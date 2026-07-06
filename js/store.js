@@ -22,7 +22,7 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], friends: {} });
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], friends: {} });
   let state = empty();
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
@@ -67,10 +67,14 @@ const Store = (() => {
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
-    const [u, p, c, f] = await Promise.all([
+    const [u, p, c, l, f] = await Promise.all([
       sb.from('users').select('*'),
       sb.from('posts').select('*'),
       sb.from('comments').select('*').order('created_at', { ascending: true }),
+      // RLS only hands back the like rows we're allowed to see: our own, plus
+      // every like on our own posts. So the cache literally can't compute a count
+      // for someone else's post — the rows aren't here.
+      sb.from('likes').select('*').order('created_at', { ascending: true }),
       sb.from('friends').select('*'),
     ]);
     state.users = (u.data || []).map(mapUser);
@@ -80,6 +84,7 @@ const Store = (() => {
       id: row.id, postId: row.post_id, author: nameById.get(row.author),
       text: row.body, date: dateOf(row.created_at),
     }));
+    state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id) }));
     const fr = {};
     const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
     for (const row of f.data || []) {
@@ -251,6 +256,7 @@ const Store = (() => {
     if (error) return { ok: false, error: 'Couldn’t delete — try again.' };
     state.posts.splice(i, 1);
     state.comments = state.comments.filter(c => c.postId !== id);
+    state.likes = state.likes.filter(x => x.postId !== id);
     return { ok: true };
   }
 
@@ -304,6 +310,37 @@ const Store = (() => {
     return { ok: true };
   }
 
+  // ── Likes (a private signal to the author) ──────────────────────────────────
+  // likesFor only ever returns what the cache holds, which RLS has already
+  // filtered: for your own post that's the full set (count + who); for anyone
+  // else's it's at most your own row. So likeCountFor is meaningful only to the
+  // author — exactly the point.
+  const likesFor = (postId) => state.likes.filter(x => x.postId === postId);
+  const likeCountFor = (postId) => likesFor(postId).length;
+  const likedByMe = (postId) => state.likes.some(x => x.postId === postId && x.user === state.session);
+
+  // Toggle my like on a friend's post. You can't like your own post (the heart is
+  // the author's window onto who liked, not a self-like), and likes — like
+  // comments — are a friends-only gesture.
+  async function toggleLike(postId) {
+    const me = state.session;
+    if (!me) return { ok: false };
+    const post = state.posts.find(p => p.id === postId);
+    if (!post || post.author === me || !isFriend(post.author)) return { ok: false };
+    const mine = idOf(me);
+    const has = likedByMe(postId);
+    if (has) {
+      const { error } = await sb.from('likes').delete().eq('post_id', postId).eq('user_id', mine);
+      if (error) return { ok: false };
+      state.likes = state.likes.filter(x => !(x.postId === postId && x.user === me));
+    } else {
+      const { error } = await sb.from('likes').insert({ post_id: postId, user_id: mine });
+      if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
+      if (!likedByMe(postId)) state.likes.push({ postId, user: me });
+    }
+    return { ok: true, liked: !has };
+  }
+
   // ── Profile (async writes) ──────────────────────────────────────────────────
   // Set (or clear) the signed-in user's avatar — a cropped square data-URI for
   // now (Storage in step 4), or null to fall back to the initial tile.
@@ -353,6 +390,8 @@ const Store = (() => {
     createPost, deletePost, updatePost,
     // Comments
     commentsFor, addComment, deleteComment,
+    // Likes
+    likesFor, likeCountFor, likedByMe, toggleLike,
     // Profile
     updateAvatar, updateProfile,
   };

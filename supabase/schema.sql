@@ -5,6 +5,7 @@
 --     empty step-1 scaffolding (no real data yet). Children are dropped first
 --     so the foreign keys unwind cleanly.
 
+drop table if exists public.likes    cascade;
 drop table if exists public.comments cascade;
 drop table if exists public.friends  cascade;
 drop table if exists public.posts    cascade;
@@ -43,6 +44,18 @@ create table public.comments (
   author     uuid not null references public.users(id) on delete cascade,
   body       text not null,
   created_at timestamptz not null default now()
+);
+
+-- ── Likes ───────────────────────────────────────────────────────────────────
+-- A quiet, private signal to the author. One row per (post, liker). The catch
+-- lives entirely in the SELECT policy below: only the post's author can read the
+-- full set (and so see the count / who liked). Everyone else can read only their
+-- OWN like row — enough to render their heart's filled state, never a total.
+create table public.likes (
+  post_id    uuid not null references public.posts(id) on delete cascade,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
 );
 
 -- ── Friends ─────────────────────────────────────────────────────────────────
@@ -89,6 +102,7 @@ create trigger on_auth_user_created
 alter table public.users    enable row level security;
 alter table public.posts    enable row level security;
 alter table public.comments enable row level security;
+alter table public.likes    enable row level security;
 alter table public.friends  enable row level security;
 
 create policy "users read all"    on public.users    for select to authenticated using (true);
@@ -102,6 +116,18 @@ create policy "posts delete own"  on public.posts    for delete to authenticated
 create policy "comments read all"   on public.comments for select to authenticated using (true);
 create policy "comments insert own" on public.comments for insert to authenticated with check (author = auth.uid());
 create policy "comments delete own" on public.comments for delete to authenticated using (author = auth.uid());
+
+-- Likes: read your OWN like on any post, plus EVERY like on a post you authored.
+-- This is the whole dignity mechanic — a friend's client is never sent the rows
+-- it would need to count, so "only the owner sees the count" is enforced in the
+-- database, not the UI. You can add/remove only your own like.
+create policy "likes read own-or-owner" on public.likes for select to authenticated
+  using (
+    user_id = auth.uid()
+    or exists (select 1 from public.posts p where p.id = post_id and p.author = auth.uid())
+  );
+create policy "likes insert own" on public.likes for insert to authenticated with check (user_id = auth.uid());
+create policy "likes delete own" on public.likes for delete to authenticated using (user_id = auth.uid());
 
 create policy "friends read all"   on public.friends for select to authenticated using (true);
 create policy "friends insert own" on public.friends for insert to authenticated with check (auth.uid() in (a, b));

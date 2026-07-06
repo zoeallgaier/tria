@@ -402,17 +402,28 @@ main {
 .card-actions button svg { width: 18px; height: 18px; }
 .card-tools { display: flex; align-items: center; gap: 0.1rem; }
 
-/* Comment toggle: glyph + count, pulled left so the glyph lines up with the post
-   text column (cancelling its own padding); lifts to the accent when open. */
-.card-comment {
-  gap: 0.3rem;
-  padding-inline: 0.35rem;
-  margin-left: -0.35rem;
-}
+/* Like + comment share the left, as one group. The group's negative margin
+   cancels the buttons' inner padding so the first glyph lines up with the post
+   text column. */
+.card-social { display: flex; align-items: center; gap: 0.05rem; margin-left: -0.35rem; }
+
+/* Comment toggle: glyph + count; lifts to the accent when open. */
+.card-comment { gap: 0.3rem; padding-inline: 0.35rem; }
 .card-comment-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 .card-comment[aria-expanded="true"],
 .card-comment:hover,
 .card-comment:focus-visible { color: var(--accent); }
+
+/* Like heart. A friend sees a fillable heart, no count. The author sees the
+   count and (via --owner) opens the "who liked" list; the heart fills to the
+   accent when liked / when the author's panel is open. */
+.card-like { gap: 0.3rem; padding-inline: 0.35rem; }
+.card-like-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
+.card-like:hover,
+.card-like:focus-visible,
+.card-like.liked,
+.card-like--owner[aria-expanded="true"] { color: var(--accent); }
+.card-like.liked svg { fill: currentColor; }
 
 .card-edit:hover, .card-edit:focus-visible {
   color: var(--accent);
@@ -594,7 +605,8 @@ main {
    panel reveals with the site's easing — a grid-rows 0fr→1fr height tween plus an
    opacity lift — so it eases open rather than snapping; `.comments-inner` clips
    the collapsing content. */
-.comments-panel {
+.comments-panel,
+.likers-panel {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
@@ -603,7 +615,8 @@ main {
   transition: grid-template-rows 0.34s var(--ease),
               opacity 0.26s ease;
 }
-.comments-panel.open { grid-template-rows: 1fr; opacity: 1; }
+.comments-panel.open,
+.likers-panel.open { grid-template-rows: 1fr; opacity: 1; }
 /* The grid child carries no padding/border — that would stop it collapsing to a
    true 0 height. Spacing + the nesting rule sit on .comments-content within it;
    its left padding realigns the content to the post text column (--inset). */
@@ -613,8 +626,20 @@ main {
   padding: 0.85rem 0 0.2rem calc(var(--inset) - 0.7rem - 2px);
 }
 @media (prefers-reduced-motion: reduce) {
-  .comments-panel { transition: none; }
+  .comments-panel, .likers-panel { transition: none; }
 }
+
+/* Who-liked list: same avatar + name row as a comment, minus the body text. */
+.likers-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.liker .comment-body { display: flex; align-items: center; min-height: 26px; }
+.likers-empty { font-size: 0.85rem; color: var(--muted); }
 
 /* Reset the list's default padding/bullets so rows align to the thread's edge. */
 .comments-list {
@@ -1316,7 +1341,7 @@ body.gate main { padding: 0; }
   .card--post .card-main, .card--find .card-main { padding-inline: 1.15rem; }
   .card--photo .card-actions { padding-inline: 1.15rem; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
-  .comments-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
+  .comments-panel, .likers-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
   .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
   .photo { border-radius: 0; }
   .card--photo .byline,

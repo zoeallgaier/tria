@@ -44,6 +44,7 @@
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
+    heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
   };
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 24 24" fill="none" ` +
@@ -202,11 +203,35 @@
   const canComment = (post) =>
     post.author === Store.session() || Store.isFriend(post.author);
 
-  // The card's action row, tucked below the post: the comment toggle on the LEFT
-  // (it opens the thread that nests below it, on the same left axis), and edit +
-  // delete grouped on the right for your own posts. The toggle carries the count
-  // and drives the panel (see wireComments).
+  // The card's action row, tucked below the post: the like heart + comment toggle
+  // grouped on the LEFT (each opens/toggles below on the same left axis), and edit
+  // + delete grouped on the right for your own posts.
+  //
+  // The like heart is deliberately two-faced. A friend sees a bare heart they can
+  // fill — no count, because a like is a private nod to the author, not a public
+  // tally. The author can't like their own post; for them the heart carries the
+  // count and opens the list of who liked (see likersPanelHtml / wireLikes).
+  function likeButtonHtml(post) {
+    const owns = post.author === Store.session();
+    if (!(owns || Store.isFriend(post.author))) return '';   // same gate as comments
+    if (owns) {
+      const n = Store.likeCountFor(post.id);
+      const open = openLikers.has(post.id);
+      return `<button class="card-like card-like--owner" type="button" aria-expanded="${open}" ` +
+          `aria-label="${n ? n + ' like' + (n === 1 ? '' : 's') + ' — see who' : 'Likes'}" title="Who liked this">` +
+          svgIcon('heart') +
+          (n ? `<span class="card-like-count">${n}</span>` : '') +
+        `</button>`;
+    }
+    const liked = Store.likedByMe(post.id);
+    return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
+        `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
+        svgIcon('heart') +
+      `</button>`;
+  }
+
   function cardActionsHtml(post, opts) {
+    const like = likeButtonHtml(post);
     const n = Store.commentsFor(post.id).length;
     const expanded = openComments.has(post.id);
     const comment = canComment(post)
@@ -225,8 +250,8 @@
         `</div>`
       : '';
     // Nothing to show (a non-friend's post you don't own) → no empty row.
-    if (!comment && !owner) return '';
-    return `<div class="card-actions">${comment}${owner}</div>`;
+    if (!like && !comment && !owner) return '';
+    return `<div class="card-actions"><div class="card-social">${like}${comment}</div>${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -260,8 +285,10 @@
           `</figure>` +
           actions +
         `</div>` +
+        likersPanelHtml(post) +
         commentsPanelHtml(post);
       wirePhoto(el, img);
+      wireLikes(el, post, opts);
       wireComments(el, post, opts);
       return el;
     }
@@ -285,8 +312,10 @@
         tagChips(post) +
         actions +
       `</div>` +
+      likersPanelHtml(post) +
       commentsPanelHtml(post);
     wireReadMore(el, post);
+    wireLikes(el, post, opts);
     wireComments(el, post, opts);
     return el;
   }
@@ -308,6 +337,87 @@
      open/shut with the site's easing (a grid-rows reveal, see .comments-panel).
      Commenting is friends-only (see canComment) — the thread is omitted on posts
      by people you're not friends with. */
+  /* ── Likes: the author's private "who liked" panel ─────────────────────────
+     Owner-only. The heart on the author's own card opens this list (same grid-
+     rows reveal as the comment thread) — a friend's card has no heart-panel and
+     no count at all, only a heart they can fill. */
+  function likerItemHtml(l) {
+    const u = Store.user(l.user);
+    const name = esc(u ? u.name : l.user);
+    return `<li class="comment liker">` +
+        `<a class="comment-avatar-link" href="#/u/${esc(encodeURIComponent(l.user))}" aria-label="${name}">` +
+          avatarEl(u || { name: l.user }, { cls: 'comment-avatar' }) +
+        `</a>` +
+        `<div class="comment-body">` +
+          `<p class="comment-text"><a class="comment-name" href="#/u/${esc(encodeURIComponent(l.user))}">${name}</a></p>` +
+        `</div>` +
+      `</li>`;
+  }
+
+  function likersPanelHtml(post) {
+    if (post.author !== Store.session()) return '';    // only the author sees who liked
+    const list = Store.likesFor(post.id);
+    const open = openLikers.has(post.id);
+    return `<div class="likers-panel${open ? ' open' : ''}">` +
+        `<div class="comments-inner">` +
+          `<div class="comments-content">` +
+            (list.length
+              ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
+              : `<p class="likers-empty">No likes yet — and that’s just fine.</p>`) +
+          `</div>` +
+        `</div>` +
+      `</div>`;
+  }
+
+  // A card's two panels (the author's "who liked" list and the comment thread)
+  // are mutually exclusive — opening either collapses the other, so the card
+  // never grows two threads at once. Each just clears the other's open-state +
+  // reverts its toggle button.
+  function collapseLikers(el, id) {
+    openLikers.delete(id);
+    el.querySelector('.card-like--owner')?.setAttribute('aria-expanded', 'false');
+    el.querySelector('.likers-panel')?.classList.remove('open');
+  }
+  function collapseComments(el, id) {
+    openComments.delete(id);
+    el.querySelector('.card-comment')?.setAttribute('aria-expanded', 'false');
+    el.querySelector('.comments-panel')?.classList.remove('open');
+  }
+
+  function wireLikes(el, post, opts) {
+    const btn = el.querySelector('.card-like');
+    if (!btn) return;
+
+    // Author: the heart is a toggle for the "who liked" panel — pure CSS reveal,
+    // no rebuild, so it eases like the comment thread. (opts is unused here but
+    // kept for symmetry with wireComments.)
+    if (post.author === Store.session()) {
+      const panel = el.querySelector('.likers-panel');
+      btn.addEventListener('click', () => {
+        const open = openLikers.has(post.id);
+        if (open) openLikers.delete(post.id); else openLikers.add(post.id);
+        if (!open) collapseComments(el, post.id);   // one panel at a time
+        btn.setAttribute('aria-expanded', String(!open));
+        panel?.classList.toggle('open', !open);
+      });
+      return;
+    }
+
+    // Friend: toggle my own like. The count belongs to the author, not to me, so
+    // there's nothing on my card to recompute — just flip the heart in place (no
+    // card rebuild, no rise-flash).
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const res = await Store.toggleLike(post.id);
+      btn.disabled = false;
+      if (!res.ok) return;
+      btn.classList.toggle('liked', res.liked);
+      btn.setAttribute('aria-pressed', String(res.liked));
+      btn.setAttribute('aria-label', res.liked ? 'Unlike' : 'Like');
+      btn.setAttribute('title', res.liked ? 'Liked' : 'Like');
+    });
+  }
+
   function commentItemHtml(c) {
     const u = Store.user(c.author);
     const name = esc(u ? u.name : c.author);
@@ -363,6 +473,7 @@
     toggle.addEventListener('click', () => {
       const open = openComments.has(post.id);
       if (open) openComments.delete(post.id); else openComments.add(post.id);
+      if (!open) collapseLikers(el, post.id);   // one panel at a time
       toggle.setAttribute('aria-expanded', String(!open));
       panel.classList.toggle('open', !open);
     });
@@ -403,6 +514,10 @@
   // delete (same full-refresh pattern as edit/delete elsewhere), so this is
   // what keeps a panel open across that refresh.
   const openComments = new Set();
+
+  // Which authors' "who liked" panels are expanded — the like-side twin of
+  // openComments, surviving the same in-place card rebuilds.
+  const openLikers = new Set();
 
   // Which posts have their long-note "Read more" tail expanded — same role as
   // openComments, keeping a panel open across an in-place card rebuild.
