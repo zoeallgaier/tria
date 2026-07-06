@@ -216,7 +216,9 @@ const Store = (() => {
     const blob = await (await fetch(dataURI)).blob();
     const path = `${me.id}/${kind}-${Date.now()}.jpg`;
     const { error } = await sb.storage.from('media')
-      .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+      // Filenames are versioned (a fresh timestamp each save), so the bytes at a
+      // URL never change — cache them for a year to make repeat loads instant.
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
     if (error) throw error;
     return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
   }
@@ -305,16 +307,23 @@ const Store = (() => {
   // ── Profile (async writes) ──────────────────────────────────────────────────
   // Set (or clear) the signed-in user's avatar — a cropped square data-URI for
   // now (Storage in step 4), or null to fall back to the initial tile.
+  // Optimistic: the cache is updated to the local crop synchronously (before the
+  // first await), so a caller can re-render and show the new photo instantly while
+  // the upload + save happen in the background. On any failure we revert the cache.
   async function updateAvatar(dataURI) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
+    const prev = u.avatar;
+    if (dataURI) u.avatar = dataURI; else delete u.avatar;   // optimistic, synchronous
+    const revert = () => { if (prev) u.avatar = prev; else delete u.avatar; };
+
     let url = null;
     if (dataURI) {
       try { url = await uploadImage(dataURI, 'avatar'); }
-      catch { return { ok: false, error: 'Couldn’t upload — try again.' }; }
+      catch { revert(); return { ok: false, error: 'Couldn’t upload — try again.' }; }
     }
     const { error } = await sb.from('users').update({ avatar: url }).eq('id', u.id);
-    if (error) return { ok: false, error: 'Couldn’t save your photo.' };
+    if (error) { revert(); return { ok: false, error: 'Couldn’t save your photo.' }; }
     if (url) u.avatar = url; else delete u.avatar;
     return { ok: true };
   }

@@ -890,19 +890,15 @@
       reader.readAsDataURL(f);
     });
 
-    saveEl.addEventListener('click', async () => {
+    saveEl.addEventListener('click', () => {
       if (!avCropper) return;
-      saveEl.disabled = true;
-      saveEl.textContent = 'Saving…';
-      const res = await Store.updateAvatar(avCropper.export(512));
-      if (!res.ok) {
-        errEl.textContent = res.error;
-        saveEl.disabled = false;
-        saveEl.textContent = 'Save photo';
-        return;
-      }
+      // Optimistic: updateAvatar sets the cache to the local crop synchronously, so
+      // closing + re-rendering now shows the new photo instantly. The upload runs in
+      // the background; if it fails, the store reverts and we re-render + toast.
+      const pending = Store.updateAvatar(avCropper.export(512));
       close();
       done();
+      pending.then(res => { if (!res.ok) { done(); toast(res.error); } });
     });
   }
 
@@ -1018,6 +1014,20 @@
       ta.remove();
       resolve(ok);
     });
+  }
+
+  // A brief, quiet notice at the bottom of the screen — used for background
+  // failures (e.g. an optimistic action that didn't reach the server).
+  let toastTimer = null;
+  function toast(msg) {
+    let el = document.querySelector('.toast');
+    if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
+    el.textContent = msg;
+    el.classList.remove('show');
+    void el.offsetWidth;                 // restart the transition if one's mid-flight
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
   }
 
   /* ── Friends (your mutual circle) + Discover (people you haven't added) ─────── */
@@ -1438,6 +1448,10 @@
     if (sampleCache.has(src)) return Promise.resolve(sampleCache.get(src));
     return new Promise(resolve => {
       const img = new Image();
+      // Photos now live on Supabase Storage (cross-origin). Request them with CORS
+      // (the bucket serves Access-Control-Allow-Origin: *) so drawing to the canvas
+      // doesn't taint it — otherwise getImageData throws and the wash never lights.
+      img.crossOrigin = 'anonymous';
       img.decoding = 'async';
       img.onload = () => {
         let out = null;

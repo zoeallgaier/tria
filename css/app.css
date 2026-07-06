@@ -1183,6 +1183,28 @@ body.gate main { padding: 0; }
   font-size: 0.92rem;
 }
 .modal-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
+
+/* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 0.8rem);
+  z-index: 200;
+  max-width: min(88vw, 340px);
+  padding: 0.7rem 1.1rem;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: var(--radius-img);
+  font-size: 0.9rem;
+  text-align: center;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: opacity var(--dur-quick) ease; } }
 .modal-actions .composer-submit:disabled { opacity: 0.5; }
 @media (hover: hover) { .modal-actions .edit-cancel:hover { color: var(--text); border-color: var(--text); } }
 @keyframes fade { from { opacity: 0; } }
