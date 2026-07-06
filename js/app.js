@@ -218,7 +218,7 @@
       const n = Store.likeCountFor(post.id);
       const open = openLikers.has(post.id);
       return `<button class="card-like card-like--owner" type="button" aria-expanded="${open}" ` +
-          `aria-label="${n ? n + ' like' + (n === 1 ? '' : 's') + ' — see who' : 'Likes'}" title="Who liked this">` +
+          `aria-label="${n ? n + ' like' + (n === 1 ? '' : 's') + ', see who' : 'Likes'}" title="Who liked this">` +
           svgIcon('heart') +
           (n ? `<span class="card-like-count">${n}</span>` : '') +
         `</button>`;
@@ -363,7 +363,7 @@
           `<div class="comments-content">` +
             (list.length
               ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
-              : `<p class="likers-empty">No likes yet — and that’s just fine.</p>`) +
+              : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
           `</div>` +
         `</div>` +
       `</div>`;
@@ -564,7 +564,7 @@
     return `<div class="field">` +
         `<label for="e-title">Headline</label>` +
         `<input id="e-title" type="text" maxlength="120" ` +
-          `value="${esc(post.title || '')}" placeholder="Optional — a title for longer thoughts.">` +
+          `value="${esc(post.title || '')}" placeholder="Optional, a title for longer thoughts.">` +
       `</div>` +
       `<div class="field">` +
         `<label for="e-note">What’s on your mind?</label>` +
@@ -690,25 +690,19 @@
 
   /* ── Auth gate (setup / login) ──────────────────────────────────────────────
      Shown whenever no one is signed in. Two modes over one form: create an
-     account (display name + username + password, with a live avatar preview) or
-     log back in. On success we drop the gate and route home. */
+     account (display name + username + password) or log back in. On success
+     we drop the gate and route home. */
   let authMode = 'signup';
 
   function renderAuth(mode) {
     authMode = mode;
     const isSignup = mode === 'signup';
 
-    const preview = isSignup
-      ? `<div class="auth-preview">` +
-          `<span class="avatar" id="auth-avatar" aria-hidden="true">?</span>` +
-          `<span class="auth-preview-label">This is your avatar</span>` +
-        `</div>`
-      : '';
     const nameField = isSignup
       ? `<div class="field">` +
           `<label for="f-name">Display name</label>` +
           `<input id="f-name" type="text" autocomplete="name" maxlength="40" ` +
-            `placeholder="Juniper Vale" autofocus>` +
+            `placeholder="Donna Haraway" autofocus>` +
         `</div>`
       : '';
     const emailField =
@@ -736,7 +730,7 @@
                   `<span class="at" aria-hidden="true">@</span>` +
                   `<input id="f-user" type="text" autocomplete="username" ` +
                     `autocapitalize="none" spellcheck="false" maxlength="20" ` +
-                    `placeholder="juniper">` +
+                    `placeholder="donnaharaway">` +
                 `</div>` +
                 `<p class="field-hint">Lowercase letters, numbers or _.</p>` +
               `</div>`
@@ -758,15 +752,7 @@
         `</p>` +
       `</div></section>`;
 
-    // Live avatar preview reflects the display name's first letter.
     const nameInput = document.getElementById('f-name');
-    const avatarEl = document.getElementById('auth-avatar');
-    if (nameInput && avatarEl) {
-      nameInput.addEventListener('input', () => {
-        avatarEl.textContent = nameInput.value.trim() ? initialOf(nameInput.value) : '?';
-      });
-    }
-
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
     document.getElementById('auth-form').addEventListener('submit', async (e) => {
@@ -865,7 +851,7 @@
     const feedEl = view.querySelector('#feed');
     if (!list.length) {
       feedEl.innerHTML = `<p class="feed-empty">` +
-        `${isSelf ? 'You haven’t posted yet.' : 'Nothing here yet.'}</p>`;
+        `${isSelf ? 'Nothing published yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
     } else {
       const frag = document.createDocumentFragment();
       list.forEach((p, i) => {
@@ -1193,7 +1179,7 @@
         mastheadEl(circleCount, 'Friends') +
         (friends.length
           ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
-          : `<p class="feed-empty">You haven’t added any friends yet.</p>`) +
+          : `<p class="feed-empty">Your circle’s empty, for now.</p>`) +
         (discover.length
           ? `<div class="discover">` +
               `<h2 class="discover-head">Find people</h2>` +
@@ -1227,12 +1213,31 @@
   let pubType = 'post';
   let cropper = null;   // set once a photo is chosen; .export() → data-URI
 
+  // A rotating cast of example tags for the composer's Tags placeholder — two
+  // picked at random each time the field mounts, so it never goes stale.
+  const TAG_PLACEHOLDERS = [
+    'garden', 'clay', 'vinyl', 'sourdough', 'thrifted',
+    'cold plunge', 'group chat', 'road trip', 'gremlin era', 'reading nook',
+  ];
+  const randomTagPlaceholder = () =>
+    [...TAG_PLACEHOLDERS].sort(() => Math.random() - 0.5).slice(0, 2).join(', ');
+
+  // Same trick for the post composer's note field — one of a few voices picked
+  // at random each time it mounts, so the empty field never feels flat.
+  const NOTE_PLACEHOLDERS = [
+    'Say it like it’s going in the group chat.',
+    'What’s on your mind, main character?',
+    'Post your truth. Try to make a point.',
+  ];
+  const randomNotePlaceholder = () =>
+    NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)];
+
   function fieldsFor(type) {
     const tags =
       `<div class="field">` +
         `<label for="c-tags">Tags</label>` +
         `<input id="c-tags" type="text" autocapitalize="none" ` +
-          `placeholder="garden, clay">` +
+          `placeholder="${randomTagPlaceholder()}">` +
         `<p class="field-hint">Optional · separate with commas.</p>` +
       `</div>`;
 
@@ -1250,7 +1255,7 @@
         `<div class="field">` +
           `<label for="c-note">Why share it?</label>` +
           `<textarea id="c-note" rows="2" maxlength="400" ` +
-            `placeholder="A line on why it’s worth a look."></textarea>` +
+            `placeholder="Why’s it worth their two minutes?"></textarea>` +
         `</div>` + tags;
     }
 
@@ -1271,7 +1276,7 @@
         `<div class="field">` +
           `<label for="c-note">Caption</label>` +
           `<textarea id="c-note" rows="2" maxlength="400" ` +
-            `placeholder="Say something about it (optional)."></textarea>` +
+            `placeholder="Say something, or let the photo do the talking."></textarea>` +
         `</div>` + tags;
     }
 
@@ -1279,12 +1284,12 @@
     return `<div class="field">` +
         `<label for="c-title">Headline</label>` +
         `<input id="c-title" type="text" maxlength="120" ` +
-          `placeholder="Optional — a title for longer thoughts.">` +
+          `placeholder="Optional, a title for longer thoughts.">` +
       `</div>` +
       `<div class="field">` +
         `<label for="c-note">What’s on your mind?</label>` +
         `<textarea id="c-note" rows="4" maxlength="600" ` +
-          `placeholder="Say it plainly." autofocus></textarea>` +
+          `placeholder="${esc(randomNotePlaceholder())}" autofocus></textarea>` +
       `</div>` + tags;
   }
 

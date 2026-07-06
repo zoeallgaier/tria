@@ -237,11 +237,11 @@ const Store = (() => {
     if (data.note)  row.note = data.note;
     if (data.image) {
       try { row.image = await uploadImage(data.image, 'photo'); }
-      catch { return { ok: false, error: 'Couldn’t upload the photo — try again.' }; }
+      catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
     }
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
-    if (error) return { ok: false, error: 'Couldn’t publish — try again.' };
+    if (error) return { ok: false, error: 'Couldn’t publish, try again.' };
     const post = mapPost(inserted, nameMap());
     state.posts.push(post);
     return { ok: true, post };
@@ -253,7 +253,7 @@ const Store = (() => {
     if (i < 0 || state.posts[i].author !== me)
       return { ok: false, error: 'That post isn’t yours to delete.' };
     const { error } = await sb.from('posts').delete().eq('id', id);
-    if (error) return { ok: false, error: 'Couldn’t delete — try again.' };
+    if (error) return { ok: false, error: 'Couldn’t delete, try again.' };
     state.posts.splice(i, 1);
     state.comments = state.comments.filter(c => c.postId !== id);
     state.likes = state.likes.filter(x => x.postId !== id);
@@ -274,7 +274,7 @@ const Store = (() => {
     if ('tags' in data) patch.tags = data.tags || [];
 
     const { data: updated, error } = await sb.from('posts').update(patch).eq('id', id).select().single();
-    if (error) return { ok: false, error: 'Couldn’t save — try again.' };
+    if (error) return { ok: false, error: 'Couldn’t save, try again.' };
     state.posts[i] = mapPost(updated, nameMap());
     return { ok: true, post: state.posts[i] };
   }
@@ -294,7 +294,7 @@ const Store = (() => {
 
     const { data: c, error } = await sb.from('comments')
       .insert({ post_id: postId, author: idOf(me), body: text }).select().single();
-    if (error) return { ok: false, error: 'Couldn’t post your comment — try again.' };
+    if (error) return { ok: false, error: 'Couldn’t post your comment, try again.' };
     state.comments.push({ id: c.id, postId, author: me, text, date: dateOf(c.created_at) });
     return { ok: true, comment: state.comments[state.comments.length - 1] };
   }
@@ -305,7 +305,7 @@ const Store = (() => {
     if (i < 0 || state.comments[i].author !== me)
       return { ok: false, error: 'That comment isn’t yours to delete.' };
     const { error } = await sb.from('comments').delete().eq('id', id);
-    if (error) return { ok: false, error: 'Couldn’t delete — try again.' };
+    if (error) return { ok: false, error: 'Couldn’t delete, try again.' };
     state.comments.splice(i, 1);
     return { ok: true };
   }
@@ -357,7 +357,7 @@ const Store = (() => {
     let url = null;
     if (dataURI) {
       try { url = await uploadImage(dataURI, 'avatar'); }
-      catch { revert(); return { ok: false, error: 'Couldn’t upload — try again.' }; }
+      catch { revert(); return { ok: false, error: 'Couldn’t upload, try again.' }; }
     }
     const { error } = await sb.from('users').update({ avatar: url }).eq('id', u.id);
     if (error) { revert(); return { ok: false, error: 'Couldn’t save your photo.' }; }
