@@ -106,3 +106,17 @@ create policy "comments delete own" on public.comments for delete to authenticat
 create policy "friends read all"   on public.friends for select to authenticated using (true);
 create policy "friends insert own" on public.friends for insert to authenticated with check (auth.uid() in (a, b));
 create policy "friends delete own" on public.friends for delete to authenticated using (auth.uid() in (a, b));
+
+-- ── Username availability (anon-callable) ─────────────────────────────────────
+-- Signup runs before you have a session, so it can't read the RLS-protected
+-- users table to tell you a handle is taken. This SECURITY DEFINER function
+-- answers just that one yes/no question, safely, for anon callers.
+create or replace function public.username_available(u text)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select not exists (select 1 from public.users where username = lower(u));
+$$;
+grant execute on function public.username_available(text) to anon, authenticated;

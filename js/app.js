@@ -376,16 +376,16 @@
       fresh.querySelector('.comment-form input')?.focus();
     };
 
-    panel.querySelector('.comment-form').addEventListener('submit', (e) => {
+    panel.querySelector('.comment-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = Store.addComment(post.id, e.target.elements.text.value);
+      const res = await Store.addComment(post.id, e.target.elements.text.value);
       if (res.ok) apply();
     });
 
     panel.querySelectorAll('.comment-delete').forEach(btn =>
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         if (!window.confirm('Delete this comment?')) return;
-        Store.deleteComment(btn.dataset.comment);
+        await Store.deleteComment(btn.dataset.comment);
         apply();
       }));
   }
@@ -582,6 +582,14 @@
             `placeholder="Juniper Vale" autofocus>` +
         `</div>`
       : '';
+    const emailField =
+      `<div class="field">` +
+        `<label for="f-email">Email</label>` +
+        `<input id="f-email" type="email" ` +
+          `autocomplete="${isSignup ? 'email' : 'username'}" ` +
+          `autocapitalize="none" spellcheck="false" ` +
+          `placeholder="you@example.com"${isSignup ? '' : ' autofocus'}>` +
+      `</div>`;
 
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
@@ -591,16 +599,19 @@
         `<form id="auth-form" novalidate>` +
           preview +
           nameField +
-          `<div class="field">` +
-            `<label for="f-user">Username</label>` +
-            `<div class="field-user">` +
-              `<span class="at" aria-hidden="true">@</span>` +
-              `<input id="f-user" type="text" autocomplete="username" ` +
-                `autocapitalize="none" spellcheck="false" maxlength="20" ` +
-                `placeholder="juniper"${isSignup ? '' : ' autofocus'}>` +
-            `</div>` +
-            (isSignup ? `<p class="field-hint">Lowercase letters, numbers or _.</p>` : '') +
-          `</div>` +
+          emailField +
+          (isSignup
+            ? `<div class="field">` +
+                `<label for="f-user">Username</label>` +
+                `<div class="field-user">` +
+                  `<span class="at" aria-hidden="true">@</span>` +
+                  `<input id="f-user" type="text" autocomplete="username" ` +
+                    `autocapitalize="none" spellcheck="false" maxlength="20" ` +
+                    `placeholder="juniper">` +
+                `</div>` +
+                `<p class="field-hint">Lowercase letters, numbers or _.</p>` +
+              `</div>`
+            : '') +
           `<div class="field">` +
             `<label for="f-pass">Password</label>` +
             `<input id="f-pass" type="password" ` +
@@ -628,14 +639,23 @@
     }
 
     const errEl = document.getElementById('auth-error');
-    document.getElementById('auth-form').addEventListener('submit', (e) => {
+    const submitBtn = document.querySelector('.auth-submit');
+    document.getElementById('auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const username = document.getElementById('f-user').value;
+      const email = document.getElementById('f-email').value;
       const password = document.getElementById('f-pass').value;
+      errEl.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = isSignup ? 'Creating…' : 'Logging in…';
       const res = isSignup
-        ? Store.signup({ name: nameInput.value, username, password })
-        : Store.login(username, password);
-      if (!res.ok) { errEl.textContent = res.error; return; }
+        ? await Store.signup({ name: nameInput.value, username: document.getElementById('f-user').value, email, password })
+        : await Store.login(email, password);
+      if (!res.ok) {
+        errEl.textContent = res.error;
+        submitBtn.disabled = false;
+        submitBtn.textContent = isSignup ? 'Create account' : 'Log in';
+        return;
+      }
       go('#/');
     });
 
@@ -736,9 +756,9 @@
       }));
 
     feedEl.querySelectorAll('.card-delete').forEach(btn =>
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         if (!window.confirm('Delete this post? This can’t be undone.')) return;
-        Store.deletePost(btn.dataset.del);
+        await Store.deletePost(btn.dataset.del);
         renderUser(username);
       }));
 
@@ -762,9 +782,9 @@
       }));
 
     const friendBtn = document.getElementById('friend');
-    if (friendBtn) friendBtn.addEventListener('click', () => {
-      if (Store.isFriend(u.username)) Store.removeFriend(u.username);
-      else Store.addFriend(u.username);
+    if (friendBtn) friendBtn.addEventListener('click', async () => {
+      if (Store.isFriend(u.username)) await Store.removeFriend(u.username);
+      else await Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
     });
 
@@ -783,8 +803,8 @@
     });
 
     const logoutBtn = document.getElementById('logout');
-    if (logoutBtn) logoutBtn.addEventListener('click', () => {
-      Store.logout();
+    if (logoutBtn) logoutBtn.addEventListener('click', async () => {
+      await Store.logout();
       authMode = 'login';        // returning user — offer login first
       go('#/');
     });
@@ -868,10 +888,11 @@
       reader.readAsDataURL(f);
     });
 
-    saveEl.addEventListener('click', () => {
+    saveEl.addEventListener('click', async () => {
       if (!avCropper) return;
-      const res = Store.updateAvatar(avCropper.export(512));
-      if (!res.ok) { errEl.textContent = res.error; return; }
+      saveEl.disabled = true;
+      const res = await Store.updateAvatar(avCropper.export(512));
+      if (!res.ok) { errEl.textContent = res.error; saveEl.disabled = false; return; }
       close();
       done();
     });
@@ -936,9 +957,9 @@
     bioEl.addEventListener('input', updateCount);
     updateCount();
 
-    modal.querySelector('#pf-form').addEventListener('submit', (e) => {
+    modal.querySelector('#pf-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = Store.updateProfile({ name: nameEl.value, bio: bioEl.value });
+      const res = await Store.updateProfile({ name: nameEl.value, bio: bioEl.value });
       if (!res.ok) { errEl.textContent = res.error; return; }
       close();
       done();
@@ -1037,10 +1058,11 @@
     // Add from a Discover row: link up, then re-render so they move into your
     // circle. The button sits inside the row link, so stop it navigating.
     view.querySelectorAll('.friend-add').forEach(btn =>
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        Store.addFriend(btn.dataset.add);
+        btn.disabled = true;
+        await Store.addFriend(btn.dataset.add);
         renderFriends();
       }));
   }
@@ -1257,7 +1279,7 @@
   const parseTags = (str) => [...new Set(String(str || '').split(',')
     .map(t => t.trim().replace(/^#/, '').toLowerCase()).filter(Boolean))].slice(0, 6);
 
-  function submitComposer() {
+  async function submitComposer() {
     const errEl = document.getElementById('c-error');
     const val = (id) => (document.getElementById(id)?.value || '').trim();
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: val('c-note') };
@@ -1278,7 +1300,7 @@
       }
     }
 
-    const res = Store.createPost(data);
+    const res = await Store.createPost(data);
     if (!res.ok) { errEl.textContent = res.error; return; }
     cropper = null;
     pubType = 'post';           // reset for next time
@@ -1288,7 +1310,7 @@
   // Save an inline text edit. Reads the form by type, applies the same rules as
   // the composer (a find needs a valid link; a post needs a headline or note),
   // then persists and re-renders the profile in place.
-  function submitEdit(id, username) {
+  async function submitEdit(id, username) {
     const errEl = document.getElementById('e-error');
     const val = (elId) => (document.getElementById(elId)?.value || '').trim();
     const post = Store.posts().find(p => p.id === id);
@@ -1310,7 +1332,7 @@
     }
     // photo: caption + tags only, both optional (the image carries the post).
 
-    const res = Store.updatePost(id, data);
+    const res = await Store.updatePost(id, data);
     if (!res.ok) { errEl.textContent = res.error; return; }
     editingId = null;
     renderUser(username);
@@ -1605,5 +1627,11 @@
   });
 
   window.addEventListener('hashchange', route);
-  route();
+
+  // Load the world from Supabase before the first render (this resolves any
+  // persisted session too). On failure we still route — straight to the gate.
+  Store.init().then(route).catch((err) => {
+    console.error('Boot failed:', err);
+    route();
+  });
 })();
