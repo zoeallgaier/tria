@@ -893,8 +893,14 @@
     saveEl.addEventListener('click', async () => {
       if (!avCropper) return;
       saveEl.disabled = true;
+      saveEl.textContent = 'Saving…';
       const res = await Store.updateAvatar(avCropper.export(512));
-      if (!res.ok) { errEl.textContent = res.error; saveEl.disabled = false; return; }
+      if (!res.ok) {
+        errEl.textContent = res.error;
+        saveEl.disabled = false;
+        saveEl.textContent = 'Save photo';
+        return;
+      }
       close();
       done();
     });

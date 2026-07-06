@@ -206,6 +206,21 @@ const Store = (() => {
   }
 
   // ── Compose (async writes) ──────────────────────────────────────────────────
+  // Upload a cropped JPEG (a data: URI from the cropper) into the public 'media'
+  // bucket under the user's own {uid}/ folder, and hand back its public URL. This
+  // is why photos no longer bloat the database — the column just stores the URL.
+  async function uploadImage(dataURI, kind) {
+    if (!/^data:/.test(dataURI)) return dataURI;      // already a URL → pass through
+    const me = currentUser();
+    if (!me) throw new Error('Not signed in.');
+    const blob = await (await fetch(dataURI)).blob();
+    const path = `${me.id}/${kind}-${Date.now()}.jpg`;
+    const { error } = await sb.storage.from('media')
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw error;
+    return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
+  }
+
   async function createPost(data) {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
@@ -213,7 +228,10 @@ const Store = (() => {
     if (data.title) row.title = data.title;
     if (data.url)   row.url = data.url;
     if (data.note)  row.note = data.note;
-    if (data.image) row.image = data.image;   // base64 for now; Storage in step 4
+    if (data.image) {
+      try { row.image = await uploadImage(data.image, 'photo'); }
+      catch { return { ok: false, error: 'Couldn’t upload the photo — try again.' }; }
+    }
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
     if (error) return { ok: false, error: 'Couldn’t publish — try again.' };
@@ -290,9 +308,14 @@ const Store = (() => {
   async function updateAvatar(dataURI) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
-    const { error } = await sb.from('users').update({ avatar: dataURI || null }).eq('id', u.id);
-    if (error) return { ok: false, error: 'Couldn’t save — the photo may be too large.' };
-    if (dataURI) u.avatar = dataURI; else delete u.avatar;
+    let url = null;
+    if (dataURI) {
+      try { url = await uploadImage(dataURI, 'avatar'); }
+      catch { return { ok: false, error: 'Couldn’t upload — try again.' }; }
+    }
+    const { error } = await sb.from('users').update({ avatar: url }).eq('id', u.id);
+    if (error) return { ok: false, error: 'Couldn’t save your photo.' };
+    if (url) u.avatar = url; else delete u.avatar;
     return { ok: true };
   }
 
