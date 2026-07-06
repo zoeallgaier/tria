@@ -354,6 +354,17 @@ main {
   padding: 2rem 0.5rem;
   text-align: center;
 }
+.feed-empty--welcome { padding-top: 3.5rem; }
+.feed-empty--welcome p { margin-bottom: 0.9rem; }
+.feed-empty-cta {
+  display: inline-block;
+  color: var(--accent);
+  font-weight: 700;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+  transition: opacity var(--dur-micro) var(--ease);
+}
+.feed-empty-cta:active { opacity: 0.6; }
 
 .card {
   animation: rise 0.5s var(--ease) both;

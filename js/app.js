@@ -74,8 +74,12 @@
   function avatarEl(user, opts = {}) {
     const cls = `avatar${opts.cls ? ' ' + opts.cls : ''}`;
     if (user && user.avatar && !opts.forceInitial) {
+      // crossorigin so the DISPLAYED avatar and the gradient sampler (applyAmbient)
+      // share one CORS-mode fetch — otherwise iOS can hand the sampler a cached
+      // non-CORS copy and taint its canvas, killing the profile wash. (Ignored
+      // harmlessly for the optimistic data: URI right after an upload.)
       return `<span class="${cls} avatar--photo" aria-hidden="true">` +
-          `<img src="${esc(user.avatar)}" alt="" loading="lazy" decoding="async">` +
+          `<img src="${esc(user.avatar)}" crossorigin="anonymous" alt="" loading="lazy" decoding="async">` +
         `</span>`;
     }
     const name = user ? (user.name || user.username) : '';
@@ -534,9 +538,19 @@
 
     feedEl.innerHTML = '';
     if (!list.length) {
-      feedEl.innerHTML = `<p class="feed-empty">Nothing here yet.` +
-        (activeTag ? ` <button class="tag" type="button" data-clear="1">clear ${esc(activeTag)}</button>` : '') +
-        `</p>`;
+      // A brand-new account has no friends yet, so its Circle is genuinely empty —
+      // point them at Discover rather than leaving a blank "nothing here".
+      const noFilter = activeFilter === 'all' && !activeTag;
+      if (noFilter && Store.friends().length === 0) {
+        feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
+          `<p>Your circle is quiet for now.</p>` +
+          `<a class="feed-empty-cta" href="#/friends">Find people to add →</a>` +
+        `</div>`;
+      } else {
+        feedEl.innerHTML = `<p class="feed-empty">Nothing here yet.` +
+          (activeTag ? ` <button class="tag" type="button" data-clear="1">clear ${esc(activeTag)}</button>` : '') +
+          `</p>`;
+      }
     } else {
       const frag = document.createDocumentFragment();
       list.forEach((p, i) => {
