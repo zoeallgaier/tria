@@ -1201,9 +1201,9 @@
 
   /* ── Publish (composer) ───────────────────────────────────────────────────
      One form, three types. The type picker reuses the home filter chips (same
-     colored language); the fields below swap per type. Photos get a real upload
-     with a drag-to-reposition 1:1 crop. On publish we route home so the new
-     entry animates in at the top of the feed. */
+     colored language); the fields below swap per type. Photos get a real upload,
+     shown and posted at their native aspect ratio (no crop). On publish we route
+     home so the new entry animates in at the top of the feed. */
   const PUB_TYPES = [
     { key: 'post',  label: 'Post'  },
     { key: 'find',  label: 'Find'  },
@@ -1264,11 +1264,10 @@
           `<input id="c-file" type="file" accept="image/*" hidden>` +
           `<div class="dropzone" id="c-drop">` +
             `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo</button>` +
-            `<p class="field-hint">JPG or PNG · cropped to a square.</p>` +
+            `<p class="field-hint">JPG or PNG · shown as you shot it.</p>` +
           `</div>` +
-          `<div class="crop" id="c-crop" hidden>` +
+          `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
-            `<span class="crop-hint">Drag to reposition</span>` +
           `</div>` +
           `<button type="button" class="crop-replace" id="c-replace" hidden>Replace photo</button>` +
         `</div>` +
@@ -1335,8 +1334,9 @@
     mountFields();
   }
 
-  // File picker + drag-to-reposition square crop. Keeps a `cropper` with an
-  // export() that renders the visible square to a canvas at publish time.
+  // File picker + full-image preview. Post photos aren't cropped — the picked
+  // image is shown (and later exported) at its own aspect ratio, so there's no
+  // square frame or panning here (that's only the avatar editor's job).
   function wirePhotoPicker(root) {
     const file    = root.querySelector('#c-file');
     const drop    = root.querySelector('#c-drop');
@@ -1357,14 +1357,37 @@
         drop.hidden = true;
         cropEl.hidden = false;
         replace.hidden = false;
-        cropper = initCropper(cropEl, imgEl, reader.result);
+        cropper = initPhotoPreview(imgEl, reader.result);
       };
       reader.readAsDataURL(f);
     });
   }
 
-  // Square cropper over an already-loaded <img>. Cover-fits the image and lets
-  // the user pan it within the frame; export() draws the framed region to a
+  // A whole-image preview that keeps the photo's native aspect ratio. export()
+  // downscales the longest edge to `maxEdge` (to keep upload size sane) but never
+  // crops — the shape you upload is the shape that posts.
+  function initPhotoPreview(imgEl, src) {
+    imgEl.style.transform = '';
+    imgEl.src = src;
+    return {
+      export(maxEdge = 1400) {
+        const iw = imgEl.naturalWidth  || 1;
+        const ih = imgEl.naturalHeight || 1;
+        const scale = Math.min(1, maxEdge / Math.max(iw, ih));
+        const w = Math.max(1, Math.round(iw * scale));
+        const h = Math.max(1, Math.round(ih * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
+        return canvas.toDataURL('image/jpeg', 0.82);
+      },
+    };
+  }
+
+  // Square cropper over an already-loaded <img> (the avatar editor only — post
+  // photos use initPhotoPreview and keep their aspect). Cover-fits the image and
+  // lets the user pan it within the frame; export() draws the framed region to a
   // canvas. Pan is clamped so the square stays fully covered. State lives on the
   // element (cropEl._crop) so "Replace photo" can re-init without re-wiring the
   // drag handlers (those are attached once, guarded by data-wired).

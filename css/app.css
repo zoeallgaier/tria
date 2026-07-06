@@ -403,13 +403,25 @@ main {
 .card-tools { display: flex; align-items: center; gap: 0.1rem; }
 
 /* Like + comment share the left, as one group. The group's negative margin
-   cancels the buttons' inner padding so the first glyph lines up with the post
-   text column. */
-.card-social { display: flex; align-items: center; gap: 0.05rem; margin-left: -0.35rem; }
+   cancels a counted button's inner padding so the first glyph lines up with the
+   post text column. */
+.card-social { display: flex; align-items: center; gap: 0.15rem; margin-left: -0.35rem; }
 
-/* Comment toggle: glyph + count; lifts to the accent when open. */
-.card-comment { gap: 0.3rem; padding-inline: 0.35rem; }
-.card-comment-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
+/* Icon-only likes/comments are the same 30px square as the edit/trash tools on
+   the right (inherited from .card-actions button) — matched hit area and rhythm.
+   When a COUNT rides along, the button grows to the left so the glyph keeps that
+   square feel, the count sits a clear step off the glyph, and trailing room keeps
+   it from crowding the next button (the old 0.05rem group gap was the culprit). */
+.card-like:has(.card-like-count),
+.card-comment:has(.card-comment-count) {
+  justify-content: flex-start;
+  gap: 0.4rem;
+  padding-inline: 0.35rem 0.55rem;
+}
+.card-comment-count,
+.card-like-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
+
+/* Comment toggle lifts to the accent when open. */
 .card-comment[aria-expanded="true"],
 .card-comment:hover,
 .card-comment:focus-visible { color: var(--accent); }
@@ -417,8 +429,6 @@ main {
 /* Like heart. A friend sees a fillable heart, no count. The author sees the
    count and (via --owner) opens the "who liked" list; the heart fills to the
    accent when liked / when the author's panel is open. */
-.card-like { gap: 0.3rem; padding-inline: 0.35rem; }
-.card-like-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 .card-like:hover,
 .card-like:focus-visible,
 .card-like.liked,
@@ -714,17 +724,18 @@ main {
 .comment-form input:not(:placeholder-shown) ~ button,
 .comment-form button:hover { opacity: 1; }
 
-/* ── Photo entries — identity + caption lead, full-bleed 1:1 image last ────── */
+/* ── Photo entries — identity + caption lead, full-bleed image last ────────── */
+/* The image keeps its own aspect ratio (no forced 1:1 crop); the figure sizes to
+   whatever was uploaded, tall or wide. */
 .photo {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
   cursor: zoom-in;
   background: var(--surface-2);
   border-radius: var(--radius-img);
   overflow: hidden;
 }
-.photo img { width: 100%; height: 100%; object-fit: cover; }
+.photo img { display: block; width: 100%; height: auto; }
 /* Byline + caption inset to align with post text; the image is full-width. The
    type reads from the green Photo tag in the byline, like posts and finds. */
 .card--photo .byline { padding-inline: var(--inset); }
@@ -1204,6 +1215,11 @@ body.gate main { padding: 0; }
 /* The avatar crop is a centered circle (what you see is what you get — photos
    display round), not full-width like the composer's. */
 .crop--avatar { width: 260px; max-width: 100%; margin: 0 auto; border-radius: 50%; }
+
+/* Post photos aren't cropped — the composer preview shows the whole image at its
+   own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
+.crop--free { aspect-ratio: auto; cursor: default; touch-action: auto; }
+.crop--free img { position: static; width: 100%; height: auto; max-width: 100%; }
 .modal-error { color: var(--type-find); font-size: 0.85rem; margin-top: 0.9rem; min-height: 1.1rem; }
 .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.2rem; }
 .modal-actions .edit-cancel {
