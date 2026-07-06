@@ -1,0 +1,63 @@
+/* ── Tria design tokens ───────────────────────────────────────────────────
+   An editorial, portfolio-minded system. The UI is a cool, near-neutral
+   greyscale — a deep off-black on a cool off-white — and the ONLY chromatic
+   color is a refined primary RYB set, reserved for post types and surfaced on
+   the filter menu. Type is Instrument Serif (display) over Oxygen (the quiet
+   functional layer). The grid and its whitespace carry the design. */
+
+:root {
+  /* Neutrals — cool off-white, deep cool off-black. The whole UI lives here. */
+  --bg:        #edeef0;   /* cool paper */
+  --surface:   #f6f7f8;   /* barely-lifted panels (sidebar, chips) */
+  --surface-2: #e6e8ea;
+  --text:      #14171a;   /* deep, slightly cool off-black */
+  --muted:     #5c636b;
+  --rule:      #dadde1;   /* hairlines */
+
+  /* Action accent — kept monochrome (ink). Publish button, active nav, the All
+     filter, links. The only chromatic color stays reserved for post types. */
+  --accent:       var(--text);
+  --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
+  --on-accent:    var(--bg);
+
+  /* Post types — a primary trio (blue / red / green). Used as the left
+     type-rule on entries and as the accent on the filter menu. */
+  --type-post:      #2a4c9b;  /* blue  */
+  --type-find:      #c1352b;  /* red   */
+  --type-photo:     #2a7150;  /* green (dark enough for AA paper-on-fill) */
+  --type-photo-ink: #236b45;  /* deeper green for text/labels on paper (AA) */
+
+  /* Geometry + rhythm */
+  --radius:      3px;     /* small radius — focus rings, incidental corners */
+  --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
+  --radius-img:  8px;      /* soft radius — images, inputs, containers */
+  --sidebar-w: 268px;
+  --topbar-h:  88px;
+  --feed-width: 660px;
+  --inset:     1.6rem;    /* text inset past the left type-rule */
+
+  color-scheme: light;
+}
+
+/* ── Dark mode — deep cool black, cool off-white ink; RYB lifted to stay vivid. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:        #0e1012;
+    --surface:   #171a1d;
+    --surface-2: #1f2327;
+    --text:      #e9ebed;
+    --muted:     #969ca3;
+    --rule:      #272c30;
+
+    --accent:       var(--text);
+    --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
+    --on-accent:    var(--bg);
+
+    --type-post:      #7d9be8;  /* blue  */
+    --type-find:      #e5705f;  /* red   */
+    --type-photo:     #5cbf92;  /* green */
+    --type-photo-ink: #5cbf92;
+
+    color-scheme: dark;
+  }
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tria</title>
+  <meta name="description" content="Social Media is so back. A quiet place for small circles of friends." />
+
+  <meta name="theme-color" content="#edeef0" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0e1012" media="(prefers-color-scheme: dark)" />
+
+  <!-- Installable web app (bookmark / add-to-home-screen). -->
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Tria" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <!-- Brand bar: fixed top on every breakpoint. -->
+  <header class="topbar">
+    <a class="brand" href="#/" aria-label="Tria — My Circle">
+      <span class="brand-mark">tria</span>
+    </a>
+    <!-- Mobile-only header action; the sidebar carries Publish on desktop.
+         Lives in the topbar (not the blurred bottom nav) so it sits top-right. -->
+    <a class="topbar-publish" href="#/publish" aria-label="Publish">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 5v14" /><path d="M5 12h14" />
+      </svg>
+      <span>Publish</span>
+    </a>
+  </header>
+
+  <!-- Nav lives OUTSIDE the (backdrop-filtered) topbar so its mobile
+       fixed-to-bottom positioning anchors to the viewport, not the bar.
+       Desktop: top-right of the bar. Mobile: bottom tab bar. Filled by app.js. -->
+  <nav class="nav" id="nav" aria-label="Primary"></nav>
+
+  <main id="main" tabindex="-1">
+    <!-- Views are rendered here by the router in app.js. -->
+    <div id="view"></div>
+  </main>
+
+  <script src="js/seed.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>
