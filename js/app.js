@@ -659,8 +659,10 @@
       go('#/');
     });
 
+    // Toggle signup ⇄ login through the same soft blur-dissolve the pages use, so
+    // the switch feels like part of the app rather than an instant redraw.
     document.getElementById('auth-toggle').addEventListener('click',
-      () => renderAuth(isSignup ? 'login' : 'signup'));
+      () => renderPage(-1, () => renderAuth(isSignup ? 'login' : 'signup')));
   }
 
   /* ── Profile (own account or any friend, at #/u/username) ─────────────────────
@@ -1300,8 +1302,18 @@
       }
     }
 
+    // Writes now hit the network (and, for photos, an upload), so reflect the
+    // wait rather than freezing on click.
+    const btn = document.querySelector('.composer-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+    errEl.textContent = '';
+
     const res = await Store.createPost(data);
-    if (!res.ok) { errEl.textContent = res.error; return; }
+    if (!res.ok) {
+      errEl.textContent = res.error;
+      if (btn) { btn.disabled = false; btn.textContent = 'Publish'; }
+      return;
+    }
     cropper = null;
     pubType = 'post';           // reset for next time
     go('#/');

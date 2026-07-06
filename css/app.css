@@ -204,7 +204,7 @@ main {
 #view { position: relative; overflow-x: clip; }
 
 .page {
-  transition: transform 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: transform 0.36s var(--ease),
               opacity   0.34s ease,
               filter    0.34s ease;
 }
@@ -338,7 +338,7 @@ main {
 }
 
 .card {
-  animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: rise 0.5s var(--ease) both;
 }
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
@@ -514,7 +514,7 @@ main {
 .readmore-clip {
   overflow: hidden;
   max-height: 8.6rem;                 /* ~six lines of teaser while collapsed */
-  transition: max-height 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: max-height 0.42s var(--ease);
   -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent);
           mask-image: linear-gradient(180deg, #000 58%, transparent);
 }
@@ -571,7 +571,7 @@ main {
   opacity: 0;
   padding-left: 0.7rem;              /* the rule lives here, in the left gutter */
   padding-right: var(--inset);
-  transition: grid-template-rows 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: grid-template-rows 0.34s var(--ease),
               opacity 0.26s ease;
 }
 .comments-panel.open { grid-template-rows: 1fr; opacity: 1; }
@@ -1140,7 +1140,7 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-img);
   padding: 1.6rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-  animation: rise 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: rise 0.24s var(--ease);
 }
 .modal-title {
   font-family: 'Instrument Serif', 'Times New Roman', serif;

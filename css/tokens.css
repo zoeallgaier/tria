@@ -50,6 +50,15 @@
   --glass-bg-soft: color-mix(in srgb, var(--bg) 62%, transparent);
   --glass-blur:    20px;
 
+  /* Motion — one signature easeOut carries every considered move (pages, cards,
+     reveals). Soft, never springy; durations step in a small, calm scale. */
+  --ease:      cubic-bezier(0.16, 1, 0.3, 1);  /* signature easeOut — settles gently */
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);   /* symmetric — for cross-fades */
+  --dur-micro: 0.15s;   /* hovers, colour shifts */
+  --dur-quick: 0.24s;   /* small reveals, modal rise, fades */
+  --dur-move:  0.36s;   /* page + big transitions */
+  --dur-slow:  0.5s;    /* card rise, generous eases */
+
   color-scheme: light;
 }
 
