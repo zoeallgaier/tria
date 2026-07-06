@@ -720,7 +720,6 @@
         `<p class="auth-tag">Social Media is so back.</p>` +
         `<h1 class="auth-head">${isSignup ? 'Create your account' : 'Welcome back'}</h1>` +
         `<form id="auth-form" novalidate>` +
-          preview +
           nameField +
           emailField +
           (isSignup
