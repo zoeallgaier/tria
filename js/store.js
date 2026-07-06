@@ -25,8 +25,34 @@ const Store = (() => {
   // `session`, so treat them as signed out (the app then shows the gate).
   function migrate(s) {
     if (s.session === undefined) s.session = null;
-    if (!s.follows) s.follows = {};
+    if (!s.comments) s.comments = [];
     delete s.currentUser;
+
+    // Following → Friends. Older states carried a one-directional `follows` map
+    // (you followed people who didn't necessarily follow back). Friendship is
+    // now mutual, so promote every past follow (either direction) to a two-way
+    // friendship — nobody loses their circle in the switch.
+    if (!s.friends) {
+      const fr = {};
+      const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
+      const old = s.follows || {};
+      for (const a of Object.keys(old))
+        for (const b of (old[a] || [])) { link(a, b); link(b, a); }
+      s.friends = fr;
+    }
+    delete s.follows;
+
+    // Backfill sample avatars added to the seed after an install's first run:
+    // the store only seeds once, so states created before avatars existed still
+    // show initial tiles for the seeded friends. Copy the avatar from the seed
+    // for any matching username that has none — real accounts (no seed match)
+    // are untouched, and anyone the seed leaves photo-less stays on the tile.
+    const seedUsers = (window.TRIA_SEED && window.TRIA_SEED.users) || [];
+    for (const u of s.users || []) {
+      if (u.avatar) continue;
+      const seed = seedUsers.find(su => su.username === u.username);
+      if (seed && seed.avatar) u.avatar = seed.avatar;
+    }
     return s;
   }
 
@@ -55,12 +81,20 @@ const Store = (() => {
   const session = () => state.session;
   const isAuthed = () => !!state.session && !!user(state.session);
   const currentUser = () => user(state.session);
-  const following = () => state.follows[state.session] || [];
 
-  // Home feed: everyone the current user follows, plus their own posts,
-  // newest first. (Chronological, no ranking — that's the whole point.)
+  // The current user's friends — mutual only: you list them AND they list you.
+  // (Writes keep both sides in sync, so this normally equals your own list; the
+  // mutual filter is the guarantee that the Circle only ever shows friends.)
+  function friends() {
+    const me = state.session;
+    const mine = state.friends[me] || [];
+    return mine.filter(u => (state.friends[u] || []).includes(me));
+  }
+
+  // Home feed: your mutual friends' posts, plus your own, newest first.
+  // (Chronological, no ranking — that's the whole point.)
   function feed() {
-    const circle = new Set([state.session, ...following()]);
+    const circle = new Set([state.session, ...friends()]);
     return posts().filter(p => circle.has(p.author));
   }
 
@@ -79,8 +113,15 @@ const Store = (() => {
       return { ok: false, error: 'Password needs at least 4 characters.' };
 
     state.users.push({ username, name, pass: hash(password), bio: '' });
-    state.follows[username] = state.users
-      .filter(u => u.username !== username).map(u => u.username).slice(0, 3);
+    // Land among a few of the existing circle as mutual friends, so the feed
+    // isn't empty on day one (both sides, since friendship is two-way).
+    state.friends[username] = [];
+    state.users
+      .filter(u => u.username !== username).slice(0, 3)
+      .forEach(u => {
+        state.friends[username].push(u.username);
+        (state.friends[u.username] || (state.friends[u.username] = [])).push(username);
+      });
     state.session = username;
     save(state);
     return { ok: true };
@@ -98,22 +139,38 @@ const Store = (() => {
 
   function logout() { state.session = null; save(state); }
 
-  // ── Following (writes) ──────────────────────────────────────────────────────
-  // The current user's circle is just a list of usernames under their session.
-  const isFollowing = (username) => following().includes(username);
+  // ── Friends (writes) ────────────────────────────────────────────────────────
+  // Friendship is mutual: are they in your circle (and you in theirs)?
+  const isFriend = (username) => friends().includes(username);
 
-  function follow(username) {
-    const me = state.session;
-    if (!me || username === me || !user(username)) return;
-    const list = state.follows[me] || (state.follows[me] = []);
-    if (!list.includes(username)) { list.push(username); save(state); }
+  // Link/unlink one direction of the friendship graph (no save — callers batch).
+  function link(a, b) {
+    const list = state.friends[a] || (state.friends[a] = []);
+    if (!list.includes(b)) list.push(b);
+  }
+  function unlink(a, b) {
+    const list = state.friends[a];
+    if (!list) return;
+    const i = list.indexOf(b);
+    if (i > -1) list.splice(i, 1);
   }
 
-  function unfollow(username) {
-    const list = state.follows[state.session];
-    if (!list) return;
-    const i = list.indexOf(username);
-    if (i > -1) { list.splice(i, 1); save(state); }
+  // Add a friend — instantly mutual (both directions), since in this prototype
+  // there's no second live person to accept a request. Remove undoes both sides.
+  function addFriend(username) {
+    const me = state.session;
+    if (!me || username === me || !user(username)) return;
+    link(me, username);
+    link(username, me);
+    save(state);
+  }
+
+  function removeFriend(username) {
+    const me = state.session;
+    if (!me) return;
+    unlink(me, username);
+    unlink(username, me);
+    save(state);
   }
 
   // All posts, newest first. Ties broken by id so order is stable across loads.
@@ -195,14 +252,94 @@ const Store = (() => {
     return { ok: true, post: updated };
   }
 
+  // ── Comments (reads + writes) ───────────────────────────────────────────────
+  // A thread is just every comment for a post, oldest first — the array only
+  // ever grows by push, so filtering it preserves that chronological order
+  // without needing a stored timestamp finer than the day.
+  const commentsFor = (postId) => state.comments.filter(c => c.postId === postId);
+
+  function addComment(postId, text) {
+    const me = state.session;
+    if (!me) return { ok: false, error: 'You need to be signed in.' };
+    text = String(text || '').trim();
+    if (!text) return { ok: false, error: 'Say something first.' };
+    const post = state.posts.find(p => p.id === postId);
+    if (!post) return { ok: false, error: 'That post no longer exists.' };
+    // Friends-only: you can comment on a friend's post, or your own.
+    if (post.author !== me && !isFriend(post.author))
+      return { ok: false, error: 'You can only comment on friends’ posts.' };
+
+    const comment = { id: 'c' + Date.now().toString(36), postId, author: me, text, date: TODAY };
+    state.comments.push(comment);
+    if (!save(state)) {
+      state.comments.pop();
+      return { ok: false, error: 'Couldn’t save — try again.' };
+    }
+    return { ok: true, comment };
+  }
+
+  // Remove one of your OWN comments. Guarded by author === session, same as
+  // deletePost — a stale or hand-crafted id can never delete someone else's.
+  function deleteComment(id) {
+    const me = state.session;
+    const i = state.comments.findIndex(c => c.id === id);
+    if (i < 0 || state.comments[i].author !== me)
+      return { ok: false, error: 'That comment isn’t yours to delete.' };
+    const [removed] = state.comments.splice(i, 1);
+    if (!save(state)) {
+      state.comments.splice(i, 0, removed);
+      return { ok: false, error: 'Couldn’t save — try again.' };
+    }
+    return { ok: true };
+  }
+
+  // Set (or clear) the signed-in user's profile photo — a cropped square data-URI
+  // (or null/'' to drop back to the initial tile). Rolls back on a failed write so
+  // runtime state never drifts from what's persisted.
+  function updateAvatar(dataURI) {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    const before = u.avatar;
+    if (dataURI) u.avatar = dataURI; else delete u.avatar;
+    if (!save(state)) {
+      if (before) u.avatar = before; else delete u.avatar;
+      return { ok: false, error: 'Couldn’t save — the photo may be too large.' };
+    }
+    return { ok: true };
+  }
+
+  // Update the signed-in user's display name + bio. Name is required (it fronts
+  // every post + directory row); bio is optional. Rolls back on a failed write.
+  function updateProfile({ name, bio } = {}) {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    name = (name || '').trim();
+    bio = (bio || '').trim();
+    if (!name) return { ok: false, error: 'Add a display name.' };
+    if (name.length > 40) return { ok: false, error: 'Name: keep it under 40 characters.' };
+    if (bio.length > 160) return { ok: false, error: 'Bio: keep it under 160 characters.' };
+    const before = { name: u.name, bio: u.bio };
+    u.name = name;
+    u.bio = bio;
+    if (!save(state)) {
+      u.name = before.name; u.bio = before.bio;
+      return { ok: false, error: 'Couldn’t save your changes.' };
+    }
+    return { ok: true };
+  }
+
   return {
-    users, user, currentUser, following, feed, posts, postsBy,
+    users, user, currentUser, friends, feed, posts, postsBy,
     // Auth
     session, isAuthed, signup, login, logout,
-    // Following
-    isFollowing, follow, unfollow,
+    // Friends
+    isFriend, addFriend, removeFriend,
     // Compose
     createPost, deletePost, updatePost,
+    // Comments
+    commentsFor, addComment, deleteComment,
+    // Profile
+    updateAvatar, updateProfile,
   };
 })();
 

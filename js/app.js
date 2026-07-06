@@ -14,6 +14,8 @@
   let view = null;
   let navIndex = -1;          // spatial index of the current route (for direction)
   let navToken = 0;           // guards against a stale transition cleaning up a new one
+  let lastPath = null;        // the path we were on before the current one (for back links)
+  let profileOrigin = '#/friends';  // where a friend profile's "← Back" returns to
   const TRANSITION_MS = 360;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
@@ -31,7 +33,7 @@
      One list drives the desktop top-right links and the mobile bottom tab bar.
      The publish "+" is the primary action (filled pill on desktop). */
   const ICONS = {
-    // Three interlocking rings — the "circle" of people you follow, and a nod
+    // Three interlocking rings — your "circle" of friends, and a nod
     // to the name (Tria). Kept as an outline to sit with the other nav glyphs.
     circle:  '<circle cx="8.5" cy="10" r="3.8"/><circle cx="15.5" cy="10" r="3.8"/><circle cx="12" cy="15.5" r="3.8"/>',
     friends: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-4-5.7"/>',
@@ -40,6 +42,8 @@
     publish: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
+    camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
+    comment: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
   };
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 24 24" fill="none" ` +
@@ -64,8 +68,30 @@
   }
 
   /* ── Cards ───────────────────────────────────────────────────────────────── */
+  // Avatar — a real uploaded photo when the user has one, else the monochrome
+  // initial tile. `cls` adds a size/context modifier; `forceInitial` is an escape
+  // hatch to pin the initial tile even when a photo exists.
+  function avatarEl(user, opts = {}) {
+    const cls = `avatar${opts.cls ? ' ' + opts.cls : ''}`;
+    if (user && user.avatar && !opts.forceInitial) {
+      return `<span class="${cls} avatar--photo" aria-hidden="true">` +
+          `<img src="${esc(user.avatar)}" alt="" loading="lazy" decoding="async">` +
+        `</span>`;
+    }
+    const name = user ? (user.name || user.username) : '';
+    return `<span class="${cls}" aria-hidden="true">${esc(initialOf(name))}</span>`;
+  }
+
+  // A small colored label marking an entry's type (Post / Find / Photo), sat at
+  // the right of the byline. The colour is the type's own (via the CSS class).
+  const TYPE_LABEL = { post: 'Post', find: 'Find', photo: 'Photo' };
+  function typeTagEl(type) {
+    return `<span class="type-tag type-tag--${type}">` +
+      `${esc(TYPE_LABEL[type] || type)}</span>`;
+  }
+
   // Byline (identity) — avatar + profile name, with the date (and a find's
-  // domain) beneath. Leads text posts; sits below the image on photos. No
+  // domain) beneath, and the type-tag at the right. Leads every entry. No
   // @usernames; profile names only.
   function bylineEl(post) {
     const u = Store.user(post.author);
@@ -74,11 +100,14 @@
     const meta = esc(niceDate(post.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
     return `<header class="byline">` +
-        `<span class="avatar" aria-hidden="true">${esc(initialOf(name))}</span>` +
-        `<span class="byline-text">` +
-          `<span class="byline-name">${name}</span>` +
-          `<span class="byline-meta">${meta}</span>` +
-        `</span>` +
+        `<a class="byline-link" href="#/u/${esc(encodeURIComponent(post.author))}">` +
+          avatarEl(u || { name: post.author }) +
+          `<span class="byline-text">` +
+            `<span class="byline-name">${name}</span>` +
+            `<span class="byline-meta">${meta}</span>` +
+          `</span>` +
+        `</a>` +
+        typeTagEl(post.type) +
       `</header>`;
   }
 
@@ -87,8 +116,72 @@
   // (and a find's domain) — no repeated avatar + name down the page.
   function soloMetaEl(post) {
     const domain = post.type === 'find' && post.url ? esc(domainOf(post.url)) : '';
-    return `<p class="card-solometa">${esc(niceDate(post.date))}` +
-      (domain ? ` <span class="dot">·</span> ${domain}` : '') + `</p>`;
+    const meta = esc(niceDate(post.date)) +
+      (domain ? ` <span class="dot">·</span> ${domain}` : '');
+    return `<p class="card-solometa"><span>${meta}</span>` +
+      typeTagEl(post.type) + `</p>`;
+  }
+
+  // ── Long notes → "Read more" ───────────────────────────────────────────────
+  // A lengthy note is shown whole but with its height clamped to a teaser; the
+  // full text stays intact in one block (no splitting — so it reads identically
+  // opened or closed) and eases into view on "Read more" by animating the clamp
+  // out to the text's real height. Below the clamp the copy softly fades (a mask,
+  // not a splice) to signal there's more.
+  const READMORE_MIN = 320;   // notes shorter than this are shown whole
+
+  // Split a note's plain text into paragraphs (blank-line separated).
+  const noteParas = (text) =>
+    String(text || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+
+  const notePara = (p) => `<p class="card-note">${esc(p)}</p>`;
+
+  // The note block for a text entry. Paragraphs always render intact; a long note
+  // additionally wraps them in a height-clamped clip + a "Read more" toggle. Open
+  // state lives in `openReadMore` so it survives a card rebuild (like openComments).
+  function cardNoteHtml(post) {
+    if (!post.note) return '';
+    const body = noteParas(post.note).map(notePara).join('');
+    if (post.note.length <= READMORE_MIN) return body;
+
+    const open = openReadMore.has(post.id);
+    return `<div class="readmore${open ? ' open' : ''}">` +
+        `<div class="readmore-clip">${body}</div>` +
+        `<button class="readmore-toggle" type="button" aria-expanded="${open}">` +
+          `${open ? 'Read less' : 'Read more'}</button>` +
+      `</div>`;
+  }
+
+  // Wire the "Read more" toggle. Opening animates the clip's max-height out to the
+  // content's real height, then releases it (so a later reflow can't re-clip);
+  // closing pins the current height first so it eases back to the clamp. The set
+  // records the state so a card rebuild reopens it.
+  function wireReadMore(el, post) {
+    const wrap = el.querySelector('.readmore');
+    if (!wrap) return;
+    const clip = wrap.querySelector('.readmore-clip');
+    const toggle = wrap.querySelector('.readmore-toggle');
+
+    clip.addEventListener('transitionend', (e) => {
+      if (e.propertyName === 'max-height' && wrap.classList.contains('open'))
+        clip.style.maxHeight = 'none';        // fully open → let it grow freely
+    });
+
+    toggle.addEventListener('click', () => {
+      const open = !wrap.classList.contains('open');
+      if (open) {
+        clip.style.maxHeight = clip.scrollHeight + 'px';   // clamp → full
+        wrap.classList.add('open');
+      } else {
+        clip.style.maxHeight = clip.scrollHeight + 'px';   // pin current height…
+        void clip.offsetHeight;                            // …commit it, then
+        wrap.classList.remove('open');
+        clip.style.maxHeight = '';                         // …ease back to clamp
+      }
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.textContent = open ? 'Read less' : 'Read more';
+      if (open) openReadMore.add(post.id); else openReadMore.delete(post.id);
+    });
   }
 
   // The tag chips, wrapped — reused in text and photo entries.
@@ -99,19 +192,37 @@
       `</div>`;
   }
 
-  // opts.owner → this is the signed-in user's own post: hang edit + delete
-  // controls in the card's top-right corner (the card is position:relative).
-  // Wired in the profile view, which is the only place owner cards render.
-  function ownerControls(el, post, opts) {
-    if (!opts.owner) return el;
-    el.insertAdjacentHTML('beforeend',
-      `<div class="card-tools">` +
-        `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
-          `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>` +
-        `<button class="card-delete" type="button" data-del="${esc(post.id)}" ` +
-          `aria-label="Delete this post" title="Delete post">${svgIcon('trash')}</button>` +
-      `</div>`);
-    return el;
+  // Comments are a friends-only feature: you can only comment on a friend's post
+  // (or your own). On a non-friend's profile their posts show, but with no
+  // comment thread. The store guards this too (see Store.addComment).
+  const canComment = (post) =>
+    post.author === Store.session() || Store.isFriend(post.author);
+
+  // The card's action row, tucked below the post: the comment toggle on the LEFT
+  // (it opens the thread that nests below it, on the same left axis), and edit +
+  // delete grouped on the right for your own posts. The toggle carries the count
+  // and drives the panel (see wireComments).
+  function cardActionsHtml(post, opts) {
+    const n = Store.commentsFor(post.id).length;
+    const expanded = openComments.has(post.id);
+    const comment = canComment(post)
+      ? `<button class="card-comment" type="button" aria-expanded="${expanded}" ` +
+          `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}" title="Comments">` +
+          svgIcon('comment') +
+          (n ? `<span class="card-comment-count">${n}</span>` : '') +
+        `</button>`
+      : '';
+    const owner = opts.owner
+      ? `<div class="card-tools">` +
+          `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
+            `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>` +
+          `<button class="card-delete" type="button" data-del="${esc(post.id)}" ` +
+            `aria-label="Delete this post" title="Delete post">${svgIcon('trash')}</button>` +
+        `</div>`
+      : '';
+    // Nothing to show (a non-friend's post you don't own) → no empty row.
+    if (!comment && !owner) return '';
+    return `<div class="card-actions">${comment}${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -119,27 +230,36 @@
   // opts.owner → the viewer owns this post: show a delete control.
   function makeCard(post, opts = {}) {
     const head = opts.solo ? soloMetaEl(post) : bylineEl(post);
+    const actions = cardActionsHtml(post, opts);
     const el = document.createElement('article');
-    el.className = `card card--${post.type}`;
+    el.className = `card card--${post.type}${opts.owner ? ' card--owner' : ''}`;
     el.dataset.type = post.type;
     el.dataset.tags = (post.tags || []).join(',');
 
     if (post.type === 'photo') {
-      // Identity first (avatar + name above the image), then the full-bleed
-      // photo, then caption + tags below it. Real uploads (post.image) show the
-      // cropped photo; seed entries fall back to the tonal placeholder.
+      // Identity first, then caption + tags, then the full-bleed photo last —
+      // text settles before the image so the two don't compete for the read.
+      // Real uploads (post.image) show the cropped photo; seed entries fall
+      // back to the tonal placeholder.
       const img = post.image
         ? { src: post.image, alt: post.note || 'Photo' }
         : placeholderPhoto(post.id, post.note);
       const foot = (post.note ? `<p class="card-note">${esc(post.note)}</p>` : '') + tagChips(post);
+      // .card-main holds the post itself (ending in the action row); the comment
+      // thread expands as a sibling below, tucked under it on the same left axis.
       el.innerHTML =
-        head +
-        `<figure class="photo" tabindex="0" role="button" aria-label="Enlarge photo">` +
-          `<img src="${img.src}" alt="${esc(img.alt)}" loading="lazy" decoding="async">` +
-        `</figure>` +
-        (foot ? `<div class="card-foot">${foot}</div>` : '');
+        `<div class="card-main">` +
+          head +
+          (foot ? `<div class="card-foot">${foot}</div>` : '') +
+          `<figure class="photo" tabindex="0" role="button" aria-label="Enlarge photo">` +
+            `<img src="${img.src}" alt="${esc(img.alt)}" loading="lazy" decoding="async">` +
+          `</figure>` +
+          actions +
+        `</div>` +
+        commentsPanelHtml(post);
       wirePhoto(el, img);
-      return ownerControls(el, post, opts);
+      wireComments(el, post, opts);
+      return el;
     }
 
     // Text entry (post / find): identity first, then headline, caption, tags.
@@ -152,14 +272,19 @@
               `${esc(post.title)}${external ? '<span class="card-title-ext" aria-hidden="true">↗</span>' : ''}</a></h2>`
           : `<h2 class="card-title">${esc(post.title)}</h2>`)
       : '';
-    if (!post.title) el.classList.add('card--note-only');
 
     el.innerHTML =
-      head +
-      titleHtml +
-      (post.note ? `<p class="card-note">${esc(post.note)}</p>` : '') +
-      tagChips(post);
-    return ownerControls(el, post, opts);
+      `<div class="card-main">` +
+        head +
+        titleHtml +
+        cardNoteHtml(post) +
+        tagChips(post) +
+        actions +
+      `</div>` +
+      commentsPanelHtml(post);
+    wireReadMore(el, post);
+    wireComments(el, post, opts);
+    return el;
   }
 
   function wirePhoto(el, img) {
@@ -172,10 +297,112 @@
     });
   }
 
+  /* ── Comments ────────────────────────────────────────────────────────────
+     A quiet thread that expands below the entry from the comment glyph on the
+     LEFT of the action row (see cardActionsHtml), nested under the post on the
+     same left axis with a small avatar + name + text. The panel animates
+     open/shut with the site's easing (a grid-rows reveal, see .comments-panel).
+     Commenting is friends-only (see canComment) — the thread is omitted on posts
+     by people you're not friends with. */
+  function commentItemHtml(c) {
+    const u = Store.user(c.author);
+    const name = esc(u ? u.name : c.author);
+    const own = c.author === Store.session();
+    return `<li class="comment">` +
+        `<a class="comment-avatar-link" href="#/u/${esc(encodeURIComponent(c.author))}" aria-label="${name}">` +
+          avatarEl(u || { name: c.author }, { cls: 'comment-avatar' }) +
+        `</a>` +
+        `<div class="comment-body">` +
+          `<p class="comment-text">` +
+            `<a class="comment-name" href="#/u/${esc(encodeURIComponent(c.author))}">${name}</a> ` +
+            esc(c.text) +
+          `</p>` +
+          `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
+        `</div>` +
+        // Delete uses the same trash glyph as the post controls (right-aligned).
+        (own
+          ? `<button class="comment-delete" type="button" data-comment="${esc(c.id)}" ` +
+              `aria-label="Delete this comment" title="Delete comment">${svgIcon('trash')}</button>`
+          : '') +
+      `</li>`;
+  }
+
+  // The collapsible thread itself. Open state lives in `openComments` so it
+  // survives a card rebuild; the .open class (not [hidden]) drives the animation.
+  function commentsPanelHtml(post) {
+    if (!canComment(post)) return '';   // friends-only: no thread on a non-friend's post
+    const list = Store.commentsFor(post.id);
+    const open = openComments.has(post.id);
+    // .comments-inner is the collapsing grid child — it holds NO padding/border
+    // (that would keep it from reaching 0 height); all spacing + the left rule
+    // live on .comments-content inside it.
+    return `<div class="comments-panel${open ? ' open' : ''}">` +
+        `<div class="comments-inner">` +
+          `<div class="comments-content">` +
+            (list.length ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>` : '') +
+            `<form class="comment-form">` +
+              `<input type="text" name="text" maxlength="300" placeholder="Add a comment…" required>` +
+              `<button type="submit">Post</button>` +
+            `</form>` +
+          `</div>` +
+        `</div>` +
+      `</div>`;
+  }
+
+  function wireComments(el, post, opts) {
+    const toggle = el.querySelector('.card-comment');
+    const panel = el.querySelector('.comments-panel');
+    if (!toggle || !panel) return;
+
+    // Expand/collapse is pure CSS (grid-rows + opacity) — no rebuild, so it
+    // eases like the rest of the site.
+    toggle.addEventListener('click', () => {
+      const open = openComments.has(post.id);
+      if (open) openComments.delete(post.id); else openComments.add(post.id);
+      toggle.setAttribute('aria-expanded', String(!open));
+      panel.classList.toggle('open', !open);
+    });
+
+    // Adding/removing a comment changes the list + the count, so the card is
+    // rebuilt. We swap just this card in place so the surrounding feed/column
+    // doesn't re-animate — except your OWN posts, whose edit/delete controls are
+    // wired at the page level (see renderUser), so those go through `refresh`.
+    const apply = () => {
+      openComments.add(post.id);
+      if (opts.owner && opts.refresh) { opts.refresh(); return; }
+      const fresh = makeCard(post, opts);
+      fresh.style.animation = 'none';               // no rise flash on an in-place swap
+      el.replaceWith(fresh);
+      fresh.querySelector('.comment-form input')?.focus();
+    };
+
+    panel.querySelector('.comment-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = Store.addComment(post.id, e.target.elements.text.value);
+      if (res.ok) apply();
+    });
+
+    panel.querySelectorAll('.comment-delete').forEach(btn =>
+      btn.addEventListener('click', () => {
+        if (!window.confirm('Delete this comment?')) return;
+        Store.deleteComment(btn.dataset.comment);
+        apply();
+      }));
+  }
+
   // ── Inline edit (text only) ───────────────────────────────────────────────
   // The post whose card is currently swapped for an edit form, or null. Only one
   // at a time; reset on any navigation (see route()).
   let editingId = null;
+
+  // Which posts' comment panels are expanded. A card rebuilds on every add/
+  // delete (same full-refresh pattern as edit/delete elsewhere), so this is
+  // what keeps a panel open across that refresh.
+  const openComments = new Set();
+
+  // Which posts have their long-note "Read more" tail expanded — same role as
+  // openComments, keeping a panel open across an in-place card rebuild.
+  const openReadMore = new Set();
 
   // The editable fields for a post, prefilled from its current values. Mirrors
   // the composer's fields (minus the photo upload — captions/tags only there).
@@ -242,6 +469,26 @@
     return el;
   }
 
+  /* ── Masthead ──────────────────────────────────────────────────────────────
+     The editorial nameplate that crowns each page: a small uppercase kicker
+     (the issue date, or a section eyebrow) over a big Instrument Serif title,
+     above a full-width hairline. Callers pass already-safe strings. */
+  function mastheadEl(kicker, title) {
+    return `<header class="masthead">` +
+        (kicker ? `<p class="masthead-kicker">${kicker}</p>` : '') +
+        `<h1 class="masthead-title">${title}</h1>` +
+      `</header>`;
+  }
+
+  // The feed's "issue date" — e.g. "Saturday · July 5". Shares store.js's TODAY
+  // so it always agrees with the posts' own date stamps.
+  function longDate() {
+    const d = new Date(TODAY + 'T12:00:00');
+    const wd = d.toLocaleDateString('en-US', { weekday: 'long' });
+    const md = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    return `${wd} <span class="dot">·</span> ${md}`;
+  }
+
   /* ── Home view ───────────────────────────────────────────────────────────── */
   const FILTERS = [
     { key: 'all',   label: 'All' },
@@ -255,9 +502,7 @@
   function renderHome() {
     view.innerHTML =
       `<section class="view">` +
-        // The nav already says "My Circle" and the feed speaks for itself, so the
-        // page header is dropped — kept only for screen readers / the a11y outline.
-        `<h1 class="visually-hidden">My Circle</h1>` +
+        mastheadEl(longDate(), 'My Circle') +
         `<div class="filters" role="group" aria-label="Filter by type">` +
           FILTERS.map(f =>
             `<button class="filter" type="button" data-filter="${f.key}" ` +
@@ -401,39 +646,58 @@
   /* ── Profile (own account or any friend, at #/u/username) ─────────────────────
      One view renders both: the signed-in identity + their posts as a single-
      author column. Your own profile carries a Log out; a friend's carries a
-     Follow / Unfollow toggle and a way back to the directory. */
+     an Add-friend toggle and a way back to the directory. */
   function renderUser(username) {
     const u = Store.user(username);
     if (!u) { location.hash = '#/'; return; }          // stale link → home
     const isSelf = u.username === Store.session();
     const list = Store.postsBy(u.username);
 
-    const following = Store.isFollowing(u.username);
+    const isFriend = Store.isFriend(u.username);
     // Own profile carries a "copy my link to share" action; a friend's carries the
-    // Follow toggle. (Log out moves to the foot of your own column, below.)
+    // Add-friend toggle. (Log out moves to the foot of your own column, below.)
     const action = isSelf
-      ? `<button class="account-share" type="button" id="share">` +
-          svgIcon('share', 'account-share-ico') +
-          `<span class="account-share-label">Copy profile link</span>` +
-        `</button>`
-      : `<button class="follow-btn" type="button" id="follow" ` +
-          `aria-pressed="${following}">${following ? 'Following' : 'Follow'}</button>`;
+      ? `<div class="account-actions">` +
+          `<button class="account-edit" type="button" id="edit-profile">` +
+            svgIcon('pencil', 'account-edit-ico') +
+            `<span>Edit profile</span>` +
+          `</button>` +
+          `<button class="account-share" type="button" id="share">` +
+            svgIcon('share', 'account-share-ico') +
+            `<span class="account-share-label">Copy profile link</span>` +
+          `</button>` +
+        `</div>`
+      : `<button class="friend-btn" type="button" id="friend" ` +
+          `aria-pressed="${isFriend}">${isFriend ? 'Friends' : 'Add friend'}</button>`;
 
     const count = `${list.length} ${list.length === 1 ? 'post' : 'posts'}`;
+    const friendCount = Store.friends().length;
     const stats = isSelf
-      ? `${count} <span class="dot">·</span> ${Store.following().length} following`
+      ? `${count} <span class="dot">·</span> ${friendCount} ${friendCount === 1 ? 'friend' : 'friends'}`
       : count;
 
     view.innerHTML =
       `<section class="view">` +
-        (isSelf ? '' : `<a class="profile-back" href="#/friends">← Friends</a>`) +
-        `<div class="account">` +
-          `<span class="avatar account-avatar" aria-hidden="true">${esc(initialOf(u.name))}</span>` +
-          `<h1 class="view-title">${esc(u.name)}</h1>` +
-          `<p class="view-sub">@${esc(u.username)}</p>` +
-          (u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '') +
-          `<p class="profile-stats">${stats}</p>` +
-          action +
+        (isSelf ? '' : (() => { const b = backTarget();
+          return `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>`; })()) +
+        `<div class="account${u.avatar ? ' account--photo' : ''}">` +
+          // The photo is the statement; its colour spills into the ambient page
+          // wash behind everything (see applyAmbient), so the header stays clean.
+          `<div class="account-id">` +
+            `<div class="account-figure">` +
+              avatarEl(u, { cls: 'account-avatar' }) +
+              (isSelf
+                ? `<button class="account-photo-edit" type="button" id="edit-photo" ` +
+                    `aria-label="Change your photo" title="Change your photo">` +
+                    svgIcon('camera', 'account-photo-ico') + `</button>`
+                : '') +
+            `</div>` +
+            `<h1 class="view-title">${esc(u.name)}</h1>` +
+            `<p class="view-sub">@${esc(u.username)}</p>` +
+            (u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '') +
+            `<p class="profile-stats">${stats}</p>` +
+            action +
+          `</div>` +
         `</div>` +
         `<div class="feed" id="feed"></div>` +
         // Log out lives at the very bottom, under your posts — a quiet exit once
@@ -456,7 +720,7 @@
       list.forEach((p, i) => {
         const card = (isSelf && p.id === editingId)
           ? makeEditCard(p)
-          : makeCard(p, { solo: true, owner: isSelf });
+          : makeCard(p, { solo: true, owner: isSelf, refresh: () => renderUser(username) });
         card.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
         frag.appendChild(card);
       });
@@ -497,10 +761,10 @@
         location.hash = '#/';
       }));
 
-    const followBtn = document.getElementById('follow');
-    if (followBtn) followBtn.addEventListener('click', () => {
-      if (Store.isFollowing(u.username)) Store.unfollow(u.username);
-      else Store.follow(u.username);
+    const friendBtn = document.getElementById('friend');
+    if (friendBtn) friendBtn.addEventListener('click', () => {
+      if (Store.isFriend(u.username)) Store.removeFriend(u.username);
+      else Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
     });
 
@@ -524,6 +788,177 @@
       authMode = 'login';        // returning user — offer login first
       go('#/');
     });
+
+    const editPhotoBtn = document.getElementById('edit-photo');
+    if (editPhotoBtn) editPhotoBtn.addEventListener('click',
+      () => openAvatarEditor(() => renderUser(username)));
+
+    const editProfileBtn = document.getElementById('edit-profile');
+    if (editProfileBtn) editProfileBtn.addEventListener('click',
+      () => openProfileEditor(() => renderUser(username)));
+  }
+
+  /* ── Avatar editor ───────────────────────────────────────────────────────
+     A small frosted modal for setting your profile photo: pick → square crop
+     (reusing initCropper) → save. On save it exports a 512² JPEG data-URI and
+     hands it to Store.updateAvatar, then calls `done` to re-render in place. */
+  function openAvatarEditor(done) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Change your photo');
+    modal.innerHTML =
+      `<div class="modal-card">` +
+        `<h2 class="modal-title">Your photo</h2>` +
+        `<input id="av-file" type="file" accept="image/*" hidden>` +
+        `<div class="dropzone" id="av-drop">` +
+          `<button type="button" class="dropzone-btn" id="av-pick">Choose a photo</button>` +
+          `<p class="field-hint">JPG or PNG · cropped to a square.</p>` +
+        `</div>` +
+        `<div class="crop crop--avatar" id="av-crop" hidden>` +
+          `<img id="av-cropimg" alt="" draggable="false">` +
+          `<span class="crop-hint">Drag to reposition</span>` +
+        `</div>` +
+        `<button type="button" class="crop-replace" id="av-replace" hidden>Replace photo</button>` +
+        `<p class="composer-error" id="av-error" role="alert"></p>` +
+        `<div class="modal-actions">` +
+          `<button type="button" class="edit-cancel" id="av-cancel">Cancel</button>` +
+          `<button type="button" class="composer-submit" id="av-save" disabled>Save photo</button>` +
+        `</div>` +
+      `</div>`;
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    const fileEl = modal.querySelector('#av-file');
+    const dropEl = modal.querySelector('#av-drop');
+    const cropEl = modal.querySelector('#av-crop');
+    const imgEl = modal.querySelector('#av-cropimg');
+    const replaceEl = modal.querySelector('#av-replace');
+    const saveEl = modal.querySelector('#av-save');
+    const errEl = modal.querySelector('#av-error');
+    let avCropper = null;
+
+    const close = () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onEsc);
+      modal.remove();
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onEsc);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.querySelector('#av-cancel').addEventListener('click', close);
+
+    const pick = () => fileEl.click();
+    modal.querySelector('#av-pick').addEventListener('click', pick);
+    replaceEl.addEventListener('click', pick);
+    dropEl.addEventListener('click', (e) => { if (e.target === dropEl) pick(); });
+
+    fileEl.addEventListener('change', () => {
+      const f = fileEl.files && fileEl.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        dropEl.hidden = true;
+        cropEl.hidden = false;
+        replaceEl.hidden = false;
+        saveEl.disabled = false;
+        avCropper = initCropper(cropEl, imgEl, reader.result);
+      };
+      reader.readAsDataURL(f);
+    });
+
+    saveEl.addEventListener('click', () => {
+      if (!avCropper) return;
+      const res = Store.updateAvatar(avCropper.export(512));
+      if (!res.ok) { errEl.textContent = res.error; return; }
+      close();
+      done();
+    });
+  }
+
+  /* ── Profile editor ──────────────────────────────────────────────────────
+     A sibling of the avatar editor for the words: display name + bio. Saves via
+     Store.updateProfile, then calls `done` to re-render the profile in place.
+     (The photo has its own editor, reached from the avatar's camera button.) */
+  function openProfileEditor(done) {
+    const u = Store.currentUser();
+    if (!u) return;
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Edit profile');
+    modal.innerHTML =
+      `<div class="modal-card">` +
+        `<h2 class="modal-title">Edit profile</h2>` +
+        `<form id="pf-form" novalidate>` +
+          `<div class="field">` +
+            `<label for="pf-name">Display name</label>` +
+            `<input id="pf-name" type="text" maxlength="40" ` +
+              `value="${esc(u.name)}" placeholder="Your name" autocomplete="name">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label for="pf-bio">Bio</label>` +
+            `<textarea id="pf-bio" rows="3" maxlength="160" ` +
+              `placeholder="A line about you (optional).">${esc(u.bio || '')}</textarea>` +
+            `<p class="field-hint" id="pf-count"></p>` +
+          `</div>` +
+          `<p class="composer-error" id="pf-error" role="alert"></p>` +
+          `<div class="modal-actions">` +
+            `<button type="button" class="edit-cancel" id="pf-cancel">Cancel</button>` +
+            `<button type="submit" class="composer-submit" id="pf-save">Save</button>` +
+          `</div>` +
+        `</form>` +
+      `</div>`;
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    const nameEl = modal.querySelector('#pf-name');
+    const bioEl = modal.querySelector('#pf-bio');
+    const countEl = modal.querySelector('#pf-count');
+    const errEl = modal.querySelector('#pf-error');
+
+    const close = () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onEsc);
+      modal.remove();
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onEsc);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.querySelector('#pf-cancel').addEventListener('click', close);
+
+    // A quiet live count so the 160-char bio ceiling never feels like a surprise.
+    const updateCount = () => {
+      countEl.textContent = `${bioEl.value.length} / 160`;
+    };
+    bioEl.addEventListener('input', updateCount);
+    updateCount();
+
+    modal.querySelector('#pf-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = Store.updateProfile({ name: nameEl.value, bio: bioEl.value });
+      if (!res.ok) { errEl.textContent = res.error; return; }
+      close();
+      done();
+    });
+
+    nameEl.focus();
+    nameEl.select();
+  }
+
+  // The "← Back" link atop a friend's profile points wherever you came from
+  // (home, Friends, your own profile…), not always Friends. `profileOrigin` is
+  // set by the router when you enter a profile from a non-profile page.
+  function backTarget() {
+    const labels = {
+      '#/': 'My Circle',
+      '#/friends': 'Friends',
+      '#/profile': 'Profile',
+    };
+    const href = labels[profileOrigin] ? profileOrigin : '#/friends';
+    return { href, label: labels[href] || 'Back' };
   }
 
   // A shareable link straight to someone's profile. Uses the current origin +
@@ -556,44 +991,41 @@
     });
   }
 
-  /* ── Friends (the circle you follow) + Discover (people you don't yet) ─────── */
+  /* ── Friends (your mutual circle) + Discover (people you haven't added) ─────── */
   function renderFriends() {
     const me = Store.session();
-    const followingSet = new Set(Store.following());
+    const friendSet = new Set(Store.friends());
     const byName = (a, b) => a.name.localeCompare(b.name);
 
-    const friends = Store.following().map(Store.user).filter(Boolean).sort(byName);
-    // Everyone signed up who isn't you and isn't already in your circle.
+    const friends = Store.friends().map(Store.user).filter(Boolean).sort(byName);
+    // Everyone signed up who isn't you and isn't already a friend.
     const discover = Store.users()
-      .filter(u => u.username !== me && !followingSet.has(u.username))
+      .filter(u => u.username !== me && !friendSet.has(u.username))
       .sort(byName);
 
-    // A directory row. `discover` rows swap the go-arrow for a Follow button so
+    // A directory row. `discover` rows swap the go-arrow for an Add button so
     // you can add someone without leaving the page.
     const row = (u, add) =>
       `<a class="friend" href="#/u/${encodeURIComponent(u.username)}">` +
-        `<span class="avatar" aria-hidden="true">${esc(initialOf(u.name))}</span>` +
+        avatarEl(u, { cls: 'friend-avatar' }) +
         `<span class="friend-text">` +
           `<span class="friend-name">${esc(u.name)}</span>` +
           `<span class="friend-user">@${esc(u.username)}</span>` +
           (u.bio ? `<span class="friend-bio">${esc(u.bio)}</span>` : '') +
         `</span>` +
         (add
-          ? `<button class="friend-add" type="button" data-follow="${esc(u.username)}" ` +
-              `aria-label="Follow ${esc(u.name)}">Follow</button>`
+          ? `<button class="friend-add" type="button" data-add="${esc(u.username)}" ` +
+              `aria-label="Add ${esc(u.name)} as a friend">Add</button>`
           : `<span class="friend-go" aria-hidden="true">→</span>`) +
       `</a>`;
 
+    const circleCount = `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} in your circle`;
     view.innerHTML =
       `<section class="view">` +
-        `<div class="view-head">` +
-          `<h1 class="view-title">Friends</h1>` +
-          `<p class="view-sub">${friends.length} ` +
-            `${friends.length === 1 ? 'person' : 'people'} in your circle</p>` +
-        `</div>` +
+        mastheadEl(circleCount, 'Friends') +
         (friends.length
           ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
-          : `<p class="feed-empty">You’re not following anyone yet.</p>`) +
+          : `<p class="feed-empty">You haven’t added any friends yet.</p>`) +
         (discover.length
           ? `<div class="discover">` +
               `<h2 class="discover-head">Find people</h2>` +
@@ -602,13 +1034,13 @@
           : '') +
       `</section>`;
 
-    // Follow from a Discover row: add, then re-render so they move up into your
+    // Add from a Discover row: link up, then re-render so they move into your
     // circle. The button sits inside the row link, so stop it navigating.
     view.querySelectorAll('.friend-add').forEach(btn =>
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        Store.follow(btn.dataset.follow);
+        Store.addFriend(btn.dataset.add);
         renderFriends();
       }));
   }
@@ -690,10 +1122,7 @@
   function renderPublish() {
     view.innerHTML =
       `<section class="view">` +
-        `<div class="view-head">` +
-          `<h1 class="view-title">Publish</h1>` +
-          `<p class="view-sub">Share to your circle</p>` +
-        `</div>` +
+        mastheadEl('Share to your circle', 'Publish') +
         `<form class="composer" id="composer" novalidate>` +
           `<div class="type-pick" role="group" aria-label="Post type">` +
             PUB_TYPES.map(t =>
@@ -920,6 +1349,107 @@
   }
   const onKey = (e) => { if (e.key === 'Escape') closeLightbox(); };
 
+  /* ── Ambient wash ───────────────────────────────────────────────────────────
+     The soft background glow (see .ambient) is on-brand by default. On a profile
+     with a photo we sample a representative colour from that photo and feed it to
+     the --glow-* CSS vars, so the page's own background picks up the person's hue
+     — a gradient underneath the content, not a blurred photo layered on top. */
+  const sampleCache = new Map();
+  let ambientSeq = 0;
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    const l = (mx + mn) / 2;
+    let h = 0, s = 0;
+    if (d) {
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return { h, s, l };
+  }
+
+  function hslToRgb(h, s, l) {
+    if (!s) { const v = Math.round(l * 255); return { r: v, g: v, b: v }; }
+    const hue = (p, q, t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    return {
+      r: Math.round(hue(p, q, h + 1 / 3) * 255),
+      g: Math.round(hue(p, q, h) * 255),
+      b: Math.round(hue(p, q, h - 1 / 3) * 255),
+    };
+  }
+
+  // Sample a single representative colour from an image (data-URI). Draws it tiny
+  // and takes a saturation-weighted average — so a photo's signature colour leads
+  // over flat greys — then normalises it to an even, gentle glow (steady hue,
+  // lifted saturation, mid lightness) so dark or washed-out photos tint alike.
+  function sampleColor(src) {
+    if (sampleCache.has(src)) return Promise.resolve(sampleCache.get(src));
+    return new Promise(resolve => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => {
+        let out = null;
+        try {
+          const n = 14;
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = n;
+          const ctx = cv.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0, n, n);
+          const d = ctx.getImageData(0, 0, n, n).data;
+          let R = 0, G = 0, B = 0, W = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const r = d[i], g = d[i + 1], b = d[i + 2];
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            const sat = mx ? (mx - mn) / mx : 0;
+            const w = sat * sat + 0.05;      // saturated pixels lead the average
+            R += r * w; G += g * w; B += b * w; W += w;
+          }
+          const hsl = rgbToHsl(R / W, G / W, B / W);
+          out = hslToRgb(hsl.h, Math.max(0.5, Math.min(0.85, hsl.s * 1.5)), 0.55);
+        } catch { out = null; }
+        sampleCache.set(src, out);
+        resolve(out);
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  // The ambient wash is a profile special: light it with a colour sampled from
+  // the profile's photo, and leave every other page clean (data-ambient "none").
+  // Sampling is async; a seq guard drops a stale result if you've navigated on,
+  // and we hold "none" until the colour lands so nothing flashes.
+  function applyAmbient(path) {
+    const body = document.body;
+    const seq = ++ambientSeq;
+
+    let user = null;
+    if (path.startsWith('#/u/')) user = Store.user(decodeURIComponent(path.slice(4)));
+    else if (path === '#/profile') user = Store.currentUser();
+
+    body.dataset.ambient = 'none';                 // default: no wash
+    if (!user || !user.avatar) return;             // non-profile, or no photo → clean
+    sampleColor(user.avatar).then(rgb => {
+      if (seq !== ambientSeq) return;
+      if (!rgb) return;                            // sampling failed → stay clean
+      const { r, g, b } = rgb;
+      body.style.setProperty('--glow-photo', `rgba(${r}, ${g}, ${b}, 0.26)`);
+      body.dataset.ambient = 'photo';
+    });
+  }
+
   /* ── Router + page transitions ─────────────────────────────────────────────
      The nav order is a line: Home(0) · Friends(1) · Profile(2) · Publish(3). A
      move to a higher index slides the new page in from the RIGHT; a lower index
@@ -1013,6 +1543,16 @@
     const hash = location.hash || '#/';
     const path = hash.split('?')[0];
     renderNav(path);   // a friend view (#/u/…) matches nothing → nothing highlighted
+
+    // Remember where a friend profile's "← Back" should return to: the page you
+    // came from. Chained profile→profile hops keep the original origin, so Back
+    // always lands you back on the feed/directory you started browsing from.
+    if (path.startsWith('#/u/')) {
+      if (lastPath && !lastPath.startsWith('#/u/')) profileOrigin = lastPath;
+    }
+    lastPath = path;
+
+    applyAmbient(path);   // warm (Circle) / cool (Friends) / photo tint (a profile)
 
     // A friend's profile lives at #/u/username. Own profile stays at #/profile so
     // the nav can mark it current (a friend view highlights nothing).

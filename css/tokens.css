@@ -34,7 +34,21 @@
   --sidebar-w: 268px;
   --topbar-h:  88px;
   --feed-width: 660px;
+  --content-max: 900px;   /* masthead + rule width (wider than the feed measure) */
   --inset:     1.6rem;    /* text inset past the left type-rule */
+
+  /* Type scale — Instrument Serif carries the display sizes (mastheads, headlines,
+     names); Oxygen carries the functional layer. Bigger, bolder, editorial. */
+  --display:  clamp(2.6rem, 4.6vw, 4.6rem);   /* page nameplates */
+  --headline: clamp(1.7rem, 2.6vw, 2.05rem);  /* post titles */
+  --body:     1.13rem;                         /* captions / notes */
+  --kicker:   0.78rem;                         /* the uppercase date/section label */
+
+  /* Frosted glass — chrome only (nav rail, sticky masthead, lightbox, hero wash).
+     Translucent enough to show the blur, opaque enough to hold AA text over it. */
+  --glass-bg:      color-mix(in srgb, var(--bg) 74%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--bg) 62%, transparent);
+  --glass-blur:    20px;
 
   color-scheme: light;
 }
@@ -57,6 +71,10 @@
     --type-find:      #e5705f;  /* red   */
     --type-photo:     #5cbf92;  /* green */
     --type-photo-ink: #5cbf92;
+
+    /* Dark glass needs a touch more opacity to keep chrome legible over content. */
+    --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);
+    --glass-bg-soft: color-mix(in srgb, var(--bg) 56%, transparent);
 
     color-scheme: dark;
   }

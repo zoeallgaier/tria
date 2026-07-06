@@ -18,6 +18,37 @@ img { max-width: 100%; display: block; }
 button { font: inherit; color: inherit; cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 
+/* ── Ambient wash (profiles only) ──────────────────────────────────────────
+   One soft blob centred above the screen, behind the whole app (above the flat
+   page colour, below all content) — symmetric depth from the background itself,
+   not a coloured card. It's a profile special: only a profile lights it up, in a
+   still colour sampled from that person's photo (set via --glow-photo by the
+   router). Everywhere else it stays transparent. */
+.ambient {
+  /* Absolute (not fixed) so it scrolls WITH the page: the glow sits behind the
+     top of the view and scrolls away as you read down — depth on arrival without
+     sitting behind every post forever. Viewport-tall, anchored to the page top.
+     Pure CSS, no scroll listener, so it costs nothing. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  --glow: transparent;
+  background: radial-gradient(ellipse 78% 62% at 50% -14%, var(--glow), transparent 70%);
+  /* Fade in/out with the page transition (a gradient can't tween, but opacity
+     can) so it eases in alongside the rest of the site rather than snapping. */
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient { transition: none; }
+}
+
 /* Visible keyboard focus on every interactive element. */
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -69,6 +100,9 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   padding: 0 1.75rem;
   border-right: 1px solid var(--rule);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .brand-mark {
@@ -95,6 +129,9 @@ a { color: inherit; text-decoration: none; }
   gap: 0.1rem;
   padding: 1rem 1rem 1.5rem;
   border-right: 1px solid var(--rule);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .nav-link {
@@ -119,19 +156,21 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700;
 }
 
-/* Publish — the one primary action. Pinned to the foot, filled ink. */
+/* Publish — the one primary action. Pinned to the foot; an outline at rest,
+   filling with ink on hover so the fill reads as a response, not a resting state. */
 .nav-publish {
   margin-top: auto;
   justify-content: center;
   gap: 0.5rem;
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
   font-weight: 700;
   font-size: 1.08rem;
-  padding: 0.8rem 0.9rem;
+  padding: calc(0.8rem - 1px) calc(0.9rem - 1px);
 }
 @media (hover: hover) {
-  .nav-publish:hover { color: var(--on-accent); background: var(--accent-press); }
+  .nav-publish:hover { color: var(--on-accent); background: var(--accent-press); border-color: var(--accent-press); }
 }
 
 /* ── Main / views ────────────────────────────────────────────────────────── */
@@ -171,10 +210,14 @@ main {
   .page { transition: none; }
 }
 
+/* Desktop: one centred column. The sidebar offsets `main` on the left, so we
+   centre within the REMAINING space — the readable measure sits balanced in the
+   headroom rather than hugging either edge. Masthead and feed share the same
+   axis and width (see the content-block cap below) so nothing reads lopsided. */
 .view {
-  max-width: calc(var(--feed-width) + 4rem);
-  margin: 0 auto;
-  padding: 3.5rem 2rem 6rem;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: 4rem 2rem 6rem;
 }
 
 /* Header aligns with the post-text column (inset past where the type-rules sit);
@@ -182,11 +225,48 @@ main {
 .view-head, .filters { padding-inline: var(--inset); }
 .view-head { margin-bottom: 2.25rem; }
 .view-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-size: 2.4rem;
   line-height: 1.05;
   letter-spacing: 0;
   color: var(--text);
 }
+
+/* ── Masthead — the editorial nameplate crowning each page ─────────────────── */
+.masthead {
+  margin-bottom: 2.6rem;
+  padding: 0 var(--inset) 1.4rem;
+  border-bottom: 1px solid var(--rule);
+}
+.masthead-kicker {
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
+  font-size: var(--kicker);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+.masthead-kicker .dot { opacity: 0.5; margin: 0 0.35rem; }
+.masthead-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: var(--display);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* Masthead and every content block share one readable measure, centred on the
+   same axis — a clean, balanced column rather than a lopsided broadsheet. */
+.masthead,
+.filters,
+.feed,
+.friends-list,
+.discover,
+.composer,
+.account,
+.feed-empty { max-width: var(--feed-width); margin-inline: auto; }
 .view-sub {
   color: var(--muted);
   font-size: 0.92rem;
@@ -200,7 +280,7 @@ main {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 3rem;
+  margin-bottom: 2.4rem;
 }
 .filter {
   flex-shrink: 0;
@@ -229,8 +309,10 @@ main {
 .filter[data-filter="find"][aria-pressed="true"]  { color: var(--bg); background: var(--type-find);  border-color: var(--type-find); }
 .filter[data-filter="photo"][aria-pressed="true"] { color: var(--bg); background: var(--type-photo); border-color: var(--type-photo); }
 
-/* ── Feed — editorial blocks, no boxes; whitespace + a left type-rule ─────── */
-.feed { display: flex; flex-direction: column; gap: 2rem; }
+/* ── Feed — editorial blocks, no boxes; whitespace + a right type-tag ──────── */
+/* Entries are separated by whitespace alone (no dividers). Each carries a small
+   colored type-tag at the right of its byline instead of a left rule. */
+.feed { display: flex; flex-direction: column; gap: 2.4rem; max-width: var(--feed-width); }
 
 .feed-empty {
   color: var(--muted);
@@ -240,45 +322,53 @@ main {
 }
 
 .card {
-  position: relative;
   animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
-/* Text entries (post / find): a colored left type-rule running the FULL height
-   of the entry — it both marks the type and separates entries, so there are no
-   horizontal dividers. Content is inset past the rule. */
-.card--post, .card--find {
-  border-left: 3px solid transparent;
-  padding: 0.35rem var(--inset) 0.35rem calc(var(--inset) - 3px);
+/* The post body sits in .card-main; the comment thread expands as a sibling
+   below it (see .comments-panel). Text entries (post / find): content inset to
+   match the photo text column; the type reads from the colored tag, not a rule. */
+.card--post .card-main, .card--find .card-main {
+  padding: 0.35rem var(--inset);
 }
-.card--post { border-left-color: var(--type-post); }
-.card--find { border-left-color: var(--type-find); }
 
-/* Owner controls — only on your own posts (profile view). Edit + delete hang
-   quietly in the top-right corner; each is a muted glyph that warms on hover.
-   A page-colored backdrop keeps them legible even over a long headline. */
-.card-tools {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.4rem;
+/* Action row below the post: comment toggle on the LEFT (opens the thread that
+   nests below it), edit + delete grouped on the right for your own posts. */
+.card-actions {
   display: flex;
-  gap: 0.1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
-.card-tools button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
+.card--photo .card-actions { padding-inline: var(--inset); margin-top: 0.9rem; }
+.card-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  min-width: 30px;
   padding: 0;
   color: var(--muted);
-  background: var(--bg);
+  background: none;
   border: none;
   border-radius: var(--radius-pill);
-  opacity: 0.65;
-  transition: color 0.15s, opacity 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
-.card-tools button svg { width: 18px; height: 18px; }
-.card-tools button:hover, .card-tools button:focus-visible { opacity: 1; }
+.card-actions button svg { width: 18px; height: 18px; }
+.card-tools { display: flex; align-items: center; gap: 0.1rem; }
+
+/* Comment toggle: glyph + count, pulled left so the glyph lines up with the post
+   text column (cancelling its own padding); lifts to the accent when open. */
+.card-comment {
+  gap: 0.3rem;
+  padding-inline: 0.35rem;
+  margin-left: -0.35rem;
+}
+.card-comment-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
+.card-comment[aria-expanded="true"],
+.card-comment:hover,
+.card-comment:focus-visible { color: var(--accent); }
+
 .card-edit:hover, .card-edit:focus-visible {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--bg));
@@ -287,12 +377,10 @@ main {
   color: var(--type-find);
   background: color-mix(in srgb, var(--type-find) 12%, var(--bg));
 }
-/* Photo cards: lift the controls above the identity row they share the top with. */
-.card--photo .card-tools { top: 0.15rem; }
 
 /* Inline edit form — a card swapped for its editable fields. Inset to align with
    the text column; the actions row pairs a quiet Cancel with the accent Save. */
-.card--editing { padding: 0.35rem var(--inset) 0.9rem calc(var(--inset) - 3px); }
+.card--editing { padding: 0.35rem var(--inset) 0.9rem; }
 .card--editing.card--photo { padding-inline: var(--inset); }
 .edit-form .field:first-child { margin-top: 0.35rem; }
 .edit-actions {
@@ -313,16 +401,46 @@ main {
 .edit-cancel:hover { color: var(--text); }
 
 /* ── Byline (identity) ────────────────────────────────────────────────────── */
+/* Flex row: the profile link on the left, the type-tag pushed to the right so it
+   aligns with the identity. */
 .byline {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  justify-content: space-between;
+  gap: 0.9rem;
   margin-bottom: 1rem;
 }
+.byline-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+/* ── Type tag — small colored label (Post / Find / Photo) at the right of the
+   byline, marking the entry's type. Replaces the old left type-rule; the colour
+   is the type's own, as an outline pill with a faint matching wash. */
+.type-tag {
+  flex-shrink: 0;
+  font-family: 'Oxygen', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  line-height: 1;
+  padding: 0.32rem 0.62rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+.type-tag--post  { color: var(--type-post); }
+.type-tag--find  { color: var(--type-find); }
+.type-tag--photo { color: var(--type-photo-ink); }
+@media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
 .avatar {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-img);
+  border-radius: 50%;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -333,7 +451,11 @@ main {
   font-size: 1rem;
   line-height: 1;
   user-select: none;
+  overflow: hidden;
 }
+/* Photo variant — a real uploaded avatar fills the tile (same rounding/size). */
+.avatar--photo { background: none; }
+.avatar--photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .byline-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .byline-name { font-weight: 700; font-size: 0.95rem; line-height: 1.1; color: var(--text); }
 .byline-meta {
@@ -356,18 +478,52 @@ main {
 @media (hover: hover) { .card-title a:hover { color: var(--muted); } }
 .card-title-ext { font-size: 0.55em; color: var(--muted); margin-left: 0.3rem; vertical-align: 0.12em; }
 
+/* One size everywhere a caption/note appears — with a headline, under a photo,
+   or carrying the entry alone (the one-liner). Consistency over emphasis. */
 .card-note {
-  font-size: 1.02rem;
-  line-height: 1.65;
+  font-size: var(--body);
+  line-height: 1.5;
   color: var(--text);
   font-weight: 300;
 }
 .card-note:last-child { margin-bottom: 0; }
-/* A note with no headline carries the whole entry (the one-liner). */
-.card--note-only .card-note {
-  font-size: 1.35rem;
-  line-height: 1.4;
-  color: var(--text);
+/* Paragraph rhythm when a note carries more than one block (long posts). */
+.card-note + .card-note { margin-top: 0.7rem; }
+
+/* ── Long notes — "Read more" ─────────────────────────────────────────────────
+   The full note renders intact; when collapsed its height is clamped to a teaser
+   and the copy below fades out (a mask — the text is never spliced, so it reads
+   the same open or shut). "Read more" eases the clamp out to the real height
+   (JS measures it — see wireReadMore). */
+.readmore-clip {
+  overflow: hidden;
+  max-height: 8.6rem;                 /* ~six lines of teaser while collapsed */
+  transition: max-height 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent);
+          mask-image: linear-gradient(180deg, #000 58%, transparent);
+}
+/* Opened: the fade lifts at once so the text is crisp as it grows; max-height is
+   driven inline by JS during the tween, then released to none at its end. */
+.readmore.open .readmore-clip {
+  max-height: none;                   /* restored-open cards (no inline height) */
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+
+.readmore-toggle {
+  font-family: 'Oxygen', sans-serif;
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 0.6rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+@media (hover: hover) { .readmore-toggle:hover { text-decoration: underline; } }
+@media (prefers-reduced-motion: reduce) {
+  .readmore-clip { transition: none; }
 }
 
 /* ── Tags ──────────────────────────────────────────────────────────────── */
@@ -387,7 +543,108 @@ main {
   .tag:hover { color: var(--accent); border-color: var(--accent); }
 }
 
-/* ── Photo entries — full-bleed 1:1 image; identity + caption below it ─────── */
+/* ── Comments — a quiet thread nested under the entry ─────────────────────────
+   Its content lines up with the post's own text column; a hairline rule in the
+   left gutter (like a reply thread) sets it apart without pushing it inward. The
+   panel reveals with the site's easing — a grid-rows 0fr→1fr height tween plus an
+   opacity lift — so it eases open rather than snapping; `.comments-inner` clips
+   the collapsing content. */
+.comments-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  padding-left: 0.7rem;              /* the rule lives here, in the left gutter */
+  padding-right: var(--inset);
+  transition: grid-template-rows 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.26s ease;
+}
+.comments-panel.open { grid-template-rows: 1fr; opacity: 1; }
+/* The grid child carries no padding/border — that would stop it collapsing to a
+   true 0 height. Spacing + the nesting rule sit on .comments-content within it;
+   its left padding realigns the content to the post text column (--inset). */
+.comments-inner { overflow: hidden; min-height: 0; }
+.comments-content {
+  border-left: 2px solid var(--rule);
+  padding: 0.85rem 0 0.2rem calc(var(--inset) - 0.7rem - 2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .comments-panel { transition: none; }
+}
+
+/* Reset the list's default padding/bullets so rows align to the thread's edge. */
+.comments-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+.comment { display: flex; align-items: flex-start; gap: 0.55rem; }
+.comment-avatar { width: 26px; height: 26px; font-size: 0.64rem; border-radius: 50%; }
+.comment-avatar-link { flex-shrink: 0; margin-top: 0.05rem; }
+.comment-body { min-width: 0; }
+.comment-text { font-size: 0.88rem; line-height: 1.4; color: var(--text); }
+.comment-name { font-weight: 700; color: var(--text); }
+@media (hover: hover) { .comment-name:hover { color: var(--muted); } }
+.comment-meta { font-size: 0.73rem; color: var(--muted); margin-top: 0.1rem; }
+.comment-meta .dot { opacity: 0.5; margin: 0 0.15rem; }
+/* Delete — the same trash glyph and muted→red treatment as the post delete
+   control, right-aligned to the thread edge, aligned to the comment's top line. */
+.comment-delete {
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-top: 0.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  transition: color 0.15s, background 0.15s;
+}
+.comment-delete svg { width: 16px; height: 16px; }
+@media (hover: hover) {
+  .comment-delete:hover, .comment-delete:focus-visible {
+    color: var(--type-find);
+    background: color-mix(in srgb, var(--type-find) 12%, var(--bg));
+  }
+}
+
+.comment-form { display: flex; align-items: center; gap: 0.7rem; }
+.comment-form input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  padding: 0.28rem 0;
+  transition: border-color 0.15s;
+}
+.comment-form input::placeholder { color: var(--muted); opacity: 0.7; }
+.comment-form input:focus { outline: none; border-color: var(--accent); }
+.comment-form button {
+  flex-shrink: 0;
+  color: var(--accent);
+  background: none;
+  border: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 0.28rem 0.1rem;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.comment-form input:not(:placeholder-shown) ~ button,
+.comment-form button:hover { opacity: 1; }
+
+/* ── Photo entries — identity + caption lead, full-bleed 1:1 image last ────── */
 .photo {
   display: block;
   width: 100%;
@@ -398,9 +655,10 @@ main {
   overflow: hidden;
 }
 .photo img { width: 100%; height: 100%; object-fit: cover; }
-/* Byline + caption inset to align with post text; the image is full-width. */
-.card--photo .byline { padding-inline: var(--inset); margin-bottom: 1.15rem; }
-.card--photo .card-foot { padding: 1rem var(--inset) 0; }
+/* Byline + caption inset to align with post text; the image is full-width. The
+   type reads from the green Photo tag in the byline, like posts and finds. */
+.card--photo .byline { padding-inline: var(--inset); }
+.card--photo .card-foot { padding: 0 var(--inset) 1rem; }
 .card--photo .tags { margin-top: 0.9rem; }
 
 /* ── Lightbox ──────────────────────────────────────────────────────────── */
@@ -447,10 +705,19 @@ body.gate main { padding: 0; }
   line-height: 1;
   color: var(--text);
 }
-.auth-tag { color: var(--muted); font-size: 0.95rem; margin-top: 0.4rem; }
+.auth-tag {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 1.18rem;
+  margin-top: 0.5rem;
+}
 .auth-head {
-  font-size: 1.9rem;
-  line-height: 1.1;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 2.5rem;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
   color: var(--text);
   margin-top: 2.5rem;
 }
@@ -525,13 +792,38 @@ body.gate main { padding: 0; }
 }
 
 /* ── Profile (own account or a friend's) — identity header + their column ──── */
-.account { text-align: center; padding: 1.5rem 0 0.5rem; }
-.account-avatar {
-  width: 72px; height: 72px;
-  font-size: 1.85rem;
-  margin: 0 auto 1.15rem;
+/* The identity hero: a calm, centred block. Colour/depth comes from the ambient
+   page wash behind everything (tinted from this profile's photo), so the header
+   itself stays clean — the photo is the statement, not a card stacked on a card. */
+.account {
+  text-align: center;
+  padding: 1rem 1.5rem 2.2rem;
 }
-.account .view-title { font-size: 2.2rem; }
+
+.account-figure { position: relative; display: inline-block; margin-bottom: 1.2rem; }
+.account-avatar {
+  width: 104px; height: 104px;
+  font-size: 2.7rem;
+  margin: 0;
+}
+/* A photo hero gets a soft ring to lift it off the wash. */
+.account--photo .account-avatar { box-shadow: 0 0 0 4px var(--bg), 0 10px 30px rgba(0, 0, 0, 0.18); }
+/* Camera button — set/replace your photo, tucked at the avatar's corner. */
+.account-photo-edit {
+  position: absolute;
+  right: -3px; bottom: -3px;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  transition: background-color 0.15s, transform 0.12s;
+}
+.account-photo-ico { width: 16px; height: 16px; }
+.account-photo-edit:active { transform: scale(0.92); }
+@media (hover: hover) { .account-photo-edit:hover { background: var(--accent-press); } }
+.account .view-title { font-size: 2.4rem; margin-top: 0.1rem; }
 .account-bio { color: var(--muted); margin-top: 0.6rem; }
 .profile-stats {
   color: var(--muted);
@@ -552,16 +844,25 @@ body.gate main { padding: 0; }
 }
 @media (hover: hover) { .profile-back:hover { color: var(--text); } }
 
-/* Their posts sit below the header as a single-author column. */
-.account + .feed { margin-top: 2.75rem; }
+/* Their posts sit below the header as a single-author column. The header already
+   carries its own bottom padding, so this only tops up to a clean separation. */
+.account + .feed { margin-top: 1.5rem; }
 
-/* Copy-my-link action on your own profile. A quiet outline pill that flips to
-   the accent (filled) for a beat once the link is on the clipboard. */
+/* Your own profile carries two quiet outline pills side by side: edit your
+   name/bio, and copy your share link. They sit centred under the header. */
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+.account-edit,
 .account-share {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  margin: 1.6rem auto 0;
+  margin: 0;
   color: var(--text);
   background: none;
   border: 1px solid var(--rule);
@@ -570,8 +871,10 @@ body.gate main { padding: 0; }
   font-size: 0.9rem;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
+.account-edit-ico,
 .account-share-ico { width: 17px; height: 17px; }
 @media (hover: hover) {
+  .account-edit:hover,
   .account-share:hover { border-color: var(--text); }
 }
 .account-share.copied {
@@ -602,8 +905,8 @@ body.gate main { padding: 0; }
   .account-logout:hover { color: var(--type-find); border-color: var(--type-find); }
 }
 
-/* Follow toggle: filled ink to follow, quiet outline once following. */
-.follow-btn {
+/* Friend toggle: filled ink to add, quiet outline once you're friends. */
+.friend-btn {
   display: block;
   margin: 1.6rem auto 0;
   min-width: 148px;
@@ -617,20 +920,25 @@ body.gate main { padding: 0; }
   transition: color 0.15s, background-color 0.15s, border-color 0.15s;
 }
 @media (hover: hover) {
-  .follow-btn:hover { background: var(--accent-press); border-color: var(--accent-press); }
+  .friend-btn:hover { background: var(--accent-press); border-color: var(--accent-press); }
 }
-.follow-btn[aria-pressed="true"] {
+.friend-btn[aria-pressed="true"] {
   color: var(--muted);
   background: none;
   border-color: var(--rule);
   font-weight: 400;
 }
 @media (hover: hover) {
-  .follow-btn[aria-pressed="true"]:hover { color: var(--text); border-color: var(--text); }
+  .friend-btn[aria-pressed="true"]:hover { color: var(--text); border-color: var(--text); }
 }
 
-/* Slim single-author meta line standing in for the byline on a profile. */
+/* Slim single-author meta line standing in for the byline on a profile: the date
+   on the left, the type-tag pushed right (mirroring the byline layout). */
 .card-solometa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
   font-size: 0.8rem;
   color: var(--muted);
   letter-spacing: 0.02em;
@@ -650,7 +958,7 @@ body.gate main { padding: 0; }
 }
 .friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
 @media (hover: hover) { .friend:hover { background: var(--surface); } }
-.friend .avatar { width: 46px; height: 46px; font-size: 1.15rem; }
+.friend .avatar { width: 56px; height: 56px; font-size: 1.4rem; }
 .friend-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
 .friend-name { font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--text); }
 .friend-user { font-size: 0.82rem; color: var(--muted); }
@@ -673,18 +981,19 @@ body.gate main { padding: 0; }
   .friend:hover .friend-go { color: var(--text); transform: translateX(3px); }
 }
 
-/* ── Discover — people you don't yet follow, with an inline Follow ─────────── */
+/* ── Discover — people you haven't added yet, with an inline Add ──────────── */
 .discover { margin-top: 3rem; }
 .discover-head {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
+  font-style: italic;
   font-size: 1.5rem;
   color: var(--text);
   padding: 0 var(--inset) 0.4rem;
   margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--rule);
 }
-/* Compact filled pill; sits where the go-arrow does on a followed row. */
+/* Compact filled pill; sits where the go-arrow does on a friend's row. */
 .friend-add {
   flex-shrink: 0;
   color: var(--on-accent);
@@ -793,6 +1102,55 @@ body.gate main { padding: 0; }
 }
 @media (hover: hover) { .crop-replace:hover { color: var(--text); } }
 
+/* ── Modal (avatar editor) — a frosted overlay + a calm card ───────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  animation: fade 0.18s ease;
+}
+.modal-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  padding: 1.6rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  animation: rise 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.7rem;
+  color: var(--text);
+  margin-bottom: 1.1rem;
+}
+/* The avatar crop is a centered circle (what you see is what you get — photos
+   display round), not full-width like the composer's. */
+.crop--avatar { width: 260px; max-width: 100%; margin: 0 auto; border-radius: 50%; }
+.modal-error { color: var(--type-find); font-size: 0.85rem; margin-top: 0.9rem; min-height: 1.1rem; }
+.modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.2rem; }
+.modal-actions .edit-cancel {
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  padding: 0.6rem 1.2rem;
+  font-size: 0.92rem;
+}
+.modal-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
+.modal-actions .composer-submit:disabled { opacity: 0.5; }
+@media (hover: hover) { .modal-actions .edit-cancel:hover { color: var(--text); border-color: var(--text); } }
+@keyframes fade { from { opacity: 0; } }
+
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -844,7 +1202,7 @@ body.gate main { padding: 0; }
   }
   .nav-link:active { transform: scale(0.92); transition: transform 0.08s; }
 
-  /* Publish moves to the header's top-right corner as a compact filled action —
+  /* Publish moves to the header's top-right corner as a compact outline action —
      so the bottom bar carries just the primary destinations (Home · Friends ·
      Profile), the way most apps do. It lives in the topbar (a plain flex child,
      pushed right) rather than fixed inside the blurred bottom nav. */
@@ -855,16 +1213,19 @@ body.gate main { padding: 0; }
     gap: 0.3rem;
     margin-left: auto;
     height: 34px;
-    padding: 0 0.9rem 0 0.68rem;
-    color: var(--on-accent);
-    background: var(--accent);
+    padding: 0 calc(0.9rem - 1px) 0 calc(0.68rem - 1px);
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
     border-radius: var(--radius-pill);
     font-size: 0.9rem;
     font-weight: 700;
   }
   .topbar-publish svg { width: 17px; height: 17px; }
   .topbar-publish:active { transform: scale(0.94); transition: transform 0.08s; }
-  @media (hover: hover) { .topbar-publish:hover { background: var(--accent-press); } }
+  @media (hover: hover) {
+    .topbar-publish:hover { color: var(--on-accent); background: var(--accent-press); border-color: var(--accent-press); }
+  }
 
   main {
     padding-left: 0;
@@ -872,18 +1233,30 @@ body.gate main { padding: 0; }
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 
-  .view { padding: 1.5rem 1.15rem 2rem; }
-  .view-head, .filters { padding-inline: 0; }   /* already inset by .view here */
+  /* Full-width column on phones — drop the desktop asymmetric margins. */
+  .view { margin: 0; max-width: none; padding: 1.5rem 1.15rem 2rem; }
+  .view-head, .masthead, .filters { padding-inline: 0; }   /* already inset by .view here */
   .view-title { font-size: 2rem; }
+  .masthead { margin-bottom: 1.8rem; padding-bottom: 1.1rem; }
+  .masthead-kicker { margin-bottom: 0.7rem; letter-spacing: 0.13em; }
   .filters { margin-bottom: 2rem; }
 
-  /* Entries break out of the view's side padding to sit screen-edge-to-edge. */
-  .feed { margin-inline: -1.15rem; gap: 1.8rem; }
-  .card--post, .card--find { padding-right: 1.15rem; padding-left: calc(1.15rem - 3px); }
+  /* Entries break out of the view's side padding to sit screen-edge-to-edge;
+     whitespace (the feed gap) separates them. */
+  .feed { margin-inline: -1.15rem; gap: 2rem; }
+  .card--post .card-main, .card--find .card-main { padding-inline: 1.15rem; }
+  .card--photo .card-actions { padding-inline: 1.15rem; }
+  /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
+  .comments-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
+  .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
   .photo { border-radius: 0; }
-  .card--photo .byline { padding-inline: 1.15rem; }
-  .card--photo .card-solometa { padding-inline: 1.15rem; }
+  .card--photo .byline,
+  .card--photo .card-solometa,
   .card--photo .card-foot { padding-inline: 1.15rem; }
+
+  /* Wider, a touch more present gradient on phones (the blob reads smaller on a
+     narrow screen otherwise). */
+  .ambient { background: radial-gradient(ellipse 140% 52% at 50% -4%, var(--glow), transparent 76%); }
 
   /* Friend rows break out to the screen edges too; back link resets its inset. */
   .profile-back { padding-inline: 0; }
