@@ -697,8 +697,8 @@
         `<div class="field">` +
           `<label for="e-date">When</label>` +
           `<div class="when-row">` +
-            `<input id="e-date" type="date" value="${esc(post.eventDate || '')}">` +
-            `<input id="e-time" type="time" aria-label="Time" value="${esc(post.eventTime || '')}">` +
+            `<input id="e-date" type="date" placeholder="mm/dd/yyyy" value="${esc(post.eventDate || '')}">` +
+            `<input id="e-time" type="time" aria-label="Time" placeholder="--:-- --" value="${esc(post.eventTime || '')}">` +
           `</div>` +
           `<p class="field-hint">Optional.</p>` +
         `</div>` +
@@ -747,7 +747,20 @@
           `<button type="submit" class="composer-submit edit-save">Save changes</button>` +
         `</div>` +
       `</form>`;
+    wireWhenHints(el);
     return el;
+  }
+
+  // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
+  // hint), so the CSS paints the placeholder attr via ::before until a value
+  // lands; this keeps the has-value flag in sync (see .when-row rules).
+  function wireWhenHints(root) {
+    root.querySelectorAll('input[type="date"], input[type="time"]').forEach(inp => {
+      const sync = () => inp.classList.toggle('has-value', !!inp.value);
+      inp.addEventListener('input', sync);
+      inp.addEventListener('change', sync);
+      sync();
+    });
   }
 
   /* ── Masthead ──────────────────────────────────────────────────────────────
@@ -1533,8 +1546,8 @@
         `<div class="field">` +
           `<label for="c-date">When</label>` +
           `<div class="when-row">` +
-            `<input id="c-date" type="date">` +
-            `<input id="c-time" type="time" aria-label="Time">` +
+            `<input id="c-date" type="date" placeholder="mm/dd/yyyy">` +
+            `<input id="c-time" type="time" aria-label="Time" placeholder="--:-- --">` +
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
         `</div>` +
@@ -1607,6 +1620,7 @@
       cropper = null;
       fieldsEl.innerHTML = fieldsFor(pubType);
       if (pubType === 'photo') wirePhotoPicker(fieldsEl);
+      if (pubType === 'activity') wireWhenHints(fieldsEl);
       view.querySelectorAll('.type-opt').forEach(b =>
         b.setAttribute('aria-pressed', String(b.dataset.type === pubType)));
     }

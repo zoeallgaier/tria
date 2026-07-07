@@ -995,6 +995,17 @@ body.gate main { padding: 0; }
 /* iOS renders date/time inputs as centered steppers; keep the height + left
    alignment of the text fields so the row sits flush with the form. */
 .when-row input { -webkit-appearance: none; appearance: none; text-align: left; }
+.when-row input::-webkit-date-and-time-value { text-align: left; }
+/* iOS shows nothing at all in an empty date/time input — paint the hint
+   ourselves (the placeholder attr, flagged by wireWhenHints in app.js).
+   Scoped to iOS so other browsers keep their native mm/dd/yyyy ghost. */
+@supports (-webkit-touch-callout: none) {
+  .when-row input:not(.has-value)::before {
+    content: attr(placeholder);
+    color: var(--muted);
+    opacity: 0.6;
+  }
+}
 
 /* Username wears an @ prefix; the wrapper carries the border + focus ring. */
 .field-user {
