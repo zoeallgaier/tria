@@ -2094,6 +2094,36 @@
     }, { passive: true });
   })();
 
+  // ── Self-update ────────────────────────────────────────────────────────────
+  // Installed home-screen apps can resume from memory for days and never pick
+  // up a deploy. On launch, and whenever the app returns to the foreground,
+  // quietly refetch index.html (cache-bypassing) and compare its ?v= asset
+  // stamp to the one this session booted with; if a new build shipped, reload.
+  // Never reloads mid-thought: composing or an open modal defers the update to
+  // the next foreground. Throttled so foreground flips don't spam the network.
+  (() => {
+    const booted = (document.querySelector('script[src*="js/app.js"]')?.src
+      .match(/[?&]v=([^&]+)/) || [])[1];
+    if (!booted) return;   // unstamped build (local harness) → nothing to compare
+    let lastCheck = 0;
+    async function check() {
+      if (Date.now() - lastCheck < 60000) return;
+      lastCheck = Date.now();
+      try {
+        const html = await (await fetch('index.html', { cache: 'no-store' })).text();
+        const latest = (html.match(/js\/app\.js\?v=([^"&]+)/) || [])[1];
+        if (!latest || latest === booted) return;
+        const busy = location.hash.split('?')[0] === '#/publish' ||
+          document.querySelector('.modal-card');
+        if (!busy) location.reload();
+      } catch { /* offline — try again next foreground */ }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') check();
+    });
+    check();
+  })();
+
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.
   Store.init().then(route).catch((err) => {
