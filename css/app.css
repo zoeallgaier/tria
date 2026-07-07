@@ -927,34 +927,35 @@ body.gate main { padding: 0; }
    carries its own bottom padding, so this only tops up to a clean separation. */
 .account + .feed { margin-top: 1.5rem; }
 
-/* Your own profile carries two quiet outline pills side by side: edit your
-   name/bio, and copy your share link. They sit centred under the header. */
+/* Your own profile carries two small, muted outline pills side by side: edit
+   your name/bio, and copy your share link. Kept compact and understated so they
+   stay out of the way of the header and posts. */
 .account-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.6rem;
-  margin-top: 1.6rem;
+  gap: 0.4rem;
+  margin-top: 1.1rem;
 }
 .account-edit,
 .account-share {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   margin: 0;
-  color: var(--text);
+  color: var(--muted);
   background: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  padding: 0.55rem 1.3rem;
-  font-size: 0.9rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 .account-edit-ico,
-.account-share-ico { width: 17px; height: 17px; }
+.account-share-ico { width: 14px; height: 14px; }
 @media (hover: hover) {
   .account-edit:hover,
-  .account-share:hover { border-color: var(--text); }
+  .account-share:hover { color: var(--text); border-color: var(--text); }
 }
 .account-share.copied {
   color: var(--on-accent);
