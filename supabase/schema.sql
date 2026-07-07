@@ -59,14 +59,16 @@ create table public.likes (
 );
 
 -- ── Friends ─────────────────────────────────────────────────────────────────
--- Mutual friendship = one unordered row per pair (canonicalised a < b, so the
--- pair is stored once, not twice). If the row exists, you're friends. Either
--- party can create or remove it — matching the prototype's instant-mutual model.
+-- Directed "adds": each row means a HAS ADDED b — one-way, like a sent request.
+-- A friendship exists only when both directions are present: (a,b) AND (b,a).
+-- Adding someone is therefore not instantly mutual; they have to add you back
+-- before either of you counts as a friend (see friends() in js/store.js).
 create table public.friends (
-  a uuid not null references public.users(id) on delete cascade,
-  b uuid not null references public.users(id) on delete cascade,
+  a uuid not null references public.users(id) on delete cascade,   -- the adder
+  b uuid not null references public.users(id) on delete cascade,   -- the added
+  created_at timestamptz not null default now(),
   primary key (a, b),
-  check (a < b)
+  check (a <> b)                                    -- you can't add yourself
 );
 
 -- ── Auto-create a profile on signup ──────────────────────────────────────────
@@ -129,9 +131,13 @@ create policy "likes read own-or-owner" on public.likes for select to authentica
 create policy "likes insert own" on public.likes for insert to authenticated with check (user_id = auth.uid());
 create policy "likes delete own" on public.likes for delete to authenticated using (user_id = auth.uid());
 
+-- Reads stay open so a client can see who has added it (to surface incoming
+-- requests) and compute mutuality. Writes are one-way: you may only create or
+-- remove your OWN add (the `a` side) — you can't add someone on their behalf,
+-- and you can't tear down their half of the link.
 create policy "friends read all"   on public.friends for select to authenticated using (true);
-create policy "friends insert own" on public.friends for insert to authenticated with check (auth.uid() in (a, b));
-create policy "friends delete own" on public.friends for delete to authenticated using (auth.uid() in (a, b));
+create policy "friends insert own" on public.friends for insert to authenticated with check (auth.uid() = a);
+create policy "friends delete own" on public.friends for delete to authenticated using (auth.uid() = a);
 
 -- ── Username availability (anon-callable) ─────────────────────────────────────
 -- Signup runs before you have a session, so it can't read the RLS-protected

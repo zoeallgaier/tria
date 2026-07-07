@@ -1012,6 +1012,18 @@ body.gate main { padding: 0; }
 @media (hover: hover) {
   .friend-btn[aria-pressed="true"]:hover { color: var(--text); border-color: var(--text); }
 }
+/* A request I've sent reads like the friends state — a quiet outline, waiting —
+   so the filled ink is reserved for an action that's still mine to take (adding,
+   or accepting someone who's added me). */
+.friend-btn--requested {
+  color: var(--muted);
+  background: none;
+  border-color: var(--rule);
+  font-weight: 400;
+}
+@media (hover: hover) {
+  .friend-btn--requested:hover { color: var(--text); border-color: var(--text); }
+}
 
 /* Slim single-author meta line standing in for the byline on a profile: the date
    on the left, the type-tag pushed right (mirroring the byline layout). */
@@ -1092,6 +1104,22 @@ body.gate main { padding: 0; }
   /* Don't tint the whole row on hover when the target is the add button. */
   .discover .friend:hover { background: none; }
 }
+/* "Requested" — a sent request that's now waiting on them: a quiet outline tag,
+   not a button. No press/hover; it's a status, not an action. */
+.friend-add--sent {
+  color: var(--muted);
+  background: none;
+  border-color: var(--rule);
+  font-weight: 400;
+  cursor: default;
+}
+.friend-add--sent:active { transform: none; }
+@media (hover: hover) {
+  .friend-add--sent:hover { background: none; border-color: var(--rule); }
+}
+
+/* ── Friend requests — people waiting on me to add them back ────────────────── */
+.requests { margin-bottom: 2.5rem; }
 
 /* ── Publish (composer) — aligned to the text column; a calm stack of fields ── */
 .composer { padding-inline: var(--inset); }

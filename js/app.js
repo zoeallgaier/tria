@@ -793,9 +793,12 @@
     const isSelf = u.username === Store.session();
     const list = Store.postsBy(u.username);
 
-    const isFriend = Store.isFriend(u.username);
+    // Where we stand with this person: 'friends' | 'requested' | 'incoming' | 'none'.
+    const rel = Store.friendState(u.username);
     // Own profile carries a "copy my link to share" action; a friend's carries the
-    // Add-friend toggle. (Log out moves to the foot of your own column, below.)
+    // friend button, whose label reflects the mutual state (friendship needs both
+    // sides). (Log out moves to the foot of your own column, below.)
+    const friendLabel = { friends: 'Friends', requested: 'Requested', incoming: 'Accept friend', none: 'Add friend' };
     const action = isSelf
       ? `<div class="account-actions">` +
           `<button class="account-edit" type="button" id="edit-profile">` +
@@ -807,8 +810,8 @@
             `<span class="account-share-label">Share</span>` +
           `</button>` +
         `</div>`
-      : `<button class="friend-btn" type="button" id="friend" ` +
-          `aria-pressed="${isFriend}">${isFriend ? 'Friends' : 'Add friend'}</button>`;
+      : `<button class="friend-btn friend-btn--${rel}" type="button" id="friend" ` +
+          `aria-pressed="${rel === 'friends'}">${friendLabel[rel]}</button>`;
 
     const count = `${list.length} ${list.length === 1 ? 'post' : 'posts'}`;
     const friendCount = Store.friends().length;
@@ -903,7 +906,10 @@
 
     const friendBtn = document.getElementById('friend');
     if (friendBtn) friendBtn.addEventListener('click', async () => {
-      if (Store.isFriend(u.username)) await Store.removeFriend(u.username);
+      // Friends or a request I sent → withdraw my side; otherwise ('none' or an
+      // 'incoming' request I'm accepting) → add them.
+      const state = Store.friendState(u.username);
+      if (state === 'friends' || state === 'requested') await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
     });
@@ -1148,21 +1154,32 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
   }
 
-  /* ── Friends (your mutual circle) + Discover (people you haven't added) ─────── */
+  /* ── Friends (your mutual circle) + incoming requests + Discover ────────────── */
   function renderFriends() {
     const me = Store.session();
     const friendSet = new Set(Store.friends());
     const byName = (a, b) => a.name.localeCompare(b.name);
 
     const friends = Store.friends().map(Store.user).filter(Boolean).sort(byName);
-    // Everyone signed up who isn't you and isn't already a friend.
+    // People who've added me and are waiting on me to add them back.
+    const requests = Store.friendRequests().map(Store.user).filter(Boolean).sort(byName);
+    const requestSet = new Set(requests.map(u => u.username));
+    // Everyone else: not me, not already a mutual friend, not an incoming request
+    // (those get their own section). Includes people I've requested — shown as a
+    // quiet "Requested" until they add back.
     const discover = Store.users()
-      .filter(u => u.username !== me && !friendSet.has(u.username))
+      .filter(u => u.username !== me && !friendSet.has(u.username) && !requestSet.has(u.username))
       .sort(byName);
 
-    // A directory row. `discover` rows swap the go-arrow for an Add button so
-    // you can add someone without leaving the page.
-    const row = (u, add) =>
+    // A directory row. `trailing` is whatever sits where the go-arrow would: an
+    // arrow for friends, an Accept/Add button elsewhere. Buttons sit inside the
+    // row link, so their handlers stop it navigating.
+    const goArrow = `<span class="friend-go" aria-hidden="true">→</span>`;
+    const addBtn = (u, label) =>
+      `<button class="friend-add" type="button" data-add="${esc(u.username)}" ` +
+        `aria-label="${label === 'Accept' ? `Accept ${esc(u.name)}’s friend request` : `Add ${esc(u.name)} as a friend`}">${label}</button>`;
+    const requestedTag = `<span class="friend-add friend-add--sent" aria-disabled="true">Requested</span>`;
+    const row = (u, trailing) =>
       `<a class="friend" href="#/u/${encodeURIComponent(u.username)}">` +
         avatarEl(u, { cls: 'friend-avatar' }) +
         `<span class="friend-text">` +
@@ -1170,30 +1187,36 @@
           `<span class="friend-user">@${esc(u.username)}</span>` +
           (u.bio ? `<span class="friend-bio">${esc(u.bio)}</span>` : '') +
         `</span>` +
-        (add
-          ? `<button class="friend-add" type="button" data-add="${esc(u.username)}" ` +
-              `aria-label="Add ${esc(u.name)} as a friend">Add</button>`
-          : `<span class="friend-go" aria-hidden="true">→</span>`) +
+        trailing +
       `</a>`;
+    // Discover rows show Add, or a quiet "Requested" tag if I've already asked.
+    const discoverRow = (u) =>
+      row(u, Store.friendState(u.username) === 'requested' ? requestedTag : addBtn(u, 'Add'));
 
     const circleCount = `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} in your circle`;
     view.innerHTML =
       `<section class="view">` +
         mastheadEl(circleCount, 'Friends') +
+        (requests.length
+          ? `<div class="requests">` +
+              `<h2 class="discover-head">Friend requests</h2>` +
+              `<div class="friends-list">` + requests.map(u => row(u, addBtn(u, 'Accept'))).join('') + `</div>` +
+            `</div>`
+          : '') +
         (friends.length
-          ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
+          ? `<div class="friends-list">` + friends.map(u => row(u, goArrow)).join('') + `</div>`
           : `<p class="feed-empty">Your circle’s empty, for now.</p>`) +
         (discover.length
           ? `<div class="discover">` +
               `<h2 class="discover-head">Find people</h2>` +
-              `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` +
+              `<div class="friends-list">` + discover.map(discoverRow).join('') + `</div>` +
             `</div>`
           : '') +
       `</section>`;
 
-    // Add from a Discover row: link up, then re-render so they move into your
-    // circle. The button sits inside the row link, so stop it navigating.
-    view.querySelectorAll('.friend-add').forEach(btn =>
+    // Add / Accept from any row: write my side, then re-render so the person
+    // moves to the right place (into the circle, or off to Requested).
+    view.querySelectorAll('.friend-add[data-add]').forEach(btn =>
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
