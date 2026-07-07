@@ -1,8 +1,8 @@
 /* ── Tria design tokens ───────────────────────────────────────────────────
    An editorial, portfolio-minded system. The UI is a cool, near-neutral
    greyscale — a deep off-black on a cool off-white — and the ONLY chromatic
-   color is a refined primary RYB set, reserved for post types and surfaced on
-   the filter menu. Type is Instrument Serif (display) over Oxygen (the quiet
+   color is a pastel quartet, reserved for post types and surfaced on the
+   filter menu and the Publish button. Type is Instrument Serif (display) over Oxygen (the quiet
    functional layer). The grid and its whitespace carry the design. */
 
 :root {
@@ -20,12 +20,20 @@
   --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
   --on-accent:    var(--bg);
 
-  /* Post types — a primary trio (blue / red / green). Used as the left
-     type-rule on entries and as the accent on the filter menu. */
-  --type-post:      #2a4c9b;  /* blue  */
-  --type-find:      #c1352b;  /* red   */
-  --type-photo:     #2a7150;  /* green (dark enough for AA paper-on-fill) */
-  --type-photo-ink: #236b45;  /* deeper green for text/labels on paper (AA) */
+  /* Post types — a pastel quartet: lavender / peach-coral / baby cyan / lime.
+     Each type carries two faces: the pastel itself is the FILL (active filter
+     chips, the shifting Publish button), and a deepened -ink twin carries
+     text/labels on paper (AA). --on-type is the ink that sits on any pastel
+     fill — near-black, AA on all four in both modes. */
+  --type-post:         #b7a6e8;  /* lavender */
+  --type-post-ink:     #6247b8;
+  --type-find:         #f2a58c;  /* peach / coral */
+  --type-find-ink:     #b0472a;
+  --type-photo:        #9fd6e8;  /* baby cyan */
+  --type-photo-ink:    #1d7391;
+  --type-activity:     #b9df7d;  /* lime green */
+  --type-activity-ink: #4d7519;
+  --on-type:           #14171a;
 
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
@@ -76,10 +84,17 @@
     --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
     --on-accent:    var(--bg);
 
-    --type-post:      #7d9be8;  /* blue  */
-    --type-find:      #e5705f;  /* red   */
-    --type-photo:     #5cbf92;  /* green */
-    --type-photo-ink: #5cbf92;
+    /* Pastel fills read light against the dark paper, so the -ink twins can
+       simply BE the pastels — vivid text without a second ramp. --on-type stays
+       near-black: the fills themselves don't change. */
+    --type-post:         #b7a6e8;
+    --type-post-ink:     #b7a6e8;
+    --type-find:         #f2a58c;
+    --type-find-ink:     #f2a58c;
+    --type-photo:        #9fd6e8;
+    --type-photo-ink:    #9fd6e8;
+    --type-activity:     #b9df7d;
+    --type-activity-ink: #b9df7d;
 
     /* Dark glass needs a touch more opacity to keep chrome legible over content. */
     --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);

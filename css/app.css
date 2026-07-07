@@ -190,21 +190,64 @@ body.gate .ambient {
   font-weight: 700;
 }
 
-/* Publish — the one primary action. Pinned to the foot; an outline at rest,
-   filling with ink on hover so the fill reads as a response, not a resting state. */
+/* Post — the one primary action. At rest a drifting gradient OUTLINE (the four
+   type pastels circling the pill — a quiet arrow pointing at posting); on
+   hover / press / while on the compose page it fills with the same drifting
+   gradient. Text contrast holds AA in every state and both modes: page ink on
+   the page at rest, near-black --on-type on the pastel fill. The ring is drawn
+   by a masked ::before, so it sits cleanly over any backdrop (sidebar surface,
+   frosted topbar, composer paper) and unmasking it IS the fill. */
+.publish-fill {
+  position: relative;
+  isolation: isolate;               /* keeps the z-index:-1 ring inside the button */
+  color: var(--text);
+  background: none;
+  border: none;
+  font-weight: 700;
+  transition: color var(--dur-micro) var(--ease);
+}
+.publish-fill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 2px;                     /* the ring's thickness */
+  background: linear-gradient(115deg,
+    var(--type-post), var(--type-find), var(--type-activity), var(--type-photo), var(--type-post));
+  background-size: 300% 100%;
+  animation: publish-shift 14s ease-in-out infinite;
+  /* Ring mode: keep only the 2px band between padding-box and border-box. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+/* Filled: drop the mask so the whole pill carries the gradient. */
+.publish-fill:active,
+.publish-fill[aria-current="page"],
+.publish-fill:focus-visible { color: var(--on-type); }
+.publish-fill:active::before,
+.publish-fill[aria-current="page"]::before,
+.publish-fill:focus-visible::before { -webkit-mask: none; mask: none; }
+@media (hover: hover) {
+  .publish-fill:hover { color: var(--on-type); }
+  .publish-fill:hover::before { -webkit-mask: none; mask: none; }
+}
+.publish-fill:disabled { opacity: 0.6; }
+@keyframes publish-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .publish-fill::before { animation: none; background-position: 50% 50%; }
+}
 .nav-publish {
   margin-top: auto;
   justify-content: center;
   gap: 0.5rem;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--accent);
-  font-weight: 700;
   font-size: 1.08rem;
-  padding: calc(0.8rem - 1px) calc(0.9rem - 1px);
-}
-@media (hover: hover) {
-  .nav-publish:hover { color: var(--on-accent); background: var(--accent-press); border-color: var(--accent-press); }
+  padding: 0.8rem 0.9rem;
 }
 
 /* ── Main / views ────────────────────────────────────────────────────────── */
@@ -300,6 +343,7 @@ main {
 .discover,
 .composer,
 .account,
+.notif-list,
 .feed-empty { max-width: var(--feed-width); margin-inline: auto; }
 .view-sub {
   color: var(--muted);
@@ -308,8 +352,9 @@ main {
   letter-spacing: 0.01em;
 }
 
-/* ── Filter menu — the one splash of color. Each type carries its RYB hue;
-   All wears the brand green. Active = filled; idle = colored text + tint edge. */
+/* ── Filter menu — the one splash of color. Each type carries its pastel hue;
+   All stays monochrome ink. Active = pastel fill + near-black ink; idle =
+   the type's deepened -ink as text + a tinted edge. */
 .filters {
   display: flex;
   gap: 0.5rem;
@@ -330,23 +375,27 @@ main {
 }
 /* Idle: hue as text + a tinted edge, so the menu reads in color. */
 .filter[data-filter="all"]   { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
-.filter[data-filter="post"]  { color: var(--type-post); border-color: color-mix(in srgb, var(--type-post) 32%, var(--rule)); }
-.filter[data-filter="find"]  { color: var(--type-find); border-color: color-mix(in srgb, var(--type-find) 32%, var(--rule)); }
-.filter[data-filter="photo"] { color: var(--type-photo-ink); border-color: color-mix(in srgb, var(--type-photo) 40%, var(--rule)); }
+.filter[data-filter="post"]     { color: var(--type-post-ink);     border-color: color-mix(in srgb, var(--type-post) 55%, var(--rule)); }
+.filter[data-filter="find"]     { color: var(--type-find-ink);     border-color: color-mix(in srgb, var(--type-find) 55%, var(--rule)); }
+.filter[data-filter="photo"]    { color: var(--type-photo-ink);    border-color: color-mix(in srgb, var(--type-photo) 55%, var(--rule)); }
+.filter[data-filter="activity"] { color: var(--type-activity-ink); border-color: color-mix(in srgb, var(--type-activity) 55%, var(--rule)); }
 @media (hover: hover) {
   .filter:not([aria-pressed="true"]):hover { border-color: currentColor; }
 }
-/* Active: filled with the hue. Text is the page colour (--bg): the fills are
-   dark in light mode and light in dark mode, so this contrasts in both. */
-.filter[aria-pressed="true"]                      { color: var(--bg); background: var(--accent);     border-color: var(--accent); }
-.filter[data-filter="post"][aria-pressed="true"]  { color: var(--bg); background: var(--type-post);  border-color: var(--type-post); }
-.filter[data-filter="find"][aria-pressed="true"]  { color: var(--bg); background: var(--type-find);  border-color: var(--type-find); }
-.filter[data-filter="photo"][aria-pressed="true"] { color: var(--bg); background: var(--type-photo); border-color: var(--type-photo); }
+/* Active: filled with the pastel, near-black ink on top (the fills are light in
+   both modes, so --on-type holds AA either way). All stays monochrome. */
+.filter[aria-pressed="true"]                         { color: var(--bg);      background: var(--accent);        border-color: var(--accent); }
+.filter[data-filter="post"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-post);     border-color: var(--type-post); }
+.filter[data-filter="find"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-find);     border-color: var(--type-find); }
+.filter[data-filter="photo"][aria-pressed="true"]    { color: var(--on-type); background: var(--type-photo);    border-color: var(--type-photo); }
+.filter[data-filter="activity"][aria-pressed="true"] { color: var(--on-type); background: var(--type-activity); border-color: var(--type-activity); }
 
 /* ── Feed — editorial blocks, no boxes; whitespace + a right type-tag ──────── */
-/* Entries are separated by whitespace alone (no dividers). Each carries a small
-   colored type-tag at the right of its byline instead of a left rule. */
-.feed { display: flex; flex-direction: column; gap: 2.4rem; max-width: var(--feed-width); }
+/* Entries are separated by whitespace plus a centered hairline divider, so one
+   post's tail never blurs into the next byline. Each carries a small colored
+   type-tag at the right of its byline instead of a left rule. */
+.feed { display: flex; flex-direction: column; gap: 1.9rem; max-width: var(--feed-width); }
+.feed > .card + .card { border-top: 1px solid var(--rule); padding-top: 1.9rem; }
 
 .feed-empty {
   color: var(--muted);
@@ -372,7 +421,7 @@ main {
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
    match the photo text column; the type reads from the colored tag, not a rule. */
-.card--post .card-main, .card--find .card-main {
+.card--post .card-main, .card--find .card-main, .card--activity .card-main {
   padding: 0.35rem var(--inset);
 }
 
@@ -435,13 +484,30 @@ main {
 .card-like--owner[aria-expanded="true"] { color: var(--accent); }
 .card-like.liked svg { fill: currentColor; }
 
+/* Headcount (activities). The hand-up toggle washes lime once you're in; the
+   public count ("3 going") is a text button that opens the who's-going panel. */
+.card-going:hover,
+.card-going:focus-visible { color: var(--type-activity-ink); }
+.card-going.going {
+  color: var(--type-activity-ink);
+  background: color-mix(in srgb, var(--type-activity) 32%, var(--bg));
+}
+.card-goingcount {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding-inline: 0.45rem;
+}
+.card-goingcount:hover,
+.card-goingcount:focus-visible,
+.card-goingcount[aria-expanded="true"] { color: var(--accent); }
+
 .card-edit:hover, .card-edit:focus-visible {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--bg));
 }
 .card-delete:hover, .card-delete:focus-visible {
-  color: var(--type-find);
-  background: color-mix(in srgb, var(--type-find) 12%, var(--bg));
+  color: var(--type-find-ink);
+  background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
 }
 
 /* Inline edit form — a card swapped for its editable fields. Inset to align with
@@ -499,9 +565,10 @@ main {
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, currentColor 9%, transparent);
 }
-.type-tag--post  { color: var(--type-post); }
-.type-tag--find  { color: var(--type-find); }
-.type-tag--photo { color: var(--type-photo-ink); }
+.type-tag--post     { color: var(--type-post-ink); }
+.type-tag--find     { color: var(--type-find-ink); }
+.type-tag--photo    { color: var(--type-photo-ink); }
+.type-tag--activity { color: var(--type-activity-ink); }
 @media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
 .avatar {
   width: 40px;
@@ -544,6 +611,29 @@ main {
 @media (hover: hover) { .card-title a:hover { color: var(--muted); } }
 .card-title-ext { color: var(--muted); margin-left: 0.3rem; }
 .card-title-ext svg { width: 0.62em; height: 0.62em; vertical-align: 0.02em; }
+
+/* Finds read as links: the title — or, on an untitled find, the caption itself
+   (see .card-note-link) — is underlined so the destination is never a guess. */
+.card--find .card-title a,
+.card-note-link {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+.card-note-link { display: block; color: inherit; transition: color 0.15s; }
+@media (hover: hover) { .card-note-link:hover { color: var(--muted); } }
+
+/* Activity where-line — a quiet pin + place tucked between title and details. */
+.card-location {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: -0.1rem 0 0.6rem;
+}
+.card-location-ico { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* One size everywhere a caption/note appears — with a headline, under a photo,
    or carrying the entry alone (the one-liner). Consistency over emphasis. */
@@ -617,7 +707,8 @@ main {
    opacity lift — so it eases open rather than snapping; `.comments-inner` clips
    the collapsing content. */
 .comments-panel,
-.likers-panel {
+.likers-panel,
+.going-panel {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
@@ -627,7 +718,8 @@ main {
               opacity 0.26s ease;
 }
 .comments-panel.open,
-.likers-panel.open { grid-template-rows: 1fr; opacity: 1; }
+.likers-panel.open,
+.going-panel.open { grid-template-rows: 1fr; opacity: 1; }
 /* The grid child carries no padding/border — that would stop it collapsing to a
    true 0 height. Spacing + the nesting rule sit on .comments-content within it;
    its left padding realigns the content to the post text column (--inset). */
@@ -637,7 +729,7 @@ main {
   padding: 0.85rem 0 0.2rem calc(var(--inset) - 0.7rem - 2px);
 }
 @media (prefers-reduced-motion: reduce) {
-  .comments-panel, .likers-panel { transition: none; }
+  .comments-panel, .likers-panel, .going-panel { transition: none; }
 }
 
 /* Who-liked list: same avatar + name row as a comment, minus the body text. */
@@ -691,8 +783,8 @@ main {
 .comment-delete svg { width: 16px; height: 16px; }
 @media (hover: hover) {
   .comment-delete:hover, .comment-delete:focus-visible {
-    color: var(--type-find);
-    background: color-mix(in srgb, var(--type-find) 12%, var(--bg));
+    color: var(--type-find-ink);
+    background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
   }
 }
 
@@ -847,7 +939,7 @@ body.gate main { padding: 0; }
 .field-user input { border: none; background: none; padding-left: 0.3rem; }
 .field-user input:focus { border-color: transparent; }
 
-.auth-error { color: var(--type-find); font-size: 0.85rem; margin-top: 1rem; min-height: 1.1rem; }
+.auth-error { color: var(--type-find-ink); font-size: 0.85rem; margin-top: 1rem; min-height: 1.1rem; }
 .auth-submit {
   width: 100%;
   margin-top: 0.5rem;
@@ -983,7 +1075,7 @@ body.gate main { padding: 0; }
   transition: color 0.15s, border-color 0.15s;
 }
 @media (hover: hover) {
-  .account-logout:hover { color: var(--type-find); border-color: var(--type-find); }
+  .account-logout:hover { color: var(--type-find-ink); border-color: var(--type-find-ink); }
 }
 
 /* Friend toggle: filled ink to add, quiet outline once you're friends. */
@@ -1093,6 +1185,54 @@ body.gate main { padding: 0; }
   .discover .friend:hover { background: none; }
 }
 
+/* ── Updates — a quiet ledger. Hairline rows, no badge anywhere; the only
+   "unread" signal is a small ink dot on rows newer than your last visit.
+   Row geometry mirrors the Friends directory (rows carry the inset, hovers
+   run edge to edge) so the two list pages read as one system. ── */
+.notif-list {
+  list-style: none;
+  margin-block: 0;   /* inline margins stay auto (the shared centering above) */
+  padding: 0;
+}
+.notif {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.95rem var(--inset);
+  border-bottom: 1px solid var(--rule);
+  color: var(--text);
+  transition: background-color var(--dur-micro) var(--ease);
+}
+.notif-list li:last-child .notif { border-bottom: none; }
+@media (hover: hover) { .notif:hover { background: var(--surface); } }
+.notif-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+  flex: 1;
+}
+.notif-text { font-size: 0.95rem; font-weight: 300; line-height: 1.4; }
+.notif-text strong { font-weight: 700; }
+.notif-quote {
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notif-date { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.02em; }
+.notif-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  flex-shrink: 0;
+}
+.notif--new .notif-dot { opacity: 1; }
+
 /* ── Publish (composer) — aligned to the text column; a calm stack of fields ── */
 .composer { padding-inline: var(--inset); }
 
@@ -1102,24 +1242,28 @@ body.gate main { padding: 0; }
 
 .composer .field:first-of-type { margin-top: 0; }
 .composer-error {
-  color: var(--type-find);
+  color: var(--type-find-ink);
   font-size: 0.85rem;
   margin-top: 1rem;
   min-height: 1.1rem;
 }
+/* Submits are compact, right-aligned actions — not full-width slabs. */
 .composer-submit {
-  width: 100%;
+  display: block;
+  width: auto;
   margin-top: 0.4rem;
-  color: var(--on-accent);
-  background: var(--accent);
+  margin-left: auto;
   border: none;
   border-radius: var(--radius-pill);
   font-weight: 700;
-  font-size: 1.02rem;
-  padding: 0.8rem;
+  font-size: 0.95rem;
+  padding: 0.62rem 1.6rem;
   transition: background-color 0.15s;
 }
-@media (hover: hover) { .composer-submit:hover { background: var(--accent-press); } }
+/* Save-style submits stay monochrome ink; the composer's own Publish carries
+   the shifting pastel fill instead (.publish-fill). */
+.composer-submit:not(.publish-fill) { color: var(--on-accent); background: var(--accent); }
+@media (hover: hover) { .composer-submit:not(.publish-fill):hover { background: var(--accent-press); } }
 
 /* Photo: dropzone → square crop with drag-to-reposition. */
 .dropzone {
@@ -1222,7 +1366,7 @@ body.gate main { padding: 0; }
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
 .crop--free { aspect-ratio: auto; cursor: default; touch-action: auto; }
 .crop--free img { position: static; width: 100%; height: auto; max-width: 100%; }
-.modal-error { color: var(--type-find); font-size: 0.85rem; margin-top: 0.9rem; min-height: 1.1rem; }
+.modal-error { color: var(--type-find-ink); font-size: 0.85rem; margin-top: 0.9rem; min-height: 1.1rem; }
 .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.2rem; }
 .modal-actions .edit-cancel {
   color: var(--muted);
@@ -1281,7 +1425,12 @@ body.gate main { padding: 0; }
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    transition: transform var(--dur-move) var(--ease);
   }
+  /* Scrolling down tucks the bar away (see the scroll watcher in app.js);
+     scrolling up brings it straight back. */
+  .topbar.topbar--hidden { transform: translateY(-100%); }
+  @media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
   .brand-mark { font-size: 1.6rem; }
 
   .nav {
@@ -1321,19 +1470,13 @@ body.gate main { padding: 0; }
     gap: 0.3rem;
     margin-left: auto;
     height: 34px;
-    padding: 0 calc(0.9rem - 1px) 0 calc(0.68rem - 1px);
-    color: var(--accent);
-    background: none;
-    border: 1px solid var(--accent);
+    padding: 0 0.9rem 0 0.68rem;
     border-radius: var(--radius-pill);
     font-size: 0.9rem;
     font-weight: 700;
   }
   .topbar-publish svg { width: 17px; height: 17px; }
   .topbar-publish:active { transform: scale(0.94); transition: transform 0.08s; }
-  @media (hover: hover) {
-    .topbar-publish:hover { color: var(--on-accent); background: var(--accent-press); border-color: var(--accent-press); }
-  }
 
   main {
     padding-left: 0;
@@ -1347,15 +1490,27 @@ body.gate main { padding: 0; }
   .view-title { font-size: 2rem; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 1.1rem; }
   .masthead-kicker { margin-bottom: 0.7rem; letter-spacing: 0.13em; }
-  .filters { margin-bottom: 2rem; }
+  /* Five chips outgrow a phone row — one swipeable line (edge-to-edge, no
+     scrollbar) instead of wrapping an orphan onto a second line. */
+  .filters {
+    margin-bottom: 2rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: -1.15rem;
+    padding-inline: 1.15rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filters::-webkit-scrollbar { display: none; }
 
   /* Entries break out of the view's side padding to sit screen-edge-to-edge;
-     whitespace (the feed gap) separates them. */
-  .feed { margin-inline: -1.15rem; gap: 2rem; }
-  .card--post .card-main, .card--find .card-main { padding-inline: 1.15rem; }
+     the hairline dividers run with them. Gap matches the divider padding so the
+     line sits centered between entries. */
+  .feed { margin-inline: -1.15rem; gap: 1.9rem; }
+  .card--post .card-main, .card--find .card-main, .card--activity .card-main { padding-inline: 1.15rem; }
   .card--photo .card-actions { padding-inline: 1.15rem; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
-  .comments-panel, .likers-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
+  .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
   .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
   .photo { border-radius: 0; }
   .card--photo .byline,
@@ -1366,10 +1521,11 @@ body.gate main { padding: 0; }
      narrow screen otherwise). */
   .ambient { background: radial-gradient(ellipse 140% 52% at 50% -4%, var(--glow), transparent 76%); }
 
-  /* Friend rows break out to the screen edges too; back link resets its inset. */
+  /* Friend + update rows break out to the screen edges too; back link resets
+     its inset. */
   .profile-back { padding-inline: 0; }
-  .friends-list { margin-inline: -1.15rem; }
-  .friend { padding-inline: 1.15rem; }
+  .friends-list, .notif-list { margin-inline: -1.15rem; }
+  .friend, .notif { padding-inline: 1.15rem; }
 
   /* Composer already sits inside the view's padding here. */
   .composer { padding-inline: 0; }

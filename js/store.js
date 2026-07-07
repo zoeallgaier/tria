@@ -8,9 +8,12 @@
    the views talk to — they just no longer know (or care) where the data lives.
    Schema + security rules: see supabase/schema.sql. */
 
-// The app's "now" — shared by niceDate's relative-date baseline. Real posts now
-// carry real timestamps from the server; this is just the reference point.
-const TODAY = new Date().toISOString().slice(0, 10);
+// The app's "now" — shared by niceDate's relative-date baseline. Real posts
+// carry real timestamps from the server; every timestamp resolves to a calendar
+// day in US Mountain time, so "today" flips at midnight in Denver, not UTC.
+const dayMT = (t) =>
+  new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
+const TODAY = dayMT(Date.now());
 
 const Store = (() => {
   const { url, key } = window.TRIA_CONFIG;
@@ -22,11 +25,11 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], friends: {} });
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], friends: {} });
   let state = empty();
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
-  const dateOf = (ts) => (ts || '').slice(0, 10) || TODAY;
+  const dateOf = (ts) => (ts ? dayMT(ts) : TODAY);
   const idOf = (username) => (state.users.find(u => u.username === username) || {}).id || null;
 
   function mapUser(u) {
@@ -39,10 +42,11 @@ const Store = (() => {
       id: p.id, author: nameById.get(p.author), type: p.type,
       date: dateOf(p.created_at), _ts: p.created_at, tags: p.tags || [],
     };
-    if (p.title) o.title = p.title;
-    if (p.url)   o.url = p.url;
-    if (p.note)  o.note = p.note;
-    if (p.image) o.image = p.image;
+    if (p.title)    o.title = p.title;
+    if (p.url)      o.url = p.url;
+    if (p.note)     o.note = p.note;
+    if (p.image)    o.image = p.image;
+    if (p.location) o.location = p.location;
     return o;
   }
   const nameMap = () => new Map(state.users.map(u => [u.id, u.username]));
@@ -67,7 +71,7 @@ const Store = (() => {
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
-    const [u, p, c, l, f] = await Promise.all([
+    const [u, p, c, l, h, f] = await Promise.all([
       sb.from('users').select('*'),
       sb.from('posts').select('*'),
       sb.from('comments').select('*').order('created_at', { ascending: true }),
@@ -75,6 +79,10 @@ const Store = (() => {
       // every like on our own posts. So the cache literally can't compute a count
       // for someone else's post — the rows aren't here.
       sb.from('likes').select('*').order('created_at', { ascending: true }),
+      // Headcount is the opposite: who's in IS the point of an activity, so the
+      // rows are readable by everyone (the table may not exist yet on an old DB —
+      // loadWorld tolerates the error and leaves the list empty).
+      sb.from('headcount').select('*').order('created_at', { ascending: true }),
       sb.from('friends').select('*'),
     ]);
     state.users = (u.data || []).map(mapUser);
@@ -82,9 +90,10 @@ const Store = (() => {
     state.posts = (p.data || []).map(row => mapPost(row, nameById));
     state.comments = (c.data || []).map(row => ({
       id: row.id, postId: row.post_id, author: nameById.get(row.author),
-      text: row.body, date: dateOf(row.created_at),
+      text: row.body, date: dateOf(row.created_at), _ts: row.created_at,
     }));
-    state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id) }));
+    state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
+    state.headcount = (h.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
     const fr = {};
     const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
     for (const row of f.data || []) {
@@ -232,9 +241,10 @@ const Store = (() => {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
     const row = { author: idOf(me), type: data.type, tags: data.tags || [] };
-    if (data.title) row.title = data.title;
-    if (data.url)   row.url = data.url;
-    if (data.note)  row.note = data.note;
+    if (data.title)    row.title = data.title;
+    if (data.url)      row.url = data.url;
+    if (data.note)     row.note = data.note;
+    if (data.location) row.location = data.location;
     if (data.image) {
       try { row.image = await uploadImage(data.image, 'photo'); }
       catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
@@ -257,6 +267,7 @@ const Store = (() => {
     state.posts.splice(i, 1);
     state.comments = state.comments.filter(c => c.postId !== id);
     state.likes = state.likes.filter(x => x.postId !== id);
+    state.headcount = state.headcount.filter(x => x.postId !== id);
     return { ok: true };
   }
 
@@ -268,7 +279,7 @@ const Store = (() => {
     if (i < 0 || state.posts[i].author !== me)
       return { ok: false, error: 'That post isn’t yours to edit.' };
     const patch = {};
-    for (const k of ['title', 'url', 'note']) {
+    for (const k of ['title', 'url', 'note', 'location']) {
       if (k in data) patch[k] = data[k] || null;
     }
     if ('tags' in data) patch.tags = data.tags || [];
@@ -295,7 +306,7 @@ const Store = (() => {
     const { data: c, error } = await sb.from('comments')
       .insert({ post_id: postId, author: idOf(me), body: text }).select().single();
     if (error) return { ok: false, error: 'Couldn’t post your comment, try again.' };
-    state.comments.push({ id: c.id, postId, author: me, text, date: dateOf(c.created_at) });
+    state.comments.push({ id: c.id, postId, author: me, text, date: dateOf(c.created_at), _ts: c.created_at });
     return { ok: true, comment: state.comments[state.comments.length - 1] };
   }
 
@@ -336,9 +347,58 @@ const Store = (() => {
     } else {
       const { error } = await sb.from('likes').insert({ post_id: postId, user_id: mine });
       if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
-      if (!likedByMe(postId)) state.likes.push({ postId, user: me });
+      if (!likedByMe(postId)) state.likes.push({ postId, user: me, _ts: new Date().toISOString() });
     }
     return { ok: true, liked: !has };
+  }
+
+  // ── Headcount (who's in, on an activity) ────────────────────────────────────
+  // The public counterpart to likes: every row is readable, so anyone who can
+  // see the activity sees the count and the names. You can raise or lower only
+  // your own hand, and — like commenting — it's a friends-only gesture. The
+  // author hosts rather than RSVPs, so their own hand stays out of the list.
+  const headcountFor = (postId) => state.headcount.filter(x => x.postId === postId);
+  const goingByMe = (postId) => state.headcount.some(x => x.postId === postId && x.user === state.session);
+
+  async function toggleGoing(postId) {
+    const me = state.session;
+    if (!me) return { ok: false };
+    const post = state.posts.find(p => p.id === postId);
+    if (!post || post.author === me || !isFriend(post.author)) return { ok: false };
+    const mine = idOf(me);
+    const has = goingByMe(postId);
+    if (has) {
+      const { error } = await sb.from('headcount').delete().eq('post_id', postId).eq('user_id', mine);
+      if (error) return { ok: false };
+      state.headcount = state.headcount.filter(x => !(x.postId === postId && x.user === me));
+    } else {
+      const { error } = await sb.from('headcount').insert({ post_id: postId, user_id: mine });
+      if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
+      if (!goingByMe(postId)) state.headcount.push({ postId, user: me, _ts: new Date().toISOString() });
+    }
+    return { ok: true, going: !has };
+  }
+
+  // ── Notifications (derived, no table) ───────────────────────────────────────
+  // Everything notification-worthy is already in the cache: comments, likes and
+  // hands-up on MY posts (RLS hands the author every like row on their own
+  // posts, and the rest is world-readable). So the tab is a pure read — newest
+  // first — with no extra storage and nothing to mark, sync or badge.
+  function notifications() {
+    const me = state.session;
+    if (!me) return [];
+    const mine = new Set(state.posts.filter(p => p.author === me).map(p => p.id));
+    const evts = [];
+    for (const c of state.comments)
+      if (mine.has(c.postId) && c.author !== me)
+        evts.push({ kind: 'comment', postId: c.postId, user: c.author, text: c.text, _ts: c._ts || '' });
+    for (const l of state.likes)
+      if (mine.has(l.postId) && l.user !== me)
+        evts.push({ kind: 'like', postId: l.postId, user: l.user, _ts: l._ts || '' });
+    for (const h of state.headcount)
+      if (mine.has(h.postId) && h.user !== me)
+        evts.push({ kind: 'going', postId: h.postId, user: h.user, _ts: h._ts || '' });
+    return evts.sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
   }
 
   // ── Profile (async writes) ──────────────────────────────────────────────────
@@ -392,6 +452,10 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
+    // Headcount
+    headcountFor, goingByMe, toggleGoing,
+    // Notifications
+    notifications,
     // Profile
     updateAvatar, updateProfile,
   };

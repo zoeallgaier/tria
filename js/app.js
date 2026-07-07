@@ -45,10 +45,15 @@
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
+    // A person with a check — the headcount's "I'm in" on an activity.
+    going:   '<circle cx="10" cy="8" r="3.4"/><path d="M4 20a6.5 6.5 0 0 1 12.2-2.8"/><path d="m14.5 16.5 2.2 2.2 4-4"/>',
+    // Map pin for an activity's location line.
+    pin:     '<path d="M12 21s-6.5-5.2-6.5-10a6.5 6.5 0 0 1 13 0c0 4.8-6.5 10-6.5 10z"/><circle cx="12" cy="11" r="2.4"/>',
     // The little "opens elsewhere" mark on a find's title. An SVG (not the ↗
     // glyph) so it renders as this plain arrow everywhere — mobile fonts render
     // the character as a colour emoji, which we never want.
     extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
+    bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
   };
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 24 24" fill="none" ` +
@@ -57,13 +62,14 @@
   const NAV = [
     { route: '#/',        key: 'circle',  label: 'My Circle' },
     { route: '#/friends', key: 'friends', label: 'Friends' },
+    { route: '#/updates', key: 'bell',    label: 'Updates' },
     { route: '#/profile', key: 'profile', label: 'Profile' },
-    { route: '#/publish', key: 'publish', label: 'Publish', publish: true },
+    { route: '#/publish', key: 'publish', label: 'Post', publish: true },
   ];
 
   function renderNav(active) {
     document.getElementById('nav').innerHTML = NAV.map(n =>
-      `<a class="nav-link${n.publish ? ' nav-publish' : ''}" href="${n.route}"` +
+      `<a class="nav-link${n.publish ? ' nav-publish publish-fill' : ''}" href="${n.route}"` +
         (n.route === active ? ' aria-current="page"' : '') +
         ` aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
@@ -93,7 +99,7 @@
 
   // A small colored label marking an entry's type (Post / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class).
-  const TYPE_LABEL = { post: 'Post', find: 'Find', photo: 'Photo' };
+  const TYPE_LABEL = { post: 'Post', find: 'Find', photo: 'Photo', activity: 'Activity' };
   function typeTagEl(type) {
     return `<span class="type-tag type-tag--${type}">` +
       `${esc(TYPE_LABEL[type] || type)}</span>`;
@@ -234,7 +240,48 @@
       `</button>`;
   }
 
+  // Headcount — activities only, and public (unlike likes): the count is the
+  // point. Two controls: a hand-up toggle for friends ("count me in"), and the
+  // count itself ("3 going"), which opens the who's-going panel for everyone.
+  // The author hosts rather than RSVPs, so they get the count but no toggle.
+  function headcountHtml(post) {
+    if (post.type !== 'activity') return '';
+    const owns = post.author === Store.session();
+    if (!(owns || Store.isFriend(post.author))) return '';   // same gate as comments
+    const n = Store.headcountFor(post.id).length;
+    const going = Store.goingByMe(post.id);
+    const open = openGoing.has(post.id);
+    const toggle = owns ? '' :
+      `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
+        `aria-label="${going ? 'You’re in. Tap to bow out' : 'Count me in'}" ` +
+        `title="${going ? 'You’re in' : 'Count me in'}">` +
+        svgIcon('going') +
+      `</button>`;
+    return toggle +
+      `<button class="card-goingcount" type="button" aria-expanded="${open}" ` +
+        `aria-label="${n} going, see who" title="Who’s going">` +
+        `${n} going</button>`;
+  }
+
+  function goingPanelHtml(post) {
+    if (post.type !== 'activity') return '';
+    const owns = post.author === Store.session();
+    if (!(owns || Store.isFriend(post.author))) return '';
+    const list = Store.headcountFor(post.id);
+    const open = openGoing.has(post.id);
+    return `<div class="going-panel${open ? ' open' : ''}">` +
+        `<div class="comments-inner">` +
+          `<div class="comments-content">` +
+            (list.length
+              ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
+              : `<p class="likers-empty">No hands up yet.</p>`) +
+          `</div>` +
+        `</div>` +
+      `</div>`;
+  }
+
   function cardActionsHtml(post, opts) {
+    const going = headcountHtml(post);
     const like = likeButtonHtml(post);
     const n = Store.commentsFor(post.id).length;
     const expanded = openComments.has(post.id);
@@ -254,8 +301,8 @@
         `</div>`
       : '';
     // Nothing to show (a non-friend's post you don't own) → no empty row.
-    if (!like && !comment && !owner) return '';
-    return `<div class="card-actions"><div class="card-social">${like}${comment}</div>${owner}</div>`;
+    if (!going && !like && !comment && !owner) return '';
+    return `<div class="card-actions"><div class="card-social">${going}${like}${comment}</div>${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -266,6 +313,7 @@
     const actions = cardActionsHtml(post, opts);
     const el = document.createElement('article');
     el.className = `card card--${post.type}${opts.owner ? ' card--owner' : ''}`;
+    el.dataset.id = post.id;
     el.dataset.type = post.type;
     el.dataset.tags = (post.tags || []).join(',');
 
@@ -308,17 +356,37 @@
           : `<h2 class="card-title">${esc(post.title)}</h2>`)
       : '';
 
+    // A find with no title: the caption itself carries the link (underlined the
+    // same way a titled find is), so the destination never gets lost. Rendered
+    // whole — the Read-more clamp would nest a button inside the anchor.
+    const linkedNote = post.type === 'find' && post.url && !post.title && post.note;
+    const noteHtml = linkedNote
+      ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
+          noteParas(post.note).map((p, i, arr) =>
+            `<p class="card-note">${esc(p)}${i === arr.length - 1 && external
+              ? `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>` : ''}</p>`).join('') +
+        `</a>`
+      : cardNoteHtml(post);
+
+    // Activities carry a where-line under the title — a quiet pin + place.
+    const locationHtml = post.type === 'activity' && post.location
+      ? `<p class="card-location">${svgIcon('pin', 'card-location-ico')}<span>${esc(post.location)}</span></p>`
+      : '';
+
     el.innerHTML =
       `<div class="card-main">` +
         head +
         titleHtml +
-        cardNoteHtml(post) +
+        locationHtml +
+        noteHtml +
         tagChips(post) +
         actions +
       `</div>` +
+      goingPanelHtml(post) +
       likersPanelHtml(post) +
       commentsPanelHtml(post);
     wireReadMore(el, post);
+    wireGoing(el, post, opts);
     wireLikes(el, post, opts);
     wireComments(el, post, opts);
     return el;
@@ -373,9 +441,9 @@
       `</div>`;
   }
 
-  // A card's two panels (the author's "who liked" list and the comment thread)
-  // are mutually exclusive — opening either collapses the other, so the card
-  // never grows two threads at once. Each just clears the other's open-state +
+  // A card's panels (who's going, who liked, and the comment thread) are
+  // mutually exclusive — opening one collapses the others, so the card never
+  // grows two threads at once. Each just clears the others' open-state +
   // reverts its toggle button.
   function collapseLikers(el, id) {
     openLikers.delete(id);
@@ -386,6 +454,42 @@
     openComments.delete(id);
     el.querySelector('.card-comment')?.setAttribute('aria-expanded', 'false');
     el.querySelector('.comments-panel')?.classList.remove('open');
+  }
+  function collapseGoing(el, id) {
+    openGoing.delete(id);
+    el.querySelector('.card-goingcount')?.setAttribute('aria-expanded', 'false');
+    el.querySelector('.going-panel')?.classList.remove('open');
+  }
+
+  function wireGoing(el, post, opts) {
+    // The count ("3 going") opens the who's-going panel — pure CSS reveal, same
+    // grid-rows ease as the comment thread, for author and friends alike.
+    const countBtn = el.querySelector('.card-goingcount');
+    const panel = el.querySelector('.going-panel');
+    if (countBtn && panel) {
+      countBtn.addEventListener('click', () => {
+        const open = openGoing.has(post.id);
+        if (open) openGoing.delete(post.id); else openGoing.add(post.id);
+        if (!open) { collapseComments(el, post.id); collapseLikers(el, post.id); }
+        countBtn.setAttribute('aria-expanded', String(!open));
+        panel.classList.toggle('open', !open);
+      });
+    }
+
+    // The hand-up toggle (friends only). Flipping it changes the public count
+    // AND the who's-going list, so the card is rebuilt in place — no rise flash,
+    // same pattern as adding a comment.
+    const toggleBtn = el.querySelector('.card-going');
+    if (!toggleBtn) return;
+    toggleBtn.addEventListener('click', async () => {
+      toggleBtn.disabled = true;
+      const res = await Store.toggleGoing(post.id);
+      toggleBtn.disabled = false;
+      if (!res.ok) return;
+      const fresh = makeCard(post, opts);
+      fresh.style.animation = 'none';
+      el.replaceWith(fresh);
+    });
   }
 
   function wireLikes(el, post, opts) {
@@ -400,7 +504,7 @@
       btn.addEventListener('click', () => {
         const open = openLikers.has(post.id);
         if (open) openLikers.delete(post.id); else openLikers.add(post.id);
-        if (!open) collapseComments(el, post.id);   // one panel at a time
+        if (!open) { collapseComments(el, post.id); collapseGoing(el, post.id); }   // one panel at a time
         btn.setAttribute('aria-expanded', String(!open));
         panel?.classList.toggle('open', !open);
       });
@@ -477,7 +581,7 @@
     toggle.addEventListener('click', () => {
       const open = openComments.has(post.id);
       if (open) openComments.delete(post.id); else openComments.add(post.id);
-      if (!open) collapseLikers(el, post.id);   // one panel at a time
+      if (!open) { collapseLikers(el, post.id); collapseGoing(el, post.id); }   // one panel at a time
       toggle.setAttribute('aria-expanded', String(!open));
       panel.classList.toggle('open', !open);
     });
@@ -527,6 +631,14 @@
   // openComments, keeping a panel open across an in-place card rebuild.
   const openReadMore = new Set();
 
+  // Which activities' "who's going" panels are expanded — the headcount's twin
+  // of openLikers, surviving the same in-place card rebuilds.
+  const openGoing = new Set();
+
+  // Set when an Updates row is tapped: the profile render scrolls this post
+  // into view and gives it a brief wash, so the update visibly lands somewhere.
+  let spotlightPost = null;
+
   // The editable fields for a post, prefilled from its current values. Mirrors
   // the composer's fields (minus the photo upload — captions/tags only there).
   function editFieldsFor(post) {
@@ -553,6 +665,24 @@
           `<label for="e-note">Why share it?</label>` +
           `<textarea id="e-note" rows="2" maxlength="400" ` +
             `placeholder="A line on why it’s worth a look.">${esc(post.note || '')}</textarea>` +
+        `</div>` + tagsInput;
+    }
+
+    if (post.type === 'activity') {
+      return `<div class="field">` +
+          `<label for="e-title">What’s the plan?</label>` +
+          `<input id="e-title" type="text" maxlength="120" ` +
+            `value="${esc(post.title || '')}" placeholder="Picnic at the park">` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="e-location">Where</label>` +
+          `<input id="e-location" type="text" maxlength="120" ` +
+            `value="${esc(post.location || '')}" placeholder="Liberty Park, by the pond">` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="e-note">Details</label>` +
+          `<textarea id="e-note" rows="2" maxlength="400" ` +
+            `placeholder="When to show up, what to bring.">${esc(post.note || '')}</textarea>` +
         `</div>` + tagsInput;
     }
 
@@ -603,21 +733,13 @@
       `</header>`;
   }
 
-  // The feed's "issue date" — e.g. "Saturday · July 5". Shares store.js's TODAY
-  // so it always agrees with the posts' own date stamps.
-  function longDate() {
-    const d = new Date(TODAY + 'T12:00:00');
-    const wd = d.toLocaleDateString('en-US', { weekday: 'long' });
-    const md = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-    return `${wd} <span class="dot">·</span> ${md}`;
-  }
-
   /* ── Home view ───────────────────────────────────────────────────────────── */
   const FILTERS = [
-    { key: 'all',   label: 'All' },
-    { key: 'post',  label: 'Posts' },
-    { key: 'find',  label: 'Finds' },
-    { key: 'photo', label: 'Photos' },
+    { key: 'all',      label: 'All' },
+    { key: 'post',     label: 'Posts' },
+    { key: 'find',     label: 'Finds' },
+    { key: 'photo',    label: 'Photos' },
+    { key: 'activity', label: 'Activities' },
   ];
   let activeFilter = 'all';
   let activeTag = null;
@@ -625,7 +747,7 @@
   function renderHome() {
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl(longDate(), 'My Circle') +
+        mastheadEl('', 'My Circle') +
         `<div class="filters" role="group" aria-label="Filter by type">` +
           FILTERS.map(f =>
             `<button class="filter" type="button" data-filter="${f.key}" ` +
@@ -791,9 +913,11 @@
     const u = Store.user(username);
     if (!u) { location.hash = '#/'; return; }          // stale link → home
     const isSelf = u.username === Store.session();
-    const list = Store.postsBy(u.username);
-
     const isFriend = Store.isFriend(u.username);
+    // A non-friend can browse a profile's posts/finds/photos, but activities are
+    // circle business — hidden until you've added each other.
+    const list = Store.postsBy(u.username)
+      .filter(p => p.type !== 'activity' || isSelf || isFriend);
     // Own profile carries a "copy my link to share" action; a friend's carries the
     // Add-friend toggle. (Log out moves to the foot of your own column, below.)
     const action = isSelf
@@ -854,7 +978,7 @@
     const feedEl = view.querySelector('#feed');
     if (!list.length) {
       feedEl.innerHTML = `<p class="feed-empty">` +
-        `${isSelf ? 'Nothing published yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
+        `${isSelf ? 'Nothing posted yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
     } else {
       const frag = document.createDocumentFragment();
       list.forEach((p, i) => {
@@ -865,6 +989,24 @@
         frag.appendChild(card);
       });
       feedEl.appendChild(frag);
+    }
+
+    // An Updates row targeted this post: bring it into view with a brief wash,
+    // so the tap visibly lands on the thing that changed. (Delayed a beat: the
+    // router resets scroll to the top right after this render.)
+    if (spotlightPost) {
+      const target = feedEl.querySelector(`[data-id="${spotlightPost}"]`);
+      spotlightPost = null;
+      if (target) setTimeout(() => {
+        target.scrollIntoView({ block: 'center', behavior: prefersReduced() ? 'auto' : 'smooth' });
+        target.style.transition = 'background-color 0.5s var(--ease-soft)';
+        target.style.borderRadius = 'var(--radius)';
+        target.style.backgroundColor = 'color-mix(in srgb, var(--accent) 8%, transparent)';
+        setTimeout(() => { target.style.backgroundColor = 'transparent'; }, 1400);
+        setTimeout(() => {
+          target.style.transition = target.style.backgroundColor = target.style.borderRadius = '';
+        }, 2100);
+      }, 120);
     }
 
     // Owner controls (own profile only) — edit swaps the card for a form; delete
@@ -1203,15 +1345,90 @@
       }));
   }
 
+  /* ── Updates — a quiet ledger, visited on your own time ────────────────────
+     A reverse-chronological list of what friends did on YOUR posts: comments,
+     likes, hands-up on activities. Deliberately pull-based: no badge, no count
+     on the nav, no push — the tab tells you nothing until you choose to look.
+     "Read" state is just a soft dot on anything newer than your last visit,
+     remembered per-account in localStorage (this device only, and that's fine
+     for a signal this gentle). */
+  const notifSeenKey = () => `tria:updates-seen:${Store.session()}`;
+
+  // "…liked ‘Metalheart’" — name the post by its title or a note snippet, so a
+  // row is recognisable without leaving the list.
+  function notifPostLabel(post) {
+    if (!post) return 'a post';
+    const t = post.title || post.note || '';
+    const snip = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t;
+    if (snip) return `“${snip}”`;
+    return post.type === 'photo' ? 'your photo' : 'your post';
+  }
+
+  function notifItemHtml(n, lastSeen) {
+    const u = Store.user(n.user);
+    const name = esc(u ? u.name : n.user);
+    const post = Store.posts().find(p => p.id === n.postId);
+    const label = esc(notifPostLabel(post));
+    const quote = n.kind === 'comment'
+      ? esc(n.text.length > 90 ? n.text.slice(0, 90).trimEnd() + '…' : n.text)
+      : '';
+    const what =
+      n.kind === 'comment' ? `commented on ${label}` :
+      n.kind === 'like'    ? `liked ${label}` :
+                             `is in for ${label}`;
+    const fresh = n._ts && n._ts > lastSeen;
+    return `<li>` +
+        `<a class="notif${fresh ? ' notif--new' : ''}" href="#/profile" ` +
+          `data-post="${esc(n.postId)}" data-kind="${n.kind}">` +
+          avatarEl(u || { name: n.user }, { cls: 'comment-avatar' }) +
+          `<span class="notif-body">` +
+            `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
+            (quote ? `<span class="notif-quote">${quote}</span>` : '') +
+            (n._ts ? `<span class="notif-date">${esc(niceDate(dayMT(n._ts)))}</span>` : '') +
+          `</span>` +
+          `<span class="notif-dot" aria-hidden="true"></span>` +
+        `</a>` +
+      `</li>`;
+  }
+
+  function renderUpdates() {
+    const list = Store.notifications();
+    const lastSeen = localStorage.getItem(notifSeenKey()) || '';
+    view.innerHTML =
+      `<section class="view">` +
+        mastheadEl('', 'Updates') +
+        (list.length
+          ? `<ul class="notif-list">${list.map(n => notifItemHtml(n, lastSeen)).join('')}</ul>`
+          : `<p class="feed-empty">All quiet. When a friend likes, comments, or raises a hand, it lands here.</p>`) +
+      `</section>`;
+
+    // A row walks you to the post itself (your profile column) with the right
+    // panel already open — the comment thread, who liked, or who's going —
+    // and the profile render scrolls that card into view (see spotlightPost).
+    view.querySelectorAll('.notif').forEach(row =>
+      row.addEventListener('click', () => {
+        const id = row.dataset.post;
+        openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
+        if (row.dataset.kind === 'comment') openComments.add(id);
+        else if (row.dataset.kind === 'like') openLikers.add(id);
+        else openGoing.add(id);
+        spotlightPost = id;
+      }));
+
+    // Everything on screen has now been seen — next visit, the dots move on.
+    if (list.length && list[0]._ts) localStorage.setItem(notifSeenKey(), list[0]._ts);
+  }
+
   /* ── Publish (composer) ───────────────────────────────────────────────────
      One form, three types. The type picker reuses the home filter chips (same
      colored language); the fields below swap per type. Photos get a real upload,
      shown and posted at their native aspect ratio (no crop). On publish we route
      home so the new entry animates in at the top of the feed. */
   const PUB_TYPES = [
-    { key: 'post',  label: 'Post'  },
-    { key: 'find',  label: 'Find'  },
-    { key: 'photo', label: 'Photo' },
+    { key: 'post',     label: 'Post'     },
+    { key: 'find',     label: 'Find'     },
+    { key: 'photo',    label: 'Photo'    },
+    { key: 'activity', label: 'Activity' },
   ];
   let pubType = 'post';
   let cropper = null;   // set once a photo is chosen; .export() → data-URI
@@ -1262,6 +1479,25 @@
         `</div>` + tags;
     }
 
+    if (type === 'activity') {
+      return `<div class="field">` +
+          `<label for="c-title">What’s the plan?</label>` +
+          `<input id="c-title" type="text" maxlength="120" ` +
+            `placeholder="Picnic at the park" autofocus>` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="c-location">Where</label>` +
+          `<input id="c-location" type="text" maxlength="120" ` +
+            `placeholder="Liberty Park, by the pond">` +
+          `<p class="field-hint">Optional.</p>` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="c-note">Details</label>` +
+          `<textarea id="c-note" rows="2" maxlength="400" ` +
+            `placeholder="When to show up, what to bring."></textarea>` +
+        `</div>` + tags;
+    }
+
     if (type === 'photo') {
       return `<div class="field">` +
           `<label>Photo</label>` +
@@ -1298,7 +1534,7 @@
   function renderPublish() {
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('Share to your circle', 'Publish') +
+        mastheadEl('Share to your circle', 'Post') +
         `<form class="composer" id="composer" novalidate>` +
           `<div class="type-pick" role="group" aria-label="Post type">` +
             PUB_TYPES.map(t =>
@@ -1308,7 +1544,7 @@
           `</div>` +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
-          `<button class="composer-submit" type="submit">Publish</button>` +
+          `<button class="composer-submit publish-fill" type="submit">Post</button>` +
         `</form>` +
       `</section>`;
 
@@ -1468,6 +1704,12 @@
       if (!/^https?:\/\/.+/i.test(data.url)) {
         errEl.textContent = 'Add a link starting with http:// or https://.'; return;
       }
+    } else if (pubType === 'activity') {
+      data.title = val('c-title');
+      data.location = val('c-location');
+      if (!data.title) {
+        errEl.textContent = 'Give the activity a title first.'; return;
+      }
     } else if (pubType === 'photo') {
       if (!cropper) { errEl.textContent = 'Choose a photo first.'; return; }
       data.image = cropper.export();
@@ -1481,13 +1723,13 @@
     // Writes now hit the network (and, for photos, an upload), so reflect the
     // wait rather than freezing on click.
     const btn = document.querySelector('.composer-submit');
-    if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
     errEl.textContent = '';
 
     const res = await Store.createPost(data);
     if (!res.ok) {
       errEl.textContent = res.error;
-      if (btn) { btn.disabled = false; btn.textContent = 'Publish'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
       return;
     }
     cropper = null;
@@ -1511,6 +1753,12 @@
       data.title = val('e-title');
       if (!/^https?:\/\/.+/i.test(data.url)) {
         errEl.textContent = 'Add a link starting with http:// or https://.'; return;
+      }
+    } else if (post.type === 'activity') {
+      data.title = val('e-title');
+      data.location = val('e-location');
+      if (!data.title) {
+        errEl.textContent = 'Give the activity a title first.'; return;
       }
     } else if (post.type === 'post') {
       data.title = val('e-title');
@@ -1665,16 +1913,18 @@
   }
 
   /* ── Router + page transitions ─────────────────────────────────────────────
-     The nav order is a line: Home(0) · Friends(1) · Profile(2) · Publish(3). A
-     move to a higher index slides the new page in from the RIGHT; a lower index
-     slides it in from the LEFT; a same-level swap (or the auth gate, index −1)
-     cross-fades. Each page rides in on blur+opacity+movement so it resolves into
-     focus rather than merely sliding. This is the only place direction is
-     decided — every view renders the same way and inherits the transition. */
+     The nav order is a line: Home(0) · Friends(1) · Notifications(2) ·
+     Profile(3) · Publish(4). A move to a higher index slides the new page in
+     from the RIGHT; a lower index slides it in from the LEFT; a same-level swap
+     (or the auth gate, index −1) cross-fades. Each page rides in on
+     blur+opacity+movement so it resolves into focus rather than merely sliding.
+     This is the only place direction is decided — every view renders the same
+     way and inherits the transition. */
   function pageOrder(path) {
     if (path === '#/friends') return 1;
-    if (path === '#/profile' || path.startsWith('#/u/')) return 2;
-    if (path === '#/publish') return 3;
+    if (path === '#/updates') return 2;
+    if (path === '#/profile' || path.startsWith('#/u/')) return 3;
+    if (path === '#/publish') return 4;
     return 0;                  // home (and any unknown route, which redirects home)
   }
 
@@ -1778,6 +2028,7 @@
       switch (path) {
         case '#/':        renderHome(); break;
         case '#/friends': renderFriends(); break;
+        case '#/updates': renderUpdates(); break;
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
         default:          location.hash = '#/';
@@ -1819,6 +2070,27 @@
   });
 
   window.addEventListener('hashchange', route);
+
+  // Mobile: the top bar steps out of the way while you read down the feed and
+  // returns the moment you scroll back up. Pure class-toggling here — the
+  // transform + transition live in CSS and only apply at phone widths, so
+  // desktop (where the bar is the sidebar's sibling brand rail) never moves.
+  (() => {
+    const topbar = document.querySelector('.topbar');
+    let lastY = window.scrollY, ticking = false;
+    window.addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (y < 48) topbar.classList.remove('topbar--hidden');       // near the top: always shown
+        else if (y > lastY + 4) topbar.classList.add('topbar--hidden');
+        else if (y < lastY - 4) topbar.classList.remove('topbar--hidden');
+        lastY = y;
+        ticking = false;
+      });
+    }, { passive: true });
+  })();
 
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.
