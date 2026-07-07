@@ -800,7 +800,7 @@
           `</button>` +
           `<button class="account-share" type="button" id="share">` +
             svgIcon('share', 'account-share-ico') +
-            `<span class="account-share-label">Copy profile link</span>` +
+            `<span class="account-share-label">Share</span>` +
           `</button>` +
         `</div>`
       : `<button class="friend-btn" type="button" id="friend" ` +
@@ -913,7 +913,7 @@
         clearTimeout(shareBtn._t);
         shareBtn._t = setTimeout(() => {
           shareBtn.classList.remove('copied');
-          label.textContent = 'Copy profile link';
+          label.textContent = 'Share';
         }, 1800);
       });
     });
