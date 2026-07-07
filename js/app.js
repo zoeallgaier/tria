@@ -45,6 +45,10 @@
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
+    // The little "opens elsewhere" mark on a find's title. An SVG (not the ↗
+    // glyph) so it renders as this plain arrow everywhere — mobile fonts render
+    // the character as a colour emoji, which we never want.
+    extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
   };
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 24 24" fill="none" ` +
@@ -300,7 +304,7 @@
     const titleHtml = post.title
       ? (post.url
           ? `<h2 class="card-title"><a href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
-              `${esc(post.title)}${external ? '<span class="card-title-ext" aria-hidden="true">↗</span>' : ''}</a></h2>`
+              `${esc(post.title)}${external ? `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>` : ''}</a></h2>`
           : `<h2 class="card-title">${esc(post.title)}</h2>`)
       : '';
 

@@ -542,7 +542,8 @@ main {
 }
 .card-title a { color: inherit; transition: color 0.15s; }
 @media (hover: hover) { .card-title a:hover { color: var(--muted); } }
-.card-title-ext { font-size: 0.55em; color: var(--muted); margin-left: 0.3rem; vertical-align: 0.12em; }
+.card-title-ext { color: var(--muted); margin-left: 0.3rem; }
+.card-title-ext svg { width: 0.62em; height: 0.62em; vertical-align: 0.02em; }
 
 /* One size everywhere a caption/note appears — with a headline, under a photo,
    or carrying the entry alone (the one-liner). Consistency over emphasis. */
