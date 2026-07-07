@@ -394,8 +394,8 @@ main {
 /* Entries are separated by whitespace plus a centered hairline divider, so one
    post's tail never blurs into the next byline. Each carries a small colored
    type-tag at the right of its byline instead of a left rule. */
-.feed { display: flex; flex-direction: column; gap: 1.9rem; max-width: var(--feed-width); }
-.feed > .card + .card { border-top: 1px solid var(--rule); padding-top: 1.9rem; }
+.feed { display: flex; flex-direction: column; gap: 0.9rem; max-width: var(--feed-width); }
+.feed > .card + .card { border-top: 1px solid var(--rule); padding-top: 0.9rem; }
 
 .feed-empty {
   color: var(--muted);
@@ -435,7 +435,7 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 0.6rem;
 }
 .card--photo .card-actions { padding-inline: var(--inset); margin-top: 0.9rem; }
 .card-actions button {
@@ -690,7 +690,11 @@ main {
 }
 
 /* ── Tags ──────────────────────────────────────────────────────────────── */
-.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1.1rem; }
+/* Tag pills are airy outlines, so they read taller than they measure; the
+   tightened top margin plus a slightly shorter step down to the action row
+   keeps a tagged post's density matching an untagged one. */
+.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.tags + .card-actions { margin-top: 0.4rem; }
 .tag {
   font-family: 'Oxygen', sans-serif;
   font-size: 0.76rem;
@@ -732,7 +736,7 @@ main {
 .comments-inner { overflow: hidden; min-height: 0; }
 .comments-content {
   border-left: 2px solid var(--rule);
-  padding: 0.85rem 0 0.2rem calc(var(--inset) - 0.7rem - 2px);
+  padding: 0.5rem 0 0 calc(var(--inset) - 0.7rem - 2px);
 }
 @media (prefers-reduced-motion: reduce) {
   .comments-panel, .likers-panel, .going-panel { transition: none; }
@@ -839,7 +843,7 @@ main {
    type reads from the green Photo tag in the byline, like posts and finds. */
 .card--photo .byline { padding-inline: var(--inset); }
 .card--photo .card-foot { padding: 0 var(--inset) 1rem; }
-.card--photo .tags { margin-top: 0.9rem; }
+.card--photo .tags { margin-top: 0.6rem; }
 
 /* ── Lightbox ──────────────────────────────────────────────────────────── */
 .lightbox {
@@ -1512,7 +1516,7 @@ body.gate main { padding: 0; }
   /* Entries break out of the view's side padding to sit screen-edge-to-edge;
      the hairline dividers run with them. Gap matches the divider padding so the
      line sits centered between entries. */
-  .feed { margin-inline: -1.15rem; gap: 1.9rem; }
+  .feed { margin-inline: -1.15rem; gap: 0.9rem; }
   .card--post .card-main, .card--find .card-main, .card--activity .card-main { padding-inline: 1.15rem; }
   .card--photo .card-actions { padding-inline: 1.15rem; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
