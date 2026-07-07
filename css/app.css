@@ -425,10 +425,13 @@ main {
   padding: 0.35rem var(--inset);
 }
 
-/* Action row below the post: comment toggle on the LEFT (opens the thread that
-   nests below it), edit + delete grouped on the right for your own posts. */
+/* Action row below the post: the social group (headcount / like / comment)
+   sits on the RIGHT for thumb reach; edit + delete tuck away on the left of
+   your own posts. row-reverse keeps the markup order (social first) while
+   pinning the social group to the right even when it's the only group. */
 .card-actions {
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
@@ -439,8 +442,8 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  min-width: 30px;
+  height: 34px;
+  min-width: 34px;
   padding: 0;
   color: var(--muted);
   background: none;
@@ -449,15 +452,18 @@ main {
   transition: color 0.15s, background 0.15s;
 }
 .card-actions button svg { width: 18px; height: 18px; }
+/* The social glyphs read a touch larger than the owner tools — they're the
+   invitations, the tools are chores. */
+.card-social button svg { width: 20px; height: 20px; }
 .card-tools { display: flex; align-items: center; gap: 0.1rem; }
 
-/* Like + comment share the left, as one group. The group's negative margin
-   cancels a counted button's inner padding so the first glyph lines up with the
-   post text column. */
-.card-social { display: flex; align-items: center; gap: 0.15rem; margin-left: -0.35rem; }
+/* Like + comment share the right, as one group. The group's negative margin
+   cancels the last button's inner padding so its glyph lines up with the post
+   text column's right edge. */
+.card-social { display: flex; align-items: center; gap: 0.15rem; margin-right: -0.4rem; }
 
-/* Icon-only likes/comments are the same 30px square as the edit/trash tools on
-   the right (inherited from .card-actions button) — matched hit area and rhythm.
+/* Icon-only likes/comments are the same square as the edit/trash tools
+   (inherited from .card-actions button) — matched hit area and rhythm.
    When a COUNT rides along, the button grows to the left so the glyph keeps that
    square feel, the count sits a clear step off the glyph, and trailing room keeps
    it from crowding the next button (the old 0.05rem group gap was the culprit). */

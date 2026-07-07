@@ -292,17 +292,19 @@
           (n ? `<span class="card-comment-count">${n}</span>` : '') +
         `</button>`
       : '';
+    // Reading order across the row: trash · edit … comments · likes — the
+    // destructive tool tucked furthest away, the like at the thumb's edge.
     const owner = opts.owner
       ? `<div class="card-tools">` +
-          `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
-            `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>` +
           `<button class="card-delete" type="button" data-del="${esc(post.id)}" ` +
             `aria-label="Delete this post" title="Delete post">${svgIcon('trash')}</button>` +
+          `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
+            `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>` +
         `</div>`
       : '';
     // Nothing to show (a non-friend's post you don't own) → no empty row.
     if (!going && !like && !comment && !owner) return '';
-    return `<div class="card-actions"><div class="card-social">${going}${like}${comment}</div>${owner}</div>`;
+    return `<div class="card-actions"><div class="card-social">${going}${comment}${like}</div>${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
