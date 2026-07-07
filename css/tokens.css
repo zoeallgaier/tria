@@ -25,8 +25,8 @@
      chips, the shifting Publish button), and a deepened -ink twin carries
      text/labels on paper (AA). --on-type is the ink that sits on any pastel
      fill — near-black, AA on all four in both modes. */
-  --type-post:         #b7a6e8;  /* lavender */
-  --type-post-ink:     #6247b8;
+  --type-note:         #b7a6e8;  /* lavender */
+  --type-note-ink:     #6247b8;
   --type-find:         #f2a58c;  /* peach / coral */
   --type-find-ink:     #b0472a;
   --type-photo:        #9fd6e8;  /* baby cyan */
@@ -87,8 +87,8 @@
     /* Pastel fills read light against the dark paper, so the -ink twins can
        simply BE the pastels — vivid text without a second ramp. --on-type stays
        near-black: the fills themselves don't change. */
-    --type-post:         #b7a6e8;
-    --type-post-ink:     #b7a6e8;
+    --type-note:         #b7a6e8;
+    --type-note-ink:     #b7a6e8;
     --type-find:         #f2a58c;
     --type-find-ink:     #f2a58c;
     --type-photo:        #9fd6e8;

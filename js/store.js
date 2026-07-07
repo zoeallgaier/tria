@@ -47,6 +47,8 @@ const Store = (() => {
     if (p.note)     o.note = p.note;
     if (p.image)    o.image = p.image;
     if (p.location) o.location = p.location;
+    if (p.event_date) o.eventDate = p.event_date;
+    if (p.event_time) o.eventTime = p.event_time;
     return o;
   }
   const nameMap = () => new Map(state.users.map(u => [u.id, u.username]));
@@ -102,6 +104,20 @@ const Store = (() => {
     }
     for (const x of state.users) fr[x.username] || (fr[x.username] = []);
     state.friends = fr;
+  }
+
+  // Re-pull the whole world on demand (nav re-taps, the app foregrounding).
+  // Resolves true only when something actually changed, so callers can skip a
+  // pointless re-render (and the animation replay that comes with it).
+  const worldPrint = () => {
+    const { session, ...world } = state;
+    return JSON.stringify(world);
+  };
+  async function refresh() {
+    if (!state.session) return false;
+    const before = worldPrint();
+    try { await loadWorld(); } catch { return false; }   // offline — keep the cache
+    return worldPrint() !== before;
   }
 
   // ── Reads (synchronous, off the cache) ─────────────────────────────────────
@@ -245,6 +261,8 @@ const Store = (() => {
     if (data.url)      row.url = data.url;
     if (data.note)     row.note = data.note;
     if (data.location) row.location = data.location;
+    if (data.eventDate) row.event_date = data.eventDate;
+    if (data.eventTime) row.event_time = data.eventTime;
     if (data.image) {
       try { row.image = await uploadImage(data.image, 'photo'); }
       catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
@@ -279,8 +297,10 @@ const Store = (() => {
     if (i < 0 || state.posts[i].author !== me)
       return { ok: false, error: 'That post isn’t yours to edit.' };
     const patch = {};
-    for (const k of ['title', 'url', 'note', 'location']) {
-      if (k in data) patch[k] = data[k] || null;
+    const COLS = { title: 'title', url: 'url', note: 'note', location: 'location',
+                   eventDate: 'event_date', eventTime: 'event_time' };
+    for (const k of Object.keys(COLS)) {
+      if (k in data) patch[COLS[k]] = data[k] || null;
     }
     if ('tags' in data) patch.tags = data.tags || [];
 
@@ -440,7 +460,7 @@ const Store = (() => {
   }
 
   return {
-    init,
+    init, refresh,
     users, user, currentUser, friends, feed, posts, postsBy,
     // Auth
     session, isAuthed, signup, login, logout,
@@ -475,6 +495,25 @@ function niceDate(iso) {
   if (days === 1) return 'yesterday';
   if (days < 7)  return days + 'd ago';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// An activity's when-line: "Today · 6:30 PM", "Tomorrow", else "Sat, Jul 12".
+// Forward-looking phrasing (vs niceDate's ago-phrasing) — plans point ahead.
+function eventWhenLabel(dateStr, timeStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const days = Math.round((d - new Date(TODAY + 'T12:00:00')) / 86400000);
+  const day =
+    days === 0 ? 'Today' :
+    days === 1 ? 'Tomorrow' :
+    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return day + (timeStr ? ` · ${niceTime(timeStr)}` : '');
+}
+
+// 'HH:MM' (24h, from <input type="time">) → "6:30 PM".
+function niceTime(hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
 const domainOf = (url) => {

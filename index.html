@@ -27,11 +27,18 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=3" />
-  <link rel="stylesheet" href="css/app.css?v=3" />
+  <link rel="stylesheet" href="css/tokens.css?v=5" />
+  <link rel="stylesheet" href="css/app.css?v=5" />
 </head>
 
 <body>
+  <!-- Boot splash: static HTML so it paints before any JS or network work.
+       The serif t wears the Post button's drifting pastel gradient; app.js
+       fades it out once the first view is in (see dismissSplash). -->
+  <div class="splash" id="splash" aria-hidden="true">
+    <span class="splash-t">t</span>
+  </div>
+
   <a href="#main" class="skip-link">Skip to main content</a>
 
   <!-- Ambient wash: a soft radial glow behind everything, giving the page
@@ -66,9 +73,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=3"></script>
-  <script src="js/store.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/config.js?v=5"></script>
+  <script src="js/store.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 
 </html>

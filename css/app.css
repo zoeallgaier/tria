@@ -99,6 +99,51 @@ body.gate .ambient {
   font-weight: 400;
 }
 
+/* ── Boot splash ────────────────────────────────────────────────────────────
+   A full-page curtain in the page's own paper, crowned by a serif t wearing
+   the Post button's drifting pastel gradient (same keyframes, same quartet).
+   Painted from static HTML before any JS runs; app.js adds .splash--out after
+   the first render and removes the node once the fade lands. The t arrives
+   the way cards do — a soft rise — plus the site's blur-settle. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 400;                     /* above topbar/nav (100) and modals (250) */
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity var(--dur-move) var(--ease);
+}
+.splash-t {
+  /* Roman, not italic — the same t as the app icon's mark. */
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: clamp(7.5rem, 26vw, 12rem);
+  line-height: 1;
+  padding: 0 0.15em 0.1em;          /* clip-to-text crops at the box — keep air around the glyph */
+  background: linear-gradient(115deg,
+    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  animation:
+    splash-in var(--dur-slow) var(--ease) both,
+    publish-shift 5s ease-in-out infinite;
+}
+@keyframes splash-in {
+  from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+}
+.splash--out {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash { transition: none; }
+  .splash--out { visibility: hidden; }
+  .splash-t { animation: none; background-position: 50% 50%; }
+}
+
 .skip-link {
   position: absolute;
   left: -999px;
@@ -214,7 +259,7 @@ body.gate .ambient {
   border-radius: inherit;
   padding: 2px;                     /* the ring's thickness */
   background: linear-gradient(115deg,
-    var(--type-post), var(--type-find), var(--type-activity), var(--type-photo), var(--type-post));
+    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
   animation: publish-shift 14s ease-in-out infinite;
   /* Ring mode: keep only the 2px band between padding-box and border-box. */
@@ -375,7 +420,7 @@ main {
 }
 /* Idle: hue as text + a tinted edge, so the menu reads in color. */
 .filter[data-filter="all"]   { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
-.filter[data-filter="post"]     { color: var(--type-post-ink);     border-color: color-mix(in srgb, var(--type-post) 55%, var(--rule)); }
+.filter[data-filter="note"]     { color: var(--type-note-ink);     border-color: color-mix(in srgb, var(--type-note) 55%, var(--rule)); }
 .filter[data-filter="find"]     { color: var(--type-find-ink);     border-color: color-mix(in srgb, var(--type-find) 55%, var(--rule)); }
 .filter[data-filter="photo"]    { color: var(--type-photo-ink);    border-color: color-mix(in srgb, var(--type-photo) 55%, var(--rule)); }
 .filter[data-filter="activity"] { color: var(--type-activity-ink); border-color: color-mix(in srgb, var(--type-activity) 55%, var(--rule)); }
@@ -385,7 +430,7 @@ main {
 /* Active: filled with the pastel, near-black ink on top (the fills are light in
    both modes, so --on-type holds AA either way). All stays monochrome. */
 .filter[aria-pressed="true"]                         { color: var(--bg);      background: var(--accent);        border-color: var(--accent); }
-.filter[data-filter="post"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-post);     border-color: var(--type-post); }
+.filter[data-filter="note"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-note);     border-color: var(--type-note); }
 .filter[data-filter="find"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-find);     border-color: var(--type-find); }
 .filter[data-filter="photo"][aria-pressed="true"]    { color: var(--on-type); background: var(--type-photo);    border-color: var(--type-photo); }
 .filter[data-filter="activity"][aria-pressed="true"] { color: var(--on-type); background: var(--type-activity); border-color: var(--type-activity); }
@@ -421,7 +466,7 @@ main {
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
    match the photo text column; the type reads from the colored tag, not a rule. */
-.card--post .card-main, .card--find .card-main, .card--activity .card-main {
+.card--note .card-main, .card--find .card-main, .card--activity .card-main {
   padding: 0.35rem var(--inset);
 }
 
@@ -491,7 +536,10 @@ main {
 .card-like.liked svg { fill: currentColor; }
 
 /* Headcount (activities). The hand-up toggle washes lime once you're in; the
-   public count ("3 going") is a text button that opens the who's-going panel. */
+   public count ("3 going") is a text button that opens the who's-going panel.
+   The toggle carries inline padding so the lime pill breathes around the glyph
+   instead of hugging it (and the thumb gets a wider target). */
+.card-going { padding-inline: 0.55rem; }
 .card-going:hover,
 .card-going:focus-visible { color: var(--type-activity-ink); }
 .card-going.going {
@@ -555,7 +603,7 @@ main {
   min-width: 0;
 }
 
-/* ── Type tag — small colored label (Post / Find / Photo) at the right of the
+/* ── Type tag — small colored label (Note / Find / Photo) at the right of the
    byline, marking the entry's type. Replaces the old left type-rule; the colour
    is the type's own, as an outline pill with a faint matching wash. */
 .type-tag {
@@ -571,10 +619,12 @@ main {
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, currentColor 9%, transparent);
 }
-.type-tag--post     { color: var(--type-post-ink); }
+.type-tag--note     { color: var(--type-note-ink); }
 .type-tag--find     { color: var(--type-find-ink); }
 .type-tag--photo    { color: var(--type-photo-ink); }
 .type-tag--activity { color: var(--type-activity-ink); }
+/* An activity whose day has passed: the lime hands back to grey, "Happened". */
+.type-tag--past     { color: var(--muted); }
 @media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
 .avatar {
   width: 40px;
@@ -630,7 +680,8 @@ main {
 .card-note-link { display: block; color: inherit; transition: color 0.15s; }
 @media (hover: hover) { .card-note-link:hover { color: var(--muted); } }
 
-/* Activity where-line — a quiet pin + place tucked between title and details. */
+/* Activity when/where-lines — a quiet calendar + day, then pin + place, tucked
+   between title and details. Stacked lines pull together into one block. */
 .card-location {
   display: flex;
   align-items: center;
@@ -639,6 +690,7 @@ main {
   font-size: 0.88rem;
   margin: -0.1rem 0 0.6rem;
 }
+.card-location + .card-location { margin-top: -0.35rem; }
 .card-location-ico { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* One size everywhere a caption/note appears — with a headline, under a photo,
@@ -934,6 +986,15 @@ body.gate main { padding: 0; }
 .field input:focus,
 .field textarea:focus { outline: none; border-color: var(--accent); }
 .field-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
+
+/* An activity's "When" — date + time sharing one row (the date takes the lead),
+   so the optional pair reads as a single quiet line, not two more form rows. */
+.when-row { display: flex; gap: 0.6rem; }
+.when-row input[type="date"] { flex: 1.4; min-width: 0; }
+.when-row input[type="time"] { flex: 1;   min-width: 0; }
+/* iOS renders date/time inputs as centered steppers; keep the height + left
+   alignment of the text fields so the row sits flush with the form. */
+.when-row input { -webkit-appearance: none; appearance: none; text-align: left; }
 
 /* Username wears an @ prefix; the wrapper carries the border + focus ring. */
 .field-user {
@@ -1512,12 +1573,14 @@ body.gate main { padding: 0; }
     -webkit-overflow-scrolling: touch;
   }
   .filters::-webkit-scrollbar { display: none; }
+  /* A touch smaller so all five fit a phone row without clipping. */
+  .filter { font-size: 0.85rem; padding: 0.4rem 0.8rem; }
 
   /* Entries break out of the view's side padding to sit screen-edge-to-edge;
      the hairline dividers run with them. Gap matches the divider padding so the
      line sits centered between entries. */
   .feed { margin-inline: -1.15rem; gap: 0.9rem; }
-  .card--post .card-main, .card--find .card-main, .card--activity .card-main { padding-inline: 1.15rem; }
+  .card--note .card-main, .card--find .card-main, .card--activity .card-main { padding-inline: 1.15rem; }
   .card--photo .card-actions { padding-inline: 1.15rem; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }

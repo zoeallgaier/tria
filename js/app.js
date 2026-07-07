@@ -49,6 +49,8 @@
     going:   '<circle cx="10" cy="8" r="3.4"/><path d="M4 20a6.5 6.5 0 0 1 12.2-2.8"/><path d="m14.5 16.5 2.2 2.2 4-4"/>',
     // Map pin for an activity's location line.
     pin:     '<path d="M12 21s-6.5-5.2-6.5-10a6.5 6.5 0 0 1 13 0c0 4.8-6.5 10-6.5 10z"/><circle cx="12" cy="11" r="2.4"/>',
+    // Calendar page for an activity's when-line.
+    cal:     '<rect x="4" y="6" width="16" height="14" rx="1.5"/><path d="M4 10.5h16"/><path d="M8.5 3.5V7"/><path d="M15.5 3.5V7"/>',
     // The little "opens elsewhere" mark on a find's title. An SVG (not the ↗
     // glyph) so it renders as this plain arrow everywhere — mobile fonts render
     // the character as a colour emoji, which we never want.
@@ -97,12 +99,22 @@
     return `<span class="${cls}" aria-hidden="true">${esc(initialOf(name))}</span>`;
   }
 
-  // A small colored label marking an entry's type (Post / Find / Photo), sat at
-  // the right of the byline. The colour is the type's own (via the CSS class).
-  const TYPE_LABEL = { post: 'Post', find: 'Find', photo: 'Photo', activity: 'Activity' };
-  function typeTagEl(type) {
-    return `<span class="type-tag type-tag--${type}">` +
-      `${esc(TYPE_LABEL[type] || type)}</span>`;
+  // A dated activity retires once its day has passed: greyed tag, and it sinks
+  // below upcoming plans on the Activities filter. (Both YYYY-MM-DD strings, so
+  // plain comparison is a date comparison.)
+  const isPastActivity = (post) =>
+    post.type === 'activity' && !!post.eventDate && post.eventDate < TODAY;
+
+  // A small colored label marking an entry's type (Note / Find / Photo), sat at
+  // the right of the byline. The colour is the type's own (via the CSS class) —
+  // except a past activity, which greys out and reads as done.
+  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Photo', activity: 'Activity' };
+  function typeTagEl(post) {
+    if (isPastActivity(post)) {
+      return `<span class="type-tag type-tag--past">Happened</span>`;
+    }
+    return `<span class="type-tag type-tag--${post.type}">` +
+      `${esc(TYPE_LABEL[post.type] || post.type)}</span>`;
   }
 
   // Byline (identity) — avatar + profile name, with the date (and a find's
@@ -122,7 +134,7 @@
             `<span class="byline-meta">${meta}</span>` +
           `</span>` +
         `</a>` +
-        typeTagEl(post.type) +
+        typeTagEl(post) +
       `</header>`;
   }
 
@@ -134,7 +146,7 @@
     const meta = esc(niceDate(post.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
     return `<p class="card-solometa"><span>${meta}</span>` +
-      typeTagEl(post.type) + `</p>`;
+      typeTagEl(post) + `</p>`;
   }
 
   // ── Long notes → "Read more" ───────────────────────────────────────────────
@@ -370,7 +382,12 @@
         `</a>`
       : cardNoteHtml(post);
 
-    // Activities carry a where-line under the title — a quiet pin + place.
+    // Activities carry a when-line and a where-line under the title — a quiet
+    // calendar + day (and time), then pin + place. Same voice, stacked.
+    const whenHtml = post.type === 'activity' && post.eventDate
+      ? `<p class="card-location">${svgIcon('cal', 'card-location-ico')}` +
+          `<span>${esc(eventWhenLabel(post.eventDate, post.eventTime))}</span></p>`
+      : '';
     const locationHtml = post.type === 'activity' && post.location
       ? `<p class="card-location">${svgIcon('pin', 'card-location-ico')}<span>${esc(post.location)}</span></p>`
       : '';
@@ -379,6 +396,7 @@
       `<div class="card-main">` +
         head +
         titleHtml +
+        whenHtml +
         locationHtml +
         noteHtml +
         tagChips(post) +
@@ -677,6 +695,14 @@
             `value="${esc(post.title || '')}" placeholder="Picnic at the park">` +
         `</div>` +
         `<div class="field">` +
+          `<label for="e-date">When</label>` +
+          `<div class="when-row">` +
+            `<input id="e-date" type="date" value="${esc(post.eventDate || '')}">` +
+            `<input id="e-time" type="time" aria-label="Time" value="${esc(post.eventTime || '')}">` +
+          `</div>` +
+          `<p class="field-hint">Optional.</p>` +
+        `</div>` +
+        `<div class="field">` +
           `<label for="e-location">Where</label>` +
           `<input id="e-location" type="text" maxlength="120" ` +
             `value="${esc(post.location || '')}" placeholder="Liberty Park, by the pond">` +
@@ -738,7 +764,7 @@
   /* ── Home view ───────────────────────────────────────────────────────────── */
   const FILTERS = [
     { key: 'all',      label: 'All' },
-    { key: 'post',     label: 'Posts' },
+    { key: 'note',     label: 'Notes' },
     { key: 'find',     label: 'Finds' },
     { key: 'photo',    label: 'Photos' },
     { key: 'activity', label: 'Activities' },
@@ -778,6 +804,23 @@
       const tagOk = !activeTag || (p.tags || []).includes(activeTag);
       return typeOk && tagOk;
     });
+
+    // The Activities tab answers "what's coming up", so it sorts by EVENT date,
+    // not post date: upcoming plans first (soonest on top), then undated ones
+    // (newest posted), then the past (most recent happening first). Everywhere
+    // else — All, profiles — activities keep their place in the timeline.
+    if (activeFilter === 'activity') {
+      const rank = (p) => !p.eventDate ? 1 : p.eventDate >= TODAY ? 0 : 2;
+      list.sort((a, b) => {
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        if (ra !== 1 && a.eventDate !== b.eventDate) {
+          const soonestFirst = a.eventDate < b.eventDate ? -1 : 1;
+          return ra === 0 ? soonestFirst : -soonestFirst;
+        }
+        return a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0;
+      });
+    }
 
     feedEl.innerHTML = '';
     if (!list.length) {
@@ -1427,12 +1470,12 @@
      shown and posted at their native aspect ratio (no crop). On publish we route
      home so the new entry animates in at the top of the feed. */
   const PUB_TYPES = [
-    { key: 'post',     label: 'Post'     },
+    { key: 'note',     label: 'Note'     },
     { key: 'find',     label: 'Find'     },
     { key: 'photo',    label: 'Photo'    },
     { key: 'activity', label: 'Activity' },
   ];
-  let pubType = 'post';
+  let pubType = 'note';
   let cropper = null;   // set once a photo is chosen; .export() → data-URI
 
   // A rotating cast of example tags for the composer's Tags placeholder — two
@@ -1488,6 +1531,14 @@
             `placeholder="Picnic at the park" autofocus>` +
         `</div>` +
         `<div class="field">` +
+          `<label for="c-date">When</label>` +
+          `<div class="when-row">` +
+            `<input id="c-date" type="date">` +
+            `<input id="c-time" type="time" aria-label="Time">` +
+          `</div>` +
+          `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
+        `</div>` +
+        `<div class="field">` +
           `<label for="c-location">Where</label>` +
           `<input id="c-location" type="text" maxlength="120" ` +
             `placeholder="Liberty Park, by the pond">` +
@@ -1536,7 +1587,7 @@
   function renderPublish() {
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('Share to your circle', 'Post') +
+        mastheadEl('Share to your circle', 'New Post') +
         `<form class="composer" id="composer" novalidate>` +
           `<div class="type-pick" role="group" aria-label="Post type">` +
             PUB_TYPES.map(t =>
@@ -1709,8 +1760,13 @@
     } else if (pubType === 'activity') {
       data.title = val('c-title');
       data.location = val('c-location');
+      data.eventDate = val('c-date');
+      data.eventTime = val('c-time');
       if (!data.title) {
         errEl.textContent = 'Give the activity a title first.'; return;
+      }
+      if (data.eventTime && !data.eventDate) {
+        errEl.textContent = 'Add a date to go with that time.'; return;
       }
     } else if (pubType === 'photo') {
       if (!cropper) { errEl.textContent = 'Choose a photo first.'; return; }
@@ -1735,7 +1791,7 @@
       return;
     }
     cropper = null;
-    pubType = 'post';           // reset for next time
+    pubType = 'note';           // reset for next time
     go('#/');
   }
 
@@ -1759,10 +1815,15 @@
     } else if (post.type === 'activity') {
       data.title = val('e-title');
       data.location = val('e-location');
+      data.eventDate = val('e-date');
+      data.eventTime = val('e-time');
       if (!data.title) {
         errEl.textContent = 'Give the activity a title first.'; return;
       }
-    } else if (post.type === 'post') {
+      if (data.eventTime && !data.eventDate) {
+        errEl.textContent = 'Add a date to go with that time.'; return;
+      }
+    } else if (post.type === 'note') {
       data.title = val('e-title');
       if (!data.title && !data.note) {
         errEl.textContent = 'Write a headline or a note first.'; return;
@@ -2038,6 +2099,28 @@
     });
 
     scrollTop(false);
+    refreshWorld(path);   // Circle/Updates: quietly re-pull behind the render
+  }
+
+  /* ── Nav-tap refresh ────────────────────────────────────────────────────────
+     Landing on (or re-tapping) Circle or Updates quietly re-pulls the world in
+     the background — the page renders from cache instantly, and only if
+     something actually changed does the view re-render, so the new cards rise
+     in with the usual entrance and an unchanged page never flickers. This is
+     the pull-to-refresh stand-in: the tab tap IS the refresh gesture. */
+  let refreshSeq = 0;
+  let lastRefresh = Date.now();   // boot just loaded the world — don't re-pull it
+  async function refreshWorld(path) {
+    if (path !== '#/' && path !== '#/updates') return;
+    if (Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
+    lastRefresh = Date.now();
+    const seq = ++refreshSeq;
+    const changed = await Store.refresh();
+    if (!changed || seq !== refreshSeq) return;    // stale response — a newer pull won
+    if ((location.hash || '#/').split('?')[0] !== path) return;   // navigated away
+    // Never yank the page out from under a half-typed comment.
+    if (document.activeElement?.matches?.('input, textarea')) return;
+    if (path === '#/') renderFeed(); else renderUpdates();
   }
 
   // Tapping the tab (or the brand) for the page you're already on scrolls back
@@ -2052,6 +2135,7 @@
       renderHome();
     }
     scrollTop(true);
+    refreshWorld(route);
   }
 
   document.getElementById('nav').addEventListener('click', (e) => {
@@ -2124,10 +2208,33 @@
     check();
   })();
 
+  // Returning to a foregrounded app re-pulls the world too (same quiet rules:
+  // only on Circle/Updates, re-render only if something changed).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
+    refreshWorld((location.hash || '#/').split('?')[0]);
+  });
+
+  // The boot splash (static HTML in index.html, so it paints before any JS or
+  // network). Dismissed once the first view is in — held on screen a beat so a
+  // warm-cache boot doesn't strobe the mark — and ALWAYS dismissed, even when
+  // boot fails, or it would wall off the gate. The node is removed after the
+  // fade so the blur/backdrop layers beneath don't keep compositing it.
+  const splashShown = performance.now();
+  function dismissSplash() {
+    const splash = document.getElementById('splash');
+    if (!splash) return;
+    const hold = Math.max(0, 900 - (performance.now() - splashShown));
+    setTimeout(() => {
+      splash.classList.add('splash--out');
+      setTimeout(() => splash.remove(), 600);   // past --dur-move; also covers reduced motion
+    }, hold);
+  }
+
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.
   Store.init().then(route).catch((err) => {
     console.error('Boot failed:', err);
     route();
-  });
+  }).finally(dismissSplash);
 })();

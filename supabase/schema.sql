@@ -29,7 +29,7 @@ create table public.users (
 create table public.posts (
   id         uuid primary key default gen_random_uuid(),
   author     uuid not null references public.users(id) on delete cascade,
-  type       text not null check (type in ('post','find','photo','activity')),
+  type       text not null check (type in ('note','find','photo','activity')),
   title      text,
   url        text,
   note       text,
