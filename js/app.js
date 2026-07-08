@@ -933,6 +933,7 @@
           `<button type="button" id="auth-toggle">` +
             `${isSignup ? 'Log in' : 'Create one'}</button>` +
         `</p>` +
+        `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
       `</div></section>`;
 
     const nameInput = document.getElementById('f-name');
@@ -1989,6 +1990,189 @@
     });
   }
 
+  /* ── About (#/about) ────────────────────────────────────────────────────────
+     The public front door: what Tria is, how to install it, the community
+     guidelines, an FAQ, and a feedback form. Reachable from the wordmark when
+     signed in AND from a link on the auth gate (route() special-cases it), so
+     it renders with or without a session — `gated` adds a way back to sign-in.
+     Feedback goes through FormSubmit's AJAX endpoint straight to Zoe's inbox
+     (first-ever submission triggers a one-time activation email to her). */
+  const FEEDBACK_ENDPOINT = 'https://formsubmit.co/ajax/zoeallgaier@gmail.com';
+
+  const ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  const INSTALL_ICONS = {
+    share: `<svg ${ICON_ATTRS}><path d="M12 15V3" /><path d="M8 6.5 12 3l4 3.5" />` +
+      `<path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" /></svg>`,
+    more: `<svg ${ICON_ATTRS}><circle cx="12" cy="5" r="0.9" fill="currentColor" />` +
+      `<circle cx="12" cy="12" r="0.9" fill="currentColor" />` +
+      `<circle cx="12" cy="19" r="0.9" fill="currentColor" /></svg>`,
+    add: `<svg ${ICON_ATTRS}><rect x="4" y="4" width="16" height="16" rx="3.5" />` +
+      `<path d="M12 9.2v5.6" /><path d="M9.2 12h5.6" /></svg>`,
+  };
+
+  function installStep(icon, text) {
+    return `<li><span class="install-icon">${icon}</span><span>${text}</span></li>`;
+  }
+
+  function renderAbout(gated) {
+    const me = !gated && Store.isAuthed() ? Store.currentUser() : null;
+
+    const installHtml =
+      `<h2 class="about-head" id="install">Add Tria to your homescreen</h2>` +
+      `<p>Tria lives on the web, so there is nothing to download and no store in ` +
+        `between. Add it to your homescreen and it opens full screen, just like ` +
+        `any other app on your phone.</p>` +
+      `<div class="install-cols">` +
+        `<div class="install-col"><h3>iPhone &amp; iPad <span class="install-browser">Safari</span></h3>` +
+          `<ol class="install-steps">` +
+          installStep(INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in the toolbar.`) +
+          installStep(INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`) +
+          installStep(`<span class="install-t">t</span>`, `Tap <strong>Add</strong>. That's it, Tria is on your homescreen.`) +
+          `</ol></div>` +
+        `<div class="install-col"><h3>Android <span class="install-browser">Chrome</span></h3>` +
+          `<ol class="install-steps">` +
+          installStep(INSTALL_ICONS.more, `Tap the <strong>three dots</strong> next to the address bar.`) +
+          installStep(INSTALL_ICONS.add, `Tap <strong>Add to Home screen</strong>, then <strong>Install</strong>.`) +
+          installStep(`<span class="install-t">t</span>`, `Confirm. That's it, Tria is on your homescreen.`) +
+          `</ol></div>` +
+      `</div>`;
+
+    const guidelinesHtml =
+      `<h2 class="about-head" id="guidelines">Community guidelines</h2>` +
+      `<p>Tria works best when it feels like a group chat that accidentally became ` +
+        `a neighborhood. These guidelines help keep Tria welcoming, safe, and ` +
+        `enjoyable for everyone. They apply across the platform, including posts, ` +
+        `comments, profiles, usernames, photos, activities, and anything else you ` +
+        `choose to share.</p>` +
+      `<h3>Respect people.</h3>` +
+      `<p>Treat people like people. Disagreement is fine. Harassment, bullying, ` +
+        `threats, hate speech, and deliberately making someone else's day worse are not.</p>` +
+      `<h3>Share honestly.</h3>` +
+      `<p>Be yourself. Don't impersonate other people, spread scams, or ` +
+        `intentionally mislead others.</p>` +
+      `<h3>Respect privacy.</h3>` +
+      `<p>Only share content that you have the right to share. Don't post someone ` +
+        `else's private information, conversations, or photos without their ` +
+        `permission. The same goes for plans: an activity's location is visible to ` +
+        `everyone in your circle, so think before pinning a home address or a spot ` +
+        `someone else considers private.</p>` +
+      `<h3>Keep it appropriate.</h3>` +
+      `<p>Illegal content, graphic violence, sexual exploitation, and content ` +
+        `intended to harm or exploit others have no place on Tria. No explicit or ` +
+        `adult material.</p>` +
+      `<h3>No spam.</h3>` +
+      `<p>People are here for conversations, recommendations, photos, ideas, and ` +
+        `plans. Accounts created primarily for spam, manipulation, or deceptive ` +
+        `promotion may be removed.</p>` +
+      `<h3>Help us improve.</h3>` +
+      `<p>If something doesn't feel right, let us know. Reports help us ` +
+        `investigate problems and keep the community healthy.</p>` +
+      `<p><strong>We may remove content or suspend accounts that repeatedly or ` +
+        `seriously violate these guidelines.</strong></p>`;
+
+    const faqHtml =
+      `<h2 class="about-head" id="faq">Frequently asked questions</h2>` +
+      `<h3 class="faq-q">Why is Tria different?</h3>` +
+      `<p>Your feed follows time, not recommendations. You decide who's in your ` +
+        `circle. Features are added because they make staying connected easier, ` +
+        `not because they increase screen time.</p>` +
+      `<h3 class="faq-q">Does Tria have an algorithm?</h3>` +
+      `<p><strong>No.</strong> Posts appear in chronological order from the people ` +
+        `you've chosen to follow. We don't reorder your feed, recommend posts ` +
+        `based on engagement, or decide what's "worth seeing."</p>` +
+      `<h3 class="faq-q">Are there ads?</h3>` +
+      `<p><strong>No.</strong> There are no advertisements, sponsored posts, or ` +
+        `third-party advertising systems built into Tria.</p>` +
+      `<h3 class="faq-q">Why can't I see everyone's like counts?</h3>` +
+      `<p><strong>Because conversations age better than scoreboards.</strong> A ` +
+        `reaction is simply a way to let someone know you saw their post. It ` +
+        `doesn't need to become a competition.</p>` +
+      `<h3 class="faq-q">Is it safe to post activities and locations?</h3>` +
+      `<p><strong>Your posts only reach your circle, but choose that circle with ` +
+        `care.</strong> Activities can carry a time and place, which is the whole ` +
+        `point, and it also means everyone you've added can see where you'll be. ` +
+        `Only add people you actually trust, and keep precise locations (like a ` +
+        `home address) for the circles that have earned them.</p>` +
+      `<h3 class="faq-q">Who is Tria for?</h3>` +
+      `<p><strong>Anyone looking for a more thoughtful place online.</strong> Some ` +
+        `people use Tria with close friends. Others join to meet people with ` +
+        `shared interests, keep up with family, organize clubs, or simply have a ` +
+        `social media account that feels a little more human. There's no right ` +
+        `way to build your circle. Everyone starts somewhere.</p>` +
+      `<h3 class="faq-q">Will Tria always stay this way?</h3>` +
+      `<p><strong>That's the goal.</strong> The internet changes quickly, and Tria ` +
+        `will keep growing alongside it. Every new feature has to answer a simple ` +
+        `question before it gets built: does this help people connect with each ` +
+        `other? If the answer is no, it probably doesn't belong here.</p>`;
+
+    const feedbackHtml =
+      `<h2 class="about-head" id="feedback">Feedback</h2>` +
+      `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
+      `<p>We'd love to hear from you. Whether you've found a bug, have an idea, or ` +
+        `just want to tell us what you think, every submission gets read by a real person.</p>` +
+      `<form id="fb-form" class="fb-form" novalidate>` +
+        `<div class="field"><label for="fb-name">Name</label>` +
+          `<input id="fb-name" type="text" maxlength="60" autocomplete="name" ` +
+            `value="${me ? esc(me.name) : ''}" placeholder="Optional"></div>` +
+        `<div class="field"><label for="fb-email">Email</label>` +
+          `<input id="fb-email" type="email" autocomplete="email" autocapitalize="none" ` +
+            `spellcheck="false" placeholder="Optional, if you'd like a reply"></div>` +
+        `<div class="field"><label for="fb-msg">Message</label>` +
+          `<textarea id="fb-msg" rows="5" maxlength="4000" ` +
+            `placeholder="Say whatever you need to say."></textarea></div>` +
+        `<p class="auth-error" id="fb-error" role="alert"></p>` +
+        `<button class="auth-submit fb-submit" type="submit">Send feedback</button>` +
+      `</form>`;
+
+    view.innerHTML =
+      `<section class="view about">` +
+        (gated ? `<p class="about-back"><a href="#/">&larr; Back to sign in</a></p>` : '') +
+        mastheadEl('Social media is so back.', 'About Tria') +
+        `<div class="about-body">` +
+          `<p class="about-lede">Tria is a social media app built around <em>real ` +
+            `relationships</em>. Whether you're keeping up with lifelong friends, ` +
+            `meeting new people, or finding your people for the first time, Tria ` +
+            `is the place to do it. <strong>Your feed is chronological. There are ` +
+            `no ads, no algorithm deciding for you, and no popularity ` +
+            `contests.</strong> Just a place to share your life, discover things ` +
+            `worth caring about, and stay connected.</p>` +
+          installHtml + guidelinesHtml + faqHtml + feedbackHtml +
+        `</div>` +
+      `</section>`;
+
+    const form = document.getElementById('fb-form');
+    const errEl = document.getElementById('fb-error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.textContent = '';
+      const message = document.getElementById('fb-msg').value.trim();
+      if (!message) { errEl.textContent = 'Write a little something first.'; return; }
+      const btn = form.querySelector('.fb-submit');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const res = await fetch(FEEDBACK_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            _subject: 'Tria feedback',
+            name: document.getElementById('fb-name').value.trim() || 'Anonymous',
+            email: document.getElementById('fb-email').value.trim() || undefined,
+            username: me ? '@' + me.username : '(not signed in)',
+            message,
+          }),
+        });
+        if (!res.ok) throw new Error('send failed');
+        form.outerHTML = `<p class="fb-thanks">Sent. Thank you, a real person will read it soon.</p>`;
+      } catch {
+        errEl.textContent = "That didn't send. Please try again in a moment.";
+        btn.disabled = false;
+        btn.textContent = 'Send feedback';
+      }
+    });
+  }
+
   /* ── Router + page transitions ─────────────────────────────────────────────
      The nav order is a line: Home(0) · Friends(1) · Notifications(2) ·
      Profile(3) · Publish(4). A move to a higher index slides the new page in
@@ -2072,9 +2256,12 @@
 
   function route() {
     // Gate: no session → the setup / login screen, whatever the hash says.
+    // The one exception is About, the public front door — reachable from a
+    // link on the gate itself (it renders chromeless, with a way back).
     if (!Store.isAuthed()) {
       document.body.classList.add('gate');
-      renderPage(-1, () => renderAuth(authMode));
+      const gatePath = (location.hash || '#/').split('?')[0];
+      renderPage(-1, () => gatePath === '#/about' ? renderAbout(true) : renderAuth(authMode));
       window.scrollTo(0, 0);
       return;
     }
@@ -2108,6 +2295,7 @@
         case '#/updates': renderUpdates(); break;
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
+        case '#/about':   renderAbout(false); break;
         default:          location.hash = '#/';
       }
     });
@@ -2162,10 +2350,12 @@
     }
   });
 
+  // The wordmark is the front door to About (My Circle in the nav is home);
+  // tapping it while already there just scrolls back to the top.
   document.querySelector('.brand').addEventListener('click', (e) => {
-    if ((location.hash || '#/').split('?')[0] === '#/') {
+    if ((location.hash || '#/').split('?')[0] === '#/about') {
       e.preventDefault();
-      reclick('#/');
+      reclick('#/about');
     }
   });
 

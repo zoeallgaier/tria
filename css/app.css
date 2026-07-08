@@ -1616,3 +1616,148 @@ body.gate main { padding: 0; }
 
   html, body { overscroll-behavior-y: none; }
 }
+
+/* ── About page (#/about) ─────────────────────────────────────────────────────
+   The public front door: editorial long-read column on the feed measure. Also
+   renders on the gate (no chrome), where the rainbow gate ambient plays behind
+   it and a back link leads to sign-in. */
+.about-body {
+  max-width: var(--feed-width);
+  margin-inline: auto;
+  padding-inline: var(--inset);
+}
+.about-body p {
+  line-height: 1.65;
+  margin-bottom: 1rem;
+  font-weight: 300;
+}
+.about-body strong { font-weight: 700; }
+.about-lede { font-size: 1.08rem; }
+
+/* Section heads echo the gate's serif italics; a hairline walks the page. */
+.about-head {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  border-top: 1px solid var(--rule);
+  margin-top: 3rem;
+  padding-top: 2.4rem;
+  margin-bottom: 1rem;
+}
+.about-body h3 {
+  font-size: 1.02rem;
+  font-weight: 700;
+  margin-top: 1.8rem;
+  margin-bottom: 0.4rem;
+}
+.about-body h3.faq-q {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.35rem;
+  margin-top: 2.1rem;
+}
+
+/* Back to the gate (only rendered when signed out). */
+.about-back {
+  max-width: var(--feed-width);
+  margin: -1.6rem auto 1.6rem;
+  padding-inline: var(--inset);
+  font-size: 0.9rem;
+}
+.about-back a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.about-back a:hover { color: var(--text); }
+
+/* Install tutorial: two platform columns; each step wears a small icon tile
+   that resolves into focus (blur + lift on the signature ease), one after
+   another down the list — the page-transition motif in miniature. */
+.install-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 2.4rem;
+  margin-top: 1.6rem;
+}
+.install-browser {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-left: 0.3rem;
+}
+.install-steps { list-style: none; padding: 0; margin: 0; }
+.install-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.45;
+}
+.install-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  color: var(--text);
+  animation: install-drift 5.4s var(--ease-soft) infinite;
+}
+.install-icon svg { width: 20px; height: 20px; }
+.install-steps li:nth-child(2) .install-icon { animation-delay: 1.8s; }
+.install-steps li:nth-child(3) .install-icon { animation-delay: 3.6s; }
+.install-t {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.5rem;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+/* Rest state sits soft and slightly blurred; each tile sharpens, lifts, and
+   settles back — staggered so the three steps read in order. */
+@keyframes install-drift {
+  0%, 22%, 100% { opacity: 0.55; filter: blur(1px); transform: translateY(1.5px) scale(0.97); }
+  10%           { opacity: 1;    filter: blur(0);   transform: translateY(-1.5px) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .install-icon { animation: none; opacity: 1; filter: none; transform: none; }
+}
+
+/* Feedback form: compact right-aligned submit (per the composer's precedent). */
+.fb-form { margin-top: 1.6rem; }
+.fb-form .auth-submit {
+  display: block;
+  width: auto;
+  margin-left: auto;
+  padding: 0.65rem 1.4rem;
+  font-size: 0.95rem;
+}
+.fb-thanks {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 1.25rem;
+  margin-top: 2rem;
+}
+
+/* Link back to About from the auth gate. */
+.auth-about { margin-top: 0.8rem; font-size: 0.88rem; text-align: center; }
+.auth-about a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-about a:hover { color: var(--text); }
+
+@media (max-width: 680px) {
+  .about-body, .about-back { padding-inline: 0; }   /* already inset by .view here */
+  .about-back { margin-top: -0.4rem; }
+  .install-cols { grid-template-columns: 1fr; }
+  .install-col + .install-col { margin-top: 2rem; }
+  .about-head { font-size: 1.7rem; margin-top: 2.6rem; padding-top: 2rem; }
+}
