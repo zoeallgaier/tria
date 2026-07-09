@@ -130,12 +130,16 @@ const Store = (() => {
   const isAuthed = () => !!state.session;
   const currentUser = () => user(state.session);
 
-  // The current user's friends — mutual only: people I've added who've also
-  // added me back. A one-sided edge is a pending request, not a friendship.
+  // Any user's friends — mutual only: people they've added who've added them
+  // back. A one-sided edge is a pending request, not a friendship.
+  function friendsOf(username) {
+    const theirs = state.friends[username] || [];
+    return theirs.filter(u => (state.friends[u] || []).includes(username));
+  }
+
+  // The current user's friends (shorthand for friendsOf on the session).
   function friends() {
-    const me = state.session;
-    const mine = state.friends[me] || [];
-    return mine.filter(u => (state.friends[u] || []).includes(me));
+    return friendsOf(state.session);
   }
 
   // Requests I've sent that haven't been answered — I added them, they haven't
@@ -283,12 +287,16 @@ const Store = (() => {
   // Upload a cropped JPEG (a data: URI from the cropper) into the public 'media'
   // bucket under the user's own {uid}/ folder, and hand back its public URL. This
   // is why photos no longer bloat the database — the column just stores the URL.
-  async function uploadImage(dataURI, kind) {
+  async function uploadImage(dataURI, kind, dims) {
     if (!/^data:/.test(dataURI)) return dataURI;      // already a URL → pass through
     const me = currentUser();
     if (!me) throw new Error('Not signed in.');
     const blob = await (await fetch(dataURI)).blob();
-    const path = `${me.id}/${kind}-${Date.now()}.jpg`;
+    // Stamp the pixel size into the filename (…-WxH.jpg) so the feed can reserve
+    // the photo's space before it loads (see imageDimsFromUrl) — no extra column,
+    // no metadata round-trip. Avatars (fixed-size tiles) skip this.
+    const dim = dims && dims.w && dims.h ? `-${dims.w}x${dims.h}` : '';
+    const path = `${me.id}/${kind}-${Date.now()}${dim}.jpg`;
     const { error } = await sb.storage.from('media')
       // Filenames are versioned (a fresh timestamp each save), so the bytes at a
       // URL never change — cache them for a year to make repeat loads instant.
@@ -308,7 +316,7 @@ const Store = (() => {
     if (data.eventDate) row.event_date = data.eventDate;
     if (data.eventTime) row.event_time = data.eventTime;
     if (data.image) {
-      try { row.image = await uploadImage(data.image, 'photo'); }
+      try { row.image = await uploadImage(data.image, 'photo', data.imageDims); }
       catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
     }
 
@@ -516,7 +524,7 @@ const Store = (() => {
 
   return {
     init, refresh,
-    users, user, currentUser, friends, feed, posts, postsBy,
+    users, user, currentUser, friends, friendsOf, feed, posts, postsBy,
     // Auth
     session, isAuthed, signup, login, logout,
     // Friends
@@ -592,5 +600,17 @@ function placeholderPhoto(id, alt) {
       `<rect width='800' height='800' fill='url(#g)'/>` +
       `<circle cx='620' cy='210' r='120' fill='rgba(255,255,255,0.10)'/>` +
     `</svg>`;
-  return { src: 'data:image/svg+xml,' + encodeURIComponent(svg), alt: alt || 'Photo' };
+  return { src: 'data:image/svg+xml,' + encodeURIComponent(svg), alt: alt || 'Photo', w: 800, h: 800 };
+}
+
+// A post photo is uploaded as `…-WIDTHxHEIGHT.jpg`, so its pixel size can be read
+// straight from the URL — no extra column, no metadata fetch. The feed hands the
+// <img> those width/height attributes so the browser reserves the exact space
+// before the bytes arrive, and nothing reflows as photos stream in. Legacy photos
+// (uploaded before the stamp) and avatars return null and fall back gracefully.
+function imageDimsFromUrl(url) {
+  const m = /-(\d+)x(\d+)\.jpe?g/i.exec(url || '');
+  if (!m) return null;
+  const w = +m[1], h = +m[2];
+  return w && h ? { w, h } : null;
 }

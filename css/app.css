@@ -698,25 +698,24 @@ main {
 /* ── Type tag — small colored label (Note / Find / Photo) at the right of the
    byline, marking the entry's type. Replaces the old left type-rule; the colour
    is the type's own, as an outline pill with a faint matching wash. */
-.type-tag {
+/* A single-colour glyph standing in for the old text pill. The SVG fills with
+   currentColor, so the type's own colour comes from the class below. */
+.type-icon {
   flex-shrink: 0;
-  font-family: 'Oxygen', sans-serif;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  line-height: 1;
-  padding: 0.32rem 0.62rem;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, currentColor 9%, transparent);
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  line-height: 0;
 }
-.type-tag--note     { color: var(--type-note-ink); }
-.type-tag--find     { color: var(--type-find-ink); }
-.type-tag--photo    { color: var(--type-photo-ink); }
-.type-tag--activity { color: var(--type-activity-ink); }
-/* An activity whose day has passed: the lime hands back to grey, "Happened". */
-.type-tag--past     { color: var(--muted); }
+.type-icon svg { width: 100%; height: 100%; display: block; }
+/* The ink twins: deeper, AA-legible on light paper; they flip back to the
+   pastels in dark mode automatically, so one set of vars covers both. */
+.type-icon--note     { color: var(--type-note-ink); }
+.type-icon--find     { color: var(--type-find-ink); }
+.type-icon--photo    { color: var(--type-photo-ink); }
+.type-icon--activity { color: var(--type-activity-ink); }
+/* An activity whose day has passed: the lime hands back to grey. */
+.type-icon--past     { color: var(--muted); }
 @media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
 .avatar {
   width: 40px;
@@ -976,11 +975,11 @@ main {
   font-weight: 700;
   font-size: 0.88rem;
   padding: 0.28rem 0.1rem;
-  opacity: 0.5;
   transition: opacity 0.15s;
 }
-.comment-form input:not(:placeholder-shown) ~ button,
-.comment-form button:hover { opacity: 1; }
+/* Empty field → the Post button is truly disabled (dimmed and inert), so it
+   never looks tappable while doing nothing. JS flips `disabled` on input. */
+.comment-form button:disabled { opacity: 0.5; cursor: default; }
 
 /* ── @mentions ─────────────────────────────────────────────────────────────
    A tag renders as the friend's display name, bold in the running text (not
@@ -1030,6 +1029,10 @@ main {
   overflow: hidden;
 }
 .photo img { display: block; width: 100%; height: auto; }
+/* Legacy photos carry no stamped size, so we can't hand the <img> width/height
+   to reserve space. Hold a neutral box until it loads (JS drops this class on
+   load, letting the figure take the real height) so the feed doesn't jump. */
+.photo--reserve { aspect-ratio: 3 / 2; }
 /* Byline + caption inset to align with post text; the image is full-width. The
    type reads from the green Photo tag in the byline, like posts and finds. */
 .card--photo .byline { padding-inline: var(--inset); }
@@ -1225,6 +1228,21 @@ body.gate main { padding: 0; }
   letter-spacing: 0.02em;
 }
 .profile-stats .dot { opacity: 0.5; margin: 0 0.3rem; }
+/* The friend count reads as plain stat text, but is a button — tappable to open
+   the friends list. Underline on hover hints it's live; disabled at zero. */
+.profile-friends {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.profile-friends:disabled { cursor: default; }
+@media (hover: hover) {
+  .profile-friends:not(:disabled):hover { color: var(--text); text-decoration: underline; }
+}
 
 /* Back to the directory, above a friend's header. */
 .profile-back {
@@ -1409,6 +1427,8 @@ body.gate main { padding: 0; }
 /* Empty Discover list: the "no one new" note plus a soft ask to share Tria,
    with a copy-the-link pill wearing the Post button's gradient ring. */
 .friends-share p { margin: 0; }
+/* Standing at the foot of Find Friends — a hairline lifts it off the list above. */
+.friends-share { border-top: 1px solid var(--rule); margin-top: 1.25rem; }
 .friends-share-ask { margin-top: 0.35rem; }
 .friends-share-copy {
   display: inline-flex;
@@ -1667,6 +1687,23 @@ body.gate main { padding: 0; }
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
 .crop--free { aspect-ratio: auto; cursor: default; touch-action: auto; }
 .crop--free img { position: static; width: 100%; height: auto; max-width: 100%; }
+/* The friends-list modal: a scrollable directory inside the frosted card. Rows
+   reuse the .friend geometry but sit edge-to-edge in the card (negative inset
+   cancels the card padding) with a lighter vertical rhythm. */
+.modal-card--list { max-width: 420px; }
+/* Edge-to-edge scroll area inside the card (negative inset cancels the padding);
+   a soft top/bottom mask fades rows into the frost as they scroll under the
+   title and Close row, matching the read-more fade elsewhere. */
+.friends-list--modal {
+  max-height: min(60vh, 26rem);
+  overflow-y: auto;
+  margin: 0 -1.6rem;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+}
+.friends-list--modal .friend { padding: 0.85rem 1.6rem; }
+.friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.1rem; }
+
 .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.2rem; }
 .modal-actions .edit-cancel {
   color: var(--muted);
@@ -1819,10 +1856,18 @@ body.gate main { padding: 0; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
   .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
-  .photo { border-radius: 0; }
+  /* Photos get room to breathe on phones: inset to the text column with rounded
+     corners instead of bleeding to the screen edges. Tap still opens full-screen. */
+  .photo { padding-inline: 1.15rem; background: none; border-radius: 0; overflow: visible; }
+  .photo img { border-radius: 14px; }
   .card--photo .byline,
   .card--photo .card-solometa,
   .card--photo .card-foot { padding-inline: 1.15rem; }
+
+  /* Tapped photo goes full-bleed edge-to-edge, uncropped (portraits letterbox,
+     landscapes span the full width). Drop the desktop padding + inset caps. */
+  .lightbox { padding: 0; }
+  .lightbox img { width: 100%; max-width: 100vw; max-height: 100dvh; border-radius: 0; }
 
   /* Wider, a touch more present gradient on phones (the blob reads smaller on a
      narrow screen otherwise). */

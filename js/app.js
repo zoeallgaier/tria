@@ -117,22 +117,42 @@
     return `<span class="${cls}" aria-hidden="true">${esc(initialOf(name))}</span>`;
   }
 
-  // A dated activity retires once its day has passed: greyed tag, and it sinks
-  // below upcoming plans on the Activities filter. (Both YYYY-MM-DD strings, so
-  // plain comparison is a date comparison.)
-  const isPastActivity = (post) =>
-    post.type === 'activity' && !!post.eventDate && post.eventDate < TODAY;
+  // A dated activity retires a few hours after it starts: greyed tag, and it
+  // sinks below upcoming plans on the Activities filter. A timed activity flips
+  // 3 hours past its start (so a plan earlier today reads as done by evening, not
+  // at midnight); a date-only activity (no start time) flips once the day has
+  // fully passed. eventDate is YYYY-MM-DD, eventTime is HH:MM in floating local time.
+  const PAST_GRACE_MS = 3 * 60 * 60 * 1000;
+  function isPastActivity(post) {
+    if (post.type !== 'activity' || !post.eventDate) return false;
+    if (post.eventTime) {
+      const [h, m] = post.eventTime.split(':').map(Number);
+      const start = new Date(+post.eventDate.slice(0, 4), +post.eventDate.slice(5, 7) - 1,
+                             +post.eventDate.slice(8, 10), h, m);
+      return Date.now() > start.getTime() + PAST_GRACE_MS;
+    }
+    return post.eventDate < TODAY;
+  }
 
   // A small colored label marking an entry's type (Note / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
   const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Photo', activity: 'Activity' };
+  // Single-colour glyphs, one per type, inlined so they inherit the type's own
+  // colour via `fill: currentColor` (set on the CSS class) — and grey out for
+  // a past activity with no extra markup. viewBoxes are the artboard sizes.
+  const TYPE_ICON = {
+    note: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99,3.91c.13.16.37.57.62,1.51l.4,1.46.92-1.2c.6-.78.98-1.07,1.16-1.17.06.2.12.66,0,1.63l-.19,1.5,1.31-.75c.81-.47,1.27-.59,1.51-.62-.03.21-.15.66-.62,1.49l-.75,1.31,1.5-.19c.37-.05.7-.07.98-.07.34,0,.55.04.66.07-.1.18-.39.56-1.18,1.17l-1.2.92,1.46.39c.95.26,1.36.5,1.53.63-.16.13-.57.36-1.5.62l-1.45.4,1.19.92c.77.59,1.05.97,1.15,1.15-.12.03-.32.07-.67.07-.28,0-.61-.02-.97-.07l-1.5-.19.75,1.31c.48.85.6,1.3.63,1.51-.2-.03-.66-.14-1.5-.62l-1.31-.75.19,1.49c.12.96.06,1.42,0,1.62-.18-.1-.57-.39-1.17-1.18l-.93-1.21-.39,1.47c-.26.98-.5,1.39-.64,1.56-.13-.17-.37-.57-.62-1.52l-.39-1.46-.92,1.19c-.6.77-.97,1.05-1.15,1.15-.06-.2-.12-.67,0-1.65l.19-1.5-1.31.75c-.82.47-1.27.59-1.51.62.03-.21.15-.67.63-1.51l.75-1.31-1.5.19c-.36.05-.69.07-.96.07-.34,0-.55-.04-.67-.07.1-.18.38-.55,1.14-1.14l1.19-.92-1.45-.4c-.93-.25-1.33-.49-1.5-.62.17-.13.58-.37,1.53-.63l1.46-.39-1.2-.92c-.78-.6-1.06-.98-1.17-1.16.12-.03.32-.07.67-.07.28,0,.61.02.97.07l1.5.19-.75-1.31c-.48-.85-.6-1.3-.63-1.51.2.03.67.14,1.52.64l1.31.75-.19-1.5c-.13-.98-.06-1.45,0-1.65.18.1.55.38,1.14,1.13l.92,1.18.4-1.44c.25-.91.48-1.3.61-1.46M11.99,3.08c-.51,0-.97.79-1.33,2.09-.73-.94-1.38-1.48-1.84-1.48-.07,0-.14.01-.2.04-.48.2-.6,1.13-.42,2.51-.83-.48-1.52-.74-1.99-.74-.21,0-.38.05-.49.17-.36.36-.12,1.27.57,2.47-.39-.05-.75-.08-1.07-.08-.78,0-1.29.16-1.43.5-.2.48.38,1.22,1.48,2.07-1.35.36-2.16.83-2.16,1.35s.8.98,2.13,1.34c-1.08.84-1.64,1.58-1.45,2.05.14.34.65.5,1.43.5.31,0,.67-.03,1.06-.08-.69,1.21-.94,2.12-.57,2.48.11.11.28.17.49.17.47,0,1.15-.26,1.98-.74-.18,1.38-.06,2.31.42,2.51.06.03.13.04.2.04.47,0,1.13-.55,1.86-1.5.36,1.34.83,2.15,1.35,2.15s1-.83,1.36-2.2c.74.97,1.41,1.53,1.89,1.53.07,0,.14-.01.2-.04.47-.2.6-1.12.42-2.49.82.47,1.5.73,1.96.73.21,0,.38-.05.49-.17.36-.36.12-1.27-.57-2.47.39.05.75.08,1.07.08.78,0,1.29-.16,1.43-.5.2-.47-.37-1.22-1.46-2.06,1.33-.36,2.13-.83,2.13-1.34s-.82-.99-2.17-1.35c1.11-.85,1.69-1.6,1.49-2.08-.14-.34-.65-.5-1.43-.5-.32,0-.68.03-1.07.08.68-1.2.92-2.1.56-2.46-.11-.11-.28-.17-.49-.17-.47,0-1.15.26-1.97.73.17-1.37.05-2.29-.42-2.49-.06-.03-.13-.04-.2-.04-.47,0-1.13.56-1.87,1.52-.36-1.33-.83-2.14-1.35-2.14h0Z"/></svg>`,
+    find: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,2.76c1.11,0,2.58.43,3.08,1.65.37.9.46,2.94-3.08,6.53-3.54-3.59-3.45-5.63-3.08-6.53.5-1.22,1.97-1.65,3.08-1.65M18.67,8.74c1.77,0,2.58,1.69,2.58,3.26,0,1.57-.81,3.26-2.58,3.26-1.06,0-2.88-.57-5.6-3.26,2.72-2.69,4.55-3.26,5.6-3.26M5.34,8.74c1.06,0,2.88.57,5.6,3.26-2.72,2.69-4.55,3.26-5.6,3.26-1.77,0-2.58-1.69-2.58-3.26s.81-3.26,2.58-3.26M12,13.06c3.54,3.59,3.45,5.63,3.08,6.53-.5,1.22-1.97,1.65-3.08,1.65s-2.58-.43-3.08-1.65c-.37-.9-.46-2.94,3.08-6.53M12,2.01c-3.4,0-6.8,3.2-.41,9.58-2.62-2.62-4.71-3.6-6.26-3.6-4.44,0-4.44,8.01,0,8.01,1.55,0,3.63-.97,6.26-3.6-6.39,6.39-2.99,9.58.41,9.58s6.8-3.2.41-9.58c2.62,2.62,4.71,3.6,6.26,3.6,4.44,0,4.44-8.01,0-8.01-1.55,0-3.63.97-6.26,3.6,6.39-6.39,2.99-9.58-.41-9.58h0Z"/></svg>`,
+    photo: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,4.92c3.91,0,7.08,3.18,7.08,7.08s-3.18,7.08-7.08,7.08-7.08-3.18-7.08-7.08,3.18-7.08,7.08-7.08M12,16.87c2.69,0,4.88-2.19,4.88-4.88s-2.19-4.88-4.88-4.88-4.88,2.19-4.88,4.88,2.19,4.88,4.88,4.88M12,4.17c-4.33,0-7.83,3.51-7.83,7.83s3.51,7.83,7.83,7.83,7.83-3.51,7.83-7.83-3.51-7.83-7.83-7.83h0ZM12,16.12c-2.28,0-4.13-1.85-4.13-4.13s1.85-4.13,4.13-4.13,4.13,1.85,4.13,4.13-1.85,4.13-4.13,4.13h0Z"/></svg>`,
+    activity: `<svg viewBox="0 0 18.88 19.82" fill="currentColor" aria-hidden="true"><path d="M9.44,2.85l.33,1.66c.14.72.78,1.25,1.52,1.25.39,0,.76-.15,1.05-.41l1.24-1.15-.71,1.54c-.22.48-.19,1.04.1,1.48.29.45.77.72,1.3.72.06,0,.12,0,.19-.01l1.68-.2-1.48.83c-.49.27-.79.79-.79,1.35s.3,1.08.79,1.35l1.48.83-1.68-.2c-.06,0-.13-.01-.19-.01-.53,0-1.02.27-1.3.72-.29.45-.32,1-.1,1.48l.71,1.54-1.24-1.15c-.29-.27-.66-.41-1.05-.41-.74,0-1.38.53-1.52,1.25l-.33,1.66-.33-1.66c-.14-.72-.78-1.25-1.52-1.25-.39,0-.76.15-1.05.41l-1.24,1.15.71-1.54c.22-.48.19-1.04-.1-1.48-.29-.45-.77-.72-1.3-.72-.06,0-.12,0-.19.01l-1.68.2,1.48-.83c.49-.27.79-.79.79-1.35s-.3-1.08-.79-1.35l-1.48-.83,1.68.2c.06,0,.13.01.19.01.53,0,1.02-.27,1.3-.72.29-.45.32-1,.1-1.48l-.71-1.54,1.24,1.15c.29.27.66.41,1.05.41.74,0,1.38-.53,1.52-1.25l.33-1.66M9.44,0c-.11,0-.21.07-.24.2l-.83,4.18c-.08.4-.43.65-.79.65-.19,0-.38-.07-.54-.21L3.92,1.91c-.05-.05-.11-.07-.16-.07-.16,0-.3.17-.22.35l1.79,3.87c.25.54-.15,1.14-.72,1.14-.03,0-.07,0-.1,0L.27,6.68s-.02,0-.03,0c-.24,0-.34.33-.11.45l3.72,2.08c.55.31.55,1.09,0,1.4L.12,12.69c-.22.12-.13.45.11.45.01,0,.02,0,.03,0l4.23-.5s.07,0,.1,0c.57,0,.97.6.72,1.14l-1.79,3.87c-.08.18.06.35.22.35.06,0,.11-.02.16-.07l3.12-2.89c.16-.15.35-.21.54-.21.36,0,.71.24.79.65l.83,4.18c.03.13.13.2.24.2s.21-.07.24-.2l.83-4.18c.08-.4.43-.65.79-.65.19,0,.38.07.54.21l3.12,2.89c.05.05.11.07.16.07.16,0,.3-.17.22-.35l-1.79-3.87c-.25-.54.15-1.14.72-1.14.03,0,.07,0,.1,0l4.23.5s.02,0,.03,0c.24,0,.34-.33.11-.45l-3.72-2.08c-.55-.31-.55-1.09,0-1.4l3.72-2.08c.22-.12.13-.45-.11-.45-.01,0-.02,0-.03,0l-4.23.5s-.07,0-.1,0c-.57,0-.97-.6-.72-1.14l1.79-3.87c.08-.18-.06-.35-.22-.35-.06,0-.11.02-.16.07l-3.12,2.89c-.16.15-.35.21-.54.21-.36,0-.71-.24-.79-.65L9.68.2c-.03-.13-.13-.2-.24-.2h0Z"/></svg>`,
+  };
   function typeTagEl(post) {
-    if (isPastActivity(post)) {
-      return `<span class="type-tag type-tag--past">Happened</span>`;
-    }
-    return `<span class="type-tag type-tag--${post.type}">` +
-      `${esc(TYPE_LABEL[post.type] || post.type)}</span>`;
+    const past = isPastActivity(post);
+    const label = past ? 'Happened' : (TYPE_LABEL[post.type] || post.type);
+    const cls = past ? 'past' : post.type;
+    return `<span class="type-icon type-icon--${cls}" role="img" aria-label="${esc(label)}">` +
+      `${TYPE_ICON[post.type] || ''}</span>`;
   }
 
   // Byline (identity) — avatar + profile name, with the date (and a find's
@@ -511,9 +531,14 @@
       // text settles before the image so the two don't compete for the read.
       // Real uploads (post.image) show the cropped photo; seed entries fall
       // back to the tonal placeholder.
+      const d = post.image ? imageDimsFromUrl(post.image) : null;
       const img = post.image
-        ? { src: post.image, alt: post.note || 'Photo' }
+        ? { src: post.image, alt: post.note || 'Photo', w: d && d.w, h: d && d.h }
         : placeholderPhoto(post.id, post.note);
+      // Known dimensions → width/height attributes let the browser hold the exact
+      // space before the photo loads (no feed reflow). Legacy photos without a
+      // stamped size fall back to a reserved box, cleared once the image lands.
+      const sized = img.w && img.h;
       const foot = (post.note ? `<p class="card-note">${richText(post.note, post.author)}</p>` : '') + tagChips(post);
       // .card-main holds the post itself (ending in the action row); the comment
       // thread expands as a sibling below, tucked under it on the same left axis.
@@ -521,8 +546,8 @@
         `<div class="card-main">` +
           head +
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
-          `<figure class="photo" tabindex="0" role="button" aria-label="Enlarge photo">` +
-            `<img src="${img.src}" alt="${esc(img.alt)}" loading="lazy" decoding="async">` +
+          `<figure class="photo${sized ? '' : ' photo--reserve'}" tabindex="0" role="button" aria-label="Enlarge photo">` +
+            `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` +
           `</figure>` +
           actions +
         `</div>` +
@@ -593,6 +618,14 @@
   function wirePhoto(el, img) {
     const fig = el.querySelector('.photo');
     if (!fig) return;
+    // A legacy photo (no stamped size) reserves a neutral box until it loads;
+    // release it once the real image lands so the figure takes the true height.
+    if (fig.classList.contains('photo--reserve')) {
+      const im = fig.querySelector('img');
+      const clear = () => fig.classList.remove('photo--reserve');
+      if (im && im.complete) clear();
+      else im && im.addEventListener('load', clear, { once: true });
+    }
     const open = () => openLightbox(img.src, img.alt);
     fig.addEventListener('click', open);
     fig.addEventListener('keydown', e => {
@@ -811,8 +844,8 @@
           `<div class="comments-content">` +
             (list.length ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>` : '') +
             `<form class="comment-form">` +
-              `<input type="text" name="text" maxlength="300" placeholder="Add a comment…" required>` +
-              `<button type="submit">Post</button>` +
+              `<input type="text" name="text" maxlength="300" placeholder="Add a comment…">` +
+              `<button type="submit" disabled>Post</button>` +
             `</form>` +
           `</div>` +
         `</div>` +
@@ -823,7 +856,15 @@
     const toggle = el.querySelector('.card-comment');
     const panel = el.querySelector('.comments-panel');
     if (!toggle || !panel) return;
-    wireMentions(panel.querySelector('.comment-form input'));
+    const input = panel.querySelector('.comment-form input');
+    const submitBtn = panel.querySelector('.comment-form button[type="submit"]');
+    wireMentions(input);
+
+    // The Post button is inert until there's something to post — flip `disabled`
+    // as the field fills/empties (drives the dimmed look; blocks empty submits).
+    const syncSubmit = () => { submitBtn.disabled = !input.value.trim(); };
+    input.addEventListener('input', syncSubmit);
+    syncSubmit();
 
     // Expand/collapse is pure CSS (grid-rows + opacity) — no rebuild, so it
     // eases like the rest of the site.
@@ -837,24 +878,28 @@
 
     // Adding/removing a comment changes the list + the count, so the card is
     // rebuilt. We swap just this card in place so the surrounding feed/column
-    // doesn't re-animate — except your OWN posts, whose edit/delete controls are
-    // wired at the page level (see renderUser), so those go through `refresh`.
+    // never re-animates — including your OWN posts: rather than re-rendering the
+    // whole column (which would replay every card's rise), we rebuild this one
+    // card and re-wire its owner edit/delete controls via opts.wireOwner.
     const apply = (dir) => {
       openComments.add(post.id);
-      if (opts.owner && opts.refresh) { opts.refresh(); return; }
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';               // no rise flash on an in-place swap
       // Roll the comment count in its new direction (up on add, down on delete).
       if (dir) fresh.querySelector('.card-comment-count')
         ?.classList.add(dir === 'up' ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
+      opts.wireOwner?.(fresh);                       // re-attach edit/delete on own posts
       fresh.querySelector('.comment-form input')?.focus();
     };
 
     panel.querySelector('.comment-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (submitBtn.disabled) return;               // empty, or a submit already in flight
+      submitBtn.disabled = true;                    // debounce: no double-post on a fast double-tap
       const res = await Store.addComment(post.id, e.target.elements.text.value);
-      if (res.ok) apply('up');
+      if (res.ok) { apply('up'); return; }          // card rebuilt — its fresh button starts disabled
+      submitBtn.disabled = false;                   // failed — let them try again
     });
 
     panel.querySelectorAll('.comment-delete').forEach(btn =>
@@ -1189,7 +1234,7 @@
     // (newest posted), then the past (most recent happening first). Everywhere
     // else — All, profiles — activities keep their place in the timeline.
     if (activeFilter === 'activity') {
-      const rank = (p) => !p.eventDate ? 1 : p.eventDate >= TODAY ? 0 : 2;
+      const rank = (p) => !p.eventDate ? 1 : isPastActivity(p) ? 2 : 0;
       list.sort((a, b) => {
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
@@ -1371,10 +1416,16 @@
         })();
 
     const count = `${list.length} ${list.length === 1 ? 'post' : 'posts'}`;
-    const friendCount = Store.friends().length;
-    const stats = isSelf
-      ? `${count} <span class="dot">·</span> ${friendCount} ${friendCount === 1 ? 'friend' : 'friends'}`
-      : count;
+    // Friend COUNT is public — it reads the same on your own profile and anyone
+    // else's. But WHO those friends are is circle business: only you or a friend
+    // can tap through to the list. To everyone else the count is plain text.
+    const fc = Store.friendsOf(u.username).length;
+    const fLabel = `${fc} ${fc === 1 ? 'friend' : 'friends'}`;
+    const canSeeFriends = (isSelf || isFriend) && fc > 0;
+    const friendStat = canSeeFriends
+      ? `<button type="button" class="profile-friends" id="show-friends">${fLabel}</button>`
+      : `<span>${fLabel}</span>`;
+    const stats = `${count} <span class="dot">·</span> ${friendStat}`;
 
     view.innerHTML =
       `<section class="view">` +
@@ -1412,6 +1463,25 @@
     // Their posts as a single-author column (slim date line, not a repeated
     // byline). Photos keep the lightbox; tags jump to the home feed filtered.
     const feedEl = view.querySelector('#feed');
+
+    // Wire the owner edit/delete controls within a root (the whole column on
+    // first render, or a single rebuilt card after an in-place comment swap —
+    // see wireComments' opts.wireOwner). Edit swaps the card for a form; delete
+    // confirms then removes. Both re-render the column.
+    const wireOwner = (root) => {
+      root.querySelectorAll('.card-edit').forEach(btn =>
+        btn.addEventListener('click', () => {
+          editingId = btn.dataset.edit;
+          renderUser(username);
+        }));
+      root.querySelectorAll('.card-delete').forEach(btn =>
+        btn.addEventListener('click', async () => {
+          if (!window.confirm('Delete this post? This can’t be undone.')) return;
+          await Store.deletePost(btn.dataset.del);
+          renderUser(username);
+        }));
+    };
+
     if (!list.length) {
       feedEl.innerHTML = `<p class="feed-empty">` +
         `${isSelf ? 'Nothing posted yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
@@ -1420,7 +1490,7 @@
       list.forEach((p, i) => {
         const card = (isSelf && p.id === editingId)
           ? makeEditCard(p)
-          : makeCard(p, { solo: true, owner: isSelf, refresh: () => renderUser(username) });
+          : makeCard(p, { solo: true, owner: isSelf, wireOwner });
         card.style.animationDelay = staggerDelay(i);
         frag.appendChild(card);
       });
@@ -1428,8 +1498,10 @@
     }
 
     // An Updates row targeted this post: bring it into view with a brief wash,
-    // so the tap visibly lands on the thing that changed. (Delayed a beat: the
-    // router resets scroll to the top right after this render.)
+    // so the tap visibly lands on the thing that changed. The router skips its
+    // top-snap while a spotlight is pending (see route), so this smooth scroll is
+    // the only motion — one glide to the card, not a jump-to-top then back down.
+    // (Delayed a beat so the entering-page transition has settled first.)
     if (spotlightPost) {
       const target = feedEl.querySelector(`[data-id="${spotlightPost}"]`);
       spotlightPost = null;
@@ -1443,22 +1515,11 @@
           target.style.transition = target.style.backgroundColor = target.style.borderRadius = '';
         }, 2100);
       }, 120);
+      else scrollTop(false);   // target filtered out — fall back to the top
     }
 
-    // Owner controls (own profile only) — edit swaps the card for a form; delete
-    // confirms then removes. Both re-render the column in place.
-    feedEl.querySelectorAll('.card-edit').forEach(btn =>
-      btn.addEventListener('click', () => {
-        editingId = btn.dataset.edit;
-        renderUser(username);
-      }));
-
-    feedEl.querySelectorAll('.card-delete').forEach(btn =>
-      btn.addEventListener('click', async () => {
-        if (!window.confirm('Delete this post? This can’t be undone.')) return;
-        await Store.deletePost(btn.dataset.del);
-        renderUser(username);
-      }));
+    // Owner controls (own profile only) for the freshly rendered column.
+    wireOwner(feedEl);
 
     const editForm = feedEl.querySelector('.edit-form');
     if (editForm) {
@@ -1517,6 +1578,64 @@
     const editProfileBtn = document.getElementById('edit-profile');
     if (editProfileBtn) editProfileBtn.addEventListener('click',
       () => openProfileEditor(() => renderUser(username)));
+
+    const friendsBtn = document.getElementById('show-friends');
+    if (friendsBtn) friendsBtn.addEventListener('click',
+      () => openFriendsList(u));
+  }
+
+  /* ── Friends list ────────────────────────────────────────────────────────
+     Tapping a profile's friend count opens their circle as a frosted modal:
+     the same directory rows as the Friends page, each linking to that person's
+     profile (which closes the modal on the way). Read-only — no add controls. */
+  function openFriendsList(u) {
+    const list = Store.friendsOf(u.username)
+      .map(name => Store.user(name))
+      .filter(Boolean)
+      .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', `${u.name}’s friends`);
+    const rows = list.map(f =>
+      `<a class="friend" href="#/u/${encodeURIComponent(f.username)}">` +
+        avatarEl(f, { cls: 'friend-avatar' }) +
+        `<span class="friend-text">` +
+          `<span class="friend-name">${esc(f.name)}</span>` +
+          `<span class="friend-user">@${esc(f.username)}</span>` +
+        `</span>` +
+        `<span class="friend-go" aria-hidden="true">→</span>` +
+      `</a>`).join('');
+    modal.innerHTML =
+      `<div class="modal-card modal-card--list">` +
+        `<h2 class="modal-title">${esc(u.name)}’s friends</h2>` +
+        `<div class="friends-list friends-list--modal">${rows}</div>` +
+        `<div class="modal-actions">` +
+          `<button type="button" class="edit-cancel" id="fl-close">Close</button>` +
+        `</div>` +
+      `</div>`;
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    const close = () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onEsc);
+      modal.remove();
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onEsc);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.querySelector('#fl-close').addEventListener('click', close);
+    // Rows cascade in with the same soft stagger as the Friends page and feed,
+    // so the popup reads as part of the same family. A row navigates to that
+    // friend's profile — close first so we don't leave a scroll-locked modal
+    // behind the new page.
+    modal.querySelectorAll('.friend').forEach((a, i) => {
+      a.style.animationDelay = staggerDelay(i);
+      a.addEventListener('click', close);
+    });
   }
 
   /* ── Avatar editor ───────────────────────────────────────────────────────
@@ -1774,21 +1893,24 @@
 
     const circleCount = `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} in your circle`;
     const onCircle = friendsTab === 'circle';
+    // The soft ask to share Tria stands at the foot of Find Friends always — a
+    // standing invite, not just what you see when there's no one new to add.
+    const shareAsk =
+      `<div class="feed-empty friends-share">` +
+        `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
+        `<button class="friends-share-copy publish-fill" type="button" ` +
+          `aria-label="Copy triaonline.com to share">` +
+          svgIcon('share', 'friends-share-ico') +
+          `<span>Share Tria</span>` +
+        `</button>` +
+      `</div>`;
     const listHtml = onCircle
       ? (friends.length
           ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
           : `<p class="feed-empty">Your circle’s empty, for now.</p>`)
       : (discover.length
-          ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>`
-          : `<div class="feed-empty friends-share">` +
-              `<p>No one new yet.</p>` +
-              `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
-              `<button class="friends-share-copy publish-fill" type="button" ` +
-                `aria-label="Copy triaonline.com to share">` +
-                svgIcon('share', 'friends-share-ico') +
-                `<span>Share Tria</span>` +
-              `</button>` +
-            `</div>`);
+          ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` + shareAsk
+          : `<p class="feed-empty">No one new to add right now.</p>` + shareAsk);
     view.innerHTML =
       `<section class="view">` +
         mastheadEl(circleCount, 'Friends') +
@@ -2149,6 +2271,10 @@
 
     function mountFields() {
       cropper = null;
+      // Fresh fields carry no pending photo decode — clear any hold left on Post
+      // (e.g. switching type away from a photo mid-decode; see wirePhotoPicker).
+      const submitBtn = view.querySelector('.composer-submit');
+      if (submitBtn) submitBtn.disabled = false;
       fieldsEl.innerHTML = fieldsFor(pubType);
       wireMentions(fieldsEl.querySelector('#c-note'));
       if (pubType === 'photo') wirePhotoPicker(fieldsEl);
@@ -2200,6 +2326,16 @@
         cropEl.hidden = false;
         replace.hidden = false;
         cropper = initPhotoPreview(imgEl, reader.result);
+        // Hold Post until the preview has decoded — export() reads naturalWidth,
+        // so posting before the image is ready would ship a 1×1 canvas. Re-enable
+        // on load (or straight away if the browser already had it decoded).
+        const submitBtn = document.querySelector('.composer-submit');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          const ready = () => { submitBtn.disabled = false; };
+          if (imgEl.complete && imgEl.naturalWidth) ready();
+          else imgEl.addEventListener('load', ready, { once: true });
+        }
       };
       reader.readAsDataURL(f);
     });
@@ -2211,13 +2347,15 @@
   function initPhotoPreview(imgEl, src) {
     imgEl.style.transform = '';
     imgEl.src = src;
-    return {
+    const api = {
+      dims: null,   // {w, h} of the last export — stamped into the upload filename
       export(maxEdge = 1400) {
         const iw = imgEl.naturalWidth  || 1;
         const ih = imgEl.naturalHeight || 1;
         const scale = Math.min(1, maxEdge / Math.max(iw, ih));
         const w = Math.max(1, Math.round(iw * scale));
         const h = Math.max(1, Math.round(ih * scale));
+        api.dims = { w, h };
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
@@ -2225,6 +2363,7 @@
         return canvas.toDataURL('image/jpeg', 0.82);
       },
     };
+    return api;
   }
 
   // Square cropper over an already-loaded <img> (the avatar editor only — post
@@ -2323,6 +2462,7 @@
     } else if (pubType === 'photo') {
       if (!cropper) { errEl.textContent = 'Choose a photo first.'; return; }
       data.image = cropper.export();
+      data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {
@@ -2838,6 +2978,12 @@
 
     applyAmbient(path);   // warm (Circle) / cool (Friends) / photo tint (a profile)
 
+    // Coming from an Updates row, the profile render scrolls the tapped post into
+    // view itself — so skip the router's top-snap below (renderUser consumes and
+    // clears spotlightPost during the render, hence capturing it here) or the page
+    // would jump to the top and then scroll back down.
+    const spotlighting = !!spotlightPost;
+
     // A friend's profile lives at #/u/username. Own profile stays at #/profile so
     // the nav can mark it current (a friend view highlights nothing).
     renderPage(pageOrder(path), () => {
@@ -2856,7 +3002,7 @@
       }
     });
 
-    scrollTop(false);
+    if (!spotlighting) scrollTop(false);   // spotlight scrolls itself (see above)
     nudgeNav();           // iOS: force the bottom nav to re-composite after the swap
     refreshWorld(path);   // Circle/Updates: quietly re-pull behind the render
   }
