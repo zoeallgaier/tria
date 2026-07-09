@@ -62,17 +62,23 @@ body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); op
    glow rises up under the form rather than falling from the top. Pinned to the
    VIEWPORT (fixed) so it never scrolls off or shows a hard cut edge when the
    signup form is tall enough to scroll. */
+/* Span BOTH viewport edges (inset: 0) rather than sizing with 100vh: on iOS
+   Safari `100vh` is the large (toolbar-hidden) viewport while `bottom: 0` pins
+   a fixed box to the small (toolbar-shown) one, so a 100vh box's bottom edge
+   lands ABOVE the toolbar. Since this glow is brightest at that very edge
+   (centre at 118%, below the box), that produced a hard-cut seam of bright glow
+   over flat paper, sliding as the toolbar collapsed. inset:0 lets the box reach
+   the true viewport bottom, tucking the glow's bright base behind the browser
+   chrome. The GPU promotion keeps the hue-drift filter off the scroll path. */
 body.gate .ambient {
   position: fixed;
-  top: auto;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 100vh;
+  inset: 0;
+  height: auto;
   --glow: rgba(52, 120, 236, 0.36);
   background: radial-gradient(ellipse 120% 85% at 50% 118%, var(--glow), transparent 72%);
   opacity: 1;
   animation: hue-drift 30s linear infinite;
+  transform: translateZ(0);
 }
 @keyframes hue-drift {
   to { filter: hue-rotate(360deg); }
