@@ -2047,8 +2047,18 @@
           `</ol></div>` +
       `</div>`;
 
-    const guidelinesHtml =
-      `<h2 class="about-head" id="guidelines">Community guidelines</h2>` +
+    // Guidelines and FAQ collapse behind their heads (same 0fr→1fr grid tween
+    // as the comment threads) so the feedback form isn't a mile of scroll away.
+    const aboutFold = (id, title, body) =>
+      `<section class="about-fold" id="${id}">` +
+        `<h2 class="about-head about-fold-head">` +
+          `<button class="about-fold-toggle" type="button" aria-expanded="false">` +
+            `${title}<span class="about-fold-chev" aria-hidden="true"></span>` +
+          `</button></h2>` +
+        `<div class="about-fold-panel"><div class="about-fold-inner">${body}</div></div>` +
+      `</section>`;
+
+    const guidelinesHtml = aboutFold('guidelines', 'Community guidelines',
       `<p>Tria works best when it feels like a group chat that accidentally became ` +
         `a neighborhood. These guidelines help keep Tria welcoming, safe, and ` +
         `enjoyable for everyone. They apply across the platform, including posts, ` +
@@ -2078,10 +2088,9 @@
       `<p>If something doesn't feel right, let us know. Reports help us ` +
         `investigate problems and keep the community healthy.</p>` +
       `<p><strong>We may remove content or suspend accounts that repeatedly or ` +
-        `seriously violate these guidelines.</strong></p>`;
+        `seriously violate these guidelines.</strong></p>`);
 
-    const faqHtml =
-      `<h2 class="about-head" id="faq">Frequently asked questions</h2>` +
+    const faqHtml = aboutFold('faq', 'Frequently asked questions',
       `<h3 class="faq-q">Why is Tria different?</h3>` +
       `<p>Your feed follows time, not recommendations. You decide who's in your ` +
         `circle. Features are added because they make staying connected easier, ` +
@@ -2113,7 +2122,7 @@
       `<p><strong>That's the goal.</strong> The internet changes quickly, and Tria ` +
         `will keep growing alongside it. Every new feature has to answer a simple ` +
         `question before it gets built: does this help people connect with each ` +
-        `other? If the answer is no, it probably doesn't belong here.</p>`;
+        `other? If the answer is no, it probably doesn't belong here.</p>`);
 
     const feedbackHtml =
       `<h2 class="about-head" id="feedback">Feedback</h2>` +
@@ -2149,6 +2158,13 @@
           installHtml + guidelinesHtml + faqHtml + feedbackHtml +
         `</div>` +
       `</section>`;
+
+    view.querySelectorAll('.about-fold-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const open = btn.closest('.about-fold').classList.toggle('open');
+        btn.setAttribute('aria-expanded', String(open));
+      });
+    });
 
     const form = document.getElementById('fb-form');
     const errEl = document.getElementById('fb-error');

@@ -1683,6 +1683,50 @@ body.gate main { padding: 0; }
   margin-top: 2.1rem;
 }
 
+/* Guidelines and FAQ fold behind their heads so the feedback form stays close.
+   Same 0fr→1fr grid tween + opacity lift as .comments-panel. The head becomes a
+   full-width button carrying the .about-head look; a chevron flips when open. */
+.about-fold-head { margin-bottom: 0; }
+.about-fold-toggle {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+.about-fold-chev {
+  width: 0.55em;
+  height: 0.55em;
+  flex: none;
+  margin-right: 0.5rem;                /* indented a touch off the right edge */
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);            /* points down while closed */
+  transition: transform 0.34s var(--ease);
+}
+.about-fold.open .about-fold-chev { transform: rotate(225deg); }
+.about-fold-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.34s var(--ease),
+              opacity 0.26s ease;
+}
+.about-fold.open .about-fold-panel { grid-template-rows: 1fr; opacity: 1; }
+.about-fold-inner { overflow: hidden; min-height: 0; }
+.about-fold-inner > :first-child { margin-top: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  .about-fold-panel, .about-fold-chev { transition: none; }
+}
+
 /* Back to the gate (only rendered when signed out). */
 .about-back {
   max-width: var(--feed-width);
