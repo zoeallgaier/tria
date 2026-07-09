@@ -128,7 +128,7 @@ body.gate .ambient {
   color: transparent;
   animation:
     splash-in var(--dur-slow) var(--ease) both,
-    publish-shift 5s ease-in-out infinite;
+    publish-shift 2s ease-in-out infinite;  /* faster than the Post button's 5s: splashes are brief, show more of the quartet */
 }
 @keyframes splash-in {
   from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
