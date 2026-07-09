@@ -1049,11 +1049,15 @@ main {
   display: block;
   width: 100%;
   cursor: zoom-in;
+  padding-inline: var(--inset);   /* inset to the post-text column, like the byline */
+}
+.photo img {
+  display: block;
+  width: 100%;
+  height: auto;
   background: var(--surface-2);
   border-radius: var(--radius-img);
-  overflow: hidden;
 }
-.photo img { display: block; width: 100%; height: auto; }
 /* Legacy photos carry no stamped size, so we can't hand the <img> width/height
    to reserve space. Hold a neutral box until it loads (JS drops this class on
    load, letting the figure take the real height) so the feed doesn't jump. */
@@ -1893,9 +1897,9 @@ body.gate main { padding: 0; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
   .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
-  /* Photos get room to breathe on phones: inset to the text column with rounded
-     corners instead of bleeding to the screen edges. Tap still opens full-screen. */
-  .photo { padding-inline: 1.15rem; background: none; border-radius: 0; overflow: visible; }
+  /* Tighter inset to the phone text column; slightly softer corners than desktop.
+     Tap still opens full-screen. */
+  .photo { padding-inline: 1.15rem; }
   .photo img { border-radius: 14px; }
   .card--photo .byline,
   .card--photo .card-solometa,
