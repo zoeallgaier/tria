@@ -896,7 +896,9 @@ main {
 .comments-inner { overflow: hidden; min-height: 0; }
 .comments-content {
   border-left: 2px solid var(--rule);
-  padding: 0.5rem 0 0 calc(var(--inset) - 0.7rem - 2px);
+  /* Match the top gutter on the bottom (a touch more) so the rule extends just
+     past the last row rather than stopping dead at it. */
+  padding: 0.5rem 0 0.65rem calc(var(--inset) - 0.7rem - 2px);
 }
 @media (prefers-reduced-motion: reduce) {
   .comments-panel, .likers-panel, .going-panel { transition: none; }
