@@ -522,6 +522,85 @@ const Store = (() => {
     return { ok: true };
   }
 
+  // ── Push notifications (Web Push) ────────────────────────────────────────────
+  // The device subscribes with the VAPID public key; we store the subscription
+  // against the signed-in user so the push Edge Function can reach them. Reads
+  // stay sync elsewhere in Store; these are the only push-specific async writes.
+  // On iOS this all only works from a home-screen install, and the permission
+  // prompt must come from a user tap — the app's soft pre-prompt handles that.
+  function pushSupported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  // VAPID public key is base64url; PushManager wants the raw bytes.
+  function vapidKeyBytes(base64) {
+    const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+    const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  async function swRegistration() {
+    const existing = await navigator.serviceWorker.getRegistration();
+    return existing || navigator.serviceWorker.register('sw.js');
+  }
+
+  // Is THIS device currently subscribed and still permitted?
+  async function pushSubscribed() {
+    if (!pushSupported() || Notification.permission !== 'granted') return false;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      return !!(reg && await reg.pushManager.getSubscription());
+    } catch { return false; }
+  }
+
+  // Turn ON. Must be called from a user gesture (iOS raises the OS prompt only
+  // then). Registers the worker, asks permission, subscribes, and stores it.
+  async function enablePush() {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    if (!pushSupported()) return { ok: false, error: 'This device can’t do notifications.' };
+    const key = (window.TRIA_CONFIG || {}).vapidPublicKey;
+    if (!key) return { ok: false, error: 'Notifications aren’t set up yet.' };
+
+    let perm;
+    try { perm = await Notification.requestPermission(); }
+    catch { return { ok: false, error: 'Couldn’t reach notification settings.' }; }
+    if (perm !== 'granted')
+      return { ok: false, error: 'Notifications are off. You can turn them on in your settings.', blocked: perm === 'denied' };
+
+    let sub;
+    try {
+      const reg = await swRegistration();
+      await navigator.serviceWorker.ready;
+      sub = await reg.pushManager.getSubscription()
+        || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(key) });
+    } catch { return { ok: false, error: 'Couldn’t set up notifications on this device.' }; }
+
+    const j = sub.toJSON();
+    const { error } = await sb.from('push_subscriptions').upsert(
+      { user_id: u.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth },
+      { onConflict: 'endpoint' });
+    if (error) return { ok: false, error: 'Couldn’t save your notification settings.' };
+    return { ok: true };
+  }
+
+  // Turn OFF. Unsubscribe on the device and drop the stored row (best effort).
+  async function disablePush() {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = reg && await reg.pushManager.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      }
+    } catch { /* leave the row; the sender prunes dead endpoints on 404/410 */ }
+    return { ok: true };
+  }
+
   return {
     init, refresh,
     users, user, currentUser, friends, friendsOf, feed, posts, postsBy,
@@ -540,6 +619,8 @@ const Store = (() => {
     headcountFor, goingByMe, toggleGoing,
     // Notifications
     notifications,
+    // Push
+    pushSupported, pushSubscribed, enablePush, disablePush,
     // Profile
     updateAvatar, updateProfile,
   };

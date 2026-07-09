@@ -1451,13 +1451,6 @@
           `</div>` +
         `</div>` +
         `<div class="feed" id="feed"></div>` +
-        // Log out lives at the very bottom, under your posts — a quiet exit once
-        // you've scrolled your column, not a header action competing with Share.
-        (isSelf
-          ? `<div class="account-foot">` +
-              `<button class="account-logout" type="button" id="logout">Log out</button>` +
-            `</div>`
-          : '') +
       `</section>`;
 
     // Their posts as a single-author column (slim date line, not a repeated
@@ -1562,13 +1555,6 @@
           label.textContent = 'Share';
         }, 1800);
       });
-    });
-
-    const logoutBtn = document.getElementById('logout');
-    if (logoutBtn) logoutBtn.addEventListener('click', async () => {
-      await Store.logout();
-      authMode = 'login';        // returning user — offer login first
-      go('#/');
     });
 
     const editPhotoBtn = document.getElementById('edit-photo');
@@ -1760,6 +1746,12 @@
             `<button type="submit" class="composer-submit" id="pf-save">Save</button>` +
           `</div>` +
         `</form>` +
+        // Account controls live below a hairline, so Log out never reads as part
+        // of saving the form above. Notifications sits with it as a quiet setting.
+        `<div class="modal-account">` +
+          pushToggleHtml() +
+          `<button type="button" class="account-logout" id="pf-logout">Log out</button>` +
+        `</div>` +
       `</div>`;
     document.body.appendChild(modal);
     document.body.style.overflow = 'hidden';
@@ -1788,6 +1780,15 @@
       if (!res.ok) { errEl.textContent = res.error; return; }
       close();
       done();
+    });
+
+    // Account controls: the notifications toggle and Log out, now homed here.
+    wirePushToggle();
+    modal.querySelector('#pf-logout').addEventListener('click', async () => {
+      await Store.logout();
+      authMode = 'login';        // returning user — offer login first
+      close();
+      go('#/');
     });
 
     nameEl.focus();
@@ -2061,6 +2062,92 @@
       `</div>`;
   }
 
+  // ── Push pre-prompt ──────────────────────────────────────────────────────
+  // A one-time soft card on Updates inviting the device to receive push. Shown
+  // only where it's honest to ask: signed in, the browser CAN do push, we
+  // haven't asked yet (permission still 'default'), and they haven't waved it
+  // off. iOS only lets us raise the real OS prompt from a tap and a "no" is
+  // permanent there — so "Turn on" is the gesture that opens it, and this
+  // pre-ask keeps us from spending that one shot before anyone wants it.
+  const pushAskKey = () => `tria:push-ask:${Store.session()}`;
+  // Add ?demo to the URL (e.g. …/?demo#/updates) to force the card in — bypasses
+  // the "only ask once, only when permission is unset" gate so it can be reviewed
+  // at any time. Purely a preview aid; delivery still needs real permission.
+  const pushDemo = () => /(?:^|[?&])demo\b/.test(location.search);
+  function pushAskEligible() {
+    if (!Store.pushSupported()) return false;
+    if (pushDemo()) return true;
+    return Notification.permission === 'default'
+      && localStorage.getItem(pushAskKey()) !== 'off';
+  }
+  function pushAskHtml() {
+    if (!pushAskEligible()) return '';
+    return `<div class="push-ask">` +
+        `<div class="push-ask-copy">` +
+          `<p class="push-ask-title">Stay in the loop</p>` +
+          `<p class="push-ask-body">Get a quiet nudge when a friend replies, tags you, ` +
+            `adds you, or shows up for your plans.</p>` +
+        `</div>` +
+        `<div class="push-ask-actions">` +
+          `<button type="button" class="push-ask-dismiss" id="push-not-now">Not now</button>` +
+          `<button type="button" class="push-ask-on publish-fill" id="push-turn-on">Turn on</button>` +
+        `</div>` +
+      `</div>`;
+  }
+  function wirePushAsk(rerender) {
+    const card = view.querySelector('.push-ask');
+    if (!card) return;
+    card.querySelector('#push-not-now').addEventListener('click', () => {
+      localStorage.setItem(pushAskKey(), 'off');
+      card.classList.add('push-ask--out');
+      setTimeout(rerender, 220);
+    });
+    card.querySelector('#push-turn-on').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Turning on…';
+      const res = await Store.enablePush();
+      if (res.ok) { localStorage.setItem(pushAskKey(), 'off'); toast('Notifications on.'); }
+      else toast(res.error);
+      rerender();
+    });
+  }
+
+  // The standing on/off control, on your own profile foot. Mirrors the pre-prompt
+  // but is always available — the place to turn push back on after "Not now", or
+  // off later. Hidden entirely where the browser can't do push.
+  function pushToggleHtml() {
+    if (!Store.pushSupported()) return '';
+    const on = Notification.permission === 'granted';   // sync guess; refined below
+    return `<div class="push-toggle-row">` +
+        `<span class="push-toggle-label">Notifications</span>` +
+        `<button type="button" class="push-toggle" role="switch" id="push-toggle" ` +
+          `aria-checked="${on}" aria-label="Push notifications on this device">` +
+          `<span class="push-toggle-knob" aria-hidden="true"></span>` +
+        `</button>` +
+      `</div>`;
+  }
+  function wirePushToggle() {
+    const btn = document.getElementById('push-toggle');
+    if (!btn) return;
+    // Reconcile the sync guess with this device's real subscription state.
+    Store.pushSubscribed().then(on => btn.setAttribute('aria-checked', String(on)));
+    btn.addEventListener('click', async () => {
+      const on = btn.getAttribute('aria-checked') === 'true';
+      btn.disabled = true;
+      if (on) {
+        await Store.disablePush();
+        btn.setAttribute('aria-checked', 'false');
+        toast('Notifications off.');
+      } else {
+        const res = await Store.enablePush();
+        if (res.ok) { btn.setAttribute('aria-checked', 'true'); toast('Notifications on.'); }
+        else toast(res.error);
+      }
+      btn.disabled = false;
+    });
+  }
+
   function renderUpdates() {
     const all = Store.notifications();
     const list = notifFilter === 'all' ? all : all.filter(n => n.kind === notifFilter);
@@ -2069,6 +2156,7 @@
     view.innerHTML =
       `<section class="view">` +
         mastheadEl('', 'Updates') +
+        pushAskHtml() +
         `<div class="filters" role="group" aria-label="Filter updates">` +
           NOTIF_FILTERS.map(f =>
             `<button class="filter" type="button" data-filter="${f.key}" ` +
@@ -2083,6 +2171,8 @@
                 ? 'No mentions yet.'
                 : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`) +
       `</section>`;
+
+    wirePushAsk(renderUpdates);
 
     view.querySelectorAll('.filter[data-filter]').forEach(btn =>
       btn.addEventListener('click', () => {
@@ -3155,6 +3245,13 @@
       splash.classList.add('splash--out');
       setTimeout(() => splash.remove(), 600);   // past --dur-move; also covers reduced motion
     }, hold);
+  }
+
+  // Register the push service worker (idempotent). It caches nothing (see sw.js)
+  // so it never fights the ?v= self-updater — it only enables Web Push delivery
+  // for anyone who's turned notifications on.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* push simply stays off */ });
   }
 
   // Load the world from Supabase before the first render (this resolves any

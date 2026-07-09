@@ -685,7 +685,7 @@ main {
 .edit-form .field:first-child { margin-top: 0.35rem; }
 .edit-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   gap: 0.6rem;
   margin-top: 1.1rem;
@@ -1326,12 +1326,6 @@ body.gate main { padding: 0; }
 
 /* Log out, moved to the foot of your own column (below your posts). The hairline
    sets it apart from the last post so it reads as an exit, not another entry. */
-.account-foot {
-  margin-top: 3rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--rule);
-  text-align: center;
-}
 .account-logout {
   display: inline-block;
   color: var(--muted);
@@ -1469,6 +1463,99 @@ body.gate main { padding: 0; }
   font-size: 0.85rem;
 }
 .friends-share-ico { width: 15px; height: 15px; }
+
+/* ── Push pre-prompt — the soft ask on Updates. An editorial card (hairline
+   frame, serif title), not a system alert; the affirmative action wears the
+   Post button's gradient, the dismiss stays a quiet ghost. ── */
+.push-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.2rem;
+  margin: 0.35rem 0 1.5rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  background: var(--surface);
+}
+.push-ask-copy { flex: 1 1 15rem; min-width: 0; }
+.push-ask-title {
+  margin: 0 0 0.25rem;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.2rem;
+  line-height: 1.05;
+}
+.push-ask-body { margin: 0; font-size: 0.88rem; line-height: 1.4; color: var(--muted); }
+.push-ask-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.push-ask-dismiss {
+  border: none;
+  background: none;
+  border-radius: var(--radius-pill);
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.push-ask-dismiss:hover { color: var(--text); }
+.push-ask-on { border-radius: var(--radius-pill); padding: 0.45rem 1.05rem; font-size: 0.85rem; }
+.push-ask--out { opacity: 0; transition: opacity var(--dur-quick) var(--ease); }
+@media (max-width: 460px) {
+  .push-ask-actions { width: 100%; }
+  .push-ask-on { margin-left: auto; }   /* push the pair to the right on its own row */
+}
+
+/* ── Account section in the Edit profile modal — the notifications toggle and
+   Log out, split from the Save area by a hairline. The toggle spans full width;
+   Log out centres below it as a quiet sign-off. ── */
+.modal-account {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1.4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+}
+/* A settings-style row: label left, iOS-style switch right (spans full width so
+   the switch lines up with the Save button and Log out above/below it). */
+.push-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  width: 100%;
+  margin-bottom: 1.1rem;
+}
+.push-toggle-label { font-size: 0.9rem; color: var(--muted); }
+.push-toggle {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  transition: background var(--dur-quick) var(--ease);
+  flex: none;
+}
+.push-toggle[aria-checked="true"] { background: var(--accent); }
+.push-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  transition: transform var(--dur-quick) var(--ease);
+}
+.push-toggle[aria-checked="true"] .push-toggle-knob { transform: translateX(16px); }
+.push-toggle:disabled { opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) {
+  .push-toggle, .push-toggle-knob { transition: none; }
+}
 
 /* ── Updates — a quiet ledger. Hairline rows, no badge anywhere; the only
    "unread" signal is a small ink dot on rows newer than your last visit.
@@ -1733,7 +1820,7 @@ body.gate main { padding: 0; }
 .friends-list--modal .friend { padding: 0.85rem 1.6rem; }
 .friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.1rem; }
 
-.modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.2rem; }
+.modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
 .modal-actions .edit-cancel {
   color: var(--muted);
   background: none;
