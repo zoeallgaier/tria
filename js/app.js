@@ -1584,6 +1584,21 @@
       () => openFriendsList(u));
   }
 
+  /* Dismiss a .modal by playing the reverse of its open animation (frost fades,
+     card sinks back down) and removing it once that settles. Returns a guarded
+     close() the modal's own Esc/backdrop/cancel handlers can all share. */
+  function modalCloser(modal, cleanup) {
+    let closing = false;
+    return () => {
+      if (closing) return;
+      closing = true;
+      document.body.style.overflow = '';
+      if (cleanup) cleanup();
+      modal.classList.add('modal--closing');
+      modal.addEventListener('animationend', () => modal.remove(), { once: true });
+    };
+  }
+
   /* ── Friends list ────────────────────────────────────────────────────────
      Tapping a profile's friend count opens their circle as a frosted modal:
      the same directory rows as the Friends page, each linking to that person's
@@ -1619,11 +1634,7 @@
     document.body.appendChild(modal);
     document.body.style.overflow = 'hidden';
 
-    const close = () => {
-      document.body.style.overflow = '';
-      document.removeEventListener('keydown', onEsc);
-      modal.remove();
-    };
+    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', onEsc);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
@@ -1679,11 +1690,7 @@
     const errEl = modal.querySelector('#av-error');
     let avCropper = null;
 
-    const close = () => {
-      document.body.style.overflow = '';
-      document.removeEventListener('keydown', onEsc);
-      modal.remove();
-    };
+    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', onEsc);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
@@ -1762,11 +1769,7 @@
     const countEl = modal.querySelector('#pf-count');
     const errEl = modal.querySelector('#pf-error');
 
-    const close = () => {
-      document.body.style.overflow = '';
-      document.removeEventListener('keydown', onEsc);
-      modal.remove();
-    };
+    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', onEsc);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });

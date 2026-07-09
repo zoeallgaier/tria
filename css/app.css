@@ -1744,6 +1744,18 @@ body.gate main { padding: 0; }
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Closing mirrors the open: the frost fades and the card sinks back down the
+   same 12px it rose, so dismissing reads as the reverse of appearing. */
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes sink {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(12px); }
+}
+.modal--closing { animation: fade-out 0.2s var(--ease) forwards; }
+.modal--closing .modal-card { animation: sink 0.2s var(--ease) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .modal--closing, .modal--closing .modal-card { animation: fade-out 0.14s ease forwards; }
+}
 @media (prefers-reduced-motion: reduce) { .card, .friend, .notif { animation: none; } }
 
 /* ── Mobile: sidebar → top brand bar + bottom tab bar; entries go edge-to-edge ── */
