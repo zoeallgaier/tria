@@ -548,6 +548,11 @@ main {
 }
 @media (prefers-reduced-motion: reduce) { .card-like.liked { animation: none; } }
 
+/* Add-to-calendar (activities with a date). Plain icon button; lifts to the
+   activity ink like its neighbor, the hand-up toggle. */
+.card-cal:hover,
+.card-cal:focus-visible { color: var(--type-activity-ink); }
+
 /* Headcount (activities). The hand-up toggle washes lime once you're in; the
    public count ("3 going") is a text button that opens the who's-going panel.
    The toggle carries inline padding so the lime pill breathes around the glyph

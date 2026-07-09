@@ -280,6 +280,18 @@
         `aria-label="${n} going, see who" title="Who’s going">${n}</button>` : '');
   }
 
+  // Add-to-calendar — activities with a date only, same friends gate as the
+  // hand-up toggle, and gone once the plan has Happened. Sits left of the
+  // hand-up toggle; tapping downloads a one-event .ics the phone hands to
+  // whatever calendar the person actually uses.
+  function calendarBtnHtml(post) {
+    if (post.type !== 'activity' || !post.eventDate || isPastActivity(post)) return '';
+    const owns = post.author === Store.session();
+    if (!(owns || Store.isFriend(post.author))) return '';
+    return `<button class="card-cal" type="button" aria-label="Add to calendar" ` +
+        `title="Add to calendar">${svgIcon('cal')}</button>`;
+  }
+
   function goingPanelHtml(post) {
     if (post.type !== 'activity') return '';
     const owns = post.author === Store.session();
@@ -298,6 +310,7 @@
   }
 
   function cardActionsHtml(post, opts) {
+    const cal = calendarBtnHtml(post);
     const going = headcountHtml(post);
     const like = likeButtonHtml(post);
     const n = Store.commentsFor(post.id).length;
@@ -320,8 +333,8 @@
         `</div>`
       : '';
     // Nothing to show (a non-friend's post you don't own) → no empty row.
-    if (!going && !like && !comment && !owner) return '';
-    return `<div class="card-actions"><div class="card-social">${going}${comment}${like}</div>${owner}</div>`;
+    if (!cal && !going && !like && !comment && !owner) return '';
+    return `<div class="card-actions"><div class="card-social">${cal}${going}${comment}${like}</div>${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -411,6 +424,7 @@
       likersPanelHtml(post) +
       commentsPanelHtml(post);
     wireReadMore(el, post);
+    wireCalendar(el, post);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
     wireComments(el, post, opts);
@@ -484,6 +498,52 @@
     openGoing.delete(id);
     el.querySelector('.card-goingcount')?.setAttribute('aria-expanded', 'false');
     el.querySelector('.going-panel')?.classList.remove('open');
+  }
+
+  // Build a one-event .ics and hand it to the browser as a download — the OS
+  // routes it to the default calendar app, so this works the same on iOS,
+  // Android, and desktop with no per-platform URL schemes. Times are written
+  // "floating" (no zone): 6:30 PM means 6:30 PM wherever you are, which is the
+  // only sane reading of a plan made between friends in the same place.
+  function icsForPost(post) {
+    const icsEsc = (s) => String(s).replace(/\\/g, '\\\\').replace(/[,;]/g, '\\$&').replace(/\n/g, '\\n');
+    const day = post.eventDate.replaceAll('-', '');
+    let when;
+    if (post.eventTime) {
+      const [h, m] = post.eventTime.split(':').map(Number);
+      const start = new Date(+post.eventDate.slice(0, 4), +post.eventDate.slice(5, 7) - 1,
+                             +post.eventDate.slice(8, 10), h, m);
+      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);   // default 2h, edit in-app
+      const fmt = (d) => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') +
+        String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') +
+        String(d.getMinutes()).padStart(2, '0') + '00';
+      when = `DTSTART:${fmt(start)}\r\nDTEND:${fmt(end)}`;
+    } else {
+      when = `DTSTART;VALUE=DATE:${day}`;                       // all-day
+    }
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tria//EN', 'BEGIN:VEVENT',
+      `UID:${post.id}@tria`, `DTSTAMP:${stamp}`, when,
+      `SUMMARY:${icsEsc(post.title || 'Tria activity')}`,
+      post.location ? `LOCATION:${icsEsc(post.location)}` : '',
+      'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
+  }
+
+  function wireCalendar(el, post) {
+    const btn = el.querySelector('.card-cal');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const blob = new Blob([icsForPost(post)], { type: 'text/calendar' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (post.title || 'activity').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '.ics';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
   }
 
   function wireGoing(el, post, opts) {
