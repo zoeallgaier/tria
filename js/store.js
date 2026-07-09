@@ -202,6 +202,11 @@ const Store = (() => {
   // ── Friends (async writes) ──────────────────────────────────────────────────
   const isFriend = (username) => friends().includes(username);
 
+  // Whether two users are (mutual) friends — used to validate @mentions at
+  // render time: a tag only counts if the tagged person was the author's friend.
+  const areFriends = (a, b) =>
+    (state.friends[a] || []).includes(b) && (state.friends[b] || []).includes(a);
+
   const linkCache = (a, b) => {
     const l = state.friends[a] || (state.friends[a] = []);
     if (!l.includes(b)) l.push(b);
@@ -409,9 +414,20 @@ const Store = (() => {
     if (!me) return [];
     const mine = new Set(state.posts.filter(p => p.author === me).map(p => p.id));
     const evts = [];
-    for (const c of state.comments)
+    // "@me" in someone's text counts as a mention only when it would render as
+    // one (same rule as the app's richText: the author must be my friend).
+    const mentionRe = new RegExp(`(^|[^\\w@])@${me}\\b`);
+    const mentionsMe = (text, author) =>
+      author !== me && mentionRe.test(text || '') && areFriends(author, me);
+    for (const c of state.comments) {
       if (mine.has(c.postId) && c.author !== me)
         evts.push({ kind: 'comment', postId: c.postId, user: c.author, text: c.text, _ts: c._ts || '' });
+      else if (mentionsMe(c.text, c.author))
+        evts.push({ kind: 'mention', postId: c.postId, user: c.author, text: c.text, _ts: c._ts || '' });
+    }
+    for (const p of state.posts)
+      if (mentionsMe(p.note, p.author))
+        evts.push({ kind: 'mention', postId: p.id, user: p.author, text: p.note, _ts: p._ts || '' });
     for (const l of state.likes)
       if (mine.has(l.postId) && l.user !== me)
         evts.push({ kind: 'like', postId: l.postId, user: l.user, _ts: l._ts || '' });
@@ -465,7 +481,7 @@ const Store = (() => {
     // Auth
     session, isAuthed, signup, login, logout,
     // Friends
-    isFriend, addFriend, removeFriend,
+    isFriend, areFriends, addFriend, removeFriend,
     // Compose
     createPost, deletePost, updatePost,
     // Comments

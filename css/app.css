@@ -419,7 +419,8 @@ main {
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 /* Idle: hue as text + a tinted edge, so the menu reads in color. */
-.filter[data-filter="all"]   { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
+.filter[data-filter="all"],
+.filter--mono               { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
 .filter[data-filter="note"]     { color: var(--type-note-ink);     border-color: color-mix(in srgb, var(--type-note) 55%, var(--rule)); }
 .filter[data-filter="find"]     { color: var(--type-find-ink);     border-color: color-mix(in srgb, var(--type-find) 55%, var(--rule)); }
 .filter[data-filter="photo"]    { color: var(--type-photo-ink);    border-color: color-mix(in srgb, var(--type-photo) 55%, var(--rule)); }
@@ -434,6 +435,27 @@ main {
 .filter[data-filter="find"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-find);     border-color: var(--type-find); }
 .filter[data-filter="photo"][aria-pressed="true"]    { color: var(--on-type); background: var(--type-photo);    border-color: var(--type-photo); }
 .filter[data-filter="activity"][aria-pressed="true"] { color: var(--on-type); background: var(--type-activity); border-color: var(--type-activity); }
+
+/* ── Friends page pills — the same filter row, two ways. My circle borrows the
+   Post button's drifting gradient (ring at rest, full fill when active); its
+   pressed state must undo the generic .filter fill so the ::before gradient
+   shows through. */
+.filter.publish-fill {
+  border: none;
+  color: var(--text);
+  transition: color var(--dur-micro) var(--ease);
+}
+/* Any filled state — pressed, hover, press, focus — carries near-black --on-type
+   over the pastel gradient (AA in both modes; --text would wash out white-on-
+   pastel in dark). Restated here because this rule outranks publish-fill's own
+   state rules earlier in the file. */
+.filter.publish-fill[aria-pressed="true"],
+.filter.publish-fill:active,
+.filter.publish-fill:focus-visible { color: var(--on-type); background: none; }
+.filter.publish-fill[aria-pressed="true"]::before { -webkit-mask: none; mask: none; }
+@media (hover: hover) {
+  .filter.publish-fill:hover { color: var(--on-type); }
+}
 
 /* ── Feed — editorial blocks, no boxes; whitespace + a right type-tag ──────── */
 /* Entries are separated by whitespace plus a centered hairline divider, so one
@@ -537,14 +559,14 @@ main {
    whole (ink twins: AA in light mode, and they flip to the pastels in dark). */
 .card-like.liked svg { fill: currentColor; }
 .card-like.liked {
-  color: var(--type-note-ink);
+  color: var(--heart-note);
   animation: liked-cycle 12s ease-in-out infinite;
 }
 @keyframes liked-cycle {
-  0%, 100% { color: var(--type-note-ink); }
-  25%      { color: var(--type-find-ink); }
-  50%      { color: var(--type-activity-ink); }
-  75%      { color: var(--type-photo-ink); }
+  0%, 100% { color: var(--heart-note); }
+  25%      { color: var(--heart-find); }
+  50%      { color: var(--heart-activity); }
+  75%      { color: var(--heart-photo); }
 }
 @media (prefers-reduced-motion: reduce) { .card-like.liked { animation: none; } }
 
@@ -907,6 +929,36 @@ main {
 .comment-form input:not(:placeholder-shown) ~ button,
 .comment-form button:hover { opacity: 1; }
 
+/* ── @mentions ─────────────────────────────────────────────────────────────
+   A tag renders as the friend's display name, bold in the running text (not
+   dressed as a link); the picker is a quiet listbox tucked under the field. */
+.mention { font-weight: 700; color: var(--text); text-decoration: none; }
+@media (hover: hover) { a.mention:hover { color: var(--muted); } }
+
+.mention-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0.3rem;
+  max-height: 210px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+}
+.mention-list [role="option"] {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.mention-list [role="option"].active,
+.mention-list [role="option"]:hover { background: var(--surface-2); }
+.mention-opt-name { font-weight: 700; color: var(--text); }
+.mention-opt-handle { color: var(--muted); font-size: 0.8rem; }
+
 /* ── Photo entries — identity + caption lead, full-bleed image last ────────── */
 /* The image keeps its own aspect ratio (no forced 1:1 crop); the figure sizes to
    whatever was uploaded, tall or wide. */
@@ -1238,6 +1290,7 @@ body.gate main { padding: 0; }
   gap: 0.85rem;
   padding: 1.1rem var(--inset);
   transition: background-color 0.15s;
+  animation: rise 0.5s var(--ease) both;   /* same soft rise as feed cards */
 }
 .friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
 @media (hover: hover) { .friend:hover { background: var(--surface); } }
@@ -1312,6 +1365,7 @@ body.gate main { padding: 0; }
   border-bottom: 1px solid var(--rule);
   color: var(--text);
   transition: background-color var(--dur-micro) var(--ease);
+  animation: rise 0.5s var(--ease) both;   /* same soft rise as friend rows */
 }
 .notif-list li:last-child .notif { border-bottom: none; }
 @media (hover: hover) { .notif:hover { background: var(--surface); } }
@@ -1324,6 +1378,7 @@ body.gate main { padding: 0; }
 }
 .notif-text { font-size: 0.95rem; font-weight: 300; line-height: 1.4; }
 .notif-text strong { font-weight: 700; }
+.notif .tags { margin-top: 0.15rem; }
 .notif-quote {
   font-size: 0.9rem;
   font-weight: 300;
@@ -1517,7 +1572,7 @@ body.gate main { padding: 0; }
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .card, .friend, .notif { animation: none; } }
 
 /* ── Mobile: sidebar → top brand bar + bottom tab bar; entries go edge-to-edge ── */
 @media (max-width: 680px) {

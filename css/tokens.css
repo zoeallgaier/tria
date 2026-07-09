@@ -35,6 +35,14 @@
   --type-activity-ink: #4d7519;
   --on-type:           #14171a;
 
+  /* Liked-heart quartet — the ink twins nudged toward their pastels so the
+     filled heart reads brighter on paper (it's an icon, not text, so it can
+     sit lighter than AA). Dark mode resets these to the inks (= pastels). */
+  --heart-note:     color-mix(in srgb, var(--type-note-ink)     70%, var(--type-note));
+  --heart-find:     color-mix(in srgb, var(--type-find-ink)     70%, var(--type-find));
+  --heart-photo:    color-mix(in srgb, var(--type-photo-ink)    70%, var(--type-photo));
+  --heart-activity: color-mix(in srgb, var(--type-activity-ink) 70%, var(--type-activity));
+
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
   --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
@@ -95,6 +103,11 @@
     --type-photo-ink:    #9fd6e8;
     --type-activity:     #b9df7d;
     --type-activity-ink: #b9df7d;
+
+    --heart-note:     var(--type-note-ink);
+    --heart-find:     var(--type-find-ink);
+    --heart-photo:    var(--type-photo-ink);
+    --heart-activity: var(--type-activity-ink);
 
     /* Dark glass needs a touch more opacity to keep chrome legible over content. */
     --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);

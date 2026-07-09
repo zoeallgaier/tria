@@ -161,14 +161,35 @@
   const noteParas = (text) =>
     String(text || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
 
-  const notePara = (p) => `<p class="card-note">${esc(p)}</p>`;
+  const notePara = (p, author) => `<p class="card-note">${richText(p, author)}</p>`;
+
+  // ── @mentions ──────────────────────────────────────────────────────────────
+  // Tags live as plain "@username" inside note/comment text (no schema). At
+  // render time a token becomes a bold profile link showing the DISPLAY name,
+  // but only when the handle is a real user who was the author's friend — any
+  // other "@word" stays literal text ("meet @ noon" is safe).
+  const MENTION_RE = /(^|[^\w@])@([a-z0-9_]{2,20})\b/g;
+
+  // opts.link:false renders the bold name without its profile link — for text
+  // that already sits inside an anchor (a title-less find's linked caption),
+  // where a nested <a> would be invalid.
+  function richText(text, author, opts = {}) {
+    return esc(text).replace(MENTION_RE, (m, lead, handle) => {
+      const u = Store.user(handle);
+      if (!u || !Store.areFriends(author, handle)) return m;
+      const name = esc(u.name);
+      return lead + (opts.link === false
+        ? `<strong class="mention">${name}</strong>`
+        : `<a class="mention" href="#/u/${esc(encodeURIComponent(handle))}">${name}</a>`);
+    });
+  }
 
   // The note block for a text entry. Paragraphs always render intact; a long note
   // additionally wraps them in a height-clamped clip + a "Read more" toggle. Open
   // state lives in `openReadMore` so it survives a card rebuild (like openComments).
   function cardNoteHtml(post) {
     if (!post.note) return '';
-    const body = noteParas(post.note).map(notePara).join('');
+    const body = noteParas(post.note).map(p => notePara(p, post.author)).join('');
     if (post.note.length <= READMORE_MIN) return body;
 
     const open = openReadMore.has(post.id);
@@ -208,6 +229,105 @@
       toggle.setAttribute('aria-expanded', String(open));
       toggle.textContent = open ? 'Read less' : 'Read more';
       if (open) openReadMore.add(post.id); else openReadMore.delete(post.id);
+    });
+  }
+
+  // ── @mention composer: a small friend-picker under the field ─────────────
+  // Typing "@" in a note/comment field opens a listbox of your mutual friends,
+  // filtered as you type (against username AND display name). Arrow keys move,
+  // Enter/Tab inserts "@username ", Escape dismisses; tap works too. ARIA
+  // combobox wiring (aria-expanded / activedescendant + a polite live region)
+  // so screen readers hear the suggestions.
+  let mentionSeq = 0;
+  function wireMentions(field) {
+    if (!field) return;
+    const listId = `mentions-${++mentionSeq}`;
+    const list = document.createElement('ul');
+    list.className = 'mention-list';
+    list.id = listId;
+    list.setAttribute('role', 'listbox');
+    list.hidden = true;
+    const live = document.createElement('div');
+    live.className = 'visually-hidden';
+    live.setAttribute('aria-live', 'polite');
+    // The comment form is a flex row, so the list sits after the form itself;
+    // in the composer/edit stacks it sits right under the textarea.
+    const anchor = field.closest('.comment-form') || field;
+    anchor.insertAdjacentElement('afterend', list);
+    list.insertAdjacentElement('afterend', live);
+    field.setAttribute('aria-autocomplete', 'list');
+    field.setAttribute('aria-expanded', 'false');
+
+    let items = [];        // matched user objects
+    let active = -1;       // highlighted row
+    let token = null;      // {start, end} of the "@query" being typed
+
+    const close = () => {
+      list.hidden = true;
+      items = []; active = -1; token = null;
+      field.setAttribute('aria-expanded', 'false');
+      field.removeAttribute('aria-controls');
+      field.removeAttribute('aria-activedescendant');
+      live.textContent = '';
+    };
+
+    const highlight = (i) => {
+      active = i;
+      list.querySelectorAll('[role="option"]').forEach((li, j) => {
+        li.setAttribute('aria-selected', String(j === i));
+        li.classList.toggle('active', j === i);
+      });
+      const u = items[i];
+      if (u) {
+        field.setAttribute('aria-activedescendant', `${listId}-${i}`);
+        live.textContent = `${items.length} friend${items.length === 1 ? '' : 's'} found. ${u.name} highlighted.`;
+      }
+    };
+
+    const pick = (i) => {
+      const u = items[i];
+      if (!u || !token) return;
+      field.setRangeText(`@${u.username} `, token.start, token.end, 'end');
+      close();
+      field.focus();
+    };
+
+    const update = () => {
+      const caret = field.selectionStart;
+      // Only while the caret sits at the end of an "@word" that starts the
+      // text or follows whitespace — never mid-email, never after letters.
+      const m = /(?:^|\s)@([a-z0-9_]*)$/i.exec(field.value.slice(0, caret));
+      if (!m) { close(); return; }
+      const q = m[1].toLowerCase();
+      items = Store.friends().map(Store.user).filter(u => u &&
+        (u.username.includes(q) || u.name.toLowerCase().includes(q)));
+      if (!items.length) { close(); return; }
+      token = { start: caret - m[1].length - 1, end: caret };
+      list.innerHTML = items.map((u, i) =>
+        `<li role="option" id="${listId}-${i}" aria-selected="false">` +
+          avatarEl(u, { cls: 'comment-avatar' }) +
+          `<span class="mention-opt-name">${esc(u.name)}</span>` +
+          `<span class="mention-opt-handle">@${esc(u.username)}</span>` +
+        `</li>`).join('');
+      list.hidden = false;
+      field.setAttribute('aria-expanded', 'true');
+      field.setAttribute('aria-controls', listId);
+      list.querySelectorAll('[role="option"]').forEach((li, i) => {
+        // mousedown (not click) so the field never loses focus mid-pick
+        li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(i); });
+      });
+      highlight(0);
+    };
+
+    field.addEventListener('input', update);
+    field.addEventListener('click', update);
+    field.addEventListener('blur', () => setTimeout(close, 100));
+    field.addEventListener('keydown', (e) => {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); highlight((active + 1) % items.length); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); highlight((active - 1 + items.length) % items.length); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(active); }
+      else if (e.key === 'Escape') { e.stopPropagation(); close(); }
     });
   }
 
@@ -357,7 +477,7 @@
       const img = post.image
         ? { src: post.image, alt: post.note || 'Photo' }
         : placeholderPhoto(post.id, post.note);
-      const foot = (post.note ? `<p class="card-note">${esc(post.note)}</p>` : '') + tagChips(post);
+      const foot = (post.note ? `<p class="card-note">${richText(post.note, post.author)}</p>` : '') + tagChips(post);
       // .card-main holds the post itself (ending in the action row); the comment
       // thread expands as a sibling below, tucked under it on the same left axis.
       el.innerHTML =
@@ -395,7 +515,7 @@
     const noteHtml = linkedNote
       ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
           noteParas(post.note).map((p, i, arr) =>
-            `<p class="card-note">${esc(p)}${i === arr.length - 1 && external
+            `<p class="card-note">${richText(p, post.author, { link: false })}${i === arr.length - 1 && external
               ? `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>` : ''}</p>`).join('') +
         `</a>`
       : cardNoteHtml(post);
@@ -622,7 +742,7 @@
         `<div class="comment-body">` +
           `<p class="comment-text">` +
             `<a class="comment-name" href="#/u/${esc(encodeURIComponent(c.author))}">${name}</a> ` +
-            esc(c.text) +
+            richText(c.text, c.author) +
           `</p>` +
           `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
         `</div>` +
@@ -660,6 +780,7 @@
     const toggle = el.querySelector('.card-comment');
     const panel = el.querySelector('.comments-panel');
     if (!toggle || !panel) return;
+    wireMentions(panel.querySelector('.comment-form input'));
 
     // Expand/collapse is pure CSS (grid-rows + opacity) — no rebuild, so it
     // eases like the rest of the site.
@@ -748,7 +869,7 @@
         `</div>` +
         `<div class="field">` +
           `<label for="e-note">Why share it?</label>` +
-          `<textarea id="e-note" rows="2" maxlength="400" ` +
+          `<textarea id="e-note" rows="2" maxlength="5000" ` +
             `placeholder="A line on why it’s worth a look.">${esc(post.note || '')}</textarea>` +
         `</div>` + tagsInput;
     }
@@ -774,7 +895,7 @@
         `</div>` +
         `<div class="field">` +
           `<label for="e-note">Details</label>` +
-          `<textarea id="e-note" rows="2" maxlength="400" ` +
+          `<textarea id="e-note" rows="2" maxlength="5000" ` +
             `placeholder="When to show up, what to bring.">${esc(post.note || '')}</textarea>` +
         `</div>` + tagsInput;
     }
@@ -782,7 +903,7 @@
     if (post.type === 'photo') {
       return `<div class="field">` +
           `<label for="e-note">Caption</label>` +
-          `<textarea id="e-note" rows="2" maxlength="400" ` +
+          `<textarea id="e-note" rows="2" maxlength="5000" ` +
             `placeholder="Say something about it (optional).">${esc(post.note || '')}</textarea>` +
         `</div>` + tagsInput;
     }
@@ -795,7 +916,7 @@
       `</div>` +
       `<div class="field">` +
         `<label for="e-note">What’s on your mind?</label>` +
-        `<textarea id="e-note" rows="4" maxlength="600" ` +
+        `<textarea id="e-note" rows="4" maxlength="5000" ` +
           `placeholder="Say it plainly.">${esc(post.note || '')}</textarea>` +
       `</div>` + tagsInput;
   }
@@ -1158,6 +1279,7 @@
         e.preventDefault();
         submitEdit(editingId, username);
       });
+      wireMentions(editForm.querySelector('#e-note'));
       editForm.querySelector('#e-note')?.focus();
     }
     feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
@@ -1414,7 +1536,10 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
   }
 
-  /* ── Friends (your mutual circle) + Discover (people you haven't added) ─────── */
+  /* ── Friends (your mutual circle) + Discover (people you haven't added) ───────
+     Two pills split the page, echoing the feed's filter menu: My circle wears
+     the Post button's gradient, Find friends stays monochrome like All. */
+  let friendsTab = 'circle';
   function renderFriends() {
     const me = Store.session();
     const friendSet = new Set(Store.friends());
@@ -1443,19 +1568,37 @@
       `</a>`;
 
     const circleCount = `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} in your circle`;
+    const onCircle = friendsTab === 'circle';
+    const listHtml = onCircle
+      ? (friends.length
+          ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
+          : `<p class="feed-empty">Your circle’s empty, for now.</p>`)
+      : (discover.length
+          ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>`
+          : `<p class="feed-empty">No one new right now.</p>`);
     view.innerHTML =
       `<section class="view">` +
         mastheadEl(circleCount, 'Friends') +
-        (friends.length
-          ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
-          : `<p class="feed-empty">Your circle’s empty, for now.</p>`) +
-        (discover.length
-          ? `<div class="discover">` +
-              `<h2 class="discover-head">Find people</h2>` +
-              `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` +
-            `</div>`
-          : '') +
+        `<div class="filters" role="group" aria-label="Show">` +
+          `<button class="filter publish-fill" type="button" data-tab="circle" ` +
+            `aria-pressed="${onCircle}">My circle</button>` +
+          `<button class="filter filter--mono" type="button" data-tab="find" ` +
+            `aria-pressed="${!onCircle}">Find friends</button>` +
+        `</div>` +
+        listHtml +
       `</section>`;
+
+    // Rows rise in with the feed's stagger, so switching pills feels like a feed.
+    view.querySelectorAll('.friend').forEach((el, i) => {
+      el.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+    });
+
+    view.querySelectorAll('.filter[data-tab]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        if (friendsTab === btn.dataset.tab) return;
+        friendsTab = btn.dataset.tab;
+        renderFriends();
+      }));
 
     // Add from a Discover row: link up, then re-render so they move into your
     // circle. The button sits inside the row link, so stop it navigating.
@@ -1485,7 +1628,10 @@
     const t = post.title || post.note || '';
     const snip = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t;
     if (snip) return `“${snip}”`;
-    return post.type === 'photo' ? 'your photo' : 'your post';
+    const yours = post.author === Store.session();
+    return post.type === 'photo'
+      ? (yours ? 'your photo' : 'a photo')
+      : (yours ? 'your post' : 'a post');
   }
 
   function notifItemHtml(n, lastSeen) {
@@ -1493,21 +1639,27 @@
     const name = esc(u ? u.name : n.user);
     const post = Store.posts().find(p => p.id === n.postId);
     const label = esc(notifPostLabel(post));
-    const quote = n.kind === 'comment'
+    const quote = (n.kind === 'comment' || n.kind === 'mention')
       ? esc(n.text.length > 90 ? n.text.slice(0, 90).trimEnd() + '…' : n.text)
       : '';
     const what =
       n.kind === 'comment' ? `commented on ${label}` :
       n.kind === 'like'    ? `liked ${label}` :
+      n.kind === 'mention' ? `mentioned you in ${label}` :
                              `is in for ${label}`;
+    // Mentions live on someone else's post, so the row walks to that profile;
+    // everything else lands on your own column.
+    const href = (n.kind === 'mention' && post)
+      ? `#/u/${esc(encodeURIComponent(post.author))}` : '#/profile';
     const fresh = n._ts && n._ts > lastSeen;
     return `<li>` +
-        `<a class="notif${fresh ? ' notif--new' : ''}" href="#/profile" ` +
+        `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
           `data-post="${esc(n.postId)}" data-kind="${n.kind}">` +
           avatarEl(u || { name: n.user }, { cls: 'comment-avatar' }) +
           `<span class="notif-body">` +
             `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
             (quote ? `<span class="notif-quote">${quote}</span>` : '') +
+            (post ? tagChips(post) : '') +
             (n._ts ? `<span class="notif-date">${esc(niceDate(dayMT(n._ts)))}</span>` : '') +
           `</span>` +
           `<span class="notif-dot" aria-hidden="true"></span>` +
@@ -1515,16 +1667,44 @@
       `</li>`;
   }
 
+  // Filter pills over the ledger — same chip language as the home feed.
+  // Only mentions get their own pill; every other kind just shows under All.
+  const NOTIF_FILTERS = [
+    { key: 'all',     label: 'All'      },
+    { key: 'mention', label: 'Mentions' },
+  ];
+  let notifFilter = 'all';
+
   function renderUpdates() {
-    const list = Store.notifications();
+    const all = Store.notifications();
+    const list = notifFilter === 'all' ? all : all.filter(n => n.kind === notifFilter);
     const lastSeen = localStorage.getItem(notifSeenKey()) || '';
     view.innerHTML =
       `<section class="view">` +
         mastheadEl('', 'Updates') +
+        `<div class="filters" role="group" aria-label="Filter updates">` +
+          NOTIF_FILTERS.map(f =>
+            `<button class="filter" type="button" data-filter="${f.key}" ` +
+              `aria-pressed="${f.key === notifFilter}">${f.label}</button>`).join('') +
+        `</div>` +
         (list.length
           ? `<ul class="notif-list">${list.map(n => notifItemHtml(n, lastSeen)).join('')}</ul>`
-          : `<p class="feed-empty">All quiet. When a friend likes, comments, or raises a hand, it lands here.</p>`) +
+          : `<p class="feed-empty">${all.length
+              ? 'Nothing here under this filter.'
+              : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`) +
       `</section>`;
+
+    view.querySelectorAll('.filter[data-filter]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        if (notifFilter === btn.dataset.filter) return;
+        notifFilter = btn.dataset.filter;
+        renderUpdates();
+      }));
+
+    // Rows rise in with the feed's stagger, same as the Friends page.
+    view.querySelectorAll('.notif').forEach((el, i) => {
+      el.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+    });
 
     // A row walks you to the post itself (your profile column) with the right
     // panel already open — the comment thread, who liked, or who's going —
@@ -1533,14 +1713,26 @@
       row.addEventListener('click', () => {
         const id = row.dataset.post;
         openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
-        if (row.dataset.kind === 'comment') openComments.add(id);
+        if (row.dataset.kind === 'comment' || row.dataset.kind === 'mention') openComments.add(id);
         else if (row.dataset.kind === 'like') openLikers.add(id);
         else openGoing.add(id);
         spotlightPost = id;
       }));
 
-    // Everything on screen has now been seen — next visit, the dots move on.
-    if (list.length && list[0]._ts) localStorage.setItem(notifSeenKey(), list[0]._ts);
+    // Tags jump to the home feed filtered, same as on profiles. They sit inside
+    // the row link, so stop the click walking to the post.
+    view.querySelectorAll('.notif .tag[data-tag]').forEach(btn =>
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        activeFilter = 'all';
+        activeTag = btn.dataset.tag;
+        location.hash = '#/';
+      }));
+
+    // Everything has now been seen (a visit counts even under a filter) —
+    // next visit, the dots move on.
+    if (all.length && all[0]._ts) localStorage.setItem(notifSeenKey(), all[0]._ts);
   }
 
   /* ── Publish (composer) ───────────────────────────────────────────────────
@@ -1602,7 +1794,7 @@
         `</div>` +
         `<div class="field">` +
           `<label for="c-note">Why share it?</label>` +
-          `<textarea id="c-note" rows="2" maxlength="400" ` +
+          `<textarea id="c-note" rows="2" maxlength="5000" ` +
             `placeholder="Why’s it worth their two minutes?"></textarea>` +
         `</div>` + tags;
     }
@@ -1629,7 +1821,7 @@
         `</div>` +
         `<div class="field">` +
           `<label for="c-note">Details</label>` +
-          `<textarea id="c-note" rows="2" maxlength="400" ` +
+          `<textarea id="c-note" rows="2" maxlength="5000" ` +
             `placeholder="When to show up, what to bring."></textarea>` +
         `</div>` + tags;
     }
@@ -1649,7 +1841,7 @@
         `</div>` +
         `<div class="field">` +
           `<label for="c-note">Caption</label>` +
-          `<textarea id="c-note" rows="2" maxlength="400" ` +
+          `<textarea id="c-note" rows="2" maxlength="5000" ` +
             `placeholder="Say something, or let the photo do the talking."></textarea>` +
         `</div>` + tags;
     }
@@ -1662,7 +1854,7 @@
       `</div>` +
       `<div class="field">` +
         `<label for="c-note">What’s on your mind?</label>` +
-        `<textarea id="c-note" rows="4" maxlength="600" ` +
+        `<textarea id="c-note" rows="4" maxlength="5000" ` +
           `placeholder="${esc(randomNotePlaceholder())}" autofocus></textarea>` +
       `</div>` + tags;
   }
@@ -1689,6 +1881,7 @@
     function mountFields() {
       cropper = null;
       fieldsEl.innerHTML = fieldsFor(pubType);
+      wireMentions(fieldsEl.querySelector('#c-note'));
       if (pubType === 'photo') wirePhotoPicker(fieldsEl);
       if (pubType === 'activity') wireWhenHints(fieldsEl);
       view.querySelectorAll('.type-opt').forEach(b =>
