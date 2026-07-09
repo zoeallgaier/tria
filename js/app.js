@@ -2663,6 +2663,11 @@
     else if (path === '#/profile') user = Store.currentUser();
 
     body.dataset.ambient = 'none';                 // default: no wash
+    // About is the front door — greet it with the same self-lit, hue-drifting
+    // glow signed-out visitors already see on the gate, so the page reads the
+    // same either side of sign-in. Top-anchored + scroll-away (see .ambient),
+    // so it clears out before the reading starts.
+    if (path.split('?')[0] === '#/about') { body.dataset.ambient = 'about'; return; }
     if (!user || !user.avatar) return;             // non-profile, or no photo → clean
     sampleColor(user.avatar).then(rgb => {
       if (seq !== ambientSeq) return;
@@ -2798,8 +2803,7 @@
         `question before it gets built: does this help people connect with each ` +
         `other? If the answer is no, it probably doesn't belong here.</p>`);
 
-    const feedbackHtml =
-      `<h2 class="about-head" id="feedback">Feedback</h2>` +
+    const feedbackHtml = aboutFold('feedback', 'Feedback',
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
       `<p>Whether you've found a bug, have an idea, or ` +
         `just want to tell us what you think, we'd love to hear from you.</p>` +
@@ -2815,7 +2819,7 @@
             `placeholder="Say whatever you need to say."></textarea></div>` +
         `<p class="auth-error" id="fb-error" role="alert"></p>` +
         `<button class="auth-submit fb-submit" type="submit">Send feedback</button>` +
-      `</form>`;
+      `</form>`);
 
     view.innerHTML =
       `<section class="view about">` +

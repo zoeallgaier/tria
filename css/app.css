@@ -57,6 +57,22 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 }
 body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
 
+/* About (signed in): the same self-lit blue glow the gate wears, but kept on
+   the top-anchored, scroll-away .ambient base (absolute, not fixed) so it
+   greets you at the masthead and scrolls off before the guidelines text —
+   rather than washing behind a page of reading. Fades in on the base opacity
+   transition and carries the gate's slow hue-drift, so it eases in and moves
+   like the others. */
+body[data-ambient="about"] .ambient {
+  --glow: rgba(52, 120, 236, 0.36);
+  opacity: 1;
+  animation: hue-drift 30s linear infinite;
+  transform: translateZ(0);   /* keep the drifting filter off the scroll path */
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-ambient="about"] .ambient { animation: none; }
+}
+
 /* Login / gate screen: there's no photo to sample, so the wash lights itself
    and drifts slowly through the hue wheel. It's flipped to the BOTTOM — the
    glow rises up under the form rather than falling from the top. Pinned to the
