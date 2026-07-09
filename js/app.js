@@ -484,35 +484,29 @@
           (n ? `<span class="card-comment-count">${n}</span>` : '') +
         `</button>`
       : '';
-    // Reading order across the row: trash · edit … comments · likes — the
-    // destructive tool tucked furthest away, the like at the thumb's edge.
+    // Just the edit pencil now — the destructive delete moved inside the edit
+    // form (see makeEditCard), so the card row carries one quiet owner tool that
+    // leads the left of the row (leftmost), ahead of the plan glyphs.
     const owner = opts.owner
-      ? `<div class="card-tools">` +
-          `<button class="card-delete" type="button" data-del="${esc(post.id)}" ` +
-            `aria-label="Delete this post" title="Delete post">${svgIcon('trash')}</button>` +
-          `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
-            `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>` +
-        `</div>`
+      ? `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
+          `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>`
       : '';
 
     if (!cal && !attendees && !rsvp && !like && !comment && !owner) return '';
 
-    // Activities split into two ends: calendar + attendee count anchor the LEFT
-    // (they belong to the plan), while comments, likes and the RSVP toggle sit on
-    // the RIGHT at the thumb's edge. This holds in the feed AND on someone else's
-    // profile. The one exception is your OWN profile card, where the edit + trash
-    // tools own the left — there the split can't hold, so it falls through to the
-    // single cluster below.
-    if (post.type === 'activity' && !(opts.solo && opts.owner)) {
-      const meta = `<div class="card-meta">${cal}${attendees}</div>`;
-      const end = `<div class="card-social">${comment}${like}${rsvp}</div>${owner}`;
-      return `<div class="card-actions card-actions--activity">${meta}<div class="card-end">${end}</div></div>`;
+    // Activities split into two ends. LEFT: the owner's edit pencil (leftmost, on
+    // your own profile only), then calendar + attendee count — the plan. RIGHT:
+    // the RSVP toggle, then comments + likes. RSVP leads the social cluster so
+    // comment + like are ALWAYS the two rightmost glyphs, in the exact same spot
+    // whether or not an RSVP rides along. Holds on the feed and every profile.
+    if (post.type === 'activity') {
+      const meta = `<div class="card-meta">${owner}${cal}${attendees}</div>`;
+      const social = `<div class="card-social">${rsvp}${comment}${like}</div>`;
+      return `<div class="card-actions card-actions--activity">${meta}${social}</div>`;
     }
 
-    // Everywhere else — every non-activity, plus your own profile's activities,
-    // where the edit tools own the left — a single row: social cluster on the
-    // right, owner tools tucked left (row-reverse). Activities lead the cluster
-    // with their extras so cal/RSVP sit beside comment + like (cal before RSVP).
+    // Everything non-activity — a single row: social cluster on the right, the
+    // edit tool tucked left (row-reverse).
     return `<div class="card-actions"><div class="card-social">${cal}${attendees}${rsvp}${comment}${like}</div>${owner}</div>`;
   }
 
@@ -1022,8 +1016,11 @@
         editFieldsFor(post) +
         `<p class="composer-error" id="e-error" role="alert"></p>` +
         `<div class="edit-actions">` +
-          `<button type="button" class="edit-cancel">Cancel</button>` +
-          `<button type="submit" class="composer-submit edit-save">Save changes</button>` +
+          `<button type="button" class="edit-delete" aria-label="Delete this post" ` +
+            `title="Delete post">${svgIcon('trash')}<span>Delete</span></button>` +
+          // One button that reads "Cancel" until a field changes, then becomes the
+          // accent "Save changes" — see the dirty-tracking wiring in renderUser.
+          `<button type="button" class="edit-toggle">Cancel</button>` +
         `</div>` +
       `</form>`;
     wireWhenHints(el);
@@ -1459,20 +1456,14 @@
     // byline). Photos keep the lightbox; tags jump to the home feed filtered.
     const feedEl = view.querySelector('#feed');
 
-    // Wire the owner edit/delete controls within a root (the whole column on
-    // first render, or a single rebuilt card after an in-place comment swap —
-    // see wireComments' opts.wireOwner). Edit swaps the card for a form; delete
-    // confirms then removes. Both re-render the column.
+    // Wire the owner edit control within a root (the whole column on first
+    // render, or a single rebuilt card after an in-place comment swap — see
+    // wireComments' opts.wireOwner). Edit swaps the card for a form; delete now
+    // lives inside that form (wired below).
     const wireOwner = (root) => {
       root.querySelectorAll('.card-edit').forEach(btn =>
         btn.addEventListener('click', () => {
           editingId = btn.dataset.edit;
-          renderUser(username);
-        }));
-      root.querySelectorAll('.card-delete').forEach(btn =>
-        btn.addEventListener('click', async () => {
-          if (!window.confirm('Delete this post? This can’t be undone.')) return;
-          await Store.deletePost(btn.dataset.del);
           renderUser(username);
         }));
     };
@@ -1518,16 +1509,43 @@
 
     const editForm = feedEl.querySelector('.edit-form');
     if (editForm) {
-      editForm.querySelector('.edit-cancel').addEventListener('click', () => {
+      // Snapshot the fields exactly as rendered. The lone toggle stays a quiet
+      // "Cancel" until any field diverges from that baseline, then flips to the
+      // accent "Save changes" — so Save never shows on an untouched form, and
+      // reverting an edit drops it back to Cancel.
+      const toggle = editForm.querySelector('.edit-toggle');
+      const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea'))
+        .map(el => el.value).join('\u0000');
+      const baseline = snapshot();
+      const dirty = () => snapshot() !== baseline;
+      const syncToggle = () => {
+        const d = dirty();
+        toggle.classList.toggle('is-dirty', d);
+        toggle.textContent = d ? 'Save changes' : 'Cancel';
+      };
+      editForm.addEventListener('input', syncToggle);
+      editForm.addEventListener('change', syncToggle);
+      toggle.addEventListener('click', () => {
+        if (dirty()) submitEdit(editingId, username);
+        else { editingId = null; renderUser(username); }
+      });
+      editForm.querySelector('.edit-delete')?.addEventListener('click', async () => {
+        if (!window.confirm('Delete this post? This can’t be undone.')) return;
+        const id = editingId;
         editingId = null;
+        await Store.deletePost(id);
         renderUser(username);
       });
       editForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        submitEdit(editingId, username);
+        if (dirty()) submitEdit(editingId, username);   // Enter saves, but never a no-op
       });
       wireMentions(editForm.querySelector('#e-note'));
-      editForm.querySelector('#e-note')?.focus();
+      // Don't auto-focus on touch: it yanks up the keyboard and the viewport
+      // jumps to center the field, which reads as a jarring lurch. Let the tap
+      // that opens the field raise the keyboard instead. Desktop still autofocuses.
+      if (window.matchMedia('(hover: hover) and (pointer: fine)').matches)
+        editForm.querySelector('#e-note')?.focus();
     }
     feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
       btn.addEventListener('click', () => {
@@ -1793,8 +1811,12 @@
       go('#/');
     });
 
-    nameEl.focus();
-    nameEl.select();
+    // Desktop only — on touch this would pop the keyboard and lurch the modal to
+    // center the field (see the same guard on the post edit form).
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      nameEl.focus();
+      nameEl.select();
+    }
   }
 
   // The "← Back" link atop a friend's profile points wherever you came from

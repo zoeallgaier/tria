@@ -546,15 +546,17 @@ main {
 .card-meta button svg { width: 28px; height: 28px; }
 .card-social button,
 .card-meta button { height: 44px; min-width: 44px; }
-.card-tools { display: flex; align-items: center; gap: 0.1rem; }
 
-/* Feed activities split the row: calendar + attendee count on the left (the
-   plan), comments/likes/RSVP on the right (the gestures). Natural order, not
-   row-reverse, so the two ends read left→right. (Profile activities fall back to
-   the single-row .card-actions above, edit tools on the left.) */
+/* Every activity splits the row: calendar + attendee count on the left (the
+   plan), comments/likes/RSVP on the right (the gestures), with the owner's edit
+   pencil trailing rightmost on your own. Natural order, not row-reverse, so the
+   two ends read left→right — identical on the feed and every profile. */
 .card-actions--activity { flex-direction: row; }
 .card-meta { display: flex; align-items: center; gap: 0.35rem; margin-left: -0.4rem; }
-.card-end { display: flex; align-items: center; gap: 0.5rem; }
+/* The edit pencil leads the meta group (leftmost) but stays a smaller, quieter
+   tool than the plan glyphs beside it — a chore, not an invitation. */
+.card-meta .card-edit { height: 34px; min-width: 34px; }
+.card-meta .card-edit svg { width: 18px; height: 18px; }
 
 /* Like + comment share the right, as one group. The group's negative margin
    cancels the last button's inner padding so its glyph lines up with the post
@@ -639,6 +641,7 @@ main {
 .card-going {
   gap: 0.28rem;
   padding-inline: 0.3rem;
+  margin-right: 0.3rem;   /* a touch of air before comment + like */
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--type-activity-ink);
@@ -686,10 +689,6 @@ main {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--bg));
 }
-.card-delete:hover, .card-delete:focus-visible {
-  color: var(--type-find-ink);
-  background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
-}
 
 /* Inline edit form — a card swapped for its editable fields. Inset to align with
    the text column; the actions row pairs a quiet Cancel with the accent Save. */
@@ -698,12 +697,52 @@ main {
 .edit-form .field:first-child { margin-top: 0.35rem; }
 .edit-actions {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
   gap: 0.6rem;
   margin-top: 1.1rem;
 }
-.edit-save { width: auto; margin: 0; padding: 0.6rem 1.4rem; font-size: 0.95rem; }
+/* One button, two lives: a quiet "Cancel" on an untouched form, the accent
+   "Save changes" pill once a field changes (.is-dirty, mirroring .composer-submit).
+   The size/weight shift is the tell that there's something to save. */
+.edit-toggle {
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 400;
+  border-radius: var(--radius-pill);
+  transition: color 0.15s, background-color 0.15s;
+}
+@media (hover: hover) { .edit-toggle:not(.is-dirty):hover { color: var(--text); } }
+.edit-toggle.is-dirty {
+  color: var(--on-accent);
+  background: var(--accent);
+  font-weight: 700;
+  padding: 0.6rem 1.4rem;
+}
+@media (hover: hover) { .edit-toggle.is-dirty:hover { background: var(--accent-press); } }
+
+/* Delete lives here now, not on the card row — a quiet destructive control on the
+   far left, weighted away from Save so it's never the accidental tap. */
+.edit-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0.55rem 0.5rem;
+  font-size: 0.9rem;
+  border-radius: var(--radius-pill);
+  transition: color 0.15s, background 0.15s;
+}
+.edit-delete svg { width: 18px; height: 18px; }
+.edit-delete:hover, .edit-delete:focus-visible {
+  color: var(--type-find-ink);
+  background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
+}
 .edit-cancel {
   color: var(--muted);
   background: none;
