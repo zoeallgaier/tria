@@ -499,13 +499,13 @@ main {
 .card-actions button svg { width: 18px; height: 18px; }
 /* The social glyphs read a touch larger than the owner tools — they're the
    invitations, the tools are chores. */
-.card-social button svg { width: 20px; height: 20px; }
+.card-social button svg { width: 22px; height: 22px; }
 .card-tools { display: flex; align-items: center; gap: 0.1rem; }
 
 /* Like + comment share the right, as one group. The group's negative margin
    cancels the last button's inner padding so its glyph lines up with the post
    text column's right edge. */
-.card-social { display: flex; align-items: center; gap: 0.15rem; margin-right: -0.4rem; }
+.card-social { display: flex; align-items: center; gap: 0.35rem; margin-right: -0.4rem; }
 
 /* Icon-only likes/comments are the same square as the edit/trash tools
    (inherited from .card-actions button) — matched hit area and rhythm.
@@ -533,7 +533,20 @@ main {
 .card-like:focus-visible,
 .card-like.liked,
 .card-like--owner[aria-expanded="true"] { color: var(--accent); }
+/* A filled heart slowly breathes through the four Tria type colors as a
+   whole (ink twins: AA in light mode, and they flip to the pastels in dark). */
 .card-like.liked svg { fill: currentColor; }
+.card-like.liked {
+  color: var(--type-note-ink);
+  animation: liked-cycle 12s ease-in-out infinite;
+}
+@keyframes liked-cycle {
+  0%, 100% { color: var(--type-note-ink); }
+  25%      { color: var(--type-find-ink); }
+  50%      { color: var(--type-activity-ink); }
+  75%      { color: var(--type-photo-ink); }
+}
+@media (prefers-reduced-motion: reduce) { .card-like.liked { animation: none; } }
 
 /* Headcount (activities). The hand-up toggle washes lime once you're in; the
    public count ("3 going") is a text button that opens the who's-going panel.
@@ -551,6 +564,16 @@ main {
   font-weight: 700;
   padding-inline: 0.45rem;
 }
+/* Friend view: the bare count snugs up to the hand toggle so the pair reads
+   as one icon-with-count cluster (like comments), not two controls. */
+.card-going + .card-goingcount { margin-left: -0.45rem; min-width: 0; padding-inline: 0.1rem 0.45rem; }
+/* Owner view: single icon+count button, same geometry as a counted like. */
+.card-goingcount--owner:has(.card-going-count) {
+  justify-content: flex-start;
+  gap: 0.4rem;
+  padding-inline: 0.35rem 0.55rem;
+}
+.card-going-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 .card-goingcount:hover,
 .card-goingcount:focus-visible,
 .card-goingcount[aria-expanded="true"] { color: var(--accent); }

@@ -43,7 +43,7 @@
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
-    comment: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
+    comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
     // A person with a check — the headcount's "I'm in" on an activity.
     going:   '<circle cx="10" cy="8" r="3.4"/><path d="M4 20a6.5 6.5 0 0 1 12.2-2.8"/><path d="m14.5 16.5 2.2 2.2 4-4"/>',
@@ -253,9 +253,10 @@
   }
 
   // Headcount — activities only, and public (unlike likes): the count is the
-  // point. Two controls: a hand-up toggle for friends ("count me in"), and the
-  // count itself ("3 going"), which opens the who's-going panel for everyone.
-  // The author hosts rather than RSVPs, so they get the count but no toggle.
+  // point. Icon-only, no "going" word: friends get a hand-up toggle with the
+  // bare count snugged beside it (the count opens the who's-going panel); the
+  // author hosts rather than RSVPs, so their single icon+count opens the panel
+  // (mirrors the owner heart).
   function headcountHtml(post) {
     if (post.type !== 'activity') return '';
     const owns = post.author === Store.session();
@@ -263,16 +264,20 @@
     const n = Store.headcountFor(post.id).length;
     const going = Store.goingByMe(post.id);
     const open = openGoing.has(post.id);
-    const toggle = owns ? '' :
-      `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
+    if (owns) {
+      return `<button class="card-goingcount card-goingcount--owner" type="button" ` +
+          `aria-expanded="${open}" aria-label="${n} going, see who" title="Who’s going">` +
+          svgIcon('going') +
+          (n ? `<span class="card-going-count">${n}</span>` : '') +
+        `</button>`;
+    }
+    return `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
         `aria-label="${going ? 'You’re in. Tap to bow out' : 'Count me in'}" ` +
         `title="${going ? 'You’re in' : 'Count me in'}">` +
         svgIcon('going') +
-      `</button>`;
-    return toggle +
-      `<button class="card-goingcount" type="button" aria-expanded="${open}" ` +
-        `aria-label="${n} going, see who" title="Who’s going">` +
-        `${n} going</button>`;
+      `</button>` +
+      (n ? `<button class="card-goingcount" type="button" aria-expanded="${open}" ` +
+        `aria-label="${n} going, see who" title="Who’s going">${n}</button>` : '');
   }
 
   function goingPanelHtml(post) {
