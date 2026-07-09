@@ -497,21 +497,23 @@
 
     if (!cal && !attendees && !rsvp && !like && !comment && !owner) return '';
 
-    // Feed activities split into two ends: calendar + attendee count anchor the
-    // LEFT (they belong to the plan), while comments, likes and the RSVP toggle
-    // sit on the RIGHT at the thumb's edge (owner tools take the RSVP's slot on
-    // your own posts).
-    if (post.type === 'activity' && !opts.solo) {
+    // Activities split into two ends: calendar + attendee count anchor the LEFT
+    // (they belong to the plan), while comments, likes and the RSVP toggle sit on
+    // the RIGHT at the thumb's edge. This holds in the feed AND on someone else's
+    // profile. The one exception is your OWN profile card, where the edit + trash
+    // tools own the left — there the split can't hold, so it falls through to the
+    // single cluster below.
+    if (post.type === 'activity' && !(opts.solo && opts.owner)) {
       const meta = `<div class="card-meta">${cal}${attendees}</div>`;
       const end = `<div class="card-social">${comment}${like}${rsvp}</div>${owner}`;
       return `<div class="card-actions card-actions--activity">${meta}<div class="card-end">${end}</div></div>`;
     }
 
-    // Everywhere else — every non-activity, plus activities on a profile (solo),
+    // Everywhere else — every non-activity, plus your own profile's activities,
     // where the edit tools own the left — a single row: social cluster on the
     // right, owner tools tucked left (row-reverse). Activities lead the cluster
-    // with their extras so cal/RSVP sit beside comment + like.
-    return `<div class="card-actions"><div class="card-social">${attendees}${cal}${rsvp}${comment}${like}</div>${owner}</div>`;
+    // with their extras so cal/RSVP sit beside comment + like (cal before RSVP).
+    return `<div class="card-actions"><div class="card-social">${cal}${attendees}${rsvp}${comment}${like}</div>${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim

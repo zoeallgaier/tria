@@ -574,10 +574,20 @@ main {
 .card-comment-count,
 .card-like-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 
+/* Optical nudge: the comment bubble's mass sits high (the tail is empty), so it
+   reads a hair above the like heart's line — drop it to match. */
+.card-social .card-comment svg { transform: translateY(2px); }
+
 /* Comment toggle lifts to the accent when open. */
 .card-comment[aria-expanded="true"],
 .card-comment:hover,
 .card-comment:focus-visible { color: var(--accent); }
+
+/* The heart's weight lives in its top lobes — the point at the bottom is almost
+   empty — so a mathematically-centred heart reads as floating above the comment
+   glyph and the "going" text beside it. A hair of downward nudge sits it back on
+   the row's optical line. (Visual tuning, not geometry — adjust to taste.) */
+.card-social .card-like svg { transform: translateY(1.5px); }
 
 /* Like heart. A friend sees a fillable heart, no count. The author sees the
    count and (via --owner) opens the "who liked" list; the heart fills to the
@@ -633,6 +643,8 @@ main {
   color: var(--type-activity-ink);
 }
 .card-social .card-going svg { width: 18px; height: 18px; }
+/* Optical nudge: the "going" label rides low against the heart's line — lift it. */
+.card-social .card-going { transform: translateY(-1.5px); }
 .card-going:hover,
 .card-going:focus-visible { color: var(--type-photo-ink); }
 /* Quartet gradient stops (themed here so they flip with light/dark, like the
