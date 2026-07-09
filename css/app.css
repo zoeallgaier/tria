@@ -895,10 +895,11 @@ main {
    its left padding realigns the content to the post text column (--inset). */
 .comments-inner { overflow: hidden; min-height: 0; }
 .comments-content {
-  border-left: 2px solid var(--rule);
-  /* Match the top gutter on the bottom (a touch more) so the rule extends just
-     past the last row rather than stopping dead at it. */
-  padding: 0.5rem 0 0.65rem calc(var(--inset) - 0.7rem - 2px);
+  /* No left rule — the thread nests under the post on the text column. Even
+     vertical padding gives the rows breathing room top and bottom; the left
+     padding pulls content back to the --inset text axis (the panel's 0.7rem
+     gutter, below, is absorbed here). */
+  padding: 0.5rem 0 0.5rem calc(var(--inset) - 0.7rem);
 }
 @media (prefers-reduced-motion: reduce) {
   .comments-panel, .likers-panel, .going-panel { transition: none; }
