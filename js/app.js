@@ -2187,8 +2187,8 @@
     const feedbackHtml =
       `<h2 class="about-head" id="feedback">Feedback</h2>` +
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
-      `<p>We'd love to hear from you. Whether you've found a bug, have an idea, or ` +
-        `just want to tell us what you think, every submission gets read by a real person.</p>` +
+      `<p>Whether you've found a bug, have an idea, or ` +
+        `just want to tell us what you think, we'd love to hear from you.</p>` +
       `<form id="fb-form" class="fb-form" novalidate>` +
         `<div class="field"><label for="fb-name">Name</label>` +
           `<input id="fb-name" type="text" maxlength="60" autocomplete="name" ` +
@@ -2249,7 +2249,7 @@
           }),
         });
         if (!res.ok) throw new Error('send failed');
-        form.outerHTML = `<p class="fb-thanks">Sent. Thank you, a real person will read it soon.</p>`;
+        form.outerHTML = `<p class="fb-thanks">Your feedback has been sent. Thank you!</p>`;
       } catch {
         errEl.textContent = "That didn't send. Please try again in a moment.";
         btn.disabled = false;
