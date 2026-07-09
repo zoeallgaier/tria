@@ -1502,6 +1502,7 @@
   const TAG_PLACEHOLDERS = [
     'garden', 'clay', 'vinyl', 'sourdough', 'thrifted',
     'cold plunge', 'group chat', 'road trip', 'gremlin era', 'reading nook',
+    'review', 'hobbies', 'gaming', 'painting',
   ];
   const randomTagPlaceholder = () =>
     [...TAG_PLACEHOLDERS].sort(() => Math.random() - 0.5).slice(0, 2).join(', ');
@@ -1509,9 +1510,12 @@
   // Same trick for the post composer's note field — one of a few voices picked
   // at random each time it mounts, so the empty field never feels flat.
   const NOTE_PLACEHOLDERS = [
-    'Say it like it’s going in the group chat.',
-    'What’s on your mind, main character?',
-    'Post your truth. Try to make a point.',
+    'speak your truth.',
+    'what’s on your mind?',
+    'say it like it’s going in the group chat',
+    'hot take?',
+    'what’s the vibe?',
+    'what’s happening?',
   ];
   const randomNotePlaceholder = () =>
     NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)];
