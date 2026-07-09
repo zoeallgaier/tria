@@ -20,7 +20,9 @@ set search_path = public, net, extensions
 as $$
 begin
   perform net.http_post(
-    url     := 'https://autjondbgcjctezbxliv.supabase.co/functions/v1/push',
+    -- The Edge Function's slug (Supabase auto-named it "swift-processor" at
+    -- creation; the invoke slug can't be renamed after the fact).
+    url     := 'https://autjondbgcjctezbxliv.supabase.co/functions/v1/swift-processor',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'apikey', 'sb_publishable_HybWJd3J_dDESzb5-OGAbg_9ksocyyQ'
