@@ -96,11 +96,14 @@ const Store = (() => {
     }));
     state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
     state.headcount = (h.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
+    // Directed "add" edges: a row (a, b) means a has added b. A friendship is
+    // mutual only when both directions exist; a lone edge is a pending request.
+    // The map keys each user to the people THEY have added (out-edges only).
     const fr = {};
     const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
     for (const row of f.data || []) {
       const a = nameById.get(row.a), b = nameById.get(row.b);
-      if (a && b) { link(a, b); link(b, a); }
+      if (a && b) link(a, b);
     }
     for (const x of state.users) fr[x.username] || (fr[x.username] = []);
     state.friends = fr;
@@ -127,12 +130,43 @@ const Store = (() => {
   const isAuthed = () => !!state.session;
   const currentUser = () => user(state.session);
 
-  // The current user's friends — mutual only (the pair table is mutual by
-  // construction; the filter is a belt-and-braces guarantee).
+  // The current user's friends — mutual only: people I've added who've also
+  // added me back. A one-sided edge is a pending request, not a friendship.
   function friends() {
     const me = state.session;
     const mine = state.friends[me] || [];
     return mine.filter(u => (state.friends[u] || []).includes(me));
+  }
+
+  // Requests I've sent that haven't been answered — I added them, they haven't
+  // added me back. These are my outstanding "pending" invites.
+  function requestsSent() {
+    const me = state.session;
+    return (state.friends[me] || []).filter(u => !(state.friends[u] || []).includes(me));
+  }
+
+  // Requests waiting on ME — people who've added me, whom I haven't added back.
+  // Answer one by adding them (→ mutual) or removing it (→ declined).
+  function requestsReceived() {
+    const me = state.session;
+    return state.users
+      .map(u => u.username)
+      .filter(u => u !== me &&
+        (state.friends[u] || []).includes(me) &&
+        !(state.friends[me] || []).includes(u));
+  }
+
+  // My relationship to `username`, as one word — drives the profile button and
+  // the directory rows: 'self' | 'friends' | 'sent' | 'incoming' | 'none'.
+  function friendStatus(username) {
+    const me = state.session;
+    if (!me || username === me) return 'self';
+    const iAdded = (state.friends[me] || []).includes(username);
+    const theyAdded = (state.friends[username] || []).includes(me);
+    if (iAdded && theyAdded) return 'friends';
+    if (iAdded) return 'sent';
+    if (theyAdded) return 'incoming';
+    return 'none';
   }
 
   // Home feed: your mutual friends' posts, plus your own, newest first.
@@ -216,26 +250,31 @@ const Store = (() => {
     const i = l.indexOf(b); if (i > -1) l.splice(i, 1);
   };
 
-  // Add a friend — instantly mutual. Stored as one canonical (a<b) pair row; the
-  // cache mirrors both directions so reads stay symmetric.
+  // Add someone: create MY directed edge (me → them). If they'd already added
+  // me this second edge makes us mutual; otherwise it stands as a pending
+  // request until they add me back. Accepting a request I received is the very
+  // same write — I add the person who added me. Stored as one directed row.
   async function addFriend(username) {
     const me = state.session;
     if (!me || username === me) return;
     const mine = idOf(me), theirs = idOf(username);
     if (!mine || !theirs) return;
-    const [a, b] = [mine, theirs].sort();
-    const { error } = await sb.from('friends').insert({ a, b });
-    if (error && !/duplicate|unique/i.test(error.message)) return;  // already friends → fine
-    linkCache(me, username); linkCache(username, me);
+    const { error } = await sb.from('friends').insert({ a: mine, b: theirs });
+    if (error && !/duplicate|unique/i.test(error.message)) return;  // already added → fine
+    linkCache(me, username);
   }
 
+  // Remove the tie in BOTH directions — one call covers cancelling a request I
+  // sent, declining one sent to me, and unfriending a mutual friend. RLS lets me
+  // delete any row I'm part of, so the filtered delete clears whichever edges
+  // exist. (`accept` above and this are the only two friend writes the UI needs.)
   async function removeFriend(username) {
     const me = state.session;
     if (!me) return;
     const mine = idOf(me), theirs = idOf(username);
     if (!mine || !theirs) return;
-    const [a, b] = [mine, theirs].sort();
-    const { error } = await sb.from('friends').delete().eq('a', a).eq('b', b);
+    const { error } = await sb.from('friends').delete()
+      .or(`and(a.eq.${mine},b.eq.${theirs}),and(a.eq.${theirs},b.eq.${mine})`);
     if (error) return;
     unlinkCache(me, username); unlinkCache(username, me);
   }
@@ -438,8 +477,8 @@ const Store = (() => {
   }
 
   // ── Profile (async writes) ──────────────────────────────────────────────────
-  // Set (or clear) the signed-in user's avatar — a cropped square data-URI for
-  // now (Storage in step 4), or null to fall back to the initial tile.
+  // Set (or clear) the signed-in user's avatar — a cropped square that gets
+  // uploaded to Storage (see uploadImage), or null to fall back to the initial tile.
   // Optimistic: the cache is updated to the local crop synchronously (before the
   // first await), so a caller can re-render and show the new photo instantly while
   // the upload + save happen in the background. On any failure we revert the cache.
@@ -482,6 +521,7 @@ const Store = (() => {
     session, isAuthed, signup, login, logout,
     // Friends
     isFriend, areFriends, addFriend, removeFriend,
+    requestsSent, requestsReceived, friendStatus,
     // Compose
     createPost, deletePost, updatePost,
     // Comments

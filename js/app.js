@@ -1,7 +1,8 @@
 /* ── Tria app ──────────────────────────────────────────────────────────────
-   A tiny hash router. Home, Friends and Profile (own + any friend's, at
-   #/u/username) are live; the Publish composer is the last placeholder,
-   wired for step 4. */
+   A tiny hash router over a handful of views — My Circle (the feed), Friends,
+   Updates, Profile (own + any friend's, at #/u/username), Publish, and the
+   public About page. Every view renders into #view and inherits the router's
+   directional page transition (see renderPage). */
 
 (function () {
   'use strict';
@@ -29,6 +30,10 @@
   const scrollTop = (smooth) =>
     window.scrollTo({ top: 0, behavior: smooth && !prefersReduced() ? 'smooth' : 'auto' });
 
+  // The feed's entrance rhythm: each card/row rises a beat after the one above it,
+  // capped so a long list doesn't trail on forever. Shared by every list view.
+  const staggerDelay = (i) => Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+
   /* ── Nav ─────────────────────────────────────────────────────────────────
      One list drives the desktop top-right links and the mobile bottom tab bar.
      The publish "+" is the primary action (filled pill on desktop). */
@@ -47,6 +52,8 @@
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
     // A person with a check — the headcount's "I'm in" on an activity.
     going:   '<circle cx="10" cy="8" r="3.4"/><path d="M4 20a6.5 6.5 0 0 1 12.2-2.8"/><path d="m14.5 16.5 2.2 2.2 4-4"/>',
+    // Bare check — rides the "going" RSVP toggle once you're in.
+    check:   '<path d="M5 12.5 10 17.5 19 7"/>',
     // Map pin for an activity's location line.
     pin:     '<path d="M12 21s-6.5-5.2-6.5-10a6.5 6.5 0 0 1 13 0c0 4.8-6.5 10-6.5 10z"/><circle cx="12" cy="11" r="2.4"/>',
     // Calendar page for an activity's when-line.
@@ -57,10 +64,21 @@
     extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
     bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
   };
+  // Maps link for an activity's location. Apple devices route maps.apple.com
+  // to the default maps app (Apple Maps, or Google if set); everything else
+  // gets a Google Maps search. Free-text places just become a search query.
+  const mapsUrl = (place) => {
+    const q = encodeURIComponent(place);
+    return /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
+      ? `https://maps.apple.com/?q=${q}`
+      : `https://www.google.com/maps/search/?api=1&query=${q}`;
+  };
+  // Shared attributes for every inline icon (24×24 line glyphs) — used by both
+  // svgIcon (the nav/card glyph set) and the About page's INSTALL_ICONS.
+  const ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   const svgIcon = (key, cls) =>
-    `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 24 24" fill="none" ` +
-      `stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ` +
-      `stroke-linejoin="round" aria-hidden="true">${ICONS[key]}</svg>`;
+    `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${ICONS[key]}</svg>`;
   const NAV = [
     { route: '#/',        key: 'circle',  label: 'My Circle' },
     { route: '#/friends', key: 'friends', label: 'Friends' },
@@ -339,10 +357,12 @@
       `</div>`;
   }
 
-  // Comments are a friends-only feature: you can only comment on a friend's post
-  // (or your own). On a non-friend's profile their posts show, but with no
-  // comment thread. The store guards this too (see Store.addComment).
-  const canComment = (post) =>
+  // Likes, comments, headcount, and add-to-calendar are all friends-only gestures:
+  // you can act on a friend's post (or your own), never a stranger's. On a
+  // non-friend's profile their posts still show, but with no thread and no social
+  // row. One gate for all of them (the store guards each write too — see
+  // Store.addComment / toggleLike / toggleGoing).
+  const canSocial = (post) =>
     post.author === Store.session() || Store.isFriend(post.author);
 
   // The card's action row, tucked below the post: the like heart + comment toggle
@@ -354,8 +374,8 @@
   // tally. The author can't like their own post; for them the heart carries the
   // count and opens the list of who liked (see likersPanelHtml / wireLikes).
   function likeButtonHtml(post) {
+    if (!canSocial(post)) return '';
     const owns = post.author === Store.session();
-    if (!(owns || Store.isFriend(post.author))) return '';   // same gate as comments
     if (owns) {
       const n = Store.likeCountFor(post.id);
       const open = openLikers.has(post.id);
@@ -372,50 +392,51 @@
       `</button>`;
   }
 
-  // Headcount — activities only, and public (unlike likes): the count is the
-  // point. Icon-only, no "going" word: friends get a hand-up toggle with the
-  // bare count snugged beside it (the count opens the who's-going panel); the
-  // author hosts rather than RSVPs, so their single icon+count opens the panel
-  // (mirrors the owner heart).
-  function headcountHtml(post) {
+  // Attendees — activities only, and public (unlike likes): the count is the
+  // point. The people-glyph + count anchor the LEFT of the action row for host
+  // and guests alike (gradient-filled like a liked heart — see .card-attendees);
+  // tapping opens the who's-going panel.
+  function attendeesHtml(post) {
     if (post.type !== 'activity') return '';
-    const owns = post.author === Store.session();
-    if (!(owns || Store.isFriend(post.author))) return '';   // same gate as comments
+    if (!canSocial(post)) return '';
     const n = Store.headcountFor(post.id).length;
-    const going = Store.goingByMe(post.id);
     const open = openGoing.has(post.id);
-    if (owns) {
-      return `<button class="card-goingcount card-goingcount--owner" type="button" ` +
-          `aria-expanded="${open}" aria-label="${n} going, see who" title="Who’s going">` +
-          svgIcon('going') +
-          (n ? `<span class="card-going-count">${n}</span>` : '') +
-        `</button>`;
-    }
+    return `<button class="card-attendees" type="button" ` +
+        `aria-expanded="${open}" aria-label="${n} going, see who" title="Who’s going">` +
+        svgIcon('going') +
+        `<span class="card-attendees-count">${n}</span>` +
+      `</button>`;
+  }
+
+  // RSVP toggle — activities, friends only (the host doesn't RSVP to their own
+  // plan). A word toggle on the RIGHT: "going?" at rest, "going ✓" once you're
+  // in (gradient treatment). Flipping it rebuilds the card so the attendee count
+  // on the left updates too.
+  function goingToggleHtml(post) {
+    if (post.type !== 'activity' || !canSocial(post)) return '';
+    if (post.author === Store.session()) return '';
+    const going = Store.goingByMe(post.id);
     return `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
         `aria-label="${going ? 'You’re in. Tap to bow out' : 'Count me in'}" ` +
         `title="${going ? 'You’re in' : 'Count me in'}">` +
-        svgIcon('going') +
-      `</button>` +
-      (n ? `<button class="card-goingcount" type="button" aria-expanded="${open}" ` +
-        `aria-label="${n} going, see who" title="Who’s going">${n}</button>` : '');
+        (going ? `<span>going</span>${svgIcon('check')}` : `<span>going?</span>`) +
+      `</button>`;
   }
 
   // Add-to-calendar — activities with a date only, same friends gate as the
-  // hand-up toggle, and gone once the plan has Happened. Sits left of the
-  // hand-up toggle; tapping downloads a one-event .ics the phone hands to
-  // whatever calendar the person actually uses.
+  // hand-up toggle, and gone once the plan has Happened. Sits at the left of the
+  // action row beside the attendee count; tapping downloads a one-event .ics the
+  // phone hands to whatever calendar the person actually uses.
   function calendarBtnHtml(post) {
     if (post.type !== 'activity' || !post.eventDate || isPastActivity(post)) return '';
-    const owns = post.author === Store.session();
-    if (!(owns || Store.isFriend(post.author))) return '';
+    if (!canSocial(post)) return '';
     return `<button class="card-cal" type="button" aria-label="Add to calendar" ` +
         `title="Add to calendar">${svgIcon('cal')}</button>`;
   }
 
   function goingPanelHtml(post) {
     if (post.type !== 'activity') return '';
-    const owns = post.author === Store.session();
-    if (!(owns || Store.isFriend(post.author))) return '';
+    if (!canSocial(post)) return '';
     const list = Store.headcountFor(post.id);
     const open = openGoing.has(post.id);
     return `<div class="going-panel${open ? ' open' : ''}">` +
@@ -431,11 +452,12 @@
 
   function cardActionsHtml(post, opts) {
     const cal = calendarBtnHtml(post);
-    const going = headcountHtml(post);
+    const attendees = attendeesHtml(post);
+    const rsvp = goingToggleHtml(post);
     const like = likeButtonHtml(post);
     const n = Store.commentsFor(post.id).length;
     const expanded = openComments.has(post.id);
-    const comment = canComment(post)
+    const comment = canSocial(post)
       ? `<button class="card-comment" type="button" aria-expanded="${expanded}" ` +
           `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}" title="Comments">` +
           svgIcon('comment') +
@@ -452,9 +474,24 @@
             `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>` +
         `</div>`
       : '';
-    // Nothing to show (a non-friend's post you don't own) → no empty row.
-    if (!cal && !going && !like && !comment && !owner) return '';
-    return `<div class="card-actions"><div class="card-social">${cal}${going}${comment}${like}</div>${owner}</div>`;
+
+    if (!cal && !attendees && !rsvp && !like && !comment && !owner) return '';
+
+    // Feed activities split into two ends: calendar + attendee count anchor the
+    // LEFT (they belong to the plan), while comments, likes and the RSVP toggle
+    // sit on the RIGHT at the thumb's edge (owner tools take the RSVP's slot on
+    // your own posts).
+    if (post.type === 'activity' && !opts.solo) {
+      const meta = `<div class="card-meta">${cal}${attendees}</div>`;
+      const end = `<div class="card-social">${comment}${like}${rsvp}</div>${owner}`;
+      return `<div class="card-actions card-actions--activity">${meta}<div class="card-end">${end}</div></div>`;
+    }
+
+    // Everywhere else — every non-activity, plus activities on a profile (solo),
+    // where the edit tools own the left — a single row: social cluster on the
+    // right, owner tools tucked left (row-reverse). Activities lead the cluster
+    // with their extras so cal/RSVP sit beside comment + like.
+    return `<div class="card-actions"><div class="card-social">${attendees}${cal}${rsvp}${comment}${like}</div>${owner}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -527,7 +564,9 @@
           `<span>${esc(eventWhenLabel(post.eventDate, post.eventTime))}</span></p>`
       : '';
     const locationHtml = post.type === 'activity' && post.location
-      ? `<p class="card-location">${svgIcon('pin', 'card-location-ico')}<span>${esc(post.location)}</span></p>`
+      ? `<p class="card-location"><a class="card-location-link" href="${esc(mapsUrl(post.location))}" ` +
+          `target="_blank" rel="noopener noreferrer">${svgIcon('pin', 'card-location-ico')}` +
+          `<span>${esc(post.location)}</span></a></p>`
       : '';
 
     el.innerHTML =
@@ -566,7 +605,7 @@
      LEFT of the action row (see cardActionsHtml), nested under the post on the
      same left axis with a small avatar + name + text. The panel animates
      open/shut with the site's easing (a grid-rows reveal, see .comments-panel).
-     Commenting is friends-only (see canComment) — the thread is omitted on posts
+     Commenting is friends-only (see canSocial) — the thread is omitted on posts
      by people you're not friends with. */
   /* ── Likes: the author's private "who liked" panel ─────────────────────────
      Owner-only. The heart on the author's own card opens this list (same grid-
@@ -616,7 +655,7 @@
   }
   function collapseGoing(el, id) {
     openGoing.delete(id);
-    el.querySelector('.card-goingcount')?.setAttribute('aria-expanded', 'false');
+    el.querySelector('.card-attendees')?.setAttribute('aria-expanded', 'false');
     el.querySelector('.going-panel')?.classList.remove('open');
   }
 
@@ -667,9 +706,9 @@
   }
 
   function wireGoing(el, post, opts) {
-    // The count ("3 going") opens the who's-going panel — pure CSS reveal, same
-    // grid-rows ease as the comment thread, for author and friends alike.
-    const countBtn = el.querySelector('.card-goingcount');
+    // The attendee count opens the who's-going panel — pure CSS reveal, same
+    // grid-rows ease as the comment thread, for host and friends alike.
+    const countBtn = el.querySelector('.card-attendees');
     const panel = el.querySelector('.going-panel');
     if (countBtn && panel) {
       countBtn.addEventListener('click', () => {
@@ -693,6 +732,10 @@
       if (!res.ok) return;
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';
+      // Roll the attendee count in its new direction — up when you join, down
+      // when you bow out.
+      fresh.querySelector('.card-attendees-count')
+        ?.classList.add(res.going ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
     });
   }
@@ -757,7 +800,7 @@
   // The collapsible thread itself. Open state lives in `openComments` so it
   // survives a card rebuild; the .open class (not [hidden]) drives the animation.
   function commentsPanelHtml(post) {
-    if (!canComment(post)) return '';   // friends-only: no thread on a non-friend's post
+    if (!canSocial(post)) return '';   // friends-only: no thread on a non-friend's post
     const list = Store.commentsFor(post.id);
     const open = openComments.has(post.id);
     // .comments-inner is the collapsing grid child — it holds NO padding/border
@@ -796,11 +839,14 @@
     // rebuilt. We swap just this card in place so the surrounding feed/column
     // doesn't re-animate — except your OWN posts, whose edit/delete controls are
     // wired at the page level (see renderUser), so those go through `refresh`.
-    const apply = () => {
+    const apply = (dir) => {
       openComments.add(post.id);
       if (opts.owner && opts.refresh) { opts.refresh(); return; }
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';               // no rise flash on an in-place swap
+      // Roll the comment count in its new direction (up on add, down on delete).
+      if (dir) fresh.querySelector('.card-comment-count')
+        ?.classList.add(dir === 'up' ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
       fresh.querySelector('.comment-form input')?.focus();
     };
@@ -808,14 +854,14 @@
     panel.querySelector('.comment-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const res = await Store.addComment(post.id, e.target.elements.text.value);
-      if (res.ok) apply();
+      if (res.ok) apply('up');
     });
 
     panel.querySelectorAll('.comment-delete').forEach(btn =>
       btn.addEventListener('click', async () => {
         if (!window.confirm('Delete this comment?')) return;
         await Store.deleteComment(btn.dataset.comment);
-        apply();
+        apply('down');
       }));
   }
 
@@ -934,6 +980,7 @@
         `</div>` +
       `</form>`;
     wireWhenHints(el);
+    wireLocationSuggest(el.querySelector('#e-location'));
     return el;
   }
 
@@ -946,6 +993,139 @@
       inp.addEventListener('input', sync);
       inp.addEventListener('change', sync);
       sync();
+    });
+  }
+
+  // Photon ranks matches globally unless given a point to lean toward, so the
+  // first focus on a Where field asks for the device location (one browser
+  // prompt, in context). Declining just means unbiased suggestions.
+  let locBias = null;      // {lat, lon} | 'denied' | null (not asked yet)
+  function askLocBias() {
+    if (locBias || !navigator.geolocation) return;
+    locBias = 'denied';    // only ask once, even if the answer never comes
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { locBias = { lat: pos.coords.latitude, lon: pos.coords.longitude }; },
+      () => {}, { timeout: 5000, maximumAge: 600000 });
+  }
+
+  // Place autocomplete on the Where field, mirroring the mention picker: a
+  // quiet listbox under the input, arrows/enter/escape, mousedown-pick so the
+  // field keeps focus. Suggestions come from Photon (OpenStreetMap search,
+  // free, no key); picking one fills the field with "Name, City" so the
+  // card's maps link resolves to the real place. Free text still stands —
+  // ignoring the list and typing "Freds house, iykyk" is fine.
+  function wireLocationSuggest(field) {
+    if (!field) return;
+    const listId = `locs-${++mentionSeq}`;
+    const list = document.createElement('ul');
+    list.className = 'mention-list loc-list';
+    list.id = listId;
+    list.setAttribute('role', 'listbox');
+    list.hidden = true;
+    field.insertAdjacentElement('afterend', list);
+    field.setAttribute('aria-autocomplete', 'list');
+    field.setAttribute('aria-expanded', 'false');
+    field.setAttribute('autocomplete', 'off');
+
+    let items = [];      // suggestion strings: [primary, detail]
+    let active = -1;
+    let timer = null;
+    let ctrl = null;     // in-flight fetch, aborted by the next keystroke
+    let picked = false;  // suppress re-search on the input event a pick fires
+
+    const close = () => {
+      list.hidden = true;
+      items = []; active = -1;
+      field.setAttribute('aria-expanded', 'false');
+      field.removeAttribute('aria-activedescendant');
+    };
+
+    const highlight = (i) => {
+      active = i;
+      list.querySelectorAll('[role="option"]').forEach((li, j) => {
+        li.setAttribute('aria-selected', String(j === i));
+        li.classList.toggle('active', j === i);
+      });
+      if (items[i]) field.setAttribute('aria-activedescendant', `${listId}-${i}`);
+    };
+
+    // Picking fills just "Name, City" — the card shows that, and the maps
+    // search resolves it to the real place without a full street address
+    // cluttering the feed.
+    const pick = (i) => {
+      const it = items[i];
+      if (!it) return;
+      picked = true;
+      field.value = [it.primary, it.city].filter(Boolean).join(', ').slice(0, 120);
+      close();
+      field.focus();
+    };
+
+    // One Photon feature → a primary line (name or street address), the city,
+    // and a detail line (the fuller address, shown in the list to tell twins
+    // apart), deduped across results.
+    const toItem = (f) => {
+      const p = f.properties || {};
+      const street = [p.street || (p.osm_key === 'highway' ? p.name : ''), p.housenumber]
+        .filter(Boolean).join(' ');
+      const primary = p.name && p.osm_key !== 'highway' ? p.name : street;
+      const city = p.city || p.district || p.state || '';
+      const detail = [primary === street ? '' : street, p.city || p.district,
+        p.state, p.country === 'United States' ? '' : p.country]
+        .filter(Boolean).join(', ');
+      return primary ? { primary, city, detail } : null;
+    };
+
+    const search = async (q) => {
+      ctrl?.abort();
+      ctrl = new AbortController();
+      let feats;
+      try {
+        const bias = locBias && locBias !== 'denied'
+          ? `&lat=${locBias.lat}&lon=${locBias.lon}` : '';
+        const res = await fetch(
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5&lang=en${bias}`,
+          { signal: ctrl.signal });
+        feats = (await res.json()).features || [];
+      } catch { return; }   // aborted or offline — the field is still free text
+      const seen = new Set();
+      items = feats.map(toItem).filter(it => {
+        if (!it) return false;
+        const key = it.primary + '|' + it.detail;
+        return seen.has(key) ? false : seen.add(key);
+      });
+      if (!items.length || document.activeElement !== field) { close(); return; }
+      list.innerHTML = items.map((it, i) =>
+        `<li role="option" id="${listId}-${i}" aria-selected="false">` +
+          `<span class="loc-opt-name">${esc(it.primary)}</span>` +
+          (it.detail ? `<span class="loc-opt-detail">${esc(it.detail)}</span>` : '') +
+        `</li>`).join('');
+      list.hidden = false;
+      field.setAttribute('aria-expanded', 'true');
+      field.setAttribute('aria-controls', listId);
+      list.querySelectorAll('[role="option"]').forEach((li, i) => {
+        li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(i); });
+      });
+      highlight(-1);   // typing stays primary; arrows opt into the list
+    };
+
+    field.addEventListener('input', () => {
+      if (picked) { picked = false; return; }
+      clearTimeout(timer);
+      const q = field.value.trim();
+      if (q.length < 3) { ctrl?.abort(); close(); return; }
+      timer = setTimeout(() => search(q), 300);
+    });
+    field.addEventListener('focus', askLocBias);
+    field.addEventListener('blur', () => setTimeout(close, 100));
+    field.addEventListener('keydown', (e) => {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); highlight((active + 1) % items.length); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); highlight((active - 1 + items.length) % items.length); }
+      else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (active >= 0) { e.preventDefault(); pick(active); } else close();
+      }
+      else if (e.key === 'Escape') { e.stopPropagation(); close(); }
     });
   }
 
@@ -1040,7 +1220,7 @@
       const frag = document.createDocumentFragment();
       list.forEach((p, i) => {
         const card = makeCard(p);
-        card.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+        card.style.animationDelay = staggerDelay(i);
         frag.appendChild(card);
       });
       feedEl.appendChild(frag);
@@ -1176,8 +1356,19 @@
             `<span class="account-share-label">Share</span>` +
           `</button>` +
         `</div>`
-      : `<button class="friend-btn" type="button" id="friend" ` +
-          `aria-pressed="${isFriend}">${isFriend ? 'Friends' : 'Add friend'}</button>`;
+      : (() => {
+          // Four-state tie button: add / requested (pending, sent) / accept
+          // (they asked first) / friends. The two "I've committed" states —
+          // friends and sent — wear the muted outline (aria-pressed) and undo on
+          // tap; add + accept wear the filled accent and create my edge.
+          const s = Store.friendStatus(u.username);
+          const label = { none: 'Add friend', sent: 'Requested', incoming: 'Accept request', friends: 'Friends' }[s];
+          const committed = s === 'friends' || s === 'sent';
+          const title = s === 'sent' ? ' title="Tap to cancel your request"'
+                      : s === 'friends' ? ' title="Tap to remove"' : '';
+          return `<button class="friend-btn" type="button" id="friend" ` +
+            `data-status="${s}" aria-pressed="${committed}"${title}>${esc(label)}</button>`;
+        })();
 
     const count = `${list.length} ${list.length === 1 ? 'post' : 'posts'}`;
     const friendCount = Store.friends().length;
@@ -1230,7 +1421,7 @@
         const card = (isSelf && p.id === editingId)
           ? makeEditCard(p)
           : makeCard(p, { solo: true, owner: isSelf, refresh: () => renderUser(username) });
-        card.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+        card.style.animationDelay = staggerDelay(i);
         frag.appendChild(card);
       });
       feedEl.appendChild(frag);
@@ -1291,7 +1482,9 @@
 
     const friendBtn = document.getElementById('friend');
     if (friendBtn) friendBtn.addEventListener('click', async () => {
-      if (Store.isFriend(u.username)) await Store.removeFriend(u.username);
+      // friends → unfriend, sent → cancel; add / accept both create my edge.
+      const committed = friendBtn.dataset.status === 'friends' || friendBtn.dataset.status === 'sent';
+      if (committed) await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
     });
@@ -1551,8 +1744,23 @@
       .filter(u => u.username !== me && !friendSet.has(u.username))
       .sort(byName);
 
-    // A directory row. `discover` rows swap the go-arrow for an Add button so
-    // you can add someone without leaving the page.
+    // The inline control on a Discover row, keyed to where the tie stands:
+    //   none     → Add       (send a request)
+    //   incoming → Accept     (they asked first; add them back → mutual)
+    //   sent     → Requested  (muted; tap to take my request back)
+    const addBtn = (u) => {
+      const s = Store.friendStatus(u.username);
+      if (s === 'sent')
+        return `<button class="friend-add friend-add--pending" type="button" data-cancel="${esc(u.username)}" ` +
+          `aria-label="Cancel your request to ${esc(u.name)}">Requested</button>`;
+      const accept = s === 'incoming';
+      return `<button class="friend-add" type="button" data-add="${esc(u.username)}" ` +
+        `aria-label="${accept ? 'Accept ' + esc(u.name) + '’s request' : 'Add ' + esc(u.name) + ' as a friend'}">` +
+        `${accept ? 'Accept' : 'Add'}</button>`;
+    };
+
+    // A directory row. `discover` rows swap the go-arrow for the status control
+    // above so you can add (or answer) someone without leaving the page.
     const row = (u, add) =>
       `<a class="friend" href="#/u/${encodeURIComponent(u.username)}">` +
         avatarEl(u, { cls: 'friend-avatar' }) +
@@ -1561,10 +1769,7 @@
           `<span class="friend-user">@${esc(u.username)}</span>` +
           (u.bio ? `<span class="friend-bio">${esc(u.bio)}</span>` : '') +
         `</span>` +
-        (add
-          ? `<button class="friend-add" type="button" data-add="${esc(u.username)}" ` +
-              `aria-label="Add ${esc(u.name)} as a friend">Add</button>`
-          : `<span class="friend-go" aria-hidden="true">→</span>`) +
+        (add ? addBtn(u) : `<span class="friend-go" aria-hidden="true">→</span>`) +
       `</a>`;
 
     const circleCount = `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} in your circle`;
@@ -1575,7 +1780,15 @@
           : `<p class="feed-empty">Your circle’s empty, for now.</p>`)
       : (discover.length
           ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>`
-          : `<p class="feed-empty">No one new right now.</p>`);
+          : `<div class="feed-empty friends-share">` +
+              `<p>No one new yet.</p>` +
+              `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
+              `<button class="friends-share-copy publish-fill" type="button" ` +
+                `aria-label="Copy triaonline.com to share">` +
+                svgIcon('share', 'friends-share-ico') +
+                `<span>Share Tria</span>` +
+              `</button>` +
+            `</div>`);
     view.innerHTML =
       `<section class="view">` +
         mastheadEl(circleCount, 'Friends') +
@@ -1590,7 +1803,7 @@
 
     // Rows rise in with the feed's stagger, so switching pills feels like a feed.
     view.querySelectorAll('.friend').forEach((el, i) => {
-      el.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+      el.style.animationDelay = staggerDelay(i);
     });
 
     view.querySelectorAll('.filter[data-tab]').forEach(btn =>
@@ -1600,9 +1813,10 @@
         renderFriends();
       }));
 
-    // Add from a Discover row: link up, then re-render so they move into your
-    // circle. The button sits inside the row link, so stop it navigating.
-    view.querySelectorAll('.friend-add').forEach(btn =>
+    // Add (or accept) from a Discover row: create my edge, then re-render — a
+    // mutual add moves them into your circle, a fresh one flips to "Requested".
+    // The button sits inside the row link, so stop it navigating.
+    view.querySelectorAll('.friend-add[data-add]').forEach(btn =>
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1610,6 +1824,25 @@
         await Store.addFriend(btn.dataset.add);
         renderFriends();
       }));
+
+    // Take back a request already sent (the "Requested" pill).
+    view.querySelectorAll('.friend-add[data-cancel]').forEach(btn =>
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.disabled = true;
+        await Store.removeFriend(btn.dataset.cancel);
+        renderFriends();
+      }));
+
+    // The share ask on an empty Discover list: copy the address, confirm softly.
+    const shareBtn = view.querySelector('.friends-share-copy');
+    if (shareBtn) shareBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText('https://triaonline.com'); } catch { return; }
+      const label = shareBtn.querySelector('span');
+      label.textContent = 'Copied';
+      setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
+    });
   }
 
   /* ── Updates — a quiet ledger, visited on your own time ────────────────────
@@ -1659,7 +1892,6 @@
           `<span class="notif-body">` +
             `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
             (quote ? `<span class="notif-quote">${quote}</span>` : '') +
-            (post ? tagChips(post) : '') +
             (n._ts ? `<span class="notif-date">${esc(niceDate(dayMT(n._ts)))}</span>` : '') +
           `</span>` +
           `<span class="notif-dot" aria-hidden="true"></span>` +
@@ -1675,10 +1907,40 @@
   ];
   let notifFilter = 'all';
 
+  // Incoming friend requests — the one actionable thing on an otherwise passive
+  // ledger, so it sits up top with Accept / Ignore inline. Shown only under the
+  // All filter (a request isn't a mention). Empty string when nobody's asked.
+  function friendRequestsHtml() {
+    if (notifFilter !== 'all') return '';
+    const reqs = Store.requestsReceived().map(Store.user).filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!reqs.length) return '';
+    // Each request reads like a ledger row — "<name> wants to be friends" in the
+    // same notif voice — but carries Accept / Ignore where a passive row's dot
+    // would sit. The avatar + text link walks to their profile, like a notif.
+    const rows = reqs.map(u =>
+      `<li class="request-row">` +
+        `<a class="request-who" href="#/u/${encodeURIComponent(u.username)}">` +
+          avatarEl(u, { cls: 'comment-avatar' }) +
+          `<span class="request-text"><strong>${esc(u.name)}</strong> wants to be friends</span>` +
+        `</a>` +
+        `<span class="request-actions">` +
+          `<button class="request-accept" type="button" data-accept="${esc(u.username)}">Accept</button>` +
+          `<button class="request-ignore" type="button" data-ignore="${esc(u.username)}" ` +
+            `aria-label="Ignore request from ${esc(u.name)}">Ignore</button>` +
+        `</span>` +
+      `</li>`).join('');
+    return `<div class="requests">` +
+        `<p class="requests-kicker">Friend request${reqs.length === 1 ? '' : 's'}</p>` +
+        `<ul class="requests-list">${rows}</ul>` +
+      `</div>`;
+  }
+
   function renderUpdates() {
     const all = Store.notifications();
     const list = notifFilter === 'all' ? all : all.filter(n => n.kind === notifFilter);
     const lastSeen = localStorage.getItem(notifSeenKey()) || '';
+    const requestsHtml = friendRequestsHtml();
     view.innerHTML =
       `<section class="view">` +
         mastheadEl('', 'Updates') +
@@ -1687,11 +1949,14 @@
             `<button class="filter" type="button" data-filter="${f.key}" ` +
               `aria-pressed="${f.key === notifFilter}">${f.label}</button>`).join('') +
         `</div>` +
+        requestsHtml +
         (list.length
           ? `<ul class="notif-list">${list.map(n => notifItemHtml(n, lastSeen)).join('')}</ul>`
-          : `<p class="feed-empty">${all.length
-              ? 'Nothing here under this filter.'
-              : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`) +
+          : requestsHtml
+            ? ''   // requests are up top; don't also say "all quiet" beneath them
+            : `<p class="feed-empty">${all.length
+                ? 'No mentions yet.'
+                : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`) +
       `</section>`;
 
     view.querySelectorAll('.filter[data-filter]').forEach(btn =>
@@ -1701,9 +1966,25 @@
         renderUpdates();
       }));
 
-    // Rows rise in with the feed's stagger, same as the Friends page.
-    view.querySelectorAll('.notif').forEach((el, i) => {
-      el.style.animationDelay = Math.min(i * 0.05, 0.4).toFixed(2) + 's';
+    // Answer a friend request in place. Accept adds them back (→ mutual, they
+    // now show in each other's feeds); Ignore clears the request quietly.
+    view.querySelectorAll('.request-accept').forEach(btn =>
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        await Store.addFriend(btn.dataset.accept);
+        renderUpdates();
+      }));
+    view.querySelectorAll('.request-ignore').forEach(btn =>
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        await Store.removeFriend(btn.dataset.ignore);
+        renderUpdates();
+      }));
+
+    // Rows rise in with the feed's stagger, same as the Friends page — the
+    // request rows lead, the ledger follows.
+    view.querySelectorAll('.request-row, .notif').forEach((el, i) => {
+      el.style.animationDelay = staggerDelay(i);
     });
 
     // A row walks you to the post itself (your profile column) with the right
@@ -1717,17 +1998,6 @@
         else if (row.dataset.kind === 'like') openLikers.add(id);
         else openGoing.add(id);
         spotlightPost = id;
-      }));
-
-    // Tags jump to the home feed filtered, same as on profiles. They sit inside
-    // the row link, so stop the click walking to the post.
-    view.querySelectorAll('.notif .tag[data-tag]').forEach(btn =>
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        activeFilter = 'all';
-        activeTag = btn.dataset.tag;
-        location.hash = '#/';
       }));
 
     // Everything has now been seen (a visit counts even under a filter) —
@@ -1817,7 +2087,6 @@
           `<label for="c-location">Where</label>` +
           `<input id="c-location" type="text" maxlength="120" ` +
             `placeholder="Liberty Park, by the pond">` +
-          `<p class="field-hint">Optional.</p>` +
         `</div>` +
         `<div class="field">` +
           `<label for="c-note">Details</label>` +
@@ -1883,7 +2152,10 @@
       fieldsEl.innerHTML = fieldsFor(pubType);
       wireMentions(fieldsEl.querySelector('#c-note'));
       if (pubType === 'photo') wirePhotoPicker(fieldsEl);
-      if (pubType === 'activity') wireWhenHints(fieldsEl);
+      if (pubType === 'activity') {
+        wireWhenHints(fieldsEl);
+        wireLocationSuggest(fieldsEl.querySelector('#c-location'));
+      }
       view.querySelectorAll('.type-opt').forEach(b =>
         b.setAttribute('aria-pressed', String(b.dataset.type === pubType)));
     }
@@ -2042,6 +2314,9 @@
       if (!data.title) {
         errEl.textContent = 'Give the activity a title first.'; return;
       }
+      if (!data.location) {
+        errEl.textContent = 'Add a place so people know where to show up.'; return;
+      }
       if (data.eventTime && !data.eventDate) {
         errEl.textContent = 'Add a date to go with that time.'; return;
       }
@@ -2096,6 +2371,9 @@
       data.eventTime = val('e-time');
       if (!data.title) {
         errEl.textContent = 'Give the activity a title first.'; return;
+      }
+      if (!data.location) {
+        errEl.textContent = 'Add a place so people know where to show up.'; return;
       }
       if (data.eventTime && !data.eventDate) {
         errEl.textContent = 'Add a date to go with that time.'; return;
@@ -2261,8 +2539,8 @@
      (first-ever submission triggers a one-time activation email to her). */
   const FEEDBACK_ENDPOINT = 'https://formsubmit.co/ajax/zoeallgaier@gmail.com';
 
-  const ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  // Full <svg> strings (not svgIcon glyphs) — these carry their own fills. They
+  // share ICON_ATTRS, defined up top alongside svgIcon.
   const INSTALL_ICONS = {
     share: `<svg ${ICON_ATTRS}><path d="M12 15V3" /><path d="M8 6.5 12 3l4 3.5" />` +
       `<path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" /></svg>`,
@@ -2470,7 +2748,7 @@
   // Build the next page, drop it into the stage, and animate the swap. `renderFn`
   // fills the fresh `view`; direction comes from newIndex vs. the current route.
   function renderPage(newIndex, renderFn) {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduce = prefersReduced();
     const prev = view;
     const token = ++navToken;
 
@@ -2579,7 +2857,20 @@
     });
 
     scrollTop(false);
+    nudgeNav();           // iOS: force the bottom nav to re-composite after the swap
     refreshWorld(path);   // Circle/Updates: quietly re-pull behind the render
+  }
+
+  // iOS Safari (standalone) sometimes drops the fixed, backdrop-filtered bottom
+  // nav's layer after a page's DOM is replaced, leaving it invisible until you
+  // scroll. Toggling display off/on forces a relayout + repaint that brings it
+  // back. Cheap (one small element) and a no-op visually since it's synchronous.
+  function nudgeNav() {
+    const nav = document.getElementById('nav');
+    if (!nav) return;
+    nav.style.display = 'none';
+    void nav.offsetHeight;   // flush the layout so the toggle actually repaints
+    nav.style.display = '';
   }
 
   /* ── Nav-tap refresh ────────────────────────────────────────────────────────

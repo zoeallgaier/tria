@@ -63,7 +63,6 @@
   /* Frosted glass — chrome only (nav rail, sticky masthead, lightbox, hero wash).
      Translucent enough to show the blur, opaque enough to hold AA text over it. */
   --glass-bg:      color-mix(in srgb, var(--bg) 74%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--bg) 62%, transparent);
   --glass-blur:    20px;
 
   /* Motion — one signature easeOut carries every considered move (pages, cards,
@@ -111,7 +110,6 @@
 
     /* Dark glass needs a touch more opacity to keep chrome legible over content. */
     --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);
-    --glass-bg-soft: color-mix(in srgb, var(--bg) 56%, transparent);
 
     color-scheme: dark;
   }

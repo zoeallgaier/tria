@@ -72,14 +72,14 @@ create table public.headcount (
 );
 
 -- ── Friends ─────────────────────────────────────────────────────────────────
--- Mutual friendship = one unordered row per pair (canonicalised a < b, so the
--- pair is stored once, not twice). If the row exists, you're friends. Either
--- party can create or remove it — matching the prototype's instant-mutual model.
+-- Directed "add" edges: a row (a, b) means a has ADDED b. A single edge is a
+-- pending friend request; the friendship is mutual (and only then do the two
+-- appear in each other's feeds) once BOTH directions exist. Accepting a request
+-- is simply adding back the person who added you.
 create table public.friends (
-  a uuid not null references public.users(id) on delete cascade,
-  b uuid not null references public.users(id) on delete cascade,
-  primary key (a, b),
-  check (a < b)
+  a uuid not null references public.users(id) on delete cascade,   -- who added
+  b uuid not null references public.users(id) on delete cascade,   -- who they added
+  primary key (a, b)
 );
 
 -- ── Auto-create a profile on signup ──────────────────────────────────────────
@@ -147,9 +147,13 @@ create policy "headcount read all"   on public.headcount for select to authentic
 create policy "headcount insert own" on public.headcount for insert to authenticated with check (user_id = auth.uid());
 create policy "headcount delete own" on public.headcount for delete to authenticated using (user_id = auth.uid());
 
-create policy "friends read all"   on public.friends for select to authenticated using (true);
-create policy "friends insert own" on public.friends for insert to authenticated with check (auth.uid() in (a, b));
-create policy "friends delete own" on public.friends for delete to authenticated using (auth.uid() in (a, b));
+-- Read every edge (so a client can tell mutual friends from pending requests).
+-- You may only create YOUR OWN outgoing edge (a = you); either party can delete
+-- an edge — so you can cancel a request you sent, decline one sent to you, or
+-- unfriend (which clears both directions).
+create policy "friends read all"    on public.friends for select to authenticated using (true);
+create policy "friends insert own"  on public.friends for insert to authenticated with check (a = auth.uid());
+create policy "friends delete mine" on public.friends for delete to authenticated using (auth.uid() in (a, b));
 
 -- ── Username availability (anon-callable) ─────────────────────────────────────
 -- Signup runs before you have a session, so it can't read the RLS-protected
