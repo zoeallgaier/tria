@@ -559,17 +559,18 @@ main {
 /* Like + comment share the right, as one group. The group's negative margin
    cancels the last button's inner padding so its glyph lines up with the post
    text column's right edge. */
-.card-social { display: flex; align-items: center; gap: 0.35rem; margin-right: -0.4rem; }
+.card-social { display: flex; align-items: center; gap: 0rem; margin-right: -0.2rem; }
 
 /* Icon-only likes/comments are a 44px square (the shared social tap target).
    When a COUNT rides along, the button grows to the left so the glyph keeps that
-   square feel, the count sits a clear step off the glyph, and trailing room keeps
-   it from crowding the next button (the old 0.05rem group gap was the culprit). */
+   square feel and the count sits a clear step off it. Trailing padding matches a
+   bare icon's own ~0.35rem breathing room, so the gap to the next button reads
+   the same whether or not a count is present. */
 .card-like:has(.card-like-count),
 .card-comment:has(.card-comment-count) {
   justify-content: flex-start;
   gap: 0.4rem;
-  padding-inline: 0.35rem 0.55rem;
+  padding-inline: 0.35rem;
 }
 .card-comment-count,
 .card-like-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
