@@ -222,23 +222,29 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 }
 
 /* ── Sidebar (desktop) ──────────────────────────────────────────────────────
-   A fixed left rail: brand up top, nav stacked, publish pinned to the foot.
-   On phones it splits into a top brand bar + a bottom tab bar (see foot). */
+   A floating macOS-style glass rail, detached from the window edges: one
+   rounded, translucent card (drawn by .nav below) carries the whole column —
+   brand up top, nav stacked, publish pinned to the foot. The topbar itself is
+   just a transparent overlay that rests the wordmark on the card's head; the
+   glass, border, and shadow all live on .nav so there's no seam between them.
+   On phones the rail splits into a top brand bar + a bottom tab bar (see foot). */
 .topbar {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--sidebar-w);
+  top: 1rem;
+  left: 1rem;
+  width: calc(var(--sidebar-w) - 2rem);
   height: var(--topbar-h);
-  z-index: 100;
+  z-index: 101;                     /* the wordmark rides on the floating card (z 100) */
   display: flex;
   align-items: center;
-  padding: 0 1.75rem;
-  border-right: 1px solid var(--rule);
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  padding: 0 1.75rem;               /* aligns the brand with the nav-link text below */
+  border: none;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;             /* only the brand link takes clicks; rest is card */
 }
+.topbar .brand { pointer-events: auto; }
 
 /* Status-bar legibility scrim — only the installed iOS shell needs it (see the
    note by the element in index.html). Off everywhere else. On a device with no
@@ -282,19 +288,26 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 
 .nav {
   position: fixed;
-  left: 0;
-  top: var(--topbar-h);
-  bottom: 0;
-  width: var(--sidebar-w);
+  left: 1rem;
+  top: 1rem;
+  bottom: 1rem;
+  width: calc(var(--sidebar-w) - 2rem);
   z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-  padding: 1rem 1rem 1.5rem;
-  border-right: 1px solid var(--rule);
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  /* Top pad clears the brand overlay (topbar sits on the card's head). */
+  padding: calc(var(--topbar-h) - 0.25rem) 0.85rem 1.25rem;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  /* Lit top rim + a soft drop, so the rail visibly floats off the page — the
+     same glass language as the mobile nav pill, scaled up to a sidebar. */
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
+    0 10px 34px rgba(0, 0, 0, 0.16);
 }
 
 .nav-link {
@@ -2044,6 +2057,9 @@ body.gate main { padding: 0; }
   :root { --topbar-h: 60px; }
 
   .topbar {
+    top: 0;                          /* undo the desktop float inset */
+    left: 0;
+    z-index: 100;
     width: auto;
     right: 0;
     height: calc(var(--topbar-h) + env(safe-area-inset-top));
@@ -2080,6 +2096,8 @@ body.gate main { padding: 0; }
     gap: 0.7rem;
     padding: 0;
     border: none;
+    border-radius: 0;
+    box-shadow: none;                 /* undo the desktop card's float shadow/rim */
     background: none;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
