@@ -1886,7 +1886,7 @@
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-label', 'Change your photo');
     modal.innerHTML =
-      `<div class="modal-card">` +
+      `<div class="modal-card modal-card--glass">` +
         `<h2 class="modal-title">Your photo</h2>` +
         `<input id="av-file" type="file" accept="image/*" hidden>` +
         `<div class="dropzone" id="av-drop">` +
@@ -1966,7 +1966,7 @@
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-label', 'Edit profile');
     modal.innerHTML =
-      `<div class="modal-card">` +
+      `<div class="modal-card modal-card--glass">` +
         `<h2 class="modal-title">Edit profile</h2>` +
         `<form id="pf-form" novalidate>` +
           `<div class="field">` +

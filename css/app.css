@@ -2114,6 +2114,35 @@ body.gate main { padding: 0; }
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
   animation: rise 0.24s var(--ease);
 }
+/* Liquid-glass card: the same frosted panel language as the nav pill, scaled up
+   to a modal. Translucent frosted background (the dimmed page saturates through
+   it), a hairline border, a top inner highlight (the "lit rim"), and a deep
+   float shadow. The .modal veil already blurs what's behind, so this reads as a
+   pane of glass floating over frosted glass rather than a flat opaque sheet. */
+.modal-card--glass {
+  /* iOS HIG rounding: a soft continuous-feeling corner in the card/sheet range
+     (well above the 8px --radius-img), so the glass panel reads like a native
+     iOS modal rather than a boxy web dialog. */
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
+    0 24px 60px rgba(0, 0, 0, 0.28);
+}
+/* Dark glass: the lit rim dims to a faint neon line, the panel runs a touch more
+   opaque to keep form fields legible over bright content, and the float shadow
+   deepens — mirroring the nav pill's dark treatment. */
+@media (prefers-color-scheme: dark) {
+  .modal-card--glass {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
+      0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+}
 .modal-title {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
