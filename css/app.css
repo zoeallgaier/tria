@@ -755,10 +755,10 @@ main {
     var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
   animation: publish-shift 14s ease-in-out infinite;
-  -webkit-mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 78%);
-          mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 78%);
-  filter: blur(7px) saturate(1.4) brightness(1.1);
-  opacity: 0.5;
+  -webkit-mask: radial-gradient(circle at 50% 50%, #000 20%, transparent 95%);
+          mask: radial-gradient(circle at 50% 50%, #000 20%, transparent 95%);
+  filter: blur(9px) saturate(1.4) brightness(1.1);
+  opacity: 0.38;
   transition: opacity var(--dur-quick) var(--ease);
   pointer-events: none;
 }
@@ -2788,7 +2788,7 @@ body.gate main { padding: 0; }
 /* Back to the gate (only rendered when signed out). */
 .about-back {
   max-width: var(--feed-width);
-  margin: -1.6rem auto 1.6rem;
+  margin: 1.6rem auto 1.6rem;
   padding-inline: var(--inset);
   font-size: 0.9rem;
 }
@@ -2881,7 +2881,7 @@ body.gate main { padding: 0; }
 
 @media (max-width: 680px) {
   .about-body, .about-back { padding-inline: 0; }   /* already inset by .view here */
-  .about-back { margin-top: -0.4rem; }
+  .about-back { margin-top: 1.6rem; }
   .install-cols { grid-template-columns: 1fr; }
   .install-col + .install-col { margin-top: 2rem; }
   .about-head { font-size: 1.7rem; margin-top: 2.6rem; padding-top: 2rem; }
