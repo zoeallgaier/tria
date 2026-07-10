@@ -1566,9 +1566,14 @@
     const shareBtn = document.getElementById('share');
     if (shareBtn) shareBtn.addEventListener('click', () => {
       const label = shareBtn.querySelector('.account-share-label');
-      copyText(profileLink(u.username)).then(ok => {
+      shareOrCopy({
+        title: `@${u.username} on Tria`,
+        text: `See ${u.name || '@' + u.username} on Tria.`,
+        url: profileLink(u.username),
+      }).then(result => {
+        if (result === 'cancelled') return;
         shareBtn.classList.add('copied');
-        label.textContent = ok ? 'Link copied' : `@${u.username}`;
+        label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
         clearTimeout(shareBtn._t);
         shareBtn._t = setTimeout(() => {
           shareBtn.classList.remove('copied');
@@ -1760,18 +1765,17 @@
               `placeholder="A line about you (optional).">${esc(u.bio || '')}</textarea>` +
             `<p class="field-hint" id="pf-count"></p>` +
           `</div>` +
+          // Notifications sits with the profile fields as a quiet setting.
+          pushToggleHtml() +
           `<p class="composer-error" id="pf-error" role="alert"></p>` +
+          // Log out weights to the far left (styled like the post editor's Delete)
+          // so it's never the accidental tap next to Save.
           `<div class="modal-actions">` +
+            `<button type="button" class="edit-delete pf-logout" id="pf-logout">Log out</button>` +
             `<button type="button" class="edit-cancel" id="pf-cancel">Cancel</button>` +
             `<button type="submit" class="composer-submit" id="pf-save">Save</button>` +
           `</div>` +
         `</form>` +
-        // Account controls live below a hairline, so Log out never reads as part
-        // of saving the form above. Notifications sits with it as a quiet setting.
-        `<div class="modal-account">` +
-          pushToggleHtml() +
-          `<button type="button" class="account-logout" id="pf-logout">Log out</button>` +
-        `</div>` +
       `</div>`;
     document.body.appendChild(modal);
     document.body.style.overflow = 'hidden';
@@ -1860,6 +1864,23 @@
       ta.remove();
       resolve(ok);
     });
+  }
+
+  // Offer the native OS share sheet where it exists (iOS/Android, and Tria runs
+  // as an installed PWA there), falling back to a clipboard copy on desktop
+  // browsers that lack navigator.share. Resolves to 'shared', 'copied', or
+  // 'cancelled' so callers can tune their confirmation. A deliberate dismiss of
+  // the sheet (AbortError) is a cancel, not a reason to fall back to copy.
+  function shareOrCopy(data) {
+    if (navigator.share) {
+      return navigator.share(data).then(
+        () => 'shared',
+        (err) => (err && err.name === 'AbortError')
+          ? 'cancelled'
+          : copyText(data.url).then(ok => ok ? 'copied' : 'cancelled'),
+      );
+    }
+    return copyText(data.url).then(ok => ok ? 'copied' : 'cancelled');
   }
 
   // A brief, quiet notice at the bottom of the screen — used for background
@@ -1985,12 +2006,18 @@
         renderFriends();
       }));
 
-    // The share ask on an empty Discover list: copy the address, confirm softly.
+    // The share ask on an empty Discover list: native share sheet where it
+    // exists, clipboard copy as the desktop fallback. Confirm softly either way.
     const shareBtn = view.querySelector('.friends-share-copy');
     if (shareBtn) shareBtn.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText('https://triaonline.com'); } catch { return; }
+      const result = await shareOrCopy({
+        title: 'Tria',
+        text: 'Come find me on Tria.',
+        url: 'https://triaonline.com',
+      });
+      if (result === 'cancelled') return;
       const label = shareBtn.querySelector('span');
-      label.textContent = 'Copied';
+      label.textContent = result === 'copied' ? 'Copied' : 'Shared';
       setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
     });
   }

@@ -733,7 +733,7 @@ main {
   color: var(--muted);
   background: none;
   border: none;
-  padding: 0.55rem 0.5rem;
+  padding: 0.55rem 0.95rem;
   font-size: 0.9rem;
   border-radius: var(--radius-pill);
   transition: color 0.15s, background 0.15s;
@@ -788,6 +788,10 @@ main {
 .type-icon--find     { color: var(--type-find-ink); }
 .type-icon--photo    { color: var(--type-photo-ink); }
 .type-icon--activity { color: var(--type-activity-ink); }
+/* The note and photo glyphs read a hair smaller than the find/activity ones,
+   so nudge them up to sit at the same visual size. */
+.type-icon--note,
+.type-icon--photo    { width: 1.35rem; height: 1.35rem; }
 /* An activity whose day has passed: the lime hands back to grey. */
 .type-icon--past     { color: var(--muted); }
 @media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
@@ -1376,22 +1380,6 @@ body.gate main { padding: 0; }
   border-color: var(--accent);
 }
 
-/* Log out, moved to the foot of your own column (below your posts). The hairline
-   sets it apart from the last post so it reads as an exit, not another entry. */
-.account-logout {
-  display: inline-block;
-  color: var(--muted);
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pill);
-  padding: 0.55rem 1.4rem;
-  font-size: 0.9rem;
-  transition: color 0.15s, border-color 0.15s;
-}
-@media (hover: hover) {
-  .account-logout:hover { color: var(--type-find-ink); border-color: var(--type-find-ink); }
-}
-
 /* Friend toggle: filled ink to add, quiet outline once you're friends. */
 .friend-btn {
   display: block;
@@ -1560,26 +1548,15 @@ body.gate main { padding: 0; }
   .push-ask-on { margin-left: auto; }   /* push the pair to the right on its own row */
 }
 
-/* ── Account section in the Edit profile modal — the notifications toggle and
-   Log out, split from the Save area by a hairline. The toggle spans full width;
-   Log out centres below it as a quiet sign-off. ── */
-.modal-account {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 1.4rem;
-  padding-top: 1.2rem;
-  border-top: 1px solid var(--rule);
-}
-/* A settings-style row: label left, iOS-style switch right (spans full width so
-   the switch lines up with the Save button and Log out above/below it). */
+/* A settings-style row in the Edit profile form: label left, iOS-style switch
+   right, spanning full width below the bio. */
 .push-toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.7rem;
   width: 100%;
-  margin-bottom: 1.1rem;
+  margin-top: 1.1rem;   /* sits in the form now, matching the field rhythm */
 }
 .push-toggle-label { font-size: 0.9rem; color: var(--muted); }
 .push-toggle {
@@ -1873,6 +1850,9 @@ body.gate main { padding: 0; }
 .friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.1rem; }
 
 .modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
+/* Log out weights hard left; its auto margin absorbs the free space so Cancel +
+   Save stay grouped on the right. */
+.modal-actions .pf-logout { margin-right: auto; }
 .modal-actions .edit-cancel {
   color: var(--muted);
   background: none;
