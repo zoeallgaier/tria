@@ -63,6 +63,9 @@
     // the character as a colour emoji, which we never want.
     extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
     bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
+    // A little letter — the friendliest "send it to someone." A softened
+    // envelope whose flap curves like a smile. Worn by the share buttons.
+    send:    '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M4.5 8.7Q12 14.2 19.5 8.7"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -1396,8 +1399,8 @@
             `<span>Edit profile</span>` +
           `</button>` +
           `<button class="account-share" type="button" id="share">` +
-            svgIcon('share', 'account-share-ico') +
-            `<span class="account-share-label">Share</span>` +
+            svgIcon('send', 'account-share-ico') +
+            `<span class="account-share-label">Share my profile</span>` +
           `</button>` +
         `</div>`
       : (() => {
@@ -1568,7 +1571,7 @@
       const label = shareBtn.querySelector('.account-share-label');
       shareOrCopy({
         title: `@${u.username} on Tria`,
-        text: `See ${u.name || '@' + u.username} on Tria.`,
+        text: `Come find me on Tria.`,
         url: profileLink(u.username),
       }).then(result => {
         if (result === 'cancelled') return;
@@ -1577,7 +1580,7 @@
         clearTimeout(shareBtn._t);
         shareBtn._t = setTimeout(() => {
           shareBtn.classList.remove('copied');
-          label.textContent = 'Share';
+          label.textContent = 'Share my profile';
         }, 1800);
       });
     });
@@ -1949,7 +1952,7 @@
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
         `<button class="friends-share-copy publish-fill" type="button" ` +
           `aria-label="Copy triaonline.com to share">` +
-          svgIcon('share', 'friends-share-ico') +
+          svgIcon('send', 'friends-share-ico') +
           `<span>Share Tria</span>` +
         `</button>` +
       `</div>`;
@@ -2017,7 +2020,7 @@
       });
       if (result === 'cancelled') return;
       const label = shareBtn.querySelector('span');
-      label.textContent = result === 'copied' ? 'Copied' : 'Shared';
+      label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
       setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
     });
   }

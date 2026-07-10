@@ -105,6 +105,32 @@ body.gate .ambient {
   body.gate .ambient { animation: none; }
 }
 
+/* ── Grain ──────────────────────────────────────────────────────────────────
+   A static, greyscale film-grain tile laid over the reading surface (bg, ambient
+   wash, and content) — flat pastel fills and gradients pick up a tactile paper
+   texture instead of reading digital-smooth. It's a single fixed, blended layer:
+   no animation (so it's reduced-motion-safe by construction) and no network
+   (the noise is an inline SVG in --grain), so the cost is one GPU-composited
+   layer. Sits below the fixed chrome (100) and modals (250), so the wordmark,
+   nav, and dialogs stay crisp; pointer-events:none keeps it inert. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  background-image: var(--grain);
+  background-size: 140px 140px;    /* native tile — reads as fine grain even at 3x DPR */
+  opacity: var(--grain-opacity);
+  mix-blend-mode: overlay;         /* mid-grey noise both lifts and deepens the surface */
+}
+/* On dark paper overlay clips to harsh sparkle; soft-light keeps it as texture. */
+@media (prefers-color-scheme: dark) {
+  body::after { mix-blend-mode: soft-light; }
+}
+/* The boot splash owns the screen before the app fades in — no grain over it. */
+body:has(.splash:not(.splash--out))::after { display: none; }
+
 /* Visible keyboard focus on every interactive element. */
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -151,6 +177,23 @@ body.gate .ambient {
   animation:
     splash-in var(--dur-slow) var(--ease) both,
     publish-shift 2s ease-in-out infinite;  /* faster than the Post button's 5s: splashes are brief, show more of the quartet */
+}
+/* Grain the whole curtain — paper and the gradient glyph together — so the boot
+   screen carries the same tactile surface as the app (the global body::after
+   grain is hidden while the splash is up, so it's re-added here). Static, above
+   the in-flow t so it textures the glyph; blend flips with the theme. */
+.splash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--grain);
+  background-size: 140px 140px;
+  mix-blend-mode: overlay;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .splash::after { mix-blend-mode: soft-light; }
 }
 @keyframes splash-in {
   from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
@@ -290,6 +333,27 @@ body.gate .ambient {
   -webkit-mask-composite: xor;
           mask-composite: exclude;
 }
+/* Grain on the gradient: a second, static layer over the pastel fill so the
+   hero button reads with the same tactile paper as the rest of the surface.
+   Kept off the animation (no crawling grain) and clipped to the pill; only lit
+   in the filled states, since at rest the gradient is just a 2px ring. */
+.publish-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;                      /* painted after ::before, so grain sits on the gradient */
+  border-radius: inherit;
+  background-image: var(--grain);
+  background-size: 140px 140px;
+  mix-blend-mode: overlay;
+  opacity: 0;                       /* only the filled states light it, below */
+  transition: opacity var(--dur-micro) var(--ease);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .publish-fill::after { mix-blend-mode: soft-light; }
+}
+
 /* Filled: drop the mask so the whole pill carries the gradient. */
 .publish-fill:active,
 .publish-fill[aria-current="page"],
@@ -297,9 +361,13 @@ body.gate .ambient {
 .publish-fill:active::before,
 .publish-fill[aria-current="page"]::before,
 .publish-fill:focus-visible::before { -webkit-mask: none; mask: none; }
+.publish-fill:active::after,
+.publish-fill[aria-current="page"]::after,
+.publish-fill:focus-visible::after { opacity: 0.28; }
 @media (hover: hover) {
   .publish-fill:hover { color: var(--on-type); }
   .publish-fill:hover::before { -webkit-mask: none; mask: none; }
+  .publish-fill:hover::after { opacity: 0.28; }
 }
 .publish-fill:disabled { opacity: 0.6; }
 @keyframes publish-shift {
@@ -473,6 +541,9 @@ main {
 .filter.publish-fill:active,
 .filter.publish-fill:focus-visible { color: var(--on-type); background: none; }
 .filter.publish-fill[aria-pressed="true"]::before { -webkit-mask: none; mask: none; }
+/* Grain rides the pill's persistent pressed fill too (its filled state is
+   aria-pressed, not the aria-current/:active the base publish-fill lights on). */
+.filter.publish-fill[aria-pressed="true"]::after { opacity: 0.28; }
 @media (hover: hover) {
   .filter.publish-fill:hover { color: var(--on-type); }
 }
