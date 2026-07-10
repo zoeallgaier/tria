@@ -1361,7 +1361,11 @@ body.gate main { padding: 0; }
 /* iOS renders date/time inputs as centered steppers; keep the height + left
    alignment of the text fields so the row sits flush with the form. */
 .when-row input { -webkit-appearance: none; appearance: none; text-align: left; }
-.when-row input::-webkit-date-and-time-value { text-align: left; }
+/* iOS paints the value in these pseudos, each carrying a default vertical margin
+   that stacks on our padding and inflates the row's height. The value pseudo
+   drives a filled input; the edit pseudo drives an empty one. Zero both. */
+.when-row input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.when-row input::-webkit-datetime-edit { margin: 0; padding: 0; }
 /* iOS shows nothing at all in an empty date/time input — paint the hint
    ourselves (the placeholder attr, flagged by wireWhenHints in app.js).
    Scoped to iOS so other browsers keep their native mm/dd/yyyy ghost. */
@@ -2127,17 +2131,17 @@ body.gate main { padding: 0; }
     transform: translateZ(0);
   }
   /* Icon-only destinations: labels stay in the DOM for the accessible name but
-     drop from view. Each target is a 56px circle with a 31px glyph, a touch
-     larger than the like/comment icons inside posts. */
+     drop from view. Each target is a 50px circle with a 28px glyph — trimmed a
+     touch from the earlier 56px, still well above the 44pt iOS tap-target floor. */
   .nav-link {
-    width: 56px;
-    height: 56px;
+    width: 50px;
+    height: 50px;
     padding: 0;
     justify-content: center;
     border-radius: var(--radius-pill);
   }
   .nav-link .nav-label { display: none; }
-  .nav-link .nav-ico { width: 31px; height: 31px; }
+  .nav-link .nav-ico { width: 28px; height: 28px; }
   /* The active highlight is the glide below, not a per-link background, so it
      can SLIDE between destinations instead of blinking from one to the next. */
   .nav-link[aria-current="page"] { color: var(--accent); }
@@ -2166,8 +2170,8 @@ body.gate main { padding: 0; }
      with the grain (::after) or the + glyph riding on top. */
   .nav-publish {
     margin: 0;
-    width: 62px;
-    height: 62px;
+    width: 56px;
+    height: 56px;
     padding: 0;
     color: var(--on-type);
     border-radius: 50%;
@@ -2177,7 +2181,7 @@ body.gate main { padding: 0; }
       0 2px 5px rgba(0, 0, 0, 0.18),
       0 12px 28px rgba(0, 0, 0, 0.20);
   }
-  .nav-publish .nav-ico { width: 33px; height: 33px; }
+  .nav-publish .nav-ico { width: 30px; height: 30px; }
   .nav-publish::after { opacity: 0.28; }
   .nav-publish::before {
     -webkit-mask: none;
