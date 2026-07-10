@@ -433,31 +433,47 @@ main {
    The router (app.js) swaps one `.page` for the next inside #view. Forward moves
    along the nav line (Home→Friends→Profile→Publish) enter from the right, back
    moves from the left, and same-level swaps / the auth gate cross-fade. Every
-   page pairs its slide with an opacity lift so it resolves in. One template,
-   driven only by the direction classes the router toggles.
-   NOTE: no filter:blur on the page here, on purpose — backdrop-filter has no
-   effect while any ancestor carries a filter, so a page-level blur would strip
-   the frost off every glass surface it wraps (seg-tabs, Updates notification
-   cards) for the length of the slide, then snap it back. Slide + fade only. */
+   page pairs its slide with a blur+opacity lift so it resolves into focus. One
+   template, driven only by the direction classes the router toggles. */
 #view { position: relative; overflow-x: clip; }
 
 .page {
   transition: transform 0.36s var(--ease),
-              opacity   0.34s ease;
+              opacity   0.34s ease,
+              filter    0.34s ease;
 }
 
-/* Entering page — starts offset and transparent … */
-.page.enter.from-right { transform: translateX(38px);  opacity: 0; }
-.page.enter.from-left  { transform: translateX(-38px); opacity: 0; }
-.page.enter.fade       { transform: none;              opacity: 0; }
-/* … then settles in (later rule wins at equal specificity). */
-.page.enter.active { transform: none; opacity: 1; }
+/* Entering page — starts offset, blurred and transparent … */
+.page.enter.from-right { transform: translateX(38px);  opacity: 0; filter: blur(10px); }
+.page.enter.from-left  { transform: translateX(-38px); opacity: 0; filter: blur(10px); }
+.page.enter.fade       { transform: none;              opacity: 0; filter: blur(10px); }
+/* … then settles into focus (later rule wins at equal specificity). */
+.page.enter.active { transform: none; opacity: 1; filter: blur(0); }
 
-/* Leaving page — lifted out of flow so it overlays, starts at rest, slides out. */
+/* Leaving page — lifted out of flow so it overlays, starts at rest, exits blurred. */
 .page.leave { position: absolute; inset: 0 0 auto 0; }
-.page.leave.active.to-left  { transform: translateX(-38px); opacity: 0; }
-.page.leave.active.to-right { transform: translateX(38px);  opacity: 0; }
-.page.leave.active.fade     { transform: none;              opacity: 0; }
+.page.leave.active.to-left  { transform: translateX(-38px); opacity: 0; filter: blur(10px); }
+.page.leave.active.to-right { transform: translateX(38px);  opacity: 0; filter: blur(10px); }
+.page.leave.active.fade     { transform: none;              opacity: 0; filter: blur(10px); }
+
+/* In-page glass goes quiet while its page is in motion. The page-level blur
+   above makes the page a backdrop root, so per spec these backdrop-filters are
+   already inert during the slide — but iOS WebKit (standalone especially) keeps
+   trying to sample mid-transform and the frost visibly jumps, exactly on the
+   pages that carry in-page glass (Friends: seg-tabs + search; Updates: seg-tabs,
+   soft-ask, notification cards). Turning it off explicitly for the 360ms stops
+   the mis-sampling and halves the compositing load; the handover back to live
+   frost lands on the same frame the router clears the transition classes. The
+   translucent fills stay, so the surfaces keep their tone throughout. The nav
+   pill lives outside #view and keeps its glass live the whole time (it has its
+   own iOS layer pin — see .nav-pill). */
+.page.enter .seg-tabs, .page.leave .seg-tabs,
+.page.enter .masthead-search-field, .page.leave .masthead-search-field,
+.page.enter .push-ask, .page.leave .push-ask,
+.page.enter .notif, .page.leave .notif {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .page { transition: none; }
