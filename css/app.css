@@ -2318,7 +2318,7 @@ body.gate main { padding: 0; }
     animation: publish-shift 14s ease-in-out infinite;
     -webkit-mask: radial-gradient(circle at 50% 50%, #000 16%, transparent 72%);
             mask: radial-gradient(circle at 50% 50%, #000 16%, transparent 72%);
-    filter: blur(7px) saturate(1.5) brightness(1.15);
+    filter: blur(11px) saturate(1.5) brightness(1.15) opacity(0.7);
     opacity: 0;
     transition: transform var(--dur-move) var(--ease), opacity var(--dur-micro) var(--ease);
     pointer-events: none;
@@ -2495,7 +2495,7 @@ body.gate main { padding: 0; }
        it reads as rich coloured light, not a white blowout. The opacity() in the
        filter dims it a touch further here (the CSS opacity property is off limits
        — JS drives it to fade the glide in/out on route changes). */
-    .nav-glide { filter: blur(9px) saturate(1.7) brightness(0.95) opacity(0.8); }
+    .nav-glide { filter: blur(13px) saturate(1.7) brightness(0.95) opacity(0.6); }
     /* Same treatment as the pill: run the icon chip less transparent and drop
        the shadow deeper so the frosted glass reads over dark content. */
     .nav-dial-ico {
