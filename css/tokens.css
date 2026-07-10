@@ -65,6 +65,16 @@
   --glass-bg:      color-mix(in srgb, var(--bg) 74%, transparent);
   --glass-blur:    20px;
 
+  /* iOS installed-shell status-bar scrim — a top wash that backs the OS clock and
+     battery glyphs where content scrolls under them (black-translucent bar, so the
+     app runs full-bleed beneath it; see .statusbar-scrim). Light paper takes a
+     WHITE wash: iOS paints dark glyphs to match the light theme-color, so they
+     need a light backing. Dark mode flips it below. */
+  --statusbar-scrim: linear-gradient(180deg,
+                       rgba(255, 255, 255, 0.80) 0%,
+                       rgba(255, 255, 255, 0.36) 55%,
+                       transparent 100%);
+
   /* Grain — a static, greyscale film-grain tile (inline SVG feTurbulence, so no
      asset and no network). Laid over the whole viewport via a fixed overlay and
      blended (see .grain in app.css) so flat fills and gradients read as tactile
@@ -141,6 +151,13 @@
 
     /* Dark glass needs a touch more opacity to keep chrome legible over content. */
     --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);
+
+    /* Flip the status-bar scrim dark: iOS paints light glyphs on the dark
+       theme-color, so they need a dark backing to read over light content. */
+    --statusbar-scrim: linear-gradient(180deg,
+                         rgba(0, 0, 0, 0.50) 0%,
+                         rgba(0, 0, 0, 0.20) 55%,
+                         transparent 100%);
 
     /* Grain reads stronger on dark paper (soft-light lifts it), so ease it back. */
     --grain-opacity: 0.07;

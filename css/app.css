@@ -260,9 +260,8 @@ body:has(.splash:not(.splash--out))::after { display: none; }
     height: env(safe-area-inset-top);
     z-index: 102;                 /* above the frosted topbar (100) so it backs the glyphs there too */
     pointer-events: none;
-    opacity: 0.7;                 /* baseline: topbar's frosted glass shares the load */
-    background: linear-gradient(180deg,
-      rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0.12) 50%, transparent 100%);
+    opacity: 0.8;                 /* baseline: topbar's frosted glass shares the load */
+    background: var(--statusbar-scrim);   /* white in light mode, dark in dark — themed */
     transition: opacity var(--dur-move) var(--ease);
   }
   /* Topbar gone, bare content under the glyphs — take the scrim to full strength. */
@@ -497,6 +496,13 @@ main {
   margin-bottom: 1rem;
 }
 .masthead-kicker .dot { opacity: 0.5; margin: 0 0.35rem; }
+.masthead-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
 .masthead-title {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
@@ -504,6 +510,89 @@ main {
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--text);
+}
+
+/* Friends search: a magnifier on the title line that wipes a FULL-WIDTH field open
+   across the nameplate — the "Friends" title simply vanishes behind it. Same
+   reveal-from-the-control feel as the + speed dial, but the bar spans the whole
+   measure so it reads as one clean input, not a menu floating over a menu. The
+   icon itself morphs into an X while open, so the same control closes it. */
+.masthead-search { flex-shrink: 0; }
+.masthead-search-btn {
+  position: relative;
+  z-index: 2;                       /* rides above the field so the X stays tappable */
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  transition: color var(--dur-micro);
+}
+@media (hover: hover) { .masthead-search-btn:hover { color: var(--text); } }
+.masthead.searching .masthead-search-btn { color: var(--text); }
+/* The two glyphs stack in the one grid cell; opening cross-fades + quarter-turns
+   the magnifier into the X (and back), so the morph reads as one control. */
+.msb-ico {
+  grid-area: 1 / 1;
+  display: flex;
+  transition: opacity var(--dur-quick) var(--ease-soft), transform var(--dur-quick) var(--ease);
+}
+.msb-ico svg { width: 22px; height: 22px; }
+.msb-ico--close { opacity: 0; transform: rotate(-90deg); }
+.masthead.searching .msb-ico--search { opacity: 0; transform: rotate(90deg); }
+.masthead.searching .msb-ico--close { opacity: 1; transform: rotate(0); }
+
+/* The title recedes behind the opening bar — a soft blur + fade, so it reads as
+   depth under frosted glass rather than a hard swap. */
+.masthead-title {
+  transition: filter var(--dur-quick) var(--ease), opacity var(--dur-quick) var(--ease);
+}
+.masthead.searching .masthead-title { filter: blur(3px); opacity: 0.35; }
+
+/* Frosted-glass field — the site's chrome treatment (nav rail, sticky bars). It's
+   translucent, so the blurred title shows through as a faint wash behind it. */
+.masthead-search-field {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  font: inherit;
+  color: var(--text);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  padding: 0.6rem 3rem 0.6rem 1rem;   /* right pad clears the X control */
+  opacity: 0;
+  pointer-events: none;
+  clip-path: inset(0 0 0 100% round 999px);   /* collapsed: wiped away to the right */
+  transition: clip-path var(--dur-move) var(--ease), opacity var(--dur-quick) var(--ease);
+}
+.masthead.searching .masthead-search-field {
+  opacity: 1;
+  pointer-events: auto;
+  clip-path: inset(0 0 0 0 round 999px);       /* open: full width */
+  /* Softer than a full --accent rule (bright white on dark paper): the open
+     field wears a dimmed accent outline so the glowing control leads, not the
+     border. Beats the :focus rule below on specificity, so it holds focused. */
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+.masthead-search-field:focus { outline: none; border-color: var(--accent); }
+.masthead-search-field::placeholder { color: var(--muted); opacity: 0.6; }
+/* Kill the browser's own clear "✕" — the morphing icon already closes + clears,
+   so a second X inside the field is redundant. */
+.masthead-search-field::-webkit-search-cancel-button,
+.masthead-search-field::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+@media (prefers-reduced-motion: reduce) {
+  .masthead-search-field { transition: opacity var(--dur-quick) ease; }
+  .msb-ico, .masthead-title { transition: opacity var(--dur-quick) ease; }
 }
 
 /* Masthead and every content block share one readable measure, centred on the
@@ -1353,6 +1442,38 @@ body.gate main { padding: 0; }
 .field textarea:focus { outline: none; border-color: var(--accent); }
 .field-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
 
+/* Combined field: a headline input and its note stacked in one bordered box,
+   split by a hairline divider, so the pair reads as a single cleaner block. The
+   inner controls shed their own borders; the box carries the frame + focus ring. */
+.field--combo {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.field--combo:focus-within { border-color: var(--accent); }
+.field--combo .combo-title,
+.field--combo .combo-note {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 0.7rem 0.85rem;
+}
+.field--combo .combo-title { font-weight: 700; }
+.field--combo .combo-title:focus,
+.field--combo .combo-note:focus { outline: none; border-color: transparent; }
+.field--combo .combo-note {
+  display: block;
+  resize: vertical;
+  line-height: 1.5;
+  min-height: 3.4rem;
+}
+.combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
+
 /* An activity's "When" — date + time sharing one row (the date takes the lead),
    so the optional pair reads as a single quiet line, not two more form rows. */
 .when-row { display: flex; gap: 0.6rem; }
@@ -1567,7 +1688,12 @@ body.gate main { padding: 0; }
 .card--photo .card-solometa { padding-inline: var(--inset); margin-bottom: 1.15rem; }
 
 /* ── Friends directory — a quiet list of rows linking out to each profile ──── */
+.friend-search-empty { margin-top: 0.6rem; }
+
 .friends-list { display: flex; flex-direction: column; }
+/* A filtered-out row: the `hidden` attribute alone loses to `.friend`'s own
+   `display: flex`, so hide it explicitly (higher specificity wins). */
+.friend[hidden] { display: none; }
 .friend {
   display: flex;
   align-items: center;
@@ -1577,6 +1703,9 @@ body.gate main { padding: 0; }
   animation: rise 0.5s var(--ease) both;   /* same soft rise as feed cards */
 }
 .friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
+/* When search hides trailing rows, drop the rule under the last VISIBLE row so no
+   hairline dangles beneath the results. */
+.friend:not([hidden]):not(:has(~ .friend:not([hidden]))) { border-bottom: none; }
 @media (hover: hover) { .friend:hover { background: var(--surface); } }
 .friend .avatar { width: 56px; height: 56px; font-size: 1.4rem; }
 .friend-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
@@ -1879,6 +2008,26 @@ body.gate main { padding: 0; }
 }
 @media (hover: hover) { .composer-submit:not(.publish-fill):hover { background: var(--lit-top), var(--accent-press); } }
 
+/* The composer's own Post button: a centred, wider, outlined pill. Centring keeps
+   it clear of the floating "+" (which used to sit on top of the right-aligned
+   fill), and the outline reads as a calm, deliberate commit rather than a slab. */
+.composer .composer-post {
+  margin-inline: auto;
+  margin-top: 1.4rem;
+  min-width: 13rem;
+  color: var(--accent);
+  background: none;
+  border: 1.5px solid var(--accent);
+  box-shadow: none;
+}
+.composer .composer-post:disabled { opacity: 0.55; }
+@media (hover: hover) {
+  .composer .composer-post:hover {
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
+    color: var(--accent);
+  }
+}
+
 /* Photo: dropzone → square crop with drag-to-reposition. */
 .dropzone {
   display: flex;
@@ -2143,22 +2292,43 @@ body.gate main { padding: 0; }
   .nav-link .nav-label { display: none; }
   .nav-link .nav-ico { width: 28px; height: 28px; }
   /* The active highlight is the glide below, not a per-link background, so it
-     can SLIDE between destinations instead of blinking from one to the next. */
+     can SLIDE between destinations instead of blinking from one to the next.
+     The icon stays --accent (bright in dark, ink in light) — it's LIT by the
+     glow behind it, not sitting on a chip, so the pill supplies its contrast. */
   .nav-link[aria-current="page"] { color: var(--accent); }
   .nav-link:active { transform: scale(0.92); transition: transform 0.08s; }
+  /* Ambient light, not a chip: the active marker glows like the dial icons.
+     The Post button's drifting quartet (publish-shift, shared keyframes) is the
+     colour engine so it cycles the brand hues; a tight radial mask pulls that
+     into a hot core fading to nothing (the dial's radial bloom), and a blur
+     turns it into coloured light pooling under the icon and spilling into the
+     frosted pill. Saturate + brighten so the pastels actually read as glow.
+     z-index -1 keeps it above the pill glass but under the icons (the pill's
+     translateZ layer is the stacking context that scopes it). */
   .nav-glide {
     display: block;
     position: absolute;
     top: 0;
     left: 0;
+    z-index: -1;
     border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--text) 9%, transparent);
+    background: linear-gradient(115deg,
+      var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    background-size: 300% 100%;
+    animation: publish-shift 14s ease-in-out infinite;
+    -webkit-mask: radial-gradient(circle at 50% 50%, #000 16%, transparent 72%);
+            mask: radial-gradient(circle at 50% 50%, #000 16%, transparent 72%);
+    filter: blur(7px) saturate(1.5) brightness(1.15);
     opacity: 0;
     transition: transform var(--dur-move) var(--ease), opacity var(--dur-micro) var(--ease);
     pointer-events: none;
   }
   @media (prefers-reduced-motion: reduce) {
-    .nav-glide { transition: opacity var(--dur-micro) ease; }
+    .nav-glide {
+      animation: none;
+      background-position: 50% 50%;   /* rest on a static mid-quartet blend */
+      transition: opacity var(--dur-micro) ease;
+    }
   }
 
   /* Post breaks out of the pill as a round button. On a screen a gradient
@@ -2319,7 +2489,13 @@ body.gate main { padding: 0; }
         inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
         0 10px 30px rgba(0, 0, 0, 0.45);
     }
-    .nav-glide { background: color-mix(in srgb, var(--text) 12%, transparent); }
+    /* The active glow stays chromatic on dark paper: brightening pastels there
+       pushes them toward white, which would swallow the (light) --accent glyph
+       riding on the hot core. Trade the brightness boost for more saturation so
+       it reads as rich coloured light, not a white blowout. The opacity() in the
+       filter dims it a touch further here (the CSS opacity property is off limits
+       — JS drives it to fade the glide in/out on route changes). */
+    .nav-glide { filter: blur(9px) saturate(1.7) brightness(0.95) opacity(0.8); }
     /* Same treatment as the pill: run the icon chip less transparent and drop
        the shadow deeper so the frosted glass reads over dark content. */
     .nav-dial-ico {

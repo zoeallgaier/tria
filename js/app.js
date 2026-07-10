@@ -30,6 +30,19 @@
   const scrollTop = (smooth) =>
     window.scrollTo({ top: 0, behavior: smooth && !prefersReduced() ? 'smooth' : 'auto' });
 
+  // Collapsing a long post (a folded note or a dropdown) can drop the timeline out
+  // from under you — you were deep inside an essay, and now everything below it
+  // jumps up. If the card's top has scrolled up off-screen, glide back to it so the
+  // read lands on the post you tapped, not wherever the collapse left the scroll.
+  function scrollCardIntoView(el) {
+    const bar = document.querySelector('.topbar');
+    const offset = (bar ? bar.getBoundingClientRect().height : 0) + 8;
+    const top = el.getBoundingClientRect().top;
+    if (top >= offset) return;   // its top is already in view — leave the scroll be
+    window.scrollTo({ top: top + window.scrollY - offset,
+      behavior: prefersReduced() ? 'auto' : 'smooth' });
+  }
+
   // The feed's entrance rhythm: each card/row rises a beat after the one above it,
   // capped so a long list doesn't trail on forever. Shared by every list view.
   const staggerDelay = (i) => Math.min(i * 0.05, 0.4).toFixed(2) + 's';
@@ -70,6 +83,9 @@
     // A little letter — the friendliest "send it to someone." A softened
     // envelope whose flap curves like a smile. Worn by the share buttons.
     send:    '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M4.5 8.7Q12 14.2 19.5 8.7"/>',
+    // Magnifier for the Friends search field, and the X it morphs into when open.
+    search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
+    close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -378,6 +394,25 @@
       `</div>`;
   }
 
+  // A reliable double-tap detector. The native `dblclick` event doesn't fire
+  // dependably on phones (a double-tap there is the browser's zoom gesture), so
+  // we count two quick taps ourselves off `click` (which every tap raises) —
+  // two within DOUBLE_TAP_MS, landing near the same spot, count as a double-tap.
+  const DOUBLE_TAP_MS = 400;
+  function onDoubleTap(el, handler) {
+    let last = 0, lx = 0, ly = 0;
+    el.addEventListener('click', (e) => {
+      const now = Date.now();
+      if (now - last < DOUBLE_TAP_MS &&
+          Math.abs(e.clientX - lx) < 32 && Math.abs(e.clientY - ly) < 32) {
+        last = 0;
+        handler(e);
+      } else {
+        last = now; lx = e.clientX; ly = e.clientY;
+      }
+    });
+  }
+
   // Wire the "Read more" toggle. Opening animates the clip's max-height out to the
   // content's real height, then releases it (so a later reflow can't re-clip);
   // closing pins the current height first so it eases back to the clamp. The set
@@ -410,12 +445,14 @@
 
     toggle.addEventListener('click', () => setOpen(!wrap.classList.contains('open')));
 
-    // Double-tap anywhere on an opened note collapses it back to the teaser — a
-    // quick way out without reaching for the toggle. Only when open, and never on
-    // a link/button (mentions, actions) so their own taps still fire.
-    clip.addEventListener('dblclick', (e) => {
-      if (!wrap.classList.contains('open') || e.target.closest('a, button')) return;
+    // Double-tap anywhere on the card (the same whole-card hitbox an Updates
+    // spotlight lands on) collapses an opened note back to the teaser — a quick
+    // way out without reaching for the toggle. Only when open, and never on a
+    // link/button/field (mentions, actions, the comment box) so their taps fire.
+    onDoubleTap(el, (e) => {
+      if (!wrap.classList.contains('open') || e.target.closest('a, button, input, textarea')) return;
       setOpen(false);
+      scrollCardIntoView(el);
     });
   }
 
@@ -584,6 +621,7 @@
   function goingToggleHtml(post) {
     if (post.type !== 'activity' || !canSocial(post)) return '';
     if (post.author === Store.session()) return '';
+    if (isPastActivity(post)) return '';   // the plan's Happened — nothing left to RSVP to
     const going = Store.goingByMe(post.id);
     return `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
         `aria-label="${going ? 'You’re in. Tap to bow out' : 'Count me in'}" ` +
@@ -701,6 +739,7 @@
       wirePhoto(el, img);
       wireLikes(el, post, opts);
       wireComments(el, post, opts);
+      wireCardCollapse(el, post);
       return el;
     }
 
@@ -757,6 +796,7 @@
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
     wireComments(el, post, opts);
+    wireCardCollapse(el, post);
     return el;
   }
 
@@ -837,6 +877,22 @@
     el.querySelector('.going-panel')?.classList.remove('open');
   }
 
+  // Double-tap the card (same whole-card hitbox as an Updates spotlight) to fold
+  // away an open dropdown — the comment thread, who liked, or who's going. Skips
+  // taps on links/buttons/fields so their own gestures still fire. Pairs with the
+  // note collapse in wireReadMore, which listens on the same card element.
+  function wireCardCollapse(el, post) {
+    onDoubleTap(el, (e) => {
+      if (e.target.closest('a, button, input, textarea')) return;
+      const open = el.querySelector('.comments-panel.open, .likers-panel.open, .going-panel.open');
+      if (!open) return;
+      collapseComments(el, post.id);
+      collapseLikers(el, post.id);
+      collapseGoing(el, post.id);
+      scrollCardIntoView(el);
+    });
+  }
+
   // Build a one-event .ics and hand it to the browser as a download — the OS
   // routes it to the default calendar app, so this works the same on iOS,
   // Android, and desktop with no per-platform URL schemes. Times are written
@@ -904,6 +960,10 @@
     const toggleBtn = el.querySelector('.card-going');
     if (!toggleBtn) return;
     toggleBtn.addEventListener('click', async () => {
+      // Bowing out is a small commitment to undo — the host planned around the
+      // headcount — so confirm before dropping off. Joining stays one tap.
+      if (Store.goingByMe(post.id) &&
+          !window.confirm('Take your name off the headcount for this plan?')) return;
       toggleBtn.disabled = true;
       const res = await Store.toggleGoing(post.id);
       toggleBtn.disabled = false;
@@ -1326,10 +1386,16 @@
      The editorial nameplate that crowns each page: a small uppercase kicker
      (the issue date, or a section eyebrow) over a big Instrument Serif title,
      above a full-width hairline. Callers pass already-safe strings. */
-  function mastheadEl(kicker, title) {
+  // `actions` (optional) is markup that rides the title's own line, at the right —
+  // e.g. the Friends page's expanding search. The title row is a relative flex
+  // container so an action can animate open over the nameplate.
+  function mastheadEl(kicker, title, actions) {
     return `<header class="masthead">` +
         (kicker ? `<p class="masthead-kicker">${kicker}</p>` : '') +
-        `<h1 class="masthead-title">${title}</h1>` +
+        `<div class="masthead-row">` +
+          `<h1 class="masthead-title">${title}</h1>` +
+          (actions || '') +
+        `</div>` +
       `</header>`;
   }
 
@@ -2050,6 +2116,7 @@
      Two pills split the page, echoing the feed's filter menu: My circle wears
      the Post button's gradient, Find friends stays monochrome like All. */
   let friendsTab = 'circle';
+  let friendsQuery = '';   // live filter over the shown list (name + @username)
   function renderFriends() {
     const me = Store.session();
     const friendSet = new Set(Store.friends());
@@ -2079,7 +2146,8 @@
     // A directory row. `discover` rows swap the go-arrow for the status control
     // above so you can add (or answer) someone without leaving the page.
     const row = (u, add) =>
-      `<a class="friend" href="#/u/${encodeURIComponent(u.username)}">` +
+      `<a class="friend" href="#/u/${encodeURIComponent(u.username)}" ` +
+        `data-name="${esc(u.name.toLowerCase())}" data-user="${esc(u.username.toLowerCase())}">` +
         avatarEl(u, { cls: 'friend-avatar' }) +
         `<span class="friend-text">` +
           `<span class="friend-name">${esc(u.name)}</span>` +
@@ -2109,22 +2177,128 @@
       : (discover.length
           ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` + shareAsk
           : `<p class="feed-empty">No one new to add right now.</p>` + shareAsk);
+    const searchAction =
+      `<div class="masthead-search">` +
+        `<input type="search" id="friend-search" class="masthead-search-field" ` +
+          `autocapitalize="none" autocomplete="off" spellcheck="false" tabindex="-1" ` +
+          `placeholder="Search by name or @username" aria-label="Search people">` +
+        `<button type="button" class="masthead-search-btn" id="friend-search-toggle" ` +
+          `aria-label="Search people" aria-expanded="false">` +
+          `<span class="msb-ico msb-ico--search">${svgIcon('search')}</span>` +
+          `<span class="msb-ico msb-ico--close">${svgIcon('close')}</span>` +
+        `</button>` +
+      `</div>`;
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl(circleCount, 'Friends') +
+        mastheadEl(circleCount, 'Friends', searchAction) +
         `<div class="filters" role="group" aria-label="Show">` +
           `<button class="filter publish-fill" type="button" data-tab="circle" ` +
             `aria-pressed="${onCircle}">My circle</button>` +
           `<button class="filter filter--mono" type="button" data-tab="find" ` +
             `aria-pressed="${!onCircle}">Find friends</button>` +
         `</div>` +
+        `<p class="feed-empty friend-search-empty" hidden>No one by that name.</p>` +
         listHtml +
       `</section>`;
 
     // Rows rise in with the feed's stagger, so switching pills feels like a feed.
+    // Stamp each row's natural order so the search can restore it after reordering.
     view.querySelectorAll('.friend').forEach((el, i) => {
       el.style.animationDelay = staggerDelay(i);
+      el.dataset.order = i;
     });
+
+    // Live search over the shown list — filter rows in place (no re-render, so the
+    // field keeps focus as you type) against name + @username. The share ask and
+    // "no matches" note toggle to match. State persists in friendsQuery so the
+    // filter survives a tab switch's re-render.
+    const searchEl = view.querySelector('#friend-search');
+    const toggleBtn = view.querySelector('#friend-search-toggle');
+    const masthead = view.querySelector('.masthead');
+    const listEl = view.querySelector('.friends-list');
+    const searchEmpty = view.querySelector('.friend-search-empty');
+    const shareEl = view.querySelector('.friends-share');
+    // Rank a row against the query: 2 = a name-word or the username STARTS with it
+    // (the strong match), 1 = it appears somewhere, 0 = no match. Both the profile
+    // name and the @username are searched.
+    const scoreRow = (r, q) => {
+      const name = r.dataset.name || '', user = r.dataset.user || '';
+      if (user.startsWith(q) || name.split(' ').some(w => w.startsWith(q))) return 2;
+      if (user.includes(q) || name.includes(q)) return 1;
+      return 0;
+    };
+    const applyFilter = () => {
+      if (!listEl) return;
+      const q = friendsQuery.trim().toLowerCase();
+      const rows = [...listEl.querySelectorAll('.friend')];
+      if (!q) {   // cleared — restore the natural order, show everyone
+        rows.sort((a, b) => a.dataset.order - b.dataset.order)
+            .forEach(r => { r.hidden = false; listEl.appendChild(r); });
+        if (searchEmpty) searchEmpty.hidden = true;
+        if (shareEl) shareEl.hidden = false;
+        return;
+      }
+      // Matches float to the top (best first, ties keep natural order); the rest
+      // sink and hide. Re-appending existing nodes reorders without replaying the
+      // rise animation, so the list settles rather than flashes.
+      const ranked = rows
+        .map(r => ({ r, s: scoreRow(r, q), o: +r.dataset.order }))
+        .sort((a, b) => b.s - a.s || a.o - b.o);
+      let shown = 0;
+      ranked.forEach(({ r, s }) => {
+        r.hidden = s === 0;
+        if (s > 0) shown++;
+        listEl.appendChild(r);
+      });
+      if (searchEmpty) searchEmpty.hidden = shown !== 0;
+      if (shareEl) shareEl.hidden = true;   // the standing invite steps aside while searching
+    };
+
+    // Open/close the field. The icon fans it out over the nameplate and focuses
+    // it; tapping again (or Escape) folds it back and clears the filter so the
+    // full list returns. `foldIfEmpty` reflects the collapsed state without
+    // touching a live query (used on blur-away and the reveal helpers).
+    const foldIfEmpty = () => {
+      if (searchEl.value.trim()) return;
+      masthead.classList.remove('searching');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.setAttribute('aria-label', 'Search people');
+      searchEl.tabIndex = -1;
+    };
+    const openSearch = () => {
+      masthead.classList.add('searching');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      toggleBtn.setAttribute('aria-label', 'Close search');
+      searchEl.tabIndex = 0;
+      searchEl.focus();
+    };
+    const closeSearch = () => {
+      if (friendsQuery) { friendsQuery = searchEl.value = ''; applyFilter(); }
+      masthead.classList.remove('searching');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.setAttribute('aria-label', 'Search people');
+      searchEl.tabIndex = -1;
+      toggleBtn.focus();
+    };
+
+    // Keep focus on the field while the icon is pressed so its blur-to-fold can't
+    // race the toggle (mousedown default would move focus off the field first).
+    toggleBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    toggleBtn.addEventListener('click', () =>
+      masthead.classList.contains('searching') ? closeSearch() : openSearch());
+    searchEl.addEventListener('blur', foldIfEmpty);
+    searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
+
+    // Reopen (without stealing focus) if a query carried over a tab-switch re-render.
+    searchEl.value = friendsQuery;
+    if (friendsQuery) {
+      masthead.classList.add('searching');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      toggleBtn.setAttribute('aria-label', 'Close search');
+      searchEl.tabIndex = 0;
+    }
+    searchEl.addEventListener('input', () => { friendsQuery = searchEl.value; applyFilter(); });
+    applyFilter();
 
     view.querySelectorAll('.filter[data-tab]').forEach(btn =>
       btn.addEventListener('click', () => {
@@ -2472,15 +2646,14 @@
           `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
             `spellcheck="false" placeholder="https://…" autofocus>` +
         `</div>` +
-        `<div class="field">` +
-          `<label for="c-title">Title</label>` +
-          `<input id="c-title" type="text" maxlength="120" ` +
-            `placeholder="What is it?">` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-note">Why share it?</label>` +
-          `<textarea id="c-note" rows="2" maxlength="5000" ` +
-            `placeholder="Why’s it worth their two minutes?"></textarea>` +
+        // Title + why-share ride in one bordered box, split by a divider — the
+        // headline reads as the lead, the caption as the note beneath it.
+        `<div class="field field--combo">` +
+          `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
+            `placeholder="Title (optional)" aria-label="Title">` +
+          `<div class="combo-divider" aria-hidden="true"></div>` +
+          `<textarea id="c-note" class="combo-note" rows="2" maxlength="5000" ` +
+            `placeholder="Why’s it worth their two minutes?" aria-label="Why share it"></textarea>` +
         `</div>` + tags;
     }
 
@@ -2530,16 +2703,14 @@
         `</div>` + tags;
     }
 
-    // post
-    return `<div class="field">` +
-        `<label for="c-title">Headline</label>` +
-        `<input id="c-title" type="text" maxlength="120" ` +
-          `placeholder="Optional, a title for longer thoughts.">` +
-      `</div>` +
-      `<div class="field">` +
-        `<label for="c-note">What’s on your mind?</label>` +
-        `<textarea id="c-note" rows="4" maxlength="5000" ` +
-          `placeholder="${esc(randomNotePlaceholder())}" autofocus></textarea>` +
+    // post — headline + note share one bordered box, split by a divider: the
+    // optional title reads as the lead, the note flows beneath it.
+    return `<div class="field field--combo">` +
+        `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
+          `placeholder="Headline (optional)" aria-label="Headline">` +
+        `<div class="combo-divider" aria-hidden="true"></div>` +
+        `<textarea id="c-note" class="combo-note" rows="4" maxlength="5000" ` +
+          `placeholder="${esc(randomNotePlaceholder())}" aria-label="Your note" autofocus></textarea>` +
       `</div>` + tags;
   }
 
@@ -2556,7 +2727,7 @@
           `</div>` +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
-          `<button class="composer-submit publish-fill is-solid" type="submit">Post</button>` +
+          `<button class="composer-submit composer-post" type="submit">Post</button>` +
         `</form>` +
       `</section>`;
 
