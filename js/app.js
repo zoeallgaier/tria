@@ -1400,7 +1400,7 @@
           `</button>` +
           `<button class="account-share" type="button" id="share">` +
             svgIcon('send', 'account-share-ico') +
-            `<span class="account-share-label">Share my profile</span>` +
+            `<span class="account-share-label">Share</span>` +
           `</button>` +
         `</div>`
       : (() => {
@@ -1580,7 +1580,7 @@
         clearTimeout(shareBtn._t);
         shareBtn._t = setTimeout(() => {
           shareBtn.classList.remove('copied');
-          label.textContent = 'Share my profile';
+          label.textContent = 'Share';
         }, 1800);
       });
     });
