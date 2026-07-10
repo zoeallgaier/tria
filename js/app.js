@@ -1399,6 +1399,53 @@
       `</header>`;
   }
 
+  /* ── Segmented tab control (.seg-tabs) — the reusable iOS view switcher shared
+     by Friends (My circle / Find friends) and Updates (All / Mentions). Two
+     equal segments over a sliding thumb; markup here, behaviour in wireSegTabs.
+     `id` namespaces the tab + panel ids, `tabs` = [{key,label}], `sel` = the
+     selected key, `panelId` is the tabpanel it drives. `glow: true` lights the
+     brand gradient under the thumb at index 0 (Friends' My circle identity);
+     neutral switches leave it off. The thumb slides via data-sel (the selected
+     index), so the control stays generic regardless of the tab keys. */
+  function segTabsEl(id, tabs, sel, { glow = false, label = 'Show', panelId = '' } = {}) {
+    const selIndex = Math.max(0, tabs.findIndex(t => t.key === sel));
+    return `<div class="seg-tabs" role="tablist" aria-label="${label}" id="${id}-tabs" data-sel="${selIndex}">` +
+        `<span class="seg-tabs-thumb" aria-hidden="true">${glow ? '<span class="seg-tabs-glow"></span>' : ''}</span>` +
+        tabs.map(t => {
+          const on = t.key === sel;
+          return `<button class="seg-tab" role="tab" id="${id}-tab-${t.key}" type="button" data-tab="${t.key}" ` +
+            `aria-controls="${panelId}" aria-selected="${on}" tabindex="${on ? 0 : -1}">${t.label}</button>`;
+        }).join('') +
+      `</div>`;
+  }
+  // Wire a seg-tabs control: click and Arrow Left/Right select (WAI-ARIA tab
+  // pattern, wrapping, focus follows). This drives the control's own visuals —
+  // the thumb slide (data-sel), aria-selected, and roving tabindex — then calls
+  // onSelect(key) so the caller swaps its panel. getSel reads the live selection.
+  function wireSegTabs(tablist, tabs, getSel, onSelect) {
+    const select = (key) => {
+      if (getSel() === key) return;
+      tablist.dataset.sel = Math.max(0, tabs.findIndex(t => t.key === key));
+      tablist.querySelectorAll('.seg-tab').forEach(b => {
+        const on = b.dataset.tab === key;
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      onSelect(key);
+    };
+    tablist.querySelectorAll('.seg-tab').forEach(btn =>
+      btn.addEventListener('click', () => select(btn.dataset.tab)));
+    tablist.addEventListener('keydown', (e) => {
+      const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!dir) return;
+      e.preventDefault();
+      const i = tabs.findIndex(t => t.key === getSel());
+      const next = tabs[(i + dir + tabs.length) % tabs.length];
+      select(next.key);
+      tablist.querySelector(`.seg-tab[data-tab="${next.key}"]`)?.focus();
+    });
+  }
+
   /* ── Home view ───────────────────────────────────────────────────────────── */
   const FILTERS = [
     { key: 'all',      label: 'All' },
@@ -2113,8 +2160,12 @@
   }
 
   /* ── Friends (your mutual circle) + Discover (people you haven't added) ───────
-     Two pills split the page, echoing the feed's filter menu: My circle wears
-     the Post button's gradient, Find friends stays monochrome like All. */
+     A segmented control (seg-tabs) splits the page: My circle wears the brand
+     gradient glow under the thumb, Find friends rests monochrome. */
+  const FRIENDS_TABS = [
+    { key: 'circle', label: 'My circle' },
+    { key: 'find',   label: 'Find friends' },
+  ];
   let friendsTab = 'circle';
   let friendsQuery = '';   // live filter over the shown list (name + @username)
   function renderFriends() {
@@ -2170,13 +2221,20 @@
           `<span>Share Tria</span>` +
         `</button>` +
       `</div>`;
-    const listHtml = onCircle
-      ? (friends.length
-          ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
-          : `<p class="feed-empty">Your circle’s empty, for now.</p>`)
-      : (discover.length
-          ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` + shareAsk
-          : `<p class="feed-empty">No one new to add right now.</p>` + shareAsk);
+    // The tab panel: the "no matches" note plus the active tab's list. Rebuilt in
+    // place on a tab switch (the masthead, search field, and tabs all persist), so
+    // switching slides the thumb and keeps any open search rather than tearing the
+    // whole view down.
+    const panelHtml = () => {
+      const listHtml = friendsTab === 'circle'
+        ? (friends.length
+            ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
+            : `<p class="feed-empty">Your circle’s empty, for now.</p>`)
+        : (discover.length
+            ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` + shareAsk
+            : `<p class="feed-empty">No one new to add right now.</p>` + shareAsk);
+      return `<p class="feed-empty friend-search-empty" hidden>No one by that name.</p>` + listHtml;
+    };
     const searchAction =
       `<div class="masthead-search">` +
         `<input type="search" id="friend-search" class="masthead-search-field" ` +
@@ -2188,25 +2246,17 @@
           `<span class="msb-ico msb-ico--close">${svgIcon('close')}</span>` +
         `</button>` +
       `</div>`;
+    // The circle / find switch is the shared iOS segmented control, driving the
+    // tabpanel below. My circle opts into the brand gradient glow.
     view.innerHTML =
       `<section class="view">` +
         mastheadEl(circleCount, 'Friends', searchAction) +
-        `<div class="filters" role="group" aria-label="Show">` +
-          `<button class="filter publish-fill" type="button" data-tab="circle" ` +
-            `aria-pressed="${onCircle}">My circle</button>` +
-          `<button class="filter filter--mono" type="button" data-tab="find" ` +
-            `aria-pressed="${!onCircle}">Find friends</button>` +
+        segTabsEl('friends', FRIENDS_TABS, friendsTab, { glow: true, panelId: 'friends-panel' }) +
+        `<div class="seg-panel" id="friends-panel" role="tabpanel" ` +
+          `aria-labelledby="friends-tab-${friendsTab}" tabindex="0">` +
+          panelHtml() +
         `</div>` +
-        `<p class="feed-empty friend-search-empty" hidden>No one by that name.</p>` +
-        listHtml +
       `</section>`;
-
-    // Rows rise in with the feed's stagger, so switching pills feels like a feed.
-    // Stamp each row's natural order so the search can restore it after reordering.
-    view.querySelectorAll('.friend').forEach((el, i) => {
-      el.style.animationDelay = staggerDelay(i);
-      el.dataset.order = i;
-    });
 
     // Live search over the shown list — filter rows in place (no re-render, so the
     // field keeps focus as you type) against name + @username. The share ask and
@@ -2215,9 +2265,11 @@
     const searchEl = view.querySelector('#friend-search');
     const toggleBtn = view.querySelector('#friend-search-toggle');
     const masthead = view.querySelector('.masthead');
-    const listEl = view.querySelector('.friends-list');
-    const searchEmpty = view.querySelector('.friend-search-empty');
-    const shareEl = view.querySelector('.friends-share');
+    // Stable containers: the panel keeps its identity across tab-switch swaps
+    // (only its innerHTML changes), so the search filter always re-queries the
+    // current list/share/empty nodes from it rather than caching stale ones.
+    const panel = view.querySelector('#friends-panel');
+    const tablist = view.querySelector('#friends-tabs');
     // Rank a row against the query: 2 = a name-word or the username STARTS with it
     // (the strong match), 1 = it appears somewhere, 0 = no match. Both the profile
     // name and the @username are searched.
@@ -2228,7 +2280,10 @@
       return 0;
     };
     const applyFilter = () => {
-      if (!listEl) return;
+      const listEl = panel.querySelector('.friends-list');
+      const searchEmpty = panel.querySelector('.friend-search-empty');
+      const shareEl = panel.querySelector('.friends-share');
+      if (!listEl) { if (searchEmpty) searchEmpty.hidden = true; return; }
       const q = friendsQuery.trim().toLowerCase();
       const rows = [...listEl.querySelectorAll('.friend')];
       if (!q) {   // cleared — restore the natural order, show everyone
@@ -2253,6 +2308,52 @@
       if (searchEmpty) searchEmpty.hidden = shown !== 0;
       if (shareEl) shareEl.hidden = true;   // the standing invite steps aside while searching
     };
+
+    // Wire the freshly mounted rows: stamp each one's natural order + feed stagger
+    // (so search can restore order after reordering), then attach the per-row
+    // controls (add / accept / cancel) and the share ask. Runs on first render and
+    // after every tab-switch panel swap.
+    function wirePanel() {
+      panel.querySelectorAll('.friend').forEach((el, i) => {
+        el.style.animationDelay = staggerDelay(i);
+        el.dataset.order = i;
+      });
+      // Add (or accept) from a Discover row: create my edge, then re-render — a
+      // mutual add moves them into your circle, a fresh one flips to "Requested".
+      // The button sits inside the row link, so stop it navigating.
+      panel.querySelectorAll('.friend-add[data-add]').forEach(btn =>
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          btn.disabled = true;
+          await Store.addFriend(btn.dataset.add);
+          renderFriends();
+        }));
+      // Take back a request already sent (the "Requested" pill).
+      panel.querySelectorAll('.friend-add[data-cancel]').forEach(btn =>
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          btn.disabled = true;
+          await Store.removeFriend(btn.dataset.cancel);
+          renderFriends();
+        }));
+      // The share ask: native share sheet where it exists, clipboard copy as the
+      // desktop fallback. Confirm softly either way.
+      const shareBtn = panel.querySelector('.friends-share-copy');
+      if (shareBtn) shareBtn.addEventListener('click', async () => {
+        const result = await shareOrCopy({
+          title: 'Tria',
+          text: 'Come find me on Tria.',
+          url: 'https://triaonline.com',
+        });
+        if (result === 'cancelled') return;
+        const label = shareBtn.querySelector('span');
+        label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
+        setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
+      });
+    }
+    wirePanel();
 
     // Open/close the field. The icon fans it out over the nameplate and focuses
     // it; tapping again (or Escape) folds it back and clears the filter so the
@@ -2300,48 +2401,16 @@
     searchEl.addEventListener('input', () => { friendsQuery = searchEl.value; applyFilter(); });
     applyFilter();
 
-    view.querySelectorAll('.filter[data-tab]').forEach(btn =>
-      btn.addEventListener('click', () => {
-        if (friendsTab === btn.dataset.tab) return;
-        friendsTab = btn.dataset.tab;
-        renderFriends();
-      }));
-
-    // Add (or accept) from a Discover row: create my edge, then re-render — a
-    // mutual add moves them into your circle, a fresh one flips to "Requested".
-    // The button sits inside the row link, so stop it navigating.
-    view.querySelectorAll('.friend-add[data-add]').forEach(btn =>
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        btn.disabled = true;
-        await Store.addFriend(btn.dataset.add);
-        renderFriends();
-      }));
-
-    // Take back a request already sent (the "Requested" pill).
-    view.querySelectorAll('.friend-add[data-cancel]').forEach(btn =>
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        btn.disabled = true;
-        await Store.removeFriend(btn.dataset.cancel);
-        renderFriends();
-      }));
-
-    // The share ask on an empty Discover list: native share sheet where it
-    // exists, clipboard copy as the desktop fallback. Confirm softly either way.
-    const shareBtn = view.querySelector('.friends-share-copy');
-    if (shareBtn) shareBtn.addEventListener('click', async () => {
-      const result = await shareOrCopy({
-        title: 'Tria',
-        text: 'Come find me on Tria.',
-        url: 'https://triaonline.com',
-      });
-      if (result === 'cancelled') return;
-      const label = shareBtn.querySelector('span');
-      label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
-      setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
+    // Switch tabs in place: the shared control slides the thumb + updates aria;
+    // here we swap only the panel and keep the masthead and any open search
+    // intact. A full renderFriends only runs when membership changes (an add or
+    // accept), which the row handlers in wirePanel trigger.
+    wireSegTabs(tablist, FRIENDS_TABS, () => friendsTab, (tab) => {
+      friendsTab = tab;
+      panel.setAttribute('aria-labelledby', 'friends-tab-' + tab);
+      panel.innerHTML = panelHtml();
+      wirePanel();
+      applyFilter();
     });
   }
 
@@ -2399,8 +2468,8 @@
       `</li>`;
   }
 
-  // Filter pills over the ledger — same chip language as the home feed.
-  // Only mentions get their own pill; every other kind just shows under All.
+  // The ledger's view switcher (shared seg-tabs control). Only mentions get their
+  // own segment; every other kind just shows under All.
   const NOTIF_FILTERS = [
     { key: 'all',     label: 'All'      },
     { key: 'mention', label: 'Mentions' },
@@ -2524,70 +2593,84 @@
 
   function renderUpdates() {
     const all = Store.notifications();
-    const list = notifFilter === 'all' ? all : all.filter(n => n.kind === notifFilter);
     const lastSeen = localStorage.getItem(notifSeenKey()) || '';
-    const requestsHtml = friendRequestsHtml();
-    view.innerHTML =
-      `<section class="view">` +
-        mastheadEl('', 'Updates') +
-        pushAskHtml() +
-        `<div class="filters" role="group" aria-label="Filter updates">` +
-          NOTIF_FILTERS.map(f =>
-            `<button class="filter" type="button" data-filter="${f.key}" ` +
-              `aria-pressed="${f.key === notifFilter}">${f.label}</button>`).join('') +
-        `</div>` +
-        requestsHtml +
+
+    // The panel under the tabs: incoming friend requests (All only) then the
+    // ledger. Rebuilt in place on a filter switch so the segmented thumb slides
+    // rather than the whole view tearing down. friendRequestsHtml reads the live
+    // notifFilter and yields '' under Mentions.
+    const panelHtml = () => {
+      const list = notifFilter === 'all' ? all : all.filter(n => n.kind === notifFilter);
+      const requestsHtml = friendRequestsHtml();
+      return requestsHtml +
         (list.length
           ? `<ul class="notif-list">${list.map(n => notifItemHtml(n, lastSeen)).join('')}</ul>`
           : requestsHtml
             ? ''   // requests are up top; don't also say "all quiet" beneath them
             : `<p class="feed-empty">${all.length
                 ? 'No mentions yet.'
-                : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`) +
+                : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`);
+    };
+    // All / Mentions is the shared segmented control, neutral (no brand glow) —
+    // colour stays reserved for post types.
+    view.innerHTML =
+      `<section class="view">` +
+        mastheadEl('', 'Updates') +
+        pushAskHtml() +
+        segTabsEl('updates', NOTIF_FILTERS, notifFilter, { label: 'Filter updates', panelId: 'updates-panel' }) +
+        `<div class="seg-panel" id="updates-panel" role="tabpanel" ` +
+          `aria-labelledby="updates-tab-${notifFilter}" tabindex="0">` +
+          panelHtml() +
+        `</div>` +
       `</section>`;
 
     wirePushAsk(renderUpdates);
 
-    view.querySelectorAll('.filter[data-filter]').forEach(btn =>
-      btn.addEventListener('click', () => {
-        if (notifFilter === btn.dataset.filter) return;
-        notifFilter = btn.dataset.filter;
-        renderUpdates();
-      }));
+    const panel = view.querySelector('#updates-panel');
+    const tablist = view.querySelector('#updates-tabs');
 
-    // Answer a friend request in place. Accept adds them back (→ mutual, they
-    // now show in each other's feeds); Ignore clears the request quietly.
-    view.querySelectorAll('.request-accept').forEach(btn =>
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        await Store.addFriend(btn.dataset.accept);
-        renderUpdates();
-      }));
-    view.querySelectorAll('.request-ignore').forEach(btn =>
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        await Store.removeFriend(btn.dataset.ignore);
-        renderUpdates();
-      }));
+    // Wire the freshly mounted panel: request answers, row taps, and the feed
+    // stagger. Runs on first render and after every filter-switch panel swap.
+    function wirePanel() {
+      // Answer a friend request in place. Accept adds them back (→ mutual, they
+      // now show in each other's feeds); Ignore clears the request quietly.
+      panel.querySelectorAll('.request-accept').forEach(btn =>
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          await Store.addFriend(btn.dataset.accept);
+          renderUpdates();
+        }));
+      panel.querySelectorAll('.request-ignore').forEach(btn =>
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          await Store.removeFriend(btn.dataset.ignore);
+          renderUpdates();
+        }));
+      // A row walks you to the post itself (your profile column) with the right
+      // panel already open — the comment thread, who liked, or who's going — and
+      // the profile render scrolls that card into view (see spotlightPost).
+      panel.querySelectorAll('.notif').forEach(row =>
+        row.addEventListener('click', () => {
+          const id = row.dataset.post;
+          openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
+          if (row.dataset.kind === 'comment' || row.dataset.kind === 'mention') openComments.add(id);
+          else if (row.dataset.kind === 'like') openLikers.add(id);
+          else openGoing.add(id);
+          spotlightPost = id;
+        }));
+      // Rows rise in with the feed's stagger — request rows lead, ledger follows.
+      panel.querySelectorAll('.request-row, .notif').forEach((el, i) => {
+        el.style.animationDelay = staggerDelay(i);
+      });
+    }
+    wirePanel();
 
-    // Rows rise in with the feed's stagger, same as the Friends page — the
-    // request rows lead, the ledger follows.
-    view.querySelectorAll('.request-row, .notif').forEach((el, i) => {
-      el.style.animationDelay = staggerDelay(i);
+    wireSegTabs(tablist, NOTIF_FILTERS, () => notifFilter, (key) => {
+      notifFilter = key;
+      panel.setAttribute('aria-labelledby', 'updates-tab-' + key);
+      panel.innerHTML = panelHtml();
+      wirePanel();
     });
-
-    // A row walks you to the post itself (your profile column) with the right
-    // panel already open — the comment thread, who liked, or who's going —
-    // and the profile render scrolls that card into view (see spotlightPost).
-    view.querySelectorAll('.notif').forEach(row =>
-      row.addEventListener('click', () => {
-        const id = row.dataset.post;
-        openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
-        if (row.dataset.kind === 'comment' || row.dataset.kind === 'mention') openComments.add(id);
-        else if (row.dataset.kind === 'like') openLikers.add(id);
-        else openGoing.add(id);
-        spotlightPost = id;
-      }));
 
     // Everything has now been seen (a visit counts even under a filter) —
     // next visit, the dots move on.

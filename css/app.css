@@ -567,7 +567,11 @@ main {
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--rule);
+  /* iOS reads a search field as a FILLED capsule, not an outlined one: the fill
+     and a faint top-lit rim carry the shape, so the edge stays a barely-there
+     hairline (the old --rule border landed as a bright ring on dark paper). */
+  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent);
   border-radius: var(--radius-pill);
   padding: 0.6rem 3rem 0.6rem 1rem;   /* right pad clears the X control */
   opacity: 0;
@@ -579,12 +583,14 @@ main {
   opacity: 1;
   pointer-events: auto;
   clip-path: inset(0 0 0 0 round 999px);       /* open: full width */
-  /* Softer than a full --accent rule (bright white on dark paper): the open
-     field wears a dimmed accent outline so the glowing control leads, not the
-     border. Beats the :focus rule below on specificity, so it holds focused. */
-  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
 }
-.masthead-search-field:focus { outline: none; border-color: var(--accent); }
+/* Focus lifts the hairline just enough to read as active (keyboard a11y) without
+   the old bright --accent ring — iOS keeps the capsule quiet and lets the caret
+   and content say it's focused. */
+.masthead-search-field:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
 .masthead-search-field::placeholder { color: var(--muted); opacity: 0.6; }
 /* Kill the browser's own clear "✕" — the morphing icon already closes + clears,
    so a second X inside the field is redundant. */
@@ -624,6 +630,7 @@ main {
 }
 .filter {
   flex-shrink: 0;
+  position: relative;               /* anchors the invisible tap-target extender */
   font-size: 0.9rem;
   font-weight: 400;
   line-height: 1;
@@ -633,6 +640,24 @@ main {
   border-radius: var(--radius-pill);
   padding: 0.45rem 0.95rem;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+/* HIG tap target (shared): small pill controls stay compact + editorial, but
+   their HIT region is extended to the 44pt minimum with an invisible overlay.
+   Apple's guidance is a 44pt hit AREA, not a 44pt drawn control (their own
+   filter chips render shorter and extend touch slop the same way), so the visual
+   isn't bloated. Vertical only — horizontal is already comfortable and neighbours
+   share the row. Each host sets position:relative to anchor it. */
+.filter::after,
+.account-edit::after,
+.account-share::after,
+.friend-btn::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
 }
 /* Idle: greyed out — neutral text on a hairline, so the whole row rests quiet
    and colour is spent only on the one active filter (its glow, below). */
@@ -676,30 +701,96 @@ main {
 .filter[data-filter="activity"][aria-pressed="true"],
 .filter[data-type="activity"][aria-pressed="true"]     { --chip: var(--type-activity); }
 
-/* ── Friends page pills — the My circle / Find friends toggle, now on the same
-   rules as every other toggle: greyed when off, lit when on. My circle's "lit
-   colour" is the brand gradient (Find friends is the neutral mono toggle). */
-.filter.publish-fill {
-  color: var(--text);
+/* ── Segmented tab control (.seg-tabs) — a reusable iOS segmented control shared
+   by the view switchers (Friends' My circle / Find friends, Updates' All /
+   Mentions). One frosted-glass track (the nav pill's material, scaled to a
+   control) holds equal segments over a raised thumb that SLIDES between them, so
+   a switch reads as one deliberate control, not loose pills. Centred, self-
+   contained. Two segments; the thumb position is driven by data-sel (0|1) so the
+   control stays generic across surfaces. An optional .seg-tabs-glow lights the
+   brand gradient under the thumb at index 0 — Friends opts in for My circle's
+   identity; neutral switches (Updates) leave it off, keeping colour reserved. */
+.seg-tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto 2.4rem;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent),
+    0 6px 20px rgba(0, 0, 0, 0.10);
+}
+/* The sliding thumb — a lighter pill lifted off the track (the selected segment
+   as a raised card). It covers the first segment and translates a full segment
+   across for the second, so the choice glides rather than blinks. overflow
+   clips its glow child to the pill; the drop shadow rides outside it. */
+.seg-tabs-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  right: 50%;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--lit-rim), var(--lit-drop);
+  transition: transform var(--dur-quick) var(--ease);
+  pointer-events: none;
+}
+.seg-tabs[data-sel="1"] .seg-tabs-thumb { transform: translateX(100%); }
+/* Brand glow inside the thumb — lit only at index 0 (Friends' My circle); it
+   fades out when the second segment is active. The drifting quartet masked to a
+   soft core and blurred into coloured light, exactly the nav glide's engine. */
+.seg-tabs-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+  background-size: 300% 100%;
+  animation: publish-shift 14s ease-in-out infinite;
+  -webkit-mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 78%);
+          mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 78%);
+  filter: blur(7px) saturate(1.4) brightness(1.1);
+  opacity: 0.5;
+  transition: opacity var(--dur-quick) var(--ease);
+  pointer-events: none;
+}
+.seg-tabs[data-sel="1"] .seg-tabs-glow { opacity: 0; }
+/* Segments — equal-width toggles riding above the thumb. Muted when off, ink
+   when on; the thumb supplies the lit surface behind the active label. Centred
+   with a 44px floor so the tap target clears the iOS accessibility minimum. */
+.seg-tab {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
   transition: color var(--dur-micro) var(--ease);
 }
-/* Off: greyed like any inactive toggle, and the drifting ring is hidden — off
-   means off (opacity beats the base publish-fill's hover/focus mask-drops, so
-   it never flashes the fill when it isn't selected). */
-.filter.publish-fill:not([aria-pressed="true"]) { color: var(--muted); }
-.filter.publish-fill:not([aria-pressed="true"])::before { opacity: 0; }
-/* On: the gradient fills, near-black ink on top (AA in both modes), lit by a
-   soft warm glow that echoes the type toggles' coloured halo. */
-.filter.publish-fill[aria-pressed="true"] {
-  color: var(--on-type);
-  background: none;
-  border-color: transparent;
-  box-shadow:
-    0 0 16px color-mix(in srgb, var(--type-find) 30%, transparent),
-    0 0 7px color-mix(in srgb, var(--type-note) 24%, transparent);
+.seg-tab[aria-selected="true"] { color: var(--text); }
+@media (hover: hover) {
+  .seg-tab:not([aria-selected="true"]):hover { color: var(--text); }
 }
-.filter.publish-fill[aria-pressed="true"]::before { -webkit-mask: none; mask: none; }
-.filter.publish-fill[aria-pressed="true"]::after { opacity: 0.28; }
+@media (prefers-reduced-motion: reduce) {
+  .seg-tabs-thumb { transition: none; }
+  .seg-tabs-glow { animation: none; background-position: 50% 50%; }
+}
 
 /* ── Feed — editorial blocks, no boxes; whitespace + a right type-tag ──────── */
 /* Entries are separated by whitespace plus a centered hairline divider, so one
@@ -1621,6 +1712,7 @@ body.gate main { padding: 0; }
 }
 .account-edit,
 .account-share {
+  position: relative;               /* anchors the 44pt tap-target overlay */
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -1647,6 +1739,7 @@ body.gate main { padding: 0; }
 
 /* Friend toggle: filled ink to add, quiet outline once you're friends. */
 .friend-btn {
+  position: relative;               /* anchors the 44pt tap-target overlay */
   display: block;
   margin: 1.6rem auto 0;
   min-width: 148px;
