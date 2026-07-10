@@ -25,7 +25,7 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], friends: {} });
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], friends: {}, audience: [] });
   let state = empty();
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
@@ -49,6 +49,7 @@ const Store = (() => {
     if (p.location) o.location = p.location;
     if (p.event_date) o.eventDate = p.event_date;
     if (p.event_time) o.eventTime = p.event_time;
+    o.audience = p.audience || 'circle';   // 'circle' (all) or 'list' (hand-picked)
     return o;
   }
   const nameMap = () => new Map(state.users.map(u => [u.id, u.username]));
@@ -73,7 +74,7 @@ const Store = (() => {
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
-    const [u, p, c, l, h, f] = await Promise.all([
+    const [u, p, c, l, h, f, pa] = await Promise.all([
       sb.from('users').select('*'),
       sb.from('posts').select('*'),
       sb.from('comments').select('*').order('created_at', { ascending: true }),
@@ -86,6 +87,10 @@ const Store = (() => {
       // loadWorld tolerates the error and leaves the list empty).
       sb.from('headcount').select('*').order('created_at', { ascending: true }),
       sb.from('friends').select('*'),
+      // Audience allowlist for 'list' posts. RLS hands back only the rows we may
+      // see: our own memberships + every row on posts we authored (enough to show
+      // the author a "shared with N" count). Tolerates a pre-migration DB (→ []).
+      sb.from('post_audience').select('*'),
     ]);
     state.users = (u.data || []).map(mapUser);
     const nameById = nameMap();
@@ -96,6 +101,7 @@ const Store = (() => {
     }));
     state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
     state.headcount = (h.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
+    state.audience = (pa.data || []).map(row => ({ postId: row.post_id, userId: row.user_id }));
     // Directed "add" edges: a row (a, b) means a has added b. A friendship is
     // mutual only when both directions exist; a lone edge is a pending request.
     // The map keys each user to the people THEY have added (out-edges only).
@@ -184,6 +190,10 @@ const Store = (() => {
     return [...state.posts].sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
   }
   const postsBy = (username) => posts().filter(p => p.author === username);
+
+  // How many people a targeted post is shared with. Accurate for posts you
+  // authored (RLS gives you all their allowlist rows); 0 for others' posts.
+  const audienceCount = (postId) => state.audience.filter(a => a.postId === postId).length;
 
   // ── Auth (async writes) ────────────────────────────────────────────────────
   // Create an account: Supabase Auth owns the email + password; the username and
@@ -309,6 +319,11 @@ const Store = (() => {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
     const row = { author: idOf(me), type: data.type, tags: data.tags || [] };
+    // Targeted only when the composer picked 'list' AND named at least one person;
+    // "choose people" with nobody picked falls back to the whole circle.
+    const targetIds = (data.audience === 'list' ? (data.audienceUsers || []) : [])
+      .map(idOf).filter(Boolean);
+    row.audience = targetIds.length ? 'list' : 'circle';
     if (data.title)    row.title = data.title;
     if (data.url)      row.url = data.url;
     if (data.note)     row.note = data.note;
@@ -322,6 +337,20 @@ const Store = (() => {
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
     if (error) return { ok: false, error: 'Couldn’t publish, try again.' };
+
+    // Lock down the audience for a targeted post. If this write fails we undo the
+    // post rather than leave it half-shared (a 'list' post with no allowlist would
+    // be visible to the author only, which is confusing, not private-as-intended).
+    if (targetIds.length) {
+      const { error: aerr } = await sb.from('post_audience')
+        .insert(targetIds.map(uid => ({ post_id: inserted.id, user_id: uid })));
+      if (aerr) {
+        await sb.from('posts').delete().eq('id', inserted.id);
+        return { ok: false, error: 'Couldn’t set who can see it, try again.' };
+      }
+      for (const uid of targetIds) state.audience.push({ postId: inserted.id, userId: uid });
+    }
+
     const post = mapPost(inserted, nameMap());
     state.posts.push(post);
     return { ok: true, post };
@@ -338,6 +367,7 @@ const Store = (() => {
     state.comments = state.comments.filter(c => c.postId !== id);
     state.likes = state.likes.filter(x => x.postId !== id);
     state.headcount = state.headcount.filter(x => x.postId !== id);
+    state.audience = state.audience.filter(x => x.postId !== id);
     return { ok: true };
   }
 
@@ -603,7 +633,7 @@ const Store = (() => {
 
   return {
     init, refresh,
-    users, user, currentUser, friends, friendsOf, feed, posts, postsBy,
+    users, user, currentUser, friends, friendsOf, feed, posts, postsBy, audienceCount,
     // Auth
     session, isAuthed, signup, login, logout,
     // Friends

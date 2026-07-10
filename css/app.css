@@ -1176,6 +1176,10 @@ main {
   margin: -0.1rem 0 0.6rem;
 }
 .card-location + .card-location { margin-top: -0.35rem; }
+/* Activities now stack where/when under the caption rather than the title —
+   the caption (plain or clamped by Read-more) carries no bottom margin of its
+   own, so give the first meta line room to breathe here instead. */
+.card-note + .card-location, .readmore + .card-location { margin-top: 0.6rem; }
 /* The where-line links out to maps. Same quiet look, underline on the place
    name so it reads as tappable, darkens on hover like other links. */
 .card-location-link {
@@ -1387,15 +1391,34 @@ main {
 .mention { font-weight: 700; font-style: italic; color: var(--text); text-decoration: none; }
 @media (hover: hover) { a.mention:hover { color: var(--muted); } }
 
+/* Floating autocomplete popover (mentions + location). A frosted-glass menu in
+   the same material as the nav pill and glass modals, menu-scaled: the content
+   behind it saturates through the blur, a hairline border and lit rim catch the
+   edge, and a soft float shadow lifts it off the field. 14px sits between the
+   12px composer inputs it hovers over and the 20px glass cards — a coherent step
+   in the corner scale. */
 .mention-list {
   list-style: none;
   margin: 0.4rem 0 0;
   padding: 0.3rem;
   max-height: 210px;
   overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  backdrop-filter: blur(30px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
+    0 12px 30px rgba(0, 0, 0, 0.18);
+}
+@media (prefers-color-scheme: dark) {
+  .mention-list {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
+      0 12px 30px rgba(0, 0, 0, 0.5);
+  }
 }
 .mention-list [role="option"] {
   display: flex;
@@ -1431,7 +1454,7 @@ main {
   width: 100%;
   height: auto;
   background: var(--surface-2);
-  border-radius: var(--radius-img);
+  border-radius: 14px;
 }
 /* Legacy photos carry no stamped size, so we can't hand the <img> width/height
    to reserve space. Hold a neutral box until it loads (JS drops this class on
@@ -1870,9 +1893,11 @@ body.gate main { padding: 0; }
 }
 .friends-share-ico { width: 15px; height: 15px; }
 
-/* ── Push pre-prompt — the soft ask on Updates. An editorial card (hairline
-   frame, serif title), not a system alert; the affirmative action wears the
-   Post button's gradient, the dismiss stays a quiet ghost. ── */
+/* ── Push pre-prompt — the soft ask on Updates. Still editorial (serif title,
+   not a system alert), but on the same frosted-glass card material as the
+   notifications it sits above, so the head of the Updates list reads as one
+   family. The affirmative action wears the Post button's gradient, the dismiss
+   stays a quiet ghost. ── */
 .push-ask {
   display: flex;
   flex-wrap: wrap;
@@ -1880,9 +1905,22 @@ body.gate main { padding: 0; }
   gap: 0.85rem 1.2rem;
   margin: 0.35rem 0 1.5rem;
   padding: 1rem 1.15rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
-  background: var(--surface);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.10);
+}
+@media (prefers-color-scheme: dark) {
+  .push-ask {
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
+      0 6px 18px rgba(0, 0, 0, 0.4);
+  }
 }
 .push-ask-copy { flex: 1 1 15rem; min-width: 0; }
 .push-ask-title {
@@ -1960,19 +1998,56 @@ body.gate main { padding: 0; }
   list-style: none;
   margin-block: 0;   /* inline margins stay auto (the shared centering above) */
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;       /* discrete cards, not hairline-joined rows */
 }
+/* Each notification is its own frosted-glass card — the floating-panel material
+   (glass menus, modals) brought to content: whatever's behind saturates through
+   the blur, a hairline + lit rim catch the edge, a soft float shadow lifts it,
+   14px corners keep it in the app's card scale. Reads like an iOS notification. */
 .notif {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  padding: 0.95rem var(--inset);
-  border-bottom: 1px solid var(--rule);
+  padding: 0.95rem 1.1rem;
+  border-radius: 14px;
   color: var(--text);
-  transition: background-color var(--dur-micro) var(--ease);
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.10);
+  transition: transform var(--dur-micro) var(--ease), box-shadow var(--dur-micro) var(--ease);
   animation: rise 0.5s var(--ease) both;   /* same soft rise as friend rows */
 }
-.notif-list li:last-child .notif { border-bottom: none; }
-@media (hover: hover) { .notif:hover { background: var(--surface); } }
+@media (prefers-color-scheme: dark) {
+  .notif {
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
+      0 6px 18px rgba(0, 0, 0, 0.4);
+  }
+}
+/* Unread: a faint accent wash into the frost plus a tinted edge, so fresh items
+   glow a touch warmer than the ones you've already seen (the dot still marks it). */
+.notif--new {
+  background:
+    linear-gradient(color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 10%, transparent)),
+    color-mix(in srgb, var(--bg) 74%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+@media (hover: hover) {
+  .notif:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent),
+      0 10px 26px rgba(0, 0, 0, 0.14);
+  }
+}
+.notif:active { transform: translateY(0); }
 .notif-body {
   display: flex;
   flex-direction: column;
@@ -2073,6 +2148,18 @@ body.gate main { padding: 0; }
 .type-opt { flex: 1; text-align: center; padding-inline: 0.5rem; }
 
 .composer .field:first-of-type { margin-top: 0; }
+/* Softer, more iOS corners on the composer's own fields — a touch rounder than the
+   shared --radius-img (8px), staying concentric under the 20px glass surfaces and
+   in step with the filled liquid-glass Post button. Scoped to the composer + the
+   inline edit form (which mirrors the composer's field layout) so post photos and
+   other --radius-img corners are untouched. */
+.composer .field input,
+.composer .field textarea,
+.composer .field--combo,
+.composer .dropzone,
+.edit-form .field input,
+.edit-form .field textarea,
+.edit-form .field--combo { border-radius: 12px; }
 .composer-error {
   color: var(--type-find-ink);
   font-size: 0.85rem;
@@ -2101,24 +2188,155 @@ body.gate main { padding: 0; }
 }
 @media (hover: hover) { .composer-submit:not(.publish-fill):hover { background: var(--lit-top), var(--accent-press); } }
 
-/* The composer's own Post button: a centred, wider, outlined pill. Centring keeps
-   it clear of the floating "+" (which used to sit on top of the right-aligned
-   fill), and the outline reads as a calm, deliberate commit rather than a slab. */
+/* The composer's own Post button: a centred, wider pill. Centring keeps it clear
+   of the floating "+" (which used to sit on top of the right-aligned fill). It
+   wears the same shifting-pastel liquid-glass fill as the nav Post and Share
+   buttons (.publish-fill.is-solid) — the hero commit reads as the brand gesture. */
 .composer .composer-post {
   margin-inline: auto;
   margin-top: 1.4rem;
   min-width: 13rem;
-  color: var(--accent);
-  background: none;
-  border: 1.5px solid var(--accent);
-  box-shadow: none;
 }
 .composer .composer-post:disabled { opacity: 0.55; }
-@media (hover: hover) {
-  .composer .composer-post:hover {
-    background: color-mix(in srgb, var(--accent) 9%, transparent);
-    color: var(--accent);
-  }
+
+/* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
+   "Shared with  Everyone in your circle ›". Reads as a field, opens the picker
+   sheet. (Design preview, demo-gated.) */
+.audience-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+@media (hover: hover) { .audience-row:hover { border-color: var(--muted); } }
+.audience-row-key { color: var(--muted); font-size: 0.9rem; }
+.audience-row-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+/* A right-pointing chevron drawn from a rotated corner (matches the → arrows). */
+.audience-row-chev {
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--muted);
+  border-top: 1.6px solid var(--muted);
+  transform: rotate(45deg);
+  margin-left: 0.1rem;
+}
+
+/* Audience sheet — a clean iOS checkmark list. No hard borders (they read as
+   harsh rings on frosted glass); selection is carried by a soft tint + an
+   accent tick. The checklist glides open/shut (grid-rows, like the About folds)
+   and its rows cascade in with the app's shared stagger. */
+/* SVG check as a MASK so the mark inherits a themed colour (accent / bg) without
+   per-theme duplicate URIs. */
+:root {
+  --check-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+
+/* Two modes grouped in one inset-list card, split by a hairline — no outlines. */
+.aud-modes {
+  border-radius: 12px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  margin-bottom: 0.6rem;
+}
+.aud-mode {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.04rem 0.6rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.72rem 0.9rem;
+  border: 0;                 /* kill the UA default 2px outset button border */
+  background: none;
+  color: var(--text);
+  transition: background-color 0.15s;
+}
+.aud-mode + .aud-mode { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent); }
+.aud-mode[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.aud-mode-t { grid-column: 1; font-weight: 700; font-size: 0.95rem; }
+.aud-mode-d { grid-column: 1; font-size: 0.82rem; color: var(--muted); }
+.aud-mode-tick {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  -webkit-mask: var(--check-mask) center / contain no-repeat;
+          mask: var(--check-mask) center / contain no-repeat;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.aud-mode[aria-pressed="true"] .aud-mode-tick { opacity: 1; transform: scale(1); }
+
+/* Collapsible checklist: grid-rows 0fr→1fr glide (matches .about-fold-panel). */
+.aud-list-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.32s var(--ease), opacity 0.24s ease;
+}
+.aud-list-wrap.is-open { grid-template-rows: 1fr; opacity: 1; }
+.aud-list-wrap > .aud-list { min-height: 0; }
+
+.aud-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.55rem 1.6rem;
+  border: 0;                 /* kill the UA default 2px outset button border */
+  background: none;
+  color: var(--text);
+  text-align: left;
+  animation: rise 0.4s var(--ease) both;   /* the app's shared row entrance */
+}
+.aud-pick .aud-avatar { width: 44px; height: 44px; font-size: 1.1rem; }
+/* Trailing selector: a soft empty ring at rest (never a hard white outline),
+   an accent disc with a bg-coloured check when picked. */
+.aud-check {
+  position: relative;
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--text) 16%, transparent);
+  transition: background-color 0.14s, border-color 0.14s;
+}
+.aud-check::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  -webkit-mask: var(--check-mask) center / 12px no-repeat;
+          mask: var(--check-mask) center / 12px no-repeat;
+  opacity: 0;
+  transition: opacity 0.14s;
+}
+.aud-pick[aria-checked="true"] .aud-check { background: var(--accent); border-color: var(--accent); }
+.aud-pick[aria-checked="true"] .aud-check::after { opacity: 1; }
+@media (hover: hover) { .aud-pick:hover { background: color-mix(in srgb, var(--text) 4%, transparent); } }
+.aud-empty { color: var(--muted); text-align: center; padding: 1.2rem 0; }
+@media (prefers-reduced-motion: reduce) {
+  .aud-list-wrap { transition: opacity 0.2s ease; }
+  .aud-pick { animation: none; }
 }
 
 /* Photo: dropzone → square crop with drag-to-reposition. */
@@ -2134,6 +2352,7 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-img);
   cursor: pointer;
 }
+.dropzone[hidden] { display: none; }
 @media (hover: hover) { .dropzone:hover { border-color: var(--muted); } }
 .dropzone-btn {
   color: var(--text);
@@ -2181,6 +2400,7 @@ body.gate main { padding: 0; }
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.crop-replace[hidden] { display: none; }
 @media (hover: hover) { .crop-replace:hover { color: var(--text); } }
 
 /* ── Modal (avatar editor) — a frosted overlay + a calm card ───────────────── */
@@ -2282,13 +2502,16 @@ body.gate main { padding: 0; }
 }
 .modal-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
 
-/* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar. */
+/* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar.
+   Tops the whole stack (above modals at 250 and the filter layer at 400): the
+   notifications toggle lives inside the Edit profile modal, so its confirmation
+   toast has to clear that veil or it flashes invisibly behind it. */
 .toast {
   position: fixed;
   left: 50%;
   bottom: calc(98px + env(safe-area-inset-bottom));
   transform: translate(-50%, 0.8rem);
-  z-index: 200;
+  z-index: 500;
   max-width: min(88vw, 340px);
   padding: 0.7rem 1.1rem;
   background: var(--text);
@@ -2668,10 +2891,9 @@ body.gate main { padding: 0; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
   .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
-  /* Tighter inset to the phone text column; slightly softer corners than desktop.
-     Tap still opens full-screen. */
+  /* Tighter inset to the phone text column. Tap still opens full-screen.
+     (Photo corners are a unified 14px across breakpoints — see .photo img.) */
   .photo { padding-inline: 1.15rem; }
-  .photo img { border-radius: 14px; }
   .card--photo .byline,
   .card--photo .card-solometa,
   .card--photo .card-foot { padding-inline: 1.15rem; }
@@ -2685,11 +2907,12 @@ body.gate main { padding: 0; }
      narrow screen otherwise). */
   .ambient { background: radial-gradient(ellipse 140% 52% at 50% -4%, var(--glow), transparent 76%); }
 
-  /* Friend + update rows break out to the screen edges too; back link resets
-     its inset. */
+  /* Friend + request rows break out to the screen edges too; back link resets
+     its inset. Notification cards stay inset (they're discrete glass cards, not
+     hairline rows), so they keep a margin off the screen edge and stay rounded. */
   .profile-back { padding-inline: 0; }
-  .friends-list, .notif-list, .requests-list { margin-inline: -1.15rem; }
-  .friend, .notif, .request-row { padding-inline: 1.15rem; }
+  .friends-list, .requests-list { margin-inline: -1.15rem; }
+  .friend, .request-row { padding-inline: 1.15rem; }
   .requests-kicker { padding-inline: 0; }
 
   /* Composer already sits inside the view's padding here. */
@@ -2859,7 +3082,7 @@ body.gate main { padding: 0; }
 .fb-form .auth-submit {
   display: block;
   width: auto;
-  margin-left: auto;
+  margin-inline: auto;
   padding: 0.65rem 1.4rem;
   font-size: 0.95rem;
 }

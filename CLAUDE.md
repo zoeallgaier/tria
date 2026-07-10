@@ -71,5 +71,20 @@ exempt). Voice is playful but not trying-too-hard.
 Austere, editorial, cool greyscale base. The only chromatic color is a pastel
 quartet reserved for the four post types: note = lavender, find = coral,
 photo = cyan, activity = lime. Instrument Serif on titles only; Oxygen everywhere
-else. 3px radius; circular avatars. Don't touch the hue-drift gate wash — Zoe
-loves it. All motion is reduced-motion aware.
+else. Circular avatars. Don't touch the hue-drift gate wash — Zoe loves it. All
+motion is reduced-motion aware.
+
+**Liquid glass — the material rule.** Frosted glass (translucent fill + backdrop
+blur + hairline border + lit top rim + float shadow) is reserved for the layer
+that *floats above* content, never for content itself. Two tiers: **chrome**
+(nav rail, seg-tabs, search field, nav dial — `blur(18–24px)`) and **floating
+panels** (modals, autocomplete menus, and the Updates notification + soft-ask
+cards — `blur(24–30px)`). Content lists — the feed, the Friends *directory*,
+comments — stay flat editorial rows. The Friends *modal* (a popover) is glass;
+the Friends *page* (a roster) is flat — that split is correct, not inconsistent
+(mirrors iOS: lock-screen notifications are glass, Contacts rows are not).
+**Corner scale:** 3px incidental (`--radius`) · 8px small containers
+(`--radius-img`) · 12px composer inputs · 14px photos + glass menus/cards ·
+18px nav rail · 20px glass modals · 999px pills. The pastel `publish-fill`
+gradient stays reserved for the primary publish/share action — don't spread it
+to every button, or it stops meaning anything.

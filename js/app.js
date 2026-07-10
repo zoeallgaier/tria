@@ -86,6 +86,8 @@
     // Magnifier for the Friends search field, and the X it morphs into when open.
     search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
+    // Padlock — marks an activity shared with a hand-picked few, not the whole circle.
+    lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -766,8 +768,8 @@
         `</a>`
       : cardNoteHtml(post);
 
-    // Activities carry a when-line and a where-line under the title — a quiet
-    // calendar + day (and time), then pin + place. Same voice, stacked.
+    // Activities carry a where-line and a when-line under the caption — a quiet
+    // pin + place, then calendar + day (and time). Same voice, stacked.
     const whenHtml = post.type === 'activity' && post.eventDate
       ? `<p class="card-location">${svgIcon('cal', 'card-location-ico')}` +
           `<span>${esc(eventWhenLabel(post.eventDate, post.eventTime))}</span></p>`
@@ -777,14 +779,25 @@
           `target="_blank" rel="noopener noreferrer">${svgIcon('pin', 'card-location-ico')}` +
           `<span>${esc(post.location)}</span></a></p>`
       : '';
+    // Targeted activity: a quiet lock line. The author sees the headcount they
+    // picked (feed + their profile); an invited viewer just sees that it's private
+    // (they can't read the full allowlist anyway — RLS hands them only their row).
+    const iAmAuthor = post.author === Store.session();
+    const audienceHtml = post.type === 'activity' && post.audience === 'list'
+      ? `<p class="card-location card-audience">${svgIcon('lock', 'card-location-ico')}` +
+          `<span>${iAmAuthor
+            ? `Shared with ${audienceCountLabel(Store.audienceCount(post.id))}`
+            : 'Shared privately'}</span></p>`
+      : '';
 
     el.innerHTML =
       `<div class="card-main">` +
         head +
         titleHtml +
-        whenHtml +
-        locationHtml +
         noteHtml +
+        locationHtml +
+        whenHtml +
+        audienceHtml +
         tagChips(post) +
         actions +
       `</div>` +
@@ -1152,29 +1165,32 @@
         `<p class="field-hint">Optional · separate with commas.</p>` +
       `</div>`;
 
+    // Combined title + note box, mirroring the composer's field--combo so create
+    // and edit read the same. The title rides as the lead, the note beneath it.
+    const combo = (titlePh, titleAria, notePh, noteAria, rows) =>
+      `<div class="field field--combo">` +
+        `<input id="e-title" class="combo-title" type="text" maxlength="120" ` +
+          `value="${esc(post.title || '')}" placeholder="${titlePh}" aria-label="${titleAria}">` +
+        `<div class="combo-divider" aria-hidden="true"></div>` +
+        `<textarea id="e-note" class="combo-note" rows="${rows}" maxlength="5000" ` +
+          `placeholder="${notePh}" aria-label="${noteAria}">${esc(post.note || '')}</textarea>` +
+      `</div>`;
+
     if (post.type === 'find') {
-      return `<div class="field">` +
+      return combo('Title (optional)', 'Title', 'Why’s it worth their two minutes?', 'Why share it', 2) +
+        `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
             `spellcheck="false" value="${esc(post.url || '')}" placeholder="https://…">` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="e-title">Title</label>` +
-          `<input id="e-title" type="text" maxlength="120" ` +
-            `value="${esc(post.title || '')}" placeholder="What is it?">` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="e-note">Why share it?</label>` +
-          `<textarea id="e-note" rows="2" maxlength="5000" ` +
-            `placeholder="A line on why it’s worth a look.">${esc(post.note || '')}</textarea>` +
         `</div>` + tagsInput;
     }
 
     if (post.type === 'activity') {
-      return `<div class="field">` +
-          `<label for="e-title">What’s the plan?</label>` +
-          `<input id="e-title" type="text" maxlength="120" ` +
-            `value="${esc(post.title || '')}" placeholder="Picnic at the park">` +
+      return combo('Picnic at the park', 'What’s the plan?', 'When to show up, what to bring.', 'Details', 2) +
+        `<div class="field">` +
+          `<label for="e-location">Where</label>` +
+          `<input id="e-location" type="text" maxlength="120" ` +
+            `value="${esc(post.location || '')}" placeholder="Liberty Park, by the pond">` +
         `</div>` +
         `<div class="field">` +
           `<label for="e-date">When</label>` +
@@ -1182,17 +1198,7 @@
             `<input id="e-date" type="date" placeholder="mm/dd/yyyy" value="${esc(post.eventDate || '')}">` +
             `<input id="e-time" type="time" aria-label="Time" placeholder="--:-- --" value="${esc(post.eventTime || '')}">` +
           `</div>` +
-          `<p class="field-hint">Optional.</p>` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="e-location">Where</label>` +
-          `<input id="e-location" type="text" maxlength="120" ` +
-            `value="${esc(post.location || '')}" placeholder="Liberty Park, by the pond">` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="e-note">Details</label>` +
-          `<textarea id="e-note" rows="2" maxlength="5000" ` +
-            `placeholder="When to show up, what to bring.">${esc(post.note || '')}</textarea>` +
+          `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
         `</div>` + tagsInput;
     }
 
@@ -1205,16 +1211,7 @@
     }
 
     // post
-    return `<div class="field">` +
-        `<label for="e-title">Headline</label>` +
-        `<input id="e-title" type="text" maxlength="120" ` +
-          `value="${esc(post.title || '')}" placeholder="Optional, a title for longer thoughts.">` +
-      `</div>` +
-      `<div class="field">` +
-        `<label for="e-note">What’s on your mind?</label>` +
-        `<textarea id="e-note" rows="4" maxlength="5000" ` +
-          `placeholder="Say it plainly.">${esc(post.note || '')}</textarea>` +
-      `</div>` + tagsInput;
+    return combo('Headline (optional)', 'Headline', 'Say it plainly.', 'Your note', 4) + tagsInput;
   }
 
   function makeEditCard(post) {
@@ -1897,7 +1894,7 @@
         `<span class="friend-go" aria-hidden="true">→</span>` +
       `</a>`).join('');
     modal.innerHTML =
-      `<div class="modal-card modal-card--list">` +
+      `<div class="modal-card modal-card--glass modal-card--list">` +
         `<h2 class="modal-title">${esc(u.name)}’s friends</h2>` +
         `<div class="friends-list friends-list--modal">${rows}</div>` +
         `<div class="modal-actions">` +
@@ -2691,6 +2688,13 @@
   let pubType = 'note';
   let cropper = null;   // set once a photo is chosen; .export() → data-URI
 
+  // Audience targeting for activities. mode 'circle' = everyone in your circle
+  // (default, unchanged behaviour); 'list' = only the chosen usernames, enforced
+  // server-side by RLS (posts.audience + the post_audience allowlist).
+  let pubAudience = { mode: 'circle', users: [] };
+  const audienceCountLabel = (n) =>
+    n === 0 ? 'Choose people' : n === 1 ? '1 person' : `${n} people`;
+
   // A rotating cast of example tags for the composer's Tags placeholder — two
   // picked at random each time the field mounts, so it never goes stale.
   const TAG_PLACEHOLDERS = [
@@ -2724,27 +2728,37 @@
       `</div>`;
 
     if (type === 'find') {
-      return `<div class="field">` +
-          `<label for="c-url">Link</label>` +
-          `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
-            `spellcheck="false" placeholder="https://…" autofocus>` +
-        `</div>` +
-        // Title + why-share ride in one bordered box, split by a divider — the
-        // headline reads as the lead, the caption as the note beneath it.
-        `<div class="field field--combo">` +
+      // Title + why-share ride in one bordered box, split by a divider — the
+      // headline reads as the lead, the caption as the note beneath it. The
+      // link rides below, same as every other type keeps its text up top.
+      return `<div class="field field--combo">` +
           `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
             `placeholder="Title (optional)" aria-label="Title">` +
           `<div class="combo-divider" aria-hidden="true"></div>` +
           `<textarea id="c-note" class="combo-note" rows="2" maxlength="5000" ` +
             `placeholder="Why’s it worth their two minutes?" aria-label="Why share it"></textarea>` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="c-url">Link</label>` +
+          `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
+            `spellcheck="false" placeholder="https://…" autofocus>` +
         `</div>` + tags;
     }
 
     if (type === 'activity') {
-      return `<div class="field">` +
-          `<label for="c-title">What’s the plan?</label>` +
-          `<input id="c-title" type="text" maxlength="120" ` +
-            `placeholder="Picnic at the park" autofocus>` +
+      // Headline + details ride in one bordered box, split by a divider — same
+      // combo pattern as find and note, so all four types read the same up top.
+      return `<div class="field field--combo">` +
+          `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
+            `placeholder="Picnic at the park" aria-label="What's the plan?" autofocus>` +
+          `<div class="combo-divider" aria-hidden="true"></div>` +
+          `<textarea id="c-note" class="combo-note" rows="2" maxlength="5000" ` +
+            `placeholder="When to show up, what to bring." aria-label="Details"></textarea>` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="c-location">Where</label>` +
+          `<input id="c-location" type="text" maxlength="120" ` +
+            `placeholder="Liberty Park, by the pond">` +
         `</div>` +
         `<div class="field">` +
           `<label for="c-date">When</label>` +
@@ -2754,35 +2768,26 @@
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
         `</div>` +
-        `<div class="field">` +
-          `<label for="c-location">Where</label>` +
-          `<input id="c-location" type="text" maxlength="120" ` +
-            `placeholder="Liberty Park, by the pond">` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-note">Details</label>` +
-          `<textarea id="c-note" rows="2" maxlength="5000" ` +
-            `placeholder="When to show up, what to bring."></textarea>` +
-        `</div>` + tags;
+        audienceRowHtml() + tags;
     }
 
     if (type === 'photo') {
       return `<div class="field">` +
+          `<label for="c-note">Caption</label>` +
+          `<textarea id="c-note" rows="2" maxlength="5000" ` +
+            `placeholder="Say something, or let the photo do the talking."></textarea>` +
+        `</div>` +
+        `<div class="field">` +
           `<label>Photo</label>` +
           `<input id="c-file" type="file" accept="image/*" hidden>` +
           `<div class="dropzone" id="c-drop">` +
             `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo</button>` +
-            `<p class="field-hint">JPG or PNG · shown as you shot it.</p>` +
+            `<p class="field-hint">JPG or PNG</p>` +
           `</div>` +
           `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
           `</div>` +
           `<button type="button" class="crop-replace" id="c-replace" hidden>Replace photo</button>` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-note">Caption</label>` +
-          `<textarea id="c-note" rows="2" maxlength="5000" ` +
-            `placeholder="Say something, or let the photo do the talking."></textarea>` +
         `</div>` + tags;
     }
 
@@ -2795,6 +2800,124 @@
         `<textarea id="c-note" class="combo-note" rows="4" maxlength="5000" ` +
           `placeholder="${esc(randomNotePlaceholder())}" aria-label="Your note" autofocus></textarea>` +
       `</div>` + tags;
+  }
+
+  // ── Audience picker (design preview) ──────────────────────────────────────
+  // A settings-style disclosure row under the activity fields: label left, the
+  // current audience + a chevron right. Tapping opens a glass sheet to switch
+  // between the whole circle and a hand-picked list (reuses the friend rows and
+  // the mention/tagging model). Demo-gated until the backend lands.
+  function audienceRowHtml() {
+    const val = pubAudience.mode === 'circle'
+      ? 'Everyone in your circle'
+      : audienceCountLabel(pubAudience.users.length);
+    return `<div class="field">` +
+        `<button type="button" class="audience-row" id="c-audience">` +
+          `<span class="audience-row-key">Shared with</span>` +
+          `<span class="audience-row-val" id="c-audience-val">${esc(val)}` +
+            `<span class="audience-row-chev" aria-hidden="true"></span></span>` +
+        `</button>` +
+        `<p class="field-hint">Everyone in your circle can see this, or pick a few.</p>` +
+      `</div>`;
+  }
+  function wireAudienceRow(root) {
+    const btn = root.querySelector('#c-audience');
+    if (btn) btn.addEventListener('click', () => openAudienceSheet(root));
+  }
+  function openAudienceSheet(root) {
+    const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
+      .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
+    const chosen = new Set(pubAudience.users);
+    let mode = pubAudience.mode;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Who can see this');
+
+    const pickRows = friends.map((f, i) =>
+      `<button type="button" class="aud-pick" role="checkbox" data-user="${esc(f.username)}" ` +
+        `aria-checked="${chosen.has(f.username)}" style="animation-delay:${staggerDelay(i)}">` +
+        avatarEl(f, { cls: 'aud-avatar' }) +
+        `<span class="friend-text">` +
+          `<span class="friend-name">${esc(f.name)}</span>` +
+          `<span class="friend-user">@${esc(f.username)}</span>` +
+        `</span>` +
+        `<span class="aud-check" aria-hidden="true"></span>` +
+      `</button>`).join('');
+
+    const modeBtn = (m, t, d) =>
+      `<button type="button" class="aud-mode" data-mode="${m}" aria-pressed="${mode === m}">` +
+        `<span class="aud-mode-t">${t}</span><span class="aud-mode-d">${d}</span>` +
+        `<span class="aud-mode-tick" aria-hidden="true"></span>` +
+      `</button>`;
+
+    modal.innerHTML =
+      `<div class="modal-card modal-card--glass modal-card--list">` +
+        `<h2 class="modal-title">Who can see this?</h2>` +
+        `<div class="aud-modes">` +
+          modeBtn('circle', 'Everyone in your circle', 'All your mutual friends') +
+          modeBtn('list', 'Choose people', 'Only who you pick') +
+        `</div>` +
+        `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}">` +
+          `<div class="aud-list friends-list--modal">` +
+            (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
+          `</div>` +
+        `</div>` +
+        `<div class="modal-actions">` +
+          `<button type="button" class="composer-submit publish-fill is-solid" id="aud-done">Done</button>` +
+        `</div>` +
+      `</div>`;
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    const listWrap = modal.querySelector('.aud-list-wrap');
+    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onEsc);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    modal.querySelectorAll('.aud-mode').forEach(b =>
+      b.addEventListener('click', () => {
+        mode = b.dataset.mode;
+        modal.querySelectorAll('.aud-mode').forEach(x =>
+          x.setAttribute('aria-pressed', String(x.dataset.mode === mode)));
+        // Expand/collapse the checklist (grid-rows glide, matching the About folds);
+        // re-stamp the row stagger so they cascade in fresh each time it opens.
+        listWrap.classList.toggle('is-open', mode === 'list');
+        if (mode === 'list') {
+          modal.querySelectorAll('.aud-pick').forEach((row, i) => {
+            row.style.animation = 'none';
+            void row.offsetWidth;                 // reflow so the restart takes
+            row.style.animation = '';
+            row.style.animationDelay = staggerDelay(i);
+          });
+        }
+      }));
+
+    modal.querySelectorAll('.aud-pick').forEach(b =>
+      b.addEventListener('click', () => {
+        const u = b.dataset.user;
+        if (chosen.has(u)) chosen.delete(u); else chosen.add(u);
+        b.setAttribute('aria-checked', String(chosen.has(u)));
+      }));
+
+    modal.querySelector('#aud-done').addEventListener('click', () => {
+      // Picking nobody in "Choose people" is really the whole circle again.
+      const users = [...chosen];
+      pubAudience = (mode === 'list' && users.length)
+        ? { mode: 'list', users }
+        : { mode: 'circle', users: [] };
+      const valEl = root.querySelector('#c-audience-val');
+      if (valEl) {
+        valEl.textContent = pubAudience.mode === 'circle'
+          ? 'Everyone in your circle'
+          : audienceCountLabel(pubAudience.users.length);
+        valEl.insertAdjacentHTML('beforeend', `<span class="audience-row-chev" aria-hidden="true"></span>`);
+      }
+      close();
+    });
   }
 
   function renderPublish() {
@@ -2810,7 +2933,7 @@
           `</div>` +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
-          `<button class="composer-submit composer-post" type="submit">Post</button>` +
+          `<button class="composer-submit composer-post publish-fill is-solid" type="submit">Post</button>` +
         `</form>` +
       `</section>`;
 
@@ -2818,6 +2941,7 @@
 
     function mountFields() {
       cropper = null;
+      pubAudience = { mode: 'circle', users: [] };   // each fresh composer defaults to the full circle
       // Fresh fields carry no pending photo decode — clear any hold left on Post
       // (e.g. switching type away from a photo mid-decode; see wirePhotoPicker).
       const submitBtn = view.querySelector('.composer-submit');
@@ -2828,6 +2952,7 @@
       if (pubType === 'activity') {
         wireWhenHints(fieldsEl);
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
+        wireAudienceRow(fieldsEl);
       }
       view.querySelectorAll('.type-opt').forEach(b =>
         b.setAttribute('aria-pressed', String(b.dataset.type === pubType)));
@@ -3006,6 +3131,8 @@
       if (data.eventTime && !data.eventDate) {
         errEl.textContent = 'Add a date to go with that time.'; return;
       }
+      data.audience = pubAudience.mode;          // 'circle' | 'list'
+      data.audienceUsers = pubAudience.users;    // usernames when 'list'
     } else if (pubType === 'photo') {
       if (!cropper) { errEl.textContent = 'Choose a photo first.'; return; }
       data.image = cropper.export();
