@@ -73,6 +73,20 @@
   --grain: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='140'%20height='140'%3E%3Cfilter%20id='g'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.72'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url%28%23g%29'/%3E%3C/svg%3E");
   --grain-opacity: 0.1;
 
+  /* Lit surfaces — one shared "light from above" cue for every filled control,
+     so buttons and active chips read as lit objects rather than flat swatches
+     (the same light the + FAB's radial dome uses). --lit-top is a sheen layered
+     OVER a solid fill (bright top fading to a base shade); the shadows give the
+     rim highlight, the pooled base shade, and a soft lift. Kept low so it stays
+     editorial, not glossy. */
+  --lit-top:  linear-gradient(180deg,
+                rgba(255, 255, 255, 0.18) 0%,
+                rgba(255, 255, 255, 0) 44%,
+                rgba(0, 0, 0, 0.12) 100%);
+  --lit-rim:  inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --lit-base: inset 0 -3px 6px rgba(0, 0, 0, 0.10);
+  --lit-drop: 0 2px 8px rgba(0, 0, 0, 0.14);
+
   /* Motion — one signature easeOut carries every considered move (pages, cards,
      reveals). Soft, never springy; durations step in a small, calm scale. */
   --ease:      cubic-bezier(0.16, 1, 0.3, 1);  /* signature easeOut — settles gently */
@@ -115,6 +129,15 @@
     --heart-find:     var(--type-find-ink);
     --heart-photo:    var(--type-photo-ink);
     --heart-activity: var(--type-activity-ink);
+
+    /* Lit surfaces on dark paper: the top-white sheen barely reads on the
+       near-white fills, so lean on a deeper base shade and a stronger lift. */
+    --lit-top:  linear-gradient(180deg,
+                  rgba(255, 255, 255, 0.14) 0%,
+                  rgba(255, 255, 255, 0) 40%,
+                  rgba(0, 0, 0, 0.16) 100%);
+    --lit-base: inset 0 -3px 6px rgba(0, 0, 0, 0.14);
+    --lit-drop: 0 3px 13px rgba(0, 0, 0, 0.5);
 
     /* Dark glass needs a touch more opacity to keep chrome legible over content. */
     --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);

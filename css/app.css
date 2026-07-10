@@ -57,21 +57,10 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 }
 body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
 
-/* About (signed in): the same self-lit blue glow the gate wears, but kept on
-   the top-anchored, scroll-away .ambient base (absolute, not fixed) so it
-   greets you at the masthead and scrolls off before the guidelines text —
-   rather than washing behind a page of reading. Fades in on the base opacity
-   transition and carries the gate's slow hue-drift, so it eases in and moves
-   like the others. */
-body[data-ambient="about"] .ambient {
-  --glow: rgba(52, 120, 236, 0.36);
-  opacity: 1;
-  animation: hue-drift 30s linear infinite;
-  transform: translateZ(0);   /* keep the drifting filter off the scroll path */
-}
-@media (prefers-reduced-motion: reduce) {
-  body[data-ambient="about"] .ambient { animation: none; }
-}
+/* About (signed in) shares the gate's locked bottom wash (see the rule just
+   below): the same self-lit blue glow, pinned to the viewport bottom and rising
+   up under the guidelines and the floating nav — position-locked, no longer the
+   top-anchored scroll-away wash. */
 
 /* Login / gate screen: there's no photo to sample, so the wash lights itself
    and drifts slowly through the hue wheel. It's flipped to the BOTTOM — the
@@ -86,7 +75,8 @@ body[data-ambient="about"] .ambient {
    over flat paper, sliding as the toolbar collapsed. inset:0 lets the box reach
    the true viewport bottom, tucking the glow's bright base behind the browser
    chrome. The GPU promotion keeps the hue-drift filter off the scroll path. */
-body.gate .ambient {
+body.gate .ambient,
+body[data-ambient="about"] .ambient {
   position: fixed;
   inset: 0;
   height: auto;
@@ -102,7 +92,8 @@ body.gate .ambient {
 
 @media (prefers-reduced-motion: reduce) {
   .ambient { transition: none; }
-  body.gate .ambient { animation: none; }
+  body.gate .ambient,
+  body[data-ambient="about"] .ambient { animation: none; }
 }
 
 /* ── Grain ──────────────────────────────────────────────────────────────────
@@ -249,6 +240,30 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
+/* Status-bar legibility scrim — only the installed iOS shell needs it (see the
+   note by the element in index.html). Off everywhere else. On a device with no
+   top inset env(safe-area-inset-top) is 0, so it self-collapses to nothing. */
+.statusbar-scrim { display: none; }
+@media (display-mode: standalone) and (max-width: 680px) {
+  .statusbar-scrim {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    z-index: 102;                 /* above the frosted topbar (100) so it backs the glyphs there too */
+    pointer-events: none;
+    opacity: 0.7;                 /* baseline: topbar's frosted glass shares the load */
+    background: linear-gradient(180deg,
+      rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0.12) 50%, transparent 100%);
+    transition: opacity var(--dur-move) var(--ease);
+  }
+  /* Topbar gone, bare content under the glyphs — take the scrim to full strength. */
+  .topbar--hidden ~ .statusbar-scrim { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .statusbar-scrim { transition: none; } }
+}
+
 .brand-mark {
   font-family: 'Oxygen', sans-serif;
   font-weight: 700;
@@ -258,8 +273,12 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   color: var(--text);
 }
 
-/* The header Publish action is mobile-only — on desktop the sidebar carries it. */
-.topbar-publish { display: none; }
+/* On desktop the pill wrapper dissolves: its links become direct flex children
+   of the sidebar column, exactly the flat list the sidebar always styled. The
+   phone styles (see the mobile block) turn it into the floating glass pill.
+   The glide (the sliding active-icon highlight) is a phone-only ornament. */
+.nav-pill { display: contents; }
+.nav-glide { display: none; }
 
 .nav {
   position: fixed;
@@ -354,7 +373,8 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   .publish-fill::after { mix-blend-mode: soft-light; }
 }
 
-/* Filled: drop the mask so the whole pill carries the gradient. */
+/* Filled: drop the mask so the whole pill carries the gradient. Kept a clean,
+   vibrant fill — no inner rim/shade, which only muddied the pastels. */
 .publish-fill:active,
 .publish-fill[aria-current="page"],
 .publish-fill:focus-visible { color: var(--on-type); }
@@ -369,6 +389,12 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   .publish-fill:hover::before { -webkit-mask: none; mask: none; }
   .publish-fill:hover::after { opacity: 0.28; }
 }
+/* Solid at rest: Post and Share Tria wear the gradient FILLED from the start
+   (the ring is the resting state everywhere else). Same as the filled state
+   above, just permanent. */
+.publish-fill.is-solid { color: var(--on-type); }
+.publish-fill.is-solid::before { -webkit-mask: none; mask: none; }
+.publish-fill.is-solid::after { opacity: 0.28; }
 .publish-fill:disabled { opacity: 0.6; }
 @keyframes publish-shift {
   0%, 100% { background-position: 0% 50%; }
@@ -506,47 +532,72 @@ main {
   padding: 0.45rem 0.95rem;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
-/* Idle: hue as text + a tinted edge, so the menu reads in color. */
-.filter[data-filter="all"],
-.filter--mono               { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
-.filter[data-filter="note"]     { color: var(--type-note-ink);     border-color: color-mix(in srgb, var(--type-note) 55%, var(--rule)); }
-.filter[data-filter="find"]     { color: var(--type-find-ink);     border-color: color-mix(in srgb, var(--type-find) 55%, var(--rule)); }
-.filter[data-filter="photo"]    { color: var(--type-photo-ink);    border-color: color-mix(in srgb, var(--type-photo) 55%, var(--rule)); }
-.filter[data-filter="activity"] { color: var(--type-activity-ink); border-color: color-mix(in srgb, var(--type-activity) 55%, var(--rule)); }
+/* Idle: greyed out — neutral text on a hairline, so the whole row rests quiet
+   and colour is spent only on the one active filter (its glow, below). */
 @media (hover: hover) {
-  .filter:not([aria-pressed="true"]):hover { border-color: currentColor; }
+  .filter:not([aria-pressed="true"]):hover {
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--text) 32%, var(--rule));
+  }
 }
-/* Active: filled with the pastel, near-black ink on top (the fills are light in
-   both modes, so --on-type holds AA either way). All stays monochrome. */
-.filter[aria-pressed="true"]                         { color: var(--bg);      background: var(--accent);        border-color: var(--accent); }
-.filter[data-filter="note"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-note);     border-color: var(--type-note); }
-.filter[data-filter="find"][aria-pressed="true"]     { color: var(--on-type); background: var(--type-find);     border-color: var(--type-find); }
-.filter[data-filter="photo"][aria-pressed="true"]    { color: var(--on-type); background: var(--type-photo);    border-color: var(--type-photo); }
-.filter[data-filter="activity"][aria-pressed="true"] { color: var(--on-type); background: var(--type-activity); border-color: var(--type-activity); }
+/* Active — NEUTRAL by default: a solid ink chip, page-coloured text, a quiet
+   colourless lift. This is the safe base for every non-type filter (All,
+   Mentions, Find friends, …) so none can land as dark ink on a dark chip. The
+   four POST TYPES override it just below with their pastel fill + hue glow. */
+.filter[aria-pressed="true"] {
+  --chip: var(--accent);
+  color: var(--bg);
+  background: var(--chip);
+  border-color: var(--chip);
+  box-shadow: 0 0 13px color-mix(in srgb, var(--text) 14%, transparent);
+}
+/* The four post types: the clean single-colour toggle — a flat pastel fill, ink
+   on top — lit from behind by a soft glow in its own hue (the "colour is light"
+   move from the nav's + button and dial). --chip carries the hue so one rule
+   lights them all. Keyed on both data-filter (home / updates rows) and data-type
+   (the composer's type picker) so a chosen post type lights up in its colour. */
+.filter[data-filter="note"][aria-pressed="true"], .filter[data-type="note"][aria-pressed="true"],
+.filter[data-filter="find"][aria-pressed="true"], .filter[data-type="find"][aria-pressed="true"],
+.filter[data-filter="photo"][aria-pressed="true"], .filter[data-type="photo"][aria-pressed="true"],
+.filter[data-filter="activity"][aria-pressed="true"], .filter[data-type="activity"][aria-pressed="true"] {
+  color: var(--on-type);
+  box-shadow:
+    0 0 15px color-mix(in srgb, var(--chip) 44%, transparent),
+    0 0 5px color-mix(in srgb, var(--chip) 30%, transparent);
+}
+.filter[data-filter="note"][aria-pressed="true"],
+.filter[data-type="note"][aria-pressed="true"]         { --chip: var(--type-note); }
+.filter[data-filter="find"][aria-pressed="true"],
+.filter[data-type="find"][aria-pressed="true"]         { --chip: var(--type-find); }
+.filter[data-filter="photo"][aria-pressed="true"],
+.filter[data-type="photo"][aria-pressed="true"]        { --chip: var(--type-photo); }
+.filter[data-filter="activity"][aria-pressed="true"],
+.filter[data-type="activity"][aria-pressed="true"]     { --chip: var(--type-activity); }
 
-/* ── Friends page pills — the same filter row, two ways. My circle borrows the
-   Post button's drifting gradient (ring at rest, full fill when active); its
-   pressed state must undo the generic .filter fill so the ::before gradient
-   shows through. */
+/* ── Friends page pills — the My circle / Find friends toggle, now on the same
+   rules as every other toggle: greyed when off, lit when on. My circle's "lit
+   colour" is the brand gradient (Find friends is the neutral mono toggle). */
 .filter.publish-fill {
-  border: none;
   color: var(--text);
   transition: color var(--dur-micro) var(--ease);
 }
-/* Any filled state — pressed, hover, press, focus — carries near-black --on-type
-   over the pastel gradient (AA in both modes; --text would wash out white-on-
-   pastel in dark). Restated here because this rule outranks publish-fill's own
-   state rules earlier in the file. */
-.filter.publish-fill[aria-pressed="true"],
-.filter.publish-fill:active,
-.filter.publish-fill:focus-visible { color: var(--on-type); background: none; }
-.filter.publish-fill[aria-pressed="true"]::before { -webkit-mask: none; mask: none; }
-/* Grain rides the pill's persistent pressed fill too (its filled state is
-   aria-pressed, not the aria-current/:active the base publish-fill lights on). */
-.filter.publish-fill[aria-pressed="true"]::after { opacity: 0.28; }
-@media (hover: hover) {
-  .filter.publish-fill:hover { color: var(--on-type); }
+/* Off: greyed like any inactive toggle, and the drifting ring is hidden — off
+   means off (opacity beats the base publish-fill's hover/focus mask-drops, so
+   it never flashes the fill when it isn't selected). */
+.filter.publish-fill:not([aria-pressed="true"]) { color: var(--muted); }
+.filter.publish-fill:not([aria-pressed="true"])::before { opacity: 0; }
+/* On: the gradient fills, near-black ink on top (AA in both modes), lit by a
+   soft warm glow that echoes the type toggles' coloured halo. */
+.filter.publish-fill[aria-pressed="true"] {
+  color: var(--on-type);
+  background: none;
+  border-color: transparent;
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--type-find) 30%, transparent),
+    0 0 7px color-mix(in srgb, var(--type-note) 24%, transparent);
 }
+.filter.publish-fill[aria-pressed="true"]::before { -webkit-mask: none; mask: none; }
+.filter.publish-fill[aria-pressed="true"]::after { opacity: 0.28; }
 
 /* ── Feed — editorial blocks, no boxes; whitespace + a right type-tag ──────── */
 /* Entries are separated by whitespace plus a centered hairline divider, so one
@@ -789,11 +840,12 @@ main {
 @media (hover: hover) { .edit-toggle:not(.is-dirty):hover { color: var(--text); } }
 .edit-toggle.is-dirty {
   color: var(--on-accent);
-  background: var(--accent);
+  background: var(--lit-top), var(--accent);
   font-weight: 700;
   padding: 0.6rem 1.4rem;
+  box-shadow: var(--lit-rim), var(--lit-drop);
 }
-@media (hover: hover) { .edit-toggle.is-dirty:hover { background: var(--accent-press); } }
+@media (hover: hover) { .edit-toggle.is-dirty:hover { background: var(--lit-top), var(--accent-press); } }
 
 /* Delete lives here now, not on the card row — a quiet destructive control on the
    far left, weighted away from Save so it's never the accidental tap. */
@@ -965,6 +1017,7 @@ main {
   overflow: hidden;
   max-height: 8.6rem;                 /* ~six lines of teaser while collapsed */
   transition: max-height 0.42s var(--ease);
+  touch-action: manipulation;         /* double-tap-to-collapse, not browser zoom */
   -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent);
           mask-image: linear-gradient(180deg, #000 58%, transparent);
 }
@@ -1136,7 +1189,9 @@ main {
 /* ── @mentions ─────────────────────────────────────────────────────────────
    A tag renders as the friend's display name, bold in the running text (not
    dressed as a link); the picker is a quiet listbox tucked under the field. */
-.mention { font-weight: 700; color: var(--text); text-decoration: none; }
+/* Italic sets a tagged name apart from the author's own voice — a leading "@Name"
+   no longer reads like the byline (which is bold roman). */
+.mention { font-weight: 700; font-style: italic; color: var(--text); text-decoration: none; }
 @media (hover: hover) { a.mention:hover { color: var(--muted); } }
 
 .mention-list {
@@ -1324,15 +1379,16 @@ body.gate main { padding: 0; }
   width: 100%;
   margin-top: 0.5rem;
   color: var(--on-accent);
-  background: var(--accent);
+  background: var(--lit-top), var(--accent);
   border: none;
   border-radius: var(--radius-pill);
   font-weight: 700;
   font-size: 1.02rem;
   padding: 0.8rem;
+  box-shadow: var(--lit-rim), var(--lit-drop);
   transition: background-color 0.15s;
 }
-.auth-submit:hover { background: var(--accent-press); }
+.auth-submit:hover { background: var(--lit-top), var(--accent-press); }
 .auth-alt { margin-top: 1.5rem; font-size: 0.88rem; color: var(--muted); text-align: center; }
 .auth-alt button {
   background: none;
@@ -1799,8 +1855,12 @@ body.gate main { padding: 0; }
 }
 /* Save-style submits stay monochrome ink; the composer's own Publish carries
    the shifting pastel fill instead (.publish-fill). */
-.composer-submit:not(.publish-fill) { color: var(--on-accent); background: var(--accent); }
-@media (hover: hover) { .composer-submit:not(.publish-fill):hover { background: var(--accent-press); } }
+.composer-submit:not(.publish-fill) {
+  color: var(--on-accent);
+  background: var(--lit-top), var(--accent);
+  box-shadow: var(--lit-rim), var(--lit-drop);
+}
+@media (hover: hover) { .composer-submit:not(.publish-fill):hover { background: var(--lit-top), var(--accent-press); } }
 
 /* Photo: dropzone → square crop with drag-to-reposition. */
 .dropzone {
@@ -1938,7 +1998,7 @@ body.gate main { padding: 0; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(78px + env(safe-area-inset-bottom));
+  bottom: calc(98px + env(safe-area-inset-bottom));
   transform: translate(-50%, 0.8rem);
   z-index: 200;
   max-width: min(88vw, 340px);
@@ -2001,60 +2061,258 @@ body.gate main { padding: 0; }
   @media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
   .brand-mark { font-size: 1.6rem; }
 
+  /* Floating liquid-glass nav: the old edge-to-edge tab bar becomes a detached
+     pill hovering above the bottom edge, with Post breaking out beside it as
+     its own round gradient button (Zoe's nav overhaul, July 2026). The .nav
+     wrapper itself is now just an invisible positioning row — the glass lives
+     on .nav-pill so the gap between pill and button stays tap-transparent. */
   .nav {
     top: auto;
-    bottom: 0;
+    bottom: calc(0.85rem + env(safe-area-inset-bottom));
     left: 0;
     right: 0;
     width: auto;
     height: auto;
+    z-index: 101;                     /* the pill + dial ride above the dial veil (100) */
     flex-direction: row;
-    justify-content: space-around;
-    gap: 0;
-    padding: 0.5rem;
-    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
-    border-right: none;
-    border-top: 1px solid var(--rule);
-    background: color-mix(in srgb, var(--bg) 92%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    /* Keep the bar on its own compositing layer. iOS Safari (standalone) will
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    padding: 0;
+    border: none;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    pointer-events: none;             /* the row spans the screen; only its children take taps */
+  }
+  .nav-pill, .nav-publish { pointer-events: auto; }
+  .nav-pill {
+    position: relative;               /* anchors the sliding .nav-glide highlight */
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    /* Glass edges: a hairline border, a top inner highlight (the "lit rim"),
+       and a soft drop under it so the pill visibly floats off the page. */
+    border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
+      0 10px 30px rgba(0, 0, 0, 0.14);
+    /* Keep the pill on its own compositing layer. iOS Safari (standalone) will
        otherwise drop a fixed + backdrop-filter element's layer after a big DOM
        swap (a page switch), leaving the nav invisible until a scroll repaints
        it. Pinning the layer here, plus the repaint nudge in route(), fixes it. */
     transform: translateZ(0);
   }
+  /* Icon-only destinations: labels stay in the DOM for the accessible name but
+     drop from view. Each target is a 46px circle, comfortably past 44px. */
   .nav-link {
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.25rem 0.6rem;
-    font-size: 0.82rem;
-  }
-  .nav-link:active { transform: scale(0.92); transition: transform 0.08s; }
-
-  /* Publish moves to the header's top-right corner as a compact outline action —
-     so the bottom bar carries just the primary destinations (Home · Friends ·
-     Profile), the way most apps do. It lives in the topbar (a plain flex child,
-     pushed right) rather than fixed inside the blurred bottom nav. */
-  .nav-publish { display: none; }         /* the sidebar copy — hidden on phones */
-  .topbar-publish {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    margin-left: auto;
-    height: 34px;
-    padding: 0 0.9rem 0 0.68rem;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    justify-content: center;
     border-radius: var(--radius-pill);
-    font-size: 0.9rem;
-    font-weight: 700;
   }
-  .topbar-publish svg { width: 17px; height: 17px; }
-  .topbar-publish:active { transform: scale(0.94); transition: transform 0.08s; }
+  .nav-link .nav-label { display: none; }
+  .nav-link .nav-ico { width: 23px; height: 23px; }
+  /* The active highlight is the glide below, not a per-link background, so it
+     can SLIDE between destinations instead of blinking from one to the next. */
+  .nav-link[aria-current="page"] { color: var(--accent); }
+  .nav-link:active { transform: scale(0.92); transition: transform 0.08s; }
+  .nav-glide {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--text) 9%, transparent);
+    opacity: 0;
+    transition: transform var(--dur-move) var(--ease), opacity var(--dur-micro) var(--ease);
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nav-glide { transition: opacity var(--dur-micro) ease; }
+  }
+
+  /* Post breaks out of the pill as a round button. On a screen a gradient
+     reads best as LIGHT, so this isn't a flat quartet disc: the four type
+     colours drift UNDERNEATH a fixed lit dome — a specular hotspot up at the
+     top-left and a soft cavity shadow pooling at the base — so it reads as a
+     glossy, lit object with a real light direction. All of it lives in the
+     ::before (the ring mask is dropped here), so there's no layer-order fight
+     with the grain (::after) or the + glyph riding on top. */
+  .nav-publish {
+    margin: 0;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    color: var(--on-type);
+    border-radius: 50%;
+    /* A tighter contact shadow under a wider ambient one — the button sits in
+       the scene rather than floating on a single flat drop. */
+    box-shadow:
+      0 2px 5px rgba(0, 0, 0, 0.18),
+      0 12px 28px rgba(0, 0, 0, 0.20);
+  }
+  .nav-publish .nav-ico { width: 25px; height: 25px; }
+  .nav-publish::after { opacity: 0.28; }
+  .nav-publish::before {
+    -webkit-mask: none;
+    mask: none;
+    background:
+      radial-gradient(72% 62% at 32% 24%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 46%),
+      radial-gradient(85% 52% at 50% 112%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 52%),
+      linear-gradient(125deg, var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    background-size: 100% 100%, 100% 100%, 300% 100%;
+    background-position: 0 0, 0 0, 0% 50%;
+    animation: publish-dome 16s ease-in-out infinite;
+  }
+  /* Only the colour band drifts; the highlight and cavity stay put, so the
+     light source never wanders. */
+  @keyframes publish-dome {
+    0%, 100% { background-position: 0 0, 0 0, 0% 50%; }
+    50%      { background-position: 0 0, 0 0, 100% 50%; }
+  }
+  /* On the compose page the destination rule above would repaint the + with
+     --accent (white in dark mode); the glyph sits on the pastel fill in every
+     state, so it always wears the on-pastel ink. */
+  .nav-publish[aria-current="page"] { color: var(--on-type); }
+  /* The + does a whole turn as it becomes the ×: a full spin plus the 45° that
+     lands the plus on its diagonal. */
+  .nav-publish .nav-ico { transition: transform var(--dur-move) var(--ease); }
+  .nav-publish.dial-open .nav-ico { transform: rotate(405deg); }
+
+  /* ── The + button's post-type speed dial ──────────────────────────────────
+     Tapping + fans these four labeled type buttons up out of the button (see
+     wireDial); the veil blurs the page behind them. Each item's icon chip
+     lines up in a column straight above the +, its label floating to the left
+     — the standard speed-dial reading. Absolutely placed inside the (fixed)
+     .nav; wireDial pins its right/bottom to the + each time it opens. */
+  .nav-dial {
+    position: absolute;
+    flex-direction: column-reverse;   /* Note (DOM-first) fans out nearest the + */
+    align-items: flex-end;
+    gap: 0.6rem;
+    pointer-events: none;             /* the items switch it back on once open */
+  }
+  /* Guarded so the `hidden` attribute still wins at rest (a bare `display: flex`
+     would outrank [hidden] and leave the empty menu in the a11y tree). */
+  .nav-dial:not([hidden]) { display: flex; }
+  .nav-dial.is-open { pointer-events: auto; }
+  .nav-dial-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    /* Collapsed: dropped onto the button and faded. Open: lifted into place,
+       each staggered a beat behind the one below it (nearest springs first). */
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+    transition:
+      opacity var(--dur-quick) var(--ease),
+      transform var(--dur-quick) var(--ease);
+  }
+  .nav-dial.is-open .nav-dial-item {
+    opacity: 1;
+    transform: none;
+    transition-delay: calc(var(--i) * 0.04s);
+  }
+  /* No pill behind the label — the blurred veil plus the chip's own shadow
+     carry the separation. A soft page-coloured halo keeps the words legible
+     over whatever content the veil is dimming. */
+  .nav-dial-label {
+    padding: 0 0.1rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    white-space: nowrap;
+    text-shadow:
+      0 0 10px var(--bg),
+      0 1px 3px color-mix(in srgb, var(--bg) 65%, transparent);
+  }
+  /* Idea (b): the type colour GLOWS from behind the glyph rather than filling a
+     chip — a soft pastel bloom on frosted glass, keynote-ish, not a hard block. */
+  .nav-dial-ico {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  }
+  .nav-dial-ico::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    /* Bloom low and off-centre so the glyph sits above the brightest part with
+       room to breathe — the colour is atmosphere, the glyph stays the figure. */
+    background: radial-gradient(64% 64% at 50% 74%, var(--glow) 0%, transparent 66%);
+    opacity: 0.7;
+  }
+  .nav-dial-ico svg { position: relative; width: 1.5rem; height: 1.5rem; }
+  .nav-dial-item:active .nav-dial-ico { transform: scale(0.92); transition: transform 0.08s; }
+
+  /* The page-dimming veil behind an open dial. */
+  .dial-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 100;                     /* over the page + topbar, under the nav (101) */
+    background: color-mix(in srgb, var(--bg) 32%, transparent);
+    backdrop-filter: blur(6px) saturate(0.9);
+    -webkit-backdrop-filter: blur(6px) saturate(0.9);
+    opacity: 0;
+    transition: opacity var(--dur-quick) var(--ease);
+  }
+  .dial-veil.is-open { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-dial-item { transform: none; transition: opacity var(--dur-micro) ease; }
+    .nav-dial.is-open .nav-dial-item { transition-delay: 0s; }
+    .nav-publish .nav-ico, .dial-veil { transition: none; }
+    /* This override sits after (and matches) the global publish-fill reduced
+       rule, so it has to re-still the FAB's dome drift itself. */
+    .nav-publish::before { animation: none; background-position: 0 0, 0 0, 50% 50%; }
+  }
+
+  /* Dark glass: the lit rim dims way down (a 40% white line glows like neon on
+     a dark pill), the drop shadow deepens to keep the float legible, and the
+     pill itself runs less transparent — muted icons over a bright photo
+     bleeding through 38% glass would otherwise drop below AA-graphics
+     contrast; at 76% the worst case stays comfortably legible. */
+  @media (prefers-color-scheme: dark) {
+    .nav-pill {
+      background: color-mix(in srgb, var(--bg) 76%, transparent);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
+        0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+    .nav-glide { background: color-mix(in srgb, var(--text) 12%, transparent); }
+    /* Same treatment as the pill: run the icon chip less transparent and drop
+       the shadow deeper so the frosted glass reads over dark content. */
+    .nav-dial-ico {
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+    }
+    /* The pastel bloom glows far harder on dark paper — pull it right down so
+       the (light) glyph reads against the chip, not lost in a bright disc. */
+    .nav-dial-ico::before { opacity: 0.42; }
+    .dial-veil { background: color-mix(in srgb, var(--bg) 44%, transparent); }
+  }
 
   main {
     padding-left: 0;
     padding-top: calc(var(--topbar-h) + env(safe-area-inset-top));
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 
   /* Full-width column on phones — drop the desktop asymmetric margins. */
@@ -2064,13 +2322,15 @@ body.gate main { padding: 0; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 1.1rem; }
   .masthead-kicker { margin-bottom: 0.7rem; letter-spacing: 0.13em; }
   /* Five chips outgrow a phone row — one swipeable line (edge-to-edge, no
-     scrollbar) instead of wrapping an orphan onto a second line. */
+     scrollbar) instead of wrapping an orphan onto a second line. The block
+     padding (cancelled by the negative margins, so the row doesn't move) is
+     headroom for the active chip's glow: overflow-x:auto forces overflow-y to
+     clip, which would otherwise crop the soft drop shadow top and bottom. */
   .filters {
-    margin-bottom: 2rem;
     flex-wrap: nowrap;
     overflow-x: auto;
-    margin-inline: -1.15rem;
-    padding-inline: 1.15rem;
+    margin: -18px -1.15rem calc(2rem - 18px);
+    padding: 18px 1.15rem;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }

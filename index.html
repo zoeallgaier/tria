@@ -33,8 +33,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=70" />
-  <link rel="stylesheet" href="css/app.css?v=70" />
+  <link rel="stylesheet" href="css/tokens.css?v=71" />
+  <link rel="stylesheet" href="css/app.css?v=71" />
 </head>
 
 <body>
@@ -72,16 +72,20 @@
     <a class="brand" href="#/about" aria-label="Tria, about">
       <span class="brand-mark">tria</span>
     </a>
-    <!-- Mobile-only header action; the sidebar carries Publish on desktop.
-         Lives in the topbar (not the blurred bottom nav) so it sits top-right. -->
-    <a class="topbar-publish publish-fill" href="#/publish" aria-label="Post">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 5v14" /><path d="M5 12h14" />
-      </svg>
-      <span>Post</span>
-    </a>
   </header>
+
+  <!-- Legibility scrim for the iOS status bar. black-translucent (above) forces
+       the clock/battery to draw WHITE over our content; in light mode the pale
+       page behind them washes them out. A soft dark-to-transparent gradient over
+       only the safe-area strip (no solid bar) keeps them readable — iOS's own
+       trick. Only rendered in the installed standalone shell; deepens once the
+       topbar tucks away and bare content scrolls under the glyphs. -->
+  <div class="statusbar-scrim" aria-hidden="true"></div>
+
+  <!-- Speed-dial veil: blurs and dims the page while the phone + button fans
+       out its post-type menu. Sits between topbar and nav in the DOM so it
+       stacks over the bar but under the dial (all three share z-index 100). -->
+  <div class="dial-veil" id="dial-veil" hidden></div>
 
   <!-- Nav lives OUTSIDE the (backdrop-filtered) topbar so its mobile
        fixed-to-bottom positioning anchors to the viewport, not the bar.
@@ -94,9 +98,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=70"></script>
-  <script src="js/store.js?v=70"></script>
-  <script src="js/app.js?v=70"></script>
+  <script src="js/config.js?v=71"></script>
+  <script src="js/store.js?v=71"></script>
+  <script src="js/app.js?v=71"></script>
 </body>
 
 </html>

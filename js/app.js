@@ -50,8 +50,10 @@
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
-    // A person with a check — the headcount's "I'm in" on an activity.
-    going:   '<circle cx="10" cy="8" r="3.4"/><path d="M4 20a6.5 6.5 0 0 1 12.2-2.8"/><path d="m14.5 16.5 2.2 2.2 4-4"/>',
+    // A person with a check — the headcount's "I'm in" on an activity. The person
+    // sits left and the check lifts clear into the upper-right; the old layout ran
+    // the check straight through the shoulder line and read as a squiggle.
+    going:   '<circle cx="8.5" cy="8.5" r="3.1"/><path d="M3 20a5.5 5.5 0 0 1 11 0"/><path d="m15.5 12.5 2.2 2.2 4.2-4.2"/>',
     // Bare check — rides the "going" RSVP toggle once you're in.
     check:   '<path d="M5 12.5 10 17.5 19 7"/>',
     // Map pin for an activity's location line.
@@ -91,14 +93,146 @@
   ];
 
   function renderNav(active) {
-    document.getElementById('nav').innerHTML = NAV.map(n =>
-      `<a class="nav-link${n.publish ? ' nav-publish publish-fill' : ''}" href="${n.route}"` +
-        (n.route === active ? ' aria-current="page"' : '') +
+    const nav = document.getElementById('nav');
+    const link = (n) =>
+      `<a class="nav-link${n.publish ? ' nav-publish publish-fill is-solid' : ''}" href="${n.route}"` +
         ` aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
-      `</a>`
-    ).join('');
+      `</a>`;
+    // Built ONCE and kept — the highlight (.nav-glide) slides between icons on
+    // route changes, which only works if the links persist across renders.
+    // The four destinations ride inside a glass pill; Post floats beside it as
+    // its own round button on phones. On desktop .nav-pill is display:contents,
+    // so the sidebar sees the same flat column of links it always has.
+    if (!nav.querySelector('.nav-pill')) {
+      nav.innerHTML =
+        `<div class="nav-pill"><span class="nav-glide" aria-hidden="true"></span>` +
+          NAV.filter(n => !n.publish).map(link).join('') +
+        `</div>` +
+        NAV.filter(n => n.publish).map(link).join('') +
+        dialEl();
+      wireDial(nav);
+    }
+    nav.querySelectorAll('.nav-link').forEach(a => {
+      if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    glideNav();
+  }
+
+  // Slides the pill's soft highlight circle under the active destination.
+  // Measured from the live link (not index math) so it survives any spacing
+  // change; hides when nothing is current (a friend view, compose). Desktop is
+  // a no-op: display:contents gives the pill zero offsetWidth. The first
+  // placement after being hidden snaps without transition, so the highlight
+  // never visibly flies in from the pill's corner.
+  function glideNav() {
+    const pill = document.querySelector('.nav-pill');
+    const glide = pill && pill.querySelector('.nav-glide');
+    if (!glide) return;
+    const cur = pill.querySelector('.nav-link[aria-current="page"]');
+    if (!cur || !pill.offsetWidth) { glide.style.opacity = '0'; return; }
+    const fresh = glide.style.opacity !== '1';
+    if (fresh) glide.style.transition = 'none';
+    glide.style.width = cur.offsetWidth + 'px';
+    glide.style.height = cur.offsetHeight + 'px';
+    glide.style.transform = `translate(${cur.offsetLeft}px, ${cur.offsetTop}px)`;
+    glide.style.opacity = '1';
+    if (fresh) { void glide.offsetWidth; glide.style.transition = ''; }
+  }
+
+  /* ── Publish speed dial (phones) ───────────────────────────────────────────
+     On a phone the + doesn't jump straight to the composer — it fans open a
+     little menu of the four post types, each labeled, so you pick what you're
+     making before the form loads (one screen, one job). Desktop keeps the +
+     as a plain link to the full composer with its type picker. Built once with
+     the nav and wired here; the visuals live in the mobile block of app.css. */
+  let dialOpen = false;
+
+  function dialEl() {
+    return `<div class="nav-dial" id="nav-dial" role="menu" ` +
+        `aria-label="Choose a post type" hidden>` +
+      PUB_TYPES.map((t, i) =>
+        `<a class="nav-dial-item" role="menuitem" href="#/publish" ` +
+          `data-type="${t.key}" style="--i:${i}">` +
+          `<span class="nav-dial-label">${t.label}</span>` +
+          `<span class="nav-dial-ico type-icon--${t.key}" ` +
+            `style="--glow:var(--type-${t.key})">${TYPE_ICON[t.key]}</span>` +
+        `</a>`).join('') +
+    `</div>`;
+  }
+
+  function wireDial(nav) {
+    const dial = nav.querySelector('#nav-dial');
+    const veil = document.getElementById('dial-veil');
+    const btn  = nav.querySelector('.nav-publish');
+    if (!dial || !veil || !btn) return;
+
+    const isPhone = () => matchMedia('(max-width: 680px)').matches;
+
+    // The + sits at a spot that shifts with the pill's width, so measure it and
+    // pin the dial's right edge so its icon chips stack straight up over the +.
+    function place() {
+      const nr = nav.getBoundingClientRect();
+      const br = btn.getBoundingClientRect();
+      const chipW = 46;   // keep in sync with .nav-dial-ico in app.css
+      dial.style.right  = (nr.right - br.right + (br.width - chipW) / 2) + 'px';
+      dial.style.bottom = (nr.bottom - br.top + 14) + 'px';
+    }
+
+    function openDial() {
+      if (dialOpen || !isPhone()) return;
+      dialOpen = true;
+      place();
+      dial.hidden = false;
+      veil.hidden = false;
+      requestAnimationFrame(() => {
+        veil.classList.add('is-open');
+        dial.classList.add('is-open');
+        btn.classList.add('dial-open');
+      });
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('keydown', onKey);
+    }
+
+    function closeDial() {
+      if (!dialOpen) return;
+      dialOpen = false;
+      veil.classList.remove('is-open');
+      dial.classList.remove('is-open');
+      btn.classList.remove('dial-open');
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('keydown', onKey);
+      // Pull it out of the a11y tree once the collapse has settled.
+      const settle = prefersReduced() ? 0 : 260;
+      window.setTimeout(() => {
+        if (!dialOpen) { dial.hidden = true; veil.hidden = true; }
+      }, settle);
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') { closeDial(); btn.focus(); }
+    }
+
+    btn.addEventListener('click', (e) => {
+      if (!isPhone()) return;   // desktop: a plain link to the composer
+      e.preventDefault();
+      dialOpen ? closeDial() : openDial();
+    });
+
+    dial.querySelectorAll('.nav-dial-item').forEach(item =>
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        pubType = item.dataset.type;   // preselect the composer's type
+        closeDial();
+        go(item.getAttribute('href'));
+      }));
+
+    veil.addEventListener('click', closeDial);
+    // Any navigation dismisses the dial — including tapping a pill destination
+    // while it's open, which routes without going through closeDial otherwise.
+    window.addEventListener('hashchange', closeDial);
   }
 
   /* ── Cards ───────────────────────────────────────────────────────────────── */
@@ -206,9 +340,10 @@
 
   // ── @mentions ──────────────────────────────────────────────────────────────
   // Tags live as plain "@username" inside note/comment text (no schema). At
-  // render time a token becomes a bold profile link showing the DISPLAY name,
-  // but only when the handle is a real user who was the author's friend — any
-  // other "@word" stays literal text ("meet @ noon" is safe).
+  // render time a token becomes a bold italic profile link showing the DISPLAY
+  // name (italic sets it apart from the author's own voice), but only when the
+  // handle is a real user who was the author's friend — any other "@word" stays
+  // literal text ("meet @ noon" is safe).
   const MENTION_RE = /(^|[^\w@])@([a-z0-9_]{2,20})\b/g;
 
   // opts.link:false renders the bold name without its profile link — for text
@@ -256,8 +391,7 @@
         clip.style.maxHeight = 'none';        // fully open → let it grow freely
     });
 
-    toggle.addEventListener('click', () => {
-      const open = !wrap.classList.contains('open');
+    function setOpen(open) {
       if (open) {
         clip.style.maxHeight = clip.scrollHeight + 'px';   // clamp → full
         wrap.classList.add('open');
@@ -270,6 +404,16 @@
       toggle.setAttribute('aria-expanded', String(open));
       toggle.textContent = open ? 'Read less' : 'Read more';
       if (open) openReadMore.add(post.id); else openReadMore.delete(post.id);
+    }
+
+    toggle.addEventListener('click', () => setOpen(!wrap.classList.contains('open')));
+
+    // Double-tap anywhere on an opened note collapses it back to the teaser — a
+    // quick way out without reaching for the toggle. Only when open, and never on
+    // a link/button (mentions, actions) so their own taps still fire.
+    clip.addEventListener('dblclick', (e) => {
+      if (!wrap.classList.contains('open') || e.target.closest('a, button')) return;
+      setOpen(false);
     });
   }
 
@@ -1950,7 +2094,7 @@
     const shareAsk =
       `<div class="feed-empty friends-share">` +
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
-        `<button class="friends-share-copy publish-fill" type="button" ` +
+        `<button class="friends-share-copy publish-fill is-solid" type="button" ` +
           `aria-label="Copy triaonline.com to share">` +
           svgIcon('send', 'friends-share-ico') +
           `<span>Share Tria</span>` +
@@ -2410,7 +2554,7 @@
           `</div>` +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
-          `<button class="composer-submit publish-fill" type="submit">Post</button>` +
+          `<button class="composer-submit publish-fill is-solid" type="submit">Post</button>` +
         `</form>` +
       `</section>`;
 
@@ -2809,8 +2953,8 @@
     body.dataset.ambient = 'none';                 // default: no wash
     // About is the front door — greet it with the same self-lit, hue-drifting
     // glow signed-out visitors already see on the gate, so the page reads the
-    // same either side of sign-in. Top-anchored + scroll-away (see .ambient),
-    // so it clears out before the reading starts.
+    // same either side of sign-in. Locked to the viewport bottom (see .ambient),
+    // rising up under the guidelines and the floating nav.
     if (path.split('?')[0] === '#/about') { body.dataset.ambient = 'about'; return; }
     if (!user || !user.avatar) return;             // non-profile, or no photo → clean
     sampleColor(user.avatar).then(rgb => {
