@@ -2127,16 +2127,17 @@ body.gate main { padding: 0; }
     transform: translateZ(0);
   }
   /* Icon-only destinations: labels stay in the DOM for the accessible name but
-     drop from view. Each target is a 46px circle, comfortably past 44px. */
+     drop from view. Each target is a 56px circle with a 31px glyph, a touch
+     larger than the like/comment icons inside posts. */
   .nav-link {
-    width: 46px;
-    height: 46px;
+    width: 56px;
+    height: 56px;
     padding: 0;
     justify-content: center;
     border-radius: var(--radius-pill);
   }
   .nav-link .nav-label { display: none; }
-  .nav-link .nav-ico { width: 23px; height: 23px; }
+  .nav-link .nav-ico { width: 31px; height: 31px; }
   /* The active highlight is the glide below, not a per-link background, so it
      can SLIDE between destinations instead of blinking from one to the next. */
   .nav-link[aria-current="page"] { color: var(--accent); }
@@ -2165,8 +2166,8 @@ body.gate main { padding: 0; }
      with the grain (::after) or the + glyph riding on top. */
   .nav-publish {
     margin: 0;
-    width: 52px;
-    height: 52px;
+    width: 62px;
+    height: 62px;
     padding: 0;
     color: var(--on-type);
     border-radius: 50%;
@@ -2176,7 +2177,7 @@ body.gate main { padding: 0; }
       0 2px 5px rgba(0, 0, 0, 0.18),
       0 12px 28px rgba(0, 0, 0, 0.20);
   }
-  .nav-publish .nav-ico { width: 25px; height: 25px; }
+  .nav-publish .nav-ico { width: 33px; height: 33px; }
   .nav-publish::after { opacity: 0.28; }
   .nav-publish::before {
     -webkit-mask: none;
