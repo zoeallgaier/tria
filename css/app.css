@@ -2923,12 +2923,13 @@ body.gate main { padding: 0; }
      narrow screen otherwise). */
   .ambient { background: radial-gradient(ellipse 140% 52% at 50% -4%, var(--glow), transparent 76%); }
 
-  /* Friend + request rows break out to the screen edges too; back link resets
-     its inset. Notification cards stay inset (they're discrete glass cards, not
-     hairline rows), so they keep a margin off the screen edge and stay rounded. */
+  /* Content-list rows break out to the screen edges so their hovers + hairline
+     dividers run full-bleed while the content keeps its inset (via padding) — the
+     feed, the Friends directory, and the Updates ledger all read as one system.
+     Back link resets its inset. */
   .profile-back { padding-inline: 0; }
-  .friends-list, .requests-list { margin-inline: -1.15rem; }
-  .friend, .request-row { padding-inline: 1.15rem; }
+  .friends-list, .requests-list, .notif-list { margin-inline: -1.15rem; }
+  .friend, .request-row, .notif { padding-inline: 1.15rem; }
   .requests-kicker { padding-inline: 0; }
 
   /* Composer already sits inside the view's padding here. */
