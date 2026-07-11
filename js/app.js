@@ -47,6 +47,16 @@
   // capped so a long list doesn't trail on forever. Shared by every list view.
   const staggerDelay = (i) => Math.min(i * 0.05, 0.4).toFixed(2) + 's';
 
+  // A cheap, stable fingerprint of a string. makeCard stamps each card with a
+  // hash of its own rendered markup so the feed can tell, on a quiet refresh,
+  // whether a card's content actually changed — and leave the unchanged ones
+  // (and their already-loaded photos) untouched instead of rebuilding them.
+  const hashStr = (s) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+    return h.toString(36);
+  };
+
   /* ── Nav ─────────────────────────────────────────────────────────────────
      One list drives the desktop top-right links and the mobile bottom tab bar.
      The publish "+" is the primary action (filled pill on desktop). */
@@ -1002,6 +1012,7 @@
         `</div>` +
         likersPanelHtml(post) +
         commentsPanelHtml(post);
+      el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
       wirePhoto(el, img);
       wireLikes(el, post, opts);
       wireComments(el, post, opts);
@@ -1068,6 +1079,7 @@
       goingPanelHtml(post) +
       likersPanelHtml(post) +
       commentsPanelHtml(post);
+    el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
     wireReadMore(el, post);
     wireCalendar(el, post);
     wireGoing(el, post, opts);
@@ -1788,8 +1800,8 @@
       });
     }
 
-    feedEl.innerHTML = '';
     if (!list.length) {
+      feedEl.innerHTML = '';
       // A brand-new account has no friends yet, so its Circle is genuinely empty —
       // point them at Discover rather than leaving a blank "nothing here".
       const noFilter = activeFilter === 'all' && !activeTag;
@@ -1802,27 +1814,71 @@
         feedEl.innerHTML = `<p class="feed-empty">Nothing here yet.` +
           (activeTag ? ` <button class="tag" type="button" data-clear="1">clear ${esc(activeTag)}</button>` : '') +
           `</p>`;
+        feedEl.querySelectorAll('[data-clear]').forEach(btn =>
+          btn.addEventListener('click', () => { activeTag = null; renderFeed(); }));
       }
-    } else {
-      const frag = document.createDocumentFragment();
-      list.forEach((p, i) => {
-        const card = makeCard(p);
-        card.style.animationDelay = staggerDelay(i);
-        frag.appendChild(card);
-      });
-      feedEl.appendChild(frag);
+      return;
     }
 
-    // Tag chips filter the feed; the active one highlights.
-    feedEl.querySelectorAll('.tag[data-tag]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tag === activeTag);
+    // Reconcile the feed against what's already on screen rather than wiping it.
+    // A nav-tap refresh re-pulls the whole world, but most taps change nothing
+    // in view (or just a like/comment on one post). Rebuilding every card from
+    // scratch would replay each photo's fade-in — the "already seen it, why did
+    // it reload" jitter. So: keep unchanged cards (and their loaded images) in
+    // place, rise in only genuinely new posts, drop posts that left the feed,
+    // and re-render in place only the cards whose content truly changed.
+    const desired = new Set(list.map(p => String(p.id)));
+    feedEl.querySelectorAll(':scope > .card').forEach(c => {
+      if (!desired.has(c.dataset.id)) c.remove();          // gone from the feed
+    });
+    feedEl.querySelectorAll(':scope > :not(.card)').forEach(n => n.remove()); // stale empty-state
+    const existing = new Map();
+    feedEl.querySelectorAll(':scope > .card').forEach(c => existing.set(c.dataset.id, c));
+
+    list.forEach((p, i) => {
+      const id = String(p.id);
+      const old = existing.get(id);
+      let node;
+      if (old) {
+        const fresh = makeCard(p);
+        if (fresh.dataset.sig === old.dataset.sig) {
+          node = old;                          // unchanged — leave the live node alone
+        } else {
+          // Content changed (a new like/comment, an edit). Swap in the new render,
+          // but carry over an already-loaded photo when the image itself is the
+          // same, and don't re-run the rise — it's an update, not an arrival.
+          const oldImg = old.querySelector('.photo img');
+          const newFig = fresh.querySelector('.photo');
+          if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
+            newFig.replaceWith(oldImg.closest('.photo'));
+          }
+          fresh.style.animation = 'none';
+          wireFeedCard(fresh);
+          old.replaceWith(fresh);
+          node = fresh;
+        }
+      } else {
+        node = makeCard(p);                    // brand-new post — rise it in
+        node.style.animationDelay = staggerDelay(i);
+        wireFeedCard(node);
+      }
+      const ref = feedEl.children[i] || null;  // slot it into the right position
+      if (node !== ref) feedEl.insertBefore(node, ref);
+    });
+
+    // Keep the active-tag highlight current on every chip (reused cards included).
+    feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
+      btn.classList.toggle('active', btn.dataset.tag === activeTag));
+  }
+
+  // Tag chips inside a feed card filter the feed by that tag; wired once, on the
+  // cards we actually create (reused cards keep the listeners they came with).
+  function wireFeedCard(card) {
+    card.querySelectorAll('.tag[data-tag]').forEach(btn =>
       btn.addEventListener('click', () => {
         activeTag = activeTag === btn.dataset.tag ? null : btn.dataset.tag;
         renderFeed();
-      });
-    });
-    feedEl.querySelectorAll('[data-clear]').forEach(btn =>
-      btn.addEventListener('click', () => { activeTag = null; renderFeed(); }));
+      }));
   }
 
   /* ── Auth gate (setup / login) ──────────────────────────────────────────────
