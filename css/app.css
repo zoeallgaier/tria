@@ -1240,6 +1240,38 @@ main {
 /* Paragraph rhythm when a note carries more than one block (long posts). */
 .card-note + .card-note { margin-top: 0.7rem; }
 
+/* ── Rich-note headings + emphasis (blog-style Notes) ──────────────────────────
+   Headings are titles, so they stay in Instrument Serif (the "serif = titles"
+   rule): H1 upright, a step under the post title; H2 the italic serif voice, a
+   step under that. Inline bold/italic ride the Oxygen body — 700 reads loud
+   against the 300 note weight. Same styles power the WYSIWYG editor below, so the
+   feed and the field render identically. */
+.card-h1 {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;                 /* match the post title (no synthetic bold) */
+  font-size: clamp(1.4rem, 2.2vw, 1.62rem);
+  line-height: 1.16;
+  color: var(--text);
+  margin: 0 0 0.4rem;
+}
+.card-h2 {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: clamp(1.15rem, 1.8vw, 1.3rem);
+  line-height: 1.2;
+  color: var(--text);
+  margin: 0 0 0.35rem;
+}
+/* A heading after any preceding block gets extra air above it, so sections
+   breathe; a paragraph directly under its heading tucks in close. */
+:where(.card-note, .card-h1, .card-h2) + .card-h1 { margin-top: 0.95rem; }
+:where(.card-note, .card-h1, .card-h2) + .card-h2 { margin-top: 0.75rem; }
+:where(.card-h1, .card-h2) + .card-note { margin-top: 0.3rem; }
+.card-h1:last-child, .card-h2:last-child { margin-bottom: 0; }
+.card-note strong, .card-note b { font-weight: 700; }
+.card-note em, .card-note i { font-style: italic; }
+
 /* ── Long notes — "Read more" ─────────────────────────────────────────────────
    The full note renders intact; when collapsed its height is clamped to a teaser
    and the copy below fades out (a mask — the text is never spliced, so it reads
@@ -1612,7 +1644,16 @@ body.gate main { padding: 0; }
   font: inherit;
   padding: 0.7rem 0.85rem;
 }
-.field--combo .combo-title { font-weight: 700; }
+/* The headline previews in the serif it posts as (titles are always Instrument
+   Serif, weight 400) — so the composer reads true to the feed, matching the live
+   H1/H2 in the note body below. Applies to every combo type, since a note, find,
+   and activity headline all render serif. */
+.field--combo .combo-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.55rem;
+  line-height: 1.2;
+}
 .field--combo .combo-title:focus,
 .field--combo .combo-note:focus { outline: none; border-color: transparent; }
 .field--combo .combo-note {
@@ -1622,6 +1663,91 @@ body.gate main { padding: 0; }
   min-height: 3.4rem;
 }
 .combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
+
+/* ── Rich Note editor (contenteditable) + its formatting toolbar ───────────────
+   The body is a contenteditable that renders headings/emphasis live (WYSIWYG) —
+   it reuses the same serif heading + Oxygen emphasis styles as the feed, so what
+   you type is what posts. The toolbar is a quiet accessory strip on the box's
+   foot; its glyphs are set as specimens (each in the style it applies). */
+.field--rich .rich-note {
+  position: relative;
+  min-height: 5.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rich-note:focus { outline: none; }
+/* Placeholder for an empty field — pulled out of flow so the caret sits at the
+   true start (matches the .combo-note padding). Shown via .is-empty from JS,
+   since a contenteditable is rarely :empty (it keeps stray <br>s). */
+.rich-note.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  left: 0.85rem;
+  top: 0.7rem;
+  color: var(--muted);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.rich-note h1 {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 0.1rem 0 0.3rem;
+}
+.rich-note h2 {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  margin: 0.1rem 0 0.3rem;
+}
+.rich-note p { margin: 0 0 0.45rem; }
+.rich-note > :last-child { margin-bottom: 0; }
+.rich-note strong, .rich-note b { font-weight: 700; }
+.rich-note em, .rich-note i { font-style: italic; }
+
+.rich-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid var(--rule);
+}
+.rt-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  min-width: 2.6rem;
+  height: 2.5rem;               /* generous tap target (HIG ~44px) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius);
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+@media (hover: hover) { .rt-btn:hover { color: var(--text); background: var(--surface-2); } }
+.rt-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rt-btn[aria-pressed="true"] { color: var(--text); background: var(--surface-2); }
+/* Specimen glyphs: H1 upright serif, H2 italic serif, then B / I in Oxygen. */
+.rt-h1 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-size: 1.35rem; }
+.rt-h2 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-style: italic; font-size: 1.3rem; }
+.rt-b  { font-family: 'Oxygen', sans-serif; font-weight: 700; font-size: 1.02rem; }
+.rt-i  { font-family: 'Oxygen', sans-serif; font-style: italic; font-size: 1.02rem; }
+.rt-sep { width: 1px; height: 1.4rem; background: var(--rule); margin: 0 0.3rem; flex: none; }
+.rt-count {
+  margin-left: auto;
+  padding-right: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rt-count.is-over { color: #d9534f; }
 
 /* An activity's "When" — date + time sharing one row (the date takes the lead),
    so the optional pair reads as a single quiet line, not two more form rows. */

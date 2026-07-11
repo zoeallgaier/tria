@@ -383,13 +383,114 @@
     });
   }
 
+  // ── Rich notes (blog-style headings + emphasis) ─────────────────────────────
+  // A Note can carry H1/H2 headings and inline bold/italic. It's composed in a
+  // contenteditable (see wireRichEditor) and stored as a SMALL, normalised HTML
+  // subset — only <h1>/<h2>/<p>/<strong>/<em>, zero attributes, with @mentions
+  // left as plain "@handle" tokens (resolved to links at render, exactly like a
+  // legacy note). The serializer (compose → storage) and the renderer (storage →
+  // feed) run the SAME allow-list walk, so nothing outside that subset survives in
+  // either direction. The render pass is the real trust boundary: a hostile client
+  // could POST any `note`, so we never inject stored HTML raw — we rebuild it,
+  // escaping every text run and dropping every tag/attribute we don't allow.
+  const RICH_LEAD = /^\s*<(h1|h2|p)>/i;         // our serializer always leads with one of these
+  const isRichNote = (s) => RICH_LEAD.test(String(s || ''));
+
+  // Walk a node's children, emitting only bold/italic inline tags; each text node
+  // passes through `textFn` (esc for storage, richText for display — so mentions
+  // link only when rendering). Unknown elements are flattened to their text: a
+  // pasted <span style> or stray <font> keeps its words, loses its markup.
+  function richInline(node, textFn) {
+    let out = '';
+    node.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { out += textFn(n.nodeValue || ''); return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.tagName.toLowerCase();
+      if (tag === 'strong' || tag === 'b') {
+        const inner = richInline(n, textFn);
+        if (inner.trim()) out += `<strong>${inner}</strong>`;
+      } else if (tag === 'em' || tag === 'i') {
+        const inner = richInline(n, textFn);
+        if (inner.trim()) out += `<em>${inner}</em>`;
+      } else if (tag === 'script' || tag === 'style' || tag === 'br') {
+        // Drop entirely: never surface script/style text, even escaped; <br> is
+        // handled at the block level (each visual line is its own paragraph).
+      } else {
+        out += richInline(n, textFn);           // flatten anything else to its plain text
+      }
+    });
+    return out;
+  }
+
+  // Split a root (the live editor, or parsed stored HTML) into normalised blocks:
+  // bare / <div> / <p> lines become paragraphs, <h1>/<h2> stay headings, and
+  // text-empty blocks are dropped. `cls` maps a tag → its render class (null for
+  // the storage + editor form, which carries no classes).
+  function richBlocks(root, textFn, cls) {
+    const out = [];
+    const emit = (tag, node) => {
+      const inner = richInline(node, textFn);
+      if (!inner.replace(/<[^>]+>/g, '').trim()) return;    // no real text → skip
+      const c = cls && cls[tag] ? ` class="${cls[tag]}"` : '';
+      out.push(`<${tag}${c}>${inner}</${tag}>`);
+    };
+    const kids = Array.from(root.childNodes);
+    const blockLevel = (n) => n.nodeType === 1 && /^(div|p|h1|h2)$/i.test(n.tagName);
+    if (!kids.some(blockLevel)) { emit('p', root); return out; }   // one loose line, no wrappers
+    let buf = document.createElement('p');
+    const flush = () => { if (buf.childNodes.length) { emit('p', buf); buf = document.createElement('p'); } };
+    kids.forEach((n) => {
+      if (n.nodeType === 1 && /^h[12]$/i.test(n.tagName)) { flush(); emit(n.tagName.toLowerCase(), n); }
+      else if (blockLevel(n)) { flush(); emit('p', n); }
+      else buf.appendChild(n.cloneNode(true));
+    });
+    flush();
+    return out;
+  }
+
+  // Parse stored note HTML in an inert document (DOMParser runs no scripts and
+  // loads no resources on a detached doc), so re-walking hostile input is safe.
+  const parseNoteHtml = (html) =>
+    new DOMParser().parseFromString(String(html || ''), 'text/html').body;
+
+  // compose → storage: clean HTML, every text run escaped, mentions kept as tokens.
+  const serializeNote = (editor) => richBlocks(editor, esc, null).join('');
+
+  // storage → feed: same walk, but text flows through richText (so @mentions link)
+  // and blocks carry render classes. Safe to inject: fixed tags, all text escaped.
+  const RICH_CLASS = { h1: 'card-h1', h2: 'card-h2', p: 'card-note' };
+  const renderRichNote = (html, author) =>
+    richBlocks(parseNoteHtml(html), (t) => richText(t, author), RICH_CLASS).join('');
+
+  // storage/legacy → editor: clean editable HTML (no classes, no links). A legacy
+  // plain-text note becomes paragraphs; a rich note re-walks to the same subset.
+  const editorPrefill = (note) =>
+    !note ? ''
+      : isRichNote(note) ? richBlocks(parseNoteHtml(note), esc, null).join('')
+      : noteParas(note).map((p) => `<p>${esc(p)}</p>`).join('');
+
+  // Read a note field's value whether it's a plain textarea (find/photo/activity
+  // captions) or the rich contenteditable (a Note, → its stored HTML subset, ''
+  // when empty). Lets the two submit paths stay one-liners.
+  function readNoteField(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.isContentEditable ? serializeNote(el) : (el.value || '').trim();
+  }
+
   // The note block for a text entry. Paragraphs always render intact; a long note
   // additionally wraps them in a height-clamped clip + a "Read more" toggle. Open
   // state lives in `openReadMore` so it survives a card rebuild (like openComments).
   function cardNoteHtml(post) {
     if (!post.note) return '';
-    const body = noteParas(post.note).map(p => notePara(p, post.author)).join('');
-    if (post.note.length <= READMORE_MIN) return body;
+    const rich = isRichNote(post.note);
+    const body = rich
+      ? renderRichNote(post.note, post.author)
+      : noteParas(post.note).map(p => notePara(p, post.author)).join('');
+    // Gate Read-more on the visible text length, not the raw markup (headings and
+    // emphasis tags would otherwise trip the teaser on a short, formatted note).
+    const plainLen = rich ? post.note.replace(/<[^>]+>/g, '').length : post.note.length;
+    if (plainLen <= READMORE_MIN) return body;
 
     const open = openReadMore.has(post.id);
     return `<div class="readmore${open ? ' open' : ''}">` +
@@ -397,6 +498,116 @@
         `<button class="readmore-toggle" type="button" aria-expanded="${open}">` +
           `${open ? 'Read less' : 'Read more'}</button>` +
       `</div>`;
+  }
+
+  // ── The rich Note field (compose + edit share it) ───────────────────────────
+  // Title input, a contenteditable body, and an H1/H2/B/I toolbar in one bordered
+  // combo box. `idp` prefixes the ids: 'c' compose, 'e' edit.
+  const NOTE_MAX = 15000;   // a Note runs long (a short essay); captions stay 5000
+
+  function richToolbarHtml(idp) {
+    // Specimen buttons: each glyph is set in the exact style it applies, so the
+    // control previews its own effect — H1 upright serif, H2 italic serif, then
+    // B / I in Oxygen. Styled in .rich-toolbar (app.css).
+    return `<div class="rich-toolbar" role="toolbar" aria-label="Text formatting">` +
+        `<button type="button" class="rt-btn rt-h1" data-cmd="h1" aria-pressed="false" aria-label="Heading">H1</button>` +
+        `<button type="button" class="rt-btn rt-h2" data-cmd="h2" aria-pressed="false" aria-label="Subheading">H2</button>` +
+        `<span class="rt-sep" aria-hidden="true"></span>` +
+        `<button type="button" class="rt-btn rt-b" data-cmd="bold" aria-pressed="false" aria-label="Bold">B</button>` +
+        `<button type="button" class="rt-btn rt-i" data-cmd="italic" aria-pressed="false" aria-label="Italic">I</button>` +
+        `<span class="rt-count" id="${idp}-note-count" aria-hidden="true"></span>` +
+      `</div>`;
+  }
+
+  function richNoteField(idp, titleVal, noteHtml, notePh) {
+    return `<div class="field field--combo field--rich">` +
+        `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
+          `value="${esc(titleVal || '')}" placeholder="Headline (optional)" aria-label="Headline">` +
+        `<div class="combo-divider" aria-hidden="true"></div>` +
+        `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
+          `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
+        richToolbarHtml(idp) +
+      `</div>`;
+  }
+
+  // Wire a rich Note editor: the H1/H2/B/I toolbar, plain-text-only paste, the
+  // NOTE_MAX cap + its count, the empty-state placeholder, and toolbar active
+  // state. Mentions are wired separately (wireMentions handles contenteditable).
+  function wireRichEditor(editor, countEl) {
+    if (!editor) return;
+    const toolbar = editor.parentElement.querySelector('.rich-toolbar');
+    const len = () => editor.textContent.length;
+
+    const syncEmpty = () => {
+      // Collapse a field left holding only a stray <br>/empty block back to truly
+      // empty, so the placeholder shows and formatBlock/typing start clean.
+      if (!editor.textContent.trim() && editor.innerHTML !== '') editor.innerHTML = '';
+      editor.classList.toggle('is-empty', !editor.textContent.trim());
+    };
+    const syncCount = () => {
+      if (!countEl) return;
+      const left = NOTE_MAX - len();
+      countEl.textContent = left <= 500 ? String(left) : '';
+      countEl.classList.toggle('is-over', left < 0);
+    };
+    const curBlock = () => {
+      let n = window.getSelection().anchorNode;
+      while (n && n !== editor) {
+        if (n.nodeType === 1 && /^h[12]$/i.test(n.tagName)) return n.tagName.toLowerCase();
+        n = n.parentNode;
+      }
+      return '';
+    };
+    const syncActive = () => {
+      const block = curBlock();
+      let bold = false, italic = false;
+      try { bold = document.queryCommandState('bold'); italic = document.queryCommandState('italic'); } catch (_) {}
+      const set = (s, on) => { const b = toolbar.querySelector(s); if (b) b.setAttribute('aria-pressed', String(on)); };
+      set('.rt-h1', block === 'h1'); set('.rt-h2', block === 'h2');
+      set('.rt-b', bold); set('.rt-i', italic);
+    };
+
+    const exec = (cmd) => {
+      editor.focus();
+      if (cmd === 'bold' || cmd === 'italic') {
+        document.execCommand('styleWithCSS', false, false);   // semantic <b>/<i>, not styled spans
+        document.execCommand(cmd);
+      } else {   // h1 / h2 — toggle the caret's block (a second tap drops back to a paragraph)
+        document.execCommand('formatBlock', false, curBlock() === cmd ? 'P' : cmd.toUpperCase());
+      }
+      syncEmpty(); syncActive(); syncCount();
+    };
+    toolbar.querySelectorAll('.rt-btn').forEach((btn) =>
+      // mousedown + preventDefault keeps the editor's selection/focus through the tap
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); exec(btn.dataset.cmd); }));
+
+    // Paste as plain text only — no foreign markup, and never past the cap.
+    editor.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      const room = NOTE_MAX - len();
+      if (room > 0 && text) document.execCommand('insertText', false, text.slice(0, room));
+    });
+    // Hold typed/inserted text at the cap (deletions and caret moves always pass).
+    editor.addEventListener('beforeinput', (e) => {
+      if (!/^insert/.test(e.inputType) || e.inputType === 'insertFromPaste') return;
+      const sel = window.getSelection();
+      const selLen = sel && !sel.isCollapsed ? sel.toString().length : 0;
+      if (len() - selLen + (e.data ? e.data.length : 1) > NOTE_MAX) e.preventDefault();
+    });
+    editor.addEventListener('input', () => { syncEmpty(); syncCount(); });
+    // Track the caret for the toolbar's active state; self-removes once the editor
+    // leaves the DOM (composer type-switch, closing an edit) so nothing piles up.
+    const onSel = () => {
+      if (!editor.isConnected) { document.removeEventListener('selectionchange', onSel); return; }
+      if (editor.contains(window.getSelection().anchorNode)) syncActive();
+    };
+    document.addEventListener('selectionchange', onSel);
+
+    syncEmpty(); syncCount();
+    // Desktop autofocuses like the old textarea; touch waits for the tap so the
+    // keyboard doesn't lurch the viewport (mirrors the edit-form focus rule).
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) editor.focus();
   }
 
   // A reliable double-tap detector. The native `dblclick` event doesn't fire
@@ -470,6 +681,7 @@
   let mentionSeq = 0;
   function wireMentions(field) {
     if (!field) return;
+    const isCE = field.isContentEditable;   // the rich Note editor vs a plain textarea
     const listId = `mentions-${++mentionSeq}`;
     const list = document.createElement('ul');
     list.className = 'mention-list';
@@ -479,9 +691,12 @@
     const live = document.createElement('div');
     live.className = 'visually-hidden';
     live.setAttribute('aria-live', 'polite');
-    // The comment form is a flex row, so the list sits after the form itself;
-    // in the composer/edit stacks it sits right under the textarea.
-    const anchor = field.closest('.comment-form') || field;
+    // The comment form is a flex row, so the list sits after the form itself; the
+    // textarea composer drops it under the field; the rich Note editor drops it
+    // below the whole combo box, clear of the toolbar strip at the box's foot.
+    const anchor = field.closest('.comment-form')
+      || (isCE && field.closest('.field--combo'))
+      || field;
     anchor.insertAdjacentElement('afterend', list);
     list.insertAdjacentElement('afterend', live);
     field.setAttribute('aria-autocomplete', 'list');
@@ -489,7 +704,7 @@
 
     let items = [];        // matched user objects
     let active = -1;       // highlighted row
-    let token = null;      // {start, end} of the "@query" being typed
+    let token = null;      // textarea: {start,end} in value; CE: {node,start,end} in a text node
 
     const close = () => {
       list.hidden = true;
@@ -516,22 +731,49 @@
     const pick = (i) => {
       const u = items[i];
       if (!u || !token) return;
-      field.setRangeText(`@${u.username} `, token.start, token.end, 'end');
+      const ins = `@${u.username} `;
+      if (!isCE) {
+        field.setRangeText(ins, token.start, token.end, 'end');
+      } else {
+        // Splice the "@query" out of its text node, drop the caret past the handle,
+        // then fire input so the editor's count/placeholder refresh.
+        const t = token.node, text = t.nodeValue || '';
+        t.nodeValue = text.slice(0, token.start) + ins + text.slice(token.end);
+        const sel = window.getSelection(), range = document.createRange();
+        range.setStart(t, token.start + ins.length); range.collapse(true);
+        sel.removeAllRanges(); sel.addRange(range);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       close();
       field.focus();
     };
 
     const update = () => {
-      const caret = field.selectionStart;
+      // The text before the caret, and the token anchor, differ by field kind:
+      // a textarea reads value + selectionStart; the editor reads the caret's
+      // text node (mentions are always typed within a single run).
+      let before, mkToken;
+      if (!isCE) {
+        const caret = field.selectionStart;
+        before = field.value.slice(0, caret);
+        mkToken = (len) => ({ start: caret - len - 1, end: caret });
+      } else {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount || !sel.isCollapsed) { close(); return; }
+        const node = sel.anchorNode, off = sel.anchorOffset;
+        if (!node || node.nodeType !== 3 || !field.contains(node)) { close(); return; }
+        before = (node.nodeValue || '').slice(0, off);
+        mkToken = (len) => ({ node, start: off - len - 1, end: off });
+      }
       // Only while the caret sits at the end of an "@word" that starts the
       // text or follows whitespace — never mid-email, never after letters.
-      const m = /(?:^|\s)@([a-z0-9_]*)$/i.exec(field.value.slice(0, caret));
+      const m = /(?:^|\s)@([a-z0-9_]*)$/i.exec(before);
       if (!m) { close(); return; }
       const q = m[1].toLowerCase();
       items = Store.friends().map(Store.user).filter(u => u &&
         (u.username.includes(q) || u.name.toLowerCase().includes(q)));
       if (!items.length) { close(); return; }
-      token = { start: caret - m[1].length - 1, end: caret };
+      token = mkToken(m[1].length);
       list.innerHTML = items.map((u, i) =>
         `<li role="option" id="${listId}-${i}" aria-selected="false">` +
           avatarEl(u, { cls: 'comment-avatar' }) +
@@ -1180,7 +1422,7 @@
       `</div>`;
 
     if (post.type === 'find') {
-      return combo('Title (optional)', 'Title', 'Why’s it worth their two minutes?', 'Why share it', 2) +
+      return combo('Title (optional)', 'Title', 'What made you want to share it?', 'Why share it', 2) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -1213,8 +1455,9 @@
         `</div>` + tagsInput;
     }
 
-    // post
-    return combo('Headline (optional)', 'Headline', 'Say it plainly.', 'Your note', 4) + tagsInput;
+    // post (Note) — the rich editor, prefilled from the stored note (a legacy
+    // plain-text note upgrades to paragraphs; see editorPrefill).
+    return richNoteField('e', post.title, editorPrefill(post.note), 'Say it plainly.') + tagsInput;
   }
 
   function makeEditCard(post) {
@@ -1777,8 +2020,8 @@
       // accent "Save changes" — so Save never shows on an untouched form, and
       // reverting an edit drops it back to Cancel.
       const toggle = editForm.querySelector('.edit-toggle');
-      const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea'))
-        .map(el => el.value).join('\u0000');
+      const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea, [contenteditable]'))
+        .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
       const baseline = snapshot();
       const dirty = () => snapshot() !== baseline;
       const syncToggle = () => {
@@ -1803,7 +2046,9 @@
         e.preventDefault();
         if (dirty()) submitEdit(editingId, username);   // Enter saves, but never a no-op
       });
-      wireMentions(editForm.querySelector('#e-note'));
+      const eNote = editForm.querySelector('#e-note');
+      wireMentions(eNote);
+      if (eNote && eNote.isContentEditable) wireRichEditor(eNote, editForm.querySelector('#e-note-count'));
       // Don't auto-focus on touch: it yanks up the keyboard and the viewport
       // jumps to center the field, which reads as a jarring lurch. Let the tap
       // that opens the field raise the keyboard instead. Desktop still autofocuses.
@@ -2740,7 +2985,7 @@
             `placeholder="Title (optional)" aria-label="Title">` +
           `<div class="combo-divider" aria-hidden="true"></div>` +
           `<textarea id="c-note" class="combo-note" rows="2" maxlength="5000" ` +
-            `placeholder="Why’s it worth their two minutes?" aria-label="Why share it"></textarea>` +
+            `placeholder="What made you want to share it?" aria-label="Why share it"></textarea>` +
         `</div>` +
         `<div class="field">` +
           `<label for="c-url">Link</label>` +
@@ -2779,7 +3024,7 @@
       return `<div class="field">` +
           `<label for="c-note">Caption</label>` +
           `<textarea id="c-note" rows="2" maxlength="5000" ` +
-            `placeholder="Say something, or let the photo do the talking."></textarea>` +
+            `placeholder="Say something, or let the photo speak."></textarea>` +
         `</div>` +
         `<div class="field">` +
           `<label>Photo</label>` +
@@ -2795,15 +3040,9 @@
         `</div>` + tags;
     }
 
-    // post — headline + note share one bordered box, split by a divider: the
-    // optional title reads as the lead, the note flows beneath it.
-    return `<div class="field field--combo">` +
-        `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
-          `placeholder="Headline (optional)" aria-label="Headline">` +
-        `<div class="combo-divider" aria-hidden="true"></div>` +
-        `<textarea id="c-note" class="combo-note" rows="4" maxlength="5000" ` +
-          `placeholder="${esc(randomNotePlaceholder())}" aria-label="Your note" autofocus></textarea>` +
-      `</div>` + tags;
+    // post (Note) — the rich editor: headline + a contenteditable body + the
+    // H1/H2/B/I toolbar in one combo box. Wired in mountFields (wireRichEditor).
+    return richNoteField('c', '', '', randomNotePlaceholder()) + tags;
   }
 
   // ── Audience picker (design preview) ──────────────────────────────────────
@@ -2951,7 +3190,9 @@
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
       fieldsEl.innerHTML = fieldsFor(pubType);
-      wireMentions(fieldsEl.querySelector('#c-note'));
+      const cNote = fieldsEl.querySelector('#c-note');
+      wireMentions(cNote);
+      if (pubType === 'note') wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
       if (pubType === 'photo') wirePhotoPicker(fieldsEl);
       if (pubType === 'activity') {
         wireWhenHints(fieldsEl);
@@ -3113,7 +3354,7 @@
   async function submitComposer() {
     const errEl = document.getElementById('c-error');
     const val = (id) => (document.getElementById(id)?.value || '').trim();
-    const data = { type: pubType, tags: parseTags(val('c-tags')), note: val('c-note') };
+    const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
 
     if (pubType === 'find') {
       data.url = val('c-url');
@@ -3174,7 +3415,7 @@
     const post = Store.posts().find(p => p.id === id);
     if (!post) { editingId = null; renderUser(username); return; }
 
-    const data = { note: val('e-note'), tags: parseTags(val('e-tags')) };
+    const data = { note: readNoteField('e-note'), tags: parseTags(val('e-tags')) };
 
     if (post.type === 'find') {
       data.url = val('e-url');
