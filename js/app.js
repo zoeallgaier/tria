@@ -15,7 +15,6 @@
   let view = null;
   let navIndex = -1;          // spatial index of the current route (for direction)
   let navToken = 0;           // guards against a stale transition cleaning up a new one
-  let navNudgeTimer = 0;      // deferred iOS nav re-composite (see nudgeNav skip in route)
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/friends';  // where a friend profile's "← Back" returns to
   const TRANSITION_MS = 360;
@@ -4013,35 +4012,20 @@
   // (navigator.standalone is true only inside an iOS standalone PWA; everywhere
   // else this is pure cost, so bail.) Rescue it GENTLY: flick the frosted pill's
   // backdrop-filter off and back on, which rebuilds that dropped layer WITHOUT
-  // pulling the element out of flow — so the nav's own slide transitions (the
-  // active-icon glide, the compose +) keep running instead of snapping to their
-  // end. A display flip does the same repaint but cancels those transitions,
-  // which is what made the bar jump between states on a home-screen install. The
-  // harder display relayout still runs once as a safety net, deferred until the
-  // slide has settled (TRANSITION_MS), where flipping display is invisible since
-  // nothing is animating; a newer navigation clears the pending one.
+  // pulling the element out of flow. The old fix toggled the nav's display, which
+  // did the same repaint but also (a) cancelled the nav's own slide transitions
+  // (the active-icon glide, the compose +) and (b) RESTARTED their CSS gradient
+  // animation from 0% — so the colour loop visibly jumped to the start on every
+  // page change. The backdrop flick leaves the slides and the gradient untouched.
   function nudgeNav() {
     if (!navigator.standalone) return;
     const pill = document.querySelector('.nav-pill');
-    if (pill) {
-      pill.style.webkitBackdropFilter = 'none';
-      pill.style.backdropFilter = 'none';
-      void pill.offsetHeight;   // rebuild the frosted layer; no paint in between
-      pill.style.webkitBackdropFilter = '';
-      pill.style.backdropFilter = '';
-    }
-    clearTimeout(navNudgeTimer);
-    navNudgeTimer = setTimeout(hardNudgeNav, TRANSITION_MS + 80);
-  }
-  // The original display relayout, kept as the deferred belt-and-braces (see
-  // nudgeNav): guarantees the layer is right even if the soft repaint didn't
-  // take, and only fires once the bar is idle so its flip stays invisible.
-  function hardNudgeNav() {
-    const nav = document.getElementById('nav');
-    if (!nav || !navigator.standalone) return;
-    nav.style.display = 'none';
-    void nav.offsetHeight;
-    nav.style.display = '';
+    if (!pill) return;
+    pill.style.webkitBackdropFilter = 'none';
+    pill.style.backdropFilter = 'none';
+    void pill.offsetHeight;   // rebuild the frosted layer; no paint in between
+    pill.style.webkitBackdropFilter = '';
+    pill.style.backdropFilter = '';
   }
 
   /* ── Warm image cache ────────────────────────────────────────────────────────
