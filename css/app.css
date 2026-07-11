@@ -2724,7 +2724,10 @@ body.gate main { padding: 0; }
      on .nav-pill so the gap between pill and button stays tap-transparent. */
   .nav {
     top: auto;
-    bottom: calc(0.85rem + env(safe-area-inset-bottom));
+    /* Hug the bottom edge. iOS floating tab bars (Liquid Glass) sit close to the
+       home indicator, not lifted well into the screen — safe-area-inset-bottom
+       already reserves the indicator, so this is a small float over it, not a gap. */
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
     left: 0;
     right: 0;
     width: auto;
@@ -2993,6 +2996,45 @@ body.gate main { padding: 0; }
        the (light) glyph reads against the chip, not lost in a bright disc. */
     .nav-dial-ico::before { opacity: 0.42; }
     .dial-veil { background: color-mix(in srgb, var(--bg) 44%, transparent); }
+  }
+
+  /* ── The view switcher docks above the nav and RISES on page-enter ──────────
+     On phones the Friends / Updates seg-tabs isn't an inline row under the
+     masthead — it floats as its own glass control just above the bottom nav
+     (the material rule: glass floats above content, and a persistent switcher
+     is exactly that). z-index sits UNDER the nav pill (101) so at rest it can
+     tuck down behind the pill; the router adds .tuck while a page is entering
+     (snapped hidden, no travel) then removes it once the page settles, so the
+     control lifts straight up out from behind the nav on the signature easeOut.
+     Default (untucked) is the visible docked state, so an in-place re-render
+     — e.g. Updates rebuilding after a push-ask answer — just shows it, no
+     vanish. Desktop has no bottom nav, so none of this reaches that layout. */
+  .seg-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom) + 5.1rem);
+    z-index: 40;
+    width: min(86%, 300px);
+    margin: 0 auto;
+    /* Opacity settles fast (quick) while the transform keeps rising (slow), so
+       it reads as sliding UP out of the nav rather than fading in above it. */
+    transition: transform var(--dur-slow) var(--ease),
+                opacity   var(--dur-quick) var(--ease);
+  }
+  /* Tucked start: snapped down behind the nav with no transition, so adding the
+     class hides it instantly; removing it lets the base transition run the rise. */
+  .seg-tabs.tuck {
+    transform: translateY(92px) scale(0.96);
+    opacity: 0;
+    transition: none;
+  }
+  /* Room to scroll the roster / ledger clear of the docked switcher + nav. */
+  .seg-panel { padding-bottom: 5.5rem; }
+  @media (prefers-reduced-motion: reduce) {
+    /* No rise — the switcher is simply present. (The router also skips .tuck
+       under reduced motion, so this is belt and braces.) */
+    .seg-tabs, .seg-tabs.tuck { transition: none; }
   }
 
   main {

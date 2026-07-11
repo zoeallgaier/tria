@@ -3847,6 +3847,17 @@
       view = page;
       stage.replaceChildren(page);
       renderFn();
+      // First paint / deep-link: no page slide, but a docked switcher still gets
+      // its rise (unless reduced motion, which shows it in place). Tuck-commit-
+      // release so it lifts from behind the nav on landing.
+      if (!reduce) {
+        const seg = page.querySelector('.seg-tabs');
+        if (seg) {
+          seg.classList.add('tuck');
+          void seg.offsetWidth;                     // commit the tucked start state
+          requestAnimationFrame(() => seg.classList.remove('tuck'));
+        }
+      }
       return;
     }
 
@@ -3859,6 +3870,11 @@
     stage.insertBefore(page, prev);
     view = page;
     renderFn();                // render into the mounted new page
+
+    // A docked view switcher (Friends / Updates on mobile) starts tucked behind
+    // the nav so it can rise once the page settles (see cleanup) rather than
+    // riding the horizontal page slide. No-op on pages without one.
+    page.querySelector('.seg-tabs')?.classList.add('tuck');
 
     prev.className = 'page';    // clear any stale transition classes before reuse
     prev.classList.add('leave', leaveTo);
@@ -3884,6 +3900,10 @@
       page.removeEventListener('transitionend', onSettle);
       prev.remove();
       page.className = 'page';
+      // The page has settled and its transform is gone, so the fixed switcher
+      // now anchors to the viewport — drop .tuck and it rises straight up from
+      // behind the nav on its own transition.
+      page.querySelector('.seg-tabs')?.classList.remove('tuck');
     };
     const onSettle = (e) => {
       if (e.target === page && e.propertyName === settleProp) cleanup();
