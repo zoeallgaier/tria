@@ -475,7 +475,7 @@ main {
    even after the blur has cleared). iOS WebKit (standalone especially) keeps
    trying to sample backdrop-filter inside a transforming/promoted layer and the
    frost visibly jumps — exactly on the pages that carry in-page glass (Friends:
-   seg-tabs + search; Updates: seg-tabs, soft-ask, notification cards). Turning
+   seg-tabs + search; Updates: seg-tabs + soft-ask). Turning
    it off explicitly stops the mis-sampling and drops the per-frame compositing
    cost; the handover back to live frost lands when the router clears the
    transition classes (right as the page settles — see renderPage cleanup). The
@@ -484,8 +484,7 @@ main {
    own iOS layer pin — see .nav-pill). */
 .page.enter .seg-tabs, .page.leave .seg-tabs,
 .page.enter .masthead-search-field, .page.leave .masthead-search-field,
-.page.enter .push-ask, .page.leave .push-ask,
-.page.enter .notif, .page.leave .notif {
+.page.enter .push-ask, .page.leave .push-ask {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -2043,54 +2042,28 @@ body.gate main { padding: 0; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;       /* discrete cards, not hairline-joined rows */
 }
-/* Each notification is its own frosted-glass card — the floating-panel material
-   (glass menus, modals) brought to content: whatever's behind saturates through
-   the blur, a hairline + lit rim catch the edge, a soft float shadow lifts it,
-   14px corners keep it in the app's card scale. Reads like an iOS notification. */
+/* Each notification is a flat editorial row, hairline-divided — the same content-
+   list language as the Friends directory (rows carry the inset, hovers run edge to
+   edge), so the two list pages read as one system. Glass is reserved for what
+   FLOATS above content (the seg-tabs, the soft-ask), never a content list itself;
+   a stack of backdrop-filter cards is also exactly what iOS Safari re-samples every
+   frame through a scroll or a page transition, so flat rows keep the ledger smooth
+   as well as on-material. (Glass card era: v=95–118. Back to flat at v=120.) */
 .notif {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  padding: 0.95rem 1.1rem;
-  border-radius: 14px;
+  padding: 1.05rem var(--inset);
   color: var(--text);
-  background: color-mix(in srgb, var(--bg) 74%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
-    0 6px 18px rgba(0, 0, 0, 0.10);
-  transition: transform var(--dur-micro) var(--ease), box-shadow var(--dur-micro) var(--ease);
-  animation: rise 0.5s var(--ease) both;   /* same soft rise as friend rows */
+  transition: background-color 0.15s;
+  animation: rise 0.5s var(--ease) both;   /* same soft rise as the directory rows */
 }
-@media (prefers-color-scheme: dark) {
-  .notif {
-    background: color-mix(in srgb, var(--bg) 80%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
-      0 6px 18px rgba(0, 0, 0, 0.4);
-  }
-}
-/* Unread: a faint accent wash into the frost plus a tinted edge, so fresh items
-   glow a touch warmer than the ones you've already seen (the dot still marks it). */
-.notif--new {
-  background:
-    linear-gradient(color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 10%, transparent)),
-    color-mix(in srgb, var(--bg) 74%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-}
-@media (hover: hover) {
-  .notif:hover {
-    transform: translateY(-1px);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent),
-      0 10px 26px rgba(0, 0, 0, 0.14);
-  }
-}
-.notif:active { transform: translateY(0); }
+.notif-list li:not(:last-child) .notif { border-bottom: 1px solid var(--rule); }
+@media (hover: hover) { .notif:hover { background: var(--surface); } }
+/* Unread: a faint accent wash across the row (the dot still marks it), so fresh
+   items read a touch warmer than the ones you've already seen. */
+.notif--new { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .notif-body {
   display: flex;
   flex-direction: column;
