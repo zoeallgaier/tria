@@ -2293,15 +2293,17 @@ body.gate main { padding: 0; }
 /* Softer, more iOS corners on the composer's own fields — a touch rounder than the
    shared --radius-img (8px), staying concentric under the 20px glass surfaces and
    in step with the filled liquid-glass Post button. Scoped to the composer + the
-   inline edit form (which mirrors the composer's field layout) so post photos and
-   other --radius-img corners are untouched. */
+   inline edit form (which mirrors the composer's field layout) + the About page's
+   feedback form, so post photos and other --radius-img corners are untouched. */
 .composer .field input,
 .composer .field textarea,
 .composer .field--combo,
 .composer .dropzone,
 .edit-form .field input,
 .edit-form .field textarea,
-.edit-form .field--combo { border-radius: 12px; }
+.edit-form .field--combo,
+.fb-form .field input,
+.fb-form .field textarea { border-radius: 12px; }
 .composer-error {
   color: var(--type-find-ink);
   font-size: 0.85rem;
@@ -2806,9 +2808,9 @@ body.gate main { padding: 0; }
       var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
     background-size: 300% 100%;
     animation: publish-shift 14s ease-in-out infinite;
-    -webkit-mask: radial-gradient(circle at 50% 50%, #000 16%, transparent 72%);
-            mask: radial-gradient(circle at 50% 50%, #000 16%, transparent 72%);
-    filter: blur(11px) saturate(1.5) brightness(1.15) opacity(0.7);
+    -webkit-mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 58%);
+            mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 58%);
+    filter: blur(20px) saturate(1.7) brightness(1.2) opacity(0.75);
     opacity: 0;
     transition: transform var(--dur-move) var(--ease), opacity var(--dur-micro) var(--ease);
     pointer-events: none;
@@ -2985,7 +2987,7 @@ body.gate main { padding: 0; }
        it reads as rich coloured light, not a white blowout. The opacity() in the
        filter dims it a touch further here (the CSS opacity property is off limits
        — JS drives it to fade the glide in/out on route changes). */
-    .nav-glide { filter: blur(13px) saturate(1.7) brightness(0.95) opacity(0.6); }
+    .nav-glide { filter: blur(22px) saturate(1.9) brightness(1) opacity(0.65); }
     /* Same treatment as the pill: run the icon chip less transparent and drop
        the shadow deeper so the frosted glass reads over dark content. */
     .nav-dial-ico {

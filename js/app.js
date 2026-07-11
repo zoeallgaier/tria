@@ -157,7 +157,9 @@
     if (fresh) glide.style.transition = 'none';
     glide.style.width = cur.offsetWidth + 'px';
     glide.style.height = cur.offsetHeight + 'px';
-    glide.style.transform = `translate(${cur.offsetLeft}px, ${cur.offsetTop}px)`;
+    // Scaled up 1.5x around its own center (transform-origin stays 50% 50%) so the
+    // heavier blur has room to pool into a full glow instead of shrinking the core.
+    glide.style.transform = `translate(${cur.offsetLeft}px, ${cur.offsetTop}px) scale(1.5)`;
     glide.style.opacity = '1';
     if (fresh) { void glide.offsetWidth; glide.style.transition = ''; }
   }
@@ -2968,6 +2970,9 @@
     'garden', 'clay', 'vinyl', 'sourdough', 'thrifted',
     'cold plunge', 'group chat', 'road trip', 'gremlin era', 'reading nook',
     'review', 'hobbies', 'gaming', 'painting',
+    'villain arc', 'delulu era', 'small dog energy', 'chaotic good',
+    'girl dinner', '3am thoughts',
+    'meal prep', 'farmers market', 'polaroids',
   ];
   const randomTagPlaceholder = () =>
     [...TAG_PLACEHOLDERS].sort(() => Math.random() - 0.5).slice(0, 2).join(', ');
