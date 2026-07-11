@@ -3811,12 +3811,25 @@
       if (Date.now() - lastCheck < 60000) return;
       lastCheck = Date.now();
       try {
-        const html = await (await fetch('index.html', { cache: 'no-store' })).text();
+        // Unique URL + no-store: GitHub Pages sends index.html with max-age=600,
+        // and an iOS home-screen app will happily hand back the cached copy even
+        // to a no-store fetch — so make the URL uncacheable outright.
+        const html = await (await fetch('index.html?_=' + Date.now(), { cache: 'no-store' })).text();
         const latest = (html.match(/js\/app\.js\?v=([^"&]+)/) || [])[1];
         if (!latest || latest === booted) return;
         const busy = location.hash.split('?')[0] === '#/publish' ||
           document.querySelector('.modal-card');
-        if (!busy) location.reload();
+        // location.reload() re-reads the CACHED index.html on iOS standalone (same
+        // max-age=600), which reloads the very build we're trying to leave — an
+        // update that never lands. Navigate to a fresh document URL instead: a new
+        // ?u= stamp is a cache key iOS has never seen, so it must refetch, pulling
+        // the new index.html and its new asset stamps. The router reads the hash,
+        // so the search param is inert; replace() keeps it out of history.
+        if (!busy) {
+          const sp = new URLSearchParams(location.search);
+          sp.set('u', latest);
+          location.replace(location.pathname + '?' + sp.toString() + location.hash);
+        }
       } catch { /* offline — try again next foreground */ }
     }
     document.addEventListener('visibilitychange', () => {
@@ -3848,11 +3861,16 @@
     }, hold);
   }
 
-  // Register the push service worker (idempotent). It caches nothing (see sw.js)
-  // so it never fights the ?v= self-updater — it only enables Web Push delivery
-  // for anyone who's turned notifications on.
+  // Register the service worker (idempotent): it powers Web Push AND keeps the
+  // shell fresh (network-first navigations — see sw.js). Nudge an update check on
+  // launch and every foreground so a new worker (e.g. this very freshness fix)
+  // propagates within a session or two instead of waiting on the browser's own
+  // ~24h cadence — the SW script itself is fetched bypassing the HTTP cache.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* push simply stays off */ });
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      const poke = () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); };
+      document.addEventListener('visibilitychange', poke);
+    }).catch(() => { /* push + shell-refresh simply stay off */ });
   }
 
   // Load the world from Supabase before the first render (this resolves any
