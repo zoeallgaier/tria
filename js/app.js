@@ -266,8 +266,11 @@
       // share one CORS-mode fetch — otherwise iOS can hand the sampler a cached
       // non-CORS copy and taint its canvas, killing the profile wash. (Ignored
       // harmlessly for the optimistic data: URI right after an upload.)
+      // NO loading="lazy": avatars are tiny and always on screen, so lazy only made
+      // them pop in a frame late on every navigation (reading as a reload). Eager +
+      // the warm decode cache (see warmImages) means they ride in WITH the page.
       return `<span class="${cls} avatar--photo" aria-hidden="true">` +
-          `<img src="${esc(user.avatar)}" crossorigin="anonymous" alt="" loading="lazy" decoding="async">` +
+          `<img src="${esc(user.avatar)}" crossorigin="anonymous" alt="" decoding="async">` +
         `</span>`;
     }
     const name = user ? (user.name || user.username) : '';
@@ -1625,6 +1628,7 @@
         return;
       }
       go('#/');
+      warmImages();   // world just loaded for this account — warm its images too
     });
 
     // Toggle signup ⇄ login through the same soft blur-dissolve the pages use, so
@@ -3717,6 +3721,35 @@
     nav.style.display = '';
   }
 
+  /* ── Warm image cache ────────────────────────────────────────────────────────
+     Every navigation re-renders from scratch, minting fresh <img>s. Even though
+     the files carry a 1-year cache, a brand-new element still has to decode before
+     it paints — so avatars and photos would pop in a frame late on each page/tab
+     change, reading as a "reload". We pre-fetch AND pre-decode them here (once the
+     world is loaded, on idle) so the browser holds a ready-to-paint copy: by the
+     time you reach a page its images ride in with it, no reload.
+
+     crossOrigin must match how each is DISPLAYED so we fill the same cache bucket:
+     avatars are crossorigin (shared with the ambient sampler), post photos aren't.
+     Recent photos only (bounded) — no point decoding the whole history up front. */
+  const warmedImages = new Set();
+  function warmImages() {
+    const warm = (url, cors) => {
+      if (!url || url.startsWith('data:') || warmedImages.has(url)) return;
+      warmedImages.add(url);
+      const im = new Image();
+      if (cors) im.crossOrigin = 'anonymous';
+      im.decoding = 'async';
+      im.src = url;
+      im.decode?.().catch(() => {});   // decode + cache the bitmap; ignore aborts
+    };
+    const run = () => {
+      Store.users().forEach(u => warm(u.avatar, true));
+      Store.posts().filter(p => p.image).slice(-40).forEach(p => warm(p.image, false));
+    };
+    ('requestIdleCallback' in window) ? requestIdleCallback(run, { timeout: 2000 }) : setTimeout(run, 400);
+  }
+
   /* ── Nav-tap refresh ────────────────────────────────────────────────────────
      Landing on (or re-tapping) Circle or Updates quietly re-pulls the world in
      the background — the page renders from cache instantly, and only if
@@ -3732,6 +3765,7 @@
     const seq = ++refreshSeq;
     const changed = await Store.refresh();
     if (!changed || seq !== refreshSeq) return;    // stale response — a newer pull won
+    warmImages();   // new friends/posts may have brought new avatars + photos
     if ((location.hash || '#/').split('?')[0] !== path) return;   // navigated away
     // Never yank the page out from under a half-typed comment.
     if (document.activeElement?.matches?.('input, textarea')) return;
@@ -3875,7 +3909,10 @@
 
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.
-  Store.init().then(route).catch((err) => {
+  Store.init().then(() => {
+    route();
+    warmImages();   // decode avatars + recent photos up front so navigation is flash-free
+  }).catch((err) => {
     console.error('Boot failed:', err);
     route();
   }).finally(dismissSplash);
