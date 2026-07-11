@@ -82,8 +82,12 @@ panels** (modals, autocomplete menus, and the Updates notification + soft-ask
 cards — `blur(24–30px)`). Content lists — the feed, the Friends *directory*,
 comments — stay flat editorial rows. The Friends *modal* (a popover) is glass;
 the Friends *page* (a roster) is flat — that split is correct, not inconsistent
-(mirrors iOS: lock-screen notifications are glass, Contacts rows are not).
-**Corner scale:** 3px incidental (`--radius`) · 8px small containers
+(mirrors iOS: lock-screen notifications are glass, Contacts rows are not). On
+phones the Friends/Updates view switcher (seg-tabs) is docked chrome, not an
+inline row: it floats just above the bottom nav and *rises up from behind it*
+when a page becomes active (router tucks it while the page slides in, releases
+it on settle). The bottom nav hugs the home indicator (small float, iOS Liquid
+Glass style), not lifted into the screen. **Corner scale:** 3px incidental (`--radius`) · 8px small containers
 (`--radius-img`) · 12px composer inputs · 14px photos + glass menus/cards ·
 18px nav rail · 20px glass modals · 999px pills. The pastel `publish-fill`
 gradient stays reserved for the primary publish/share action — don't spread it
