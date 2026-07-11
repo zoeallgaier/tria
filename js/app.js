@@ -2968,7 +2968,7 @@
   // picked at random each time the field mounts, so it never goes stale.
   const TAG_PLACEHOLDERS = [
     'garden', 'clay', 'vinyl', 'sourdough', 'thrifted',
-    'cold plunge', 'group chat', 'road trip', 'gremlin era', 'reading nook',
+    'group chat', 'road trip', 'gremlin era', 'reading nook',
     'review', 'hobbies', 'gaming', 'painting',
     'villain arc', 'delulu era', 'small dog energy', 'chaotic good',
     'girl dinner', '3am thoughts',
