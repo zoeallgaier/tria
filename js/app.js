@@ -501,8 +501,8 @@
   }
 
   // ── The rich Note field (compose + edit share it) ───────────────────────────
-  // Title input, a contenteditable body, and an H1/H2/B/I toolbar in one bordered
-  // combo box. `idp` prefixes the ids: 'c' compose, 'e' edit.
+  // An H1/H2/B/I toolbar across the top, then the title input and a contenteditable
+  // body, all in one bordered combo box. `idp` prefixes the ids: 'c' compose, 'e' edit.
   const NOTE_MAX = 15000;   // a Note runs long (a short essay); captions stay 5000
 
   function richToolbarHtml(idp) {
@@ -521,12 +521,12 @@
 
   function richNoteField(idp, titleVal, noteHtml, notePh) {
     return `<div class="field field--combo field--rich">` +
+        richToolbarHtml(idp) +
         `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
           `value="${esc(titleVal || '')}" placeholder="Headline (optional)" aria-label="Headline">` +
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
-        richToolbarHtml(idp) +
       `</div>`;
   }
 
@@ -2669,11 +2669,23 @@
      for a signal this gentle). */
   const notifSeenKey = () => `tria:updates-seen:${Store.session()}`;
 
+  // A note as clean one-line plain text — for previews (Updates snippets) where
+  // a rich note's headings/emphasis markup would otherwise leak in. Strips the
+  // rich-note tags to their words (blocks joined by a space) and collapses
+  // whitespace; a legacy plain-text note just gets its whitespace collapsed.
+  function notePlain(note) {
+    if (!note) return '';
+    const text = isRichNote(note)
+      ? Array.from(parseNoteHtml(note).childNodes).map(n => n.textContent || '').join(' ')
+      : note;
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
   // "…liked ‘Metalheart’" — name the post by its title or a note snippet, so a
   // row is recognisable without leaving the list.
   function notifPostLabel(post) {
     if (!post) return 'a post';
-    const t = post.title || post.note || '';
+    const t = post.title || notePlain(post.note) || '';
     const snip = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t;
     if (snip) return `“${snip}”`;
     const yours = post.author === Store.session();

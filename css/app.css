@@ -1667,8 +1667,8 @@ body.gate main { padding: 0; }
 /* ── Rich Note editor (contenteditable) + its formatting toolbar ───────────────
    The body is a contenteditable that renders headings/emphasis live (WYSIWYG) —
    it reuses the same serif heading + Oxygen emphasis styles as the feed, so what
-   you type is what posts. The toolbar is a quiet accessory strip on the box's
-   foot; its glyphs are set as specimens (each in the style it applies). */
+   you type is what posts. The toolbar is a quiet accessory strip across the
+   box's top; its glyphs are set as specimens (each in the style it applies). */
 .field--rich .rich-note {
   position: relative;
   min-height: 5.5rem;
@@ -1712,22 +1712,22 @@ body.gate main { padding: 0; }
   display: flex;
   align-items: center;
   gap: 0.1rem;
-  padding: 0.25rem 0.5rem;
-  border-top: 1px solid var(--rule);
+  padding: 0.1rem 0.35rem;
+  border-bottom: 1px solid var(--rule);
 }
 .rt-btn {
   -webkit-appearance: none;
   appearance: none;
   border: none;
   background: none;
-  min-width: 2.6rem;
-  height: 2.5rem;               /* generous tap target (HIG ~44px) */
+  min-width: 2.75rem;           /* 44px — iOS HIG minimum tap target */
+  height: 2.75rem;              /* the glyphs read smaller, the hitbox stays full */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--muted);
   cursor: pointer;
-  border-radius: var(--radius);
+  border-radius: 50px;          /* fully rounded hover/pressed pill */
   line-height: 1;
   transition: background 0.15s, color 0.15s;
 }
@@ -1735,15 +1735,15 @@ body.gate main { padding: 0; }
 .rt-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .rt-btn[aria-pressed="true"] { color: var(--text); background: var(--surface-2); }
 /* Specimen glyphs: H1 upright serif, H2 italic serif, then B / I in Oxygen. */
-.rt-h1 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-size: 1.35rem; }
-.rt-h2 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-style: italic; font-size: 1.3rem; }
-.rt-b  { font-family: 'Oxygen', sans-serif; font-weight: 700; font-size: 1.02rem; }
-.rt-i  { font-family: 'Oxygen', sans-serif; font-style: italic; font-size: 1.02rem; }
-.rt-sep { width: 1px; height: 1.4rem; background: var(--rule); margin: 0 0.3rem; flex: none; }
+.rt-h1 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-size: 1.15rem; }
+.rt-h2 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-style: italic; font-size: 1.1rem; }
+.rt-b  { font-family: 'Oxygen', sans-serif; font-weight: 700; font-size: 0.9rem; }
+.rt-i  { font-family: 'Oxygen', sans-serif; font-style: italic; font-size: 0.9rem; }
+.rt-sep { width: 1px; height: 1.1rem; background: var(--rule); margin: 0 0.25rem; flex: none; }
 .rt-count {
   margin-left: auto;
   padding-right: 0.15rem;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
