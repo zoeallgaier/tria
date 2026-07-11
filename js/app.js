@@ -138,6 +138,17 @@
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
+    // On the compose page the + would compete with the composer's own publish
+    // button, so it drops away (fade + sink behind the nav) and the four-icon
+    // pill glides to true center — same spirit as the docked seg-tabs switcher.
+    // Pull the tucked + out of the tab order + a11y tree while it's hidden.
+    const composing = active === '#/publish';
+    nav.classList.toggle('nav--compose', composing);
+    const pub = nav.querySelector('.nav-publish');
+    if (pub) {
+      if (composing) { pub.setAttribute('aria-hidden', 'true'); pub.tabIndex = -1; }
+      else { pub.removeAttribute('aria-hidden'); pub.removeAttribute('tabindex'); }
+    }
     glideNav();
   }
 
@@ -531,7 +542,7 @@
     return `<div class="field field--combo field--rich">` +
         richToolbarHtml(idp) +
         `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
-          `value="${esc(titleVal || '')}" placeholder="Headline (optional)" aria-label="Headline">` +
+          `value="${esc(titleVal || '')}" placeholder="Title (optional)" aria-label="Title">` +
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
@@ -1765,7 +1776,7 @@
       const noFilter = activeFilter === 'all' && !activeTag;
       if (noFilter && Store.friends().length === 0) {
         feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
-          `<p>Your circle is quiet for now.</p>` +
+          `<p>Your circle is empty, for now.</p>` +
           `<a class="feed-empty-cta" href="#/friends">Find people to add →</a>` +
         `</div>`;
       } else {
@@ -2483,7 +2494,7 @@
       const listHtml = friendsTab === 'circle'
         ? (friends.length
             ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
-            : `<p class="feed-empty">Your circle’s empty, for now.</p>`)
+            : `<p class="feed-empty">Your circle is empty, for now.</p>`)
         : (discover.length
             ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` + shareAsk
             : `<p class="feed-empty">No one new to add right now.</p>` + shareAsk);
@@ -2799,7 +2810,7 @@
         `</div>` +
         `<div class="push-ask-actions">` +
           `<button type="button" class="push-ask-dismiss" id="push-not-now">Not now</button>` +
-          `<button type="button" class="push-ask-on publish-fill" id="push-turn-on">Turn on</button>` +
+          `<button type="button" class="push-ask-on" id="push-turn-on">Turn on</button>` +
         `</div>` +
       `</div>`;
   }
@@ -2973,7 +2984,7 @@
     'villain arc', 'delulu era', 'small dog energy', 'chaotic good',
     'girl dinner', '3am thoughts',
     'meal prep', 'farmers market', 'polaroids',
-    'houseplants', 'sports', 'side quest', 'npc moment', 'note it', 'noted',
+    'houseplants', 'sports', 'side quest', 'npc moment',
   ];
   const randomTagPlaceholder = () => {
     const pool = [...TAG_PLACEHOLDERS];
@@ -3139,7 +3150,7 @@
           `</div>` +
         `</div>` +
         `<div class="modal-actions">` +
-          `<button type="button" class="composer-submit publish-fill is-solid" id="aud-done">Done</button>` +
+          `<button type="button" class="composer-submit" id="aud-done">Done</button>` +
         `</div>` +
       `</div>`;
     document.body.appendChild(modal);
@@ -3415,7 +3426,7 @@
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {
-        errEl.textContent = 'Write a headline or a note first.'; return;
+        errEl.textContent = 'Write a title or a note first.'; return;
       }
     }
 
@@ -3470,7 +3481,7 @@
     } else if (post.type === 'note') {
       data.title = val('e-title');
       if (!data.title && !data.note) {
-        errEl.textContent = 'Write a headline or a note first.'; return;
+        errEl.textContent = 'Write a title or a note first.'; return;
       }
     }
     // photo: caption + tags only, both optional (the image carries the post).

@@ -46,7 +46,13 @@
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
   --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
-  --radius-img:  8px;      /* soft radius — images, inputs, containers */
+  --radius-img:  8px;      /* soft radius — small containers, chips */
+  /* The rest of the corner scale, tokenised so the ladder is enforced not
+     remembered (see the design system note in CLAUDE.md). */
+  --radius-field: 12px;   /* composer + edit inputs and their grouped rows */
+  --radius-card:  14px;   /* photos, and floating glass menus / cards */
+  --radius-nav:   18px;   /* the nav rail */
+  --radius-modal: 20px;   /* glass modals + sheets */
   --sidebar-w: 268px;
   --topbar-h:  88px;
   --feed-width: 660px;

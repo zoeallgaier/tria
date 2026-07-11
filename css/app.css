@@ -297,7 +297,7 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   gap: 0.1rem;
   /* Top pad clears the brand overlay (topbar sits on the card's head). */
   padding: calc(var(--topbar-h) - 0.25rem) 0.85rem 1.25rem;
-  border-radius: 18px;
+  border-radius: var(--radius-nav);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   background: color-mix(in srgb, var(--bg) 72%, transparent);
   backdrop-filter: blur(24px) saturate(1.5);
@@ -319,7 +319,7 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   font-size: 1.12rem;
   font-weight: 400;
   line-height: 1;
-  transition: color 0.15s;
+  transition: color var(--dur-micro);
 }
 .nav-link .nav-ico { width: 22px; height: 22px; flex-shrink: 0; }
 @media (hover: hover) {
@@ -439,7 +439,7 @@ main {
    the whole moving page to re-rasterize every frame, and it's a MULTIPLIER on
    everything beneath it (the feed, each rising card, the glass) — the root of
    the iOS jitter. So the blur is a brief focus-in cue only: 6px that clears in
-   the first ~third of the slide (filter transition 0.12s vs the 0.36s slide),
+   the first ~third of the slide (filter transition 0.12s vs the var(--dur-move) slide),
    after which the move is pure transform + opacity, which the GPU composites
    for free. The leaving page gets no blur at all — it's exiting/covered, so it
    doesn't need the cue and stays cheap. `will-change` promotes each page to its
@@ -447,14 +447,14 @@ main {
 #view { position: relative; overflow-x: clip; }
 
 .page {
-  transition: transform 0.36s var(--ease),
+  transition: transform var(--dur-move) var(--ease),
               opacity   0.30s ease;
 }
 
 /* Entering page — offset, transparent, and softly out of focus … */
 .page.enter {
   will-change: transform, opacity;
-  transition: transform 0.36s var(--ease),
+  transition: transform var(--dur-move) var(--ease),
               opacity   0.30s ease,
               filter    0.12s ease-out;   /* clears fast: focus-in, not a held blur */
 }
@@ -471,7 +471,7 @@ main {
 .page.leave.active.to-right { transform: translateX(38px);  opacity: 0; }
 .page.leave.active.fade     { transform: none;              opacity: 0; }
 
-/* In-page glass goes quiet for the whole move (transform runs the full 0.36s,
+/* In-page glass goes quiet for the whole move (transform runs the full var(--dur-move),
    even after the blur has cleared). iOS WebKit (standalone especially) keeps
    trying to sample backdrop-filter inside a transforming/promoted layer and the
    frost visibly jumps — exactly on the pages that carry in-page glass (Friends:
@@ -674,7 +674,7 @@ main {
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
   padding: 0.45rem 0.95rem;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+  transition: color var(--dur-micro), border-color var(--dur-micro), background-color var(--dur-micro);
 }
 /* HIG tap target (shared): small pill controls stay compact + editorial, but
    their HIT region is extended to the 44pt minimum with an invisible overlay.
@@ -853,7 +853,7 @@ main {
 .feed-empty-cta:active { opacity: 0.6; }
 
 .card {
-  animation: rise 0.5s var(--ease) both;
+  animation: rise var(--dur-slow) var(--ease) both;
 }
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
@@ -886,7 +886,7 @@ main {
   background: none;
   border: none;
   border-radius: var(--radius-pill);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-micro), background var(--dur-micro);
 }
 .card-actions button svg { width: 18px; height: 18px; }
 /* The social + activity glyphs read larger than the owner tools — they're the
@@ -1029,8 +1029,8 @@ main {
   from { transform: translateY(-0.6em); opacity: 0; }
   to   { transform: translateY(0);      opacity: 1; }
 }
-.count-tick-up   { display: inline-block; animation: count-tick-up 0.34s var(--ease); }
-.count-tick-down { display: inline-block; animation: count-tick-down 0.34s var(--ease); }
+.count-tick-up   { display: inline-block; animation: count-tick-up var(--dur-move) var(--ease); }
+.count-tick-down { display: inline-block; animation: count-tick-down var(--dur-move) var(--ease); }
 @media (prefers-reduced-motion: reduce) {
   .count-tick-up, .count-tick-down { animation: none; }
 }
@@ -1063,7 +1063,7 @@ main {
   font-size: 0.9rem;
   font-weight: 400;
   border-radius: var(--radius-pill);
-  transition: color 0.15s, background-color 0.15s;
+  transition: color var(--dur-micro), background-color var(--dur-micro);
 }
 @media (hover: hover) { .edit-toggle:not(.is-dirty):hover { color: var(--text); } }
 .edit-toggle.is-dirty {
@@ -1087,7 +1087,7 @@ main {
   padding: 0.55rem 0.95rem;
   font-size: 0.9rem;
   border-radius: var(--radius-pill);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-micro), background var(--dur-micro);
 }
 .edit-delete svg { width: 18px; height: 18px; }
 .edit-delete:hover, .edit-delete:focus-visible {
@@ -1183,7 +1183,7 @@ main {
   color: var(--text);
   margin-bottom: 0.55rem;
 }
-.card-title a { color: inherit; transition: color 0.15s; }
+.card-title a { color: inherit; transition: color var(--dur-micro); }
 @media (hover: hover) { .card-title a:hover { color: var(--muted); } }
 .card-title-ext { color: var(--muted); margin-left: 0.3rem; }
 .card-title-ext svg { width: 0.62em; height: 0.62em; vertical-align: 0.02em; }
@@ -1197,7 +1197,7 @@ main {
   text-underline-offset: 0.16em;
   text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
 }
-.card-note-link { display: block; color: inherit; transition: color 0.15s; }
+.card-note-link { display: block; color: inherit; transition: color var(--dur-micro); }
 @media (hover: hover) { .card-note-link:hover { color: var(--muted); } }
 
 /* Activity when/where-lines — a quiet calendar + day, then pin + place, tucked
@@ -1222,7 +1222,7 @@ main {
   align-items: center;
   gap: 0.35rem;
   color: inherit;
-  transition: color 0.15s;
+  transition: color var(--dur-micro);
 }
 .card-location-link span { text-decoration: underline; text-underline-offset: 2px; }
 @media (hover: hover) { .card-location-link:hover { color: var(--text); } }
@@ -1302,7 +1302,7 @@ main {
   padding: 0;
   margin-top: 0.6rem;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--dur-micro);
 }
 @media (hover: hover) { .readmore-toggle:hover { text-decoration: underline; } }
 @media (prefers-reduced-motion: reduce) {
@@ -1323,7 +1323,7 @@ main {
   border-radius: var(--radius-pill);
   padding: 0.16rem 0.55rem;
   background: none;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-micro), border-color var(--dur-micro);
 }
 .tag.active { color: var(--accent); border-color: var(--accent); }
 @media (hover: hover) {
@@ -1344,7 +1344,7 @@ main {
   opacity: 0;
   padding-left: 0.7rem;              /* the rule lives here, in the left gutter */
   padding-right: var(--inset);
-  transition: grid-template-rows 0.34s var(--ease),
+  transition: grid-template-rows var(--dur-move) var(--ease),
               opacity 0.26s ease;
 }
 .comments-panel.open,
@@ -1411,7 +1411,7 @@ main {
   background: none;
   border: none;
   border-radius: var(--radius-pill);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--dur-micro), background var(--dur-micro);
 }
 .comment-delete svg { width: 16px; height: 16px; }
 @media (hover: hover) {
@@ -1432,7 +1432,7 @@ main {
   border: none;
   border-bottom: 1px solid var(--rule);
   padding: 0.28rem 0;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-micro);
 }
 .comment-form input::placeholder { color: var(--muted); opacity: 0.7; }
 .comment-form input:focus { outline: none; border-color: var(--accent); }
@@ -1444,7 +1444,7 @@ main {
   font-weight: 700;
   font-size: 0.88rem;
   padding: 0.28rem 0.1rem;
-  transition: opacity 0.15s;
+  transition: opacity var(--dur-micro);
 }
 /* Empty field → the Post button is truly disabled (dimmed and inert), so it
    never looks tappable while doing nothing. JS flips `disabled` on input. */
@@ -1474,7 +1474,7 @@ main {
   -webkit-backdrop-filter: blur(30px) saturate(1.5);
   backdrop-filter: blur(30px) saturate(1.5);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
     0 12px 30px rgba(0, 0, 0, 0.18);
@@ -1521,7 +1521,7 @@ main {
   width: 100%;
   height: auto;
   background: var(--surface-2);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
 }
 /* Legacy photos carry no stamped size, so we can't hand the <img> width/height
    to reserve space. Hold a neutral box until it loads (JS drops this class on
@@ -1548,7 +1548,7 @@ main {
   cursor: zoom-out;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
+  transition: opacity var(--dur-quick), visibility var(--dur-quick);
 }
 .lightbox.open { opacity: 1; visibility: visible; }
 .lightbox img { max-width: 92vw; max-height: 90vh; border-radius: var(--radius-img); }
@@ -1614,7 +1614,7 @@ body.gate main { padding: 0; }
   border: 1px solid var(--rule);
   border-radius: var(--radius-img);
   padding: 0.7rem 0.85rem;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-micro);
 }
 .field textarea { resize: vertical; line-height: 1.5; min-height: 3rem; }
 .field input::placeholder,
@@ -1631,7 +1631,7 @@ body.gate main { padding: 0; }
   border: 1px solid var(--rule);
   border-radius: var(--radius-img);
   overflow: hidden;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-micro);
 }
 .field--combo:focus-within { border-color: var(--accent); }
 .field--combo .combo-title,
@@ -1727,9 +1727,9 @@ body.gate main { padding: 0; }
   justify-content: center;
   color: var(--muted);
   cursor: pointer;
-  border-radius: 50px;          /* fully rounded hover/pressed pill */
+  border-radius: var(--radius-pill);   /* fully rounded hover/pressed pill */
   line-height: 1;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--dur-micro), color var(--dur-micro);
 }
 @media (hover: hover) { .rt-btn:hover { color: var(--text); background: var(--surface-2); } }
 .rt-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1747,7 +1747,7 @@ body.gate main { padding: 0; }
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.rt-count.is-over { color: #d9534f; }
+.rt-count.is-over { color: var(--type-find-ink); }
 
 /* An activity's "When" — date + time sharing one row (the date takes the lead),
    so the optional pair reads as a single quiet line, not two more form rows. */
@@ -1787,7 +1787,7 @@ body.gate main { padding: 0; }
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-img);
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-micro);
 }
 .field-user:focus-within { border-color: var(--accent); }
 .field-user .at { padding-left: 0.85rem; color: var(--muted); }
@@ -1806,7 +1806,7 @@ body.gate main { padding: 0; }
   font-size: 1.02rem;
   padding: 0.8rem;
   box-shadow: var(--lit-rim), var(--lit-drop);
-  transition: background-color 0.15s;
+  transition: background-color var(--dur-micro);
 }
 .auth-submit:hover { background: var(--lit-top), var(--accent-press); }
 .auth-alt { margin-top: 1.5rem; font-size: 0.88rem; color: var(--muted); text-align: center; }
@@ -1846,7 +1846,7 @@ body.gate main { padding: 0; }
   background: var(--accent);
   border: 2px solid var(--bg);
   border-radius: 50%;
-  transition: background-color 0.15s, transform 0.12s;
+  transition: background-color var(--dur-micro), transform 0.12s;
 }
 .account-photo-ico { width: 16px; height: 16px; }
 .account-photo-edit:active { transform: scale(0.92); }
@@ -1883,7 +1883,7 @@ body.gate main { padding: 0; }
   font-size: 0.9rem;
   padding-inline: var(--inset);
   margin-bottom: 1rem;
-  transition: color 0.15s;
+  transition: color var(--dur-micro);
 }
 @media (hover: hover) { .profile-back:hover { color: var(--text); } }
 
@@ -1914,7 +1914,7 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-pill);
   padding: 0.35rem 0.85rem;
   font-size: 0.8rem;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+  transition: color var(--dur-micro), border-color var(--dur-micro), background-color var(--dur-micro);
 }
 .account-edit-ico,
 .account-share-ico { width: 14px; height: 14px; }
@@ -1941,7 +1941,7 @@ body.gate main { padding: 0; }
   padding: 0.55rem 1.4rem;
   font-weight: 700;
   font-size: 0.92rem;
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+  transition: color var(--dur-micro), background-color var(--dur-micro), border-color var(--dur-micro);
 }
 @media (hover: hover) {
   .friend-btn:hover { background: var(--accent-press); border-color: var(--accent-press); }
@@ -1983,8 +1983,8 @@ body.gate main { padding: 0; }
   align-items: center;
   gap: 0.85rem;
   padding: 1.1rem var(--inset);
-  transition: background-color 0.15s;
-  animation: rise 0.5s var(--ease) both;   /* same soft rise as feed cards */
+  transition: background-color var(--dur-micro);
+  animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
 }
 .friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
 /* When search hides trailing rows, drop the rule under the last VISIBLE row so no
@@ -2008,7 +2008,7 @@ body.gate main { padding: 0; }
   flex-shrink: 0;
   color: var(--muted);
   font-size: 1.1rem;
-  transition: color 0.15s, transform 0.15s;
+  transition: color var(--dur-micro), transform var(--dur-micro);
 }
 @media (hover: hover) {
   .friend:hover .friend-go { color: var(--text); transform: translateX(3px); }
@@ -2026,7 +2026,7 @@ body.gate main { padding: 0; }
   padding: 0.4rem 1rem;
   font-size: 0.85rem;
   font-weight: 700;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition: background-color var(--dur-micro), border-color var(--dur-micro);
 }
 .friend-add:active { transform: scale(0.96); }
 @media (hover: hover) {
@@ -2073,7 +2073,7 @@ body.gate main { padding: 0; }
   gap: 0.85rem 1.2rem;
   margin: 0.35rem 0 1.5rem;
   padding: 1rem 1.15rem;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--bg) 74%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   backdrop-filter: blur(24px) saturate(1.5);
@@ -2113,7 +2113,20 @@ body.gate main { padding: 0; }
   color: var(--muted);
 }
 .push-ask-dismiss:hover { color: var(--text); }
-.push-ask-on { border-radius: var(--radius-pill); padding: 0.45rem 1.05rem; font-size: 0.85rem; }
+/* The affirmative action, but not a publish/share gesture — so it wears the
+   monochrome ink fill (like the Save-style submits), not the reserved pastel
+   publish-fill gradient. */
+.push-ask-on {
+  border-radius: var(--radius-pill);
+  padding: 0.45rem 1.05rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: none;
+  color: var(--on-accent);
+  background: var(--lit-top), var(--accent);
+  box-shadow: var(--lit-rim), var(--lit-drop);
+  transition: background-color var(--dur-micro) var(--ease);
+}
 .push-ask--out { opacity: 0; transition: opacity var(--dur-quick) var(--ease); }
 @media (max-width: 460px) {
   .push-ask-actions { width: 100%; }
@@ -2182,8 +2195,8 @@ body.gate main { padding: 0; }
   gap: 0.85rem;
   padding: 1.05rem var(--inset);
   color: var(--text);
-  transition: background-color 0.15s;
-  animation: rise 0.5s var(--ease) both;   /* same soft rise as the directory rows */
+  transition: background-color var(--dur-micro);
+  animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as the directory rows */
 }
 .notif-list li:not(:last-child) .notif { border-bottom: 1px solid var(--rule); }
 @media (hover: hover) { .notif:hover { background: var(--surface); } }
@@ -2242,7 +2255,7 @@ body.gate main { padding: 0; }
   padding: 0.95rem var(--inset);
   border-bottom: 1px solid var(--rule);
   transition: background-color var(--dur-micro) var(--ease);
-  animation: rise 0.5s var(--ease) both;   /* same soft rise as the ledger */
+  animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as the ledger */
 }
 @media (hover: hover) { .request-row:hover { background: var(--surface); } }
 .request-who {
@@ -2266,7 +2279,7 @@ body.gate main { padding: 0; }
   padding: 0.4rem 1rem;
   font-size: 0.85rem;
   font-weight: 700;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition: background-color var(--dur-micro), border-color var(--dur-micro);
 }
 .request-accept:active { transform: scale(0.96); }
 @media (hover: hover) {
@@ -2278,7 +2291,7 @@ body.gate main { padding: 0; }
   color: var(--muted);
   font-size: 0.85rem;
   padding: 0.4rem 0.55rem;
-  transition: color 0.15s;
+  transition: color var(--dur-micro);
 }
 @media (hover: hover) { .request-ignore:hover { color: var(--text); } }
 
@@ -2303,7 +2316,7 @@ body.gate main { padding: 0; }
 .edit-form .field textarea,
 .edit-form .field--combo,
 .fb-form .field input,
-.fb-form .field textarea { border-radius: 12px; }
+.fb-form .field textarea { border-radius: var(--radius-field); }
 .composer-error {
   color: var(--type-find-ink);
   font-size: 0.85rem;
@@ -2321,7 +2334,7 @@ body.gate main { padding: 0; }
   font-weight: 700;
   font-size: 0.95rem;
   padding: 0.62rem 1.6rem;
-  transition: background-color 0.15s;
+  transition: background-color var(--dur-micro);
 }
 /* Save-style submits stay monochrome ink; the composer's own Publish carries
    the shifting pastel fill instead (.publish-fill). */
@@ -2354,12 +2367,12 @@ body.gate main { padding: 0; }
   width: 100%;
   padding: 0.7rem 0.85rem;
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: var(--radius-field);
   background: var(--surface);
   color: var(--text);
   font: inherit;
   text-align: left;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-micro);
 }
 @media (hover: hover) { .audience-row:hover { border-color: var(--muted); } }
 .audience-row-key { color: var(--muted); font-size: 0.9rem; }
@@ -2392,7 +2405,7 @@ body.gate main { padding: 0; }
 
 /* Two modes grouped in one inset-list card, split by a hairline — no outlines. */
 .aud-modes {
-  border-radius: 12px;
+  border-radius: var(--radius-field);
   overflow: hidden;
   background: color-mix(in srgb, var(--text) 4%, transparent);
   margin-bottom: 0.6rem;
@@ -2408,7 +2421,7 @@ body.gate main { padding: 0; }
   border: 0;                 /* kill the UA default 2px outset button border */
   background: none;
   color: var(--text);
-  transition: background-color 0.15s;
+  transition: background-color var(--dur-micro);
 }
 .aud-mode + .aud-mode { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent); }
 .aud-mode[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 9%, transparent); }
@@ -2425,7 +2438,7 @@ body.gate main { padding: 0; }
           mask: var(--check-mask) center / contain no-repeat;
   opacity: 0;
   transform: scale(0.6);
-  transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+  transition: opacity var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease);
 }
 .aud-mode[aria-pressed="true"] .aud-mode-tick { opacity: 1; transform: scale(1); }
 
@@ -2434,7 +2447,7 @@ body.gate main { padding: 0; }
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.32s var(--ease), opacity 0.24s ease;
+  transition: grid-template-rows 0.32s var(--ease), opacity var(--dur-quick) ease;
 }
 .aud-list-wrap.is-open { grid-template-rows: 1fr; opacity: 1; }
 .aud-list-wrap > .aud-list { min-height: 0; }
@@ -2462,7 +2475,7 @@ body.gate main { padding: 0; }
   height: 22px;
   border-radius: 50%;
   border: 1.5px solid color-mix(in srgb, var(--text) 16%, transparent);
-  transition: background-color 0.14s, border-color 0.14s;
+  transition: background-color var(--dur-micro), border-color var(--dur-micro);
 }
 .aud-check::after {
   content: '';
@@ -2472,14 +2485,14 @@ body.gate main { padding: 0; }
   -webkit-mask: var(--check-mask) center / 12px no-repeat;
           mask: var(--check-mask) center / 12px no-repeat;
   opacity: 0;
-  transition: opacity 0.14s;
+  transition: opacity var(--dur-micro);
 }
 .aud-pick[aria-checked="true"] .aud-check { background: var(--accent); border-color: var(--accent); }
 .aud-pick[aria-checked="true"] .aud-check::after { opacity: 1; }
 @media (hover: hover) { .aud-pick:hover { background: color-mix(in srgb, var(--text) 4%, transparent); } }
 .aud-empty { color: var(--muted); text-align: center; padding: 1.2rem 0; }
 @media (prefers-reduced-motion: reduce) {
-  .aud-list-wrap { transition: opacity 0.2s ease; }
+  .aud-list-wrap { transition: opacity var(--dur-quick) ease; }
   .aud-pick { animation: none; }
 }
 
@@ -2569,7 +2582,7 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-img);
   padding: 1.6rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-  animation: rise 0.24s var(--ease);
+  animation: rise var(--dur-quick) var(--ease);
 }
 /* Liquid-glass card: the same frosted panel language as the nav pill, scaled up
    to a modal. Translucent frosted background (the dimmed page saturates through
@@ -2580,7 +2593,7 @@ body.gate main { padding: 0; }
   /* iOS HIG rounding: a soft continuous-feeling corner in the card/sheet range
      (well above the 8px --radius-img), so the glass panel reads like a native
      iOS modal rather than a boxy web dialog. */
-  border-radius: 20px;
+  border-radius: var(--radius-modal);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   backdrop-filter: blur(30px) saturate(1.5);
   -webkit-backdrop-filter: blur(30px) saturate(1.5);
@@ -2685,10 +2698,10 @@ body.gate main { padding: 0; }
   from { opacity: 1; transform: translateY(0); }
   to   { opacity: 0; transform: translateY(12px); }
 }
-.modal--closing { animation: fade-out 0.2s var(--ease) forwards; }
-.modal--closing .modal-card { animation: sink 0.2s var(--ease) forwards; }
+.modal--closing { animation: fade-out var(--dur-quick) var(--ease) forwards; }
+.modal--closing .modal-card { animation: sink var(--dur-quick) var(--ease) forwards; }
 @media (prefers-reduced-motion: reduce) {
-  .modal--closing, .modal--closing .modal-card { animation: fade-out 0.14s ease forwards; }
+  .modal--closing, .modal--closing .modal-card { animation: fade-out var(--dur-micro) ease forwards; }
 }
 @media (prefers-reduced-motion: reduce) { .card, .friend, .notif { animation: none; } }
 
@@ -2709,8 +2722,10 @@ body.gate main { padding: 0; }
     border-right: none;
     border-bottom: 1px solid var(--rule);
     background: color-mix(in srgb, var(--bg) 88%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    /* Chrome-tier frost (18–24px). Kept at the floor since the bar runs more
+       opaque (88%) than the nav pill, so it needs less blur to lift off content. */
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
     transition: transform var(--dur-move) var(--ease);
   }
   /* Scrolling down tucks the bar away (see the scroll watcher in app.js);
@@ -2735,10 +2750,15 @@ body.gate main { padding: 0; }
     width: auto;
     height: auto;
     z-index: 101;                     /* the pill + dial ride above the dial veil (100) */
+    /* The + is a --fab-size disc set --nav-gap off the pill; on the compose page
+       it tucks away and the pill slides right by half that footprint to recenter
+       (see .nav--compose). Both are vars so the recenter maths stays exact. */
+    --fab-size: 56px;
+    --nav-gap: 0.7rem;
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 0.7rem;
+    gap: var(--nav-gap);
     padding: 0;
     border: none;
     border-radius: 0;
@@ -2770,6 +2790,8 @@ body.gate main { padding: 0; }
        swap (a page switch), leaving the nav invisible until a scroll repaints
        it. Pinning the layer here, plus the repaint nudge in route(), fixes it. */
     transform: translateZ(0);
+    /* Glides to true center when the + drops away on the compose page. */
+    transition: transform var(--dur-move) var(--ease);
   }
   /* Icon-only destinations: labels stay in the DOM for the accessible name but
      drop from view. Each target is a 50px circle with a 28px glyph — trimmed a
@@ -2832,8 +2854,8 @@ body.gate main { padding: 0; }
      with the grain (::after) or the + glyph riding on top. */
   .nav-publish {
     margin: 0;
-    width: 56px;
-    height: 56px;
+    width: var(--fab-size);
+    height: var(--fab-size);
     padding: 0;
     color: var(--on-type);
     border-radius: 50%;
@@ -2842,6 +2864,10 @@ body.gate main { padding: 0; }
     box-shadow:
       0 2px 5px rgba(0, 0, 0, 0.18),
       0 12px 28px rgba(0, 0, 0, 0.20);
+    /* Fades fast while it sinks slower, so it reads as dropping behind the nav
+       (matching the seg-tabs rise) rather than blinking out. */
+    transition: opacity var(--dur-quick) var(--ease),
+                transform var(--dur-move) var(--ease);
   }
   .nav-publish .nav-ico { width: 30px; height: 30px; }
   .nav-publish::after { opacity: 0.28; }
@@ -2870,6 +2896,20 @@ body.gate main { padding: 0; }
      lands the plus on its diagonal. */
   .nav-publish .nav-ico { transition: transform var(--dur-move) var(--ease); }
   .nav-publish.dial-open .nav-ico { transform: rotate(405deg); }
+
+  /* Compose page (renderNav toggles .nav--compose): the + would fight the
+     composer's own publish button, so it sinks behind the nav and fades out,
+     and the tab pill glides to true center. The + stays in flow (opacity 0), so
+     shifting the pill right by exactly half the +'s footprint — its width plus
+     the row gap — lands the pill's center on the screen center. */
+  .nav--compose .nav-publish {
+    opacity: 0;
+    transform: translateY(14px) scale(0.6);
+    pointer-events: none;
+  }
+  .nav--compose .nav-pill {
+    transform: translateX(calc((var(--fab-size) + var(--nav-gap)) / 2)) translateZ(0);
+  }
 
   /* ── The + button's post-type speed dial ──────────────────────────────────
      Tapping + fans these four labeled type buttons up out of the button (see
@@ -2964,6 +3004,8 @@ body.gate main { padding: 0; }
     .nav-dial-item { transform: none; transition: opacity var(--dur-micro) ease; }
     .nav-dial.is-open .nav-dial-item { transition-delay: 0s; }
     .nav-publish .nav-ico, .dial-veil { transition: none; }
+    /* Snap the + away and the pill to center — no slide under reduced motion. */
+    .nav-pill, .nav-publish { transition: none; }
     /* This override sits after (and matches) the global publish-fill reduced
        rule, so it has to re-still the FAB's dome drift itself. */
     .nav-publish::before { animation: none; background-position: 0 0, 0 0, 50% 50%; }
@@ -3047,6 +3089,16 @@ body.gate main { padding: 0; }
 
   /* Full-width column on phones — drop the desktop asymmetric margins. */
   .view { margin: 0; max-width: none; padding: 1.5rem 1.15rem 2rem; }
+
+  /* Signed-out About renders in a chromeless main (body.gate main padding:0),
+     with no topbar to clear the notch and no bottom nav reserving space — so the
+     "Back to sign in" link hid under the status bar and the Feedback fold crowded
+     the home indicator. Restore the safe-area insets for the gated About only;
+     the auth screen (also under body.gate main) keeps its own centered layout. */
+  body.gate .view.about {
+    padding-top: calc(env(safe-area-inset-top) + 1.5rem);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 3rem);
+  }
   .masthead, .filters { padding-inline: 0; }   /* already inset by .view here */
   .view-title { font-size: 2rem; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 1.1rem; }
@@ -3178,14 +3230,14 @@ body.gate main { padding: 0; }
   border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted);
   transform: rotate(45deg);            /* points down while closed */
-  transition: transform 0.34s var(--ease);
+  transition: transform var(--dur-move) var(--ease);
 }
 .about-fold.open .about-fold-chev { transform: rotate(225deg); }
 .about-fold-panel {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.34s var(--ease),
+  transition: grid-template-rows var(--dur-move) var(--ease),
               opacity 0.26s ease;
 }
 .about-fold.open .about-fold-panel { grid-template-rows: 1fr; opacity: 1; }
