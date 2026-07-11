@@ -1611,15 +1611,21 @@ body.gate main { padding: 0; }
    so the optional pair reads as a single quiet line, not two more form rows. */
 .when-row { display: flex; gap: 0.6rem; }
 .when-row input[type="date"] { flex: 1.4; min-width: 0; }
-.when-row input[type="time"] { flex: 1;   min-width: 0; }
+/* The time input keeps an em floor (not 0) so it can never squeeze below its
+   own value: iOS (home-screen installs especially, where text can run larger)
+   otherwise wraps the AM/PM onto a second line inside the control. em tracks
+   the rendered font, so the floor holds at any iOS text size; the date field
+   beside it stays min-width:0 and absorbs the squeeze. */
+.when-row input[type="time"] { flex: 1; min-width: 6.8em; }
 /* iOS renders date/time inputs as centered steppers; keep the height + left
    alignment of the text fields so the row sits flush with the form. */
 .when-row input { -webkit-appearance: none; appearance: none; text-align: left; }
 /* iOS paints the value in these pseudos, each carrying a default vertical margin
    that stacks on our padding and inflates the row's height. The value pseudo
-   drives a filled input; the edit pseudo drives an empty one. Zero both. */
-.when-row input::-webkit-date-and-time-value { text-align: left; margin: 0; }
-.when-row input::-webkit-datetime-edit { margin: 0; padding: 0; }
+   drives a filled input; the edit pseudo drives an empty one. Zero both, and
+   forbid the value from ever line-breaking ("10:30" / "PM"). */
+.when-row input::-webkit-date-and-time-value { text-align: left; margin: 0; white-space: nowrap; }
+.when-row input::-webkit-datetime-edit { margin: 0; padding: 0; white-space: nowrap; }
 /* iOS shows nothing at all in an empty date/time input — paint the hint
    ourselves (the placeholder attr, flagged by wireWhenHints in app.js).
    Scoped to iOS so other browsers keep their native mm/dd/yyyy ghost. */
