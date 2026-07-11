@@ -373,10 +373,16 @@
   // that already sits inside an anchor (a title-less find's linked caption),
   // where a nested <a> would be invalid.
   function richText(text, author, opts = {}) {
-    return esc(text).replace(MENTION_RE, (m, lead, handle) => {
+    // Tracks where the previous rendered mention ended, so a run of tagged users
+    // reads as a list. Only two resolved mentions separated by a single space are
+    // joined with a comma — never text after a name, so no stray commas appear.
+    let prevEnd = -1;
+    return esc(text).replace(MENTION_RE, (m, lead, handle, offset) => {
       const u = Store.user(handle);
-      if (!u || !Store.areFriends(author, handle)) return m;
+      if (!u || !Store.areFriends(author, handle)) { prevEnd = -1; return m; }
       const name = esc(u.name);
+      if (lead === ' ' && offset === prevEnd) lead = '<strong class="mention">,</strong> ';
+      prevEnd = offset + m.length;
       return lead + (opts.link === false
         ? `<strong class="mention">${name}</strong>`
         : `<a class="mention" href="#/u/${esc(encodeURIComponent(handle))}">${name}</a>`);
@@ -503,7 +509,7 @@
   // ── The rich Note field (compose + edit share it) ───────────────────────────
   // An H1/H2/B/I toolbar across the top, then the title input and a contenteditable
   // body, all in one bordered combo box. `idp` prefixes the ids: 'c' compose, 'e' edit.
-  const NOTE_MAX = 15000;   // a Note runs long (a short essay); captions stay 5000
+  const NOTE_MAX = 15000;   // a Note runs long (a short essay); captions stay 180
 
   function richToolbarHtml(idp) {
     // Specimen buttons: each glyph is set in the exact style it applies, so the
@@ -1417,7 +1423,7 @@
         `<input id="e-title" class="combo-title" type="text" maxlength="120" ` +
           `value="${esc(post.title || '')}" placeholder="${titlePh}" aria-label="${titleAria}">` +
         `<div class="combo-divider" aria-hidden="true"></div>` +
-        `<textarea id="e-note" class="combo-note" rows="${rows}" maxlength="5000" ` +
+        `<textarea id="e-note" class="combo-note" rows="${rows}" maxlength="180" ` +
           `placeholder="${notePh}" aria-label="${noteAria}">${esc(post.note || '')}</textarea>` +
       `</div>`;
 
@@ -1450,7 +1456,7 @@
     if (post.type === 'photo') {
       return `<div class="field">` +
           `<label for="e-note">Caption</label>` +
-          `<textarea id="e-note" rows="2" maxlength="5000" ` +
+          `<textarea id="e-note" rows="2" maxlength="180" ` +
             `placeholder="Say something about it (optional).">${esc(post.note || '')}</textarea>` +
         `</div>` + tagsInput;
     }
@@ -2996,7 +3002,7 @@
           `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
             `placeholder="Title (optional)" aria-label="Title">` +
           `<div class="combo-divider" aria-hidden="true"></div>` +
-          `<textarea id="c-note" class="combo-note" rows="2" maxlength="5000" ` +
+          `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
             `placeholder="What made you want to share it?" aria-label="Why share it"></textarea>` +
         `</div>` +
         `<div class="field">` +
@@ -3013,7 +3019,7 @@
           `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
             `placeholder="Picnic at the park" aria-label="What's the plan?" autofocus>` +
           `<div class="combo-divider" aria-hidden="true"></div>` +
-          `<textarea id="c-note" class="combo-note" rows="2" maxlength="5000" ` +
+          `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
             `placeholder="When to show up, what to bring." aria-label="Details"></textarea>` +
         `</div>` +
         `<div class="field">` +
@@ -3035,7 +3041,7 @@
     if (type === 'photo') {
       return `<div class="field">` +
           `<label for="c-note">Caption</label>` +
-          `<textarea id="c-note" rows="2" maxlength="5000" ` +
+          `<textarea id="c-note" rows="2" maxlength="180" ` +
             `placeholder="Say something, or let the photo speak."></textarea>` +
         `</div>` +
         `<div class="field">` +
