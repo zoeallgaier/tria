@@ -1421,7 +1421,7 @@ main {
   }
 }
 
-/* flex-end so the Post button rides the last line as the box grows downward. */
+/* Bottom-aligned so the Post button hugs the last line as the box grows. */
 .comment-form { display: flex; align-items: flex-end; gap: 0.7rem; }
 .comment-form textarea {
   flex: 1;
@@ -1434,16 +1434,21 @@ main {
   border: none;
   border-bottom: 1px solid var(--rule);
   padding: 0.28rem 0;
-  /* Auto-grown by JS to fit the comment; no manual resize handle, and once it
-     hits the cap it scrolls internally rather than shoving the form off-screen. */
+  /* One line to start; JS grows the height to fit, so a long comment wraps into
+     view instead of scrolling off the end. No manual drag handle. */
   resize: none;
-  overflow-y: auto;
-  max-height: 8.4em;
-  transition: border-color var(--dur-micro);
+  overflow: hidden;
+  /* Ease the grow/shrink as lines wrap in and out, so the box breathes rather
+     than jumping a line at a time. */
+  transition: border-color var(--dur-micro), height var(--dur-quick) var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .comment-form textarea { transition: border-color var(--dur-micro); }
 }
 .comment-form textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .comment-form textarea:focus { outline: none; border-color: var(--accent); }
 .comment-form button {
+  position: relative;
   flex-shrink: 0;
   color: var(--accent);
   background: none;
@@ -1452,6 +1457,19 @@ main {
   font-size: 0.88rem;
   padding: 0.28rem 0.1rem;
   transition: opacity var(--dur-micro);
+}
+/* Stretch the tap target to the 44px HIG minimum without bloating the flat row:
+   an invisible overlay centred on the small label carries the hit area. */
+.comment-form button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  min-width: 44px;
+  min-height: 44px;
 }
 /* Empty field → the Post button is truly disabled (dimmed and inert), so it
    never looks tappable while doing nothing. JS flips `disabled` on input. */
@@ -1486,10 +1504,6 @@ main {
     inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
     0 12px 30px rgba(0, 0, 0, 0.18);
 }
-/* The @mention + location pickers float as a fixed popover (JS pins top/left/width
-   to the field and parks it ABOVE, so the iOS keyboard never buries it); sits above
-   the glass modal (250) since the Note/Activity composers open there. */
-.mention-list--float { position: fixed; margin: 0; z-index: 260; }
 @media (prefers-color-scheme: dark) {
   .mention-list {
     background: color-mix(in srgb, var(--bg) 82%, transparent);
@@ -1533,6 +1547,14 @@ main {
   height: auto;
   background: var(--surface-2);
   border-radius: var(--radius-card);
+  /* The neutral box holds the space; the photo eases in over it once it lands
+     (JS adds .is-loaded), so it settles rather than popping. */
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.photo.is-loaded img { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .photo img { opacity: 1; transition: none; }
 }
 /* Legacy photos carry no stamped size, so we can't hand the <img> width/height
    to reserve space. Hold a neutral box until it loads (JS drops this class on
@@ -2366,6 +2388,61 @@ body.gate main { padding: 0; }
   min-width: 13rem;
 }
 .composer .composer-post:disabled { opacity: 0.55; }
+
+/* The hero Post wears the same lit dome as the compose "+" (.nav-publish): a
+   top-left specular gloss and a base cavity shadow layered over the drifting
+   quartet, plus a contact + ambient drop, so it reads as a glossy 3D object,
+   not a flat pill. Only the colour band drifts; the highlight and cavity stay
+   put so the light source never wanders (mirrors publish-dome on the FAB). */
+.composer .composer-post.publish-fill.is-solid {
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.16),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.composer .composer-post.publish-fill.is-solid::before {
+  background:
+    radial-gradient(75% 130% at 34% -20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
+    radial-gradient(92% 130% at 50% 120%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 55%),
+    linear-gradient(115deg, var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+  background-size: 100% 100%, 100% 100%, 300% 100%;
+  background-position: 0 0, 0 0, 0% 50%;
+  animation: publish-dome-pill 14s ease-in-out infinite;
+}
+/* Dark mode flattens the button: the black cavity + drop shadows all but vanish
+   against a dark surface, so the volume has to come from LIGHT. Brighter hotspot,
+   a deeper cavity that still bites the pastel fill, and a crisp lit top rim, so
+   it reads as a glossy 3D object in the dark too. Light is left as-is. */
+@media (prefers-color-scheme: dark) {
+  .composer .composer-post.publish-fill.is-solid {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),        /* lit top rim (reads on dark) */
+      inset 0 -10px 18px rgba(0, 0, 0, 0.28),         /* cavity depth into the fill */
+      0 2px 6px rgba(0, 0, 0, 0.45),
+      0 14px 32px rgba(0, 0, 0, 0.55);                 /* float, darker to clear the dark bg */
+  }
+  .composer .composer-post.publish-fill.is-solid::before {
+    background:
+      radial-gradient(70% 120% at 34% -16%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 52%),
+      radial-gradient(95% 130% at 50% 122%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 55%),
+      linear-gradient(115deg, var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    /* The `background` shorthand above resets background-size/position, so restate
+       them: the band stays 300%-wide (2-3 colours in view, drifting) like light. */
+    background-size: 100% 100%, 100% 100%, 300% 100%;
+    background-position: 0 0, 0 0, 0% 50%;
+  }
+}
+/* Only the colour band drifts; the highlight and cavity stay pinned so the light
+   source never wanders. */
+@keyframes publish-dome-pill {
+  0%, 100% { background-position: 0 0, 0 0, 0% 50%; }
+  50%      { background-position: 0 0, 0 0, 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer .composer-post.publish-fill.is-solid::before {
+    animation: none;
+    background-position: 0 0, 0 0, 50% 50%;
+  }
+}
 
 /* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
    "Shared with  Everyone in your circle ›". Reads as a field, opens the picker

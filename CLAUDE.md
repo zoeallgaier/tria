@@ -92,3 +92,21 @@ Glass style), not lifted into the screen. **Corner scale:** 3px incidental (`--r
 18px nav rail · 20px glass modals · 999px pills. The pastel `publish-fill`
 gradient stays reserved for the primary publish/share action — don't spread it
 to every button, or it stops meaning anything.
+
+**Lit dome — the primary-action material.** The two hero commit buttons — the
+compose **+ FAB** (`.nav-publish`) and the composer's **Post** pill
+(`.composer-post`) — aren't flat pastel discs: the drifting quartet sits under a
+fixed lit dome (top-left specular hotspot + base cavity shadow + contact/ambient
+float) so they read as glossy 3D objects with a real, non-wandering light source
+(only the colour band drifts; the highlight/cavity stay pinned). **Dark mode
+carries the volume with light, not shadow:** the black cavity + drop shadows all
+but vanish on a dark surface, so dark brightens the hotspot and adds a crisp lit
+top rim instead. Keep the colour-band scale (`300%`, 2–3 hues in view) identical
+across modes — only the gloss is scheme-tuned; redeclaring the `background`
+shorthand silently resets `background-size`, so always restate it.
+
+**Comments are a growing textarea, not a one-line input.** The comment composer
+auto-grows to fit its text (wraps into view instead of scrolling off one line);
+Enter posts, Shift+Enter breaks a line. It stays flat editorial (comments are
+content, never glass). Post-photos fade in as they load over the neutral
+placeholder box (JS adds `.is-loaded`), so they settle rather than pop.
