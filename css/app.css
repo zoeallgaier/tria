@@ -1421,21 +1421,28 @@ main {
   }
 }
 
-.comment-form { display: flex; align-items: center; gap: 0.7rem; }
-.comment-form input {
+/* flex-end so the Post button rides the last line as the box grows downward. */
+.comment-form { display: flex; align-items: flex-end; gap: 0.7rem; }
+.comment-form textarea {
   flex: 1;
   min-width: 0;
   font: inherit;
   font-size: 16px;          /* keep ≥16px so iOS doesn't auto-zoom on focus */
+  line-height: 1.4;
   color: var(--text);
   background: none;
   border: none;
   border-bottom: 1px solid var(--rule);
   padding: 0.28rem 0;
+  /* Auto-grown by JS to fit the comment; no manual resize handle, and once it
+     hits the cap it scrolls internally rather than shoving the form off-screen. */
+  resize: none;
+  overflow-y: auto;
+  max-height: 8.4em;
   transition: border-color var(--dur-micro);
 }
-.comment-form input::placeholder { color: var(--muted); opacity: 0.7; }
-.comment-form input:focus { outline: none; border-color: var(--accent); }
+.comment-form textarea::placeholder { color: var(--muted); opacity: 0.7; }
+.comment-form textarea:focus { outline: none; border-color: var(--accent); }
 .comment-form button {
   flex-shrink: 0;
   color: var(--accent);
@@ -1479,6 +1486,10 @@ main {
     inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
     0 12px 30px rgba(0, 0, 0, 0.18);
 }
+/* The @mention + location pickers float as a fixed popover (JS pins top/left/width
+   to the field and parks it ABOVE, so the iOS keyboard never buries it); sits above
+   the glass modal (250) since the Note/Activity composers open there. */
+.mention-list--float { position: fixed; margin: 0; z-index: 260; }
 @media (prefers-color-scheme: dark) {
   .mention-list {
     background: color-mix(in srgb, var(--bg) 82%, transparent);

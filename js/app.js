@@ -698,6 +698,54 @@
   // combobox wiring (aria-expanded / activedescendant + a polite live region)
   // so screen readers hear the suggestions.
   let mentionSeq = 0;
+
+  // Shared autocomplete popover mechanics for the @mention + location pickers.
+  // The listbox is a fixed popover parked on <body> (only while open) instead of
+  // living in the field's flow — that lets it escape the comment panel's / combo
+  // box's overflow clip, and (the point) sit ABOVE the field so the iOS keyboard,
+  // which eats the bottom of the screen, never buries it. It drops below only when
+  // the field hugs the top of the visual viewport, so nothing clips off-screen.
+  // Body-parented (not inside the glass modal) keeps `fixed` viewport-relative —
+  // a backdrop-filter ancestor would otherwise capture it and skew the coords.
+  function floatPopover(field, list, live) {
+    list.classList.add('mention-list--float');
+    const place = () => {
+      const r = field.getBoundingClientRect();
+      const vv = window.visualViewport;
+      const vTop = vv ? vv.offsetTop : 0;
+      const gap = 6;
+      list.style.left = Math.round(r.left) + 'px';
+      list.style.width = Math.round(r.width) + 'px';
+      const h = list.offsetHeight;
+      const below = (r.top - vTop) < h + gap;   // no room above -> fall below
+      list.style.top = Math.round(below ? r.bottom + gap : r.top - h - gap) + 'px';
+    };
+    let reflowing = false;
+    const onReflow = () => { if (!list.hidden) place(); };
+    const bindReflow = () => {
+      if (reflowing) return; reflowing = true;
+      window.addEventListener('scroll', onReflow, true);   // capture: catch inner scrolls too
+      window.visualViewport?.addEventListener('resize', onReflow);
+      window.visualViewport?.addEventListener('scroll', onReflow);
+    };
+    const unbindReflow = () => {
+      if (!reflowing) return; reflowing = false;
+      window.removeEventListener('scroll', onReflow, true);
+      window.visualViewport?.removeEventListener('resize', onReflow);
+      window.visualViewport?.removeEventListener('scroll', onReflow);
+    };
+    return {
+      // Call once the list is populated + unhidden: mount, position, track.
+      show() {
+        if (!list.isConnected) { document.body.appendChild(list); if (live) document.body.appendChild(live); }
+        place();
+        bindReflow();
+      },
+      // Call from the picker's close(): stop tracking, leave no orphan on <body>.
+      detach() { unbindReflow(); list.remove(); if (live) live.remove(); },
+    };
+  }
+
   function wireMentions(field) {
     if (!field) return;
     const isCE = field.isContentEditable;   // the rich Note editor vs a plain textarea
@@ -710,16 +758,9 @@
     const live = document.createElement('div');
     live.className = 'visually-hidden';
     live.setAttribute('aria-live', 'polite');
-    // The comment form is a flex row, so the list sits after the form itself; the
-    // textarea composer drops it under the field; the rich Note editor drops it
-    // below the whole combo box, clear of the toolbar strip at the box's foot.
-    const anchor = field.closest('.comment-form')
-      || (isCE && field.closest('.field--combo'))
-      || field;
-    anchor.insertAdjacentElement('afterend', list);
-    list.insertAdjacentElement('afterend', live);
     field.setAttribute('aria-autocomplete', 'list');
     field.setAttribute('aria-expanded', 'false');
+    const pop = floatPopover(field, list, live);
 
     let items = [];        // matched user objects
     let active = -1;       // highlighted row
@@ -732,6 +773,7 @@
       field.removeAttribute('aria-controls');
       field.removeAttribute('aria-activedescendant');
       live.textContent = '';
+      pop.detach();
     };
 
     const highlight = (i) => {
@@ -807,6 +849,7 @@
         li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(i); });
       });
       highlight(0);
+      pop.show();
     };
 
     field.addEventListener('input', update);
@@ -816,7 +859,7 @@
       if (list.hidden) return;
       if (e.key === 'ArrowDown') { e.preventDefault(); highlight((active + 1) % items.length); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); highlight((active - 1 + items.length) % items.length); }
-      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(active); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); pick(active); }
       else if (e.key === 'Escape') { e.stopPropagation(); close(); }
     });
   }
@@ -1326,7 +1369,7 @@
           `<div class="comments-content">` +
             (list.length ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>` : '') +
             `<form class="comment-form">` +
-              `<input type="text" name="text" maxlength="300" placeholder="Add a comment…">` +
+              `<textarea name="text" maxlength="300" rows="1" placeholder="Add a comment…"></textarea>` +
               `<button type="submit" disabled>Post</button>` +
             `</form>` +
           `</div>` +
@@ -1338,15 +1381,35 @@
     const toggle = el.querySelector('.card-comment');
     const panel = el.querySelector('.comments-panel');
     if (!toggle || !panel) return;
-    const input = panel.querySelector('.comment-form input');
+    const input = panel.querySelector('.comment-form textarea');
+    const form = panel.querySelector('.comment-form');
     const submitBtn = panel.querySelector('.comment-form button[type="submit"]');
     wireMentions(input);
 
     // The Post button is inert until there's something to post — flip `disabled`
     // as the field fills/empties (drives the dimmed look; blocks empty submits).
     const syncSubmit = () => { submitBtn.disabled = !input.value.trim(); };
+    // Grow the box to fit the whole comment so a long one wraps into view instead
+    // of scrolling past on one line; capped by CSS max-height, then it scrolls.
+    // scrollHeight only reads true once the field is in layout — wireComments runs
+    // inside makeCard, before the card is inserted — so the initial size waits a
+    // frame (else height pins to 0 and the placeholder spills below the rule).
+    const grow = () => {
+      if (!input.isConnected) return;
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    };
     input.addEventListener('input', syncSubmit);
+    input.addEventListener('input', grow);
+    // Enter posts (Shift+Enter makes a new line); the mentions handler already
+    // owns Enter — with stopImmediatePropagation — while its picker is open.
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      form.requestSubmit();
+    });
     syncSubmit();
+    requestAnimationFrame(grow);
 
     // Expand/collapse is pure CSS (grid-rows + opacity) — no rebuild, so it
     // eases like the rest of the site.
@@ -1372,7 +1435,7 @@
         ?.classList.add(dir === 'up' ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
       opts.wireOwner?.(fresh);                       // re-attach edit/delete on own posts
-      fresh.querySelector('.comment-form input')?.focus();
+      fresh.querySelector('.comment-form textarea')?.focus();
     };
 
     panel.querySelector('.comment-form').addEventListener('submit', async (e) => {
@@ -1524,7 +1587,7 @@
   }
 
   // Place autocomplete on the Where field, mirroring the mention picker: a
-  // quiet listbox under the input, arrows/enter/escape, mousedown-pick so the
+  // floating listbox above the input, arrows/enter/escape, mousedown-pick so the
   // field keeps focus. Suggestions come from Photon (OpenStreetMap search,
   // free, no key); picking one fills the field with "Name, City" so the
   // card's maps link resolves to the real place. Free text still stands —
@@ -1537,10 +1600,10 @@
     list.id = listId;
     list.setAttribute('role', 'listbox');
     list.hidden = true;
-    field.insertAdjacentElement('afterend', list);
     field.setAttribute('aria-autocomplete', 'list');
     field.setAttribute('aria-expanded', 'false');
     field.setAttribute('autocomplete', 'off');
+    const pop = floatPopover(field, list, null);
 
     let items = [];      // suggestion strings: [primary, detail]
     let active = -1;
@@ -1553,6 +1616,7 @@
       items = []; active = -1;
       field.setAttribute('aria-expanded', 'false');
       field.removeAttribute('aria-activedescendant');
+      pop.detach();
     };
 
     const highlight = (i) => {
@@ -1622,6 +1686,7 @@
         li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(i); });
       });
       highlight(-1);   // typing stays primary; arrows opt into the list
+      pop.show();
     };
 
     field.addEventListener('input', () => {
