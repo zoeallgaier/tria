@@ -2973,9 +2973,16 @@
     'villain arc', 'delulu era', 'small dog energy', 'chaotic good',
     'girl dinner', '3am thoughts',
     'meal prep', 'farmers market', 'polaroids',
+    'houseplants', 'sports', 'side quest', 'npc moment', 'note it', 'noted',
   ];
-  const randomTagPlaceholder = () =>
-    [...TAG_PLACEHOLDERS].sort(() => Math.random() - 0.5).slice(0, 2).join(', ');
+  const randomTagPlaceholder = () => {
+    const pool = [...TAG_PLACEHOLDERS];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, 2).join(', ');
+  };
 
   // Same trick for the post composer's note field — one of a few voices picked
   // at random each time it mounts, so the empty field never feels flat.
