@@ -3612,11 +3612,27 @@
       prev.classList.add('active');
     });
 
-    window.setTimeout(() => {
-      if (token !== navToken) return;   // a newer navigation now owns the stage
+    // Clean up the instant the page finishes settling: drop the outgoing page and
+    // clear the transition classes — which also releases the will-change layer AND
+    // hands the in-page glass back its live frost (see the glass rule in app.css),
+    // so the frost returns exactly as motion ends, no flat tail. Driven by the
+    // entering page's own transitionend on the property that finishes LAST (the
+    // slide's transform, or opacity on a fade — the filter clears early and must
+    // not trigger cleanup). A timeout backs it up if the event is ever missed.
+    const settleProp = dir === 0 ? 'opacity' : 'transform';
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned || token !== navToken) return;   // a newer navigation owns the stage
+      cleaned = true;
+      page.removeEventListener('transitionend', onSettle);
       prev.remove();
       page.className = 'page';
-    }, TRANSITION_MS + 60);
+    };
+    const onSettle = (e) => {
+      if (e.target === page && e.propertyName === settleProp) cleanup();
+    };
+    page.addEventListener('transitionend', onSettle);
+    window.setTimeout(cleanup, TRANSITION_MS + 120);
   }
 
   // Programmatic navigation. Setting location.hash to a NEW value fires a
@@ -3692,6 +3708,10 @@
   function nudgeNav() {
     const nav = document.getElementById('nav');
     if (!nav) return;
+    // Only iOS home-screen installs drop the fixed nav's layer after a DOM swap;
+    // everywhere else this forced reflow is pure cost mid-transition, so skip it.
+    // (navigator.standalone is true only inside an iOS standalone PWA.)
+    if (!navigator.standalone) return;
     nav.style.display = 'none';
     void nav.offsetHeight;   // flush the layout so the toggle actually repaints
     nav.style.display = '';

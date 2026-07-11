@@ -432,38 +432,53 @@ main {
 /* ── Page transitions ──────────────────────────────────────────────────────
    The router (app.js) swaps one `.page` for the next inside #view. Forward moves
    along the nav line (Home→Friends→Profile→Publish) enter from the right, back
-   moves from the left, and same-level swaps / the auth gate cross-fade. Every
-   page pairs its slide with a blur+opacity lift so it resolves into focus. One
-   template, driven only by the direction classes the router toggles. */
+   moves from the left, and same-level swaps / the auth gate cross-fade. One
+   template, driven only by the direction classes the router toggles.
+
+   MOTION BUDGET (why it's shaped this way): animating `filter: blur()` forces
+   the whole moving page to re-rasterize every frame, and it's a MULTIPLIER on
+   everything beneath it (the feed, each rising card, the glass) — the root of
+   the iOS jitter. So the blur is a brief focus-in cue only: 6px that clears in
+   the first ~third of the slide (filter transition 0.12s vs the 0.36s slide),
+   after which the move is pure transform + opacity, which the GPU composites
+   for free. The leaving page gets no blur at all — it's exiting/covered, so it
+   doesn't need the cue and stays cheap. `will-change` promotes each page to its
+   own layer for the move, then releases when the class clears. */
 #view { position: relative; overflow-x: clip; }
 
 .page {
   transition: transform 0.36s var(--ease),
-              opacity   0.34s ease,
-              filter    0.34s ease;
+              opacity   0.30s ease;
 }
 
-/* Entering page — starts offset, blurred and transparent … */
-.page.enter.from-right { transform: translateX(38px);  opacity: 0; filter: blur(10px); }
-.page.enter.from-left  { transform: translateX(-38px); opacity: 0; filter: blur(10px); }
-.page.enter.fade       { transform: none;              opacity: 0; filter: blur(10px); }
+/* Entering page — offset, transparent, and softly out of focus … */
+.page.enter {
+  will-change: transform, opacity;
+  transition: transform 0.36s var(--ease),
+              opacity   0.30s ease,
+              filter    0.12s ease-out;   /* clears fast: focus-in, not a held blur */
+}
+.page.enter.from-right { transform: translateX(38px);  opacity: 0; filter: blur(6px); }
+.page.enter.from-left  { transform: translateX(-38px); opacity: 0; filter: blur(6px); }
+.page.enter.fade       { transform: none;              opacity: 0; filter: blur(6px); }
 /* … then settles into focus (later rule wins at equal specificity). */
 .page.enter.active { transform: none; opacity: 1; filter: blur(0); }
 
-/* Leaving page — lifted out of flow so it overlays, starts at rest, exits blurred. */
-.page.leave { position: absolute; inset: 0 0 auto 0; }
-.page.leave.active.to-left  { transform: translateX(-38px); opacity: 0; filter: blur(10px); }
-.page.leave.active.to-right { transform: translateX(38px);  opacity: 0; filter: blur(10px); }
-.page.leave.active.fade     { transform: none;              opacity: 0; filter: blur(10px); }
+/* Leaving page — lifted out of flow so it overlays, slides out on transform +
+   opacity only (no blur: cheap, and it's on its way out). */
+.page.leave { position: absolute; inset: 0 0 auto 0; will-change: transform, opacity; }
+.page.leave.active.to-left  { transform: translateX(-38px); opacity: 0; }
+.page.leave.active.to-right { transform: translateX(38px);  opacity: 0; }
+.page.leave.active.fade     { transform: none;              opacity: 0; }
 
-/* In-page glass goes quiet while its page is in motion. The page-level blur
-   above makes the page a backdrop root, so per spec these backdrop-filters are
-   already inert during the slide — but iOS WebKit (standalone especially) keeps
-   trying to sample mid-transform and the frost visibly jumps, exactly on the
-   pages that carry in-page glass (Friends: seg-tabs + search; Updates: seg-tabs,
-   soft-ask, notification cards). Turning it off explicitly for the 360ms stops
-   the mis-sampling and halves the compositing load; the handover back to live
-   frost lands on the same frame the router clears the transition classes. The
+/* In-page glass goes quiet for the whole move (transform runs the full 0.36s,
+   even after the blur has cleared). iOS WebKit (standalone especially) keeps
+   trying to sample backdrop-filter inside a transforming/promoted layer and the
+   frost visibly jumps — exactly on the pages that carry in-page glass (Friends:
+   seg-tabs + search; Updates: seg-tabs, soft-ask, notification cards). Turning
+   it off explicitly stops the mis-sampling and drops the per-frame compositing
+   cost; the handover back to live frost lands when the router clears the
+   transition classes (right as the page settles — see renderPage cleanup). The
    translucent fills stay, so the surfaces keep their tone throughout. The nav
    pill lives outside #view and keeps its glass live the whole time (it has its
    own iOS layer pin — see .nav-pill). */
@@ -476,7 +491,9 @@ main {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page { transition: none; }
+  /* Match .page.enter's specificity so the override actually wins (the router
+     also skips the slide path entirely under reduced motion — belt and braces). */
+  .page, .page.enter, .page.leave { transition: none; will-change: auto; }
 }
 
 /* Desktop: one centred column. The sidebar offsets `main` on the left, so we
@@ -1634,6 +1651,7 @@ body.gate main { padding: 0; }
     content: attr(placeholder);
     color: var(--muted);
     opacity: 0.6;
+    white-space: nowrap;   /* the time hint "--:-- --" must never break after the colon pair */
   }
 }
 
