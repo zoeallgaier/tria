@@ -1108,19 +1108,22 @@
         fig.classList.add('is-loaded');
         fig.classList.remove('photo--reserve');   // legacy: release the reserved box
       };
-      const onEvents = () => {
-        im.addEventListener('load', landed, { once: true });
+      // Reveal on a fully DECODED bitmap, not just `load`: iOS fires load before
+      // the bitmap is paint-ready, so revealing on load stutters/pops. decode()
+      // resolves only when it can paint in one clean frame, so the settle reads
+      // as a settle. CRUCIAL: only ever call decode() AFTER the browser has
+      // chosen to load the image (it's complete, or its `load` fires) — calling
+      // decode() up front forces a loading=lazy image to fetch+decode right away,
+      // which defeats lazy-loading and, on a long feed, forces EVERY photo's full
+      // bitmap resident at once. On iPhone that memory spike kills the renderer
+      // (white screen / "a problem repeatedly occurred"). Gating decode behind
+      // load keeps offscreen photos lazy and the working set small.
+      const reveal = () => im.decode ? im.decode().then(landed).catch(landed) : landed();
+      if (im.complete && im.naturalWidth) reveal();
+      else {
+        im.addEventListener('load', reveal, { once: true });
         im.addEventListener('error', landed, { once: true });
-      };
-      // Warm cache (pre-decoded by warmImages): reveal at once, no fade to replay.
-      // Cold: wait for a fully DECODED bitmap before revealing, not just `load` —
-      // iOS fires load before the bitmap is paint-ready, so revealing on load
-      // stutters/pops. decode() resolves only when it can paint in one clean
-      // frame, so the settle reads as a settle. Fall back to load/error events
-      // if decode isn't available or rejects (e.g. a broken image).
-      if (im.complete && im.naturalWidth) landed();
-      else if (im.decode) im.decode().then(landed).catch(onEvents);
-      else onEvents();
+      }
     }
     const open = () => openLightbox(img.src, img.alt);
     fig.addEventListener('click', open);
