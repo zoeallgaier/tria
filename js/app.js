@@ -1011,8 +1011,10 @@
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
           `<figure class="photo${sized ? '' : ' photo--reserve'}${hasBlur ? ' photo--lqip' : ''}" ` +
             `${hasBlur ? `style="--lqip:url('${img.blur}')" ` : ''}tabindex="0" role="button" aria-label="Enlarge photo">` +
-            (hasBlur ? `<div class="photo-blur" aria-hidden="true"></div>` : '') +
-            `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` +
+            `<div class="photo-frame">` +
+              (hasBlur ? `<div class="photo-blur" aria-hidden="true"></div>` : '') +
+              `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` +
+            `</div>` +
           `</figure>` +
           actions +
         `</div>` +
