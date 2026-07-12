@@ -46,7 +46,7 @@ const Store = (() => {
     if (p.url)      o.url = p.url;
     if (p.note)     o.note = p.note;
     if (p.image)    o.image = p.image;
-    if (p.blur)     o.blur = p.blur;   // inline LQIP thumbnail → blur-up in the feed
+    if (p.tint)     o.tint = p.tint;   // photo's average colour → colour-up in the feed
     if (p.location) o.location = p.location;
     if (p.event_date) o.eventDate = p.event_date;
     if (p.event_time) o.eventTime = p.event_time;
@@ -334,9 +334,9 @@ const Store = (() => {
     if (data.image) {
       try { row.image = await uploadImage(data.image, 'photo', data.imageDims); }
       catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
-      // A tiny inline thumbnail rides along in the row (no upload) for the feed's
-      // blur-up. Best-effort: a photo without it just falls back to the grey box.
-      if (data.imageBlur) row.blur = data.imageBlur;
+      // The photo's average colour rides along in the row (no upload) so the feed
+      // settles it over its own colour. Best-effort: without it, the neutral box.
+      if (data.imageTint) row.tint = data.imageTint;
     }
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();

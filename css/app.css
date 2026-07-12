@@ -1542,70 +1542,28 @@ main {
   cursor: zoom-in;
   padding-inline: var(--inset);   /* inset to the post-text column, like the byline */
 }
-/* One rounded clip wraps BOTH the sharp photo and the blur-up layer. Fills the
-   figure's content box (inside the padding inset), so it tracks the inset at every
-   breakpoint automatically — the blur no longer has to mirror padding-inline.
-   Safari-critical: overflow + border-radius alone won't clip a filtered/composited
-   child (the blur) or a composited descendant to rounded corners unless this box
-   is its own compositing layer, so translateZ pins the whole group onto one layer
-   and the rounded clip holds for everything inside. */
-.photo-frame {
-  position: relative;
-  border-radius: var(--radius-card);
-  overflow: hidden;
-  transform: translateZ(0);
-}
+/* ── Colour-up settle ──────────────────────────────────────────────────────────
+   One layer, no filtered sibling: the <img> carries its own border-radius (which
+   Safari has always clipped cleanly on a plain image — the two-layer blur-up was
+   what broke that), and its reserved box is painted in the photo's own average
+   colour (inline background-color from the `tint` column; legacy photos fall back
+   to the neutral surface below). The photo then eases in over that colour once its
+   bitmap is fully DECODED (JS adds .is-loaded — see wirePhoto): a soft fade paired
+   with a tiny scale-settle on the signature ease, so it eases into place instead
+   of blinking on. Warm (pre-decoded) photos get .is-loaded before first paint, so
+   they simply appear — no fade to replay on every navigation. */
 .photo img {
   display: block;
-  position: relative;
-  z-index: 1;                     /* above the blur-up layer */
   width: 100%;
   height: auto;
   background: var(--surface-2);
-  /* The neutral box holds the space; the photo eases into it once its bitmap is
-     fully decoded (JS adds .is-loaded — see wirePhoto). A cold-loading photo
-     settles: a soft fade paired with a tiny scale-down, on the signature ease,
-     so it eases into place instead of blinking on. Warm (pre-decoded) photos get
-     .is-loaded before first paint, so they simply appear — no fade to replay on
-     every navigation. */
+  border-radius: var(--radius-card);
   opacity: 0;
   transform: scale(1.03);
   transform-origin: center;
   transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
 }
 .photo.is-loaded img { opacity: 1; transform: none; }
-
-/* ── Blur-up ──────────────────────────────────────────────────────────────────
-   Photos posted with an inline LQIP (a tiny base64 thumbnail on the row, set as
-   --lqip on the figure) paint it instantly, upscaled soft, so the full photo
-   sharpens into focus over its own colours instead of over flat grey. This layer
-   sits exactly over the image box BEHIND the fading-in photo; once the photo is
-   opaque it fully covers this, so there's no cross-fade dip. Rounded corners come
-   from the .photo-frame clip above, not from here. iOS-robust: the thumbnail is
-   inline data, so it always paints instantly even after iOS drops the full image's
-   decoded bitmap from memory. */
-.photo-blur {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: var(--surface-2);
-}
-/* The tiny thumbnail scaled with `cover` alone reads as blocky pixels. A real
-   Gaussian blur melts it into soft colour. The blur is on an overscanned inner
-   layer (inset past the box on all sides) so its fuzzy, fading edge lands
-   outside the figure and gets clipped — no pale halo ringing the photo. */
-.photo-blur::before {
-  content: '';
-  position: absolute;
-  inset: -8%;
-  background: var(--lqip) center / cover no-repeat;
-  filter: blur(16px);
-  -webkit-filter: blur(16px);
-}
-/* The blur layer carries the reveal, so the sharp photo just cross-fades in over
-   it — drop the scale-settle (which is for the plain grey-box case) to avoid the
-   two layers drifting against each other. */
-.photo--lqip img { transform: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .photo img { opacity: 1; transform: none; transition: none; }
@@ -3271,9 +3229,7 @@ body.gate main { padding: 0; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }
   .comments-content { padding-left: calc(1.15rem - 0.7rem - 2px); }
-  /* Tighter inset to the phone text column. Tap still opens full-screen.
-     (The .photo-frame clip fills the padded box, so the inset tracks automatically
-     and the blur box needs no separate override.) */
+  /* Tighter inset to the phone text column. Tap still opens full-screen. */
   .photo { padding-inline: 1.15rem; }
   .card--photo .byline,
   .card--photo .card-solometa,

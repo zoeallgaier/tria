@@ -992,16 +992,17 @@
       // back to the tonal placeholder.
       const d = post.image ? imageDimsFromUrl(post.image) : null;
       const img = post.image
-        ? { src: post.image, alt: post.note || 'Photo', w: d && d.w, h: d && d.h, blur: post.blur }
+        ? { src: post.image, alt: post.note || 'Photo', w: d && d.w, h: d && d.h, tint: post.tint }
         : placeholderPhoto(post.id, post.note);
       // Known dimensions → width/height attributes let the browser hold the exact
       // space before the photo loads (no feed reflow). Legacy photos without a
       // stamped size fall back to a reserved box, cleared once the image lands.
       const sized = img.w && img.h;
-      // Blur-up: photos with an inline thumbnail paint it instantly behind the
-      // full image (see .photo-blur), which sharpens into focus over it. Photos
-      // posted before the blur column stay null → the plain grey-box fade.
-      const hasBlur = !!img.blur;
+      // Average-colour settle: a photo carries its own average colour (one hex, the
+      // `tint` column), so its reserved box is a soft wash of its colour and the
+      // photo fades in over it. One layer, no filtered sibling. Legacy photos with
+      // no tint fall back to the neutral surface box (the CSS default).
+      const tint = img.tint;
       const foot = (post.note ? `<p class="card-note">${richText(post.note, post.author)}</p>` : '') + tagChips(post);
       // .card-main holds the post itself (ending in the action row); the comment
       // thread expands as a sibling below, tucked under it on the same left axis.
@@ -1009,12 +1010,8 @@
         `<div class="card-main">` +
           head +
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
-          `<figure class="photo${sized ? '' : ' photo--reserve'}${hasBlur ? ' photo--lqip' : ''}" ` +
-            `${hasBlur ? `style="--lqip:url('${img.blur}')" ` : ''}tabindex="0" role="button" aria-label="Enlarge photo">` +
-            `<div class="photo-frame">` +
-              (hasBlur ? `<div class="photo-blur" aria-hidden="true"></div>` : '') +
-              `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` +
-            `</div>` +
+          `<figure class="photo${sized ? '' : ' photo--reserve'}" tabindex="0" role="button" aria-label="Enlarge photo">` +
+            `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''}${tint ? ` style="background-color:${tint}"` : ''} loading="lazy" decoding="async">` +
           `</figure>` +
           actions +
         `</div>` +
@@ -3417,21 +3414,20 @@
         canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
         return canvas.toDataURL('image/jpeg', 0.82);
       },
-      // A tiny inline thumbnail (LQIP) of the same photo, kept in aspect. Stored
-      // on the post row (not uploaded) so the feed can paint it instantly and let
-      // the full image sharpen into focus over it — a blur-up. ~32px longest edge
-      // at low quality is ~1KB of base64, upscaled soft by the browser at display.
-      blur(edge = 32) {
-        const iw = imgEl.naturalWidth  || 1;
-        const ih = imgEl.naturalHeight || 1;
-        const scale = Math.min(1, edge / Math.max(iw, ih));
-        const w = Math.max(1, Math.round(iw * scale));
-        const h = Math.max(1, Math.round(ih * scale));
+      // The photo's average colour as one #rrggbb string (~7 bytes). Stored on the
+      // post row (not uploaded) so the feed paints the reserved box in the photo's
+      // own colour and the full image fades in over it — a calm colour-up, one
+      // layer, no filtered thumbnail. Downscaling the whole image to a single pixel
+      // IS the average; the source is a local object/data URL so the canvas stays
+      // untainted and getImageData is allowed.
+      tint() {
         const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-        return canvas.toDataURL('image/jpeg', 0.5);
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgEl, 0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
       },
     };
     return api;
@@ -3536,7 +3532,7 @@
       if (!cropper) { errEl.textContent = 'Choose a photo first.'; return; }
       data.image = cropper.export();
       data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
-      data.imageBlur = cropper.blur(); // inline LQIP thumbnail → blur-up in the feed
+      data.imageTint = cropper.tint(); // photo's average colour → colour-up in the feed
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {

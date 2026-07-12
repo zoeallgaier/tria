@@ -34,7 +34,7 @@ create table public.posts (
   url        text,
   note       text,
   image      text,                          -- Storage URL later (photo posts)
-  blur       text,                          -- tiny inline LQIP thumbnail for blur-up (photo posts)
+  tint       text,                          -- photo's average colour (#rrggbb) for the colour-up settle
   location   text,                          -- where it's happening (activities)
   tags       text[] not null default '{}',
   created_at timestamptz not null default now()
