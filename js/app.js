@@ -2009,9 +2009,13 @@
     if (!u) { location.hash = '#/'; return; }          // stale link → home
     const isSelf = u.username === Store.session();
     const isFriend = Store.isFriend(u.username);
-    // A non-friend can browse a profile's posts/finds/photos, but activities are
-    // circle business — hidden until you've added each other.
-    const list = Store.postsBy(u.username)
+    // A private profile fences its whole feed to friends: an outsider sees the
+    // identity card and a nudge to add them, no posts. (The data layer backs this
+    // too — RLS won't hand a non-friend a private author's rows.) A public profile
+    // still shows notes/finds/photos to anyone; activities stay circle business,
+    // hidden until you've added each other.
+    const locked = Store.isPrivate(u.username) && !isSelf && !isFriend;
+    const list = locked ? [] : Store.postsBy(u.username)
       .filter(p => p.type !== 'activity' || isSelf || isFriend);
     // Own profile carries a "copy my link to share" action; a friend's carries the
     // Add-friend toggle. (Log out moves to the foot of your own column, below.)
@@ -2049,7 +2053,9 @@
     const friendStat = canSeeFriends
       ? `<button type="button" class="profile-friends" id="show-friends">${fLabel}</button>`
       : `<span>${fLabel}</span>`;
-    const stats = `${count} <span class="dot">·</span> ${friendStat}`;
+    // A locked profile's post count is fenced with the posts, so show only the
+    // (public) friend count rather than a misleading "0 posts".
+    const stats = locked ? friendStat : `${count} <span class="dot">·</span> ${friendStat}`;
 
     // The photo IS the profile now: it fills the hero edge to edge and blurs
     // progressively toward its base, where a liquid-glass card carries the name,
@@ -2113,7 +2119,16 @@
         }));
     };
 
-    if (!list.length) {
+    if (locked) {
+      // Private profile, seen by an outsider: no posts, just a warm nudge toward
+      // the Add-friend button that already sits in the card above.
+      feedEl.innerHTML =
+        `<div class="profile-locked">` +
+          svgIcon('lock', 'profile-locked-ico') +
+          `<p class="profile-locked-line">${esc(u.name)} keeps their posts for friends.</p>` +
+          `<p class="profile-locked-sub">Add them and, once they add you back, their posts show up here.</p>` +
+        `</div>`;
+    } else if (!list.length) {
       feedEl.innerHTML = `<p class="feed-empty">` +
         `${isSelf ? 'Nothing posted yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
     } else {
@@ -2338,18 +2353,27 @@
             `<img id="pf-cropimg" alt="" draggable="false">` +
             `<span class="crop-hint">Drag to reposition</span>` +
           `</div>` +
-          `<div class="field">` +
-            `<label for="pf-name">Display name</label>` +
-            `<input id="pf-name" type="text" maxlength="40" ` +
-              `value="${esc(u.name)}" placeholder="Your name" autocomplete="name">` +
+          // Identity as one combo box — display name as the serif headline, bio as
+          // the note beneath it — mirroring the composer's title+note and signup.
+          `<div class="field field--combo">` +
+            `<input id="pf-name" class="combo-title" type="text" maxlength="40" ` +
+              `value="${esc(u.name)}" placeholder="Display name" autocomplete="name" ` +
+              `aria-label="Display name">` +
+            `<div class="combo-divider" aria-hidden="true"></div>` +
+            `<textarea id="pf-bio" class="combo-note" rows="3" maxlength="160" ` +
+              `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
           `</div>` +
-          `<div class="field">` +
-            `<label for="pf-bio">Bio</label>` +
-            `<textarea id="pf-bio" rows="3" maxlength="160" ` +
-              `placeholder="A line about you (optional).">${esc(u.bio || '')}</textarea>` +
-            `<p class="field-hint" id="pf-count"></p>` +
+          `<p class="field-hint field-hint--combo" id="pf-count"></p>` +
+          // Privacy + notifications sit below the identity as quiet settings.
+          `<div class="push-toggle-row">` +
+            `<span class="push-toggle-label">Private account</span>` +
+            `<button type="button" class="push-toggle" role="switch" id="privacy-toggle" ` +
+              `aria-checked="${u.private !== false}" ` +
+              `aria-label="Private account, only friends can see your posts">` +
+              `<span class="push-toggle-knob" aria-hidden="true"></span>` +
+            `</button>` +
           `</div>` +
-          // Notifications sits with the profile fields as a quiet setting.
+          `<p class="field-hint">When on, only friends can see your posts. Activities are always friends only.</p>` +
           pushToggleHtml() +
           `<p class="composer-error" id="pf-error" role="alert"></p>` +
           // Log out weights to the far left (styled like the post editor's Delete)
@@ -2368,6 +2392,14 @@
     const bioEl = modal.querySelector('#pf-bio');
     const countEl = modal.querySelector('#pf-count');
     const errEl = modal.querySelector('#pf-error');
+    const privacyBtn = modal.querySelector('#privacy-toggle');
+
+    // A plain UI switch — it holds its state until Save commits it alongside the
+    // words (Cancel discards it, same as name/bio).
+    privacyBtn.addEventListener('click', () => {
+      const on = privacyBtn.getAttribute('aria-checked') === 'true';
+      privacyBtn.setAttribute('aria-checked', String(!on));
+    });
 
     const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
@@ -2404,7 +2436,10 @@
 
     modal.querySelector('#pf-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await Store.updateProfile({ name: nameEl.value, bio: bioEl.value });
+      const res = await Store.updateProfile({
+        name: nameEl.value, bio: bioEl.value,
+        isPrivate: privacyBtn.getAttribute('aria-checked') === 'true',
+      });
       if (!res.ok) { errEl.textContent = res.error; return; }
       // A freshly cropped photo commits alongside — optimistic (cache updates
       // synchronously), upload in the background; on failure the store reverts.

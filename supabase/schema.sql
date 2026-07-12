@@ -22,6 +22,7 @@ create table public.users (
   name       text not null,
   bio        text not null default '',
   avatar     text,                          -- Storage URL later; null = initial tile
+  private    boolean not null default true, -- posts fenced to friends (see profile-privacy.sql)
   created_at timestamptz not null default now()
 );
 

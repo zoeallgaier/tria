@@ -1991,6 +1991,33 @@ body.gate main { padding: 0; }
   color: var(--text);
 }
 
+/* A private profile, seen by an outsider: the posts column is replaced by a
+   quiet, centred nudge toward adding them. Flat editorial (content, not glass),
+   in the same muted register as .feed-empty. */
+.profile-locked {
+  max-width: var(--feed-width);
+  margin-inline: auto;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  color: var(--muted);
+}
+.profile-locked-ico {
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  opacity: 0.7;
+  margin-bottom: 0.85rem;
+}
+.profile-locked-line {
+  font-size: 1rem;
+  color: var(--text);
+}
+.profile-locked-sub {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 /* Back to the directory, above a friend's card. */
 .profile-back {
   display: inline-block;

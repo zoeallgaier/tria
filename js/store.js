@@ -33,7 +33,11 @@ const Store = (() => {
   const idOf = (username) => (state.users.find(u => u.username === username) || {}).id || null;
 
   function mapUser(u) {
-    const o = { id: u.id, username: u.username, name: u.name, bio: u.bio || '' };
+    // `private` gates whether outsiders (non-friends) can see this person's posts.
+    // Defaults true where the column isn't there yet (pre-migration DB) so a fresh
+    // deploy errs toward closed, not open.
+    const o = { id: u.id, username: u.username, name: u.name, bio: u.bio || '',
+                private: u.private !== false };
     if (u.avatar) o.avatar = u.avatar;
     return o;
   }
@@ -136,6 +140,10 @@ const Store = (() => {
   const session = () => state.session;
   const isAuthed = () => !!state.session;
   const currentUser = () => user(state.session);
+
+  // Is this person private — posts fenced to their friends? Unknown user → treat
+  // as private (fail closed). Drives the profile's "add them to see posts" gate.
+  const isPrivate = (username) => (user(username) || { private: true }).private !== false;
 
   // Any user's friends — mutual only: people they've added who've added them
   // back. A one-sided edge is a pending request, not a friendship.
@@ -542,7 +550,7 @@ const Store = (() => {
     return { ok: true };
   }
 
-  async function updateProfile({ name, bio } = {}) {
+  async function updateProfile({ name, bio, isPrivate } = {}) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
     name = (name || '').trim();
@@ -550,9 +558,19 @@ const Store = (() => {
     if (!name) return { ok: false, error: 'Add a display name.' };
     if (name.length > 40) return { ok: false, error: 'Name: keep it under 40 characters.' };
     if (bio.length > 160) return { ok: false, error: 'Bio: keep it under 160 characters.' };
-    const { error } = await sb.from('users').update({ name, bio }).eq('id', u.id);
+    const patch = { name, bio };
+    if (typeof isPrivate === 'boolean') patch.private = isPrivate;
+    let { error } = await sb.from('users').update(patch).eq('id', u.id);
+    // Tolerate a DB that hasn't run the privacy migration yet: the `private`
+    // column may not exist, so retry the name/bio save without it rather than
+    // failing the whole edit. (The UI still reflects the toggle until reload.)
+    if (error && 'private' in patch && /private|column|schema/i.test(error.message || '')) {
+      delete patch.private;
+      ({ error } = await sb.from('users').update(patch).eq('id', u.id));
+    }
     if (error) return { ok: false, error: 'Couldn’t save your changes.' };
     u.name = name; u.bio = bio;
+    if ('private' in patch) u.private = patch.private;
     return { ok: true };
   }
 
@@ -637,7 +655,7 @@ const Store = (() => {
 
   return {
     init, refresh,
-    users, user, currentUser, friends, friendsOf, feed, posts, postsBy, audienceCount,
+    users, user, currentUser, isPrivate, friends, friendsOf, feed, posts, postsBy, audienceCount,
     // Auth
     session, isAuthed, signup, login, logout,
     // Friends

@@ -63,6 +63,12 @@ exempt). Voice is playful but not trying-too-hard.
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. **Friends are directed edges** (request → mutual on accept).
+- **Private accounts** (`users.private`, defaults true, so new signups open
+  closed): when private, only mutual friends see your posts. Enforced at BOTH
+  layers — the profile view shows non-friends an "add them to see posts" nudge,
+  and RLS won't hand them the rows (`can_view_post` wraps `can_see_post` with a
+  mutual-friend check; see `supabase/profile-privacy.sql`). Toggle lives in Edit
+  profile. Activities stay friends-only regardless (app-level gate, unchanged).
 - Post photos are stored at native aspect ratio (not cropped); only avatars crop
   (circular). Push notifications: see `supabase/PUSH-SETUP.md`; the Edge Function's
   real slug is `swift-processor`, not `push`.
