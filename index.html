@@ -7,6 +7,24 @@
   <title>Tria</title>
   <meta name="description" content="Social Media is so back. A quiet place for small circles of friends." />
 
+  <!-- Link preview (Open Graph + Twitter). Without these, the iOS/Android share
+       sheet and Messages/social unfurls fall back to a generic globe glyph; an
+       absolute og:image points them at the Tria app icon instead. Absolute URLs
+       are required — LinkPresentation fetches them over the network, so they
+       can't be relative. Domain matches CNAME (triaonline.com). -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Tria" />
+  <meta property="og:title" content="Tria" />
+  <meta property="og:description" content="Social Media is so back. A quiet place for small circles of friends." />
+  <meta property="og:url" content="https://triaonline.com/" />
+  <meta property="og:image" content="https://triaonline.com/icons/icon-512.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Tria" />
+  <meta name="twitter:description" content="Social Media is so back. A quiet place for small circles of friends." />
+  <meta name="twitter:image" content="https://triaonline.com/icons/icon-512.png" />
+
   <meta name="theme-color" content="#edeef0" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0e1012" media="(prefers-color-scheme: dark)" />
 
@@ -45,8 +63,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=173" />
-  <link rel="stylesheet" href="css/app.css?v=173" />
+  <link rel="stylesheet" href="css/tokens.css?v=174" />
+  <link rel="stylesheet" href="css/app.css?v=174" />
 </head>
 
 <body>
@@ -84,6 +102,19 @@
     <a class="brand" href="#/about" aria-label="Tria, about">
       <span class="brand-mark">tria</span>
     </a>
+    <!-- Support: a note from Zoe + a soft ask to invite people. A sprout (grow
+         your circle) rather than a heart (too close to the like button). Sits at
+         the header's right edge on phones; floats top-right over content on
+         desktop, where the topbar is a left rail (see .support-link). The whole
+         topbar is hidden signed-out, so this is signed-in only for free. -->
+    <a class="support-link" href="#/support" aria-label="A note from Zoe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 20.5 V12" />
+        <path d="M12 14 C7.5 14 5 11 5 6.5 C9.5 6.5 12 9.5 12 14 Z" />
+        <path d="M12 12 C12 8.2 14.2 5.8 18.5 5.8 C18.5 9.4 16.3 12 12 12 Z" />
+      </svg>
+    </a>
   </header>
 
   <!-- Legibility scrim for the iOS status bar. black-translucent (above) forces
@@ -110,9 +141,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=173"></script>
-  <script src="js/store.js?v=173"></script>
-  <script src="js/app.js?v=173"></script>
+  <script src="js/config.js?v=174"></script>
+  <script src="js/store.js?v=174"></script>
+  <script src="js/app.js?v=174"></script>
 </body>
 
 </html>

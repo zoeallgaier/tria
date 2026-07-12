@@ -2230,7 +2230,7 @@
       const label = shareBtn.querySelector('.account-share-label');
       shareOrCopy({
         title: `@${u.username} on Tria`,
-        text: `Come find me on Tria.`,
+        text: `Join me on Tria`,
         url: profileLink(u.username),
       }).then(result => {
         if (result === 'cancelled') return;
@@ -2725,7 +2725,7 @@
       if (shareBtn) shareBtn.addEventListener('click', async () => {
         const result = await shareOrCopy({
           title: 'Tria',
-          text: 'Come find me on Tria.',
+          text: 'Join me on Tria',
           url: 'https://triaonline.com',
         });
         if (result === 'cancelled') return;
@@ -3757,6 +3757,8 @@
     // same either side of sign-in. Locked to the viewport bottom (see .ambient),
     // rising up under the guidelines and the floating nav.
     if (path.split('?')[0] === '#/about') { body.dataset.ambient = 'about'; return; }
+    // Support wears the same self-lit, hue-drifting glow as About.
+    if (path.split('?')[0] === '#/support') { body.dataset.ambient = 'support'; return; }
     if (!user || !user.avatar) return;             // non-profile, or no photo → clean
     sampleColor(user.avatar).then(rgb => {
       if (seq !== ambientSeq) return;
@@ -3966,6 +3968,52 @@
     });
   }
 
+  /* ── Support (#/support) ─────────────────────────────────────────────────────
+     A quiet love letter from Zoe with a soft ask: invite the people you want in
+     your circle. Reachable only from the sprout glyph in the header, which the
+     signed-out gate hides — so this is signed-in only (the route() gate would
+     redirect a logged-out hash here to the login screen regardless). Reuses the
+     About page's editorial body + hue-drifting glow (data-ambient="support"). */
+  function renderSupport() {
+    // Root invite link (drop any #/… route), so the share points at Tria itself.
+    const shareUrl = /^https?:/.test(location.origin)
+      ? location.origin + location.pathname
+      : location.href;
+
+    view.innerHTML =
+      `<section class="view about support">` +
+        mastheadEl('A note from the designer', 'Thank you') +
+        `<div class="about-body">` +
+          `<p class="about-lede">I built Tria because I believe online community ` +
+            `should be <em>fun, authentic, and free.</em> The internet needs a ` +
+            `place for people you actually know and love.</p>` +
+          `<p class="about-lede">The best way to help Tria grow is the simplest: ` +
+            `<strong>invite your friends to join you here.</strong> Every circle that ` +
+            `starts here is proof that social media can be fun again.</p>` +
+          `<p class="support-sign">&mdash; <a href="#/u/zoe">Zoe</a></p>` +
+          `<button class="support-share publish-fill is-solid" type="button" ` +
+            `aria-label="Share Tria with a friend">` +
+            svgIcon('send', 'support-share-ico') +
+            `<span>Share Tria</span>` +
+          `</button>` +
+        `</div>` +
+      `</section>`;
+
+    // Native share sheet where it exists (mobile/PWA), clipboard copy on desktop.
+    const shareBtn = view.querySelector('.support-share');
+    shareBtn.addEventListener('click', async () => {
+      const result = await shareOrCopy({
+        title: 'Join me on Tria',
+        text: 'Join me on Tria',
+        url: shareUrl,
+      });
+      if (result === 'cancelled') return;
+      const label = shareBtn.querySelector('span');
+      label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
+      setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
+    });
+  }
+
   /* ── Router + page transitions ─────────────────────────────────────────────
      The nav order is a line: Home(0) · Friends(1) · Notifications(2) ·
      Profile(3) · Publish(4). A move to a higher index slides the new page in
@@ -4145,6 +4193,7 @@
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
         case '#/about':   renderAbout(false); break;
+        case '#/support': renderSupport(); break;
         default:          location.hash = '#/';
       }
     });

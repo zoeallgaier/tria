@@ -81,7 +81,8 @@ body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); op
    the box reach the true viewport top, keeping the glow's bright base flush
    with the screen edge regardless of browser chrome. The GPU promotion keeps
    the hue-drift filter off the scroll path. */
-body[data-ambient="about"] .ambient {
+body[data-ambient="about"] .ambient,
+body[data-ambient="support"] .ambient {
   position: fixed;
   inset: 0;
   height: auto;
@@ -97,7 +98,8 @@ body[data-ambient="about"] .ambient {
 
 @media (prefers-reduced-motion: reduce) {
   .ambient { transition: none; }
-  body[data-ambient="about"] .ambient { animation: none; }
+  body[data-ambient="about"] .ambient,
+  body[data-ambient="support"] .ambient { animation: none; }
 }
 
 /* ── Grain ──────────────────────────────────────────────────────────────────
@@ -249,6 +251,37 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   pointer-events: none;             /* only the brand link takes clicks; rest is card */
 }
 .topbar .brand { pointer-events: auto; }
+
+/* Support entry (the sprout). Desktop: the topbar is a left rail, so this breaks
+   out of it and floats as a small glass disc pinned to the viewport's top-right
+   corner over content — floating chrome, hence the glass material (blur + rim +
+   float). On phones it sheds the disc and docks bare into the header bar (mobile
+   block below). pointer-events re-enabled since the desktop topbar is inert. */
+.support-link {
+  position: fixed;
+  top: 1.15rem;
+  right: 1.15rem;
+  z-index: 102;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--rule);
+  box-shadow: var(--lit-rim), 0 6px 18px rgba(0, 0, 0, 0.12);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  pointer-events: auto;
+  transition: color var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease);
+}
+.support-link svg { width: 22px; height: 22px; }
+@media (hover: hover) {
+  .support-link:hover { color: var(--text); transform: translateY(-1px); }
+}
+.support-link:active { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .support-link { transition: color var(--dur-micro) var(--ease); } }
 
 /* Status-bar legibility scrim — only the installed iOS shell needs it (see the
    note by the element in index.html). Off everywhere else. On a device with no
@@ -2235,6 +2268,35 @@ body.gate main { padding: 0; }
 }
 .friends-share-ico { width: 15px; height: 15px; }
 
+/* ── Support (#/support) — Zoe's love letter. Rides the About page's editorial
+   body (.about-body / .about-lede) and its hue-drifting glow; adds only a signed
+   signature and the share CTA. ── */
+.support-sign {
+  margin-top: 2rem;
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.support-sign a { color: var(--text); text-decoration: none; }
+@media (hover: hover) {
+  .support-sign a:hover { text-decoration: underline; text-underline-offset: 3px; }
+}
+.support-share {
+  display: flex;
+  width: fit-content;
+  min-width: 13rem;                 /* the hero Post pill's presence */
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 2.4rem auto 0;            /* centered under the letter */
+  border-radius: var(--radius-pill);
+  padding: 0.7rem 1.3rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.support-share-ico { width: 17px; height: 17px; }
+
 /* ── Push pre-prompt — the soft ask on Updates. Still editorial (serif title,
    not a system alert), but on the same frosted-glass card material as the
    notifications it sits above, so the head of the Updates list reads as one
@@ -2538,7 +2600,8 @@ body.gate main { padding: 0; }
 .composer .composer-post.publish-fill.is-solid,
 .auth-submit.publish-fill.is-solid,
 .account-share.publish-fill.is-solid,
-.friends-share-copy.publish-fill.is-solid {
+.friends-share-copy.publish-fill.is-solid,
+.support-share.publish-fill.is-solid {
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.16),
     0 10px 24px rgba(0, 0, 0, 0.18);
@@ -2546,7 +2609,8 @@ body.gate main { padding: 0; }
 .composer .composer-post.publish-fill.is-solid::before,
 .auth-submit.publish-fill.is-solid::before,
 .account-share.publish-fill.is-solid::before,
-.friends-share-copy.publish-fill.is-solid::before {
+.friends-share-copy.publish-fill.is-solid::before,
+.support-share.publish-fill.is-solid::before {
   background:
     radial-gradient(75% 130% at 34% -20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
     radial-gradient(92% 130% at 50% 120%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 55%),
@@ -2563,7 +2627,8 @@ body.gate main { padding: 0; }
   .composer .composer-post.publish-fill.is-solid,
   .auth-submit.publish-fill.is-solid,
   .account-share.publish-fill.is-solid,
-  .friends-share-copy.publish-fill.is-solid {
+  .friends-share-copy.publish-fill.is-solid,
+  .support-share.publish-fill.is-solid {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.7),        /* lit top rim (reads on dark) */
       inset 0 -10px 18px rgba(0, 0, 0, 0.28),         /* cavity depth into the fill */
@@ -2573,7 +2638,8 @@ body.gate main { padding: 0; }
   .composer .composer-post.publish-fill.is-solid::before,
   .auth-submit.publish-fill.is-solid::before,
   .account-share.publish-fill.is-solid::before,
-  .friends-share-copy.publish-fill.is-solid::before {
+  .friends-share-copy.publish-fill.is-solid::before,
+  .support-share.publish-fill.is-solid::before {
     background:
       radial-gradient(70% 120% at 34% -16%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 52%),
       radial-gradient(95% 130% at 50% 122%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 55%),
@@ -2594,7 +2660,8 @@ body.gate main { padding: 0; }
   .composer .composer-post.publish-fill.is-solid::before,
   .auth-submit.publish-fill.is-solid::before,
   .account-share.publish-fill.is-solid::before,
-  .friends-share-copy.publish-fill.is-solid::before {
+  .friends-share-copy.publish-fill.is-solid::before,
+  .support-share.publish-fill.is-solid::before {
     animation: none;
     background-position: 0 0, 0 0, 50% 50%;
   }
@@ -3004,6 +3071,21 @@ body.gate main { padding: 0; }
   .topbar.topbar--hidden { transform: translateY(-100%); }
   @media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
   .brand-mark { font-size: 1.6rem; }
+
+  /* Sprout docks into the header bar: bare glyph pushed to the right edge
+     (opposite the wordmark), no glass disc — the frosted topbar already is the
+     chrome, so a disc-on-glass would double up. Full 44px tap target. */
+  .support-link {
+    position: static;
+    top: auto;
+    right: auto;
+    margin-left: auto;
+    background: none;
+    border: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 
   /* Floating liquid-glass nav: the old edge-to-edge tab bar becomes a detached
      pill hovering above the bottom edge, with Post breaking out beside it as
