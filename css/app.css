@@ -1581,6 +1581,11 @@ main {
   overflow: hidden;                 /* clips the blurred layer's soft edge */
   border-radius: var(--radius-card);
   background: var(--surface-2);
+  /* Safari won't clip a FILTERED child (the blur below) to rounded corners
+     unless this box is its own compositing layer — without it the blur keeps
+     square corners that poke past the photo's radius. translateZ forces the
+     real layer clip so the rounded corners hold. */
+  transform: translateZ(0);
 }
 /* The tiny thumbnail scaled with `cover` alone reads as blocky pixels. A real
    Gaussian blur melts it into soft colour. The blur is on an overscanned inner
