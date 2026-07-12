@@ -497,20 +497,18 @@ main {
 }
 
 /* The same collision, different cause: on a photo-heavy page, the entering
-   page's will-change layer tears down at the exact moment a burst of card
-   entrances AND photo-frame reveals are still mid-flight (card rise is 0.5s,
-   staggered up to 0.4s — well past the page's own 0.36s move), right as
-   several photo bitmaps are freshly decoded. That pile-up of simultaneous
-   compositor layers + fresh large bitmaps is what's crashing Safari on iOS
-   ("A problem repeatedly occurred") on page switches, not the glass. Pausing
-   card rise for the move's duration and letting photos snap in instead of
-   fading (still reveal the instant they decode, just without an extra
-   transform/opacity layer riding along) cuts the concurrent-layer count during
-   the one window that matters; the stagger resumes and fades return to normal
-   the moment renderPage's cleanup clears these classes. */
-.page.enter .card, .page.leave .card {
-  animation-play-state: paused;
-}
+   page's will-change layer tears down while a burst of photo-frame reveals is
+   still mid-flight, right as several photo bitmaps are freshly decoded. That
+   pile-up of simultaneous compositor layers + fresh large bitmaps is what was
+   crashing Safari on iOS ("A problem repeatedly occurred") on page switches,
+   not the glass. Letting photos snap in instead of fading during the move (they
+   still reveal the instant they decode, just without an extra transform/opacity
+   layer riding along) cuts the concurrent-layer count during the one window
+   that matters; fades return to normal the moment renderPage's cleanup clears
+   these classes. Card rise itself no longer runs during a navigation at all —
+   renderPage freezes freshly-mounted cards so they ride the page's own slide
+   (see the freeze in app.js), which both removes the old white flash and drops
+   the card layers entirely. */
 .page.enter .photo-frame img, .page.leave .photo-frame img {
   transition: none;
 }

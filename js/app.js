@@ -4033,6 +4033,17 @@
     view = page;
     renderFn();                // render into the mounted new page
 
+    // Content mounted during a navigation rides in on the page's own slide+fade —
+    // it does NOT also play its per-card rise. Freezing every fresh card here (not
+    // pausing it in CSS) keeps it VISIBLE for the whole move instead of held at the
+    // rise's transparent first frame: that blank window over the near-white page
+    // was the "white flash" on the card-heavy Circle. Inline, so it survives the
+    // class cleanup and the cards never replay the rise once the page settles; and
+    // with no card animation in flight the move carries the fewest possible layers
+    // (the same iOS-crash win the old CSS pause was after). Cards that arrive later
+    // without a page change (refreshWorld) are untouched and still rise in.
+    page.querySelectorAll('.card').forEach(c => { c.style.animation = 'none'; });
+
     // A docked view switcher (Friends / Updates on mobile) starts tucked behind
     // the nav so it can rise once the page settles (see cleanup) rather than
     // riding the horizontal page slide. No-op on pages without one.
