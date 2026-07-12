@@ -998,11 +998,17 @@
       // space before the photo loads (no feed reflow). Legacy photos without a
       // stamped size fall back to a reserved box, cleared once the image lands.
       const sized = img.w && img.h;
-      // Average-colour settle: a photo carries its own average colour (one hex, the
-      // `tint` column), so its reserved box is a soft wash of its colour and the
-      // photo fades in over it. One layer, no filtered sibling. Legacy photos with
-      // no tint fall back to the neutral surface box (the CSS default).
+      // The placeholder + reserved box live on .photo-frame, NOT the <img>. The
+      // image is held at opacity 0 until its bitmap is decoded, so anything painted
+      // on the image itself (the old average-colour wash) stayed invisible too —
+      // you just saw page background until the photo popped in. The frame instead
+      // draws a rounded outline at the photo's real aspect ratio (a crop preview),
+      // filled with the photo's average colour (the `tint` column) when we have it;
+      // the decoded image then eases in over it on a plain scale + opacity settle.
       const tint = img.tint;
+      const frameStyle =
+        (sized ? `aspect-ratio:${img.w}/${img.h};` : '') +
+        (tint ? `--ph-fill:${tint};` : '');
       const foot = (post.note ? `<p class="card-note">${richText(post.note, post.author)}</p>` : '') + tagChips(post);
       // .card-main holds the post itself (ending in the action row); the comment
       // thread expands as a sibling below, tucked under it on the same left axis.
@@ -1010,8 +1016,10 @@
         `<div class="card-main">` +
           head +
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
-          `<figure class="photo${sized ? '' : ' photo--reserve'}" tabindex="0" role="button" aria-label="Enlarge photo">` +
-            `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''}${tint ? ` style="background-color:${tint}"` : ''} loading="lazy" decoding="async">` +
+          `<figure class="photo" tabindex="0" role="button" aria-label="Enlarge photo">` +
+            `<div class="photo-frame${sized ? '' : ' photo-frame--reserve'}"${frameStyle ? ` style="${frameStyle}"` : ''}>` +
+              `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` +
+            `</div>` +
           `</figure>` +
           actions +
         `</div>` +
@@ -1105,7 +1113,9 @@
     if (im) {
       const landed = () => {
         fig.classList.add('is-loaded');
-        fig.classList.remove('photo--reserve');   // legacy: release the reserved box
+        // Legacy photos (no stamped size) reserve a 3:2 box; release it on load so
+        // the frame takes the image's true height.
+        fig.querySelector('.photo-frame')?.classList.remove('photo-frame--reserve');
       };
       // Reveal on a fully DECODED bitmap, not just `load`: iOS fires load before
       // the bitmap is paint-ready, so revealing on load stutters/pops. decode()

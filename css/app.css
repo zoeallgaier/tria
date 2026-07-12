@@ -1550,36 +1550,46 @@ main {
   cursor: zoom-in;
   padding-inline: var(--inset);   /* inset to the post-text column, like the byline */
 }
-/* ── Colour-up settle ──────────────────────────────────────────────────────────
-   One layer, no filtered sibling: the <img> carries its own border-radius (which
-   Safari has always clipped cleanly on a plain image — the two-layer blur-up was
-   what broke that), and its reserved box is painted in the photo's own average
-   colour (inline background-color from the `tint` column; legacy photos fall back
-   to the neutral surface below). The photo then eases in over that colour once its
-   bitmap is fully DECODED (JS adds .is-loaded — see wirePhoto): a soft fade paired
-   with a tiny scale-settle on the signature ease, so it eases into place instead
-   of blinking on. Warm (pre-decoded) photos get .is-loaded before first paint, so
-   they simply appear — no fade to replay on every navigation. */
-.photo img {
+/* ── Placeholder frame + settle ────────────────────────────────────────────────
+   The reserved box + placeholder live on .photo-frame, never on the <img>: the
+   image is held at opacity 0 until its bitmap is DECODED (JS adds .is-loaded — see
+   wirePhoto), so any stand-in painted on the image itself is hidden too, leaving a
+   wall of page background until the photo pops. The frame is always visible: it
+   reserves the photo's real aspect ratio (inline `aspect-ratio` from the stamped
+   size) and draws a rounded hairline outline — a crop preview — over a soft fill
+   (the photo's own average colour via --ph-fill, else the neutral surface). The
+   decoded image then eases in on a plain scale + opacity settle: no blur, nothing
+   composited beyond one transform. The outline retires once the photo covers it.
+   Warm (pre-decoded) photos get .is-loaded before first paint, so they just appear
+   — no fade to replay on every navigation. */
+.photo-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-card);
+  background: var(--ph-fill, var(--surface-2));
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+/* Legacy photos carry no stamped size, so we can't reserve the exact box. Hold a
+   3:2 outline until the image loads (JS drops this class on load, letting the
+   frame take the real height) so the feed doesn't jump. */
+.photo-frame--reserve { aspect-ratio: 3 / 2; }
+.photo-frame img {
   display: block;
   width: 100%;
   height: auto;
-  background: var(--surface-2);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-card);   /* self-clip: Safari clips a plain <img>'s own corners cleanly */
   opacity: 0;
-  transform: scale(1.03);
+  transform: scale(1.02);
   transform-origin: center;
   transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
 }
-.photo.is-loaded img { opacity: 1; transform: none; }
+.photo.is-loaded .photo-frame img { opacity: 1; transform: none; }
+.photo.is-loaded .photo-frame { background: none; box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .photo img { opacity: 1; transform: none; transition: none; }
+  .photo-frame img { opacity: 1; transform: none; transition: none; }
 }
-/* Legacy photos carry no stamped size, so we can't hand the <img> width/height
-   to reserve space. Hold a neutral box until it loads (JS drops this class on
-   load, letting the figure take the real height) so the feed doesn't jump. */
-.photo--reserve { aspect-ratio: 3 / 2; }
 /* Byline + caption inset to align with post text; the image is full-width. The
    type reads from the green Photo tag in the byline, like posts and finds. */
 .card--photo .byline { padding-inline: var(--inset); }
