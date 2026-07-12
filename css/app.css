@@ -5,10 +5,14 @@
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;   /* no grey flash on tap — app feel */
+  /* The page fill lives on <html>, NOT <body>: the ambient wash is a z-index:-1
+     child of <body>, and a body background box paints ABOVE its own negative
+     z-index descendants (CSS painting order), which would bury the wash. Putting
+     the fill on the root canvas lets the wash show through under the content. */
+  background: var(--bg);
 }
 
 body {
-  background: var(--bg);
   color: var(--text);
   font-family: 'Oxygen', system-ui, sans-serif;
   font-weight: 300;
@@ -57,16 +61,18 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 }
 body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
 
-/* About (signed in) shares the gate's locked bottom wash (see the rule just
-   below): the same self-lit blue glow, pinned to the viewport bottom and rising
-   up under the guidelines and the floating nav — position-locked, no longer the
-   top-anchored scroll-away wash. */
+/* About page (signed in OR the signed-out front door) carries the self-lit,
+   hue-drifting blue glow: pinned to the viewport bottom and rising up under the
+   guidelines and the floating nav — position-locked, no longer the top-anchored
+   scroll-away wash. The LOGIN screen no longer wears it — its pastel now comes
+   from the gradient Create-account / Log-in button — so the wash is keyed off
+   data-ambient="about" only, not body.gate (the router sets 'about' on the
+   signed-out front door and 'none' on the auth form). */
 
-/* Login / gate screen: there's no photo to sample, so the wash lights itself
-   and drifts slowly through the hue wheel. It's flipped to the BOTTOM — the
-   glow rises up under the form rather than falling from the top. Pinned to the
-   VIEWPORT (fixed) so it never scrolls off or shows a hard cut edge when the
-   signup form is tall enough to scroll. */
+/* There's no photo to sample here, so the wash lights itself and drifts slowly
+   through the hue wheel. It's flipped to the BOTTOM — the glow rises up under
+   the content rather than falling from the top. Pinned to the VIEWPORT (fixed)
+   so it never scrolls off or shows a hard cut edge when the page is tall. */
 /* Span BOTH viewport edges (inset: 0) rather than sizing with 100vh: on iOS
    Safari `100vh` is the large (toolbar-hidden) viewport while `bottom: 0` pins
    a fixed box to the small (toolbar-shown) one, so a 100vh box's bottom edge
@@ -75,7 +81,6 @@ body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); op
    over flat paper, sliding as the toolbar collapsed. inset:0 lets the box reach
    the true viewport bottom, tucking the glow's bright base behind the browser
    chrome. The GPU promotion keeps the hue-drift filter off the scroll path. */
-body.gate .ambient,
 body[data-ambient="about"] .ambient {
   position: fixed;
   inset: 0;
@@ -92,7 +97,6 @@ body[data-ambient="about"] .ambient {
 
 @media (prefers-reduced-motion: reduce) {
   .ambient { transition: none; }
-  body.gate .ambient,
   body[data-ambient="about"] .ambient { animation: none; }
 }
 
@@ -681,10 +685,11 @@ main {
    Apple's guidance is a 44pt hit AREA, not a 44pt drawn control (their own
    filter chips render shorter and extend touch slop the same way), so the visual
    isn't bloated. Vertical only — horizontal is already comfortable and neighbours
-   share the row. Each host sets position:relative to anchor it. */
+   share the row. Each host sets position:relative to anchor it. NB: not for
+   .publish-fill pills (e.g. the profile Share) — those spend their ::after on the
+   grain layer, so a tap overlay here would fight it; they size the hit area with
+   real padding instead. */
 .filter::after,
-.account-edit::after,
-.account-share::after,
 .friend-btn::after {
   content: '';
   position: absolute;
@@ -1708,6 +1713,22 @@ body.gate main { padding: 0; }
   min-height: 3.4rem;
 }
 .combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
+/* Signup identity combo: the @handle rides in the note slot, a single line with a
+   muted @ prefix (rather than the tall textarea a real note uses). */
+.combo-user { display: flex; align-items: center; padding: 0 0.85rem; }
+.combo-user .at { color: var(--muted); flex-shrink: 0; }
+.field--combo .combo-userinput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 0.62rem 0.2rem;
+}
+.field--combo .combo-userinput:focus { outline: none; }
+.field-hint--combo { margin-top: 0.4rem; }
 
 /* ── Rich Note editor (contenteditable) + its formatting toolbar ───────────────
    The body is a contenteditable that renders headings/emphasis live (WYSIWYG) —
@@ -1825,20 +1846,6 @@ body.gate main { padding: 0; }
   }
 }
 
-/* Username wears an @ prefix; the wrapper carries the border + focus ring. */
-.field-user {
-  display: flex;
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
-  transition: border-color var(--dur-micro);
-}
-.field-user:focus-within { border-color: var(--accent); }
-.field-user .at { padding-left: 0.85rem; color: var(--muted); }
-.field-user input { border: none; background: none; padding-left: 0.3rem; }
-.field-user input:focus { border-color: transparent; }
-
 .auth-error { color: var(--type-find-ink); font-size: 0.85rem; margin-top: 1rem; min-height: 1.1rem; }
 .auth-submit {
   width: 100%;
@@ -1854,6 +1861,12 @@ body.gate main { padding: 0; }
   transition: background-color var(--dur-micro);
 }
 .auth-submit:hover { background: var(--lit-top), var(--accent-press); }
+/* The auth gate's Create account / Log in commit wears the same lit-dome pastel
+   fill as the hero Post pill and compose "+" (.publish-fill.is-solid): the flat
+   accent bg would paint over the gradient, so drop it here and let the dome
+   below (shared with .composer-post) carry the look. */
+.auth-submit.publish-fill { background: none; box-shadow: none; color: var(--on-type); }
+.auth-submit.publish-fill:hover { background: none; }
 .auth-alt { margin-top: 1.5rem; font-size: 0.88rem; color: var(--muted); text-align: center; }
 .auth-alt button {
   background: none;
@@ -1865,44 +1878,80 @@ body.gate main { padding: 0; }
 }
 
 /* ── Profile (own account or a friend's) — identity header + their column ──── */
-/* The identity hero: a calm, centred block. Colour/depth comes from the ambient
-   page wash behind everything (tinted from this profile's photo), so the header
-   itself stays clean — the photo is the statement, not a card stacked on a card. */
-.account {
-  text-align: center;
-  padding: 1rem 1.5rem 2.2rem;
+/* The identity header: a floating glass CARD on the profile's own colour wash.
+   The wash (.ambient, a soft blob tinted from the photo via --glow-photo, set by
+   applyAmbient) sits behind the page, so the card's backdrop-blur has real colour
+   to refract — every profile reads in its own custom hue. Inside the card: the
+   photo sits LEFT as its own floating glass panel, and the whole identity group
+   (name / handle / stats / bio / actions) stacks beside it. (max-width + centring
+   come from the shared .account rule up top, so it tracks the feed column.) */
+.account { padding-top: 0.25rem; }
+
+.account-card {
+  position: relative;                  /* anchors the corner edit-profile badge */
+  padding: 1.5rem 1.4rem;
+  border-radius: var(--radius-modal);  /* a larger piece of glass, rounder corners */
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+          backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: var(--lit-rim), 0 12px 30px rgba(0, 0, 0, 0.12);
 }
 
-.account-figure { position: relative; display: inline-block; margin-bottom: 1.2rem; }
-.account-avatar {
-  width: 104px; height: 104px;
-  font-size: 2.7rem;
-  margin: 0;
+/* Photo panel left, the whole identity group (name, handle, stats, bio, actions)
+   beside it. Top-aligned so the name crowns the photo. */
+.account-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
 }
-/* A photo hero gets a soft ring to lift it off the wash. */
-.account--photo .account-avatar { box-shadow: 0 0 0 4px var(--bg), 0 10px 30px rgba(0, 0, 0, 0.18); }
-/* Camera button — set/replace your photo, tucked at the avatar's corner. */
-.account-photo-edit {
-  position: absolute;
-  right: -3px; bottom: -3px;
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 2px solid var(--bg);
-  border-radius: 50%;
-  transition: background-color var(--dur-micro), transform 0.12s;
+/* The profile photo is its OWN floating glass panel stacked on the card: a
+   4:3-tall (portrait) tile, framed by a hairline + lit rim + float shadow so it
+   reads as a distinct glass layer sitting on top. Profile-page-only crop — the
+   square-stored avatar is object-fit:cover'd into 3:4, so it needs no separate
+   upload and stays circular everywhere else in the app. */
+.account-photo {
+  position: relative;
+  flex: 0 0 clamp(132px, 40%, 196px);
+  aspect-ratio: 3 / 4;
+  /* Pull the panel toward the card's top/left/bottom edges — the text next to it
+     keeps the card's own padding, but the photo hugs the glass layer below. */
+  margin: -0.7rem 0 -0.7rem -0.65rem;
+  border-radius: 17px;                 /* rounder to sit with the card's 20px */
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: var(--lit-rim), 0 10px 24px rgba(0, 0, 0, 0.18);
 }
-.account-photo-ico { width: 16px; height: 16px; }
-.account-photo-edit:active { transform: scale(0.92); }
-@media (hover: hover) { .account-photo-edit:hover { background: var(--accent-press); } }
-.account .view-title { font-size: 2.4rem; margin-top: 0.1rem; }
-.account-bio { color: var(--muted); margin-top: 0.6rem; }
-.profile-stats {
+.account-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.account-photo--empty { display: grid; place-items: center; }
+.account-photo-initial {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: clamp(3rem, 13vw, 4.5rem);
+  line-height: 1;
+  color: color-mix(in srgb, var(--text) 32%, transparent);
+  user-select: none;
+}
+
+.account-meta { min-width: 0; flex: 1; }
+.account-name {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(1.7rem, 5.5vw, 2.1rem);
+  line-height: 1.05;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.account-handle {
+  margin-top: 0.12rem;
+  font-size: 0.92rem;
   color: var(--muted);
-  font-size: 0.88rem;
-  margin-top: 0.85rem;
+}
+.profile-stats {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
   letter-spacing: 0.02em;
+  color: var(--muted);
 }
 .profile-stats .dot { opacity: 0.5; margin: 0 0.3rem; }
 /* The friend count reads as plain stat text, but is a button — tappable to open
@@ -1921,71 +1970,90 @@ body.gate main { padding: 0; }
   .profile-friends:not(:disabled):hover { color: var(--text); text-decoration: underline; }
 }
 
-/* Back to the directory, above a friend's header. */
+/* Bio sits in the identity group, below the stats. */
+.account-bio {
+  margin-top: 0.85rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Back to the directory, above a friend's card. */
 .profile-back {
   display: inline-block;
   color: var(--muted);
   font-size: 0.9rem;
-  padding-inline: var(--inset);
   margin-bottom: 1rem;
   transition: color var(--dur-micro);
 }
 @media (hover: hover) { .profile-back:hover { color: var(--text); } }
 
-/* Their posts sit below the header as a single-author column. The header already
-   carries its own bottom padding, so this only tops up to a clean separation. */
-.account + .feed { margin-top: 1.5rem; }
+/* Their posts sit below the card as a single-author column, with a clear gap so
+   the card reads as its own header, not the top of the feed. */
+.account + .feed { margin-top: 2.4rem; }
 
-/* Your own profile carries two small, muted outline pills side by side: edit
-   your name/bio, and copy your share link. Kept compact and understated so they
-   stay out of the way of the header and posts. */
+/* Actions sit at the foot of the identity group (left-aligned). Your own profile
+   now carries just Share here (edit moved to the corner pencil below); a friend's
+   carries the tie button. */
 .account-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.4rem;
+  justify-content: flex-start;
+  gap: 0.5rem;
   margin-top: 1.1rem;
 }
-.account-edit,
 .account-share {
-  position: relative;               /* anchors the 44pt tap-target overlay */
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   margin: 0;
-  color: var(--muted);
-  background: none;
-  border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
-  transition: color var(--dur-micro), border-color var(--dur-micro), background-color var(--dur-micro);
+  padding: 0.56rem 1.15rem;         /* real padding carries the hit area (no ::after
+                                        overlay — that pseudo is the grain layer) */
+  font-size: 0.85rem;
 }
-.account-edit-ico,
+/* Share wears the drifting pastel fill — it's the single primary action on your
+   own card and a genuine share (same treatment as Post / Share Tria). publish-fill
+   carries the look; the copied tick just swaps the label, no bg change. */
+.account-share.publish-fill,
+.account-share.publish-fill.copied { color: var(--on-type); font-weight: 700; }
 .account-share-ico { width: 14px; height: 14px; }
-@media (hover: hover) {
-  .account-edit:hover,
-  .account-share:hover { color: var(--text); border-color: var(--text); }
-}
-.account-share.copied {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent);
-}
 
-/* Friend toggle: filled ink to add, quiet outline once you're friends. */
+/* Edit-profile: a pencil badge in the card's top-right corner (opens the name/bio
+   editor). A quiet outline disc on faint glass, echoing the pill it replaced. */
+.account-edit-badge {
+  position: absolute;
+  top: 10px; right: 10px;
+  z-index: 2;
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--glass-bg) 55%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  transition: color var(--dur-micro), border-color var(--dur-micro),
+              background-color var(--dur-micro), transform 0.12s;
+}
+.account-edit-ico { width: 15px; height: 15px; }
+.account-edit-badge:active { transform: scale(0.92); }
+@media (hover: hover) { .account-edit-badge:hover { color: var(--text); border-color: var(--text); } }
+/* Reserve room so a long name's first line clears the corner badge. */
+.account-card:has(.account-edit-badge) .account-name { padding-right: 1.7rem; }
+
+/* Friend toggle: filled ink to add, quiet outline once you're friends. Sits at
+   the foot of the identity group, left-aligned with it. */
 .friend-btn {
   position: relative;               /* anchors the 44pt tap-target overlay */
   display: block;
-  margin: 1.6rem auto 0;
-  min-width: 148px;
+  margin: 1.1rem 0 0;
+  min-width: 122px;
   color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--radius-pill);
-  padding: 0.55rem 1.4rem;
+  padding: 0.46rem 1.15rem;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.87rem;
   transition: color var(--dur-micro), background-color var(--dur-micro), border-color var(--dur-micro);
 }
 @media (hover: hover) {
@@ -2406,12 +2474,18 @@ body.gate main { padding: 0; }
    quartet, plus a contact + ambient drop, so it reads as a glossy 3D object,
    not a flat pill. Only the colour band drifts; the highlight and cavity stay
    put so the light source never wanders (mirrors publish-dome on the FAB). */
-.composer .composer-post.publish-fill.is-solid {
+.composer .composer-post.publish-fill.is-solid,
+.auth-submit.publish-fill.is-solid,
+.account-share.publish-fill.is-solid,
+.friends-share-copy.publish-fill.is-solid {
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.16),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
-.composer .composer-post.publish-fill.is-solid::before {
+.composer .composer-post.publish-fill.is-solid::before,
+.auth-submit.publish-fill.is-solid::before,
+.account-share.publish-fill.is-solid::before,
+.friends-share-copy.publish-fill.is-solid::before {
   background:
     radial-gradient(75% 130% at 34% -20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
     radial-gradient(92% 130% at 50% 120%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 55%),
@@ -2425,14 +2499,20 @@ body.gate main { padding: 0; }
    a deeper cavity that still bites the pastel fill, and a crisp lit top rim, so
    it reads as a glossy 3D object in the dark too. Light is left as-is. */
 @media (prefers-color-scheme: dark) {
-  .composer .composer-post.publish-fill.is-solid {
+  .composer .composer-post.publish-fill.is-solid,
+  .auth-submit.publish-fill.is-solid,
+  .account-share.publish-fill.is-solid,
+  .friends-share-copy.publish-fill.is-solid {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.7),        /* lit top rim (reads on dark) */
       inset 0 -10px 18px rgba(0, 0, 0, 0.28),         /* cavity depth into the fill */
       0 2px 6px rgba(0, 0, 0, 0.45),
       0 14px 32px rgba(0, 0, 0, 0.55);                 /* float, darker to clear the dark bg */
   }
-  .composer .composer-post.publish-fill.is-solid::before {
+  .composer .composer-post.publish-fill.is-solid::before,
+  .auth-submit.publish-fill.is-solid::before,
+  .account-share.publish-fill.is-solid::before,
+  .friends-share-copy.publish-fill.is-solid::before {
     background:
       radial-gradient(70% 120% at 34% -16%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 52%),
       radial-gradient(95% 130% at 50% 122%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 55%),
@@ -2450,7 +2530,10 @@ body.gate main { padding: 0; }
   50%      { background-position: 0 0, 0 0, 100% 50%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .composer .composer-post.publish-fill.is-solid::before {
+  .composer .composer-post.publish-fill.is-solid::before,
+  .auth-submit.publish-fill.is-solid::before,
+  .account-share.publish-fill.is-solid::before,
+  .friends-share-copy.publish-fill.is-solid::before {
     animation: none;
     background-position: 0 0, 0 0, 50% 50%;
   }
@@ -2659,6 +2742,32 @@ body.gate main { padding: 0; }
 }
 .crop-replace[hidden] { display: none; }
 @media (hover: hover) { .crop-replace:hover { color: var(--text); } }
+
+/* Profile editor's photo: a big centred avatar with a camera badge at its corner.
+   Tapping the badge picks a file, which hides this row and reveals the inline crop
+   below. */
+.pf-photo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+.pf-photo[hidden] { display: none; }
+.pf-photo-figure { position: relative; display: inline-block; }
+.pf-photo-avatar { width: 116px; height: 116px; font-size: 2.9rem; }
+.pf-photo-edit {
+  position: absolute;
+  right: -2px; bottom: -2px;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  transition: background-color var(--dur-micro), transform 0.12s;
+}
+.pf-photo-ico { width: 16px; height: 16px; }
+.pf-photo-edit:active { transform: scale(0.92); }
+@media (hover: hover) { .pf-photo-edit:hover { background: var(--accent-press); } }
 
 /* ── Modal (avatar editor) — a frosted overlay + a calm card ───────────────── */
 .modal {
@@ -3246,9 +3355,7 @@ body.gate main { padding: 0; }
 
   /* Content-list rows break out to the screen edges so their hovers + hairline
      dividers run full-bleed while the content keeps its inset (via padding) — the
-     feed, the Friends directory, and the Updates ledger all read as one system.
-     Back link resets its inset. */
-  .profile-back { padding-inline: 0; }
+     feed, the Friends directory, and the Updates ledger all read as one system. */
   .friends-list, .requests-list, .notif-list { margin-inline: -1.15rem; }
   .friend, .request-row, .notif { padding-inline: 1.15rem; }
   .requests-kicker { padding-inline: 0; }

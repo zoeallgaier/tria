@@ -1910,12 +1910,21 @@
     authMode = mode;
     const isSignup = mode === 'signup';
 
-    const nameField = isSignup
-      ? `<div class="field">` +
-          `<label for="f-name">Display name</label>` +
-          `<input id="f-name" type="text" autocomplete="name" maxlength="40" ` +
-            `placeholder="Donna Haraway" autofocus>` +
-        `</div>`
+    // Signup leads with your identity as one combo box — display name as the serif
+    // headline, @handle as the note beneath it — echoing the composer's title+note.
+    const identityField = isSignup
+      ? `<div class="field field--combo">` +
+          `<input id="f-name" class="combo-title" type="text" autocomplete="name" ` +
+            `maxlength="40" placeholder="Display name" autofocus aria-label="Display name">` +
+          `<div class="combo-divider" aria-hidden="true"></div>` +
+          `<div class="combo-user">` +
+            `<span class="at" aria-hidden="true">@</span>` +
+            `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
+              `autocapitalize="none" spellcheck="false" maxlength="20" ` +
+              `placeholder="username" aria-label="Username">` +
+          `</div>` +
+        `</div>` +
+        `<p class="field-hint field-hint--combo">Lowercase letters, numbers or _ for your @handle.</p>`
       : '';
     const emailField =
       `<div class="field">` +
@@ -1932,20 +1941,8 @@
         `<p class="auth-tag">Social Media is so back.</p>` +
         `<h1 class="auth-head">${isSignup ? 'Create your account' : 'Welcome back'}</h1>` +
         `<form id="auth-form" novalidate>` +
-          nameField +
+          identityField +
           emailField +
-          (isSignup
-            ? `<div class="field">` +
-                `<label for="f-user">Username</label>` +
-                `<div class="field-user">` +
-                  `<span class="at" aria-hidden="true">@</span>` +
-                  `<input id="f-user" type="text" autocomplete="username" ` +
-                    `autocapitalize="none" spellcheck="false" maxlength="20" ` +
-                    `placeholder="donnaharaway">` +
-                `</div>` +
-                `<p class="field-hint">Lowercase letters, numbers or _.</p>` +
-              `</div>`
-            : '') +
           `<div class="field">` +
             `<label for="f-pass">Password</label>` +
             `<input id="f-pass" type="password" ` +
@@ -1953,7 +1950,7 @@
               `placeholder="••••••">` +
           `</div>` +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
-          `<button class="auth-submit" type="submit">` +
+          `<button class="auth-submit publish-fill is-solid" type="submit">` +
             `${isSignup ? 'Create account' : 'Log in'}</button>` +
         `</form>` +
         `<p class="auth-alt">` +
@@ -2008,13 +2005,12 @@
       .filter(p => p.type !== 'activity' || isSelf || isFriend);
     // Own profile carries a "copy my link to share" action; a friend's carries the
     // Add-friend toggle. (Log out moves to the foot of your own column, below.)
+    // Edit moved to a pencil badge in the card corner (see editBadge below), so
+    // the only meta action on your own profile is Share — now the single primary
+    // button, so it wears the drifting pastel fill (same as Post / Share Tria).
     const action = isSelf
       ? `<div class="account-actions">` +
-          `<button class="account-edit" type="button" id="edit-profile">` +
-            svgIcon('pencil', 'account-edit-ico') +
-            `<span>Edit profile</span>` +
-          `</button>` +
-          `<button class="account-share" type="button" id="share">` +
+          `<button class="account-share publish-fill is-solid" type="button" id="share">` +
             svgIcon('send', 'account-share-ico') +
             `<span class="account-share-label">Share</span>` +
           `</button>` +
@@ -2045,27 +2041,47 @@
       : `<span>${fLabel}</span>`;
     const stats = `${count} <span class="dot">·</span> ${friendStat}`;
 
+    // The photo IS the profile now: it fills the hero edge to edge and blurs
+    // progressively toward its base, where a liquid-glass card carries the name,
+    // handle, bio, stats and the action. No photo → a tinted panel with the big
+    // monogram, same card. The photo's colour still spills into the page wash
+    // below the hero via applyAmbient. The top-corner control is change-photo for
+    // the owner, back-to-directory for a visitor.
+    // Own profile carries a single pencil badge in the card's corner — it opens
+    // Edit profile, which now also holds the change-photo control. A visitor sees
+    // a back link above the card.
+    const editBadge = isSelf
+      ? `<button class="account-edit-badge" type="button" id="edit-profile" ` +
+          `aria-label="Edit profile" title="Edit profile">` +
+          svgIcon('pencil', 'account-edit-ico') + `</button>`
+      : '';
+    const back = isSelf ? '' : (() => { const b = backTarget();
+      return `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>`; })();
+
     view.innerHTML =
       `<section class="view">` +
-        (isSelf ? '' : (() => { const b = backTarget();
-          return `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>`; })()) +
-        `<div class="account${u.avatar ? ' account--photo' : ''}">` +
-          // The photo is the statement; its colour spills into the ambient page
-          // wash behind everything (see applyAmbient), so the header stays clean.
-          `<div class="account-id">` +
-            `<div class="account-figure">` +
-              avatarEl(u, { cls: 'account-avatar' }) +
-              (isSelf
-                ? `<button class="account-photo-edit" type="button" id="edit-photo" ` +
-                    `aria-label="Change your photo" title="Change your photo">` +
-                    svgIcon('camera', 'account-photo-ico') + `</button>`
-                : '') +
+        back +
+        `<div class="account">` +
+          // A floating glass card on the profile's own colour wash (.ambient,
+          // tinted from the photo) — the glass refracts that wash, so each profile
+          // reads in a custom hue. Avatar left, identity beside it, bio below,
+          // actions centred underneath.
+          `<div class="account-card">` +
+            editBadge +
+            `<div class="account-head">` +
+              `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
+                (u.avatar
+                  ? `<img src="${esc(u.avatar)}" crossorigin="anonymous" alt="" decoding="async">`
+                  : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
+              `</div>` +
+              `<div class="account-meta">` +
+                `<h1 class="account-name">${esc(u.name)}</h1>` +
+                `<p class="account-handle">@${esc(u.username)}</p>` +
+                `<p class="profile-stats">${stats}</p>` +
+                (u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '') +
+                action +
+              `</div>` +
             `</div>` +
-            `<h1 class="view-title">${esc(u.name)}</h1>` +
-            `<p class="view-sub">@${esc(u.username)}</p>` +
-            (u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '') +
-            `<p class="profile-stats">${stats}</p>` +
-            action +
           `</div>` +
         `</div>` +
         `<div class="feed" id="feed"></div>` +
@@ -2203,10 +2219,6 @@
       });
     });
 
-    const editPhotoBtn = document.getElementById('edit-photo');
-    if (editPhotoBtn) editPhotoBtn.addEventListener('click',
-      () => openAvatarEditor(() => renderUser(username)));
-
     const editProfileBtn = document.getElementById('edit-profile');
     if (editProfileBtn) editProfileBtn.addEventListener('click',
       () => openProfileEditor(() => renderUser(username)));
@@ -2285,84 +2297,12 @@
      A small frosted modal for setting your profile photo: pick → square crop
      (reusing initCropper) → save. On save it exports a 512² JPEG data-URI and
      hands it to Store.updateAvatar, then calls `done` to re-render in place. */
-  function openAvatarEditor(done) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Change your photo');
-    modal.innerHTML =
-      `<div class="modal-card modal-card--glass">` +
-        `<h2 class="modal-title">Your photo</h2>` +
-        `<input id="av-file" type="file" accept="image/*" hidden>` +
-        `<div class="dropzone" id="av-drop">` +
-          `<button type="button" class="dropzone-btn" id="av-pick">Choose a photo</button>` +
-          `<p class="field-hint">JPG or PNG · cropped to a square.</p>` +
-        `</div>` +
-        `<div class="crop crop--avatar" id="av-crop" hidden>` +
-          `<img id="av-cropimg" alt="" draggable="false">` +
-          `<span class="crop-hint">Drag to reposition</span>` +
-        `</div>` +
-        `<button type="button" class="crop-replace" id="av-replace" hidden>Replace photo</button>` +
-        `<p class="composer-error" id="av-error" role="alert"></p>` +
-        `<div class="modal-actions">` +
-          `<button type="button" class="edit-cancel" id="av-cancel">Cancel</button>` +
-          `<button type="button" class="composer-submit" id="av-save" disabled>Save photo</button>` +
-        `</div>` +
-      `</div>`;
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
-
-    const fileEl = modal.querySelector('#av-file');
-    const dropEl = modal.querySelector('#av-drop');
-    const cropEl = modal.querySelector('#av-crop');
-    const imgEl = modal.querySelector('#av-cropimg');
-    const replaceEl = modal.querySelector('#av-replace');
-    const saveEl = modal.querySelector('#av-save');
-    const errEl = modal.querySelector('#av-error');
-    let avCropper = null;
-
-    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
-    const onEsc = (e) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', onEsc);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    modal.querySelector('#av-cancel').addEventListener('click', close);
-
-    const pick = () => fileEl.click();
-    modal.querySelector('#av-pick').addEventListener('click', pick);
-    replaceEl.addEventListener('click', pick);
-    dropEl.addEventListener('click', (e) => { if (e.target === dropEl) pick(); });
-
-    fileEl.addEventListener('change', () => {
-      const f = fileEl.files && fileEl.files[0];
-      if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        dropEl.hidden = true;
-        cropEl.hidden = false;
-        replaceEl.hidden = false;
-        saveEl.disabled = false;
-        avCropper = initCropper(cropEl, imgEl, reader.result);
-      };
-      reader.readAsDataURL(f);
-    });
-
-    saveEl.addEventListener('click', () => {
-      if (!avCropper) return;
-      // Optimistic: updateAvatar sets the cache to the local crop synchronously, so
-      // closing + re-rendering now shows the new photo instantly. The upload runs in
-      // the background; if it fails, the store reverts and we re-render + toast.
-      const pending = Store.updateAvatar(avCropper.export(512));
-      close();
-      done();
-      pending.then(res => { if (!res.ok) { done(); toast(res.error); } });
-    });
-  }
-
   /* ── Profile editor ──────────────────────────────────────────────────────
-     A sibling of the avatar editor for the words: display name + bio. Saves via
-     Store.updateProfile, then calls `done` to re-render the profile in place.
-     (The photo has its own editor, reached from the avatar's camera button.) */
+     One place for everything about you: your photo, display name, and bio (plus
+     the notifications toggle and Log out). The photo folds in here — pick a file
+     to reveal an inline square cropper; Save commits the words and, if you chose
+     a new photo, the crop too. Saves via Store.updateProfile / updateAvatar, then
+     calls `done` to re-render the profile in place. */
   function openProfileEditor(done) {
     const u = Store.currentUser();
     if (!u) return;
@@ -2375,6 +2315,19 @@
       `<div class="modal-card modal-card--glass">` +
         `<h2 class="modal-title">Edit profile</h2>` +
         `<form id="pf-form" novalidate>` +
+          `<div class="pf-photo" id="pf-photo">` +
+            `<div class="pf-photo-figure">` +
+              avatarEl(u, { cls: 'pf-photo-avatar' }) +
+              `<button type="button" class="pf-photo-edit" id="pf-photo-pick" ` +
+                `aria-label="Change your photo" title="Change your photo">` +
+                svgIcon('camera', 'pf-photo-ico') + `</button>` +
+            `</div>` +
+          `</div>` +
+          `<input id="pf-file" type="file" accept="image/*" hidden>` +
+          `<div class="crop crop--avatar" id="pf-crop" hidden>` +
+            `<img id="pf-cropimg" alt="" draggable="false">` +
+            `<span class="crop-hint">Drag to reposition</span>` +
+          `</div>` +
           `<div class="field">` +
             `<label for="pf-name">Display name</label>` +
             `<input id="pf-name" type="text" maxlength="40" ` +
@@ -2419,12 +2372,36 @@
     bioEl.addEventListener('input', updateCount);
     updateCount();
 
+    // Photo: pick a file → an inline square crop replaces the thumbnail. Save
+    // commits it alongside the words; no file chosen leaves the photo untouched.
+    const pfFile = modal.querySelector('#pf-file');
+    const pfCropEl = modal.querySelector('#pf-crop');
+    const pfCropImg = modal.querySelector('#pf-cropimg');
+    const pfPhotoRow = modal.querySelector('#pf-photo');
+    let pfCropper = null;
+    modal.querySelector('#pf-photo-pick').addEventListener('click', () => pfFile.click());
+    pfFile.addEventListener('change', () => {
+      const f = pfFile.files && pfFile.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        pfPhotoRow.hidden = true;
+        pfCropEl.hidden = false;
+        pfCropper = initCropper(pfCropEl, pfCropImg, reader.result);
+      };
+      reader.readAsDataURL(f);
+    });
+
     modal.querySelector('#pf-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const res = await Store.updateProfile({ name: nameEl.value, bio: bioEl.value });
       if (!res.ok) { errEl.textContent = res.error; return; }
+      // A freshly cropped photo commits alongside — optimistic (cache updates
+      // synchronously), upload in the background; on failure the store reverts.
+      const pendingAvatar = pfCropper ? Store.updateAvatar(pfCropper.export(512)) : null;
       close();
       done();
+      if (pendingAvatar) pendingAvatar.then(r => { if (!r.ok) { done(); toast(r.error); } });
     });
 
     // Account controls: the notifications toggle and Log out, now homed here.
@@ -4067,6 +4044,9 @@
     if (!Store.isAuthed()) {
       document.body.classList.add('gate');
       const gatePath = (location.hash || '#/').split('?')[0];
+      // The signed-out About front door keeps the hue-drift wash; the auth form
+      // does not (its pastel now comes from the gradient submit button).
+      document.body.dataset.ambient = gatePath === '#/about' ? 'about' : 'none';
       renderPage(-1, () => gatePath === '#/about' ? renderAbout(true) : renderAuth(authMode));
       window.scrollTo(0, 0);
       return;
