@@ -479,7 +479,9 @@ main {
    even after the blur has cleared). iOS WebKit (standalone especially) keeps
    trying to sample backdrop-filter inside a transforming/promoted layer and the
    frost visibly jumps — exactly on the pages that carry in-page glass (Friends:
-   seg-tabs + search; Updates: seg-tabs + soft-ask). Turning
+   seg-tabs + search; Updates: seg-tabs + soft-ask; Profile: the account-card,
+   a big piece of glass whose large sample area was crashing iOS WebKit outright
+   on the way out to Circle). Turning
    it off explicitly stops the mis-sampling and drops the per-frame compositing
    cost; the handover back to live frost lands when the router clears the
    transition classes (right as the page settles — see renderPage cleanup). The
@@ -488,7 +490,8 @@ main {
    own iOS layer pin — see .nav-pill). */
 .page.enter .seg-tabs, .page.leave .seg-tabs,
 .page.enter .masthead-search-field, .page.leave .masthead-search-field,
-.page.enter .push-ask, .page.leave .push-ask {
+.page.enter .push-ask, .page.leave .push-ask,
+.page.enter .account-card, .page.leave .account-card {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
