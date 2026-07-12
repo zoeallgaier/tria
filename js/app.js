@@ -3918,7 +3918,8 @@
           `<p class="about-lede">Tria is a social media app built around <em>real ` +
             `relationships</em>. Whether you're keeping up with lifelong friends, ` +
             `or finding your people for the first time, Tria ` +
-            `is the place to do it. <strong>Your feed is chronological. There are ` +
+            `is the place to do it.</p>` +
+          `<p class="about-lede"><strong>Your feed is chronological. There are ` +
             `no ads, no algorithm deciding for you, and no popularity ` +
             `contests.</strong> Just a place to share your life, discover things ` +
             `worth caring about, and stay connected.</p>` +

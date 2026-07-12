@@ -62,31 +62,31 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
 
 /* About page (signed in OR the signed-out front door) carries the self-lit,
-   hue-drifting blue glow: pinned to the viewport bottom and rising up under the
-   guidelines and the floating nav — position-locked, no longer the top-anchored
-   scroll-away wash. The LOGIN screen no longer wears it — its pastel now comes
-   from the gradient Create-account / Log-in button — so the wash is keyed off
+   hue-drifting blue glow: pinned to the viewport top and falling down over the
+   guidelines and the floating nav — position-locked, no longer a scroll-away
+   wash. The LOGIN screen no longer wears it — its pastel now comes from the
+   gradient Create-account / Log-in button — so the wash is keyed off
    data-ambient="about" only, not body.gate (the router sets 'about' on the
    signed-out front door and 'none' on the auth form). */
 
 /* There's no photo to sample here, so the wash lights itself and drifts slowly
-   through the hue wheel. It's flipped to the BOTTOM — the glow rises up under
-   the content rather than falling from the top. Pinned to the VIEWPORT (fixed)
-   so it never scrolls off or shows a hard cut edge when the page is tall. */
+   through the hue wheel. It's anchored to the TOP — the glow falls down over
+   the content. Pinned to the VIEWPORT (fixed) so it never scrolls off or shows
+   a hard cut edge when the page is tall. */
 /* Span BOTH viewport edges (inset: 0) rather than sizing with 100vh: on iOS
-   Safari `100vh` is the large (toolbar-hidden) viewport while `bottom: 0` pins
-   a fixed box to the small (toolbar-shown) one, so a 100vh box's bottom edge
-   lands ABOVE the toolbar. Since this glow is brightest at that very edge
-   (centre at 118%, below the box), that produced a hard-cut seam of bright glow
-   over flat paper, sliding as the toolbar collapsed. inset:0 lets the box reach
-   the true viewport bottom, tucking the glow's bright base behind the browser
-   chrome. The GPU promotion keeps the hue-drift filter off the scroll path. */
+   Safari `100vh` is the large (toolbar-hidden) viewport while `top: 0` pins a
+   fixed box to the small (toolbar-shown) one, so a 100vh box's top edge can
+   land below the true top when the toolbar is collapsed. Since this glow is
+   brightest at that very edge (centre at -18%, above the box), inset:0 lets
+   the box reach the true viewport top, keeping the glow's bright base flush
+   with the screen edge regardless of browser chrome. The GPU promotion keeps
+   the hue-drift filter off the scroll path. */
 body[data-ambient="about"] .ambient {
   position: fixed;
   inset: 0;
   height: auto;
   --glow: rgba(52, 120, 236, 0.36);
-  background: radial-gradient(ellipse 120% 85% at 50% 118%, var(--glow), transparent 72%);
+  background: radial-gradient(ellipse 120% 85% at 50% -18%, var(--glow), transparent 72%);
   opacity: 1;
   animation: hue-drift 30s linear infinite;
   transform: translateZ(0);
