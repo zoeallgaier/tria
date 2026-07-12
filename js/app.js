@@ -1102,8 +1102,19 @@
         fig.classList.add('is-loaded');
         fig.classList.remove('photo--reserve');   // legacy: release the reserved box
       };
-      if (im.complete) landed();
-      else { im.addEventListener('load', landed, { once: true }); im.addEventListener('error', landed, { once: true }); }
+      const onEvents = () => {
+        im.addEventListener('load', landed, { once: true });
+        im.addEventListener('error', landed, { once: true });
+      };
+      // Warm cache (pre-decoded by warmImages): reveal at once, no fade to replay.
+      // Cold: wait for a fully DECODED bitmap before revealing, not just `load` —
+      // iOS fires load before the bitmap is paint-ready, so revealing on load
+      // stutters/pops. decode() resolves only when it can paint in one clean
+      // frame, so the settle reads as a settle. Fall back to load/error events
+      // if decode isn't available or rejects (e.g. a broken image).
+      if (im.complete && im.naturalWidth) landed();
+      else if (im.decode) im.decode().then(landed).catch(onEvents);
+      else onEvents();
     }
     const open = () => openLightbox(img.src, img.alt);
     fig.addEventListener('click', open);

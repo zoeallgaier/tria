@@ -1547,14 +1547,20 @@ main {
   height: auto;
   background: var(--surface-2);
   border-radius: var(--radius-card);
-  /* The neutral box holds the space; the photo eases in over it once it lands
-     (JS adds .is-loaded), so it settles rather than popping. */
+  /* The neutral box holds the space; the photo eases into it once its bitmap is
+     fully decoded (JS adds .is-loaded — see wirePhoto). A cold-loading photo
+     settles: a soft fade paired with a tiny scale-down, on the signature ease,
+     so it eases into place instead of blinking on. Warm (pre-decoded) photos get
+     .is-loaded before first paint, so they simply appear — no fade to replay on
+     every navigation. */
   opacity: 0;
-  transition: opacity var(--dur-quick) var(--ease);
+  transform: scale(1.03);
+  transform-origin: center;
+  transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
 }
-.photo.is-loaded img { opacity: 1; }
+.photo.is-loaded img { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
-  .photo img { opacity: 1; transition: none; }
+  .photo img { opacity: 1; transform: none; transition: none; }
 }
 /* Legacy photos carry no stamped size, so we can't hand the <img> width/height
    to reserve space. Hold a neutral box until it loads (JS drops this class on
