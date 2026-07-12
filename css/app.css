@@ -496,6 +496,25 @@ main {
   backdrop-filter: none;
 }
 
+/* The same collision, different cause: on a photo-heavy page, the entering
+   page's will-change layer tears down at the exact moment a burst of card
+   entrances AND photo-frame reveals are still mid-flight (card rise is 0.5s,
+   staggered up to 0.4s — well past the page's own 0.36s move), right as
+   several photo bitmaps are freshly decoded. That pile-up of simultaneous
+   compositor layers + fresh large bitmaps is what's crashing Safari on iOS
+   ("A problem repeatedly occurred") on page switches, not the glass. Pausing
+   card rise for the move's duration and letting photos snap in instead of
+   fading (still reveal the instant they decode, just without an extra
+   transform/opacity layer riding along) cuts the concurrent-layer count during
+   the one window that matters; the stagger resumes and fades return to normal
+   the moment renderPage's cleanup clears these classes. */
+.page.enter .card, .page.leave .card {
+  animation-play-state: paused;
+}
+.page.enter .photo-frame img, .page.leave .photo-frame img {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Match .page.enter's specificity so the override actually wins (the router
      also skips the slide path entirely under reduced motion — belt and braces). */
@@ -1504,8 +1523,12 @@ main {
   max-height: 210px;
   overflow-y: auto;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
-  -webkit-backdrop-filter: blur(30px) saturate(1.5);
-  backdrop-filter: blur(30px) saturate(1.5);
+  /* Trimmed from 30 to 24px (matches the rest of the floating-panel tier) —
+     sample-radius is a real compositing cost on iOS, and this popover doesn't
+     need the extra 6px to read as frosted. Part of the July 2026 crash audit;
+     see the page-transition comment above for the fuller context. */
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: var(--radius-card);
   box-shadow:
@@ -2844,8 +2867,9 @@ body.gate main { padding: 0; }
      iOS modal rather than a boxy web dialog. */
   border-radius: var(--radius-modal);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
-  backdrop-filter: blur(30px) saturate(1.5);
-  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  /* Trimmed from 30 to 24px, same reasoning as .mention-list above. */
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
