@@ -1537,12 +1537,15 @@ main {
    whatever was uploaded, tall or wide. */
 .photo {
   display: block;
+  position: relative;             /* positioning context for the blur-up layer */
   width: 100%;
   cursor: zoom-in;
   padding-inline: var(--inset);   /* inset to the post-text column, like the byline */
 }
 .photo img {
   display: block;
+  position: relative;
+  z-index: 1;                     /* above the blur-up layer */
   width: 100%;
   height: auto;
   background: var(--surface-2);
@@ -1559,6 +1562,31 @@ main {
   transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
 }
 .photo.is-loaded img { opacity: 1; transform: none; }
+
+/* ── Blur-up ──────────────────────────────────────────────────────────────────
+   Photos posted with an inline LQIP (a tiny base64 thumbnail on the row, set as
+   --lqip on the figure) paint it instantly, upscaled soft, so the full photo
+   sharpens into focus over its own colours instead of over flat grey. This layer
+   sits exactly over the image box (same inset + corners as the img) BEHIND the
+   fading-in photo; once the photo is opaque it fully covers this, so there's no
+   cross-fade dip. iOS-robust: the thumbnail is inline data, so it always paints
+   instantly even after iOS drops the full image's decoded bitmap from memory. */
+.photo-blur {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--inset);
+  right: var(--inset);
+  z-index: 0;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--surface-2) var(--lqip) center / cover no-repeat;
+}
+/* The blur layer carries the reveal, so the sharp photo just cross-fades in over
+   it — drop the scale-settle (which is for the plain grey-box case) to avoid the
+   two layers drifting against each other. */
+.photo--lqip img { transform: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .photo img { opacity: 1; transform: none; transition: none; }
 }
@@ -3226,6 +3254,7 @@ body.gate main { padding: 0; }
   /* Tighter inset to the phone text column. Tap still opens full-screen.
      (Photo corners are a unified 14px across breakpoints — see .photo img.) */
   .photo { padding-inline: 1.15rem; }
+  .photo-blur { left: 1.15rem; right: 1.15rem; }   /* keep the blur box on the img box */
   .card--photo .byline,
   .card--photo .card-solometa,
   .card--photo .card-foot { padding-inline: 1.15rem; }
