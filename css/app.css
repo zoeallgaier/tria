@@ -1578,9 +1578,21 @@ main {
   left: var(--inset);
   right: var(--inset);
   z-index: 0;
-  overflow: hidden;
+  overflow: hidden;                 /* clips the blurred layer's soft edge */
   border-radius: var(--radius-card);
-  background: var(--surface-2) var(--lqip) center / cover no-repeat;
+  background: var(--surface-2);
+}
+/* The tiny thumbnail scaled with `cover` alone reads as blocky pixels. A real
+   Gaussian blur melts it into soft colour. The blur is on an overscanned inner
+   layer (inset past the box on all sides) so its fuzzy, fading edge lands
+   outside the figure and gets clipped — no pale halo ringing the photo. */
+.photo-blur::before {
+  content: '';
+  position: absolute;
+  inset: -8%;
+  background: var(--lqip) center / cover no-repeat;
+  filter: blur(16px);
+  -webkit-filter: blur(16px);
 }
 /* The blur layer carries the reveal, so the sharp photo just cross-fades in over
    it — drop the scale-settle (which is for the plain grey-box case) to avoid the
