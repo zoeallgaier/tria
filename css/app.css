@@ -1601,8 +1601,11 @@ main {
 }
 /* The blur layer carries the reveal, so the sharp photo just cross-fades in over
    it — drop the scale-settle (which is for the plain grey-box case) to avoid the
-   two layers drifting against each other. */
-.photo--lqip img { transform: none; }
+   two layers drifting against each other. translateZ (not `none`) forces the img
+   onto its own compositing layer: once the sibling .photo-blur is composited (it
+   uses translateZ too), Safari stops clipping a NON-composited img above it to its
+   border-radius and renders square corners. Its own layer restores the rounded clip. */
+.photo--lqip img { transform: translateZ(0); }
 
 @media (prefers-reduced-motion: reduce) {
   .photo img { opacity: 1; transform: none; transition: none; }
