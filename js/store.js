@@ -25,7 +25,7 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], friends: {}, audience: [] });
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], friends: {}, audience: [], blocks: [] });
   let state = empty();
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
@@ -79,7 +79,7 @@ const Store = (() => {
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
-    const [u, p, c, l, h, f, pa] = await Promise.all([
+    const [u, p, c, l, h, f, pa, bl] = await Promise.all([
       sb.from('users').select('*'),
       sb.from('posts').select('*'),
       sb.from('comments').select('*').order('created_at', { ascending: true }),
@@ -96,6 +96,11 @@ const Store = (() => {
       // see: our own memberships + every row on posts we authored (enough to show
       // the author a "shared with N" count). Tolerates a pre-migration DB (→ []).
       sb.from('post_audience').select('*'),
+      // People I've blocked. RLS hands back only my own block rows (blocker =
+      // me), so every row here is someone I blocked. Tolerates a pre-migration DB
+      // (no blocks table yet → error, data null → []); the app keeps a localStorage
+      // mirror so blocking still works before this migration is run.
+      sb.from('blocks').select('*'),
     ]);
     state.users = (u.data || []).map(mapUser);
     const nameById = nameMap();
@@ -118,6 +123,9 @@ const Store = (() => {
     }
     for (const x of state.users) fr[x.username] || (fr[x.username] = []);
     state.friends = fr;
+    // Usernames I've blocked (RLS already scoped these rows to me). Empty on a
+    // pre-migration DB — the localStorage mirror in app.js covers that gap.
+    state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
   }
 
   // Re-pull the whole world on demand (nav re-taps, the app foregrounding).
@@ -300,6 +308,33 @@ const Store = (() => {
       .or(`and(a.eq.${mine},b.eq.${theirs}),and(a.eq.${theirs},b.eq.${mine})`);
     if (error) return;
     unlinkCache(me, username); unlinkCache(username, me);
+  }
+
+  // ── Blocking ────────────────────────────────────────────────────────────────
+  // Server-backed once blocks.sql is run: the row hides posts BOTH ways at the
+  // data layer (can_view_post excludes blocked pairs), so a stale client mirror
+  // can't leak content. Before the migration, these writes no-op on the missing
+  // table and app.js's localStorage mirror carries the block on its own.
+  const isBlocked = (username) => state.blocks.includes(username);
+
+  async function block(username) {
+    const me = state.session;
+    if (!me || username === me) return;
+    const mine = idOf(me), theirs = idOf(username);
+    if (!mine || !theirs) return;
+    // Blocking a friend severs the tie too, so RLS stops handing them your posts.
+    await removeFriend(username);
+    const { error } = await sb.from('blocks').insert({ blocker: mine, blocked: theirs });
+    if (error && !/duplicate|unique/i.test(error.message)) return;  // table missing / already blocked → localStorage covers it
+    if (!state.blocks.includes(username)) state.blocks.push(username);
+  }
+
+  async function unblock(username) {
+    const me = state.session;
+    if (!me) return;
+    const mine = idOf(me), theirs = idOf(username);
+    if (mine && theirs) await sb.from('blocks').delete().eq('blocker', mine).eq('blocked', theirs);
+    state.blocks = state.blocks.filter(u => u !== username);
   }
 
   // ── Compose (async writes) ──────────────────────────────────────────────────
@@ -661,6 +696,8 @@ const Store = (() => {
     // Friends
     isFriend, areFriends, addFriend, removeFriend,
     requestsSent, requestsReceived, friendStatus,
+    // Blocking
+    isBlocked, block, unblock,
     // Compose
     createPost, deletePost, updatePost,
     // Comments

@@ -966,6 +966,19 @@ main {
 .card-meta .card-edit { height: 34px; min-width: 34px; }
 .card-meta .card-edit svg { width: 18px; height: 18px; }
 
+/* The ••• overflow rides the bottom-left corner of the row, toned and sized like
+   the edit pencil — a quiet tool. It's a direct child of .card-actions on plain
+   posts (row-reverse floats it leftmost) and leads .card-meta on activities;
+   pin it to the 34px/18px tool scale in both, overriding the 44px/28px meta
+   glyphs it would otherwise inherit on an activity. */
+.card-menu { color: var(--muted); opacity: 0.6; }
+.card-actions > .card-menu,
+.card-meta .card-menu { height: 34px; min-width: 34px; }
+.card-menu svg,
+.card-meta .card-menu svg { width: 18px; height: 18px; }
+.card-menu:active { opacity: 1; color: var(--text); }
+@media (hover: hover) { .card-menu:hover { opacity: 1; color: var(--text); } }
+
 /* Like + comment share the right, as one group. The group's negative margin
    cancels the last button's inner padding so its glyph lines up with the post
    text column's right edge. */
@@ -1095,11 +1108,6 @@ main {
   .card-like.is-unliking .like-heart { animation: none; }
   .card-like.is-liking::before { display: none; }
 }
-
-/* Add-to-calendar (activities with a date). Plain icon button; lifts to the
-   activity ink like its neighbor, the hand-up toggle. */
-.card-cal:hover,
-.card-cal:focus-visible { color: var(--type-activity-ink); }
 
 /* Attendees (activities). The people-glyph + count on the left; an outline
    glyph carrying the activity ink (it's a public tally, not a toggle), no
@@ -1278,6 +1286,7 @@ main {
 /* An activity whose day has passed: the lime hands back to grey. */
 .type-icon--past     { color: var(--muted); }
 @media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
+
 .avatar {
   width: 40px;
   height: 40px;
@@ -1670,6 +1679,103 @@ main {
 .loc-opt-name { font-weight: 700; color: var(--text); }
 .loc-opt-detail { color: var(--muted); font-size: 0.8rem; }
 
+/* ── Action sheet — the ••• post menu and the friend menu (Remove/Block/Report).
+   A floating glass panel that rises from the bottom over a dim scrim. Glass per
+   the material rule (a menu floats above content); same frosted recipe as the
+   mention popover, sheet-scaled. On wide screens it caps its width and still docks
+   to the bottom, iOS-style. ─────────────────────────────────────────────────── */
+.sheet-scrim {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0.7rem;
+  padding-bottom: calc(0.7rem + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, #000 34%, transparent);
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-soft);
+}
+.sheet-scrim.open { opacity: 1; }
+.sheet {
+  width: 100%; max-width: 440px;
+  display: flex; flex-direction: column; gap: 0.5rem;
+  transform: translateY(14px);
+  transition: transform 0.22s var(--ease-soft);
+}
+.sheet-scrim.open .sheet { transform: none; }
+.sheet-items, .sheet-cancel {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  /* 24px matches the rest of the floating-panel tier (nav pill, mention popover)
+     — standardized in the July 2026 crash audit; sample-radius is a real iOS
+     compositing cost and the sheet reads as frosted at 24 just the same. */
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: var(--radius-modal, 20px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
+    0 12px 34px rgba(0, 0, 0, 0.22);
+}
+.sheet-title {
+  text-align: center; font-size: 0.8rem; color: var(--muted);
+  padding: 0.7rem 1rem 0.1rem; margin: 0;
+}
+.sheet-items { overflow: hidden; padding: 0.3rem; }
+.sheet-item {
+  display: flex; align-items: center; gap: 0.7rem; width: 100%;
+  padding: 0.85rem 0.9rem; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 0.98rem; color: var(--text); text-align: left;
+  border-radius: var(--radius-img, 8px);
+  -webkit-tap-highlight-color: transparent;
+}
+.sheet-item + .sheet-item { position: relative; }
+.sheet-item + .sheet-item::before {
+  content: ""; position: absolute; left: 0.9rem; right: 0.9rem; top: 0;
+  border-top: 1px solid var(--rule);
+}
+.sheet-item:active { background: var(--surface-2); }
+@media (hover: hover) { .sheet-item:hover { background: var(--surface-2); } }
+.sheet-item:focus-visible,
+.sheet-cancel:focus-visible { outline: none; background: var(--surface-2); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent); }
+.sheet-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
+.sheet-item--danger { color: var(--type-find-ink); }
+.sheet-item--danger .sheet-ico { color: currentColor; }
+.sheet-cancel {
+  padding: 0.9rem; border: none; cursor: pointer;
+  font: inherit; font-size: 0.98rem; font-weight: 700; color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+.sheet-cancel:active { background: var(--surface-2); }
+@media (prefers-color-scheme: dark) {
+  .sheet-items, .sheet-cancel {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
+      0 12px 34px rgba(0, 0, 0, 0.5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-scrim, .sheet { transition: none; }
+  .sheet { transform: none; }
+}
+
+/* ── Blocked wall — a blocked person's profile in place of their content ────── */
+.blocked-wall {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 0.6rem; padding: 3rem 1.5rem;
+}
+.blocked-mark {
+  width: 3rem; height: 3rem; color: var(--muted); opacity: 0.7;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 0.3rem;
+}
+.blocked-mark svg { width: 100%; height: 100%; }
+.blocked-name { font-size: 1.4rem; margin: 0; }
+.blocked-note { color: var(--muted); max-width: 30ch; margin: 0 0 0.6rem; line-height: 1.5; }
+.blocked-unblock {
+  padding: 0.6rem 1.4rem; border-radius: 999px; cursor: pointer;
+  font: inherit; font-weight: 700; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--rule);
+}
+@media (hover: hover) { .blocked-unblock:hover { background: var(--surface-3, var(--surface-2)); } }
+
 /* ── Photo entries — identity + caption lead, full-bleed image last ────────── */
 /* The image keeps its own aspect ratio (no forced 1:1 crop); the figure sizes to
    whatever was uploaded, tall or wide. */
@@ -1990,6 +2096,20 @@ body.gate main { padding: 0; }
 }
 
 .auth-error { color: var(--type-find-ink); font-size: 0.85rem; margin-top: 1rem; min-height: 1.1rem; }
+
+/* Signup's guidelines agreement — a quiet inline checkbox above the error line.
+   The accent tick matches the primary action; the copy stays small and muted. */
+.auth-agree {
+  display: flex; align-items: flex-start; gap: 0.55rem;
+  margin-top: 1.1rem; font-size: 0.82rem; color: var(--muted); line-height: 1.4;
+  cursor: pointer;
+}
+.auth-agree input {
+  flex-shrink: 0; width: 1.05rem; height: 1.05rem; margin-top: 0.05rem;
+  accent-color: var(--type-activity-ink); cursor: pointer;
+}
+.auth-agree a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+@media (hover: hover) { .auth-agree a:hover { color: var(--type-activity-ink); } }
 .auth-submit {
   width: 100%;
   margin-top: 0.5rem;
@@ -2227,6 +2347,7 @@ body.gate main { padding: 0; }
 .account-edit-ico { width: 15px; height: 15px; }
 .account-share-ico { width: 15px; height: 15px; }
 .account-friend-ico { width: 18px; height: 18px; }
+.account-more-ico { width: 18px; height: 18px; }
 /* Share flashes a check on copy/share — quietly acknowledge, don't shout. */
 .account-share-badge.copied { color: var(--text); border-color: var(--text); }
 /* The friends tie reads as a settled positive state (text ink + a firmer rim),
@@ -2236,6 +2357,7 @@ body.gate main { padding: 0; }
 /* Reserve room on the name's first line so it clears the corner cluster — more
    for the two-disc own card, less for a friend's single tie. */
 .account-card:has(.account-friend-badge) .account-name { padding-right: 2rem; }
+.account-card:has(.account-more-badge) .account-name { padding-right: 2rem; }
 .account-card:has(.account-share-badge) .account-name { padding-right: 4.3rem; }
 
 /* Friend toggle (pre-friend states only — add / requested / accept; once you're

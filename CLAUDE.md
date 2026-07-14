@@ -16,11 +16,9 @@ Real multi-user backend on **Supabase** (Auth + Postgres + Storage).
 - `sw.js` — push-only service worker (caches nothing, on purpose — see below).
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `functions/push/` + `PUSH-SETUP.md`.
 
-## Running it
+## Building & Running it
 Zoe previews on her **VSCode Live Server** — she strongly prefers seeing changes
-live over screenshots, so default to letting her preview. Any static file server
-works (e.g. `python3 -m http.server`); Supabase is remote, so there's nothing to
-run locally beyond serving the files.
+live over screenshots, so default to letting her preview. For design changes that she is unable to preview directly, generate an artifact (ask before). Any static file server works (e.g. `python3 -m http.server`); Supabase is remote, so there's nothing to run locally beyond serving the files.
 
 `?demo` in the URL (e.g. `/?demo#/updates`) is a preview aid — it currently forces
 the push pre-prompt card to show regardless of permission state. Handy for showing

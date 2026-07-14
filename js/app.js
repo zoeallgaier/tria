@@ -98,6 +98,16 @@
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
     // Padlock — marks an activity shared with a hand-picked few, not the whole circle.
     lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+    // Horizontal ellipsis — the quiet "more" overflow on a post header. Opens the
+    // per-post action sheet (Copy link, Report). Filled dots so it reads at the
+    // small header scale where a hairline outline would nearly vanish.
+    dots:    '<circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+    // A little chain link — Copy link.
+    link:    '<path d="M9.5 14.5 14.5 9.5"/><path d="M11 7l1.5-1.5a3.5 3.5 0 0 1 5 5L16 12"/><path d="M13 17l-1.5 1.5a3.5 3.5 0 0 1-5-5L8 12"/>',
+    // A pennant on a staff — Report. Rides the report row inside the sheets.
+    flag:    '<path d="M6 21V4"/><path d="M6 5h11l-2 3 2 3H6"/>',
+    // No-entry circle — Block a user.
+    block:   '<circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -114,6 +124,64 @@
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${ICONS[key]}</svg>`;
+
+  /* ── Blocking ────────────────────────────────────────────────────────────────
+     A client-side block list, persisted per-device in localStorage. Blocking a
+     person severs the friendship (Store.removeFriend, which drops the mutual edge
+     at the data layer too) AND hides them locally: their posts leave your feed,
+     their profile shows a blocked wall instead of content, and they vanish from
+     Discover so you don't re-add them by reflex. Because Tria is private by
+     default (only mutual friends see posts), severing the edge already stops them
+     seeing YOUR posts at the RLS layer — the local list handles the other half,
+     you not seeing THEM. A server-side blocks table with RLS is the eventual
+     hardening (needs a migration Zoe runs); this ships real, sticky blocking today
+     without one. Keyed by username, lower-cased. */
+  const Blocks = (() => {
+    const KEY = 'tria:blocks';
+    let local = new Set();
+    try { local = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { local = new Set(); }
+    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify([...local])); } catch {} };
+    const S = () => (typeof Store !== 'undefined' ? Store : null);
+    return {
+      // A block counts if EITHER the server cache (post-migration) or the local
+      // mirror (pre-migration / offline) has it — so blocking never regresses.
+      has: (u) => local.has(u) || !!(S() && S().isBlocked && S().isBlocked(u)),
+      add: (u) => { local.add(u); persist(); if (S() && S().block) S().block(u); },
+      remove: (u) => { local.delete(u); persist(); if (S() && S().unblock) S().unblock(u); },
+    };
+  })();
+
+  /* ── Objectionable-content filter ────────────────────────────────────────────
+     A good-faith gate at compose time (App Store 1.2: "filter objectionable
+     material from being posted"), NOT a moderation engine — reporting is the real
+     net. Deliberately short and high-precision: slurs + the hardest sexual-
+     exploitation terms only. Matches on word boundaries over normalised text
+     (lower-cased, zero-width stripped, common leet folded) so it can't misfire on
+     innocent substrings (the Scunthorpe problem). Extend TERMS to tune; keep it
+     tight — a bloated list flags real words and trains people to distrust it. */
+  const BLOCKLIST = (() => {
+    // Kept intentionally small. These are the unambiguous cases; the reporting
+    // pipeline handles everything contextual. Add terms here as needed.
+    const TERMS = [
+      'nigger', 'faggot', 'chink', 'kike', 'spic', 'wetback', 'coon', 'tranny',
+      'retard', 'childporn', 'cp', 'jailbait', 'lolicon',
+    ];
+    const LEET = { '4': 'a', '@': 'a', '3': 'e', '1': 'i', '!': 'i', '0': 'o', '5': 's', '$': 's', '7': 't' };
+    const normalise = (s) => String(s || '')
+      .toLowerCase()
+      .replace(/[​-‍﻿]/g, '')          // strip zero-width chars
+      .replace(/[4@31!05$7]/g, (c) => LEET[c] || c);  // fold basic leetspeak
+    // Word-boundary matcher per term. `cp` and `cp`-like short terms need real
+    // boundaries so they don't hit inside ordinary words.
+    const patterns = TERMS.map(t => new RegExp(`\\b${t}\\b`, 'i'));
+    return {
+      // Returns true if any field trips the filter.
+      hits: (...fields) => {
+        const text = normalise(fields.join(' \n '));
+        return patterns.some(re => re.test(text));
+      },
+    };
+  })();
   const NAV = [
     { route: '#/',        key: 'circle',  label: 'My Circle' },
     { route: '#/friends', key: 'friends', label: 'Friends' },
@@ -336,6 +404,18 @@
     const cls = past ? 'past' : post.type;
     return `<span class="type-icon type-icon--${cls}" role="img" aria-label="${esc(label)}">` +
       `${TYPE_ICON[post.type] || ''}</span>`;
+  }
+
+  // The quiet ••• overflow — it rides the bottom-left corner of the action row,
+  // out of the way, sized and toned like the edit pencil (a tool, not an
+  // invitation). Opens the per-post sheet (Copy link, Add to calendar, Report).
+  // On your OWN posts it's suppressed — nothing to report, and you can share the
+  // profile — EXCEPT on your own upcoming activities, where Add to calendar is a
+  // real self-action (put your own plan on your calendar), so the menu stays.
+  function menuBtnHtml(post) {
+    if (post.author === Store.session() && !isCalendarable(post)) return '';
+    return `<button class="card-menu" type="button" data-menu="${esc(post.id)}" ` +
+      `aria-label="More" title="More">${svgIcon('dots')}</button>`;
   }
 
   // Byline (identity) — avatar + profile name, with the date (and a find's
@@ -885,7 +965,7 @@
   function attendeesHtml(post) {
     if (post.type !== 'activity') return '';
     if (!canSocial(post)) return '';
-    const n = Store.headcountFor(post.id).length;
+    const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
     const open = openGoing.has(post.id);
     return `<button class="card-attendees" type="button" ` +
         `aria-expanded="${open}" aria-label="${n} going, see who" title="Who’s going">` +
@@ -911,20 +991,17 @@
   }
 
   // Add-to-calendar — activities with a date only, same friends gate as the
-  // hand-up toggle, and gone once the plan has Happened. Sits at the left of the
-  // action row beside the attendee count; tapping downloads a one-event .ics the
-  // phone hands to whatever calendar the person actually uses.
-  function calendarBtnHtml(post) {
-    if (post.type !== 'activity' || !post.eventDate || isPastActivity(post)) return '';
-    if (!canSocial(post)) return '';
-    return `<button class="card-cal" type="button" aria-label="Add to calendar" ` +
-        `title="Add to calendar">${svgIcon('cal')}</button>`;
+  // hand-up toggle, and gone once the plan has Happened. It's a "take this plan
+  // somewhere else" action, sibling to Copy link, so it lives in the ••• menu
+  // rather than as its own glyph (see openPostMenu). This predicate gates it.
+  function isCalendarable(post) {
+    return post.type === 'activity' && post.eventDate && !isPastActivity(post) && canSocial(post);
   }
 
   function goingPanelHtml(post) {
     if (post.type !== 'activity') return '';
     if (!canSocial(post)) return '';
-    const list = Store.headcountFor(post.id);
+    const list = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user));
     const open = openGoing.has(post.id);
     return `<div class="going-panel${open ? ' open' : ''}">` +
         `<div class="comments-inner">` +
@@ -938,11 +1015,10 @@
   }
 
   function cardActionsHtml(post, opts) {
-    const cal = calendarBtnHtml(post);
     const attendees = attendeesHtml(post);
     const rsvp = goingToggleHtml(post);
     const like = likeButtonHtml(post);
-    const n = Store.commentsFor(post.id).length;
+    const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
     const expanded = openComments.has(post.id);
     const comment = canSocial(post)
       ? `<button class="card-comment" type="button" aria-expanded="${expanded}" ` +
@@ -958,23 +1034,26 @@
       ? `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
           `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>`
       : '';
+    // The ••• overflow — leftmost of the left cluster, so it lands in the bottom-
+    // left corner of the card, out of the way. Empty on your own posts.
+    const menu = menuBtnHtml(post);
 
-    if (!cal && !attendees && !rsvp && !like && !comment && !owner) return '';
+    if (!attendees && !rsvp && !like && !comment && !owner && !menu) return '';
 
-    // Activities split into two ends. LEFT: the owner's edit pencil (leftmost, on
-    // your own profile only), then calendar + attendee count — the plan. RIGHT:
-    // the RSVP toggle, then comments + likes. RSVP leads the social cluster so
-    // comment + like are ALWAYS the two rightmost glyphs, in the exact same spot
-    // whether or not an RSVP rides along. Holds on the feed and every profile.
+    // Activities split into two ends. LEFT: the ••• menu (which carries Add to
+    // calendar), then the owner's edit pencil (own profile only), then the
+    // attendee count — the plan. RIGHT: the RSVP toggle, then comments + likes.
+    // RSVP leads the social cluster so comment + like are ALWAYS the two rightmost
+    // glyphs, in the exact same spot whether or not an RSVP rides along.
     if (post.type === 'activity') {
-      const meta = `<div class="card-meta">${owner}${cal}${attendees}</div>`;
+      const meta = `<div class="card-meta">${menu}${owner}${attendees}</div>`;
       const social = `<div class="card-social">${rsvp}${comment}${like}</div>`;
       return `<div class="card-actions card-actions--activity">${meta}${social}</div>`;
     }
 
     // Everything non-activity — a single row: social cluster on the right, the
-    // edit tool tucked left (row-reverse).
-    return `<div class="card-actions"><div class="card-social">${cal}${attendees}${rsvp}${comment}${like}</div>${owner}</div>`;
+    // edit tool and ••• menu tucked left (row-reverse, so menu ends up leftmost).
+    return `<div class="card-actions"><div class="card-social">${attendees}${rsvp}${comment}${like}</div>${owner}${menu}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -1098,7 +1177,6 @@
       commentsPanelHtml(post);
     el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
     wireReadMore(el, post);
-    wireCalendar(el, post);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
     wireComments(el, post, opts);
@@ -1171,7 +1249,7 @@
 
   function likersPanelHtml(post) {
     if (post.author !== Store.session()) return '';    // only the author sees who liked
-    const list = Store.likesFor(post.id);
+    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
     const open = openLikers.has(post.id);
     return `<div class="likers-panel${open ? ' open' : ''}">` +
         `<div class="comments-inner">` +
@@ -1249,21 +1327,19 @@
       'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
   }
 
-  function wireCalendar(el, post) {
-    const btn = el.querySelector('.card-cal');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      const blob = new Blob([icsForPost(post)], { type: 'text/calendar' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = (post.title || 'activity').toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '.ics';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    });
+  // Build the post's .ics and hand it to the browser as a download — fired from
+  // the ••• menu's "Add to calendar" (see openPostMenu).
+  function downloadIcs(post) {
+    const blob = new Blob([icsForPost(post)], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (post.title || 'activity').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   function wireGoing(el, post, opts) {
@@ -1375,7 +1451,9 @@
   // survives a card rebuild; the .open class (not [hidden]) drives the animation.
   function commentsPanelHtml(post) {
     if (!canSocial(post)) return '';   // friends-only: no thread on a non-friend's post
-    const list = Store.commentsFor(post.id);
+    // Blocked authors' comments never render, on any post (closes the block gap
+    // for threads on mutual friends' posts). The count above filters to match.
+    const list = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author));
     const open = openComments.has(post.id);
     // .comments-inner is the collapsing grid child — it holds NO padding/border
     // (that would keep it from reaching 0 height); all spacing + the left rule
@@ -1820,6 +1898,7 @@
     const feedEl = view.querySelector('#feed');
     if (!feedEl) return;
     const list = Store.feed().filter(p => {
+      if (Blocks.has(p.author)) return false;   // blocked authors never surface
       const typeOk = activeFilter === 'all' || p.type === activeFilter;
       const tagOk = !activeTag || (p.tags || []).includes(activeTag);
       return typeOk && tagOk;
@@ -1972,6 +2051,14 @@
               `autocomplete="${isSignup ? 'new-password' : 'current-password'}" ` +
               `placeholder="••••••">` +
           `</div>` +
+          // App Store 1.2: joining is an explicit agreement to the guidelines
+          // (our zero-tolerance terms). Signup only; gated in the submit handler.
+          (isSignup
+            ? `<label class="auth-agree" for="f-agree">` +
+                `<input id="f-agree" type="checkbox">` +
+                `<span>I agree to Tria's <a href="#/about?open=guidelines" target="_blank" rel="noopener">Community Guidelines</a> and to keep it kind.</span>` +
+              `</label>`
+            : '') +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
           `<button class="auth-submit publish-fill is-solid" type="submit">` +
             `${isSignup ? 'Create account' : 'Log in'}</button>` +
@@ -1992,6 +2079,11 @@
       const email = document.getElementById('f-email').value;
       const password = document.getElementById('f-pass').value;
       errEl.textContent = '';
+      const agree = document.getElementById('f-agree');
+      if (isSignup && agree && !agree.checked) {
+        errEl.textContent = 'Please agree to the Community Guidelines to continue.';
+        return;
+      }
       submitBtn.disabled = true;
       submitBtn.textContent = isSignup ? 'Creating…' : 'Logging in…';
       const res = isSignup
@@ -2017,10 +2109,29 @@
      One view renders both: the signed-in identity + their posts as a single-
      author column. Your own profile carries a Log out; a friend's carries a
      an Add-friend toggle and a way back to the directory. */
+  // A blocked person's profile: no content, just a quiet wall with an undo. Their
+  // posts are already gone from your feed; this closes the last door (their page).
+  function renderBlockedWall(u) {
+    const b = backTarget();
+    view.innerHTML =
+      `<section class="view">` +
+        `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>` +
+        `<div class="blocked-wall">` +
+          `<div class="blocked-mark">${svgIcon('block')}</div>` +
+          `<h1 class="blocked-name">${esc(u.name)}</h1>` +
+          `<p class="blocked-note">You blocked @${esc(u.username)}. You won't see each other on Tria.</p>` +
+          `<button class="blocked-unblock" type="button" id="unblock">Unblock</button>` +
+        `</div>` +
+      `</section>`;
+    const btn = document.getElementById('unblock');
+    if (btn) btn.addEventListener('click', () => { Blocks.remove(u.username); renderUser(u.username); });
+  }
+
   function renderUser(username) {
     const u = Store.user(username);
     if (!u) { location.hash = '#/'; return; }          // stale link → home
     const isSelf = u.username === Store.session();
+    if (!isSelf && Blocks.has(u.username)) { renderBlockedWall(u); return; }
     const isFriend = Store.isFriend(u.username);
     // A private profile fences its whole feed to friends: an outsider sees the
     // identity card and a nudge to add them, no posts. (The data layer backs this
@@ -2108,8 +2219,16 @@
           `aria-label="Friends, tap to remove" title="Friends · tap to remove">` +
           svgIcon('friends', 'account-friend-ico') + `</button>`
       : '';
-    const cornerBadges = (shareBadge || editBadge || friendBadge)
-      ? `<div class="account-badges">${shareBadge}${editBadge}${friendBadge}</div>`
+    // A visitor who ISN'T your friend still needs Block + Report reachable (App
+    // Store 1.2 — you must be able to block an abusive person you haven't added).
+    // Friends get those inside the friend badge's menu; this covers everyone else.
+    const moreBadge = (!isSelf && !areFriends)
+      ? `<button class="account-more-badge" type="button" id="account-more" ` +
+          `aria-label="More" title="More">` +
+          svgIcon('dots', 'account-more-ico') + `</button>`
+      : '';
+    const cornerBadges = (shareBadge || editBadge || friendBadge || moreBadge)
+      ? `<div class="account-badges">${shareBadge}${editBadge}${friendBadge}${moreBadge}</div>`
       : '';
 
     // Bio always rides in the identity column beside the photo, on the same left
@@ -2270,11 +2389,25 @@
 
     const friendBtn = document.getElementById('friend');
     if (friendBtn) friendBtn.addEventListener('click', async () => {
-      // friends → unfriend, sent → cancel; add / accept both create my edge.
-      const committed = friendBtn.dataset.status === 'friends' || friendBtn.dataset.status === 'sent';
-      if (committed) await Store.removeFriend(u.username);
+      // Already friends → open the menu (Remove / Block / Report) rather than
+      // dropping the edge on one stray tap. sent → cancel the request; add /
+      // accept both create my edge.
+      const status = friendBtn.dataset.status;
+      if (status === 'friends') { openFriendMenu(u.username, () => renderUser(username)); return; }
+      if (status === 'sent') await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
+    });
+
+    const moreBtn = document.getElementById('account-more');
+    if (moreBtn) moreBtn.addEventListener('click', () => {
+      openSheet({
+        title: u.name || '@' + u.username,
+        items: [
+          { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(u.username, () => renderUser(username)) },
+          { label: 'Report', icon: 'flag', danger: true, run: () => reportUser(u.username) },
+        ],
+      });
     });
 
     const shareBtn = document.getElementById('share');
@@ -2598,6 +2731,187 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
   }
 
+  /* ── Action sheet ─────────────────────────────────────────────────────────────
+     A floating glass panel that rises from the bottom over a scrim — the iOS
+     action-sheet pattern. Home to the per-post overflow (••• → Copy link, Report)
+     and the friend menu (Remove friend, Block, Report). Glass per the material
+     rule (a menu floats above content). items: {label, icon?, danger?, run?}; run
+     may be async and fires after the sheet closes. Reduced-motion aware. */
+  let sheetOpen = false;
+  function openSheet({ title, items }) {
+    if (sheetOpen) return;
+    sheetOpen = true;
+    const scrim = document.createElement('div');
+    scrim.className = 'sheet-scrim';
+    const rows = items.map((it, i) =>
+      `<button class="sheet-item${it.danger ? ' sheet-item--danger' : ''}" type="button" data-i="${i}">` +
+        (it.icon ? svgIcon(it.icon, 'sheet-ico') : '') +
+        `<span>${esc(it.label)}</span>` +
+      `</button>`).join('');
+    scrim.innerHTML =
+      `<div class="sheet" role="dialog" aria-modal="true"${title ? ` aria-label="${esc(title)}"` : ''}>` +
+        (title ? `<p class="sheet-title">${esc(title)}</p>` : '') +
+        `<div class="sheet-items">${rows}</div>` +
+        `<button class="sheet-cancel" type="button">Cancel</button>` +
+      `</div>`;
+    document.body.appendChild(scrim);
+    document.body.style.overflow = 'hidden';
+    // Remember who opened the sheet so focus can return there on close (HIG /
+    // WAI-ARIA dialog: focus moves in on open, is trapped while open, returns on
+    // close). Move focus to the first action once it's painted.
+    const opener = document.activeElement;
+    const focusables = () => [...scrim.querySelectorAll('.sheet-item, .sheet-cancel')];
+    requestAnimationFrame(() => {
+      scrim.classList.add('open');
+      focusables()[0]?.focus();
+    });
+
+    const close = (then) => {
+      if (!sheetOpen) return;
+      sheetOpen = false;
+      document.removeEventListener('keydown', onKey);
+      scrim.classList.remove('open');
+      document.body.style.overflow = '';
+      if (opener && opener.focus) opener.focus();   // restore focus to the ••• trigger
+      const done = () => { scrim.remove(); if (then) then(); };
+      if (prefersReduced()) done(); else setTimeout(done, 220);
+    };
+    function onKey(e) {
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key !== 'Tab') return;
+      // Trap Tab inside the sheet so a keyboard user can't wander behind the scrim.
+      const f = focusables();
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
+    scrim.querySelector('.sheet-cancel').addEventListener('click', () => close());
+    scrim.querySelectorAll('.sheet-item').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const it = items[+btn.dataset.i];
+        close(() => { if (it && it.run) it.run(); });
+      }));
+    document.addEventListener('keydown', onKey);
+  }
+
+  // A deep link to a single post: the author's profile plus ?p=<id>, which the
+  // router reads to spotlight-scroll the card into view (same mechanism an Updates
+  // row uses). Only resolves for someone who can already see that author's posts —
+  // correct, since posts are friends-only. Falls back to the bare @handle off-web.
+  function postLink(post) {
+    const base = profileLink(post.author);
+    return /^https?:/.test(base) ? `${base}?p=${encodeURIComponent(post.id)}` : base;
+  }
+
+  function copyPostLink(post) {
+    const author = Store.user(post.author);
+    shareOrCopy({
+      title: `${author ? author.name : post.author} on Tria`,
+      text: 'A post on Tria',
+      url: postLink(post),
+    }).then(result => {
+      if (result === 'cancelled') return;
+      toast(result === 'copied' ? 'Link copied' : 'Shared');
+    });
+  }
+
+  // Reports ride the same pipe as the feedback form (App Store 1.2: a report
+  // channel with a timely response — it lands in Zoe's inbox immediately, and she
+  // has the DB access to remove content or suspend an account). No schema needed.
+  async function sendReport(payload) {
+    const me = Store.user(Store.session());
+    try {
+      const res = await fetch(FEEDBACK_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ _subject: 'Tria report', reporter: me ? '@' + me.username : '(unknown)', ...payload }),
+      });
+      if (!res.ok) throw new Error('send failed');
+      return true;
+    } catch { return false; }
+  }
+
+  const REPORT_REASONS = ['Spam', 'Harassment or bullying', 'Hate or abuse', 'Explicit or violent', 'Something else'];
+  const reportToast = (ok) =>
+    toast(ok ? 'Thanks. Your report has been sent.' : "That didn't send. Please try again in a moment.");
+
+  function reportPost(post) {
+    openSheet({
+      title: 'Report this post',
+      items: REPORT_REASONS.map(reason => ({ label: reason, run: async () =>
+        reportToast(await sendReport({
+          kind: 'post', reason,
+          post_id: post.id, post_type: post.type, post_author: '@' + post.author,
+          excerpt: (post.title || post.note || '').replace(/<[^>]*>/g, ' ').trim().slice(0, 280) || '(no text)',
+          link: postLink(post),
+        })) })),
+    });
+  }
+
+  function reportUser(username) {
+    const u = Store.user(username);
+    openSheet({
+      title: 'Report @' + username,
+      items: REPORT_REASONS.map(reason => ({ label: reason, run: async () =>
+        reportToast(await sendReport({ kind: 'user', reason, reported: '@' + username, name: u ? u.name : '' })) })),
+    });
+  }
+
+  // The per-post overflow (•••). Copy link for everyone; Add to calendar on
+  // upcoming activities (a sibling "send this elsewhere" action); Report only on
+  // posts that aren't yours (you can't report yourself).
+  function openPostMenu(post) {
+    const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
+    if (isCalendarable(post))
+      items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(post) });
+    if (post.author !== Store.session())
+      items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
+    openSheet({ items });
+  }
+
+  // The friend badge/menu: Remove friend, Block, Report. Replaces the old
+  // tap-to-unfriend so an accidental tap can't silently drop a friendship.
+  function openFriendMenu(username, after) {
+    const u = Store.user(username);
+    openSheet({
+      title: u ? u.name : '@' + username,
+      items: [
+        { label: 'Remove friend', icon: 'friends', run: async () => { await Store.removeFriend(username); if (after) after(); } },
+        { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(username, after) },
+        { label: 'Report', icon: 'flag', danger: true, run: () => reportUser(username) },
+      ],
+    });
+  }
+
+  // Block is heavy, so confirm it. Blocking severs the friendship (removeFriend
+  // drops the mutual edge server-side too) and adds them to the local block list,
+  // which hides their posts and swaps their profile for a blocked wall.
+  function confirmBlock(username, after) {
+    const u = Store.user(username);
+    openSheet({
+      title: `Block ${u ? u.name : '@' + username}?`,
+      items: [
+        { label: 'Block', icon: 'block', danger: true, run: () => {
+            Blocks.add(username);   // hides them now (local mirror) + Store.block severs the tie server-side
+            toast("Blocked. You won't see each other.");
+            if (after) after();
+          } },
+      ],
+    });
+  }
+
+  // Delegated: any post's ••• opens its menu, wherever the card is rendered.
+  document.addEventListener('click', (e) => {
+    const mb = e.target.closest('.card-menu');
+    if (!mb) return;
+    e.preventDefault();
+    const post = Store.posts().find(p => p.id === mb.dataset.menu);
+    if (post) openPostMenu(post);
+  });
+
   /* ── Friends (your mutual circle) + Discover (people you haven't added) ───────
      A segmented control (seg-tabs) splits the page: My circle wears the brand
      gradient glow under the thumb, Find friends rests monochrome. */
@@ -2612,10 +2926,11 @@
     const friendSet = new Set(Store.friends());
     const byName = (a, b) => a.name.localeCompare(b.name);
 
-    const friends = Store.friends().map(Store.user).filter(Boolean).sort(byName);
-    // Everyone signed up who isn't you and isn't already a friend.
+    const friends = Store.friends().map(Store.user).filter(Boolean)
+      .filter(u => !Blocks.has(u.username)).sort(byName);
+    // Everyone signed up who isn't you, isn't already a friend, and isn't blocked.
     const discover = Store.users()
-      .filter(u => u.username !== me && !friendSet.has(u.username))
+      .filter(u => u.username !== me && !friendSet.has(u.username) && !Blocks.has(u.username))
       .sort(byName);
 
     // The inline control on a Discover row, keyed to where the tie stands:
@@ -3715,6 +4030,14 @@
       }
     }
 
+    // Good-faith objectionable-content gate (App Store 1.2). Checks the text
+    // fields the composer collected; a hit stops the post with a nudge toward the
+    // guidelines rather than silently eating it.
+    if (BLOCKLIST.hits(data.note, data.title, data.location)) {
+      errEl.textContent = 'That looks like it breaks our community guidelines. Please revise before posting.';
+      return;
+    }
+
     // Writes now hit the network (and, for photos, an upload), so reflect the
     // wait rather than freezing on click.
     const btn = document.querySelector('.composer-submit');
@@ -4089,6 +4412,22 @@
       });
     });
 
+    // Deep link: #/about?open=<foldId> (the signup guidelines link) opens that
+    // fold and scrolls it into view, so "Community Guidelines" lands you right on
+    // the open section instead of the top of a collapsed page.
+    const openId = new URLSearchParams(location.hash.split('?')[1] || '').get('open');
+    if (openId) {
+      const fold = document.getElementById(openId);
+      if (fold && fold.classList.contains('about-fold')) {
+        fold.classList.add('open');
+        const tog = fold.querySelector('.about-fold-toggle');
+        if (tog) tog.setAttribute('aria-expanded', 'true');
+        setTimeout(() => fold.scrollIntoView({
+          behavior: prefersReduced() ? 'auto' : 'smooth', block: 'start',
+        }), 80);
+      }
+    }
+
     const form = document.getElementById('fb-form');
     const errEl = document.getElementById('fb-error');
     form.addEventListener('submit', async (e) => {
@@ -4314,6 +4653,13 @@
 
     const hash = location.hash || '#/';
     const path = hash.split('?')[0];
+    // A copied post link carries ?p=<id> onto the author's profile. Set the
+    // spotlight so renderUser scrolls that card into view (same path an Updates
+    // row uses). Only honoured on a profile route.
+    if (path.startsWith('#/u/') || path === '#/profile') {
+      const p = new URLSearchParams(hash.split('?')[1] || '').get('p');
+      if (p) spotlightPost = p;
+    }
     renderNav(path);   // a friend view (#/u/…) matches nothing → nothing highlighted
 
     // Remember where a friend profile's "← Back" should return to: the page you
