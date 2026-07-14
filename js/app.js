@@ -2905,7 +2905,10 @@
     const href = (n.kind === 'mention' && post)
       ? `#/u/${esc(encodeURIComponent(post.author))}` : '#/profile';
     const fresh = n._ts && n._ts > lastSeen;
-    return `<li>` +
+    // data-key is the row's stable identity for the reconcile in renderUpdates
+    // (kind + which post + who + when) — one event, one row, across refreshes.
+    const key = esc(`${n.kind}:${n.postId}:${n.user}:${n._ts || ''}`);
+    return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
           `data-post="${esc(n.postId)}" data-kind="${n.kind}">` +
           avatarEl(u || { name: n.user }, { cls: 'comment-avatar' }) +
@@ -2939,7 +2942,7 @@
     // same notif voice — but carries Accept / Ignore where a passive row's dot
     // would sit. The avatar + text link walks to their profile, like a notif.
     const rows = reqs.map(u =>
-      `<li class="request-row">` +
+      `<li class="request-row" data-key="req:${esc(u.username)}">` +
         `<a class="request-who" href="#/u/${encodeURIComponent(u.username)}">` +
           avatarEl(u, { cls: 'comment-avatar' }) +
           `<span class="request-text"><strong>${esc(u.name)}</strong> wants to be friends</span>` +
@@ -3062,66 +3065,158 @@
                 ? 'No mentions yet.'
                 : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`);
     };
-    // All / Mentions is the shared segmented control, neutral (no brand glow) —
-    // colour stays reserved for post types.
-    view.innerHTML =
-      `<section class="view">` +
-        mastheadEl('', 'Updates') +
-        pushAskHtml() +
-        segTabsEl('updates', NOTIF_FILTERS, notifFilter, { label: 'Filter updates', panelId: 'updates-panel' }) +
-        `<div class="seg-panel" id="updates-panel" role="tabpanel" ` +
-          `aria-labelledby="updates-tab-${notifFilter}" tabindex="0">` +
-          panelHtml() +
-        `</div>` +
-      `</section>`;
-
-    wirePushAsk(renderUpdates);
-
-    const panel = view.querySelector('#updates-panel');
-    const tablist = view.querySelector('#updates-tabs');
-
-    // Wire the freshly mounted panel: request answers, row taps, and the feed
-    // stagger. Runs on first render and after every filter-switch panel swap.
-    function wirePanel() {
-      // Answer a friend request in place. Accept adds them back (→ mutual, they
-      // now show in each other's feeds); Ignore clears the request quietly.
-      panel.querySelectorAll('.request-accept').forEach(btn =>
+    // Answer a friend request in place. Accept adds them back (→ mutual, they
+    // now show in each other's feeds); Ignore clears the request quietly.
+    function wireRequests(scope) {
+      scope.querySelectorAll('.request-accept').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
           await Store.addFriend(btn.dataset.accept);
           renderUpdates();
         }));
-      panel.querySelectorAll('.request-ignore').forEach(btn =>
+      scope.querySelectorAll('.request-ignore').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
           await Store.removeFriend(btn.dataset.ignore);
           renderUpdates();
         }));
-      // A row walks you to the post itself (your profile column) with the right
-      // panel already open — the comment thread, who liked, or who's going — and
-      // the profile render scrolls that card into view (see spotlightPost).
-      panel.querySelectorAll('.notif').forEach(row =>
-        row.addEventListener('click', () => {
-          const id = row.dataset.post;
-          openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
-          if (row.dataset.kind === 'comment' || row.dataset.kind === 'mention') openComments.add(id);
-          else if (row.dataset.kind === 'like') openLikers.add(id);
-          else openGoing.add(id);
-          spotlightPost = id;
-        }));
-      // Rows rise in with the feed's stagger — request rows lead, ledger follows.
+    }
+    // A row walks you to the post itself (your profile column) with the right
+    // panel already open — the comment thread, who liked, or who's going — and
+    // the profile render scrolls that card into view (see spotlightPost).
+    function wireNotif(a) {
+      a.addEventListener('click', () => {
+        const id = a.dataset.post;
+        openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
+        if (a.dataset.kind === 'comment' || a.dataset.kind === 'mention') openComments.add(id);
+        else if (a.dataset.kind === 'like') openLikers.add(id);
+        else openGoing.add(id);
+        spotlightPost = id;
+      });
+    }
+    // Wire a freshly mounted panel and stagger its rows — request rows lead, the
+    // ledger follows. Runs on first mount and after every filter-switch swap.
+    function wirePanelFull(panel) {
+      wireRequests(panel);
+      panel.querySelectorAll('.notif').forEach(wireNotif);
       panel.querySelectorAll('.request-row, .notif').forEach((el, i) => {
         el.style.animationDelay = staggerDelay(i);
       });
     }
-    wirePanel();
 
-    wireSegTabs(tablist, NOTIF_FILTERS, () => notifFilter, (key) => {
-      notifFilter = key;
-      panel.setAttribute('aria-labelledby', 'updates-tab-' + key);
-      panel.innerHTML = panelHtml();
-      wirePanel();
-    });
+    // First mount (or a page navigation into Updates): build the whole view.
+    function mount() {
+      // All / Mentions is the shared segmented control, neutral (no brand glow) —
+      // colour stays reserved for post types.
+      view.innerHTML =
+        `<section class="view">` +
+          mastheadEl('', 'Updates') +
+          pushAskHtml() +
+          segTabsEl('updates', NOTIF_FILTERS, notifFilter, { label: 'Filter updates', panelId: 'updates-panel' }) +
+          `<div class="seg-panel" id="updates-panel" role="tabpanel" ` +
+            `aria-labelledby="updates-tab-${notifFilter}" tabindex="0">` +
+            panelHtml() +
+          `</div>` +
+        `</section>`;
+
+      wirePushAsk(renderUpdates);
+
+      const panel = view.querySelector('#updates-panel');
+      const tablist = view.querySelector('#updates-tabs');
+      wirePanelFull(panel);
+
+      wireSegTabs(tablist, NOTIF_FILTERS, () => notifFilter, (key) => {
+        notifFilter = key;
+        panel.setAttribute('aria-labelledby', 'updates-tab-' + key);
+        panel.innerHTML = panelHtml();
+        wirePanelFull(panel);
+      });
+    }
+
+    // Already on Updates: reconcile the panel in place instead of tearing the
+    // whole view down and replaying it. A background refresh (refreshWorld) often
+    // fires for a change that isn't even on this page — a like on some post you
+    // aren't looking at — and a full rebuild would replay the masthead, the tab
+    // thumb, and every row's entrance: the "why did it reload" flicker the feed
+    // already avoids. So keep unchanged rows (and their loaded avatars) put, rise
+    // in only genuinely new ones, and drop those that left.
+    function reconcile(panel) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = panelHtml();
+
+      // Requests block — rare and actionable, so reconcile it whole by signature.
+      const liveReq = panel.querySelector('.requests');
+      const wantReq = tmp.querySelector('.requests');
+      if (wantReq && !liveReq) {
+        panel.insertBefore(wantReq, panel.firstChild);
+        wireRequests(wantReq);
+        wantReq.querySelectorAll('.request-row').forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
+      } else if (liveReq && !wantReq) {
+        liveReq.remove();
+      } else if (liveReq && wantReq && liveReq.outerHTML !== wantReq.outerHTML) {
+        wireRequests(wantReq);
+        liveReq.replaceWith(wantReq);
+      }
+
+      // Empty state (mutually exclusive with the ledger list).
+      const liveEmpty = panel.querySelector('.feed-empty');
+      const wantEmpty = tmp.querySelector('.feed-empty');
+      if (wantEmpty && !liveEmpty) {
+        panel.querySelector('.notif-list')?.remove();
+        panel.appendChild(wantEmpty);
+      } else if (liveEmpty && !wantEmpty) {
+        liveEmpty.remove();
+      } else if (liveEmpty && wantEmpty && liveEmpty.outerHTML !== wantEmpty.outerHTML) {
+        liveEmpty.replaceWith(wantEmpty);
+      }
+
+      // Ledger — key-matched row reconcile (see makeCard's feed reconcile).
+      const liveList = panel.querySelector('.notif-list');
+      const wantList = tmp.querySelector('.notif-list');
+      if (!wantList) { liveList?.remove(); return; }
+      if (!liveList) {
+        panel.appendChild(wantList);
+        wantList.querySelectorAll('.notif').forEach(wireNotif);
+        wantList.querySelectorAll('.notif').forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
+        return;
+      }
+      const norm = s => s.replace(' notif--new', '');   // freshness alone isn't a content change
+      const wantLis = Array.from(wantList.children);
+      const wantKeys = new Set(wantLis.map(li => li.dataset.key));
+      Array.from(liveList.children).forEach(li => { if (!wantKeys.has(li.dataset.key)) li.remove(); });
+      const liveByKey = new Map(Array.from(liveList.children).map(li => [li.dataset.key, li]));
+      wantLis.forEach((want, i) => {
+        let node = liveByKey.get(want.dataset.key);
+        if (node) {
+          if (norm(node.innerHTML) !== norm(want.innerHTML)) {
+            // content genuinely changed (an edited post's label) — swap, no rise
+            const a = want.querySelector('.notif');
+            if (a) { wireNotif(a); a.style.animation = 'none'; }
+            node.replaceWith(want);
+            node = want;
+          } else {
+            // same row — just clear the "new" dot if this visit has now seen it,
+            // keeping the live node (and its already-decoded avatar) in place
+            const fresh = !!want.querySelector('.notif')?.classList.contains('notif--new');
+            node.querySelector('.notif')?.classList.toggle('notif--new', fresh);
+          }
+        } else {
+          const a = want.querySelector('.notif');   // brand-new — rise it in
+          if (a) { wireNotif(a); a.style.animationDelay = staggerDelay(i); }
+          node = want;
+        }
+        const ref = liveList.children[i] || null;
+        if (node !== ref) liveList.insertBefore(node, ref);
+      });
+    }
+
+    // Reconcile only when Updates is already mounted AND the push pre-prompt
+    // isn't appearing/vanishing (its dismiss + turn-on lean on a full rebuild to
+    // drop the card); otherwise mount fresh.
+    const livePanel = view.querySelector('#updates-panel');
+    const canReconcile = livePanel && view.querySelector('#updates-tabs')
+      && (!!view.querySelector('.push-ask') === !!pushAskHtml());
+    if (canReconcile) reconcile(livePanel); else mount();
 
     // Everything has now been seen (a visit counts even under a filter) —
     // next visit, the dots move on.
