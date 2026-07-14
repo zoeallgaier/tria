@@ -1022,6 +1022,80 @@ main {
 }
 @media (prefers-reduced-motion: reduce) { .card-like.liked { animation: none; } }
 
+/* ── Like tap: scale-pop + a colour glow bloom ──────────────────────────────
+   A tap plays a one-shot scale bounce on the heart, and on LIKE a soft glow
+   blooms behind it in the post's own type colour — the same lit-glow language as
+   the active filters and the nav glide, so it sits with the rest of the site.
+   The settled liked heart is untouched (it keeps its slow colour-drift) — this is
+   purely the moment of the tap. Everything is transform + opacity (the glow is a
+   radial-gradient, not filter:blur), so it composites cleanly on iOS. */
+.card-like { position: relative; }
+/* Burst colour = the post's type colour (matched to the liked-heart palette). */
+.card-like[data-type="note"]     { --burst: var(--heart-note); }
+.card-like[data-type="find"]     { --burst: var(--heart-find); }
+.card-like[data-type="photo"]    { --burst: var(--heart-photo); }
+.card-like[data-type="activity"] { --burst: var(--heart-activity); }
+
+/* The heart itself bounces. Keeps the row's optical translateY nudge in every
+   frame so the pop doesn't also shift the glyph off its line. */
+.card-like.is-liking .like-heart   { animation: like-pop 0.5s var(--ease) both; }
+.card-like.is-unliking .like-heart { animation: like-unpop 0.35s var(--ease-soft) both; }
+@keyframes like-pop {
+  0%   { transform: translateY(1.5px) scale(1); }
+  20%  { transform: translateY(1.5px) scale(0.82); }
+  45%  { transform: translateY(1.5px) scale(1.32); }
+  70%  { transform: translateY(1.5px) scale(0.92); }
+  100% { transform: translateY(1.5px) scale(1); }
+}
+@keyframes like-unpop {
+  0%   { transform: translateY(1.5px) scale(1); }
+  40%  { transform: translateY(1.5px) scale(0.8); }
+  100% { transform: translateY(1.5px) scale(1); }
+}
+
+/* Glow: a soft radial bloom behind the heart in the post's colour. A layered
+   radial-gradient — a lit core into a wider halo — swells and fades. No blur
+   filter, so it's iOS-safe; the soft edge lives in the gradient stops. A faint
+   fractal-noise grain rides on top, dithered into the gradient with
+   background-blend-mode (not mix-blend-mode) so it smooths the colour banding
+   without a filter. A radial mask fades the whole layer with the glow's falloff,
+   so the square grain tile never shows a hard edge past the bloom. */
+.card-like.is-liking::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 50px; height: 50px;
+  margin: -25px 0 0 -25px;
+  border-radius: 50%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
+    radial-gradient(circle at center,
+      color-mix(in srgb, var(--burst) 82%, transparent) 0%,
+      color-mix(in srgb, var(--burst) 32%, transparent) 40%,
+      transparent 70%);
+  background-size: 90px 90px, 100% 100%;
+  background-position: center;
+  background-blend-mode: overlay;
+  -webkit-mask: radial-gradient(circle at center, #000 40%, transparent 72%);
+          mask: radial-gradient(circle at center, #000 40%, transparent 72%);
+  transform: scale(0.35);
+  opacity: 0;
+  pointer-events: none;
+  animation: like-glow 0.62s var(--ease) forwards;
+}
+@keyframes like-glow {
+  0%   { opacity: 0;    transform: scale(0.35); }
+  24%  { opacity: 0.95; transform: scale(0.95); }
+  46%  { opacity: 0.7;  transform: scale(1.12); }
+  100% { opacity: 0;    transform: scale(1.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-like.is-liking .like-heart,
+  .card-like.is-unliking .like-heart { animation: none; }
+  .card-like.is-liking::before { display: none; }
+}
+
 /* Add-to-calendar (activities with a date). Plain icon button; lifts to the
    activity ink like its neighbor, the hand-up toggle. */
 .card-cal:hover,
@@ -1213,9 +1287,11 @@ main {
   place-items: center;
   background: var(--text);
   color: var(--bg);
-  font-family: 'Oxygen', sans-serif;
-  font-weight: 700;
-  font-size: 1rem;
+  /* Photoless tiles show the initial in Instrument Serif — the app lettering —
+     instead of the Oxygen block cap. */
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.3rem;
   line-height: 1;
   user-select: none;
   overflow: hidden;
@@ -1445,7 +1521,7 @@ main {
   margin-bottom: 0.85rem;
 }
 .comment { display: flex; align-items: flex-start; gap: 0.55rem; }
-.comment-avatar { width: 26px; height: 26px; font-size: 0.64rem; border-radius: 50%; }
+.comment-avatar { width: 26px; height: 26px; font-size: 0.86rem; border-radius: 50%; }
 .comment-avatar-link { flex-shrink: 0; margin-top: 0.05rem; }
 .comment-body { min-width: 0; }
 .comment-text { font-size: 0.88rem; line-height: 1.4; color: var(--text); }
@@ -1969,7 +2045,7 @@ body.gate main { padding: 0; }
    beside it. Top-aligned so the name crowns the photo. */
 .account-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 1.2rem;
 }
 /* The profile photo is its OWN floating glass panel stacked on the card: a
@@ -2000,7 +2076,23 @@ body.gate main { padding: 0; }
   user-select: none;
 }
 
-.account-meta { min-width: 0; flex: 1; }
+/* The identity beside the photo is one left-aligned axis: name+handle, an inline
+   stat line, the bio, then the action — every row shares the same left edge, so
+   the column reads as a single clean editorial stack. */
+.account-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+.account-id { min-width: 0; }
+
+/* The identity column always sits vertically centred against the taller photo
+   tile: a short (or missing) bio centres against the photo for a balanced card
+   instead of hugging the top with dead space beneath, and a long bio simply
+   grows the column past the photo. One rule, every content state. */
 .account-name {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
@@ -2014,32 +2106,43 @@ body.gate main { padding: 0; }
   font-size: 0.92rem;
   color: var(--muted);
 }
-.profile-stats {
-  margin-top: 0.5rem;
+
+/* One inline stat line: "N posts · N friends". The count is inked, its label
+   muted, the two stats parted by a faint dot. A locked profile shows the friend
+   count alone (its dot is dropped in the template). */
+.account-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
   font-size: 0.85rem;
-  letter-spacing: 0.02em;
   color: var(--muted);
 }
-.profile-stats .dot { opacity: 0.5; margin: 0 0.3rem; }
-/* The friend count reads as plain stat text, but is a button — tappable to open
-   the friends list. Underline on hover hints it's live; disabled at zero. */
-.profile-friends {
-  background: none;
-  border: none;
+.account-stat {
+  /* The friends stat is a <button>, so strip the UA chrome — reads as text. */
+  display: inline;
   padding: 0;
+  background: none;
+  border: 0;
   font: inherit;
-  color: inherit;
-  letter-spacing: inherit;
-  cursor: pointer;
+  color: var(--muted);
 }
-.profile-friends:disabled { cursor: default; }
+.account-stat-num { font-weight: 700; color: var(--text); }
+.account-stat-label { color: var(--muted); }
+.account-stat-dot { color: var(--muted); opacity: 0.5; }
+/* The friends stat is a live button — opens their circle. The tap hint is a
+   quiet underline on hover. */
+.account-stat--friends { cursor: pointer; }
 @media (hover: hover) {
-  .profile-friends:not(:disabled):hover { color: var(--text); text-decoration: underline; }
+  .account-stat--friends:hover .account-stat-label {
+    color: var(--text);
+    text-decoration: underline;
+  }
 }
 
-/* Bio sits in the identity group, below the stats. */
+/* Bio sits in the identity grid, below the stats (row spacing comes from the
+   grid gap, so no top margin of its own). */
 .account-bio {
-  margin-top: 0.85rem;
   font-size: 0.95rem;
   line-height: 1.5;
   color: var(--text);
@@ -2086,39 +2189,28 @@ body.gate main { padding: 0; }
    the card reads as its own header, not the top of the feed. */
 .account + .feed { margin-top: 2.4rem; }
 
-/* Actions sit at the foot of the identity group (left-aligned). Your own profile
-   now carries just Share here (edit moved to the corner pencil below); a friend's
-   carries the tie button. */
+/* The pre-friend tie sits at the foot of the identity column, on the same left
+   axis as everything above it. (Your own card has no in-flow action — Share +
+   Edit are corner icons; once you're friends the tie is a corner icon too.) */
 .account-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: flex-start;    /* left axis, matching name/stats/bio */
   gap: 0.5rem;
-  margin-top: 1.1rem;
 }
-.account-share {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0;
-  border-radius: var(--radius-pill);
-  padding: 0.56rem 1.15rem;         /* real padding carries the hit area (no ::after
-                                        overlay — that pseudo is the grain layer) */
-  font-size: 0.85rem;
-}
-/* Share wears the drifting pastel fill — it's the single primary action on your
-   own card and a genuine share (same treatment as Post / Share Tria). publish-fill
-   carries the look; the copied tick just swaps the label, no bg change. */
-.account-share.publish-fill,
-.account-share.publish-fill.copied { color: var(--on-type); font-weight: 700; }
-.account-share-ico { width: 14px; height: 14px; }
 
-/* Edit-profile: a pencil badge in the card's top-right corner (opens the name/bio
-   editor). A quiet outline disc on faint glass, echoing the pill it replaced. */
-.account-edit-badge {
+/* Corner badge cluster: a top-right row of small glass discs floating on the
+   card. Own card carries Share + Edit; a friend's carries the friends tie. All
+   share one disc treatment (a quiet outline on faint glass); only the colour
+   differs per badge. */
+.account-badges {
   position: absolute;
   top: 10px; right: 10px;
   z-index: 2;
+  display: flex;
+  gap: 6px;
+}
+.account-badges > button {
   width: 32px; height: 32px;
   display: grid; place-items: center;
   color: var(--muted);
@@ -2128,18 +2220,30 @@ body.gate main { padding: 0; }
   transition: color var(--dur-micro), border-color var(--dur-micro),
               background-color var(--dur-micro), transform 0.12s;
 }
+.account-badges > button:active { transform: scale(0.92); }
+@media (hover: hover) {
+  .account-badges > button:hover { color: var(--text); border-color: var(--text); }
+}
 .account-edit-ico { width: 15px; height: 15px; }
-.account-edit-badge:active { transform: scale(0.92); }
-@media (hover: hover) { .account-edit-badge:hover { color: var(--text); border-color: var(--text); } }
-/* Reserve room so a long name's first line clears the corner badge. */
-.account-card:has(.account-edit-badge) .account-name { padding-right: 1.7rem; }
+.account-share-ico { width: 15px; height: 15px; }
+.account-friend-ico { width: 18px; height: 18px; }
+/* Share flashes a check on copy/share — quietly acknowledge, don't shout. */
+.account-share-badge.copied { color: var(--text); border-color: var(--text); }
+/* The friends tie reads as a settled positive state (text ink + a firmer rim),
+   so it sits a touch more present than the neutral Share/Edit discs. */
+.account-friend-badge { color: var(--text); border-color: color-mix(in srgb, var(--text) 22%, transparent); }
 
-/* Friend toggle: filled ink to add, quiet outline once you're friends. Sits at
-   the foot of the identity group, left-aligned with it. */
+/* Reserve room on the name's first line so it clears the corner cluster — more
+   for the two-disc own card, less for a friend's single tie. */
+.account-card:has(.account-friend-badge) .account-name { padding-right: 2rem; }
+.account-card:has(.account-share-badge) .account-name { padding-right: 4.3rem; }
+
+/* Friend toggle (pre-friend states only — add / requested / accept; once you're
+   friends it collapses to the corner badge). Centred in the action row. */
 .friend-btn {
   position: relative;               /* anchors the 44pt tap-target overlay */
-  display: block;
-  margin: 1.1rem 0 0;
+  display: inline-block;
+  margin: 0;
   min-width: 122px;
   color: var(--on-accent);
   background: var(--accent);
@@ -2198,7 +2302,7 @@ body.gate main { padding: 0; }
    hairline dangles beneath the results. */
 .friend:not([hidden]):not(:has(~ .friend:not([hidden]))) { border-bottom: none; }
 @media (hover: hover) { .friend:hover { background: var(--surface); } }
-.friend .avatar { width: 56px; height: 56px; font-size: 1.4rem; }
+.friend .avatar { width: 56px; height: 56px; font-size: 1.8rem; }
 .friend-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
 .friend-name { font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--text); }
 .friend-user { font-size: 0.82rem; color: var(--muted); }
@@ -2599,7 +2703,6 @@ body.gate main { padding: 0; }
    put so the light source never wanders (mirrors publish-dome on the FAB). */
 .composer .composer-post.publish-fill.is-solid,
 .auth-submit.publish-fill.is-solid,
-.account-share.publish-fill.is-solid,
 .friends-share-copy.publish-fill.is-solid,
 .support-share.publish-fill.is-solid {
   box-shadow:
@@ -2608,7 +2711,6 @@ body.gate main { padding: 0; }
 }
 .composer .composer-post.publish-fill.is-solid::before,
 .auth-submit.publish-fill.is-solid::before,
-.account-share.publish-fill.is-solid::before,
 .friends-share-copy.publish-fill.is-solid::before,
 .support-share.publish-fill.is-solid::before {
   background:
@@ -2626,7 +2728,6 @@ body.gate main { padding: 0; }
 @media (prefers-color-scheme: dark) {
   .composer .composer-post.publish-fill.is-solid,
   .auth-submit.publish-fill.is-solid,
-  .account-share.publish-fill.is-solid,
   .friends-share-copy.publish-fill.is-solid,
   .support-share.publish-fill.is-solid {
     box-shadow:
@@ -2637,7 +2738,6 @@ body.gate main { padding: 0; }
   }
   .composer .composer-post.publish-fill.is-solid::before,
   .auth-submit.publish-fill.is-solid::before,
-  .account-share.publish-fill.is-solid::before,
   .friends-share-copy.publish-fill.is-solid::before,
   .support-share.publish-fill.is-solid::before {
     background:
@@ -2659,7 +2759,6 @@ body.gate main { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .composer .composer-post.publish-fill.is-solid::before,
   .auth-submit.publish-fill.is-solid::before,
-  .account-share.publish-fill.is-solid::before,
   .friends-share-copy.publish-fill.is-solid::before,
   .support-share.publish-fill.is-solid::before {
     animation: none;
@@ -2775,7 +2874,7 @@ body.gate main { padding: 0; }
   text-align: left;
   animation: rise 0.4s var(--ease) both;   /* the app's shared row entrance */
 }
-.aud-pick .aud-avatar { width: 44px; height: 44px; font-size: 1.1rem; }
+.aud-pick .aud-avatar { width: 44px; height: 44px; font-size: 1.4rem; }
 /* Trailing selector: a soft empty ring at rest (never a hard white outline),
    an accent disc with a bg-coloured check when picked. */
 .aud-check {
@@ -2881,7 +2980,7 @@ body.gate main { padding: 0; }
 }
 .pf-photo[hidden] { display: none; }
 .pf-photo-figure { position: relative; display: inline-block; }
-.pf-photo-avatar { width: 116px; height: 116px; font-size: 2.9rem; }
+.pf-photo-avatar { width: 116px; height: 116px; font-size: 3.7rem; }
 .pf-photo-edit {
   position: absolute;
   right: -2px; bottom: -2px;
@@ -2981,7 +3080,7 @@ body.gate main { padding: 0; }
   mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
 }
 .friends-list--modal .friend { padding: 0.85rem 1.6rem; }
-.friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.1rem; }
+.friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.4rem; }
 
 .modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
 /* Log out weights hard left; its auto margin absorbs the free space so Cancel +

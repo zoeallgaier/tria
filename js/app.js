@@ -868,9 +868,13 @@
         `</button>`;
     }
     const liked = Store.likedByMe(post.id);
+    // data-type paints the tap's celebratory burst (ring + confetti) in the post's
+    // own colour; the classed heart is the target of the scale-pop. The settled
+    // liked look (the slow quartet-drift) is unchanged — the tap just adds motion.
     return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
+        `data-type="${post.type}" ` +
         `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
-        svgIcon('heart') +
+        svgIcon('heart', 'like-heart') +
       `</button>`;
   }
 
@@ -1332,6 +1336,15 @@
       btn.setAttribute('aria-pressed', String(res.liked));
       btn.setAttribute('aria-label', res.liked ? 'Unlike' : 'Like');
       btn.setAttribute('title', res.liked ? 'Liked' : 'Like');
+      // One-shot celebratory pop: a scale bounce plus (on like) a colour burst,
+      // all transform+opacity so it stays smooth on iOS. Re-add after a reflow so
+      // rapid re-taps replay it; a timer clears the class once the burst settles
+      // (removing it mid-flight would cut the ::before/::after pseudos short).
+      clearTimeout(btn._pop);
+      btn.classList.remove('is-liking', 'is-unliking');
+      void btn.offsetWidth;
+      btn.classList.add(res.liked ? 'is-liking' : 'is-unliking');
+      btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 620);
     });
   }
 
@@ -2017,45 +2030,56 @@
     const locked = Store.isPrivate(u.username) && !isSelf && !isFriend;
     const list = locked ? [] : Store.postsBy(u.username)
       .filter(p => p.type !== 'activity' || isSelf || isFriend);
-    // Own profile carries a "copy my link to share" action; a friend's carries the
-    // Add-friend toggle. (Log out moves to the foot of your own column, below.)
-    // Edit moved to a pencil badge in the card corner (see editBadge below), so
-    // the only meta action on your own profile is Share — now the single primary
-    // button, so it wears the drifting pastel fill (same as Post / Share Tria).
-    const action = isSelf
-      ? `<div class="account-actions">` +
-          `<button class="account-share publish-fill is-solid" type="button" id="share">` +
-            svgIcon('send', 'account-share-ico') +
-            `<span class="account-share-label">Share</span>` +
-          `</button>` +
-        `</div>`
-      : (() => {
-          // Four-state tie button: add / requested (pending, sent) / accept
-          // (they asked first) / friends. The two "I've committed" states —
-          // friends and sent — wear the muted outline (aria-pressed) and undo on
-          // tap; add + accept wear the filled accent and create my edge.
-          const s = Store.friendStatus(u.username);
-          const label = { none: 'Add friend', sent: 'Requested', incoming: 'Accept request', friends: 'Friends' }[s];
-          const committed = s === 'friends' || s === 'sent';
-          const title = s === 'sent' ? ' title="Tap to cancel your request"'
-                      : s === 'friends' ? ' title="Tap to remove"' : '';
-          return `<button class="friend-btn" type="button" id="friend" ` +
-            `data-status="${s}" aria-pressed="${committed}"${title}>${esc(label)}</button>`;
-        })();
+    const friendStatus = isSelf ? null : Store.friendStatus(u.username);
+    const areFriends = friendStatus === 'friends';
 
-    const count = `${list.length} ${list.length === 1 ? 'post' : 'posts'}`;
-    // Friend COUNT is public — it reads the same on your own profile and anyone
-    // else's. But WHO those friends are is circle business: only you or a friend
-    // can tap through to the list. To everyone else the count is plain text.
+    // One inline metadata line on the identity's left axis: "N posts · N friends".
+    // Friend COUNT is public (same on your card and anyone else's), but WHO those
+    // friends are is circle business — so the friend stat is a tappable button only
+    // for you or a friend, plain text otherwise. A locked profile fences its feed,
+    // so its post stat is dropped (a "0 posts" would mislead) and the line carries
+    // the friend count alone (no leading dot).
+    const postNum = list.length;
+    const postStat = locked ? ''
+      : `<span class="account-stat">` +
+          `<span class="account-stat-num">${postNum}</span> ` +
+          `<span class="account-stat-label">${postNum === 1 ? 'post' : 'posts'}</span>` +
+        `</span>`;
     const fc = Store.friendsOf(u.username).length;
-    const fLabel = `${fc} ${fc === 1 ? 'friend' : 'friends'}`;
     const canSeeFriends = (isSelf || isFriend) && fc > 0;
+    const friendInner =
+      `<span class="account-stat-num">${fc}</span> ` +
+      `<span class="account-stat-label">${fc === 1 ? 'friend' : 'friends'}</span>`;
     const friendStat = canSeeFriends
-      ? `<button type="button" class="profile-friends" id="show-friends">${fLabel}</button>`
-      : `<span>${fLabel}</span>`;
-    // A locked profile's post count is fenced with the posts, so show only the
-    // (public) friend count rather than a misleading "0 posts".
-    const stats = locked ? friendStat : `${count} <span class="dot">·</span> ${friendStat}`;
+      ? `<button type="button" class="account-stat account-stat--friends" id="show-friends">${friendInner}</button>`
+      : `<span class="account-stat">${friendInner}</span>`;
+    const statSep = (postStat && friendStat)
+      ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
+    const statsRow = `<div class="account-stats">${postStat}${statSep}${friendStat}</div>`;
+
+    // The in-flow action row (foot of the identity grid): Share on your own card,
+    // the add / requested / accept tie on a visitor's. Once you're mutually
+    // friends the tie leaves this row entirely and becomes a quiet corner badge
+    // (see friendBadge) — freeing the card for the bio and, by design, making
+    // "un-tie" a deliberate act rather than a standing button.
+    // In-flow action row (foot of the identity grid). Your own card has none —
+    // Share and Edit both live as corner icons now. A visitor's carries the
+    // add / requested / accept tie, unless you're already friends (that's the
+    // corner badge too).
+    const action = (isSelf || areFriends) ? ''
+      : (() => {
+          // Three pre-friend states: add / requested (pending, sent) / accept
+          // (they asked first). Only "sent" is a committed state (muted outline,
+          // undo on tap); add + accept wear the filled accent and create my edge.
+          const s = friendStatus;
+          const label = { none: 'Add friend', sent: 'Requested', incoming: 'Accept request' }[s];
+          const committed = s === 'sent';
+          const title = s === 'sent' ? ' title="Tap to cancel your request"' : '';
+          return `<div class="account-actions">` +
+            `<button class="friend-btn" type="button" id="friend" ` +
+              `data-status="${s}" aria-pressed="${committed}"${title}>${esc(label)}</button>` +
+          `</div>`;
+        })();
 
     // The photo IS the profile now: it fills the hero edge to edge and blurs
     // progressively toward its base, where a liquid-glass card carries the name,
@@ -2063,14 +2087,36 @@
     // monogram, same card. The photo's colour still spills into the page wash
     // below the hero via applyAmbient. The top-corner control is change-photo for
     // the owner, back-to-directory for a visitor.
-    // Own profile carries a single pencil badge in the card's corner — it opens
-    // Edit profile, which now also holds the change-photo control. A visitor sees
-    // a back link above the card.
+    // Corner badge cluster (top-right of the card): a row of small glass discs.
+    // Your own card carries Share + Edit (Edit rightmost, in the far corner, where
+    // it's always lived; Share tucks just inside it). A visitor's carries the tie
+    // ONCE you're friends — the same slot, the two never coexist — where a tap
+    // still removes; parking it here rather than as a standing button nudges
+    // people to stay friends and frees the card for the bio.
+    const shareBadge = isSelf
+      ? `<button class="account-share-badge" type="button" id="share" ` +
+          `aria-label="Share your profile" title="Share your profile">` +
+          svgIcon('send', 'account-share-ico') + `</button>`
+      : '';
     const editBadge = isSelf
       ? `<button class="account-edit-badge" type="button" id="edit-profile" ` +
           `aria-label="Edit profile" title="Edit profile">` +
           svgIcon('pencil', 'account-edit-ico') + `</button>`
       : '';
+    const friendBadge = areFriends
+      ? `<button class="account-friend-badge" type="button" id="friend" data-status="friends" ` +
+          `aria-label="Friends, tap to remove" title="Friends · tap to remove">` +
+          svgIcon('friends', 'account-friend-ico') + `</button>`
+      : '';
+    const cornerBadges = (shareBadge || editBadge || friendBadge)
+      ? `<div class="account-badges">${shareBadge}${editBadge}${friendBadge}</div>`
+      : '';
+
+    // Bio always rides in the identity column beside the photo, on the same left
+    // axis as the name/stats/action — short or long, it just wraps in place (no
+    // character-count threshold, no jump to a separate full-width slot).
+    const bio = u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '';
+
     const back = isSelf ? '' : (() => { const b = backTarget();
       return `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>`; })();
 
@@ -2082,19 +2128,25 @@
           // tinted from the photo) — the glass refracts that wash, so each profile
           // reads in a custom hue. Avatar left, identity beside it, bio below,
           // actions centred underneath.
-          `<div class="account-card">` +
-            editBadge +
+          `<div class="account-card${u.bio ? '' : ' account-card--nobio'}">` +
+            cornerBadges +
             `<div class="account-head">` +
               `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
                 (u.avatar
                   ? `<img src="${esc(u.avatar)}" crossorigin="anonymous" alt="" decoding="async">`
                   : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
               `</div>` +
+              // The identity column, all on one left axis: name+handle, an inline
+              // "N posts · N friends" stat line, the bio (wraps in place, any
+              // length), then the action beneath. No bio → the column vertically
+              // centres against the taller photo (see .account-card--nobio).
               `<div class="account-meta">` +
-                `<h1 class="account-name">${esc(u.name)}</h1>` +
-                `<p class="account-handle">@${esc(u.username)}</p>` +
-                `<p class="profile-stats">${stats}</p>` +
-                (u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '') +
+                `<div class="account-id">` +
+                  `<h1 class="account-name">${esc(u.name)}</h1>` +
+                  `<p class="account-handle">@${esc(u.username)}</p>` +
+                `</div>` +
+                statsRow +
+                bio +
                 action +
               `</div>` +
             `</div>` +
@@ -2227,19 +2279,25 @@
 
     const shareBtn = document.getElementById('share');
     if (shareBtn) shareBtn.addEventListener('click', () => {
-      const label = shareBtn.querySelector('.account-share-label');
       shareOrCopy({
         title: `@${u.username} on Tria`,
         text: `Join me on Tria`,
         url: profileLink(u.username),
       }).then(result => {
         if (result === 'cancelled') return;
+        // Icon badge: flash a check + retitle for the confirmation, then restore
+        // the send glyph. (No text label to swap now that Share is a corner icon.)
+        const msg = result === 'copied' ? 'Link copied' : 'Shared';
         shareBtn.classList.add('copied');
-        label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
+        shareBtn.innerHTML = svgIcon('check', 'account-share-ico');
+        shareBtn.title = msg;
+        shareBtn.setAttribute('aria-label', msg);
         clearTimeout(shareBtn._t);
         shareBtn._t = setTimeout(() => {
           shareBtn.classList.remove('copied');
-          label.textContent = 'Share';
+          shareBtn.innerHTML = svgIcon('send', 'account-share-ico');
+          shareBtn.title = 'Share your profile';
+          shareBtn.setAttribute('aria-label', 'Share your profile');
         }, 1800);
       });
     });
