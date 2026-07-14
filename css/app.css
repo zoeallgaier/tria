@@ -1021,10 +1021,13 @@ main {
 .card-like.liked,
 .card-like--owner[aria-expanded="true"] { color: var(--accent); }
 /* A filled heart slowly breathes through the four Tria type colors as a
-   whole (ink twins: AA in light mode, and they flip to the pastels in dark). */
+   whole (ink twins: AA in light mode, and they flip to the pastels in dark) —
+   but it starts on ITS post's own type colour, not always lavender. Same
+   12s loop for every card; a negative delay (set per data-type below) just
+   walks the clock forward to that type's keyframe before frame 1 ever paints. */
 .card-like.liked svg { fill: currentColor; }
 .card-like.liked {
-  color: var(--heart-note);
+  color: var(--burst, var(--heart-note));
   animation: liked-cycle 12s ease-in-out infinite;
 }
 @keyframes liked-cycle {
@@ -1043,11 +1046,15 @@ main {
    purely the moment of the tap. Everything is transform + opacity (the glow is a
    radial-gradient, not filter:blur), so it composites cleanly on iOS. */
 .card-like { position: relative; }
-/* Burst colour = the post's type colour (matched to the liked-heart palette). */
-.card-like[data-type="note"]     { --burst: var(--heart-note); }
-.card-like[data-type="find"]     { --burst: var(--heart-find); }
-.card-like[data-type="photo"]    { --burst: var(--heart-photo); }
-.card-like[data-type="activity"] { --burst: var(--heart-activity); }
+/* Burst colour = the post's type colour (matched to the liked-heart palette).
+   The animation-delay here is what phases liked-cycle to START on this
+   colour (each stop is 25% of the 12s loop, so the delay is -25%/-50%/-75%
+   of it) — negative because a negative delay fast-forwards into the loop
+   instead of holding the first frame. */
+.card-like[data-type="note"]     { --burst: var(--heart-note);     animation-delay: 0s; }
+.card-like[data-type="find"]     { --burst: var(--heart-find);     animation-delay: -3s; }
+.card-like[data-type="activity"] { --burst: var(--heart-activity); animation-delay: -6s; }
+.card-like[data-type="photo"]    { --burst: var(--heart-photo);    animation-delay: -9s; }
 
 /* The heart itself bounces. Keeps the row's optical translateY nudge in every
    frame so the pop doesn't also shift the glyph off its line. */
