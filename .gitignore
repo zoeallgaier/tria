@@ -1,1 +1,9 @@
 .DS_Store
+node_modules
+www
+
+# Xcode / Capacitor build artifacts (the ios/App project itself is checked in)
+ios/App/App/public
+ios/DerivedData
+ios/App/build
+**/xcuserdata
