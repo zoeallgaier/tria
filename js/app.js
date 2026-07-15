@@ -108,6 +108,8 @@
     flag:    '<path d="M6 21V4"/><path d="M6 5h11l-2 3 2 3H6"/>',
     // No-entry circle — Block a user.
     block:   '<circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/>',
+    // A doorway with an arrow stepping out — Log out.
+    signout: '<path d="M13.5 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7.5"/><path d="M10 12h9.5"/><path d="m16 8 4 4-4 4"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -2040,7 +2042,7 @@
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
         `<div class="auth-brand">tria</div>` +
-        `<p class="auth-tag">Social Media is so back.</p>` +
+        `<p class="auth-tag">Social media made local.</p>` +
         `<h1 class="auth-head">${isSignup ? 'Create your account' : 'Welcome back'}</h1>` +
         `<form id="auth-form" novalidate>` +
           identityField +
@@ -2051,12 +2053,18 @@
               `autocomplete="${isSignup ? 'new-password' : 'current-password'}" ` +
               `placeholder="••••••">` +
           `</div>` +
-          // App Store 1.2: joining is an explicit agreement to the guidelines
-          // (our zero-tolerance terms). Signup only; gated in the submit handler.
+          // Login only: a quiet way out for a forgotten password, mirroring the
+          // #auth-toggle link's plain text-button treatment.
+          (isSignup
+            ? ''
+            : `<p class="auth-forgot"><a href="#/forgot">Forgot password?</a></p>`) +
+          // App Store 1.2 + 5.1.1(i): joining is an explicit agreement to both
+          // the guidelines (our zero-tolerance terms) and the privacy policy,
+          // folded into one checkbox. Signup only; gated in the submit handler.
           (isSignup
             ? `<label class="auth-agree" for="f-agree">` +
                 `<input id="f-agree" type="checkbox">` +
-                `<span>I agree to Tria's <a href="#/about?open=guidelines" target="_blank" rel="noopener">Community Guidelines</a> and to keep it kind.</span>` +
+                `<span>I agree to Tria's <a href="#/about?open=guidelines" target="_blank" rel="noopener">Community Guidelines</a> and <a href="#/about?open=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>` +
               `</label>`
             : '') +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
@@ -2081,7 +2089,7 @@
       errEl.textContent = '';
       const agree = document.getElementById('f-agree');
       if (isSignup && agree && !agree.checked) {
-        errEl.textContent = 'Please agree to the Community Guidelines to continue.';
+        errEl.textContent = 'Please agree to the Community Guidelines and Privacy Policy to continue.';
         return;
       }
       submitBtn.disabled = true;
@@ -2090,7 +2098,14 @@
         ? await Store.signup({ name: nameInput.value, username: document.getElementById('f-user').value, email, password })
         : await Store.login(email, password);
       if (!res.ok) {
+        // Signup with confirm-email on: the account exists, they just need to
+        // click the link. That's a success in disguise, not an error — swap to a
+        // calm "check your inbox" screen rather than flashing red.
+        if (res.pending) { renderCheckInbox(res.email || email); return; }
         errEl.textContent = res.error;
+        // Unconfirmed email on login: valid credentials, unclicked link. Offer a
+        // one-tap resend inline instead of leaving them stuck.
+        if (res.needsConfirm) showResend(email, errEl);
         submitBtn.disabled = false;
         submitBtn.textContent = isSignup ? 'Create account' : 'Log in';
         return;
@@ -2103,6 +2118,164 @@
     // the switch feels like part of the app rather than an instant redraw.
     document.getElementById('auth-toggle').addEventListener('click',
       () => renderPage(-1, () => renderAuth(isSignup ? 'login' : 'signup')));
+  }
+
+  // Login met the confirm-email gate: drop a one-tap "resend" under the error so
+  // an unconfirmed friend isn't stranded. Idempotent (won't stack on re-submit).
+  function showResend(email, errEl) {
+    if (document.getElementById('auth-resend')) return;
+    const p = document.createElement('p');
+    p.className = 'auth-resend';
+    p.id = 'auth-resend';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Resend confirmation email';
+    p.appendChild(btn);
+    errEl.insertAdjacentElement('afterend', p);
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      const res = await Store.resendConfirmation(email);
+      btn.textContent = res.ok ? 'Sent. Check your inbox.' : 'Could not send, try again';
+      if (!res.ok) btn.disabled = false;
+    });
+  }
+
+  /* ── Forgot password: request a reset link ────────────────────────────────────
+     Same screen family as the auth gate (reuses .auth-*). We never reveal whether
+     an address has an account — on submit we always show the same calm "sent"
+     confirmation, so the form can't be used to probe who's on Tria. */
+  function renderRequestReset() {
+    view.innerHTML =
+      `<section class="auth"><div class="auth-card">` +
+        `<div class="auth-brand">tria</div>` +
+        `<h1 class="auth-head">Reset your password</h1>` +
+        `<p class="auth-sub">Enter your email and we'll send a link to set a new one.</p>` +
+        `<form id="reset-form" novalidate>` +
+          `<div class="field">` +
+            `<label for="f-email">Email</label>` +
+            `<input id="f-email" type="email" autocomplete="email" ` +
+              `autocapitalize="none" spellcheck="false" ` +
+              `placeholder="you@example.com" autofocus>` +
+          `</div>` +
+          `<p class="auth-error" id="auth-error" role="alert"></p>` +
+          `<button class="auth-submit publish-fill is-solid" type="submit">Send reset link</button>` +
+        `</form>` +
+        `<p class="auth-alt"><button type="button" id="reset-back">Back to log in</button></p>` +
+      `</div></section>`;
+    const errEl = document.getElementById('auth-error');
+    const submitBtn = document.querySelector('.auth-submit');
+    document.getElementById('reset-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.textContent = '';
+      const email = document.getElementById('f-email').value;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+      const res = await Store.requestPasswordReset(email);
+      if (!res.ok) {
+        errEl.textContent = res.error;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send reset link';
+        return;
+      }
+      renderResetSent(email);
+    });
+    document.getElementById('reset-back').addEventListener('click', () => {
+      authMode = 'login';
+      go('#/');
+    });
+  }
+
+  // Calm confirmation after a reset request. Same for a real and an unknown
+  // address (see renderRequestReset) so it never leaks who has an account.
+  function renderResetSent(email) {
+    view.innerHTML =
+      `<section class="auth"><div class="auth-card">` +
+        `<div class="auth-brand">tria</div>` +
+        `<h1 class="auth-head">Check your inbox</h1>` +
+        `<p class="auth-sub">If ${esc(email)} has an account, a reset link is on its way. ` +
+          `The link opens Tria and lets you set a new password.</p>` +
+        `<p class="auth-alt"><button type="button" id="reset-back">Back to log in</button></p>` +
+      `</div></section>`;
+    document.getElementById('reset-back').addEventListener('click', () => {
+      authMode = 'login';
+      go('#/');
+    });
+  }
+
+  // Post-signup landing when confirm-email is on: the account is made, we just
+  // need them to click the link. Positive, with an inline resend and a way back.
+  function renderCheckInbox(email) {
+    view.innerHTML =
+      `<section class="auth"><div class="auth-card">` +
+        `<div class="auth-brand">tria</div>` +
+        `<h1 class="auth-head">Confirm your email</h1>` +
+        `<p class="auth-sub">We sent a link to ${esc(email)}. Click it to confirm your ` +
+          `account, then come back and log in.</p>` +
+        `<p class="auth-error" id="auth-error" role="alert"></p>` +
+        `<p class="auth-alt"><button type="button" id="inbox-back">Back to log in</button></p>` +
+      `</div></section>`;
+    showResend(email, document.getElementById('auth-error'));
+    document.getElementById('inbox-back').addEventListener('click', () => {
+      authMode = 'login';
+      go('#/');
+    });
+  }
+
+  /* ── Set a new password (recovery landing) ────────────────────────────────────
+     Shown when Store.isRecovering() is true: the reset link opened a short-lived
+     recovery session and route() holds us here (never hydrating the world) until
+     a new password is picked. updatePassword then logs us in for real. */
+  function renderNewPassword() {
+    view.innerHTML =
+      `<section class="auth"><div class="auth-card">` +
+        `<div class="auth-brand">tria</div>` +
+        `<h1 class="auth-head">Set a new password</h1>` +
+        `<p class="auth-sub">Almost there. Pick a new password and you're back in.</p>` +
+        `<form id="newpass-form" novalidate>` +
+          `<div class="field">` +
+            `<label for="f-pass">New password</label>` +
+            `<input id="f-pass" type="password" autocomplete="new-password" ` +
+              `placeholder="••••••" autofocus>` +
+          `</div>` +
+          `<p class="auth-error" id="auth-error" role="alert"></p>` +
+          `<button class="auth-submit publish-fill is-solid" type="submit">Save password</button>` +
+        `</form>` +
+      `</div></section>`;
+    const errEl = document.getElementById('auth-error');
+    const submitBtn = document.querySelector('.auth-submit');
+    document.getElementById('newpass-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.textContent = '';
+      const password = document.getElementById('f-pass').value;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving…';
+      const res = await Store.updatePassword(password);
+      if (!res.ok) {
+        errEl.textContent = res.error;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save password';
+        return;
+      }
+      go('#/');           // recovering cleared + world hydrated → drops us home
+      warmImages();
+    });
+  }
+
+  // Landing after an email-confirmation click when Supabase didn't auto-sign the
+  // person in (config dependent). A plain "you're verified, log in" reassurance.
+  function renderConfirmed() {
+    view.innerHTML =
+      `<section class="auth"><div class="auth-card">` +
+        `<div class="auth-brand">tria</div>` +
+        `<h1 class="auth-head">You're all set</h1>` +
+        `<p class="auth-sub">Your email is confirmed. Log in and say hello.</p>` +
+        `<button class="auth-submit publish-fill is-solid" type="button" id="confirmed-go">Log in</button>` +
+      `</div></section>`;
+    document.getElementById('confirmed-go').addEventListener('click', () => {
+      authMode = 'login';
+      go('#/');
+    });
   }
 
   /* ── Profile (own account or any friend, at #/u/username) ─────────────────────
@@ -2567,12 +2740,22 @@
           `<p class="field-hint">When on, only friends can see your posts. Activities are always friends only.</p>` +
           pushToggleHtml() +
           `<p class="composer-error" id="pf-error" role="alert"></p>` +
-          // Log out weights to the far left (styled like the post editor's Delete)
-          // so it's never the accidental tap next to Save.
+          // Cancel + Save are the form's commit row. Account actions (Log out,
+          // Delete) live in their own zone below, split off by a hairline — they
+          // act on the session, not this form, so they read as a separate group.
           `<div class="modal-actions">` +
-            `<button type="button" class="edit-delete pf-logout" id="pf-logout">Log out</button>` +
             `<button type="button" class="edit-cancel" id="pf-cancel">Cancel</button>` +
             `<button type="submit" class="composer-submit" id="pf-save">Save</button>` +
+          `</div>` +
+          // Two quiet icon buttons. Delete sits left (coral danger tint, App
+          // Store 5.1.1(v) requires the option — still guarded by the confirm
+          // sheet); Log out sits right, in the more reachable spot, mirroring
+          // Save's position in the row above since it's the one tapped often.
+          `<div class="pf-account">` +
+            `<button type="button" class="pf-account-btn pf-delete" id="pf-delete">` +
+              svgIcon('trash') + `Delete account</button>` +
+            `<button type="button" class="pf-account-btn pf-logout" id="pf-logout">` +
+              svgIcon('signout') + `Log out</button>` +
           `</div>` +
         `</form>` +
       `</div>`;
@@ -2647,6 +2830,26 @@
       authMode = 'login';        // returning user — offer login first
       close();
       go('#/');
+    });
+
+    // Delete account: one sheet standing in for "are you sure", so an accidental
+    // tap next to Log out can't fall through to something unrecoverable. The
+    // sheet's own Cancel (always rendered) is the escape hatch.
+    modal.querySelector('#pf-delete').addEventListener('click', () => {
+      openSheet({
+        title: 'Delete your account? This can’t be undone.',
+        items: [{
+          label: 'Delete account', icon: 'trash', danger: true,
+          run: async () => {
+            const res = await Store.deleteAccount();
+            if (!res.ok) { toast(res.error); return; }
+            authMode = 'signup';   // no account left to log back into
+            close();
+            go('#/');
+            toast('Account deleted.');
+          },
+        }],
+      });
     });
 
     // Desktop only — on touch this would pop the keyboard and lurch the modal to
@@ -4336,6 +4539,42 @@
       `<p><strong>We may remove content or suspend accounts that repeatedly or ` +
         `seriously violate these guidelines.</strong></p>`);
 
+    const privacyHtml = aboutFold('privacy', 'Privacy policy',
+      `<p>This policy explains what Tria collects, why, and what happens to it. ` +
+        `The short version: we collect the little we need to run the app, we ` +
+        `don't sell it, and you can delete all of it at any time.</p>` +
+      `<h3>What we collect.</h3>` +
+      `<p>Your email address, which we use to sign you in and, if you ask, to ` +
+        `reply to feedback. Your username and profile details. The content you ` +
+        `choose to share, including posts, comments, photos, and the time and ` +
+        `place attached to any activities. If you turn on notifications, the ` +
+        `push subscription your device hands us so we can deliver them.</p>` +
+      `<h3>How we use it.</h3>` +
+      `<p>Only to make Tria work: to show your posts to the circle you've ` +
+        `chosen, to deliver the notifications you asked for, and to keep the ` +
+        `community safe. We don't build advertising profiles or track you ` +
+        `across other apps and sites.</p>` +
+      `<h3>Who can see it.</h3>` +
+      `<p>Your posts reach the people in your circle, following the privacy ` +
+        `settings you choose. Private likes stay private. We do not sell your ` +
+        `data, and we do not share it with advertisers or data brokers. There ` +
+        `are no third-party advertising or analytics systems inside Tria.</p>` +
+      `<h3>Where it lives.</h3>` +
+      `<p>Your data is stored with our hosting provider, Supabase, and moves ` +
+        `over encrypted connections. We keep it only as long as your account ` +
+        `exists.</p>` +
+      `<h3>Deleting your account.</h3>` +
+      `<p>You can delete your account at any time from Edit profile. Deleting ` +
+        `removes your account and the content tied to it, including your posts, ` +
+        `comments, photos, and profile.</p>` +
+      `<h3>Children.</h3>` +
+      `<p>Tria is not directed to children under 13, and we don't knowingly ` +
+        `collect their information.</p>` +
+      `<h3>Changes and questions.</h3>` +
+      `<p>If this policy changes in a meaningful way, we'll let you know in the ` +
+        `app. Questions about your data? Reach us through the Feedback form ` +
+        `below.</p>`);
+
     const faqHtml = aboutFold('faq', 'Frequently asked questions',
       `<h3 class="faq-q">Why is Tria different?</h3>` +
       `<p>Your feed follows time, not recommendations. You decide who's in your ` +
@@ -4391,17 +4630,17 @@
     view.innerHTML =
       `<section class="view about">` +
         (gated ? `<p class="about-back"><a href="#/">&larr; Back to sign in</a></p>` : '') +
-        mastheadEl('Social media is so back.', 'About Tria') +
+        mastheadEl('Social media made local.', 'About Tria') +
         `<div class="about-body">` +
-          `<p class="about-lede">Tria is a social media app built around <em>real ` +
+          `<p class="about-lede">Tria is a social media app built for <em>real ` +
             `relationships</em>. Whether you're keeping up with lifelong friends, ` +
-            `or finding your people for the first time, Tria ` +
-            `is the place to do it.</p>` +
+            `or finding your people for the first time, <strong>Tria ` +
+            `is the place to do it.</strong></p>` +
           `<p class="about-lede"><strong>Your feed is chronological. There are ` +
-            `no ads, no algorithm deciding for you, and no popularity ` +
-            `contests.</strong> Just a place to share your life, discover things ` +
-            `worth caring about, and stay connected.</p>` +
-          installHtml + guidelinesHtml + faqHtml + feedbackHtml +
+            `no ads, and no algorithm deciding for you.</strong> Just a place to ` +
+            `share your life, discover things worth caring about, and stay ` +
+            `connected.</p>` +
+          installHtml + guidelinesHtml + privacyHtml + faqHtml + feedbackHtml +
         `</div>` +
       `</section>`;
 
@@ -4644,7 +4883,17 @@
       // The signed-out About front door keeps the hue-drift wash; the auth form
       // does not (its pastel now comes from the gradient submit button).
       document.body.dataset.ambient = gatePath === '#/about' ? 'about' : 'none';
-      renderPage(-1, () => gatePath === '#/about' ? renderAbout(true) : renderAuth(authMode));
+      renderPage(-1, () => {
+        // A live recovery session (from the reset link) always wins: set-new-
+        // password, whatever the hash says.
+        if (Store.isRecovering()) return renderNewPassword();
+        if (gatePath === '#/about') return renderAbout(true);
+        // #/reset-password is the link's landing; with no recovery session it has
+        // expired or been reused, so route them to request a fresh one.
+        if (gatePath === '#/forgot' || gatePath === '#/reset-password') return renderRequestReset();
+        if (gatePath === '#/confirmed') return renderConfirmed();
+        return renderAuth(authMode);
+      });
       window.scrollTo(0, 0);
       return;
     }
@@ -4908,6 +5157,10 @@
       document.addEventListener('visibilitychange', poke);
     }).catch(() => { /* push + shell-refresh simply stay off */ });
   }
+
+  // If the recovery event lands after the first paint (it usually resolves during
+  // init, but the URL parse is async), re-route so set-new-password takes over.
+  Store.onRecovery(route);
 
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.

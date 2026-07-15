@@ -2104,6 +2104,29 @@ body.gate main { padding: 0; }
 
 .auth-error { color: var(--type-find-ink); font-size: 0.85rem; margin-top: 1rem; min-height: 1.1rem; }
 
+/* Sub-headline under a reset / recovery / confirmed title — same muted body voice
+   as the rest of the gate, a touch of breathing room below the serif head. */
+.auth-sub {
+  margin-top: 0.9rem; font-size: 0.95rem; line-height: 1.5; color: var(--muted);
+}
+
+/* "Forgot password?" — a quiet link tucked under the login password field, right-
+   aligned so it reads as a secondary way out, not a field. */
+.auth-forgot { margin-top: 0.55rem; text-align: right; font-size: 0.85rem; }
+.auth-forgot a {
+  color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
+}
+@media (hover: hover) { .auth-forgot a:hover { color: var(--text); } }
+
+/* Inline resend under the confirm-email nudge — a plain accent text-button, in
+   the same family as .auth-alt's toggle. */
+.auth-resend { margin-top: 0.7rem; font-size: 0.88rem; }
+.auth-resend button {
+  background: none; border: none; color: var(--accent); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.auth-resend button:disabled { color: var(--muted); text-decoration: none; cursor: default; }
+
 /* Signup's guidelines agreement — a quiet inline checkbox above the error line.
    The accent tick matches the primary action; the copy stays small and muted. */
 .auth-agree {
@@ -3212,9 +3235,6 @@ body.gate main { padding: 0; }
 .friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.4rem; }
 
 .modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
-/* Log out weights hard left; its auto margin absorbs the free space so Cancel +
-   Save stay grouped on the right. */
-.modal-actions .pf-logout { margin-right: auto; }
 .modal-actions .edit-cancel {
   color: var(--muted);
   background: none;
@@ -3224,6 +3244,39 @@ body.gate main { padding: 0; }
   font-size: 0.92rem;
 }
 .modal-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
+
+/* Account actions — Log out + Delete, grouped in their own zone below the form's
+   Cancel/Save row and split off by a hairline. Icon + label each. Log out stays
+   neutral; Delete carries a resting coral (find) tint so it reads as the risky
+   one at a glance. The confirm sheet still guards Delete, so grouping them is safe. */
+.pf-account {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+.pf-account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-micro), background var(--dur-micro);
+}
+.pf-account-btn svg { width: 18px; height: 18px; }
+.pf-delete { color: var(--type-find-ink); }
+@media (hover: hover) {
+  .pf-logout:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, var(--bg)); }
+  .pf-delete:hover { background: color-mix(in srgb, var(--type-find) 18%, var(--bg)); }
+}
+.pf-logout:focus-visible { color: var(--text); background: color-mix(in srgb, var(--text) 8%, var(--bg)); }
+.pf-delete:focus-visible { background: color-mix(in srgb, var(--type-find) 18%, var(--bg)); }
 
 /* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar.
    Tops the whole stack (above modals at 250 and the filter layer at 400): the

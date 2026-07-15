@@ -15,9 +15,34 @@ const dayMT = (t) =>
   new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
 const TODAY = dayMT(Date.now());
 
+// Password-recovery landing, captured before anything else touches the URL.
+// createClient() below (detectSessionInUrl, on by default) consumes the token
+// from the hash and strips it *synchronously*, as part of construction — so this
+// has to run before that call, not after, or the hash is already gone by the time
+// we look. See the longer comment at `recovering` inside Store for why this can't
+// just be an event listener either.
+const cameFromRecoveryLink = /type=recovery/.test(location.hash);
+
 const Store = (() => {
   const { url, key } = window.TRIA_CONFIG;
   const sb = window.supabase.createClient(url, key);
+
+  // Password-recovery landing. When someone clicks the reset link in their email,
+  // supabase-js consumes the token from the URL (above) and, a beat later, fires
+  // PASSWORD_RECOVERY async. That's too late to gate init()'s first hydrate on —
+  // init() calls getSession() and would see the recovery session as a normal login
+  // before the event ever fires, dropping them straight into the app. So we gate on
+  // cameFromRecoveryLink (captured synchronously above) instead; the PASSWORD_RECOVERY
+  // event below just re-confirms it and re-triggers the route.
+  let recovering = cameFromRecoveryLink;
+  const recoveryHandlers = [];
+  sb.auth.onAuthStateChange((event) => {
+    if (event !== 'PASSWORD_RECOVERY') return;
+    recovering = true;
+    recoveryHandlers.forEach(fn => { try { fn(); } catch { /* view will re-route */ } });
+  });
+  const isRecovering = () => recovering;
+  const onRecovery = (fn) => { recoveryHandlers.push(fn); };
 
   // In-memory mirror of the shared world, shaped like the old save file:
   //   users: [{id, username, name, bio, avatar?}]
@@ -65,6 +90,9 @@ const Store = (() => {
   // session in localStorage, so a returning visitor stays logged in.
   async function init() {
     const { data: { session } } = await sb.auth.getSession();
+    // A recovery session getSession picked up from the reset link isn't a login —
+    // hold it at the gate (set-new-password) instead of hydrating the world.
+    if (recovering) return;
     await hydrate(session);
   }
 
@@ -215,8 +243,9 @@ const Store = (() => {
   // ── Auth (async writes) ────────────────────────────────────────────────────
   // Create an account: Supabase Auth owns the email + password; the username and
   // name ride along as metadata, and a DB trigger turns them into a public
-  // profile row (see schema.sql). Email confirmation is off, so signUp returns a
-  // live session and we're straight in.
+  // profile row (see schema.sql). With "Confirm email" on, signUp returns NO
+  // session until the link is clicked (see the !data.session branch below); with
+  // it off, signUp hands back a live session and we're straight in.
   async function signup({ name, username, email, password }) {
     name = String(name || '').trim();
     username = String(username || '').trim().toLowerCase();
@@ -246,7 +275,9 @@ const Store = (() => {
         : error.message;
       return { ok: false, error: m };
     }
-    if (!data.session) return { ok: false, error: 'Check your email to confirm your account, then log in.' };
+    // Confirm-email on: no session yet. Signal the view to show a positive "check
+    // your inbox" screen (with resend), not a red error — the account was created.
+    if (!data.session) return { ok: false, pending: true, email };
     await hydrate(data.session);
     return { ok: true };
   }
@@ -254,14 +285,85 @@ const Store = (() => {
   async function login(email, password) {
     email = String(email || '').trim();
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) return { ok: false, error: 'Wrong email or password.' };
+    if (error) {
+      // Confirm-email gate: the credentials are right, they just haven't clicked
+      // the link yet. Flag it so the view can offer a friendly resend instead of
+      // the generic "wrong email or password" (which would be misleading here).
+      if (/confirm/i.test(error.message))
+        return { ok: false, error: 'Confirm your email to log in. Check your inbox for the link.', needsConfirm: true };
+      return { ok: false, error: 'Wrong email or password.' };
+    }
     await hydrate(data.session);
     return { ok: true };
   }
 
   async function logout() {
     await sb.auth.signOut();
+    recovering = false;
     state = empty();
+  }
+
+  async function requestPasswordReset(email) {
+    email = String(email || '').trim();
+    if (!/^\S+@\S+\.\S+$/.test(email))
+      return { ok: false, error: 'Enter a valid email address.' };
+    // No app hash on redirectTo: supabase-js appends the recovery token as its OWN
+    // hash fragment, and a second '#' would collide with our hash router and hide
+    // the token. We land on the bare origin, the client fires PASSWORD_RECOVERY,
+    // and route() shows set-new-password off the `recovering` flag (not the URL).
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${location.origin}${location.pathname}`,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
+  async function updatePassword(password) {
+    if (String(password || '').length < 6)
+      return { ok: false, error: 'Password needs at least 6 characters.' };
+    const { data, error } = await sb.auth.updateUser({ password });
+    if (error) return { ok: false, error: error.message };
+    // Password set: the recovery session is now a normal login. Clear the flag and
+    // hydrate the world so we can drop them straight into the app, signed in.
+    recovering = false;
+    const { data: { session } } = await sb.auth.getSession();
+    await hydrate(session || (data && data.user ? { user: data.user } : null));
+    return { ok: true };
+  }
+
+  async function resendConfirmation(email) {
+    email = String(email || '').trim();
+    const { error } = await sb.auth.resend({ type: 'signup', email });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
+  // Permanently deletes the signed-in user's account: their Storage folder
+  // (avatars + post photos, which sit outside the DB) and their auth.users row,
+  // which cascades through public.users to every post, comment, like, friend
+  // edge, block, and push subscription (see schema.sql's `on delete cascade`
+  // chain). The actual deletion needs the service role, so this calls a small
+  // Edge Function (supabase/functions/delete-account) that verifies the caller's
+  // own session token before doing anything — see supabase/DELETE-ACCOUNT-SETUP.md.
+  async function deleteAccount() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return { ok: false, error: 'You need to be signed in.' };
+    let res;
+    try {
+      res = await fetch(`${url}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, apikey: key },
+      });
+    } catch {
+      return { ok: false, error: 'Couldn’t reach the server. Check your connection and try again.' };
+    }
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body || !body.ok)
+      return { ok: false, error: (body && body.error) || 'Couldn’t delete your account. Try again in a moment.' };
+    await sb.auth.signOut();
+    recovering = false;
+    state = empty();
+    return { ok: true };
   }
 
   // ── Friends (async writes) ──────────────────────────────────────────────────
@@ -692,7 +794,9 @@ const Store = (() => {
     init, refresh,
     users, user, currentUser, isPrivate, friends, friendsOf, feed, posts, postsBy, audienceCount,
     // Auth
-    session, isAuthed, signup, login, logout,
+    session, isAuthed, signup, login, logout, deleteAccount,
+    requestPasswordReset, updatePassword, resendConfirmation,
+    isRecovering, onRecovery,
     // Friends
     isFriend, areFriends, addFriend, removeFriend,
     requestsSent, requestsReceived, friendStatus,

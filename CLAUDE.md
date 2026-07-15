@@ -1,6 +1,6 @@
 # Tria — working notes for Claude
 
-A social web app for small circles of friends. Tagline "Social Media is so back."
+A social web app for small circles of friends. Tagline "Social media made local."
 Ethos: low-tech, non-addictive, anti-bloat. The app promotes context (long posts
 read well), not an infinite feed.
 

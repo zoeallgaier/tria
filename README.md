@@ -1,6 +1,6 @@
 # Tria
 
-**Social Media is so back.**
+**Social media made local.**
 
 Tria is a quiet social app for small circles of friends. It's built to be
 low-tech, non-addictive, and anti-bloat: no infinite feed, no ads, no metrics to
