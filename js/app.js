@@ -4323,10 +4323,15 @@
       trimSound.setAttribute('aria-pressed', 'false');
       trimSound.innerHTML = svgIcon('mute', 'trim-sound-ico');
       layoutTrim();
-      trimVideo.play().catch(() => {});
-      // Filmstrip thumbnails are best-effort — on failure the strip just shows its
-      // neutral track, the window/handles still work.
-      buildFilmstrip(blob, dur, trimThumbs).catch(() => {});
+      // Build the filmstrip BEFORE starting playback. iOS caps how many <video>
+      // elements can decode at once — a sampler decoding the same clip while the
+      // preview is playing comes back blank on-device (fine on desktop, which
+      // allows many decoders). So sample first with the decoder to ourselves,
+      // then hand it back to the preview. Best-effort — on failure the strip
+      // just shows its neutral track, the window/handles still work.
+      buildFilmstrip(blob, dur, trimThumbs)
+        .catch(() => {})
+        .finally(() => { trimVideo.play().catch(() => {}); });
     }
 
     // Reflect [tStart,tEnd] onto the window + duration pill, and keep videoCapture
@@ -4344,13 +4349,28 @@
 
     // Loop preview playback inside the window and track the playhead across the
     // whole strip (absolute position reads more like iOS than a window-local one).
-    trimVideo.addEventListener('timeupdate', () => {
-      if (!tD) return;
-      if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
-        trimVideo.currentTime = tStart;
+    // Driven per-frame, not off `timeupdate` (which only fires ~4x/sec, so the clip
+    // would visibly overrun tEnd before looping and the playhead would jump) —
+    // requestVideoFrameCallback clamps it frame-tight, with a rAF fallback.
+    const positionPlayhead = () => {
+      if (tD) trimPlay.style.left = (clamp(trimVideo.currentTime, 0, tD) / tD * 100) + '%';
+    };
+    const previewTick = () => {
+      if (tD && !tDrag) {
+        // Loop the instant we reach the window's end (or fall before its start).
+        if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
+          trimVideo.currentTime = tStart;
+        }
+        positionPlayhead();
       }
-      trimPlay.style.left = (trimVideo.currentTime / tD * 100) + '%';
-    });
+      scheduleTick();
+    };
+    const scheduleTick = () => {
+      if (typeof trimVideo.requestVideoFrameCallback === 'function')
+        trimVideo.requestVideoFrameCallback(previewTick);
+      else requestAnimationFrame(previewTick);
+    };
+    scheduleTick();
 
     trimSound.addEventListener('click', () => {
       trimVideo.muted = !trimVideo.muted;
@@ -4382,10 +4402,18 @@
         tEnd = clamp(tDrag.e0 + dSec, tStart + minLen, Math.min(tD, tStart + MAX_CLIP_SEC));
       }
       layoutTrim();
-      // Scrub the preview to the edge being dragged so you see the exact frame.
+      // Scrub the preview to the edge being dragged so you see the exact frame,
+      // and move the playhead with it (the per-frame loop is paused while dragging).
       trimVideo.currentTime = tDrag.mode === 'r' ? Math.max(0, tEnd - 0.06) : tStart;
+      positionPlayhead();
     });
-    const endDrag = () => { tDrag = null; trimVideo.currentTime = tStart; trimVideo.play().catch(() => {}); };
+    const endDrag = () => {
+      if (!tDrag) return;
+      tDrag = null;
+      trimVideo.currentTime = tStart;
+      positionPlayhead();
+      trimVideo.play().catch(() => {});
+    };
     trimWindow.addEventListener('pointerup', endDrag);
     trimWindow.addEventListener('pointercancel', endDrag);
 
@@ -4494,6 +4522,13 @@
   // Sample `count` evenly-spaced thumbnails across a clip into the strip. Sequential
   // seeks (iOS won't overlap them); each thumb waits on `seeked` with a short
   // timeout so a stubborn frame can't hang the whole strip. Best-effort throughout.
+  //
+  // iOS caveats this navigates: (a) a seeked event fires before the GPU process has
+  // actually painted the new frame, so drawImage can grab black — we wait on
+  // requestVideoFrameCallback (a real painted frame) when available, then re-check
+  // the pixel and nudge the seek once if it still came back black; (b) the sampler
+  // must have the decoder to itself (the caller keeps the preview paused until we're
+  // done), and a longer per-seek budget since 4K HEVC library clips are slow to seek.
   async function buildFilmstrip(blob, duration, container, count = 10) {
     container.innerHTML = '';
     const v = document.createElement('video');
@@ -4502,20 +4537,50 @@
     await new Promise((res) => {
       v.addEventListener('loadeddata', res, { once: true });
       v.addEventListener('error', res, { once: true });
-      setTimeout(res, 2500);
+      setTimeout(res, 4000);
     });
     const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
     const th = 52, tw = Math.max(1, Math.round(th * vw / vh));
-    for (let i = 0; i < count; i++) {
-      const t = duration * (i + 0.5) / count;
-      await new Promise((res) => {
-        v.addEventListener('seeked', res, { once: true });
-        v.currentTime = Math.min(t, Math.max(0, duration - 0.05));
-        setTimeout(res, 700);
-      });
+
+    // Seek, then resolve only once a frame has genuinely painted (rVFC) — falling
+    // back to `seeked` + a rAF where rVFC is unavailable. Bounded by `budget`ms.
+    const seekAndPaint = (t, budget) => new Promise((res) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; res(); } };
+      const timer = setTimeout(finish, budget);
+      const painted = () => { clearTimeout(timer); finish(); };
+      if (typeof v.requestVideoFrameCallback === 'function') {
+        v.requestVideoFrameCallback(() => painted());
+      } else {
+        v.addEventListener('seeked', () => requestAnimationFrame(painted), { once: true });
+      }
+      v.currentTime = t;
+    });
+    const drawThumb = () => {
       const c = document.createElement('canvas');
-      c.width = tw; c.height = th; c.className = 'trim-thumb';
-      try { c.getContext('2d').drawImage(v, 0, 0, tw, th); } catch {}
+      c.width = tw; c.height = th;
+      const ctx = c.getContext('2d');
+      try { ctx.drawImage(v, 0, 0, tw, th); } catch {}
+      let black = true;
+      try {
+        const d = ctx.getImageData(0, 0, tw, th).data;
+        for (let p = 0; p < d.length && black; p += 4)
+          if (d[p] > 8 || d[p + 1] > 8 || d[p + 2] > 8) black = false;
+      } catch { black = false; } // tainted canvas — can't sample, keep the draw
+      return { c, black };
+    };
+
+    for (let i = 0; i < count; i++) {
+      const t = Math.min(duration * (i + 0.5) / count, Math.max(0, duration - 0.05));
+      await seekAndPaint(t, 1200);
+      let { c, black } = drawThumb();
+      // A black grab usually means the frame hadn't landed — nudge the seek and
+      // retry once before settling for whatever we got.
+      if (black) {
+        await seekAndPaint(Math.min(t + 0.08, Math.max(0, duration - 0.02)), 1200);
+        ({ c } = drawThumb());
+      }
+      c.className = 'trim-thumb';
       container.appendChild(c);
     }
     try { URL.revokeObjectURL(v.src); } catch {}
