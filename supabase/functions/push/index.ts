@@ -53,7 +53,7 @@ async function areFriends(a: string, b: string) {
 function postLabel(post: Row | null): string {
   const t = ((post?.title || post?.note) ?? '').trim();
   if (t) { const s = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t; return `“${s}”`; }
-  return post?.type === 'photo' ? 'your photo' : 'your post';
+  return post?.type === 'photo' ? 'your frame' : 'your post';
 }
 function snip(t: string, n = 90) { t = (t || '').trim(); return t.length > n ? t.slice(0, n).trimEnd() + '…' : t; }
 

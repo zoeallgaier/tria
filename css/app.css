@@ -4147,6 +4147,11 @@ body.gate main { padding: 0; }
   .masthead, .filters { padding-inline: 0; }   /* already inset by .view here */
   .view-title { font-size: 2rem; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 1.1rem; }
+  /* Friends / Updates: the seg-tabs that used to sit under the masthead docks to
+     the bottom nav on phones (position: fixed), so its 1.8rem gap would leave the
+     masthead divider hanging with dead space above the first row. Pull the list up
+     close to the rule — the row's own 1.1rem top padding is enough breathing room. */
+  .masthead:has(+ .seg-tabs) { margin-bottom: 0.35rem; }
   .masthead-kicker { margin-bottom: 0.7rem; letter-spacing: 0.13em; }
   /* Five chips outgrow a phone row — one swipeable line (edge-to-edge, no
      scrollbar) instead of wrapping an orphan onto a second line. The block

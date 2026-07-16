@@ -419,8 +419,12 @@
   // On your OWN posts it's suppressed — nothing to report, and you can share the
   // profile — EXCEPT on your own upcoming activities, where Add to calendar is a
   // real self-action (put your own plan on your calendar), so the menu stays.
-  function menuBtnHtml(post) {
-    if (post.author === Store.session() && !isCalendarable(post)) return '';
+  // owner → this card sits on your own profile, where the edit pencil already
+  // leads the row, so your own posts keep an empty ••• (unless it carries a
+  // non-edit action like Add to calendar). In the feed (no pencil, owner falsy)
+  // your own posts DO get the •••: it carries Copy link and Edit post.
+  function menuBtnHtml(post, owner) {
+    if (post.author === Store.session() && owner && !isCalendarable(post)) return '';
     return `<button class="card-menu" type="button" data-menu="${esc(post.id)}" ` +
       `aria-label="More" title="More">${svgIcon('dots')}</button>`;
   }
@@ -1043,7 +1047,7 @@
       : '';
     // The ••• overflow — leftmost of the left cluster, so it lands in the bottom-
     // left corner of the card, out of the way. Empty on your own posts.
-    const menu = menuBtnHtml(post);
+    const menu = menuBtnHtml(post, opts.owner);
 
     if (!attendees && !rsvp && !like && !comment && !owner && !menu) return '';
 
@@ -1689,6 +1693,9 @@
   // The post whose card is currently swapped for an edit form, or null. Only one
   // at a time; reset on any navigation (see route()).
   let editingId = null;
+  // A post the feed's ••• menu asked to edit, handed across the navigation to the
+  // profile (which owns the edit machinery). Consumed once by renderUser.
+  let pendingEditId = null;
 
   // Which posts' comment panels are expanded. A card rebuilds on every add/
   // delete (same full-refresh pattern as edit/delete elsewhere), so this is
@@ -1775,6 +1782,7 @@
   function makeEditCard(post) {
     const el = document.createElement('article');
     el.className = `card card--${post.type} card--editing`;
+    el.dataset.id = post.id;      // lets the spotlight scroll target the open editor
     el.innerHTML =
       `<form class="edit-form" novalidate>` +
         editFieldsFor(post) +
@@ -2513,6 +2521,13 @@
     const u = Store.user(username);
     if (!u) { location.hash = '#/'; return; }          // stale link → home
     const isSelf = u.username === Store.session();
+    // Arriving from the feed's ••• "Edit post": open that post in its editor and
+    // scroll it into view (spotlight), same as a copied-link landing.
+    if (isSelf && pendingEditId) {
+      editingId = pendingEditId;
+      spotlightPost = pendingEditId;
+      pendingEditId = null;
+    }
     if (!isSelf && Blocks.has(u.username)) { renderBlockedWall(u); return; }
     const isFriend = Store.isFriend(u.username);
     // A private profile fences its whole feed to friends: an outsider sees the
@@ -3276,12 +3291,28 @@
   // upcoming activities (a sibling "send this elsewhere" action); Report only on
   // posts that aren't yours (you can't report yourself).
   function openPostMenu(post) {
+    const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
     if (isCalendarable(post))
       items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(post) });
-    if (post.author !== Store.session())
+    if (own)
+      items.push({ label: 'Edit post', icon: 'pencil', run: () => startPostEdit(post) });
+    else
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
     openSheet({ items });
+  }
+
+  // Edit swaps the card for a form, but that machinery lives on the profile
+  // (renderUser + editingId). From anywhere else the ••• "Edit post" lands you
+  // on your own profile with that post already open in its editor.
+  function startPostEdit(post) {
+    if (location.hash === '#/profile') {
+      editingId = post.id;
+      renderUser(Store.session());
+      return;
+    }
+    pendingEditId = post.id;      // survives the router's editingId reset; consumed by renderUser
+    location.hash = '#/profile';
   }
 
   // The friend badge/menu: Remove friend, Block, Report. Replaces the old
@@ -5501,6 +5532,25 @@
         `question before it gets built: does this help people connect with each ` +
         `other? If the answer is no, it probably doesn't belong here.</p>`);
 
+    const businessHtml = aboutFold('business', 'Tria for business',
+      `<p>Tria is available to businesses and nonprofits for ` +
+        `<strong>$149.99 per month</strong>. That's the whole price. No ad ` +
+        `auctions, no hidden fees. <strong>Your social strategy is determined by ` +
+        `you and your audience, not an algorithm.</strong></p>` +
+      `<p>Tria doesn't use an algorithm to push promotional content into anyone's ` +
+        `feed. Instead, organizations share posts the same way people do, and those ` +
+        `posts reach the people who choose to follow them.</p>` +
+      `<p>This is why an organization account costs a flat monthly fee instead of ` +
+        `thousands in ad spend. We're not selling attention or building profiles to ` +
+        `target you. We're just letting the people who already care about your ` +
+        `organization keep up with it.</p>` +
+      `<p>Organization accounts follow the same community guidelines as everyone ` +
+        `else. <strong>No spam, no deceptive promotion, no buying your way past the ` +
+        `people who didn't ask to hear from you.</strong></p>` +
+      `<h3>Interested?</h3>` +
+      `<p>If you'd like to set up an organization account, reach us through the ` +
+        `Feedback form below and we'll help you get started.</p>`);
+
     const feedbackHtml = aboutFold('feedback', 'Feedback',
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
       `<p>Whether you've found a bug, have an idea, or ` +
@@ -5536,7 +5586,7 @@
             `share your life, discover things worth caring about, and stay ` +
             `connected.</p>` +
           aboutFold('install', 'Add Tria to your homescreen', installHtml) +
-          guidelinesHtml + privacyHtml + faqHtml + feedbackHtml +
+          guidelinesHtml + privacyHtml + faqHtml + businessHtml + feedbackHtml +
         `</div>` +
       `</section>`;
 

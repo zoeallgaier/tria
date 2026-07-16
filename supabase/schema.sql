@@ -34,8 +34,9 @@ create table public.posts (
   title      text,
   url        text,
   note       text,
-  image      text,                          -- Storage URL later (photo posts)
-  tint       text,                          -- photo's average colour (#rrggbb) for the colour-up settle
+  image      text,                          -- Storage URL later (photo/video posts; video clip URL for Frames)
+  tint       text,                          -- photo/poster's average colour (#rrggbb) for the colour-up settle
+  poster     text,                          -- first-frame still for a video Frame (image posts leave this null)
   location   text,                          -- where it's happening (activities)
   tags       text[] not null default '{}',
   created_at timestamptz not null default now()
