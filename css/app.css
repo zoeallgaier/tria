@@ -1941,7 +1941,8 @@ body.gate main { padding: 0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: calc(1.6rem + env(safe-area-inset-top)) 1.5rem calc(2rem + env(safe-area-inset-bottom));
+  /* Top padding clears the fixed .auth-topbar (safe-area + its stacked height). */
+  padding: calc(env(safe-area-inset-top) + 5.4rem) 1.5rem calc(2rem + env(safe-area-inset-bottom));
 }
 /* Auto margins centre the card when there's room, but collapse when the form is
    taller than the screen — so the top never gets clipped above the scroll and
@@ -4091,7 +4092,7 @@ body.gate main { padding: 0; }
      the home indicator. Restore the safe-area insets for the gated About only;
      the auth screen (also under body.gate main) keeps its own centered layout. */
   body.gate .view.about {
-    padding-top: calc(env(safe-area-inset-top) + 1.5rem);
+    padding-top: calc(env(safe-area-inset-top) + 5.2rem);   /* clears the fixed .auth-topbar */
     padding-bottom: calc(env(safe-area-inset-bottom) + 3rem);
   }
   .masthead, .filters { padding-inline: 0; }   /* already inset by .view here */
@@ -4333,6 +4334,92 @@ body.gate main { padding: 0; }
   text-underline-offset: 2px;
 }
 .auth-about a:hover { color: var(--text); }
+
+/* ── Install-first welcome (signed-out browser front door) ────────────────────
+   Reuses the .auth card shell: leads with the home-screen steps, keeps the
+   account actions quiet below the fold of the tutorial. See renderWelcome. */
+.welcome-head { margin-top: 1.9rem; font-size: 2.1rem; }
+.welcome-lede {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-weight: 300;
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+.welcome-lede strong { color: var(--text); font-weight: 500; }
+.welcome-steps { margin-top: 1.8rem; }
+/* The last step's tile IS the Tria app icon: the create/publish pastel quartet,
+   drifting like the Post button, with the dark-ink serif "t" — the tutorial's
+   payoff, and where the loud gradient now lives (not on a button). */
+.welcome-steps .install-appicon {
+  background: linear-gradient(115deg,
+    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+  background-size: 300% 100%;
+  border: none;
+  box-shadow: var(--lit-rim), var(--lit-drop);
+  /* Runs the same install-drift as the other two tiles (it's step 3, so the
+     nth-child 3.6s delay settles it right after them, blur and all), with the
+     Post button's colour drift layered on so the payoff tile stays alive. */
+  animation: install-drift 5.4s var(--ease-soft) infinite,
+             publish-shift 14s ease-in-out infinite;
+}
+.welcome-steps .install-appicon .install-t { color: var(--on-type); }
+@media (prefers-reduced-motion: reduce) {
+  .welcome-steps .install-appicon { animation: none; background-position: 50% 50%; }
+}
+/* Signed-out brand header — the SAME frosted bar as the signed-in feed header
+   (edge-to-edge frost, hairline underline, wordmark at the left, a docked glyph
+   at the right where the sprout sits). Just given extra height so the slogan can
+   ride under the wordmark. Fixed, so tutorial content scrolls under it. */
+.auth-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: calc(env(safe-area-inset-top) + 0.75rem) 1.15rem 0.75rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--rule);
+}
+.auth-topbar-brand { display: flex; flex-direction: column; }
+.auth-topbar .brand-mark { font-size: 1.6rem; }
+/* Gated (signed-out) About carries the same fixed header, so clear its height. */
+.view.about--front { padding-top: calc(env(safe-area-inset-top) + 5.2rem); }
+.auth-topbar-tag {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.1;
+  margin-top: 0.12rem;
+}
+/* Account glyph docks at the right edge (the sprout's perch), bare over the
+   frost — the bar is already the chrome, so no glass disc. The returning-user
+   escape hatch; the auth screen it opens toggles create ⇄ log in. */
+.auth-account {
+  margin-left: auto;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease);
+}
+.auth-account-ico { width: 24px; height: 24px; }
+@media (hover: hover) {
+  .auth-account:hover { color: var(--text); transform: translateY(-1px); }
+}
+.auth-account:active { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .auth-account { transition: color var(--dur-micro) var(--ease); } }
 
 @media (max-width: 680px) {
   .about-body, .about-back { padding-inline: 0; }   /* already inset by .view here */

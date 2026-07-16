@@ -2140,6 +2140,34 @@
      we drop the gate and route home. */
   let authMode = 'signup';
 
+  // Signed-out brand header — the front-door echo of the signed-in .topbar (same
+  // wordmark), shared by the welcome tutorial and the auth (log in / create)
+  // screens so they read as one app. The slogan rides in the header. The account
+  // disc is pinned top-left, the mirror of the sprout's top-right perch; it opens
+  // the auth form for returning users (and toggles create ⇄ log in from there).
+  function authHeader() {
+    return `<header class="auth-topbar">` +
+        `<div class="auth-topbar-brand">` +
+          `<span class="brand-mark">tria</span>` +
+          `<span class="auth-topbar-tag">Social media made local.</span>` +
+        `</div>` +
+        `<button class="auth-account" type="button" id="auth-account" aria-label="Sign in">` +
+          svgIcon('profile', 'auth-account-ico') +
+        `</button>` +
+      `</header>`;
+  }
+  function wireAuthAccount() {
+    const btn = document.getElementById('auth-account');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      authMode = 'login';   // returning-user affordance; the form offers "create one"
+      // Already on the auth screen (e.g. create-account): flip to log in in place,
+      // since the hash wouldn't change and the router wouldn't re-render.
+      if (location.hash.replace(/\?.*$/, '') === '#/signin') renderAuth('login');
+      else go('#/signin');
+    });
+  }
+
   function renderAuth(mode) {
     authMode = mode;
     const isSignup = mode === 'signup';
@@ -2170,9 +2198,9 @@
       `</div>`;
 
     view.innerHTML =
-      `<section class="auth"><div class="auth-card">` +
-        `<div class="auth-brand">tria</div>` +
-        `<p class="auth-tag">Social media made local.</p>` +
+      `<section class="auth">` +
+        authHeader() +
+        `<div class="auth-card">` +
         `<h1 class="auth-head">${isSignup ? 'Create your account' : 'Welcome back'}</h1>` +
         `<form id="auth-form" novalidate>` +
           identityField +
@@ -2209,6 +2237,7 @@
         `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
       `</div></section>`;
 
+    wireAuthAccount();
     const nameInput = document.getElementById('f-name');
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
@@ -2248,6 +2277,43 @@
     // the switch feels like part of the app rather than an instant redraw.
     document.getElementById('auth-toggle').addEventListener('click',
       () => renderPage(-1, () => renderAuth(isSignup ? 'login' : 'signup')));
+  }
+
+  /* ── Install-first welcome (signed-out browser front door) ────────────────────
+     The first impression in a browser: lead with adding Tria to the home screen
+     (iOS steps — Android is a near-identical two-tap, so a single column keeps
+     the page focused), with account actions kept secondary below. The spine is
+     "install first, THEN create your account inside the app", because a session
+     made in Safari does not carry into the installed PWA (separate storage) —
+     which is what was making people sign in twice. Installed visitors never see
+     this: route() sends standalone launches straight to the form. Reuses the
+     .auth card shell + the About page's animated .install-steps / INSTALL_ICONS. */
+  function renderWelcome() {
+    view.innerHTML =
+      `<section class="auth welcome">` +
+        // Shared brand header (wordmark + slogan + the corner account disc). The
+        // page's one job is "add Tria to your home screen"; signing up is meant to
+        // happen in the installed app (the double-login fix), so account stays a
+        // quiet corner escape hatch for returning users.
+        authHeader() +
+        `<div class="auth-card">` +
+        `<h1 class="auth-head welcome-head">Add Tria to your home screen</h1>` +
+        `<p class="welcome-lede">Tria lives on the web, so there's nothing to ` +
+          `download. <strong>Add it to your home screen</strong> and it opens ` +
+          `just like any other app.</p>` +
+        `<ol class="install-steps welcome-steps">` +
+          installStep(INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in Safari's toolbar.`) +
+          installStep(INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`) +
+          // The final step's tile IS the Tria app icon — the drifting pastel
+          // quartet (the same gradient that used to sit on the button), so the
+          // payoff reads "and here's Tria, on your home screen".
+          `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +
+            `<span>Tap <strong>Add</strong>. Tria is now on your home screen.</span></li>` +
+        `</ol>` +
+        `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
+      `</div></section>`;
+
+    wireAuthAccount();
   }
 
   // Login met the confirm-email gate: drop a one-tap "resend" under the error so
@@ -2312,7 +2378,7 @@
     });
     document.getElementById('reset-back').addEventListener('click', () => {
       authMode = 'login';
-      go('#/');
+      go('#/signin');
     });
   }
 
@@ -2329,7 +2395,7 @@
       `</div></section>`;
     document.getElementById('reset-back').addEventListener('click', () => {
       authMode = 'login';
-      go('#/');
+      go('#/signin');
     });
   }
 
@@ -2348,7 +2414,7 @@
     showResend(email, document.getElementById('auth-error'));
     document.getElementById('inbox-back').addEventListener('click', () => {
       authMode = 'login';
-      go('#/');
+      go('#/signin');
     });
   }
 
@@ -2404,7 +2470,7 @@
       `</div></section>`;
     document.getElementById('confirmed-go').addEventListener('click', () => {
       authMode = 'login';
-      go('#/');
+      go('#/signin');
     });
   }
 
@@ -2959,7 +3025,7 @@
       await Store.logout();
       authMode = 'login';        // returning user — offer login first
       close();
-      go('#/');
+      go('#/signin');
     });
 
     // Delete account: one sheet standing in for "are you sure", so an accidental
@@ -5164,8 +5230,10 @@
   function renderAbout(gated) {
     const me = !gated && Store.isAuthed() ? Store.currentUser() : null;
 
+    // The install steps live behind a fold like the guidelines/FAQ (the browser
+    // welcome landing is now the primary place this content is shown). Keeps its
+    // id="install" via aboutFold, so #/about?open=install still deep-links here.
     const installHtml =
-      `<h2 class="about-head" id="install">Add Tria to your homescreen</h2>` +
       `<p>Tria lives on the web, so there is nothing to download and no store in ` +
         `between. Add it to your homescreen and it opens full screen, just like ` +
         `any other app on your phone.</p>` +
@@ -5316,7 +5384,10 @@
       `</form>`);
 
     view.innerHTML =
-      `<section class="view about">` +
+      `<section class="view about${gated ? ' about--front' : ''}">` +
+        // Signed out, the signed-in .topbar is hidden, so carry the same front-door
+        // brand header here too. Signed in, the real topbar is already up top.
+        (gated ? authHeader() : '') +
         (gated ? `<p class="about-back"><a href="#/">&larr; Back to sign in</a></p>` : '') +
         mastheadEl('Social media made local.', 'About Tria') +
         `<div class="about-body">` +
@@ -5328,7 +5399,8 @@
             `no ads, and no algorithm deciding for you.</strong> Just a place to ` +
             `share your life, discover things worth caring about, and stay ` +
             `connected.</p>` +
-          installHtml + guidelinesHtml + privacyHtml + faqHtml + feedbackHtml +
+          aboutFold('install', 'Add Tria to your homescreen', installHtml) +
+          guidelinesHtml + privacyHtml + faqHtml + feedbackHtml +
         `</div>` +
       `</section>`;
 
@@ -5431,6 +5503,8 @@
       label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
       setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
     });
+
+    wireAuthAccount();   // no-op when signed in (the header is signed-out only)
   }
 
   /* ── Router + page transitions ─────────────────────────────────────────────
@@ -5573,9 +5647,24 @@
     if (!Store.isAuthed()) {
       document.body.classList.add('gate');
       const gatePath = (location.hash || '#/').split('?')[0];
-      // The signed-out About front door keeps the hue-drift wash; the auth form
-      // does not (its pastel now comes from the gradient submit button).
-      document.body.dataset.ambient = gatePath === '#/about' ? 'about' : 'none';
+      // Installed (home-screen / standalone) visitors are already past the
+      // install step, so they skip the tutorial and land straight on the sign-in
+      // form. navigator.standalone is iOS-only; the media query covers the rest.
+      const installed = navigator.standalone === true
+        || window.matchMedia('(display-mode: standalone)').matches;
+      // The install-first welcome is the browser front door: any signed-out route
+      // that isn't an explicit auth / About / recovery screen lands there. It
+      // leads with "add Tria to your home screen, then sign in there", which is
+      // what keeps people from signing in twice — a session made in Safari does
+      // not carry into the installed app (separate storage).
+      const showWelcome = !installed && !Store.isRecovering()
+        && gatePath !== '#/signin' && gatePath !== '#/about'
+        && gatePath !== '#/forgot' && gatePath !== '#/reset-password'
+        && gatePath !== '#/confirmed';
+      // Welcome + About keep the hue-drift wash; the bare auth form does not
+      // (its pastel now comes from the gradient submit button).
+      document.body.dataset.ambient =
+        (gatePath === '#/about' || showWelcome) ? 'about' : 'none';
       renderPage(-1, () => {
         // A live recovery session (from the reset link) always wins: set-new-
         // password, whatever the hash says.
@@ -5585,6 +5674,7 @@
         // expired or been reused, so route them to request a fresh one.
         if (gatePath === '#/forgot' || gatePath === '#/reset-password') return renderRequestReset();
         if (gatePath === '#/confirmed') return renderConfirmed();
+        if (showWelcome) return renderWelcome();
         return renderAuth(authMode);
       });
       window.scrollTo(0, 0);
