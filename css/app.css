@@ -2040,6 +2040,21 @@ body.gate main { padding: 0; }
   min-height: 3.4rem;
 }
 .combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
+/* The Frame combo's media slot — the dropzone/crop/trim surfaces live in the
+   note-position of the box (below the caption + divider). The box already frames
+   them, so the dropzone drops its own border and sits flush on the combo surface;
+   a picked photo/clip keeps its rounded preview inside the padding. */
+.combo-frame { padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 12px; }
+.combo-frame .dropzone {
+  border: none;
+  background: none;
+  padding: 1.5rem 0 1.2rem;
+  gap: 0.75rem;
+  cursor: default;
+}
+@media (hover: hover) {
+  .combo-frame .dropzone:hover { border-color: transparent; }
+}
 /* Signup identity combo: the @handle rides in the note slot, a single line with a
    muted @ prefix (rather than the tall textarea a real note uses). */
 .combo-user { display: flex; align-items: center; padding: 0 0.85rem; }
@@ -3301,13 +3316,8 @@ body.gate main { padding: 0; }
 }
 .trim--loading .trim-video { opacity: 0; }
 .trim--loading .trim-loading { display: flex; }
-/* The strip fills its cells in, then wipes open left-to-right on reveal. The
-   resting shape is an explicit inset(0) so the wipe can interpolate (a clip-path
-   of `none` wouldn't animate). */
-.trim-thumbs { clip-path: inset(0); transition: clip-path var(--dur-slow) var(--ease); }
-.trim--loading .trim-thumbs { clip-path: inset(0 100% 0 0); }
-.trim--loading .trim-strip {
-  pointer-events: none;   /* no scrubbing while we seek to sample */
+.trim--loading .reel {
+  pointer-events: none;   /* no scrubbing until the preview is ready */
   background-image: linear-gradient(100deg,
     transparent 38%,
     color-mix(in srgb, var(--type-photo) 16%, transparent) 50%,
@@ -3316,6 +3326,12 @@ body.gate main { padding: 0; }
   background-repeat: no-repeat;
   animation: trim-shimmer 1.25s linear infinite;
 }
+/* Nothing to see behind the shimmer — hide the frame/scrims/playhead/ticks until
+   the clip is ready, so they don't flash in over the neutral track. */
+.trim--loading .reel-frame,
+.trim--loading .reel-scrim,
+.trim--loading .reel-playhead,
+.trim--loading .reel-ticks { opacity: 0; }
 @keyframes trim-shimmer {
   from { background-position: 220% 0; }
   to   { background-position: -120% 0; }
@@ -3327,10 +3343,8 @@ body.gate main { padding: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .trim-video { transition: none; }
-  .trim-thumbs { transition: none; }
-  .trim--loading .trim-thumbs { clip-path: none; }
   .trim--loading .trim-stage,
-  .trim--loading .trim-strip { animation: none; }
+  .trim--loading .reel { animation: none; }
   .trim-loading-dot { animation: none; }
 }
 .trim-sound {
@@ -3352,71 +3366,106 @@ body.gate main { padding: 0; }
 }
 .trim-sound-ico { width: 20px; height: 20px; }
 
-.trim-strip {
-  position: relative;
-  height: 52px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--surface-2);
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.trim-thumbs { position: absolute; inset: 0; display: flex; }
-.trim-thumb {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 100%;
-  width: auto;
-  object-fit: cover;
-  display: block;
-}
-/* The window frames the kept region; its huge outset shadow (clipped by the
-   strip's overflow) dims everything trimmed away — one element, no extra scrims. */
-.trim-window {
+/* ── Trim reel ───────────────────────────────────────────────────────────────
+   A full-width, horizontally-scrollable thumbnail filmstrip with a fixed centered
+   selection frame. You SCROLL the reel to choose the moment and drag the frame's
+   ends to set length (≤10s). Content, not floating chrome, in the Frame's cyan
+   accent. Thumbnails are a progressive enhancement (neutral cells if a sample comes
+   back blank); the frame + ticks + scrims carry it either way. The frame/scrims/
+   playhead are absolutely positioned within .reel-wrap and offset by 21px (the
+   ticks row: 15px tall + 6px gap) so they overlay the 60px reel exactly. */
+.reel-wrap { position: relative; }
+.reel-ticks { position: relative; height: 15px; margin-bottom: 6px; overflow: hidden; }
+.reel-tick {
   position: absolute;
   top: 0;
+  left: 0;
+  font: 600 10px/1 ui-monospace, monospace;
+  color: var(--muted);
+  letter-spacing: .02em;
+  white-space: nowrap;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.reel {
+  position: relative;
+  height: 60px;
+  border-radius: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  background: var(--surface-2);
+}
+.reel::-webkit-scrollbar { display: none; }
+.reel-track { position: relative; height: 100%; }
+.reel-thumb {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-color: color-mix(in srgb, var(--surface-2) 65%, #000);
+}
+/* The fixed selection frame + scrims + playhead do NOT scroll — the reel moves
+   under them. The frame is CSS-centered; JS sets its width. */
+.reel-frame {
+  position: absolute;
+  top: 21px;
   bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   box-sizing: border-box;
   border: 2px solid var(--type-photo);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--type-photo) 12%, transparent);
-  box-shadow: 0 0 0 2000px color-mix(in srgb, var(--bg) 55%, transparent);
-  cursor: grab;
-  touch-action: none;
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity var(--dur-slow) var(--ease);
 }
-.trim-window:active { cursor: grabbing; }
-.trim-handle {
+.reel-scrim {
+  position: absolute;
+  top: 21px;
+  bottom: 0;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.reel-handle {
   position: absolute;
   top: -2px;
   bottom: -2px;
-  width: 18px;
+  width: 22px;
   background: var(--type-photo);
-  cursor: ew-resize;
+  pointer-events: auto;
   touch-action: none;
+  cursor: ew-resize;
 }
-.trim-handle--l { left: -2px; border-radius: 10px 0 0 10px; }
-.trim-handle--r { right: -2px; border-radius: 0 10px 10px 0; }
-.trim-handle::after {
+.reel-handle--l { left: -2px; border-radius: 10px 0 0 10px; }
+.reel-handle--r { right: -2px; border-radius: 0 10px 10px 0; }
+.reel-handle::after {
   content: "";
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 3px;
-  height: 18px;
+  height: 20px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--type-photo-ink) 70%, #000);
 }
-.trim-playhead {
+.reel-playhead {
   position: absolute;
-  top: -3px;
+  top: 18px;
   bottom: -3px;
   width: 2px;
   border-radius: 2px;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
   pointer-events: none;
+  z-index: 4;
+  transition: opacity var(--dur-slow) var(--ease);
 }
 .trim-meta {
   display: flex;
@@ -3684,7 +3733,7 @@ body.gate main { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .modal--closing, .modal--closing .modal-card { animation: fade-out var(--dur-micro) ease forwards; }
 }
-@media (prefers-reduced-motion: reduce) { .card, .friend, .notif { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .card, .friend, .notif, .request-row { animation: none; } }
 
 /* ── Mobile: sidebar → top brand bar + bottom tab bar; entries go edge-to-edge ── */
 @media (max-width: 680px) {

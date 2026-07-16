@@ -1309,6 +1309,19 @@
       clip = document.createElement('video');
       clip.className = 'frame-clip';
       clip.muted = true; clip.playsInline = true; clip.loop = true; clip.preload = 'metadata';
+      // Ground-truth aspect ratio: once the decoder reports the clip's real
+      // dimensions, size the frame box to match so object-fit:cover never crops.
+      // The stamped `-WxH` dims usually get this right already, but a Frame with
+      // no stored poster AND no stamped size otherwise falls back to the 3:2
+      // reserve box — which would crop the video. Reading videoWidth/Height off
+      // the live element is definitionally correct: the box matches exactly what
+      // this element will paint, so the clip keeps its aspect on any device.
+      clip.addEventListener('loadedmetadata', () => {
+        if (clip && clip.videoWidth && clip.videoHeight) {
+          frame.style.aspectRatio = clip.videoWidth + '/' + clip.videoHeight;
+          frame.classList.remove('photo-frame--reserve');
+        }
+      }, { once: true });
       // The #t=0.001 media fragment makes the clip self-paint its own first
       // frame on iOS even before playback starts — the universal poster
       // fallback for a Frame that has no stored `poster` still.
@@ -4047,50 +4060,66 @@
     }
 
     if (type === 'photo') {
-      return `<div class="field">` +
-          `<label for="c-pick">Frame</label>` +
-          `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
-          `<div class="dropzone" id="c-drop">` +
-            `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo or video</button>` +
-            `<p class="field-hint">A photo, or a clip up to 10 seconds.</p>` +
-          `</div>` +
-          `<div class="crop crop--free" id="c-crop" hidden>` +
-            `<img id="c-cropimg" alt="" draggable="false">` +
-          `</div>` +
-          // Trim surface: a playing preview + an iOS-style filmstrip scrubber with a
-          // draggable ≤10s window. A picked video lands here — the clip plays and a
-          // longer library pick gets trimmed down in-app instead of getting bounced
-          // to Photos. See wireFrameCapture.
-          `<div class="trim" id="c-trim" hidden>` +
-            `<div class="trim-stage">` +
-              `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
-              // Shown only while .trim--loading — a calm shimmer + word so a heavy
-              // clip (4K, iCloud) reads as "working," never frozen. Hidden on reveal.
-              `<div class="trim-loading" aria-live="polite"><span class="trim-loading-dot"></span>Getting your clip ready</div>` +
-              `<button type="button" class="trim-sound" id="c-trimsound" ` +
-                `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
+      // Caption + frame ride in one bordered box, split by a divider — same combo
+      // pattern as find, activity, and note, so all four types read the same up
+      // top. Caption leads (like every other type's text), the frame sits below.
+      return `<div class="field field--combo">` +
+          `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
+            `placeholder="Say something, or let the frame speak." aria-label="Caption"></textarea>` +
+          `<div class="combo-divider" aria-hidden="true"></div>` +
+          `<div class="combo-frame">` +
+            `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
+            `<div class="dropzone" id="c-drop">` +
+              `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo or video</button>` +
+              `<p class="field-hint">A photo, or a clip up to 10 seconds.</p>` +
             `</div>` +
-            `<div class="trim-strip" id="c-trimstrip">` +
-              `<div class="trim-thumbs" id="c-trimthumbs" aria-hidden="true"></div>` +
-              `<div class="trim-window" id="c-trimwindow" role="slider" aria-label="Trim window">` +
-                `<span class="trim-handle trim-handle--l" data-edge="l" aria-hidden="true"></span>` +
-                `<span class="trim-handle trim-handle--r" data-edge="r" aria-hidden="true"></span>` +
+            `<div class="crop crop--free" id="c-crop" hidden>` +
+              `<img id="c-cropimg" alt="" draggable="false">` +
+            `</div>` +
+            // Trim surface: a playing native preview + a flat scrub bar with a
+            // draggable ≤10s window (playhead + two handles, no canvas anywhere —
+            // that's what iOS renders blank). A picked video lands here; the clip
+            // plays and a longer library pick gets trimmed down in-app instead of
+            // getting bounced to Photos. See wireFrameCapture.
+            `<div class="trim" id="c-trim" hidden>` +
+              `<div class="trim-stage">` +
+                `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
+                // Shown only while .trim--loading — a calm shimmer + word so a heavy
+                // clip (4K, iCloud) reads as "working" while its metadata loads,
+                // never frozen. Cleared the moment the preview starts playing.
+                `<div class="trim-loading" aria-live="polite"><span class="trim-loading-dot"></span>Getting your clip ready</div>` +
+                `<button type="button" class="trim-sound" id="c-trimsound" ` +
+                  `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
               `</div>` +
-              `<div class="trim-playhead" id="c-trimplayhead" aria-hidden="true"></div>` +
+              // A full-width, horizontally-scrollable thumbnail reel. A fixed
+              // selection frame sits centered over it: you SCROLL the reel to choose
+              // the moment and drag the frame's ends to set length (≤10s). Time ticks
+              // ride the top; scrims dim the trimmed-away edges; the playhead tracks
+              // playback inside the frame. Thumbnails are sampled off the preview
+              // element (canvas-from-video works on real iOS Safari) but are a
+              // progressive enhancement — the reel scrubs fine with neutral cells.
+              `<div class="reel-wrap" id="c-reelwrap">` +
+                `<div class="reel-ticks" id="c-reelticks" aria-hidden="true"></div>` +
+                `<div class="reel" id="c-reel">` +
+                  `<div class="reel-track" id="c-reeltrack"></div>` +
+                `</div>` +
+                `<div class="reel-scrim" id="c-reelscriml" aria-hidden="true"></div>` +
+                `<div class="reel-scrim" id="c-reelscrimr" aria-hidden="true"></div>` +
+                `<div class="reel-frame" id="c-reelframe" role="slider" aria-label="Trim window">` +
+                  `<span class="reel-handle reel-handle--l" data-edge="l" aria-hidden="true"></span>` +
+                  `<span class="reel-handle reel-handle--r" data-edge="r" aria-hidden="true"></span>` +
+                `</div>` +
+                `<div class="reel-playhead" id="c-reelplayhead" aria-hidden="true"></div>` +
+              `</div>` +
+              `<p class="trim-meta">` +
+                `<span class="trim-dur" id="c-trimdur">0.0s</span>` +
+                `<span class="trim-hint">Scroll to choose the moment. Drag the ends to set length, up to 10 seconds.</span>` +
+              `</p>` +
             `</div>` +
-            `<p class="trim-meta">` +
-              `<span class="trim-dur" id="c-trimdur">0.0s</span>` +
-              `<span class="trim-hint" id="c-trimhint">Drag the ends to trim, up to 10 seconds.</span>` +
-            `</p>` +
+            // One text button to swap the frame — re-opens the OS picker. Photos keep
+            // their native aspect (no crop step, by design — see initPhotoPreview).
+            `<button type="button" class="crop-replace" id="c-replace" hidden>Choose another</button>` +
           `</div>` +
-          // One text button to swap the frame — re-opens the OS picker. Photos keep
-          // their native aspect (no crop step, by design — see initPhotoPreview).
-          `<button type="button" class="crop-replace" id="c-replace" hidden>Choose another</button>` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-note">Caption</label>` +
-          `<textarea id="c-note" rows="2" maxlength="180" ` +
-            `placeholder="Say something, or let the frame speak."></textarea>` +
         `</div>` + tags;
     }
 
@@ -4287,6 +4316,7 @@
   // in-app trim surface, where you pick the ≤10s window to keep. The cut/re-encode
   // happens once, on Post (see submitComposer).
   const MAX_CLIP_SEC = 10;                              // the published clip cap — the trimmer enforces it
+  const MAX_SOURCE_SEC = 180;                          // longest source we accept (Tria trims it down to ≤10s)
   const TRIM_MIN_SEC = 1;                               // shortest window you can drag to
   // A longer library pick doesn't bounce to Photos — the in-app trimmer cuts it to
   // ≤10s. This cap only rejects a genuinely huge raw file the browser can't seek.
@@ -4300,19 +4330,27 @@
     const trimEl     = root.querySelector('#c-trim');
     const trimVideo  = root.querySelector('#c-trimvideo');
     const trimSound  = root.querySelector('#c-trimsound');
-    const trimStrip  = root.querySelector('#c-trimstrip');
-    const trimThumbs = root.querySelector('#c-trimthumbs');
-    const trimWindow = root.querySelector('#c-trimwindow');
-    const trimPlay   = root.querySelector('#c-trimplayhead');
+    const reel       = root.querySelector('#c-reel');
+    const reelTrack  = root.querySelector('#c-reeltrack');
+    const reelTicks  = root.querySelector('#c-reelticks');
+    const reelFrame  = root.querySelector('#c-reelframe');
+    const reelScrimL = root.querySelector('#c-reelscriml');
+    const reelScrimR = root.querySelector('#c-reelscrimr');
+    const reelPlay   = root.querySelector('#c-reelplayhead');
     const trimDur    = root.querySelector('#c-trimdur');
     const replace  = root.querySelector('#c-replace');
     const errEl    = () => document.getElementById('c-error');
 
-    // Trim window state — tD = full clip duration, [tStart,tEnd] = the selected
-    // window (seconds). Hoisted so the drag/playhead handlers wired once below all
-    // read the same live values; finishVideo resets them per clip. tPlaying gates
-    // the looping playhead so it can't fight the seeks while we sample the strip.
-    let tD = 0, tStart = 0, tEnd = 0, tDrag = null, tPlaying = false;
+    // Reel state — tD = full clip duration; [tStart,tEnd] = the selected ≤10s window;
+    // selLen = its length; PPS = pixels-per-second zoom; lead = constant side padding
+    // (half the initial frame) so the frame's edges sit flush with the clip at both
+    // scroll extremes; frameW0 = the initial frame width; vw = the reel's on-screen
+    // width. Everything visible derives from reel.scrollLeft + selLen. cells[] are the
+    // thumbnail tiles. All hoisted so the listeners wired once below read live values;
+    // finishVideo/buildReel reset them per clip. tPlaying gates the playback loop.
+    let tD = 0, tStart = 0, tEnd = 0, selLen = 0, PPS = 0, lead = 0, frameW0 = 0, vw = 0;
+    let tPlaying = false, dragging = null, cells = [];
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
     // Switching post type (or re-mounting) tears this surface down — release the
     // trim clip's object URL so a played preview doesn't leak. mountFields calls
@@ -4368,16 +4406,19 @@
       }
     }
 
-    // ── Video → trim surface ─────────────────────────────────────────────────
-    // A library-picked clip of any length lands here: it plays, and the filmstrip
-    // lets you pick the ≤10s window to keep. videoCapture holds the ORIGINAL blob
-    // plus the window; the actual cut/re-encode happens once, on Post (submitComposer).
+    // ── Video → trim reel ────────────────────────────────────────────────────
+    // A picked clip of any length (≤3 min) lands here. The native <video> loops the
+    // selected window as a preview; below it a full-width, horizontally-scrollable
+    // thumbnail reel lets you SCROLL to choose the moment and drag the frame's ends
+    // to set length (≤10s). videoCapture holds the ORIGINAL blob plus the window; the
+    // cut/re-encode happens once, on Post (submitComposer).
     //
-    // Everything runs on ONE <video>, in strict sequence — read metadata, sample the
-    // filmstrip, then loop the preview. iOS caps how many clips can decode at once,
-    // so the old split (a hidden sampler decoding the same file while the preview
-    // played) starved the decoder and blanked BOTH on-device. One element sidesteps
-    // that entirely, and it's less code besides.
+    // Thumbnails ARE sampled here — canvas-from-video works on real iOS Safari
+    // (confirmed on-device; the old blank preview was the reveal gate, not the draw).
+    // Sampling runs behind the loading shimmer so the seeking never shows, and it is
+    // best-effort: any black/failed frame just leaves a neutral cell, so the reel
+    // still scrubs perfectly even where a device's canvas readback misbehaves. The
+    // preview itself is pure native playback (the one thing iOS does reliably).
     async function finishVideo(blob) {
       drop.hidden = true;
       cropEl.hidden = true;
@@ -4388,10 +4429,9 @@
       const mimeType = blob.type || 'video/mp4';
       const ext = /mp4/i.test(mimeType) ? 'mp4' : /webm/i.test(mimeType) ? 'webm' : 'mov';
 
-      // Reset per-clip state and clear the previous strip.
-      tPlaying = false; tDrag = null; tD = 0;
-      trimThumbs.innerHTML = '';
-      trimEl.classList.add('trim--loading');   // steady placeholder until the first frame paints
+      // Reset per-clip state.
+      tPlaying = false; dragging = null; tD = 0;
+      trimEl.classList.add('trim--loading');   // calm placeholder while metadata reads (heavy 4K/iCloud clips)
 
       if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} }
       const url = URL.createObjectURL(blob);
@@ -4404,63 +4444,168 @@
       // Metadata (duration + native size) off the preview element itself.
       const meta = await loadClipMeta(trimVideo);
       tD = meta.duration;
-      tStart = 0;
-      tEnd = Math.min(tD, MAX_CLIP_SEC);
+
+      // 3-minute source cap. Tria trims any clip down to ≤10s, but a longer source is
+      // a heavier seek + re-encode than we want to promise, so bounce it kindly back
+      // to the picker. (Unknown-duration blobs report ≤10s and pass — those are quick
+      // MediaRecorder captures, never long library picks.)
+      if (meta.known && tD > MAX_SOURCE_SEC) {
+        const err = errEl();
+        if (err) err.textContent = 'That video is longer than 3 minutes. Trim it in Photos first, or pick a shorter one.';
+        tPlaying = false;
+        try { trimVideo.pause(); trimVideo.removeAttribute('src'); trimVideo.load(); } catch {}
+        if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
+        trimEl.classList.remove('trim--loading');
+        trimEl.hidden = true;
+        replace.hidden = true;
+        drop.hidden = false;
+        videoCapture = null;
+        return;
+      }
+
+      selLen = Math.min(tD, MAX_CLIP_SEC);
+      tStart = 0; tEnd = selLen;
       videoCapture = { blob, mimeType, ext, duration: tD, durationKnown: meta.known,
                        start: tStart, end: tEnd, poster: null, tint: null,
                        dims: (meta.w && meta.h) ? { w: meta.w, h: meta.h } : null };
-      layoutTrim();
 
-      // Sample the filmstrip off the same element (best-effort — a failure just
-      // leaves the neutral track, the window/handles still work), then release the
-      // decoder to looping playback.
-      await sampleFilmstrip(trimVideo, tD, trimThumbs).catch(() => {});
-      // Cue the window's first frame and start playback while still invisible, THEN
-      // drop the loading class so the preview fades in on a real frame (not the last
-      // one we happened to seek to) and the strip wipes open alongside it.
+      // Build the reel geometry + tiles + ticks, reflect the initial window.
+      buildReel(tD, meta.w, meta.h);
+      layoutReel();
+
+      // Sample thumbnails off this same element (still hidden behind the shimmer, so
+      // the seeking never shows), then cue the window's start, play, and reveal on a
+      // genuine moving frame. A guard drops the loading state regardless, so a clip
+      // that refuses muted autoplay still shows its first frame.
+      await sampleThumbs();
       tPlaying = true;
-      trimVideo.currentTime = tStart;
-      trimVideo.play().catch(() => {});
-      trimEl.classList.remove('trim--loading');
+      scrubTo(tStart);
+      const reveal = () => trimEl.classList.remove('trim--loading');
+      trimVideo.addEventListener('playing', reveal, { once: true });
+      trimVideo.addEventListener('canplay', reveal, { once: true });
+      setTimeout(reveal, 1200);
+      trimVideo.play().catch(reveal);
     }
 
-    // Reflect [tStart,tEnd] onto the window + duration pill, and keep videoCapture
-    // in sync so Post always cuts the currently-shown selection.
-    function layoutTrim() {
-      if (!tD) return;
-      let leftPct  = tStart / tD * 100;
-      let widthPct = (tEnd - tStart) / tD * 100;
-      // Option A — any clip length is allowed, so on a long source (a whole minute+)
-      // the real window can shrink to an ungrabbable sliver. Floor its ON-SCREEN
-      // width to keep both handles + a drag strip reachable (the duration pill still
-      // reports the exact seconds), nudging it left if the floored box would spill
-      // off the strip's right edge. Purely visual — the drag math reads seconds, not
-      // pixels, so the selection stays accurate.
-      const stripW = trimStrip.clientWidth || 1;
-      const minPct = Math.min(100, 56 / stripW * 100);
-      if (widthPct < minPct) {
-        widthPct = minPct;
-        leftPct = Math.max(0, Math.min(leftPct, 100 - widthPct));
+    // Build the reel for a freshly-loaded clip. Reads the reel's on-screen width NOW
+    // (it's visible), lays out a constant-padding track wide enough to scroll the
+    // whole clip under the centered frame, tiles empty thumbnail cells + time ticks,
+    // and parks the scroll at the start. sampleThumbs fills the cells afterward.
+    function buildReel(duration, w, h) {
+      vw = reel.clientWidth || 340;
+      selLen = Math.min(MAX_CLIP_SEC, duration);
+      // Aim the initial window at ~62% of the viewport width.
+      PPS = clamp((vw * 0.62) / Math.max(0.1, selLen), 8, 120);
+      frameW0 = selLen * PPS;
+      // Side padding = half the initial frame, held constant, so the frame's edges
+      // sit flush with the clip at both scroll extremes (no dead space) and the tiles
+      // never reflow when the window is resized.
+      lead = (vw - frameW0) / 2;
+      const trackW = lead * 2 + duration * PPS;
+      reelTrack.style.width = trackW + 'px';
+      reelTrack.innerHTML = '';
+      reelTicks.innerHTML = '';
+      reel.scrollLeft = 0;
+
+      // Thumbnail tiles — one every ~thumbW px, capped so sampling stays quick even
+      // on a 3-minute source.
+      const ar = (w && h) ? w / h : 16 / 9;
+      const thumbW = Math.max(34, Math.round(60 * ar));
+      const count = clamp(Math.ceil(duration * PPS / thumbW), 4, 16);
+      const cellW = duration * PPS / count;
+      cells = [];
+      for (let i = 0; i < count; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'reel-thumb';
+        cell.style.left = (lead + i * cellW) + 'px';
+        cell.style.width = Math.ceil(cellW) + 'px';
+        reelTrack.appendChild(cell);
+        cells.push(cell);
       }
-      trimWindow.style.left  = leftPct + '%';
-      trimWindow.style.width = widthPct + '%';
+
+      // Time ticks, labelled at the clip's real seconds, scrolling with the reel.
+      const step = duration <= 20 ? 5 : duration <= 60 ? 15 : 30;
+      for (let t = 0; t <= duration + 0.01; t += step) {
+        const el = document.createElement('span');
+        el.className = 'reel-tick';
+        el.textContent = tickLabel(t);
+        el.style.left = (lead + t * PPS) + 'px';
+        reelTicks.appendChild(el);
+      }
+    }
+
+    // Fill the tiles with real frames sampled off the preview element. Best-effort: a
+    // black/failed draw leaves the cell neutral (the reel still scrubs), so a device
+    // where canvas-from-video misbehaves degrades to a plain bar rather than breaking.
+    async function sampleThumbs() {
+      if (!cells.length) return;
+      const w = trimVideo.videoWidth || 16, h = trimVideo.videoHeight || 9;
+      const th = 120, tw = Math.max(1, Math.round(th * w / h));
+      for (let i = 0; i < cells.length; i++) {
+        const t = Math.min((i + 0.5) * tD / cells.length, Math.max(0, tD - 0.05));
+        await seekPaint(trimVideo, t, 900);
+        try {
+          const c = document.createElement('canvas'); c.width = tw; c.height = th;
+          const g = c.getContext('2d');
+          g.drawImage(trimVideo, 0, 0, tw, th);
+          const [r, gg, b] = g.getImageData(0, 0, 1, 1).data;
+          if (r || gg || b) cells[i].style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.7)})`;
+        } catch {}
+      }
+    }
+
+    // Derive [tStart,tEnd] from the current scroll + selLen, and reflect it onto the
+    // frame width, the dimming scrims, the ticks, the duration pill, and videoCapture
+    // (so Post always cuts the currently-shown selection). The frame is CSS-centered;
+    // everything else is positioned to line up with it.
+    function layoutReel() {
+      if (!tD) return;
+      const centerTime = (reel.scrollLeft + frameW0 / 2) / PPS;
+      tStart = clamp(centerTime - selLen / 2, 0, Math.max(0, tD - selLen));
+      tEnd = Math.min(tD, tStart + selLen);
+      const frameW = selLen * PPS;
+      const frameLeft = (vw - frameW) / 2;
+      reelFrame.style.width = frameW + 'px';
+      reelScrimL.style.left = '0'; reelScrimL.style.width = Math.max(0, frameLeft) + 'px';
+      reelScrimR.style.left = (frameLeft + frameW) + 'px';
+      reelScrimR.style.width = Math.max(0, vw - frameLeft - frameW) + 'px';
       trimDur.textContent = fmtClip(tEnd - tStart);
-      // Announce the selection to assistive tech (the handles are drag-only).
-      trimWindow.setAttribute('aria-valuetext',
+      reelFrame.setAttribute('aria-valuetext',
         `${fmtClip(tEnd - tStart)} selected, from ${fmtClip(tStart)} to ${fmtClip(tEnd)}`);
+      // Ticks ride with the reel (they live in a non-scrolling strip).
+      const sx = reel.scrollLeft;
+      for (const el of reelTicks.children) el.style.transform = `translateX(calc(-50% - ${sx}px))`;
       if (videoCapture) { videoCapture.start = tStart; videoCapture.end = tEnd; }
     }
 
-    // Loop preview playback inside the window and track the playhead across the
-    // whole strip (absolute position reads more like iOS than a window-local one).
-    // Driven per-frame, not off `timeupdate` (which only fires ~4x/sec, so the clip
-    // would visibly overrun tEnd before looping and the playhead would jump) —
-    // requestVideoFrameCallback clamps it frame-tight, with a rAF fallback.
+    // Move the preview to time t and reposition the playhead (used by scroll, drag,
+    // and the loop reset).
+    const scrubTo = (t) => { try { trimVideo.currentTime = t; } catch {} positionPlayhead(); };
+    // The playhead lives inside the fixed centered frame, tracking the fraction of
+    // the way through the selected window.
     const positionPlayhead = () => {
-      if (tD) trimPlay.style.left = (clamp(trimVideo.currentTime, 0, tD) / tD * 100) + '%';
+      if (!tD || !selLen) return;
+      const f = clamp((trimVideo.currentTime - tStart) / selLen, 0, 1);
+      const frameW = selLen * PPS, frameLeft = (vw - frameW) / 2;
+      reelPlay.style.left = (frameLeft + f * frameW) + 'px';
     };
+
+    // Scroll the reel → move the window through the clip (the frame stays centered).
+    // Scrubbing the preview live as you scroll gives the "scroll through the video"
+    // feel. Gated on tPlaying so the programmatic scrollLeft reset in buildReel (and
+    // any scroll before a clip is loaded) doesn't scrub.
+    reel.addEventListener('scroll', () => {
+      if (dragging || !tPlaying) return;
+      layoutReel();
+      scrubTo(tStart);
+    });
+
+    // Loop preview playback inside [tStart,tEnd]; the playhead tracks position inside
+    // the frame. Driven per-frame, not off `timeupdate` (which only fires ~4x/sec, so
+    // the clip would visibly overrun tEnd before looping) — requestVideoFrameCallback
+    // clamps it frame-tight, with a rAF fallback.
     const previewTick = () => {
-      if (tD && tPlaying && !tDrag) {
+      if (tD && tPlaying && !dragging) {
         // Loop the instant we reach the window's end (or fall before its start).
         if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
           trimVideo.currentTime = tStart;
@@ -4482,44 +4627,31 @@
       trimSound.innerHTML = svgIcon(trimVideo.muted ? 'mute' : 'sound', 'trim-sound-ico');
     });
 
-    // ── Trim drag: move the whole window, or resize from either handle ─────────
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    trimWindow.addEventListener('pointerdown', (e) => {
-      tDrag = { mode: e.target.dataset.edge || 'move', x: e.clientX, s0: tStart, e0: tEnd };
-      trimWindow.setPointerCapture?.(e.pointerId);
-      e.preventDefault();
+    // ── Handle drag: change the window's length around its centre ──────────────
+    // The reel stays put; only the frame grows/shrinks. The dragged handle tracks the
+    // finger 1:1, and because the frame is centred the window grows symmetrically —
+    // so selLen changes by twice the drag. Clamped to [1s, min(10s, clip)].
+    reelFrame.querySelectorAll('.reel-handle').forEach((hb) => {
+      hb.addEventListener('pointerdown', (e) => {
+        if (!tD) return;
+        dragging = { edge: hb.dataset.edge, x: e.clientX, len0: selLen };
+        hb.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+      });
+      hb.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dSec = (e.clientX - dragging.x) / (PPS || 1);
+        const delta = dragging.edge === 'r' ? dSec : -dSec;
+        selLen = clamp(dragging.len0 + delta * 2, Math.min(TRIM_MIN_SEC, tD), Math.min(MAX_CLIP_SEC, tD));
+        layoutReel();
+        // Scrub to the edge being dragged so you see the exact frame (the loop is
+        // paused while dragging).
+        scrubTo(dragging.edge === 'r' ? Math.max(0, tEnd - 0.06) : tStart);
+      });
+      const end = () => { if (dragging) { dragging = null; scrubTo(tStart); trimVideo.play().catch(() => {}); } };
+      hb.addEventListener('pointerup', end);
+      hb.addEventListener('pointercancel', end);
     });
-    trimWindow.addEventListener('pointermove', (e) => {
-      if (!tDrag || !tD) return;
-      const r = trimStrip.getBoundingClientRect();
-      const dSec = (e.clientX - tDrag.x) / (r.width || 1) * tD;
-      // Very short clips (a quick tap-record) can be under the 1s floor; don't let
-      // the floor exceed the clip or the window inverts (handle jumps past the end).
-      const minLen = Math.min(TRIM_MIN_SEC, tD);
-      if (tDrag.mode === 'move') {
-        const len = tDrag.e0 - tDrag.s0;
-        let ns = clamp(tDrag.s0 + dSec, 0, tD - len);
-        tStart = ns; tEnd = ns + len;
-      } else if (tDrag.mode === 'l') {
-        tStart = clamp(tDrag.s0 + dSec, Math.max(0, tEnd - MAX_CLIP_SEC), tEnd - minLen);
-      } else {
-        tEnd = clamp(tDrag.e0 + dSec, tStart + minLen, Math.min(tD, tStart + MAX_CLIP_SEC));
-      }
-      layoutTrim();
-      // Scrub the preview to the edge being dragged so you see the exact frame,
-      // and move the playhead with it (the per-frame loop is paused while dragging).
-      trimVideo.currentTime = tDrag.mode === 'r' ? Math.max(0, tEnd - 0.06) : tStart;
-      positionPlayhead();
-    });
-    const endDrag = () => {
-      if (!tDrag) return;
-      tDrag = null;
-      trimVideo.currentTime = tStart;
-      positionPlayhead();
-      trimVideo.play().catch(() => {});
-    };
-    trimWindow.addEventListener('pointerup', endDrag);
-    trimWindow.addEventListener('pointercancel', endDrag);
 
     async function handleLibraryVideo(f) {
       const err = errEl();
@@ -4567,6 +4699,21 @@
       if (v.readyState >= 1) onMeta();
       else v.addEventListener('loadedmetadata', onMeta, { once: true });
       v.addEventListener('error', () => finish(0), { once: true });
+    });
+  }
+
+  // Seek a <video> to t and resolve once a frame is actually painted there, so a
+  // canvas draw right after lands real pixels: requestVideoFrameCallback fires on the
+  // decoded frame (rAF-after-`seeked` fallback), and a time budget guarantees the
+  // sampling loop never hangs on a stubborn frame.
+  function seekPaint(v, t, budget = 900) {
+    return new Promise((res) => {
+      let done = false;
+      const fin = () => { if (!done) { done = true; clearTimeout(tm); res(); } };
+      const tm = setTimeout(fin, budget);
+      if (typeof v.requestVideoFrameCallback === 'function') v.requestVideoFrameCallback(fin);
+      else v.addEventListener('seeked', () => requestAnimationFrame(fin), { once: true });
+      try { v.currentTime = t; } catch { fin(); }
     });
   }
 
@@ -4628,56 +4775,28 @@
                    : `${s.toFixed(1)}s`;
   }
 
-  // Sample `count` evenly-spaced thumbnails across the clip into the strip, drawn
-  // from the SAME <video> the preview uses (v, src already loaded). Seeks are
-  // sequential — iOS won't overlap them — and each waits on a genuinely painted
-  // frame (requestVideoFrameCallback, since a `seeked` event fires before the GPU
-  // process has actually painted), bounded so one stubborn frame can't hang the
-  // strip. Best-effort: a black or missed grab just leaves a darker cell; the
-  // window/handles work regardless. The caller keeps the preview paused (tPlaying
-  // false) throughout, so nothing fights these seeks.
-  async function sampleFilmstrip(v, duration, container, count = 10) {
-    container.innerHTML = '';
-    const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
-    const th = 52, tw = Math.max(1, Math.round(th * vw / vh));
-    for (let i = 0; i < count; i++) {
-      const t = Math.min(duration * (i + 0.5) / count, Math.max(0, duration - 0.05));
-      await seekPaint(v, t, 1200);
-      const c = document.createElement('canvas');
-      c.width = tw; c.height = th;
-      c.className = 'trim-thumb';
-      try { c.getContext('2d').drawImage(v, 0, 0, tw, th); } catch {}
-      container.appendChild(c);
-    }
-  }
-
-  // Seek `v` to `t` and resolve only once a frame has genuinely painted (rVFC),
-  // falling back to `seeked` + a rAF where rVFC is unavailable. Bounded by `budget`ms.
-  function seekPaint(v, t, budget) {
-    return new Promise((res) => {
-      let done = false;
-      const finish = () => { if (!done) { done = true; clearTimeout(timer); res(); } };
-      const timer = setTimeout(finish, budget);
-      if (typeof v.requestVideoFrameCallback === 'function') v.requestVideoFrameCallback(finish);
-      else v.addEventListener('seeked', () => requestAnimationFrame(finish), { once: true });
-      v.currentTime = t;
-    });
+  // Reel timeline tick — whole-second clock time ("0:05", "1:30"). (fmtClip is for
+  // the duration pill and reads "8.2s"; the ticks want clock time instead.)
+  function tickLabel(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
   // Re-encode the [startSec,endSec] window of a clip to a fresh, ≤10s, downscaled
   // blob — the actual cut. No build step / ffmpeg, so this is a real-time pass:
-  // the source plays start→end while we draw frames to a canvas (captureStream)
-  // and tap its audio through WebAudio into a MediaStreamDestination; a
-  // MediaRecorder muxes both. A 10s selection takes ~10s, hence the Post-time
-  // progress. Downscaling the longest edge to ~1280 keeps the upload small (the
-  // raw camera clip can be 4K). Works in WKWebView (iOS 15+) and desktop.
+  // the source plays start→end while we draw frames to a canvas (captureStream) and
+  // a MediaRecorder muxes the canvas stream (plus the clip's audio when we can carry
+  // it — see below). A 10s selection takes ~10s, hence the Post-time progress.
+  // Downscaling the longest edge to ~1280 keeps the upload small (the raw camera clip
+  // can be 4K). Works in WKWebView (iOS 15+) and desktop.
   function reencodeWindow(blob, startSec, endSec, { maxEdge = 1280, onProgress } = {}) {
     return new Promise((resolve, reject) => {
       const v = document.createElement('video');
       v.src = URL.createObjectURL(blob);
       v.playsInline = true; v.preload = 'auto';
-      let audioCtx, recorder, raf;
+      let audioCtx, recorder, raf, stopped = false;
       const cleanup = () => {
+        stopped = true;
         cancelAnimationFrame(raf);
         try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch {}
         try { audioCtx && audioCtx.close(); } catch {}
@@ -4697,15 +4816,29 @@
         v.addEventListener('seeked', () => {
           const t0 = v.currentTime;   // the parked start frame; playback = currentTime moving past it
           let tracks = canvas.captureStream(30).getVideoTracks();
-          // Route the element's audio through WebAudio (not the speakers) so the
-          // recorder captures it while the processing pass stays silent. A silent
-          // clip simply yields no audio track — fine.
+          // Carry the clip's audio, but ONLY through a *running* WebAudio graph. A
+          // suspended AudioContext — the norm by the time this async pass runs on iOS,
+          // where the Post tap's gesture has long expired — hands MediaRecorder a dead
+          // audio track that hangs WebKit's mp4 muxer forever (no data, no onstop),
+          // which is exactly why a trimmed clip could never post on iPhone. The state
+          // reads synchronously (desktop Chrome starts 'running'; iOS/WebKit starts
+          // 'suspended'), and resume() needs a gesture we no longer have AND its promise
+          // can hang on WebKit — so we only ever check it. No running audio → record
+          // video-only (rock-solid on every engine) and mute the element so the pass
+          // stays silent. An untrimmed short clip keeps its sound by uploading raw
+          // instead of ever reaching this path.
           try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const dest = audioCtx.createMediaStreamDestination();
-            audioCtx.createMediaElementSource(v).connect(dest);
-            tracks = tracks.concat(dest.stream.getAudioTracks());
-          } catch {}
+            const ac = new (window.AudioContext || window.webkitAudioContext)();
+            if (ac.state === 'running') {
+              const dest = ac.createMediaStreamDestination();
+              ac.createMediaElementSource(v).connect(dest);
+              audioCtx = ac;
+              tracks = tracks.concat(dest.stream.getAudioTracks());
+            } else {
+              try { ac.close(); } catch {}
+              v.muted = true;
+            }
+          } catch { v.muted = true; }
           const cands = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
           const mime = cands.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
           const chunks = [];
@@ -4721,14 +4854,17 @@
             resolve({ blob: new Blob(chunks, { type }), mimeType: type, ext, dims: { w, h } });
           };
           v.play().catch(() => {});
-          // Draw every frame to the canvas from the outset (so the stream always has
-          // content), but DON'T start the recorder until playback has actually moved
-          // past the parked start frame. MediaRecorder counts wall-clock, and WebKit
-          // can take ~1s for play() to begin advancing currentTime — starting on that
-          // seeked event (as before) baked that second of frozen frame onto the front,
-          // so the cut ran ~1s long and no longer matched the trim window.
+          // rAF drives the draw loop: it ticks even though this <video> is detached
+          // from the DOM, and while the clip is PLAYING every drawImage lands a real
+          // frame anyway. Draw from the outset so the captured stream always has
+          // content, but DON'T start the recorder until playback has moved past the
+          // parked start frame: MediaRecorder counts wall-clock, and WebKit can take
+          // ~1s for play() to begin advancing currentTime — starting any sooner baked
+          // that frozen second onto the front, so the cut ran ~1s long and no longer
+          // matched the window.
           let recording = false;
           const draw = () => {
+            if (stopped) return;
             try { ctx.drawImage(v, 0, 0, w, h); } catch {}
             if (!recording && v.currentTime > t0 + 0.001) {
               recording = true;
@@ -5575,15 +5711,18 @@
     renderFn();                // render into the mounted new page
 
     // Content mounted during a navigation rides in on the page's own slide+fade —
-    // it does NOT also play its per-card rise. Freezing every fresh card here (not
+    // it does NOT also play its per-row rise. Freezing every fresh row here (not
     // pausing it in CSS) keeps it VISIBLE for the whole move instead of held at the
     // rise's transparent first frame: that blank window over the near-white page
     // was the "white flash" on the card-heavy Circle. Inline, so it survives the
-    // class cleanup and the cards never replay the rise once the page settles; and
-    // with no card animation in flight the move carries the fewest possible layers
-    // (the same iOS-crash win the old CSS pause was after). Cards that arrive later
-    // without a page change (refreshWorld) are untouched and still rise in.
-    page.querySelectorAll('.card').forEach(c => { c.style.animation = 'none'; });
+    // class cleanup and the rows never replay the rise once the page settles; and
+    // with no row animation in flight the move carries the fewest possible layers
+    // (the same iOS-crash win the old CSS pause was after). Covers feed .card AND
+    // the Updates ledger (.notif / .request-row), which carry the same rise and
+    // were otherwise stacking their translateY layers on top of the slide — the
+    // Updates-page stutter/refresh. Rows that arrive later without a page change
+    // (refreshWorld / the Updates reconcile) are untouched and still rise in.
+    page.querySelectorAll('.card, .notif, .request-row').forEach(c => { c.style.animation = 'none'; });
 
     // A docked view switcher (Friends / Updates on mobile) starts tucked behind
     // the nav so it can rise once the page settles (see cleanup) rather than
@@ -5868,8 +6007,10 @@
   // up a deploy. On launch, and whenever the app returns to the foreground,
   // quietly refetch index.html (cache-bypassing) and compare its ?v= asset
   // stamp to the one this session booted with; if a new build shipped, reload.
-  // Never reloads mid-thought: composing or an open modal defers the update to
-  // the next foreground. Throttled so foreground flips don't spam the network.
+  // Never reloads mid-thought: composing, an open modal, or a page mid-transition
+  // defers the update to the next foreground (a reload during the slide is the
+  // jarring "navigating hard-refreshed" flicker). Throttled so foreground flips
+  // don't spam the network.
   (() => {
     const booted = (document.querySelector('script[src*="js/app.js"]')?.src
       .match(/[?&]v=([^&]+)/) || [])[1];
@@ -5886,7 +6027,8 @@
         const latest = (html.match(/js\/app\.js\?v=([^"&]+)/) || [])[1];
         if (!latest || latest === booted) return;
         const busy = location.hash.split('?')[0] === '#/publish' ||
-          document.querySelector('.modal-card');
+          document.querySelector('.modal-card') ||
+          document.querySelector('.page.enter, .page.leave');
         // location.reload() re-reads the CACHED index.html on iOS standalone (same
         // max-age=600), which reloads the very build we're trying to leave — an
         // update that never lands. Navigate to a fresh document URL instead: a new
