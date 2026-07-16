@@ -2873,7 +2873,7 @@ body.gate main { padding: 0; }
 .composer .field input,
 .composer .field textarea,
 .composer .field--combo,
-.composer .capture,
+.composer .dropzone,
 .edit-form .field input,
 .edit-form .field textarea,
 .edit-form .field--combo,
@@ -3190,129 +3190,41 @@ body.gate main { padding: 0; }
   .aud-pick { animation: none; }
 }
 
-/* ── Frame capture — live, camera-first (replaces the old file dropzone) ────
-   A full-bleed preview surface with corner icon chrome (library/flip) floating
-   above it — the same frosted-chip material as the nav dial's icons and the
-   feed's frame-sound toggle — and a lit-dome shutter as the screen's one hero
-   commit. Tapping shutter snaps a photo (→ .crop below); holding it records,
-   the ring sweeping over 10s (→ the .trim surface below). */
-.capture {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  overflow: hidden;
-  border-radius: var(--radius-img);
-  background: var(--surface-2);
-}
-.capture[hidden] { display: none; }
-.capture video,
-.capture-native {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-/* Front camera previews mirrored (like every camera app's selfie view); the rear
-   camera shows the true, un-mirrored scene — .is-rear drops the flip on flip. */
-#c-capture-preview { transform: scaleX(-1); }
-.capture.is-rear #c-capture-preview { transform: none; }
-/* The native camera-preview plugin renders BEHIND the webview (toBack: true);
-   this element is just the transparent hole it shows through. */
-.capture-native { background: none; }
-
-.capture-unavailable-hint {
-  display: none;
-  position: absolute;
-  inset: 0;
+/* ── Frame picker — a plain upload dropzone ─────────────────────────────────
+   Same frame + fill as every other composer field (.field input/textarea) —
+   this is a field that happens to hold a button instead of text, not a
+   separate material. Picking a photo swaps in the .crop preview below;
+   picking a video swaps in the .trim surface. Content, not floating chrome. */
+.dropzone {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.4rem 1.2rem;
   text-align: center;
-  padding: 1.6rem;
-  color: var(--muted);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color var(--dur-micro);
+}
+@media (hover: hover) {
+  .dropzone:hover { border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+}
+.dropzone[hidden] { display: none; }
+.dropzone .field-hint { margin: 0; }
+.dropzone-btn {
+  padding: 0.55rem 1.2rem;
   font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: border-color var(--dur-micro), background-color var(--dur-micro);
 }
-.capture-unavailable .capture-unavailable-hint { display: flex; }
-.capture-unavailable #c-capture-preview,
-.capture-unavailable .capture-native { visibility: hidden; }
-
-.capture-topbar {
-  position: absolute;
-  top: 0.8rem;
-  left: 0.8rem;
-  right: 0.8rem;
-  display: flex;
-  justify-content: space-between;
-}
-.capture-icon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border-radius: 50%;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
-}
-.capture-icon svg { width: 18px; height: 18px; }
-@media (hover: hover) { .capture-icon:hover { background: color-mix(in srgb, var(--bg) 70%, transparent); } }
-
-.capture-controls {
-  position: absolute;
-  left: 0; right: 0; bottom: 2.9rem;
-  display: flex;
-  justify-content: center;
-}
-.capture-hint {
-  position: absolute;
-  left: 0; right: 0; bottom: 1.2rem;
-  text-align: center;
-  font-size: 0.72rem;
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.75);
-  pointer-events: none;
-}
-
-/* The shutter: a clean translucent-white circle at rest (a ring, not a filled
-   disc — nothing to draw the eye until you act). Holding it to record hands
-   both the disc and the ring's progress arc the drifting quartet gradient
-   (same keyframes as .publish-fill), so the countdown itself reads as "moving
-   through the Tria colours" rather than a flat single-hue fill. */
-.capture-shutter {
-  position: relative;
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
-  border: 2.5px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-  transition: transform 0.12s var(--ease), background 0.25s var(--ease), border-color 0.25s var(--ease);
-}
-.capture-shutter:active,
-.capture-shutter.is-recording { transform: scale(0.9); }
-.capture-shutter.is-recording {
-  background: linear-gradient(115deg,
-    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-  background-size: 300% 100%;
-  animation: publish-shift 2s ease-in-out infinite;
-  border-color: transparent;
-}
-.capture-ring {
-  position: absolute;
-  inset: -7px;
-  width: calc(100% + 14px);
-  height: calc(100% + 14px);
-  transform: rotate(-90deg);   /* progress starts at 12 o'clock, not 3 */
-  pointer-events: none;
-}
-.capture-ring-fill { transition: stroke-dashoffset 0.05s linear; }
-@media (prefers-reduced-motion: reduce) {
-  .capture-shutter,
-  .capture-ring-fill { transition: none; }
-  .capture-shutter.is-recording { animation: none; background-position: 50% 50%; }
+@media (hover: hover) {
+  .dropzone-btn:hover { border-color: color-mix(in srgb, var(--text) 28%, transparent); }
 }
 
 /* ── Trim surface — the post-capture review + iOS-style scrubber ────────────
@@ -3475,22 +3387,13 @@ body.gate main { padding: 0; }
   pointer-events: none;
 }
 .crop.dragging .crop-hint { opacity: 0; }
-/* Post-capture controls: a centred pair of matching pill buttons (Retake +
-   Library), same editorial chip material as the type filters — content-area
-   controls, not floating glass. Icon + label so they read as real actions,
-   not the old underlined text link. */
-.review-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 0.8rem;
-}
-.review-actions[hidden] { display: none; }
-.review-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0.5rem 1rem;
+/* Swap-the-frame control: one centred pill (Choose another) that re-opens the OS
+   picker, same editorial chip material as the type filters — a content-area
+   control, not floating glass. */
+.crop-replace {
+  display: block;
+  margin: 0.8rem auto 0;
+  padding: 0.5rem 1.1rem;
   font-size: 0.85rem;
   font-weight: 400;
   line-height: 1;
@@ -3501,9 +3404,9 @@ body.gate main { padding: 0; }
   cursor: pointer;
   transition: color var(--dur-micro), border-color var(--dur-micro), background-color var(--dur-micro);
 }
-.review-btn svg { width: 17px; height: 17px; }
+.crop-replace[hidden] { display: none; }
 @media (hover: hover) {
-  .review-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+  .crop-replace:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 28%, transparent); }
 }
 
 /* Profile editor's photo: a big centred avatar with a camera badge at its corner.

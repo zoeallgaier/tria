@@ -3981,50 +3981,20 @@
     }
 
     if (type === 'photo') {
-      const ICON_LIBRARY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
-        `stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
-        `<rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 21h13a1 1 0 0 0 1-1V7"/></svg>`;
-      const ICON_FLIP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
-        `stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
-        `<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>` +
-        `<path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/></svg>`;
       return `<div class="field">` +
+          `<label for="c-pick">Frame</label>` +
           `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
-          `<div class="capture" id="c-capture">` +
-            `<video id="c-capture-preview" autoplay muted playsinline></video>` +
-            `<div class="capture-topbar">` +
-              `<button type="button" class="capture-icon" id="c-library" aria-label="Choose from library">${ICON_LIBRARY}</button>` +
-              `<button type="button" class="capture-icon" id="c-flip" aria-label="Flip camera">${ICON_FLIP}</button>` +
-            `</div>` +
-            `<p class="capture-unavailable-hint">Camera preview isn't available here — use the library icon instead.</p>` +
-            `<div class="capture-controls">` +
-              `<button type="button" class="capture-shutter" id="c-shutter" ` +
-                `aria-label="Tap for a photo, hold to record up to 10 seconds of video">` +
-                `<svg class="capture-ring" viewBox="0 0 68 68" aria-hidden="true">` +
-                  `<defs>` +
-                    `<linearGradient id="capture-ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">` +
-                      `<stop offset="0%" style="stop-color: var(--type-note)"/>` +
-                      `<stop offset="33%" style="stop-color: var(--type-find)"/>` +
-                      `<stop offset="66%" style="stop-color: var(--type-activity)"/>` +
-                      `<stop offset="100%" style="stop-color: var(--type-photo)"/>` +
-                    `</linearGradient>` +
-                  `</defs>` +
-                  `<circle class="capture-ring-track" cx="34" cy="34" r="30" fill="none" ` +
-                    `stroke="rgba(255,255,255,.35)" stroke-width="3"/>` +
-                  `<circle class="capture-ring-fill" cx="34" cy="34" r="30" fill="none" ` +
-                    `stroke="url(#capture-ring-grad)" stroke-width="3" stroke-linecap="round"/>` +
-                `</svg>` +
-              `</button>` +
-            `</div>` +
-            `<p class="capture-hint">Tap to snap, hold to record</p>` +
+          `<div class="dropzone" id="c-drop">` +
+            `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo or video</button>` +
+            `<p class="field-hint">A photo, or a clip up to 10 seconds.</p>` +
           `</div>` +
           `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
           `</div>` +
           // Trim surface: a playing preview + an iOS-style filmstrip scrubber with a
-          // draggable ≤10s window. Replaces the old frozen video-preview element —
-          // now the clip actually plays and a longer library pick can be trimmed
-          // down in-app instead of getting bounced to Photos. See wireFrameCapture.
+          // draggable ≤10s window. A picked video lands here — the clip plays and a
+          // longer library pick gets trimmed down in-app instead of getting bounced
+          // to Photos. See wireFrameCapture.
           `<div class="trim" id="c-trim" hidden>` +
             `<div class="trim-stage">` +
               `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
@@ -4044,14 +4014,9 @@
               `<span class="trim-hint" id="c-trimhint">Drag the ends to trim, up to 10 seconds.</span>` +
             `</p>` +
           `</div>` +
-          // Post-capture controls: a matching icon-button pair (not an underlined
-          // text link). Retake drops back to the live camera; Library re-opens the
-          // picker — the two ways to swap the frame, styled the same. Photos keep
+          // One text button to swap the frame — re-opens the OS picker. Photos keep
           // their native aspect (no crop step, by design — see initPhotoPreview).
-          `<div class="review-actions" id="c-review" hidden>` +
-            `<button type="button" class="review-btn" id="c-replace">${svgIcon('camera', 'review-ico')}<span>Retake</span></button>` +
-            `<button type="button" class="review-btn" id="c-relibrary">${ICON_LIBRARY}<span>Library</span></button>` +
-          `</div>` +
+          `<button type="button" class="crop-replace" id="c-replace" hidden>Choose another</button>` +
         `</div>` +
         `<div class="field">` +
           `<label for="c-note">Caption</label>` +
@@ -4248,36 +4213,22 @@
     mountFields();
   }
 
-  // The Frame capture surface: a live camera preview with a tap-for-photo /
-  // hold-for-video shutter, a library picker, and a front/back flip. On device
-  // this drives a native camera-preview plugin (added in a later step); in a
-  // plain browser (Live Server / desktop preview) it falls back to getUserMedia
-  // + MediaRecorder so the UI still previews without a Capacitor build.
-  const RECORD_MS = 10000;
+  // The Frame capture surface: a plain file picker (photo or video). A picked
+  // photo previews at its native aspect (no crop); a picked video drops into the
+  // in-app trim surface, where you pick the ≤10s window to keep. The cut/re-encode
+  // happens once, on Post (see submitComposer).
   const MAX_CLIP_SEC = 10;                              // the published clip cap — the trimmer enforces it
   const TRIM_MIN_SEC = 1;                               // shortest window you can drag to
-  // A longer library pick no longer bounces to Photos — the in-app trimmer cuts it
-  // to ≤10s. This cap only rejects a genuinely huge raw file the browser can't seek.
+  // A longer library pick doesn't bounce to Photos — the in-app trimmer cuts it to
+  // ≤10s. This cap only rejects a genuinely huge raw file the browser can't seek.
   const MAX_LIBRARY_VIDEO_BYTES = 300 * 1024 * 1024;
-  const RING_R = 30, RING_C = 2 * Math.PI * RING_R;
-
-  function isNativeApp() {
-    return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
-  }
-  function cameraPreviewPlugin() {
-    return window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.CameraPreview;
-  }
 
   function wireFrameCapture(root) {
-    const capEl    = root.querySelector('#c-capture');
-    const previewEl = root.querySelector('#c-capture-preview');
-    const shutter  = root.querySelector('#c-shutter');
-    const ring     = root.querySelector('.capture-ring-fill');
     const file     = root.querySelector('#c-file');
+    const drop     = root.querySelector('#c-drop');
     const cropEl   = root.querySelector('#c-crop');
     const imgEl    = root.querySelector('#c-cropimg');
     const trimEl     = root.querySelector('#c-trim');
-    const trimStage  = root.querySelector('#c-trim .trim-stage');
     const trimVideo  = root.querySelector('#c-trimvideo');
     const trimSound  = root.querySelector('#c-trimsound');
     const trimStrip  = root.querySelector('#c-trimstrip');
@@ -4285,88 +4236,54 @@
     const trimWindow = root.querySelector('#c-trimwindow');
     const trimPlay   = root.querySelector('#c-trimplayhead');
     const trimDur    = root.querySelector('#c-trimdur');
-    const reviewRow = root.querySelector('#c-review');
     const replace  = root.querySelector('#c-replace');
-    const reLibrary = root.querySelector('#c-relibrary');
     const errEl    = () => document.getElementById('c-error');
 
-    let facing = 'user';
-    let stream = null;
-    let recorder = null;
-    let chunks = [];
-    let recording = false;
-    let holdTimer = null, holdStart = 0, isHolding = false;
-    let ringRaf = null;
-    let nativeRecordPromise = null;
-    let recStart = 0;   // Date.now() at record start — measured clip length for finishVideo's hint
-    let recordMic = null;   // the mic stream, acquired lazily at record time (never during preview)
     // Trim window state — tD = full clip duration, [tStart,tEnd] = the selected
     // window (seconds). Hoisted so the drag/playhead handlers wired once below all
-    // read the same live values; enterTrim just resets them per clip.
+    // read the same live values; finishVideo resets them per clip.
     let tD = 0, tStart = 0, tEnd = 0, tDrag = null;
 
-    ring && (ring.style.strokeDasharray = String(RING_C));
-    setRing(0);
-    function setRing(p) { if (ring) ring.style.strokeDashoffset = String(RING_C * (1 - p)); }
-
-    function stopStream() {
-      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-      previewEl.srcObject = null;
-    }
-
-    async function startPreview() {
-      capEl.classList.remove('capture-unavailable');
-      // Mirror the front (selfie) preview; show the rear camera true-to-life.
-      capEl.classList.toggle('is-rear', facing !== 'user');
-      if (isNativeApp()) {
-        const plugin = cameraPreviewPlugin();
-        if (!plugin) { capEl.classList.add('capture-unavailable'); return; }
-        try {
-          await plugin.start({
-            position: facing === 'user' ? 'front' : 'rear',
-            parent: 'c-capture', className: 'capture-native', toBack: true,
-          });
-        } catch { capEl.classList.add('capture-unavailable'); }
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia) { capEl.classList.add('capture-unavailable'); return; }
-      try {
-        // Camera only — the mic is acquired lazily when recording actually starts
-        // (see startRecording), so opening the composer never prompts for the mic
-        // and the mic-in-use indicator stays dark until you record.
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
-        previewEl.srcObject = stream;
-        await previewEl.play().catch(() => {});
-      } catch { capEl.classList.add('capture-unavailable'); }
-    }
-
-    async function stopPreview() {
-      if (isNativeApp()) { try { await cameraPreviewPlugin()?.stop(); } catch {} return; }
-      stopStream();
-    }
-
+    // Switching post type (or re-mounting) tears this surface down — release the
+    // trim clip's object URL so a played preview doesn't leak. mountFields calls
+    // this via stopActiveCapture before replacing the DOM.
     function teardown() {
-      clearTimeout(holdTimer);
-      cancelAnimationFrame(ringRaf);
-      recording = false;
-      recordMic?.getTracks().forEach(t => t.stop()); recordMic = null;
-      stopPreview();
       try { trimVideo.pause(); } catch {}
       if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
     }
     stopActiveCapture = teardown;
 
-    // ── Photo ──────────────────────────────────────────────────────────────
+    // Open the OS picker. The dropzone, its button, and the post-pick Choose
+    // another button all lead here — one way in, the system does the rest.
+    const pick = () => file.click();
+    root.querySelector('#c-pick').addEventListener('click', pick);
+    replace.addEventListener('click', pick);
+    drop.addEventListener('click', (e) => { if (e.target === drop) pick(); });
+
+    file.addEventListener('change', () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      if (f.type.startsWith('video/')) handleLibraryVideo(f);
+      else {
+        const reader = new FileReader();
+        reader.onload = () => finishPhoto(reader.result);
+        reader.readAsDataURL(f);
+      }
+    });
+
+    // ── Photo → native-aspect preview ────────────────────────────────────────
     function finishPhoto(dataUrl) {
-      stopPreview();
-      capEl.hidden = true;
+      drop.hidden = true;
       cropEl.hidden = false;
-      // Swapping in from a video review (Library button) — tear the trim surface down.
+      // Swapping in from a video pick — tear the trim surface down.
       try { trimVideo.pause(); } catch {}
       trimEl.hidden = true;
-      reviewRow.hidden = false;
+      replace.hidden = false;
       videoCapture = null;
       cropper = initPhotoPreview(imgEl, dataUrl);
+      // Hold Post until the preview decodes — export() reads naturalWidth, so
+      // posting early would ship a 1x1 canvas. Re-enable on load (or straight away
+      // if the browser already had it decoded).
       const submitBtn = document.querySelector('.composer-submit');
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -4376,44 +4293,21 @@
       }
     }
 
-    async function takePhoto() {
-      if (isNativeApp()) {
-        const plugin = cameraPreviewPlugin();
-        if (!plugin) return;
-        try {
-          const res = await plugin.capture({ quality: 85 });
-          finishPhoto(`data:image/jpeg;base64,${res.value}`);
-        } catch {}
-        return;
-      }
-      if (!previewEl.videoWidth) return;
-      const canvas = document.createElement('canvas');
-      canvas.width = previewEl.videoWidth;
-      canvas.height = previewEl.videoHeight;
-      canvas.getContext('2d').drawImage(previewEl, 0, 0);
-      finishPhoto(canvas.toDataURL('image/jpeg', 0.9));
-    }
-
     // ── Video → trim surface ─────────────────────────────────────────────────
-    // A freshly recorded (≤10s) or library-picked (any length) clip lands here.
-    // We swap the camera for the trim surface: the clip plays, and the filmstrip
-    // lets you pick the ≤10s window to keep. videoCapture holds the ORIGINAL blob
-    // plus the window; the actual cut/re-encode happens once, on Post (see
-    // submitComposer), so a single primary action drives it.
-    // hintSec: the recorder's own measured length (ms→s) for an in-app capture, so
-    // a short clip gets its true duration even if WebKit's metadata probe fails. A
-    // library pick has no hint and leans on the probe (then the 10s cap).
-    async function finishVideo(blob, hintSec = 0) {
-      stopPreview();
-      capEl.hidden = true;
+    // A library-picked clip of any length lands here. We show the trim surface:
+    // the clip plays, and the filmstrip lets you pick the ≤10s window to keep.
+    // videoCapture holds the ORIGINAL blob plus the window; the actual cut/
+    // re-encode happens once, on Post (see submitComposer).
+    async function finishVideo(blob) {
+      drop.hidden = true;
       cropEl.hidden = true;
       cropper = null;
       trimEl.hidden = false;
-      reviewRow.hidden = false;
+      replace.hidden = false;
 
       const mimeType = blob.type || 'video/mp4';
       const ext = /mp4/i.test(mimeType) ? 'mp4' : /webm/i.test(mimeType) ? 'webm' : 'mov';
-      const dur = (await videoDuration(blob)) || hintSec || RECORD_MS / 1000;
+      const dur = (await videoDuration(blob)) || MAX_CLIP_SEC;
 
       tD = dur;
       tStart = 0;
@@ -4495,133 +4389,6 @@
     trimWindow.addEventListener('pointerup', endDrag);
     trimWindow.addEventListener('pointercancel', endDrag);
 
-    async function startRecording() {
-      if (isNativeApp()) {
-        const plugin = cameraPreviewPlugin();
-        if (!plugin?.startRecordVideo) return;
-        recording = true;
-        shutter.classList.add('is-recording');
-        const startedAt = recStart = Date.now();
-        const tick = () => {
-          setRing(Math.min(1, (Date.now() - startedAt) / RECORD_MS));
-          if (recording) ringRaf = requestAnimationFrame(tick);
-        };
-        ringRaf = requestAnimationFrame(tick);
-        // startRecordVideo's promise only resolves once the recording is
-        // stopped (its completion handler doubles as the "started" ack), so
-        // don't await it here or the auto-stop timer below would never get
-        // scheduled. Stash it; stopRecording() awaits it for the file path.
-        nativeRecordPromise = plugin.startRecordVideo({ quality: 85 }).catch(() => null);
-        holdTimer = setTimeout(stopRecording, RECORD_MS);
-        return;
-      }
-      if (!stream) return;
-      // Mark intent up front (before the async mic grab) so a release during the
-      // permission prompt cancels cleanly via stopRecording's `recording` guard.
-      recording = true;
-      shutter.classList.add('is-recording');
-      const startedAt = recStart = Date.now();
-      const tick = () => {
-        setRing(Math.min(1, (Date.now() - startedAt) / RECORD_MS));
-        if (recording) ringRaf = requestAnimationFrame(tick);
-      };
-      ringRaf = requestAnimationFrame(tick);
-      // Acquire the mic now, not at preview time — this is the only mic prompt and
-      // it lands exactly when you start recording. A denial just yields a silent clip.
-      let micStream = null;
-      try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-      catch {}
-      if (!recording) { micStream?.getTracks().forEach(t => t.stop()); return; }  // released during the prompt
-      recordMic = micStream;
-      chunks = [];
-      const recStream = new MediaStream([
-        ...stream.getVideoTracks(),
-        ...(micStream ? micStream.getAudioTracks() : []),
-      ]);
-      const candidates = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
-      const mimeType = candidates.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
-      try { recorder = new MediaRecorder(recStream, mimeType ? { mimeType } : undefined); }
-      catch {
-        recording = false;
-        shutter.classList.remove('is-recording');
-        cancelAnimationFrame(ringRaf); setRing(0);
-        micStream?.getTracks().forEach(t => t.stop()); recordMic = null;
-        return;
-      }
-      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-      recorder.start();
-      holdTimer = setTimeout(stopRecording, RECORD_MS);
-    }
-
-    async function stopRecording() {
-      if (!recording) return;
-      recording = false;
-      clearTimeout(holdTimer);
-      cancelAnimationFrame(ringRaf);
-      shutter.classList.remove('is-recording');
-      setRing(0);
-      // Measure how long we actually recorded (capped at the 10s ceiling) — the
-      // duration hint that survives a flaky metadata probe. Read before any await.
-      const elapsedSec = recStart ? Math.min(RECORD_MS / 1000, (Date.now() - recStart) / 1000) : 0;
-      if (isNativeApp()) {
-        const plugin = cameraPreviewPlugin();
-        try {
-          await plugin?.stopRecordVideo?.();        // signals the native side to stop
-          const res = await nativeRecordPromise;    // now resolves with { value: fileUrl }
-          if (res?.value) {
-            const fetched = await fetch(Capacitor.convertFileSrc(res.value));
-            await finishVideo(await fetched.blob(), elapsedSec);
-          }
-        } catch {}
-        nativeRecordPromise = null;
-        return;
-      }
-      if (!recorder) return;
-      const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
-      recorder.stop();
-      await stopped;
-      // Release the mic the moment recording ends — no lingering mic-in-use light.
-      recordMic?.getTracks().forEach(t => t.stop()); recordMic = null;
-      await finishVideo(new Blob(chunks, { type: recorder.mimeType || 'video/mp4' }), elapsedSec);
-    }
-
-    // ── Shutter: tap = photo, hold = video (auto-stops at RECORD_MS) ────────
-    const HOLD_MS = 260;
-    shutter.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      isHolding = false;
-      holdStart = Date.now();
-      holdTimer = setTimeout(() => { isHolding = true; startRecording(); }, HOLD_MS);
-    });
-    const release = () => {
-      clearTimeout(holdTimer);
-      if (isHolding) stopRecording();
-      else if (Date.now() - holdStart < 4000) takePhoto();
-      isHolding = false;
-    };
-    shutter.addEventListener('pointerup', release);
-    shutter.addEventListener('pointercancel', release);
-
-    // ── Flip ──────────────────────────────────────────────────────────────
-    root.querySelector('#c-flip').addEventListener('click', async () => {
-      facing = facing === 'user' ? 'environment' : 'user';
-      if (isNativeApp()) { try { await cameraPreviewPlugin()?.flip(); } catch {} return; }
-      stopStream();
-      await startPreview();
-    });
-
-    // ── Library ───────────────────────────────────────────────────────────
-    root.querySelector('#c-library').addEventListener('click', () => file.click());
-    file.addEventListener('change', () => {
-      const f = file.files && file.files[0];
-      if (!f) return;
-      if (f.type.startsWith('video/')) handleLibraryVideo(f);
-      else {
-        const reader = new FileReader();
-        reader.onload = () => finishPhoto(reader.result);
-        reader.readAsDataURL(f);
-      }
-    });
     async function handleLibraryVideo(f) {
       const err = errEl();
       if (f.size > MAX_LIBRARY_VIDEO_BYTES) {
@@ -4629,35 +4396,9 @@
         return;
       }
       if (err) err.textContent = '';
-      // Any length is fine now — the trim surface enforces the ≤10s cut.
+      // Any length is fine — the trim surface enforces the ≤10s cut.
       await finishVideo(f);
     }
-
-    // ── Retake / Library ────────────────────────────────────────────────────
-    // Retake drops back to the live camera; Library re-opens the picker. Both
-    // clear the pending capture first so the review state can't leak through.
-    function clearCapture() {
-      cropper = null;
-      videoCapture = null;
-      cropEl.hidden = true;
-      trimVideo.pause();
-      if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo.removeAttribute('src'); trimVideo._url = null; }
-      trimEl.hidden = true;
-      tD = tStart = tEnd = 0; tDrag = null;
-      reviewRow.hidden = true;
-      const submitBtn = document.querySelector('.composer-submit');
-      if (submitBtn) submitBtn.disabled = false;   // release any pending photo-decode hold
-    }
-    replace.addEventListener('click', () => {
-      clearCapture();
-      capEl.hidden = false;
-      startPreview();
-    });
-    // Back to the live camera behind the picker, so cancelling leaves you there
-    // (not on a blank surface); a pick swaps to the photo/trim review.
-    reLibrary.addEventListener('click', () => { clearCapture(); capEl.hidden = false; startPreview(); file.click(); });
-
-    startPreview();
   }
 
   // Reads a freshly-picked/recorded video's duration. Safari/WebKit often reports
