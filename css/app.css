@@ -3199,7 +3199,7 @@ body.gate main { padding: 0; }
 .capture {
   position: relative;
   width: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   border-radius: var(--radius-img);
   background: var(--surface-2);
@@ -3213,8 +3213,10 @@ body.gate main { padding: 0; }
   height: 100%;
   object-fit: cover;
 }
-/* Front camera previews mirrored, like every other camera app. */
+/* Front camera previews mirrored (like every camera app's selfie view); the rear
+   camera shows the true, un-mirrored scene — .is-rear drops the flip on flip. */
 #c-capture-preview { transform: scaleX(-1); }
+.capture.is-rear #c-capture-preview { transform: none; }
 /* The native camera-preview plugin renders BEHIND the webview (toBack: true);
    this element is just the transparent hole it shows through. */
 .capture-native { background: none; }

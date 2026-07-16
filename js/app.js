@@ -4299,6 +4299,7 @@
     let ringRaf = null;
     let nativeRecordPromise = null;
     let recStart = 0;   // Date.now() at record start — measured clip length for finishVideo's hint
+    let recordMic = null;   // the mic stream, acquired lazily at record time (never during preview)
     // Trim window state — tD = full clip duration, [tStart,tEnd] = the selected
     // window (seconds). Hoisted so the drag/playhead handlers wired once below all
     // read the same live values; enterTrim just resets them per clip.
@@ -4315,6 +4316,8 @@
 
     async function startPreview() {
       capEl.classList.remove('capture-unavailable');
+      // Mirror the front (selfie) preview; show the rear camera true-to-life.
+      capEl.classList.toggle('is-rear', facing !== 'user');
       if (isNativeApp()) {
         const plugin = cameraPreviewPlugin();
         if (!plugin) { capEl.classList.add('capture-unavailable'); return; }
@@ -4328,7 +4331,10 @@
       }
       if (!navigator.mediaDevices?.getUserMedia) { capEl.classList.add('capture-unavailable'); return; }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: true });
+        // Camera only — the mic is acquired lazily when recording actually starts
+        // (see startRecording), so opening the composer never prompts for the mic
+        // and the mic-in-use indicator stays dark until you record.
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
         previewEl.srcObject = stream;
         await previewEl.play().catch(() => {});
       } catch { capEl.classList.add('capture-unavailable'); }
@@ -4343,6 +4349,7 @@
       clearTimeout(holdTimer);
       cancelAnimationFrame(ringRaf);
       recording = false;
+      recordMic?.getTracks().forEach(t => t.stop()); recordMic = null;
       stopPreview();
       try { trimVideo.pause(); } catch {}
       if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
@@ -4509,12 +4516,8 @@
         return;
       }
       if (!stream) return;
-      chunks = [];
-      const candidates = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
-      const mimeType = candidates.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
-      try { recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined); }
-      catch { return; }
-      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      // Mark intent up front (before the async mic grab) so a release during the
+      // permission prompt cancels cleanly via stopRecording's `recording` guard.
       recording = true;
       shutter.classList.add('is-recording');
       const startedAt = recStart = Date.now();
@@ -4523,6 +4526,29 @@
         if (recording) ringRaf = requestAnimationFrame(tick);
       };
       ringRaf = requestAnimationFrame(tick);
+      // Acquire the mic now, not at preview time — this is the only mic prompt and
+      // it lands exactly when you start recording. A denial just yields a silent clip.
+      let micStream = null;
+      try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch {}
+      if (!recording) { micStream?.getTracks().forEach(t => t.stop()); return; }  // released during the prompt
+      recordMic = micStream;
+      chunks = [];
+      const recStream = new MediaStream([
+        ...stream.getVideoTracks(),
+        ...(micStream ? micStream.getAudioTracks() : []),
+      ]);
+      const candidates = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+      const mimeType = candidates.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+      try { recorder = new MediaRecorder(recStream, mimeType ? { mimeType } : undefined); }
+      catch {
+        recording = false;
+        shutter.classList.remove('is-recording');
+        cancelAnimationFrame(ringRaf); setRing(0);
+        micStream?.getTracks().forEach(t => t.stop()); recordMic = null;
+        return;
+      }
+      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
       recorder.start();
       holdTimer = setTimeout(stopRecording, RECORD_MS);
     }
@@ -4554,6 +4580,8 @@
       const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
       recorder.stop();
       await stopped;
+      // Release the mic the moment recording ends — no lingering mic-in-use light.
+      recordMic?.getTracks().forEach(t => t.stop()); recordMic = null;
       await finishVideo(new Blob(chunks, { type: recorder.mimeType || 'video/mp4' }), elapsedSec);
     }
 
