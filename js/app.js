@@ -110,6 +110,11 @@
     block:   '<circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/>',
     // A doorway with an arrow stepping out — Log out.
     signout: '<path d="M13.5 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7.5"/><path d="M10 12h9.5"/><path d="m16 8 4 4-4 4"/>',
+    // Speaker + waves / speaker + X — the Frame video sound toggle.
+    sound:   '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/>',
+    mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
+    // Filled triangle — the play affordance on a Frame video that hasn't started.
+    play:    '<path d="M8.5 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -390,7 +395,7 @@
   // A small colored label marking an entry's type (Note / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
-  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Photo', activity: 'Activity' };
+  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity' };
   // Single-colour glyphs, one per type, inlined so they inherit the type's own
   // colour via `fill: currentColor` (set on the CSS class) — and grey out for
   // a past activity with no extra markup. viewBoxes are the artboard sizes.
@@ -1071,17 +1076,19 @@
     el.dataset.tags = (post.tags || []).join(',');
 
     if (post.type === 'photo') {
-      // Identity first, then caption + tags, then the full-bleed photo last —
-      // text settles before the image so the two don't compete for the read.
-      // Real uploads (post.image) show the cropped photo; seed entries fall
-      // back to the tonal placeholder.
+      // Identity first, then caption + tags, then the full-bleed frame last —
+      // text settles before the media so the two don't compete for the read.
+      // Real uploads (post.image) show the still/clip; seed entries fall back
+      // to the tonal placeholder. A Frame video's `image` holds the clip URL;
+      // `poster` (best-effort) holds its first-frame still.
+      const isVideo = post.image && isVideoUrl(post.image);
       const d = post.image ? imageDimsFromUrl(post.image) : null;
       const img = post.image
-        ? { src: post.image, alt: post.note || 'Photo', w: d && d.w, h: d && d.h, tint: post.tint }
+        ? { src: isVideo ? (post.poster || null) : post.image, alt: post.note || 'Frame', w: d && d.w, h: d && d.h, tint: post.tint }
         : placeholderPhoto(post.id, post.note);
       // Known dimensions → width/height attributes let the browser hold the exact
-      // space before the photo loads (no feed reflow). Legacy photos without a
-      // stamped size fall back to a reserved box, cleared once the image lands.
+      // space before the media loads (no feed reflow). Legacy photos without a
+      // stamped size fall back to a reserved box, cleared once the media lands.
       const sized = img.w && img.h;
       // The placeholder + reserved box live on .photo-frame, NOT the <img>. The
       // image is held at opacity 0 until its bitmap is decoded, so anything painted
@@ -1090,20 +1097,29 @@
       // draws a rounded outline at the photo's real aspect ratio (a crop preview),
       // filled with the photo's average colour (the `tint` column) when we have it;
       // the decoded image then eases in over it on a plain scale + opacity settle.
+      // A video Frame with no stored poster skips straight to that tint box —
+      // wireFrameVideo's own #t=0.001 clip self-paints the first frame instead.
       const tint = img.tint;
       const frameStyle =
         (sized ? `aspect-ratio:${img.w}/${img.h};` : '') +
         (tint ? `--ph-fill:${tint};` : '');
       const foot = (post.note ? `<p class="card-note">${richText(post.note, post.author)}</p>` : '') + tagChips(post);
+      const mediaHtml =
+        (img.src ? `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` : '') +
+        (isVideo
+          ? `<button type="button" class="frame-sound" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute', 'frame-sound-ico')}</button>` +
+            `<span class="frame-play" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+            `<div class="frame-progress" aria-hidden="true"><span class="frame-progress-fill"></span></div>`
+          : '');
       // .card-main holds the post itself (ending in the action row); the comment
       // thread expands as a sibling below, tucked under it on the same left axis.
       el.innerHTML =
         `<div class="card-main">` +
           head +
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
-          `<figure class="photo" tabindex="0" role="button" aria-label="Enlarge photo">` +
+          `<figure class="photo${isVideo ? ' frame-video' : ''}" tabindex="0" role="button" aria-label="${isVideo ? 'Play frame' : 'Enlarge photo'}">` +
             `<div class="photo-frame${sized ? '' : ' photo-frame--reserve'}"${frameStyle ? ` style="${frameStyle}"` : ''}>` +
-              `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` +
+              mediaHtml +
             `</div>` +
           `</figure>` +
           actions +
@@ -1111,7 +1127,8 @@
         likersPanelHtml(post) +
         commentsPanelHtml(post);
       el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
-      wirePhoto(el, img);
+      if (isVideo) wireFrameVideo(el, post);
+      else wirePhoto(el, img);
       wireLikes(el, post, opts);
       wireComments(el, post, opts);
       wireCardCollapse(el, post);
@@ -1186,39 +1203,149 @@
     return el;
   }
 
+  // Fades a card's <img> in once its bitmap is fully decoded, and releases the
+  // frame's reserved box so it takes the image's true height. `complete` covers
+  // a warm cache; `error` reveals a broken image rather than leaving it invisible.
+  // Reveal on a fully DECODED bitmap, not just `load`: iOS fires load before the
+  // bitmap is paint-ready, so revealing on load stutters/pops. decode() resolves
+  // only when it can paint in one clean frame, so the settle reads as a settle.
+  // CRUCIAL: only ever call decode() AFTER the browser has chosen to load the
+  // image (it's complete, or its `load` fires) — calling decode() up front forces
+  // a loading=lazy image to fetch+decode right away, which defeats lazy-loading
+  // and, on a long feed, forces EVERY photo's full bitmap resident at once. On
+  // iPhone that memory spike kills the renderer (white screen / "a problem
+  // repeatedly occurred"). Gating decode behind load keeps offscreen media lazy
+  // and the working set small.
+  function revealCardImage(fig, im) {
+    const landed = () => {
+      fig.classList.add('is-loaded');
+      fig.querySelector('.photo-frame')?.classList.remove('photo-frame--reserve');
+    };
+    const reveal = () => im.decode ? im.decode().then(landed).catch(landed) : landed();
+    if (im.complete && im.naturalWidth) reveal();
+    else {
+      im.addEventListener('load', reveal, { once: true });
+      im.addEventListener('error', landed, { once: true });
+    }
+  }
+
   function wirePhoto(el, img) {
     const fig = el.querySelector('.photo');
     if (!fig) return;
-    // Fade the photo in as it lands (the neutral box holds its place until then)
-    // and, for a legacy photo with no stamped size, release the reserved box so
-    // the figure takes the true height. `complete` covers a warm cache; `error`
-    // reveals a broken image rather than leaving it invisible.
     const im = fig.querySelector('img');
-    if (im) {
-      const landed = () => {
-        fig.classList.add('is-loaded');
-        // Legacy photos (no stamped size) reserve a 3:2 box; release it on load so
-        // the frame takes the image's true height.
-        fig.querySelector('.photo-frame')?.classList.remove('photo-frame--reserve');
-      };
-      // Reveal on a fully DECODED bitmap, not just `load`: iOS fires load before
-      // the bitmap is paint-ready, so revealing on load stutters/pops. decode()
-      // resolves only when it can paint in one clean frame, so the settle reads
-      // as a settle. CRUCIAL: only ever call decode() AFTER the browser has
-      // chosen to load the image (it's complete, or its `load` fires) — calling
-      // decode() up front forces a loading=lazy image to fetch+decode right away,
-      // which defeats lazy-loading and, on a long feed, forces EVERY photo's full
-      // bitmap resident at once. On iPhone that memory spike kills the renderer
-      // (white screen / "a problem repeatedly occurred"). Gating decode behind
-      // load keeps offscreen photos lazy and the working set small.
-      const reveal = () => im.decode ? im.decode().then(landed).catch(landed) : landed();
-      if (im.complete && im.naturalWidth) reveal();
-      else {
-        im.addEventListener('load', reveal, { once: true });
-        im.addEventListener('error', landed, { once: true });
+    if (im) revealCardImage(fig, im);
+    const open = () => openLightbox(img.src, img.alt);
+    fig.addEventListener('click', open);
+    fig.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+  }
+
+  /* ── Frame video (feed playback) ─────────────────────────────────────────
+     Poster-first, egress-cheap: the card shows only a small poster JPEG until
+     it scrolls into view, then a muted <video> is inserted over it and detached
+     again on the way out — no clip stays resident (bytes or decoder) offscreen.
+     iOS caps concurrent video decoders, so at most one clip plays (and at most
+     one carries sound) across the whole feed at a time; see activeFrameVideo /
+     soundedFrameVideo below. */
+  let activeFrameVideo = null;    // the one <video> currently allowed to play
+  let soundedFrameVideo = null;   // the one <video> currently unmuted
+  const frameCallbacks = new WeakMap();   // .photo-frame el → { attach, detach }
+  // Removing an observed element from the document still fires one last
+  // (non-intersecting) entry for it — that's what lets us unobserve + clean up
+  // a card's video the moment the feed diff throws the card away, with no extra
+  // teardown hook required from the render loop.
+  const frameObserver = ('IntersectionObserver' in window)
+    ? new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          const target = entry.target;
+          const cb = frameCallbacks.get(target);
+          if (!cb) return;
+          if (!target.isConnected) {
+            frameObserver.unobserve(target);
+            frameCallbacks.delete(target);
+            cb.detach();
+            return;
+          }
+          if (entry.isIntersecting) cb.attach(); else cb.detach();
+        });
+      }, { threshold: 0.6 })
+    : null;
+
+  function wireFrameVideo(el, post) {
+    const fig = el.querySelector('.photo');
+    if (!fig) return;
+    const frame = fig.querySelector('.photo-frame');
+    const posterImg = frame.querySelector('img');
+    const soundBtn = fig.querySelector('.frame-sound');
+    const progressFill = fig.querySelector('.frame-progress-fill');
+    const alt = post.note || 'Frame';
+    if (posterImg) revealCardImage(fig, posterImg);
+    else fig.classList.add('is-loaded');   // no stored poster: nothing to fade — the clip paints its own first frame
+
+    let clip = null;   // the lazily-inserted <video>, only alive while the card is in view
+
+    function detach() {
+      if (!clip) return;
+      if (activeFrameVideo === clip) activeFrameVideo = null;
+      if (soundedFrameVideo === clip) soundedFrameVideo = null;
+      clip.pause();
+      // Drop the source (not just pause) so the decoder + buffered bytes are
+      // actually freed once the card scrolls away — this is the egress lever.
+      clip.removeAttribute('src'); clip.load();
+      clip.remove();
+      clip = null;
+      fig.classList.remove('frame-video--playing');
+      if (soundBtn) {
+        soundBtn.setAttribute('aria-pressed', 'false');
+        soundBtn.innerHTML = svgIcon('mute', 'frame-sound-ico');
       }
     }
-    const open = () => openLightbox(img.src, img.alt);
+
+    function attach() {
+      // Reduced motion: stay on the poster/tint box, no ambient autoplay —
+      // the clip only ever plays inside the lightbox, on an explicit tap.
+      if (clip || prefersReduced()) return;
+      clip = document.createElement('video');
+      clip.className = 'frame-clip';
+      clip.muted = true; clip.playsInline = true; clip.loop = true; clip.preload = 'metadata';
+      // The #t=0.001 media fragment makes the clip self-paint its own first
+      // frame on iOS even before playback starts — the universal poster
+      // fallback for a Frame that has no stored `poster` still.
+      clip.src = post.image + '#t=0.001';
+      clip.addEventListener('timeupdate', () => {
+        if (progressFill && clip.duration) progressFill.style.width = (clip.currentTime / clip.duration * 100) + '%';
+      });
+      frame.appendChild(clip);
+      // iOS Low Power Mode (and some embedded contexts) refuse even muted
+      // autoplay — never assume play() resolves; on rejection just detach and
+      // leave the poster + play badge up, same fallback as reduced-motion.
+      const played = clip.play();
+      Promise.resolve(played).then(() => {
+        if (activeFrameVideo && activeFrameVideo !== clip) activeFrameVideo.pause();
+        activeFrameVideo = clip;
+        fig.classList.add('frame-video--playing');
+      }).catch(() => detach());
+    }
+
+    if (frameObserver) {
+      frameCallbacks.set(frame, { attach, detach });
+      frameObserver.observe(frame);
+    }
+
+    soundBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      // Nothing playing inline (declined autoplay / reduced motion) → sound
+      // only ever works in the lightbox, so send the tap straight there.
+      if (!clip) { openLightbox(post.image, alt, true); return; }
+      if (soundedFrameVideo && soundedFrameVideo !== clip) soundedFrameVideo.muted = true;
+      clip.muted = !clip.muted;
+      soundedFrameVideo = clip.muted ? null : clip;
+      soundBtn.setAttribute('aria-pressed', String(!clip.muted));
+      soundBtn.innerHTML = svgIcon(clip.muted ? 'mute' : 'sound', 'frame-sound-ico');
+    });
+
+    const open = () => openLightbox(post.image, alt, true);
     fig.addEventListener('click', open);
     fig.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
@@ -1805,10 +1932,13 @@
   // e.g. the Friends page's expanding search. The title row is a relative flex
   // container so an action can animate open over the nameplate.
   function mastheadEl(kicker, title, actions) {
+    // No title: the kicker carries the page (promoted to <h1> for a11y, same
+    // small-caps look) instead of stacking a redundant big serif line under it.
+    const kickerTag = title ? 'p' : 'h1';
     return `<header class="masthead">` +
-        (kicker ? `<p class="masthead-kicker">${kicker}</p>` : '') +
+        (kicker ? `<${kickerTag} class="masthead-kicker">${kicker}</${kickerTag}>` : '') +
         `<div class="masthead-row">` +
-          `<h1 class="masthead-title">${title}</h1>` +
+          (title ? `<h1 class="masthead-title">${title}</h1>` : '') +
           (actions || '') +
         `</div>` +
       `</header>`;
@@ -1866,7 +1996,7 @@
     { key: 'all',      label: 'All' },
     { key: 'note',     label: 'Notes' },
     { key: 'find',     label: 'Finds' },
-    { key: 'photo',    label: 'Photos' },
+    { key: 'photo',    label: 'Frames' },
     { key: 'activity', label: 'Activities' },
   ];
   let activeFilter = 'all';
@@ -3749,11 +3879,13 @@
   const PUB_TYPES = [
     { key: 'note',     label: 'Note'     },
     { key: 'find',     label: 'Find'     },
-    { key: 'photo',    label: 'Photo'    },
+    { key: 'photo',    label: 'Frame'    },
     { key: 'activity', label: 'Activity' },
   ];
   let pubType = 'note';
-  let cropper = null;   // set once a photo is chosen; .export() → data-URI
+  let cropper = null;        // set once a still is captured/picked; .export() → data-URI
+  let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
+  let stopActiveCapture = null;   // teardown for the live camera/mic (getUserMedia or native preview)
 
   // Audience targeting for activities. mode 'circle' = everyone in your circle
   // (default, unchanged behaviour); 'list' = only the chosen usernames, enforced
@@ -3849,22 +3981,82 @@
     }
 
     if (type === 'photo') {
+      const ICON_LIBRARY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
+        `stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+        `<rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 21h13a1 1 0 0 0 1-1V7"/></svg>`;
+      const ICON_FLIP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
+        `stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+        `<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>` +
+        `<path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/></svg>`;
       return `<div class="field">` +
-          `<label for="c-note">Caption</label>` +
-          `<textarea id="c-note" rows="2" maxlength="180" ` +
-            `placeholder="Say something, or let the photo speak."></textarea>` +
-        `</div>` +
-        `<div class="field">` +
-          `<label>Photo</label>` +
-          `<input id="c-file" type="file" accept="image/*" hidden>` +
-          `<div class="dropzone" id="c-drop">` +
-            `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo</button>` +
-            `<p class="field-hint">JPG or PNG</p>` +
+          `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
+          `<div class="capture" id="c-capture">` +
+            `<video id="c-capture-preview" autoplay muted playsinline></video>` +
+            `<div class="capture-topbar">` +
+              `<button type="button" class="capture-icon" id="c-library" aria-label="Choose from library">${ICON_LIBRARY}</button>` +
+              `<button type="button" class="capture-icon" id="c-flip" aria-label="Flip camera">${ICON_FLIP}</button>` +
+            `</div>` +
+            `<p class="capture-unavailable-hint">Camera preview isn't available here — use the library icon instead.</p>` +
+            `<div class="capture-controls">` +
+              `<button type="button" class="capture-shutter" id="c-shutter" ` +
+                `aria-label="Tap for a photo, hold to record up to 10 seconds of video">` +
+                `<svg class="capture-ring" viewBox="0 0 68 68" aria-hidden="true">` +
+                  `<defs>` +
+                    `<linearGradient id="capture-ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">` +
+                      `<stop offset="0%" style="stop-color: var(--type-note)"/>` +
+                      `<stop offset="33%" style="stop-color: var(--type-find)"/>` +
+                      `<stop offset="66%" style="stop-color: var(--type-activity)"/>` +
+                      `<stop offset="100%" style="stop-color: var(--type-photo)"/>` +
+                    `</linearGradient>` +
+                  `</defs>` +
+                  `<circle class="capture-ring-track" cx="34" cy="34" r="30" fill="none" ` +
+                    `stroke="rgba(255,255,255,.35)" stroke-width="3"/>` +
+                  `<circle class="capture-ring-fill" cx="34" cy="34" r="30" fill="none" ` +
+                    `stroke="url(#capture-ring-grad)" stroke-width="3" stroke-linecap="round"/>` +
+                `</svg>` +
+              `</button>` +
+            `</div>` +
+            `<p class="capture-hint">Tap to snap, hold to record</p>` +
           `</div>` +
           `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
           `</div>` +
-          `<button type="button" class="crop-replace" id="c-replace" hidden>Replace photo</button>` +
+          // Trim surface: a playing preview + an iOS-style filmstrip scrubber with a
+          // draggable ≤10s window. Replaces the old frozen video-preview element —
+          // now the clip actually plays and a longer library pick can be trimmed
+          // down in-app instead of getting bounced to Photos. See wireFrameCapture.
+          `<div class="trim" id="c-trim" hidden>` +
+            `<div class="trim-stage">` +
+              `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
+              `<button type="button" class="trim-sound" id="c-trimsound" ` +
+                `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
+            `</div>` +
+            `<div class="trim-strip" id="c-trimstrip">` +
+              `<div class="trim-thumbs" id="c-trimthumbs" aria-hidden="true"></div>` +
+              `<div class="trim-window" id="c-trimwindow" role="slider" aria-label="Trim window">` +
+                `<span class="trim-handle trim-handle--l" data-edge="l" aria-hidden="true"></span>` +
+                `<span class="trim-handle trim-handle--r" data-edge="r" aria-hidden="true"></span>` +
+              `</div>` +
+              `<div class="trim-playhead" id="c-trimplayhead" aria-hidden="true"></div>` +
+            `</div>` +
+            `<p class="trim-meta">` +
+              `<span class="trim-dur" id="c-trimdur">0.0s</span>` +
+              `<span class="trim-hint" id="c-trimhint">Drag the ends to trim, up to 10 seconds.</span>` +
+            `</p>` +
+          `</div>` +
+          // Post-capture controls: a matching icon-button pair (not an underlined
+          // text link). Retake drops back to the live camera; Library re-opens the
+          // picker — the two ways to swap the frame, styled the same. Photos keep
+          // their native aspect (no crop step, by design — see initPhotoPreview).
+          `<div class="review-actions" id="c-review" hidden>` +
+            `<button type="button" class="review-btn" id="c-replace">${svgIcon('camera', 'review-ico')}<span>Retake</span></button>` +
+            `<button type="button" class="review-btn" id="c-relibrary">${ICON_LIBRARY}<span>Library</span></button>` +
+          `</div>` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="c-note">Caption</label>` +
+          `<textarea id="c-note" rows="2" maxlength="180" ` +
+            `placeholder="Say something, or let the frame speak."></textarea>` +
         `</div>` + tags;
     }
 
@@ -3994,7 +4186,7 @@
   function renderPublish() {
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('Share to your circle', 'New Post') +
+        `<h1 class="visually-hidden">New Post</h1>` +
         `<form class="composer" id="composer" novalidate>` +
           `<div class="type-pick" role="group" aria-label="Post type">` +
             PUB_TYPES.map(t =>
@@ -4004,6 +4196,10 @@
           `</div>` +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
+          `<div class="post-progress" id="c-progress" aria-live="polite">` +
+            `<span class="post-progress-label" id="c-progress-label"></span>` +
+            `<div class="post-progress-track"><div class="post-progress-fill" id="c-progress-fill"></div></div>` +
+          `</div>` +
           `<button class="composer-submit composer-post publish-fill is-solid" type="submit">Post</button>` +
         `</form>` +
       `</section>`;
@@ -4011,17 +4207,22 @@
     const fieldsEl = view.querySelector('#c-fields');
 
     function mountFields() {
+      // Leaving a live camera/mic stream running behind a torn-down capture
+      // surface would keep recording (and draining battery) after the user
+      // switches type or re-mounts — always stop it before replacing the DOM.
+      if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null;
+      videoCapture = null;
       pubAudience = { mode: 'circle', users: [] };   // each fresh composer defaults to the full circle
       // Fresh fields carry no pending photo decode — clear any hold left on Post
-      // (e.g. switching type away from a photo mid-decode; see wirePhotoPicker).
+      // (e.g. switching type away from a photo mid-decode; see wireFrameCapture).
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
       fieldsEl.innerHTML = fieldsFor(pubType);
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
       if (pubType === 'note') wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
-      if (pubType === 'photo') wirePhotoPicker(fieldsEl);
+      if (pubType === 'photo') wireFrameCapture(fieldsEl);
       if (pubType === 'activity') {
         wireWhenHints(fieldsEl);
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
@@ -4047,42 +4248,581 @@
     mountFields();
   }
 
-  // File picker + full-image preview. Post photos aren't cropped — the picked
-  // image is shown (and later exported) at its own aspect ratio, so there's no
-  // square frame or panning here (that's only the avatar editor's job).
-  function wirePhotoPicker(root) {
-    const file    = root.querySelector('#c-file');
-    const drop    = root.querySelector('#c-drop');
-    const cropEl  = root.querySelector('#c-crop');
-    const imgEl   = root.querySelector('#c-cropimg');
-    const replace = root.querySelector('#c-replace');
+  // The Frame capture surface: a live camera preview with a tap-for-photo /
+  // hold-for-video shutter, a library picker, and a front/back flip. On device
+  // this drives a native camera-preview plugin (added in a later step); in a
+  // plain browser (Live Server / desktop preview) it falls back to getUserMedia
+  // + MediaRecorder so the UI still previews without a Capacitor build.
+  const RECORD_MS = 10000;
+  const MAX_CLIP_SEC = 10;                              // the published clip cap — the trimmer enforces it
+  const TRIM_MIN_SEC = 1;                               // shortest window you can drag to
+  // A longer library pick no longer bounces to Photos — the in-app trimmer cuts it
+  // to ≤10s. This cap only rejects a genuinely huge raw file the browser can't seek.
+  const MAX_LIBRARY_VIDEO_BYTES = 300 * 1024 * 1024;
+  const RING_R = 30, RING_C = 2 * Math.PI * RING_R;
 
-    const pick = () => file.click();
-    root.querySelector('#c-pick').addEventListener('click', pick);
-    replace.addEventListener('click', pick);
-    drop.addEventListener('click', (e) => { if (e.target === drop) pick(); });
+  function isNativeApp() {
+    return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  }
+  function cameraPreviewPlugin() {
+    return window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.CameraPreview;
+  }
 
+  function wireFrameCapture(root) {
+    const capEl    = root.querySelector('#c-capture');
+    const previewEl = root.querySelector('#c-capture-preview');
+    const shutter  = root.querySelector('#c-shutter');
+    const ring     = root.querySelector('.capture-ring-fill');
+    const file     = root.querySelector('#c-file');
+    const cropEl   = root.querySelector('#c-crop');
+    const imgEl    = root.querySelector('#c-cropimg');
+    const trimEl     = root.querySelector('#c-trim');
+    const trimStage  = root.querySelector('#c-trim .trim-stage');
+    const trimVideo  = root.querySelector('#c-trimvideo');
+    const trimSound  = root.querySelector('#c-trimsound');
+    const trimStrip  = root.querySelector('#c-trimstrip');
+    const trimThumbs = root.querySelector('#c-trimthumbs');
+    const trimWindow = root.querySelector('#c-trimwindow');
+    const trimPlay   = root.querySelector('#c-trimplayhead');
+    const trimDur    = root.querySelector('#c-trimdur');
+    const reviewRow = root.querySelector('#c-review');
+    const replace  = root.querySelector('#c-replace');
+    const reLibrary = root.querySelector('#c-relibrary');
+    const errEl    = () => document.getElementById('c-error');
+
+    let facing = 'user';
+    let stream = null;
+    let recorder = null;
+    let chunks = [];
+    let recording = false;
+    let holdTimer = null, holdStart = 0, isHolding = false;
+    let ringRaf = null;
+    let nativeRecordPromise = null;
+    let recStart = 0;   // Date.now() at record start — measured clip length for finishVideo's hint
+    // Trim window state — tD = full clip duration, [tStart,tEnd] = the selected
+    // window (seconds). Hoisted so the drag/playhead handlers wired once below all
+    // read the same live values; enterTrim just resets them per clip.
+    let tD = 0, tStart = 0, tEnd = 0, tDrag = null;
+
+    ring && (ring.style.strokeDasharray = String(RING_C));
+    setRing(0);
+    function setRing(p) { if (ring) ring.style.strokeDashoffset = String(RING_C * (1 - p)); }
+
+    function stopStream() {
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      previewEl.srcObject = null;
+    }
+
+    async function startPreview() {
+      capEl.classList.remove('capture-unavailable');
+      if (isNativeApp()) {
+        const plugin = cameraPreviewPlugin();
+        if (!plugin) { capEl.classList.add('capture-unavailable'); return; }
+        try {
+          await plugin.start({
+            position: facing === 'user' ? 'front' : 'rear',
+            parent: 'c-capture', className: 'capture-native', toBack: true,
+          });
+        } catch { capEl.classList.add('capture-unavailable'); }
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) { capEl.classList.add('capture-unavailable'); return; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: true });
+        previewEl.srcObject = stream;
+        await previewEl.play().catch(() => {});
+      } catch { capEl.classList.add('capture-unavailable'); }
+    }
+
+    async function stopPreview() {
+      if (isNativeApp()) { try { await cameraPreviewPlugin()?.stop(); } catch {} return; }
+      stopStream();
+    }
+
+    function teardown() {
+      clearTimeout(holdTimer);
+      cancelAnimationFrame(ringRaf);
+      recording = false;
+      stopPreview();
+      try { trimVideo.pause(); } catch {}
+      if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
+    }
+    stopActiveCapture = teardown;
+
+    // ── Photo ──────────────────────────────────────────────────────────────
+    function finishPhoto(dataUrl) {
+      stopPreview();
+      capEl.hidden = true;
+      cropEl.hidden = false;
+      // Swapping in from a video review (Library button) — tear the trim surface down.
+      try { trimVideo.pause(); } catch {}
+      trimEl.hidden = true;
+      reviewRow.hidden = false;
+      videoCapture = null;
+      cropper = initPhotoPreview(imgEl, dataUrl);
+      const submitBtn = document.querySelector('.composer-submit');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        const ready = () => { submitBtn.disabled = false; };
+        if (imgEl.complete && imgEl.naturalWidth) ready();
+        else imgEl.addEventListener('load', ready, { once: true });
+      }
+    }
+
+    async function takePhoto() {
+      if (isNativeApp()) {
+        const plugin = cameraPreviewPlugin();
+        if (!plugin) return;
+        try {
+          const res = await plugin.capture({ quality: 85 });
+          finishPhoto(`data:image/jpeg;base64,${res.value}`);
+        } catch {}
+        return;
+      }
+      if (!previewEl.videoWidth) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = previewEl.videoWidth;
+      canvas.height = previewEl.videoHeight;
+      canvas.getContext('2d').drawImage(previewEl, 0, 0);
+      finishPhoto(canvas.toDataURL('image/jpeg', 0.9));
+    }
+
+    // ── Video → trim surface ─────────────────────────────────────────────────
+    // A freshly recorded (≤10s) or library-picked (any length) clip lands here.
+    // We swap the camera for the trim surface: the clip plays, and the filmstrip
+    // lets you pick the ≤10s window to keep. videoCapture holds the ORIGINAL blob
+    // plus the window; the actual cut/re-encode happens once, on Post (see
+    // submitComposer), so a single primary action drives it.
+    // hintSec: the recorder's own measured length (ms→s) for an in-app capture, so
+    // a short clip gets its true duration even if WebKit's metadata probe fails. A
+    // library pick has no hint and leans on the probe (then the 10s cap).
+    async function finishVideo(blob, hintSec = 0) {
+      stopPreview();
+      capEl.hidden = true;
+      cropEl.hidden = true;
+      cropper = null;
+      trimEl.hidden = false;
+      reviewRow.hidden = false;
+
+      const mimeType = blob.type || 'video/mp4';
+      const ext = /mp4/i.test(mimeType) ? 'mp4' : /webm/i.test(mimeType) ? 'webm' : 'mov';
+      const dur = (await videoDuration(blob)) || hintSec || RECORD_MS / 1000;
+
+      tD = dur;
+      tStart = 0;
+      tEnd = Math.min(dur, MAX_CLIP_SEC);
+      videoCapture = { blob, mimeType, ext, duration: dur, start: tStart, end: tEnd,
+                       poster: null, tint: null, dims: null };
+
+      if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} }
+      const url = URL.createObjectURL(blob);
+      trimVideo._url = url;
+      trimVideo.src = url;
+      trimVideo.muted = true;
+      trimSound.setAttribute('aria-pressed', 'false');
+      trimSound.innerHTML = svgIcon('mute', 'trim-sound-ico');
+      layoutTrim();
+      trimVideo.play().catch(() => {});
+      // Filmstrip thumbnails are best-effort — on failure the strip just shows its
+      // neutral track, the window/handles still work.
+      buildFilmstrip(blob, dur, trimThumbs).catch(() => {});
+    }
+
+    // Reflect [tStart,tEnd] onto the window + duration pill, and keep videoCapture
+    // in sync so Post always cuts the currently-shown selection.
+    function layoutTrim() {
+      if (!tD) return;
+      trimWindow.style.left  = (tStart / tD * 100) + '%';
+      trimWindow.style.width = ((tEnd - tStart) / tD * 100) + '%';
+      trimDur.textContent = fmtClip(tEnd - tStart);
+      // Announce the selection to assistive tech (the handles are drag-only).
+      trimWindow.setAttribute('aria-valuetext',
+        `${fmtClip(tEnd - tStart)} selected, from ${fmtClip(tStart)} to ${fmtClip(tEnd)}`);
+      if (videoCapture) { videoCapture.start = tStart; videoCapture.end = tEnd; }
+    }
+
+    // Loop preview playback inside the window and track the playhead across the
+    // whole strip (absolute position reads more like iOS than a window-local one).
+    trimVideo.addEventListener('timeupdate', () => {
+      if (!tD) return;
+      if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
+        trimVideo.currentTime = tStart;
+      }
+      trimPlay.style.left = (trimVideo.currentTime / tD * 100) + '%';
+    });
+
+    trimSound.addEventListener('click', () => {
+      trimVideo.muted = !trimVideo.muted;
+      trimSound.setAttribute('aria-pressed', String(!trimVideo.muted));
+      trimSound.innerHTML = svgIcon(trimVideo.muted ? 'mute' : 'sound', 'trim-sound-ico');
+    });
+
+    // ── Trim drag: move the whole window, or resize from either handle ─────────
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    trimWindow.addEventListener('pointerdown', (e) => {
+      tDrag = { mode: e.target.dataset.edge || 'move', x: e.clientX, s0: tStart, e0: tEnd };
+      trimWindow.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+    });
+    trimWindow.addEventListener('pointermove', (e) => {
+      if (!tDrag || !tD) return;
+      const r = trimStrip.getBoundingClientRect();
+      const dSec = (e.clientX - tDrag.x) / (r.width || 1) * tD;
+      // Very short clips (a quick tap-record) can be under the 1s floor; don't let
+      // the floor exceed the clip or the window inverts (handle jumps past the end).
+      const minLen = Math.min(TRIM_MIN_SEC, tD);
+      if (tDrag.mode === 'move') {
+        const len = tDrag.e0 - tDrag.s0;
+        let ns = clamp(tDrag.s0 + dSec, 0, tD - len);
+        tStart = ns; tEnd = ns + len;
+      } else if (tDrag.mode === 'l') {
+        tStart = clamp(tDrag.s0 + dSec, Math.max(0, tEnd - MAX_CLIP_SEC), tEnd - minLen);
+      } else {
+        tEnd = clamp(tDrag.e0 + dSec, tStart + minLen, Math.min(tD, tStart + MAX_CLIP_SEC));
+      }
+      layoutTrim();
+      // Scrub the preview to the edge being dragged so you see the exact frame.
+      trimVideo.currentTime = tDrag.mode === 'r' ? Math.max(0, tEnd - 0.06) : tStart;
+    });
+    const endDrag = () => { tDrag = null; trimVideo.currentTime = tStart; trimVideo.play().catch(() => {}); };
+    trimWindow.addEventListener('pointerup', endDrag);
+    trimWindow.addEventListener('pointercancel', endDrag);
+
+    async function startRecording() {
+      if (isNativeApp()) {
+        const plugin = cameraPreviewPlugin();
+        if (!plugin?.startRecordVideo) return;
+        recording = true;
+        shutter.classList.add('is-recording');
+        const startedAt = recStart = Date.now();
+        const tick = () => {
+          setRing(Math.min(1, (Date.now() - startedAt) / RECORD_MS));
+          if (recording) ringRaf = requestAnimationFrame(tick);
+        };
+        ringRaf = requestAnimationFrame(tick);
+        // startRecordVideo's promise only resolves once the recording is
+        // stopped (its completion handler doubles as the "started" ack), so
+        // don't await it here or the auto-stop timer below would never get
+        // scheduled. Stash it; stopRecording() awaits it for the file path.
+        nativeRecordPromise = plugin.startRecordVideo({ quality: 85 }).catch(() => null);
+        holdTimer = setTimeout(stopRecording, RECORD_MS);
+        return;
+      }
+      if (!stream) return;
+      chunks = [];
+      const candidates = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+      const mimeType = candidates.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+      try { recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined); }
+      catch { return; }
+      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      recording = true;
+      shutter.classList.add('is-recording');
+      const startedAt = recStart = Date.now();
+      const tick = () => {
+        setRing(Math.min(1, (Date.now() - startedAt) / RECORD_MS));
+        if (recording) ringRaf = requestAnimationFrame(tick);
+      };
+      ringRaf = requestAnimationFrame(tick);
+      recorder.start();
+      holdTimer = setTimeout(stopRecording, RECORD_MS);
+    }
+
+    async function stopRecording() {
+      if (!recording) return;
+      recording = false;
+      clearTimeout(holdTimer);
+      cancelAnimationFrame(ringRaf);
+      shutter.classList.remove('is-recording');
+      setRing(0);
+      // Measure how long we actually recorded (capped at the 10s ceiling) — the
+      // duration hint that survives a flaky metadata probe. Read before any await.
+      const elapsedSec = recStart ? Math.min(RECORD_MS / 1000, (Date.now() - recStart) / 1000) : 0;
+      if (isNativeApp()) {
+        const plugin = cameraPreviewPlugin();
+        try {
+          await plugin?.stopRecordVideo?.();        // signals the native side to stop
+          const res = await nativeRecordPromise;    // now resolves with { value: fileUrl }
+          if (res?.value) {
+            const fetched = await fetch(Capacitor.convertFileSrc(res.value));
+            await finishVideo(await fetched.blob(), elapsedSec);
+          }
+        } catch {}
+        nativeRecordPromise = null;
+        return;
+      }
+      if (!recorder) return;
+      const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
+      recorder.stop();
+      await stopped;
+      await finishVideo(new Blob(chunks, { type: recorder.mimeType || 'video/mp4' }), elapsedSec);
+    }
+
+    // ── Shutter: tap = photo, hold = video (auto-stops at RECORD_MS) ────────
+    const HOLD_MS = 260;
+    shutter.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      isHolding = false;
+      holdStart = Date.now();
+      holdTimer = setTimeout(() => { isHolding = true; startRecording(); }, HOLD_MS);
+    });
+    const release = () => {
+      clearTimeout(holdTimer);
+      if (isHolding) stopRecording();
+      else if (Date.now() - holdStart < 4000) takePhoto();
+      isHolding = false;
+    };
+    shutter.addEventListener('pointerup', release);
+    shutter.addEventListener('pointercancel', release);
+
+    // ── Flip ──────────────────────────────────────────────────────────────
+    root.querySelector('#c-flip').addEventListener('click', async () => {
+      facing = facing === 'user' ? 'environment' : 'user';
+      if (isNativeApp()) { try { await cameraPreviewPlugin()?.flip(); } catch {} return; }
+      stopStream();
+      await startPreview();
+    });
+
+    // ── Library ───────────────────────────────────────────────────────────
+    root.querySelector('#c-library').addEventListener('click', () => file.click());
     file.addEventListener('change', () => {
       const f = file.files && file.files[0];
       if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        drop.hidden = true;
-        cropEl.hidden = false;
-        replace.hidden = false;
-        cropper = initPhotoPreview(imgEl, reader.result);
-        // Hold Post until the preview has decoded — export() reads naturalWidth,
-        // so posting before the image is ready would ship a 1×1 canvas. Re-enable
-        // on load (or straight away if the browser already had it decoded).
-        const submitBtn = document.querySelector('.composer-submit');
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          const ready = () => { submitBtn.disabled = false; };
-          if (imgEl.complete && imgEl.naturalWidth) ready();
-          else imgEl.addEventListener('load', ready, { once: true });
-        }
+      if (f.type.startsWith('video/')) handleLibraryVideo(f);
+      else {
+        const reader = new FileReader();
+        reader.onload = () => finishPhoto(reader.result);
+        reader.readAsDataURL(f);
+      }
+    });
+    async function handleLibraryVideo(f) {
+      const err = errEl();
+      if (f.size > MAX_LIBRARY_VIDEO_BYTES) {
+        if (err) err.textContent = 'That video is too large to trim here, pick a shorter one.';
+        return;
+      }
+      if (err) err.textContent = '';
+      // Any length is fine now — the trim surface enforces the ≤10s cut.
+      await finishVideo(f);
+    }
+
+    // ── Retake / Library ────────────────────────────────────────────────────
+    // Retake drops back to the live camera; Library re-opens the picker. Both
+    // clear the pending capture first so the review state can't leak through.
+    function clearCapture() {
+      cropper = null;
+      videoCapture = null;
+      cropEl.hidden = true;
+      trimVideo.pause();
+      if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo.removeAttribute('src'); trimVideo._url = null; }
+      trimEl.hidden = true;
+      tD = tStart = tEnd = 0; tDrag = null;
+      reviewRow.hidden = true;
+      const submitBtn = document.querySelector('.composer-submit');
+      if (submitBtn) submitBtn.disabled = false;   // release any pending photo-decode hold
+    }
+    replace.addEventListener('click', () => {
+      clearCapture();
+      capEl.hidden = false;
+      startPreview();
+    });
+    // Back to the live camera behind the picker, so cancelling leaves you there
+    // (not on a blank surface); a pick swaps to the photo/trim review.
+    reLibrary.addEventListener('click', () => { clearCapture(); capEl.hidden = false; startPreview(); file.click(); });
+
+    startPreview();
+  }
+
+  // Reads a freshly-picked/recorded video's duration. Safari/WebKit often reports
+  // `Infinity` for a MediaRecorder blob until the element is forced to seek to the
+  // end, so nudge it and wait for `durationchange`. Returns 0 when it can't tell —
+  // callers fall back to a measured hint. Hardened against two WebKit traps:
+  //   • `durationchange` can fire mid-seek while duration is STILL Infinity — only
+  //     resolve once it's finite, or we'd hand back 0 on a perfectly good clip.
+  //   • a stubborn blob might never settle — a 3s guard resolves 0 rather than
+  //     leaving finishVideo's `await` (and the whole trim surface) hung forever.
+  function videoDuration(file) {
+    return new Promise((resolve) => {
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      let settled = false;
+      const done = (d) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(guard);
+        try { URL.revokeObjectURL(v.src); } catch {}
+        resolve(Number.isFinite(d) && d > 0 ? d : 0);
       };
-      reader.readAsDataURL(f);
+      const guard = setTimeout(() => done(0), 3000);
+      v.onloadedmetadata = () => {
+        if (v.duration === Infinity || Number.isNaN(v.duration)) {
+          v.currentTime = 1e9;
+          v.ondurationchange = () => { if (Number.isFinite(v.duration)) done(v.duration); };
+        } else done(v.duration);
+      };
+      v.onerror = () => done(0);
+      v.src = URL.createObjectURL(file);
+    });
+  }
+
+  // Best-effort poster grab from a recorded/picked video Blob. Current iOS WebKit
+  // (GPU-process canvas) can return an all-black frame from a <video> draw — sample
+  // a pixel and bail rather than uploading a black poster; the feed's #t=0.001
+  // fragment still self-paints a first frame with no stored poster at all.
+  function grabPosterFromBlob(blob) {
+    return new Promise((resolve) => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.src = URL.createObjectURL(blob);
+      const cleanup = () => URL.revokeObjectURL(v.src);
+      const fail = () => { cleanup(); resolve({ dataUrl: null }); };
+      const timer = setTimeout(fail, 4000);
+      v.addEventListener('error', fail, { once: true });
+      v.addEventListener('loadeddata', () => {
+        const onSeeked = () => {
+          clearTimeout(timer);
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(v, 0, 0);
+            const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+            cleanup();
+            if (r === 0 && g === 0 && b === 0) { resolve({ dataUrl: null }); return; }
+            resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.82), w: v.videoWidth, h: v.videoHeight });
+          } catch { cleanup(); resolve({ dataUrl: null }); }
+        };
+        v.currentTime = Math.min(0.05, (v.duration || 1) / 2);
+        v.addEventListener('seeked', onSeeked, { once: true });
+      }, { once: true });
+    });
+  }
+
+  // Same 1×1-downscale average-colour trick as a photo's tint, but sourced from
+  // an already-captured poster <img> — never from a <video> (see grabPosterFromBlob).
+  function tintFromDataUrl(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1; canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        resolve('#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(''));
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+
+  // Short-clip duration label: "8.2s" reads better than "0:08" for a ≤10s window.
+  function fmtClip(sec) {
+    const s = Math.max(0, sec || 0);
+    return s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+                   : `${s.toFixed(1)}s`;
+  }
+
+  // Sample `count` evenly-spaced thumbnails across a clip into the strip. Sequential
+  // seeks (iOS won't overlap them); each thumb waits on `seeked` with a short
+  // timeout so a stubborn frame can't hang the whole strip. Best-effort throughout.
+  async function buildFilmstrip(blob, duration, container, count = 10) {
+    container.innerHTML = '';
+    const v = document.createElement('video');
+    v.src = URL.createObjectURL(blob);
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    await new Promise((res) => {
+      v.addEventListener('loadeddata', res, { once: true });
+      v.addEventListener('error', res, { once: true });
+      setTimeout(res, 2500);
+    });
+    const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
+    const th = 52, tw = Math.max(1, Math.round(th * vw / vh));
+    for (let i = 0; i < count; i++) {
+      const t = duration * (i + 0.5) / count;
+      await new Promise((res) => {
+        v.addEventListener('seeked', res, { once: true });
+        v.currentTime = Math.min(t, Math.max(0, duration - 0.05));
+        setTimeout(res, 700);
+      });
+      const c = document.createElement('canvas');
+      c.width = tw; c.height = th; c.className = 'trim-thumb';
+      try { c.getContext('2d').drawImage(v, 0, 0, tw, th); } catch {}
+      container.appendChild(c);
+    }
+    try { URL.revokeObjectURL(v.src); } catch {}
+  }
+
+  // Re-encode the [startSec,endSec] window of a clip to a fresh, ≤10s, downscaled
+  // blob — the actual cut. No build step / ffmpeg, so this is a real-time pass:
+  // the source plays start→end while we draw frames to a canvas (captureStream)
+  // and tap its audio through WebAudio into a MediaStreamDestination; a
+  // MediaRecorder muxes both. A 10s selection takes ~10s, hence the Post-time
+  // progress. Downscaling the longest edge to ~1280 keeps the upload small (the
+  // raw camera clip can be 4K). Works in WKWebView (iOS 15+) and desktop.
+  function reencodeWindow(blob, startSec, endSec, { maxEdge = 1280, onProgress } = {}) {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement('video');
+      v.src = URL.createObjectURL(blob);
+      v.playsInline = true; v.preload = 'auto';
+      let audioCtx, recorder, raf;
+      const cleanup = () => {
+        cancelAnimationFrame(raf);
+        try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch {}
+        try { audioCtx && audioCtx.close(); } catch {}
+        try { URL.revokeObjectURL(v.src); } catch {}
+      };
+      const fail = (e) => { cleanup(); reject(e || new Error('trim-failed')); };
+      const guard = setTimeout(() => fail(new Error('trim-timeout')), (endSec - startSec) * 1000 + 15000);
+      v.addEventListener('error', () => fail(new Error('trim-load')), { once: true });
+      v.addEventListener('loadedmetadata', () => {
+        const vw = v.videoWidth || 1, vh = v.videoHeight || 1;
+        const scale = Math.min(1, maxEdge / Math.max(vw, vh));
+        const w = Math.max(2, Math.round(vw * scale / 2) * 2);
+        const h = Math.max(2, Math.round(vh * scale / 2) * 2);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        v.addEventListener('seeked', () => {
+          let tracks = canvas.captureStream(30).getVideoTracks();
+          // Route the element's audio through WebAudio (not the speakers) so the
+          // recorder captures it while the processing pass stays silent. A silent
+          // clip simply yields no audio track — fine.
+          try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const dest = audioCtx.createMediaStreamDestination();
+            audioCtx.createMediaElementSource(v).connect(dest);
+            tracks = tracks.concat(dest.stream.getAudioTracks());
+          } catch {}
+          const cands = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+          const mime = cands.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+          const chunks = [];
+          try { recorder = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime } : undefined); }
+          catch (e) { return fail(e); }
+          recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+          recorder.onstop = () => {
+            clearTimeout(guard);
+            const type = recorder.mimeType || mime || 'video/mp4';
+            const ext = /mp4/i.test(type) ? 'mp4' : /webm/i.test(type) ? 'webm' : 'mov';
+            try { audioCtx && audioCtx.close(); } catch {}
+            try { URL.revokeObjectURL(v.src); } catch {}
+            resolve({ blob: new Blob(chunks, { type }), mimeType: type, ext, dims: { w, h } });
+          };
+          recorder.start();
+          v.play().catch(() => {});
+          const draw = () => {
+            try { ctx.drawImage(v, 0, 0, w, h); } catch {}
+            if (onProgress) onProgress(Math.min(1, (v.currentTime - startSec) / Math.max(0.1, endSec - startSec)));
+            if (v.currentTime >= endSec || v.ended) {
+              v.pause();
+              try { if (recorder.state !== 'inactive') recorder.stop(); } catch {}
+              return;
+            }
+            raf = requestAnimationFrame(draw);
+          };
+          raf = requestAnimationFrame(draw);
+        }, { once: true });
+        v.currentTime = Math.min(startSec, Math.max(0, (v.duration || endSec) - 0.1));
+      }, { once: true });
     });
   }
 
@@ -4222,10 +4962,44 @@
       data.audience = pubAudience.mode;          // 'circle' | 'list'
       data.audienceUsers = pubAudience.users;    // usernames when 'list'
     } else if (pubType === 'photo') {
-      if (!cropper) { errEl.textContent = 'Choose a photo first.'; return; }
-      data.image = cropper.export();
-      data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
-      data.imageTint = cropper.tint(); // photo's average colour → colour-up in the feed
+      if (!cropper && !videoCapture) { errEl.textContent = 'Capture or choose a frame first.'; return; }
+      if (videoCapture) {
+        const vc = videoCapture;
+        const btn0 = document.querySelector('.composer-submit');
+        const trimmed = vc.start > 0.05 || vc.end < vc.duration - 0.05;
+        let finalBlob = vc.blob;
+        // Cut only when the window is actually shorter than the source (or the
+        // source runs past the cap). An untrimmed ≤10s clip uploads as-is — no
+        // needless re-encode, no wait.
+        if (trimmed || vc.duration > MAX_CLIP_SEC + 0.1) {
+          if (btn0) { btn0.disabled = true; btn0.textContent = 'Trimming…'; }
+          errEl.textContent = '';
+          setPostProgress('Trimming', 0);
+          try {
+            const out = await reencodeWindow(vc.blob, vc.start, Math.min(vc.end, vc.start + MAX_CLIP_SEC), {
+              onProgress: (p) => setPostProgress('Trimming', p),
+            });
+            finalBlob = out.blob;
+          } catch {
+            errEl.textContent = 'Couldn’t trim that clip, try again or pick a shorter selection.';
+            clearPostProgress();
+            if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
+            return;
+          }
+        }
+        data.video = finalBlob;
+        // Poster + tint from the FINAL blob's first frame, so a trimmed clip's
+        // poster matches its new start. Best-effort — the feed self-paints a first
+        // frame via #t=0.001 if this fails.
+        try {
+          const g = await grabPosterFromBlob(finalBlob);
+          if (g.dataUrl) { data.poster = g.dataUrl; data.imageDims = { w: g.w, h: g.h }; data.imageTint = await tintFromDataUrl(g.dataUrl); }
+        } catch {}
+      } else {
+        data.image = cropper.export();
+        data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
+        data.imageTint = cropper.tint(); // photo's average colour → colour-up in the feed
+      }
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {
@@ -4241,21 +5015,54 @@
       return;
     }
 
-    // Writes now hit the network (and, for photos, an upload), so reflect the
-    // wait rather than freezing on click.
+    // Writes now hit the network (and, for photos/videos, an upload), so reflect
+    // the wait rather than freezing on click.
     const btn = document.querySelector('.composer-submit');
     if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
     errEl.textContent = '';
 
-    const res = await Store.createPost(data);
+    // A video shows a real, byte-level upload bar (it's the big transfer). Photos
+    // and text posts are small enough that a spinner-word says enough; the bar
+    // stays hidden for them.
+    const res = await Store.createPost(data, {
+      onProgress: data.video ? (p) => setPostProgress('Uploading', p) : undefined,
+    });
     if (!res.ok) {
       errEl.textContent = res.error;
+      clearPostProgress();
       if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
       return;
     }
+    clearPostProgress();
     cropper = null;
+    videoCapture = null;
     pubType = 'note';           // reset for next time
     go('#/');
+  }
+
+  // The composer's shared progress affordance, used for both phases of a video
+  // post: the local trim re-encode, then the network upload. Determinate bar +
+  // a "Label 42%" caption; the Post button mirrors the caption as its text.
+  function setPostProgress(label, frac) {
+    const wrap = document.getElementById('c-progress');
+    const fill = document.getElementById('c-progress-fill');
+    const cap  = document.getElementById('c-progress-label');
+    const btn  = document.querySelector('.composer-submit');
+    const pct  = Math.max(0, Math.min(100, Math.round((frac || 0) * 100)));
+    // Reveal via a class (opacity/max-height on its own layer), never by toggling
+    // `display` — a display:none→flex flip during the main-thread-heavy re-encode/
+    // upload won't repaint on iOS WebKit until a scroll forces it (the "invisible
+    // until I scroll" bug). Compositor-friendly props paint reliably under load.
+    if (wrap) wrap.classList.add('is-active');
+    if (fill) fill.style.width = pct + '%';
+    if (cap)  cap.textContent = `${label} ${pct}%`;
+    if (btn)  { btn.disabled = true; btn.textContent = `${label}… ${pct}%`; }
+  }
+  function clearPostProgress() {
+    const wrap = document.getElementById('c-progress');
+    const fill = document.getElementById('c-progress-fill');
+    if (wrap) wrap.classList.remove('is-active');
+    if (fill) fill.style.width = '0%';
   }
 
   // Save an inline text edit. Reads the form by type, applies the same rules as
@@ -4306,20 +5113,27 @@
   /* ── Lightbox ────────────────────────────────────────────────────────────── */
   let lightbox = null;
   let lightboxReturn = null;   // element to restore focus to on close
-  function openLightbox(src, alt) {
+  function openLightbox(src, alt, isVideo) {
     if (!lightbox) {
       lightbox = document.createElement('div');
       lightbox.className = 'lightbox';
       lightbox.tabIndex = -1;
       lightbox.setAttribute('role', 'dialog');
       lightbox.setAttribute('aria-modal', 'true');
-      lightbox.setAttribute('aria-label', 'Photo viewer');
-      lightbox.innerHTML = '<img alt="">';
       lightbox.addEventListener('click', closeLightbox);
       document.body.appendChild(lightbox);
     }
-    const im = lightbox.querySelector('img');
-    im.src = src; im.alt = alt || '';
+    lightbox.setAttribute('aria-label', isVideo ? 'Frame viewer' : 'Photo viewer');
+    // Rebuilt fresh on every open (not just swapping src) so a video never
+    // lingers as dead markup once the lightbox is reused for a photo, or vice
+    // versa. A Frame plays full sound here — this is the one explicit,
+    // user-initiated place unmuted/fullscreen autoplay is safe to assume.
+    lightbox.innerHTML = isVideo
+      ? `<video src="${esc(src)}" playsinline controls autoplay></video>`
+      : `<img src="${esc(src)}" alt="${esc(alt || '')}">`;
+    // Native video controls (scrub, pause) must not bubble into the backdrop's
+    // click-to-close; tapping the photo itself, though, still closes as before.
+    if (isVideo) lightbox.querySelector('video').addEventListener('click', e => e.stopPropagation());
     lightboxReturn = document.activeElement;
     document.body.style.overflow = 'hidden';   // lock the page behind it
     lightbox.classList.add('open');
@@ -4328,6 +5142,10 @@
   }
   function closeLightbox() {
     if (!lightbox) return;
+    // A playing <video> must be stopped, not just visually hidden, or it keeps
+    // decoding (and, if unmuted, keeps making sound) behind the closed sheet.
+    const v = lightbox.querySelector('video');
+    if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
     lightbox.classList.remove('open');
     document.body.style.overflow = '';
     document.removeEventListener('keydown', onKey);
@@ -4874,6 +5692,11 @@
   }
 
   function route() {
+    // Navigating away from Publish must stop a live camera/mic stream — the
+    // capture surface's own DOM is about to be replaced, which wouldn't
+    // otherwise release it (see wireFrameCapture's teardown).
+    if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
+
     // Gate: no session → the setup / login screen, whatever the hash says.
     // The one exception is About, the public front door — reachable from a
     // link on the gate itself (it renders chromeless, with a way back).

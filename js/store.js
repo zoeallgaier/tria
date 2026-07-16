@@ -75,7 +75,8 @@ const Store = (() => {
     if (p.url)      o.url = p.url;
     if (p.note)     o.note = p.note;
     if (p.image)    o.image = p.image;
-    if (p.tint)     o.tint = p.tint;   // photo's average colour → colour-up in the feed
+    if (p.tint)     o.tint = p.tint;   // photo/poster's average colour → colour-up in the feed
+    if (p.poster)   o.poster = p.poster;   // first-frame still for a video Frame
     if (p.location) o.location = p.location;
     if (p.event_date) o.eventDate = p.event_date;
     if (p.event_time) o.eventTime = p.event_time;
@@ -440,28 +441,85 @@ const Store = (() => {
   }
 
   // ── Compose (async writes) ──────────────────────────────────────────────────
-  // Upload a cropped JPEG (a data: URI from the cropper) into the public 'media'
+  // Upload a data: URI or a Blob/File (native video capture hands back a Blob —
+  // it must never be inflated to a base64 data-URI first) into the public 'media'
   // bucket under the user's own {uid}/ folder, and hand back its public URL. This
-  // is why photos no longer bloat the database — the column just stores the URL.
-  async function uploadImage(dataURI, kind, dims) {
-    if (!/^data:/.test(dataURI)) return dataURI;      // already a URL → pass through
+  // is why photos/videos no longer bloat the database — the column just stores
+  // the URL. `contentType`/`ext` come from the caller (the recorder's mimeType on
+  // web, the native file's type on device) — never assumed to be JPEG.
+  async function uploadMedia(source, kind, { contentType, ext, dims, onProgress } = {}) {
     const me = currentUser();
     if (!me) throw new Error('Not signed in.');
-    const blob = await (await fetch(dataURI)).blob();
-    // Stamp the pixel size into the filename (…-WxH.jpg) so the feed can reserve
-    // the photo's space before it loads (see imageDimsFromUrl) — no extra column,
-    // no metadata round-trip. Avatars (fixed-size tiles) skip this.
+    let blob, type = contentType, extension = ext;
+    if (typeof source === 'string') {
+      if (!/^data:/.test(source)) return source;      // already a URL → pass through
+      blob = await (await fetch(source)).blob();
+      type = type || blob.type || 'image/jpeg';
+      extension = extension || 'jpg';
+    } else {
+      blob = source;
+      type = type || blob.type || 'application/octet-stream';
+      extension = extension || (type.split('/')[1] || 'bin').split(';')[0];
+    }
+    // Stamp the pixel size into the filename (…-WxH.ext) so the feed can reserve
+    // the photo/video's space before it loads (see imageDimsFromUrl) — no extra
+    // column, no metadata round-trip. Avatars (fixed-size tiles) skip this.
     const dim = dims && dims.w && dims.h ? `-${dims.w}x${dims.h}` : '';
-    const path = `${me.id}/${kind}-${Date.now()}${dim}.jpg`;
+    const path = `${me.id}/${kind}-${Date.now()}${dim}.${extension}`;
+    // Real byte-level progress (videos are the big upload) needs XHR — supabase-js's
+    // .upload() runs on fetch with no progress events. We POST straight to the same
+    // Storage REST endpoint it would hit, streaming xhr.upload.onprogress to the
+    // caller, and fall back to sb.storage.upload() if anything about XHR fails.
+    if (onProgress) {
+      try {
+        await xhrUpload(path, blob, type, onProgress);
+        return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
+      } catch (e) {
+        if (e && e._httpStatus) throw e;   // a real server rejection — don't mask it
+        // XHR plumbing failed (offline shim, blocked, etc.) → fall through to fetch.
+      }
+    }
     const { error } = await sb.storage.from('media')
       // Filenames are versioned (a fresh timestamp each save), so the bytes at a
       // URL never change — cache them for a year to make repeat loads instant.
-      .upload(path, blob, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
+      .upload(path, blob, { contentType: type, upsert: false, cacheControl: '31536000' });
     if (error) throw error;
     return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
   }
 
-  async function createPost(data) {
+  // POST a blob to Storage with progress. Mirrors supabase-js's own upload request
+  // (bucket 'media', the user's bearer token + publishable apikey) so RLS applies
+  // identically; the only reason we hand-roll it is xhr.upload.onprogress.
+  async function xhrUpload(path, blob, type, onProgress) {
+    const { data } = await sb.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) throw new Error('No session for upload.');
+    const endpoint = `${url}/storage/v1/object/media/${path.split('/').map(encodeURIComponent).join('/')}`;
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', endpoint);
+      xhr.setRequestHeader('authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('apikey', key);
+      xhr.setRequestHeader('cache-control', 'max-age=31536000');
+      xhr.setRequestHeader('x-upsert', 'false');
+      if (type) xhr.setRequestHeader('content-type', type);
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) onProgress(ev.loaded / ev.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) { onProgress(1); resolve(); }
+        else { const err = new Error(`Upload failed (${xhr.status}).`); err._httpStatus = xhr.status; reject(err); }
+      };
+      xhr.onerror = () => reject(new Error('Upload network error.'));
+      xhr.onabort = () => reject(new Error('Upload aborted.'));
+      xhr.send(blob);
+    });
+  }
+  function uploadImage(dataURI, kind, dims) {
+    return uploadMedia(dataURI, kind, { contentType: 'image/jpeg', ext: 'jpg', dims });
+  }
+
+  async function createPost(data, { onProgress } = {}) {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
     const row = { author: idOf(me), type: data.type, tags: data.tags || [] };
@@ -476,7 +534,18 @@ const Store = (() => {
     if (data.location) row.location = data.location;
     if (data.eventDate) row.event_date = data.eventDate;
     if (data.eventTime) row.event_time = data.eventTime;
-    if (data.image) {
+    if (data.video) {
+      try {
+        const vExt = /mp4/i.test(data.video.type) ? 'mp4' : /webm/i.test(data.video.type) ? 'webm' : 'mov';
+        row.image = await uploadMedia(data.video, 'video', { contentType: data.video.type || 'video/mp4', ext: vExt, dims: data.imageDims, onProgress });
+        // Best-effort: the feed's #t=0.001 fragment self-paints a first frame even
+        // without a stored poster, so a failed/skipped poster upload isn't fatal.
+        if (data.poster) row.poster = await uploadImage(data.poster, 'poster', data.imageDims);
+      } catch { return { ok: false, error: 'Couldn’t upload the video, try again.' }; }
+      // The poster's average colour rides along in the row (no upload) so the feed
+      // settles it over its own colour. Best-effort: without it, the neutral box.
+      if (data.imageTint) row.tint = data.imageTint;
+    } else if (data.image) {
       try { row.image = await uploadImage(data.image, 'photo', data.imageDims); }
       catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
       // The photo's average colour rides along in the row (no upload) so the feed
@@ -877,14 +946,21 @@ function placeholderPhoto(id, alt) {
   return { src: 'data:image/svg+xml,' + encodeURIComponent(svg), alt: alt || 'Photo', w: 800, h: 800 };
 }
 
-// A post photo is uploaded as `…-WIDTHxHEIGHT.jpg`, so its pixel size can be read
-// straight from the URL — no extra column, no metadata fetch. The feed hands the
-// <img> those width/height attributes so the browser reserves the exact space
-// before the bytes arrive, and nothing reflows as photos stream in. Legacy photos
-// (uploaded before the stamp) and avatars return null and fall back gracefully.
+// A post photo/video is uploaded as `…-WIDTHxHEIGHT.ext`, so its pixel size can be
+// read straight from the URL — no extra column, no metadata fetch. The feed hands
+// the <img>/<video> those width/height attributes so the browser reserves the
+// exact space before the bytes arrive, and nothing reflows as media streams in.
+// Legacy photos (uploaded before the stamp) and avatars return null and fall back
+// gracefully.
 function imageDimsFromUrl(url) {
-  const m = /-(\d+)x(\d+)\.jpe?g/i.exec(url || '');
+  const m = /-(\d+)x(\d+)\.(?:jpe?g|mp4|webm|mov)/i.exec(url || '');
   if (!m) return null;
   const w = +m[1], h = +m[2];
   return w && h ? { w, h } : null;
+}
+
+// A Frame's `image` column holds either a still or a short clip; tell them apart
+// by extension so the feed can branch to a <video> instead of an <img>.
+function isVideoUrl(url) {
+  return /\.(mp4|webm|mov)$/i.test(url || '');
 }
