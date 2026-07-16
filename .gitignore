@@ -2,6 +2,10 @@
 node_modules
 www
 
+# Local test media (e.g. sample clips for the Frame trimmer) — never deploy these
+*.MOV
+*.mov
+
 # Xcode / Capacitor build artifacts (the ios/App project itself is checked in)
 ios/App/App/public
 ios/DerivedData

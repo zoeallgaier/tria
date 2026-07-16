@@ -3258,6 +3258,80 @@ body.gate main { padding: 0; }
   max-height: 46vh;
   object-fit: contain;
 }
+/* ── Trim loading + reveal ───────────────────────────────────────────────────
+   While we read metadata + sample the filmstrip off this one element, the clip is
+   being seeked around. We hide those frames, hold the surface open with a calm
+   cyan shimmer (the photo-type colour), then reveal the preview + strip together
+   once playback starts — a settle, never a pop. */
+.trim-video {
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.trim-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+.trim-loading-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--type-photo);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--type-photo) 55%, transparent);
+  animation: trim-pulse 1.1s var(--ease-soft) infinite;
+}
+.trim--loading .trim-stage {
+  min-height: 200px;
+  /* A soft cyan sweep over the neutral placeholder — reads as "developing." */
+  background-image: linear-gradient(100deg,
+    transparent 38%,
+    color-mix(in srgb, var(--type-photo) 16%, transparent) 50%,
+    transparent 62%);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: trim-shimmer 1.25s linear infinite;
+}
+.trim--loading .trim-video { opacity: 0; }
+.trim--loading .trim-loading { display: flex; }
+/* The strip fills its cells in, then wipes open left-to-right on reveal. The
+   resting shape is an explicit inset(0) so the wipe can interpolate (a clip-path
+   of `none` wouldn't animate). */
+.trim-thumbs { clip-path: inset(0); transition: clip-path var(--dur-slow) var(--ease); }
+.trim--loading .trim-thumbs { clip-path: inset(0 100% 0 0); }
+.trim--loading .trim-strip {
+  pointer-events: none;   /* no scrubbing while we seek to sample */
+  background-image: linear-gradient(100deg,
+    transparent 38%,
+    color-mix(in srgb, var(--type-photo) 16%, transparent) 50%,
+    transparent 62%);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: trim-shimmer 1.25s linear infinite;
+}
+@keyframes trim-shimmer {
+  from { background-position: 220% 0; }
+  to   { background-position: -120% 0; }
+}
+@keyframes trim-pulse {
+  0%   { transform: scale(0.85); box-shadow: 0 0 0 0 color-mix(in srgb, var(--type-photo) 55%, transparent); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 7px transparent; }
+  100% { transform: scale(0.85); box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trim-video { transition: none; }
+  .trim-thumbs { transition: none; }
+  .trim--loading .trim-thumbs { clip-path: none; }
+  .trim--loading .trim-stage,
+  .trim--loading .trim-strip { animation: none; }
+  .trim-loading-dot { animation: none; }
+}
 .trim-sound {
   position: absolute;
   right: 10px;

@@ -3998,6 +3998,9 @@
           `<div class="trim" id="c-trim" hidden>` +
             `<div class="trim-stage">` +
               `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
+              // Shown only while .trim--loading — a calm shimmer + word so a heavy
+              // clip (4K, iCloud) reads as "working," never frozen. Hidden on reveal.
+              `<div class="trim-loading" aria-live="polite"><span class="trim-loading-dot"></span>Getting your clip ready</div>` +
               `<button type="button" class="trim-sound" id="c-trimsound" ` +
                 `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
             `</div>` +
@@ -4241,14 +4244,19 @@
 
     // Trim window state — tD = full clip duration, [tStart,tEnd] = the selected
     // window (seconds). Hoisted so the drag/playhead handlers wired once below all
-    // read the same live values; finishVideo resets them per clip.
-    let tD = 0, tStart = 0, tEnd = 0, tDrag = null;
+    // read the same live values; finishVideo resets them per clip. tPlaying gates
+    // the looping playhead so it can't fight the seeks while we sample the strip.
+    let tD = 0, tStart = 0, tEnd = 0, tDrag = null, tPlaying = false;
 
     // Switching post type (or re-mounting) tears this surface down — release the
     // trim clip's object URL so a played preview doesn't leak. mountFields calls
     // this via stopActiveCapture before replacing the DOM.
     function teardown() {
+      tPlaying = false;
       try { trimVideo.pause(); } catch {}
+      // Drop the source and reload so iOS actually frees the decoder (not just
+      // pauses it) — the Post-time re-encode needs that one decoder slot.
+      try { trimVideo.removeAttribute('src'); trimVideo.load(); } catch {}
       if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
     }
     stopActiveCapture = teardown;
@@ -4276,6 +4284,7 @@
       drop.hidden = true;
       cropEl.hidden = false;
       // Swapping in from a video pick — tear the trim surface down.
+      tPlaying = false;
       try { trimVideo.pause(); } catch {}
       trimEl.hidden = true;
       replace.hidden = false;
@@ -4294,10 +4303,15 @@
     }
 
     // ── Video → trim surface ─────────────────────────────────────────────────
-    // A library-picked clip of any length lands here. We show the trim surface:
-    // the clip plays, and the filmstrip lets you pick the ≤10s window to keep.
-    // videoCapture holds the ORIGINAL blob plus the window; the actual cut/
-    // re-encode happens once, on Post (see submitComposer).
+    // A library-picked clip of any length lands here: it plays, and the filmstrip
+    // lets you pick the ≤10s window to keep. videoCapture holds the ORIGINAL blob
+    // plus the window; the actual cut/re-encode happens once, on Post (submitComposer).
+    //
+    // Everything runs on ONE <video>, in strict sequence — read metadata, sample the
+    // filmstrip, then loop the preview. iOS caps how many clips can decode at once,
+    // so the old split (a hidden sampler decoding the same file while the preview
+    // played) starved the decoder and blanked BOTH on-device. One element sidesteps
+    // that entirely, and it's less code besides.
     async function finishVideo(blob) {
       drop.hidden = true;
       cropEl.hidden = true;
@@ -4307,39 +4321,63 @@
 
       const mimeType = blob.type || 'video/mp4';
       const ext = /mp4/i.test(mimeType) ? 'mp4' : /webm/i.test(mimeType) ? 'webm' : 'mov';
-      const dur = (await videoDuration(blob)) || MAX_CLIP_SEC;
 
-      tD = dur;
-      tStart = 0;
-      tEnd = Math.min(dur, MAX_CLIP_SEC);
-      videoCapture = { blob, mimeType, ext, duration: dur, start: tStart, end: tEnd,
-                       poster: null, tint: null, dims: null };
+      // Reset per-clip state and clear the previous strip.
+      tPlaying = false; tDrag = null; tD = 0;
+      trimThumbs.innerHTML = '';
+      trimEl.classList.add('trim--loading');   // steady placeholder until the first frame paints
 
       if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} }
       const url = URL.createObjectURL(blob);
       trimVideo._url = url;
-      trimVideo.src = url;
       trimVideo.muted = true;
       trimSound.setAttribute('aria-pressed', 'false');
       trimSound.innerHTML = svgIcon('mute', 'trim-sound-ico');
+      trimVideo.src = url;
+
+      // Metadata (duration + native size) off the preview element itself.
+      const meta = await loadClipMeta(trimVideo);
+      tD = meta.duration;
+      tStart = 0;
+      tEnd = Math.min(tD, MAX_CLIP_SEC);
+      videoCapture = { blob, mimeType, ext, duration: tD, durationKnown: meta.known,
+                       start: tStart, end: tEnd, poster: null, tint: null,
+                       dims: (meta.w && meta.h) ? { w: meta.w, h: meta.h } : null };
       layoutTrim();
-      // Build the filmstrip BEFORE starting playback. iOS caps how many <video>
-      // elements can decode at once — a sampler decoding the same clip while the
-      // preview is playing comes back blank on-device (fine on desktop, which
-      // allows many decoders). So sample first with the decoder to ourselves,
-      // then hand it back to the preview. Best-effort — on failure the strip
-      // just shows its neutral track, the window/handles still work.
-      buildFilmstrip(blob, dur, trimThumbs)
-        .catch(() => {})
-        .finally(() => { trimVideo.play().catch(() => {}); });
+
+      // Sample the filmstrip off the same element (best-effort — a failure just
+      // leaves the neutral track, the window/handles still work), then release the
+      // decoder to looping playback.
+      await sampleFilmstrip(trimVideo, tD, trimThumbs).catch(() => {});
+      // Cue the window's first frame and start playback while still invisible, THEN
+      // drop the loading class so the preview fades in on a real frame (not the last
+      // one we happened to seek to) and the strip wipes open alongside it.
+      tPlaying = true;
+      trimVideo.currentTime = tStart;
+      trimVideo.play().catch(() => {});
+      trimEl.classList.remove('trim--loading');
     }
 
     // Reflect [tStart,tEnd] onto the window + duration pill, and keep videoCapture
     // in sync so Post always cuts the currently-shown selection.
     function layoutTrim() {
       if (!tD) return;
-      trimWindow.style.left  = (tStart / tD * 100) + '%';
-      trimWindow.style.width = ((tEnd - tStart) / tD * 100) + '%';
+      let leftPct  = tStart / tD * 100;
+      let widthPct = (tEnd - tStart) / tD * 100;
+      // Option A — any clip length is allowed, so on a long source (a whole minute+)
+      // the real window can shrink to an ungrabbable sliver. Floor its ON-SCREEN
+      // width to keep both handles + a drag strip reachable (the duration pill still
+      // reports the exact seconds), nudging it left if the floored box would spill
+      // off the strip's right edge. Purely visual — the drag math reads seconds, not
+      // pixels, so the selection stays accurate.
+      const stripW = trimStrip.clientWidth || 1;
+      const minPct = Math.min(100, 56 / stripW * 100);
+      if (widthPct < minPct) {
+        widthPct = minPct;
+        leftPct = Math.max(0, Math.min(leftPct, 100 - widthPct));
+      }
+      trimWindow.style.left  = leftPct + '%';
+      trimWindow.style.width = widthPct + '%';
       trimDur.textContent = fmtClip(tEnd - tStart);
       // Announce the selection to assistive tech (the handles are drag-only).
       trimWindow.setAttribute('aria-valuetext',
@@ -4356,7 +4394,7 @@
       if (tD) trimPlay.style.left = (clamp(trimVideo.currentTime, 0, tD) / tD * 100) + '%';
     };
     const previewTick = () => {
-      if (tD && !tDrag) {
+      if (tD && tPlaying && !tDrag) {
         // Loop the instant we reach the window's end (or fall before its start).
         if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
           trimVideo.currentTime = tStart;
@@ -4420,7 +4458,9 @@
     async function handleLibraryVideo(f) {
       const err = errEl();
       if (f.size > MAX_LIBRARY_VIDEO_BYTES) {
-        if (err) err.textContent = 'That video is too large to trim here, pick a shorter one.';
+        // Length is fine (the trimmer cuts to ≤10s) — this only guards raw file
+        // size, which is what the browser struggles to seek, so speak to size.
+        if (err) err.textContent = 'That file is too big to load here, try a smaller video.';
         return;
       }
       if (err) err.textContent = '';
@@ -4429,35 +4469,38 @@
     }
   }
 
-  // Reads a freshly-picked/recorded video's duration. Safari/WebKit often reports
-  // `Infinity` for a MediaRecorder blob until the element is forced to seek to the
-  // end, so nudge it and wait for `durationchange`. Returns 0 when it can't tell —
-  // callers fall back to a measured hint. Hardened against two WebKit traps:
+  // Read a just-loaded clip's duration + native size straight off the preview
+  // <video> (src already set). Safari/WebKit reports `Infinity` for a MediaRecorder
+  // blob until the element is forced to seek to the end, so nudge it and wait for a
+  // finite `durationchange`. Returns { duration, w, h, known }: `known` is false
+  // when we couldn't measure the length, which tells Post to cut defensively rather
+  // than trust an untrimmed upload. Hardened against two WebKit traps:
   //   • `durationchange` can fire mid-seek while duration is STILL Infinity — only
-  //     resolve once it's finite, or we'd hand back 0 on a perfectly good clip.
-  //   • a stubborn blob might never settle — a 3s guard resolves 0 rather than
+  //     settle once it's finite, or we'd fall back on a perfectly good clip.
+  //   • a stubborn blob might never settle — a 3s guard resolves rather than
   //     leaving finishVideo's `await` (and the whole trim surface) hung forever.
-  function videoDuration(file) {
+  function loadClipMeta(v) {
     return new Promise((resolve) => {
-      const v = document.createElement('video');
-      v.preload = 'metadata';
       let settled = false;
-      const done = (d) => {
+      const finish = (d) => {
         if (settled) return;
         settled = true;
         clearTimeout(guard);
-        try { URL.revokeObjectURL(v.src); } catch {}
-        resolve(Number.isFinite(d) && d > 0 ? d : 0);
+        v.ondurationchange = null;
+        const known = Number.isFinite(d) && d > 0;
+        try { v.currentTime = 0; } catch {}
+        resolve({ duration: known ? d : MAX_CLIP_SEC, known, w: v.videoWidth, h: v.videoHeight });
       };
-      const guard = setTimeout(() => done(0), 3000);
-      v.onloadedmetadata = () => {
+      const guard = setTimeout(() => finish(v.duration), 3000);
+      const onMeta = () => {
         if (v.duration === Infinity || Number.isNaN(v.duration)) {
           v.currentTime = 1e9;
-          v.ondurationchange = () => { if (Number.isFinite(v.duration)) done(v.duration); };
-        } else done(v.duration);
+          v.ondurationchange = () => { if (Number.isFinite(v.duration)) finish(v.duration); };
+        } else finish(v.duration);
       };
-      v.onerror = () => done(0);
-      v.src = URL.createObjectURL(file);
+      if (v.readyState >= 1) onMeta();
+      else v.addEventListener('loadedmetadata', onMeta, { once: true });
+      v.addEventListener('error', () => finish(0), { once: true });
     });
   }
 
@@ -4519,71 +4562,40 @@
                    : `${s.toFixed(1)}s`;
   }
 
-  // Sample `count` evenly-spaced thumbnails across a clip into the strip. Sequential
-  // seeks (iOS won't overlap them); each thumb waits on `seeked` with a short
-  // timeout so a stubborn frame can't hang the whole strip. Best-effort throughout.
-  //
-  // iOS caveats this navigates: (a) a seeked event fires before the GPU process has
-  // actually painted the new frame, so drawImage can grab black — we wait on
-  // requestVideoFrameCallback (a real painted frame) when available, then re-check
-  // the pixel and nudge the seek once if it still came back black; (b) the sampler
-  // must have the decoder to itself (the caller keeps the preview paused until we're
-  // done), and a longer per-seek budget since 4K HEVC library clips are slow to seek.
-  async function buildFilmstrip(blob, duration, container, count = 10) {
+  // Sample `count` evenly-spaced thumbnails across the clip into the strip, drawn
+  // from the SAME <video> the preview uses (v, src already loaded). Seeks are
+  // sequential — iOS won't overlap them — and each waits on a genuinely painted
+  // frame (requestVideoFrameCallback, since a `seeked` event fires before the GPU
+  // process has actually painted), bounded so one stubborn frame can't hang the
+  // strip. Best-effort: a black or missed grab just leaves a darker cell; the
+  // window/handles work regardless. The caller keeps the preview paused (tPlaying
+  // false) throughout, so nothing fights these seeks.
+  async function sampleFilmstrip(v, duration, container, count = 10) {
     container.innerHTML = '';
-    const v = document.createElement('video');
-    v.src = URL.createObjectURL(blob);
-    v.muted = true; v.playsInline = true; v.preload = 'auto';
-    await new Promise((res) => {
-      v.addEventListener('loadeddata', res, { once: true });
-      v.addEventListener('error', res, { once: true });
-      setTimeout(res, 4000);
-    });
     const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
     const th = 52, tw = Math.max(1, Math.round(th * vw / vh));
-
-    // Seek, then resolve only once a frame has genuinely painted (rVFC) — falling
-    // back to `seeked` + a rAF where rVFC is unavailable. Bounded by `budget`ms.
-    const seekAndPaint = (t, budget) => new Promise((res) => {
-      let done = false;
-      const finish = () => { if (!done) { done = true; res(); } };
-      const timer = setTimeout(finish, budget);
-      const painted = () => { clearTimeout(timer); finish(); };
-      if (typeof v.requestVideoFrameCallback === 'function') {
-        v.requestVideoFrameCallback(() => painted());
-      } else {
-        v.addEventListener('seeked', () => requestAnimationFrame(painted), { once: true });
-      }
-      v.currentTime = t;
-    });
-    const drawThumb = () => {
-      const c = document.createElement('canvas');
-      c.width = tw; c.height = th;
-      const ctx = c.getContext('2d');
-      try { ctx.drawImage(v, 0, 0, tw, th); } catch {}
-      let black = true;
-      try {
-        const d = ctx.getImageData(0, 0, tw, th).data;
-        for (let p = 0; p < d.length && black; p += 4)
-          if (d[p] > 8 || d[p + 1] > 8 || d[p + 2] > 8) black = false;
-      } catch { black = false; } // tainted canvas — can't sample, keep the draw
-      return { c, black };
-    };
-
     for (let i = 0; i < count; i++) {
       const t = Math.min(duration * (i + 0.5) / count, Math.max(0, duration - 0.05));
-      await seekAndPaint(t, 1200);
-      let { c, black } = drawThumb();
-      // A black grab usually means the frame hadn't landed — nudge the seek and
-      // retry once before settling for whatever we got.
-      if (black) {
-        await seekAndPaint(Math.min(t + 0.08, Math.max(0, duration - 0.02)), 1200);
-        ({ c } = drawThumb());
-      }
+      await seekPaint(v, t, 1200);
+      const c = document.createElement('canvas');
+      c.width = tw; c.height = th;
       c.className = 'trim-thumb';
+      try { c.getContext('2d').drawImage(v, 0, 0, tw, th); } catch {}
       container.appendChild(c);
     }
-    try { URL.revokeObjectURL(v.src); } catch {}
+  }
+
+  // Seek `v` to `t` and resolve only once a frame has genuinely painted (rVFC),
+  // falling back to `seeked` + a rAF where rVFC is unavailable. Bounded by `budget`ms.
+  function seekPaint(v, t, budget) {
+    return new Promise((res) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(timer); res(); } };
+      const timer = setTimeout(finish, budget);
+      if (typeof v.requestVideoFrameCallback === 'function') v.requestVideoFrameCallback(finish);
+      else v.addEventListener('seeked', () => requestAnimationFrame(finish), { once: true });
+      v.currentTime = t;
+    });
   }
 
   // Re-encode the [startSec,endSec] window of a clip to a fresh, ≤10s, downscaled
@@ -4617,6 +4629,7 @@
         canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
         v.addEventListener('seeked', () => {
+          const t0 = v.currentTime;   // the parked start frame; playback = currentTime moving past it
           let tracks = canvas.captureStream(30).getVideoTracks();
           // Route the element's audio through WebAudio (not the speakers) so the
           // recorder captures it while the processing pass stays silent. A silent
@@ -4641,12 +4654,23 @@
             try { URL.revokeObjectURL(v.src); } catch {}
             resolve({ blob: new Blob(chunks, { type }), mimeType: type, ext, dims: { w, h } });
           };
-          recorder.start();
           v.play().catch(() => {});
+          // Draw every frame to the canvas from the outset (so the stream always has
+          // content), but DON'T start the recorder until playback has actually moved
+          // past the parked start frame. MediaRecorder counts wall-clock, and WebKit
+          // can take ~1s for play() to begin advancing currentTime — starting on that
+          // seeked event (as before) baked that second of frozen frame onto the front,
+          // so the cut ran ~1s long and no longer matched the trim window.
+          let recording = false;
           const draw = () => {
             try { ctx.drawImage(v, 0, 0, w, h); } catch {}
-            if (onProgress) onProgress(Math.min(1, (v.currentTime - startSec) / Math.max(0.1, endSec - startSec)));
-            if (v.currentTime >= endSec || v.ended) {
+            if (!recording && v.currentTime > t0 + 0.001) {
+              recording = true;
+              try { recorder.start(); } catch (e) { return fail(e); }
+            }
+            if (recording && onProgress)
+              onProgress(Math.min(1, (v.currentTime - t0) / Math.max(0.1, endSec - t0)));
+            if (recording && (v.currentTime >= endSec || v.ended)) {
               v.pause();
               try { if (recorder.state !== 'inactive') recorder.stop(); } catch {}
               return;
@@ -4801,11 +4825,17 @@
         const vc = videoCapture;
         const btn0 = document.querySelector('.composer-submit');
         const trimmed = vc.start > 0.05 || vc.end < vc.duration - 0.05;
+        // Free the preview's decoder before the re-encode spins up its own — iOS
+        // won't hand out two, and a contended re-encode records black frames.
+        if (stopActiveCapture) stopActiveCapture();
         let finalBlob = vc.blob;
-        // Cut only when the window is actually shorter than the source (or the
-        // source runs past the cap). An untrimmed ≤10s clip uploads as-is — no
-        // needless re-encode, no wait.
-        if (trimmed || vc.duration > MAX_CLIP_SEC + 0.1) {
+        // Cut when the window is shorter than the source, when the source runs past
+        // the cap, OR when we couldn't measure its length (cut defensively so an
+        // over-long clip can never sneak through untrimmed). An untrimmed, known
+        // ≤10s clip uploads as-is — no needless re-encode, no wait. reencodeWindow
+        // bounds itself to [start, start+10] and stops at the real end either way,
+        // so the upload always matches the window the user set.
+        if (trimmed || !vc.durationKnown || vc.duration > MAX_CLIP_SEC + 0.1) {
           if (btn0) { btn0.disabled = true; btn0.textContent = 'Trimming…'; }
           errEl.textContent = '';
           setPostProgress('Trimming', 0);
@@ -4815,9 +4845,15 @@
             });
             finalBlob = out.blob;
           } catch {
-            errEl.textContent = 'Couldn’t trim that clip, try again or pick a shorter selection.';
+            errEl.textContent = 'Couldn’t trim that clip. Pick it again and try a shorter selection.';
             clearPostProgress();
             if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
+            // We released the preview decoder for the re-encode, so rather than leave
+            // a dead trim surface up, drop back to the picker for a clean retry.
+            videoCapture = null;
+            document.getElementById('c-trim')?.setAttribute('hidden', '');
+            document.getElementById('c-replace')?.setAttribute('hidden', '');
+            document.getElementById('c-drop')?.removeAttribute('hidden');
             return;
           }
         }
