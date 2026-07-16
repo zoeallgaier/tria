@@ -4091,13 +4091,13 @@
     }
 
     if (type === 'photo') {
-      // Caption + frame ride in one bordered box, split by a divider — same combo
-      // pattern as find, activity, and note, so all four types read the same up
-      // top. Caption leads (like every other type's text), the frame sits below.
+      // Caption + frame ride in one bordered box — same combo pattern as find,
+      // activity, and note, so all four types read the same up top. Caption leads
+      // (like every other type's text); the frame sits directly below with no
+      // divider, the media's own edge is separation enough.
       return `<div class="field field--combo">` +
           `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
             `placeholder="Say something, or let the frame speak." aria-label="Caption"></textarea>` +
-          `<div class="combo-divider" aria-hidden="true"></div>` +
           `<div class="combo-frame">` +
             `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
             `<div class="dropzone" id="c-drop">` +
@@ -4107,11 +4107,10 @@
             `<div class="crop crop--free" id="c-crop" hidden>` +
               `<img id="c-cropimg" alt="" draggable="false">` +
             `</div>` +
-            // Trim surface: a playing native preview + a flat scrub bar with a
-            // draggable ≤10s window (playhead + two handles, no canvas anywhere —
-            // that's what iOS renders blank). A picked video lands here; the clip
-            // plays and a longer library pick gets trimmed down in-app instead of
-            // getting bounced to Photos. See wireFrameCapture.
+            // Trim surface: a playing native preview + the scrollable thumbnail
+            // reel with a draggable ≤10s window. A picked video lands here; the
+            // clip plays and a longer library pick gets trimmed down in-app
+            // instead of getting bounced to Photos. See wireFrameCapture.
             `<div class="trim" id="c-trim" hidden>` +
               `<div class="trim-stage">` +
                 `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
@@ -4372,6 +4371,18 @@
     const replace  = root.querySelector('#c-replace');
     const errEl    = () => document.getElementById('c-error');
 
+    // Put a pick rejection where it can't be missed. iOS holds the user in the
+    // Photos sheet while it exports the pick (we're not even running yet), so by
+    // the time we can say anything they've been staring elsewhere for a while —
+    // scroll the message into view the moment control returns.
+    function showPickError(msg) {
+      const err = errEl();
+      if (!err) return;
+      err.textContent = msg;
+      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      try { err.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' }); } catch {}
+    }
+
     // Reel state — tD = full clip duration; [tStart,tEnd] = the selected ≤10s window;
     // selLen = its length; PPS = pixels-per-second zoom; lead = constant side padding
     // (half the initial frame) so the frame's edges sit flush with the clip at both
@@ -4481,8 +4492,7 @@
       // to the picker. (Unknown-duration blobs report ≤10s and pass — those are quick
       // MediaRecorder captures, never long library picks.)
       if (meta.known && tD > MAX_SOURCE_SEC) {
-        const err = errEl();
-        if (err) err.textContent = 'That video is longer than 3 minutes. Trim it in Photos first, or pick a shorter one.';
+        showPickError('That video is longer than 3 minutes. Trim it in Photos first, or pick a shorter one.');
         tPlaying = false;
         try { trimVideo.pause(); trimVideo.removeAttribute('src'); trimVideo.load(); } catch {}
         if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
@@ -4572,6 +4582,19 @@
       if (!cells.length) return;
       const w = trimVideo.videoWidth || 16, h = trimVideo.videoHeight || 9;
       const th = 120, tw = Math.max(1, Math.round(th * w / h));
+      // iOS WebKit draws a never-played <video> to canvas as TRANSPARENT — the
+      // element has to present a real frame before seek-and-draw lands pixels.
+      // Prime it with a brief muted play (allowed without a gesture; we're still
+      // behind the shimmer), then sample paused.
+      try {
+        await trimVideo.play();
+        await new Promise((res) => {
+          const tm = setTimeout(res, 350);
+          if (typeof trimVideo.requestVideoFrameCallback === 'function')
+            trimVideo.requestVideoFrameCallback(() => { clearTimeout(tm); res(); });
+        });
+      } catch {}
+      trimVideo.pause();
       for (let i = 0; i < cells.length; i++) {
         const t = Math.min((i + 0.5) * tD / cells.length, Math.max(0, tD - 0.05));
         await seekPaint(trimVideo, t, 900);
@@ -4579,8 +4602,13 @@
           const c = document.createElement('canvas'); c.width = tw; c.height = th;
           const g = c.getContext('2d');
           g.drawImage(trimVideo, 0, 0, tw, th);
-          const [r, gg, b] = g.getImageData(0, 0, 1, 1).data;
-          if (r || gg || b) cells[i].style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.7)})`;
+          // A failed WebKit draw leaves the canvas transparent, which a JPEG data
+          // URL would flatten to a solid black tile — so gate on ALPHA, not
+          // colour. Checking colour here would also throw away genuinely dark
+          // frames (night clips, letterboxed edges), which is why the reel could
+          // come up all-neutral on iPhone.
+          const px = g.getImageData(tw >> 1, th >> 1, 1, 1).data;
+          if (px[3]) cells[i].style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.7)})`;
         } catch {}
       }
     }
@@ -4632,10 +4660,13 @@
     });
 
     // Loop preview playback inside [tStart,tEnd]; the playhead tracks position inside
-    // the frame. Driven per-frame, not off `timeupdate` (which only fires ~4x/sec, so
-    // the clip would visibly overrun tEnd before looping) — requestVideoFrameCallback
-    // clamps it frame-tight, with a rAF fallback.
+    // the frame. Driven per-frame off rAF — not `timeupdate` (only ~4x/sec, the clip
+    // would visibly overrun tEnd before looping) and not requestVideoFrameCallback,
+    // which iOS WebKit stalls (same lesson as the re-encode draw loop): a stalled
+    // tick means nothing clamps playback to the window, so the looping preview
+    // drifts off the trimmer's selection entirely.
     const previewTick = () => {
+      if (!trimVideo.isConnected) return;   // surface torn down — end this loop (a remount wires a fresh one)
       if (tD && tPlaying && !dragging) {
         // Loop the instant we reach the window's end (or fall before its start).
         if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
@@ -4643,14 +4674,9 @@
         }
         positionPlayhead();
       }
-      scheduleTick();
+      requestAnimationFrame(previewTick);
     };
-    const scheduleTick = () => {
-      if (typeof trimVideo.requestVideoFrameCallback === 'function')
-        trimVideo.requestVideoFrameCallback(previewTick);
-      else requestAnimationFrame(previewTick);
-    };
-    scheduleTick();
+    requestAnimationFrame(previewTick);
 
     trimSound.addEventListener('click', () => {
       trimVideo.muted = !trimVideo.muted;
@@ -4685,13 +4711,13 @@
     });
 
     async function handleLibraryVideo(f) {
-      const err = errEl();
       if (f.size > MAX_LIBRARY_VIDEO_BYTES) {
         // Length is fine (the trimmer cuts to ≤10s) — this only guards raw file
         // size, which is what the browser struggles to seek, so speak to size.
-        if (err) err.textContent = 'That file is too big to load here, try a smaller video.';
+        showPickError('That file is too big to load here, try a smaller video.');
         return;
       }
+      const err = errEl();
       if (err) err.textContent = '';
       // Any length is fine — the trim surface enforces the ≤10s cut.
       await finishVideo(f);
@@ -4742,8 +4768,12 @@
       let done = false;
       const fin = () => { if (!done) { done = true; clearTimeout(tm); res(); } };
       const tm = setTimeout(fin, budget);
+      // Race BOTH signals, first one wins: rVFC is the precise one (the decoded
+      // frame is truly presented), but iOS WebKit can stall it on a paused
+      // element — seeked→rAF backstops it so sampling never crawls through the
+      // full budget on every cell.
       if (typeof v.requestVideoFrameCallback === 'function') v.requestVideoFrameCallback(fin);
-      else v.addEventListener('seeked', () => requestAnimationFrame(fin), { once: true });
+      v.addEventListener('seeked', () => requestAnimationFrame(fin), { once: true });
       try { v.currentTime = t; } catch { fin(); }
     });
   }
