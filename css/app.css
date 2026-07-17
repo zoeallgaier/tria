@@ -1999,6 +1999,18 @@ body.gate main { padding: 0; }
 .field input:focus,
 .field textarea:focus { outline: none; border-color: var(--accent); }
 .field-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
+/* The Note composer's link nudge (see wireFindNudge): a hint line whose action
+   reads like the auth screens' inline text buttons. */
+.find-nudge button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* Combined field: a headline input and its note stacked in one bordered box,
    split by a hairline divider, so the pair reads as a single cleaner block. The
@@ -4332,7 +4344,9 @@ body.gate main { padding: 0; }
 .about-fold.open .about-fold-panel { grid-template-rows: 1fr; opacity: 1; }
 .about-fold-inner { overflow: hidden; min-height: 0; }
 .about-fold-inner > :first-child { margin-top: 0.1rem; }
-.about-fold-inner > :last-child { margin-bottom: 0.9rem; }
+/* A fold's content ends a clear beat above the next section's hairline, so an
+   open accordion reads as its own block rather than crowding the rule below. */
+.about-fold-inner > :last-child { margin-bottom: 1.8rem; }
 @media (prefers-reduced-motion: reduce) {
   .about-fold-panel, .about-fold-chev, .about-fold-chev::before { transition: none; }
 }
@@ -4350,10 +4364,38 @@ body.gate main { padding: 0; }
 }
 .about-back a:hover { color: var(--text); }
 
-/* Install tutorial: a single iOS step list (matches the signed-out welcome
-   front door), each step wearing a small icon tile that resolves into focus
-   (blur + lift on the signature ease), one after another down the list — the
-   page-transition motif in miniature. */
+/* Install tutorial: one step list with an iPhone/Android switch (matches the
+   signed-out welcome front door), each step wearing a small icon tile that
+   resolves into focus (blur + lift on the signature ease), one after another
+   down the list — the page-transition motif in miniature. */
+/* The iPhone / Android switch above the steps — one quiet pill, two options,
+   the picked one filled. The list keeps the same three rows either way; only
+   the words and the lead icon change (see installStepsHtml in app.js). */
+.os-toggle {
+  display: flex;
+  width: max-content;
+  margin: 1.5rem 0 0;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+.os-opt {
+  background: none;
+  border: none;
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  transition: background-color var(--dur-micro), color var(--dur-micro);
+}
+.os-opt[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
 .install-steps { list-style: none; padding: 0; margin: 1.4rem 0 0; }
 .install-steps li {
   display: flex;
@@ -4374,7 +4416,10 @@ body.gate main { padding: 0; }
   border: 1px solid var(--rule);
   border-radius: var(--radius-img);
   color: var(--text);
-  animation: install-drift 5.4s var(--ease-soft) infinite;
+  /* `backwards` holds the delayed tiles (steps 2 and 3) at the 0% rest state —
+     soft, slightly blurred — through their stagger delay. Without it they sit
+     fully sharp until the delay elapses, then visibly snap to the rest state. */
+  animation: install-drift 5.4s var(--ease-soft) infinite backwards;
 }
 .install-icon svg { width: 20px; height: 20px; }
 .install-steps li:nth-child(2) .install-icon { animation-delay: 1.8s; }
@@ -4413,6 +4458,7 @@ body.gate main { padding: 0; }
 
 /* Link back to About from the auth gate. */
 .auth-about { margin-top: 0.8rem; font-size: 0.88rem; text-align: center; }
+.welcome .auth-about { margin-top: 1.8rem; }
 .auth-about a {
   color: var(--muted);
   text-decoration: underline;
@@ -4445,7 +4491,7 @@ body.gate main { padding: 0; }
   /* Runs the same install-drift as the other two tiles (it's step 3, so the
      nth-child 3.6s delay settles it right after them, blur and all), with the
      Post button's colour drift layered on so the payoff tile stays alive. */
-  animation: install-drift 5.4s var(--ease-soft) infinite,
+  animation: install-drift 5.4s var(--ease-soft) infinite backwards,
              publish-shift 14s ease-in-out infinite;
 }
 .install-appicon .install-t { color: var(--on-type); }

@@ -43,6 +43,33 @@
       behavior: prefersReduced() ? 'auto' : 'smooth' });
   }
 
+  // Like scrollCardIntoView, but resolves once the glide has settled (or at once
+  // if the card is already up top / motion is reduced). Lets a caller rise to the
+  // post first and THEN collapse it, so the fold doesn't race the scroll — a much
+  // cleaner read than folding while the page is still gliding. scrollend isn't on
+  // every engine yet, so a timeout backstops the resolve.
+  function scrollCardToTop(el) {
+    const bar = document.querySelector('.topbar');
+    const offset = (bar ? bar.getBoundingClientRect().height : 0) + 8;
+    const top = el.getBoundingClientRect().top;
+    if (top >= offset) return Promise.resolve();          // already up top — nothing to glide
+    const targetY = top + window.scrollY - offset;
+    if (prefersReduced()) { window.scrollTo({ top: targetY, behavior: 'auto' }); return Promise.resolve(); }
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(t);
+        window.removeEventListener('scrollend', finish);
+        resolve();
+      };
+      const t = setTimeout(finish, 600);                  // backstop if scrollend never fires
+      window.addEventListener('scrollend', finish);
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    });
+  }
+
   // The feed's entrance rhythm: each card/row rises a beat after the one above it,
   // capped so a long list doesn't trail on forever. Shared by every list view.
   const staggerDelay = (i) => Math.min(i * 0.05, 0.4).toFixed(2) + 's';
@@ -81,6 +108,9 @@
     going:   '<circle cx="8.5" cy="8.5" r="3.1"/><path d="M3 20a5.5 5.5 0 0 1 11 0"/><path d="m15.5 12.5 2.2 2.2 4.2-4.2"/>',
     // Bare check — rides the "going" RSVP toggle once you're in.
     check:   '<path d="M5 12.5 10 17.5 19 7"/>',
+    // The going person with an x where the check was — the "can't make it"
+    // sheet action, so backing out reads as the mirror of joining.
+    notgoing: '<circle cx="8.5" cy="8.5" r="3.1"/><path d="M3 20a5.5 5.5 0 0 1 11 0"/><path d="m16.2 11.2 4.4 4.4"/><path d="m20.6 11.2-4.4 4.4"/>',
     // Map pin for an activity's location line.
     pin:     '<path d="M12 21s-6.5-5.2-6.5-10a6.5 6.5 0 0 1 13 0c0 4.8-6.5 10-6.5 10z"/><circle cx="12" cy="11" r="2.4"/>',
     // Calendar page for an activity's when-line.
@@ -787,8 +817,10 @@
     // link/button/field (mentions, actions, the comment box) so their taps fire.
     onDoubleTap(el, (e) => {
       if (!wrap.classList.contains('open') || e.target.closest('a, button, input, textarea')) return;
-      setOpen(false);
-      scrollCardIntoView(el);
+      // Rise to the top of the post first, then fold it away. Collapsing while the
+      // page is still gliding looks busy and can land the post short of the top;
+      // scrolling first lets the fold play out with the post already settled.
+      scrollCardToTop(el).then(() => setOpen(false));
     });
   }
 
@@ -995,7 +1027,7 @@
     if (isPastActivity(post)) return '';   // the plan's Happened — nothing left to RSVP to
     const going = Store.goingByMe(post.id);
     return `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
-        `aria-label="${going ? 'You’re in. Tap to bow out' : 'Count me in'}" ` +
+        `aria-label="${going ? 'You’re going. Tap if you can’t make it' : 'Count me in'}" ` +
         `title="${going ? 'You’re in' : 'Count me in'}">` +
         (going ? `<span>going</span>${svgIcon('check')}` : `<span>going?</span>`) +
       `</button>`;
@@ -1019,7 +1051,7 @@
           `<div class="comments-content">` +
             (list.length
               ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
-              : `<p class="likers-empty">No hands up yet.</p>`) +
+              : `<p class="likers-empty">No one’s going yet.</p>`) +
           `</div>` +
         `</div>` +
       `</div>`;
@@ -1508,11 +1540,7 @@
     // same pattern as adding a comment.
     const toggleBtn = el.querySelector('.card-going');
     if (!toggleBtn) return;
-    toggleBtn.addEventListener('click', async () => {
-      // Bowing out is a small commitment to undo — the host planned around the
-      // headcount — so confirm before dropping off. Joining stays one tap.
-      if (Store.goingByMe(post.id) &&
-          !window.confirm('Take your name off the headcount for this plan?')) return;
+    const flip = async () => {
       toggleBtn.disabled = true;
       const res = await Store.toggleGoing(post.id);
       toggleBtn.disabled = false;
@@ -1524,6 +1552,19 @@
       fresh.querySelector('.card-attendees-count')
         ?.classList.add(res.going ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
+    };
+    toggleBtn.addEventListener('click', () => {
+      // Backing out is a small commitment to undo — the host planned around the
+      // headcount — so it gets the sheet (not a bare confirm). Joining stays
+      // one tap. Not a danger row: it's a change of plans, not a destruction.
+      if (Store.goingByMe(post.id)) {
+        openSheet({
+          title: 'Can’t make it?',
+          items: [{ label: 'Can’t make it', icon: 'notgoing', run: flip }],
+        });
+        return;
+      }
+      flip();
     });
   }
 
@@ -1682,10 +1723,14 @@
     });
 
     panel.querySelectorAll('.comment-delete').forEach(btn =>
-      btn.addEventListener('click', async () => {
-        if (!window.confirm('Delete this comment?')) return;
-        await Store.deleteComment(btn.dataset.comment);
-        apply('down');
+      btn.addEventListener('click', () => {
+        openSheet({
+          title: 'Delete this comment?',
+          items: [{ label: 'Delete comment', icon: 'trash', danger: true, run: async () => {
+            await Store.deleteComment(btn.dataset.comment);
+            apply('down');
+          } }],
+        });
       }));
   }
 
@@ -2322,19 +2367,13 @@
         `<p class="welcome-lede">Tria lives on the web, so there's nothing to ` +
           `download. <strong>Add it to your home screen</strong> and it opens ` +
           `just like any other app.</p>` +
-        `<ol class="install-steps welcome-steps">` +
-          installStep(INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in Safari's toolbar.`) +
-          installStep(INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`) +
-          // The final step's tile IS the Tria app icon — the drifting pastel
-          // quartet (the same gradient that used to sit on the button), so the
-          // payoff reads "and here's Tria, on your home screen".
-          `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +
-            `<span>Tap <strong>Add</strong>. Tria is now on your home screen.</span></li>` +
-        `</ol>` +
+        installToggleHtml() +
+        `<ol class="install-steps welcome-steps">${installStepsHtml()}</ol>` +
         `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
       `</div></section>`;
 
     wireAuthAccount();
+    wireInstallToggle(view);
   }
 
   // Login met the confirm-email gate: drop a one-tap "resend" under the error so
@@ -2757,12 +2796,18 @@
         if (dirty()) submitEdit(editingId, username);
         else { editingId = null; renderUser(username); }
       });
-      editForm.querySelector('.edit-delete')?.addEventListener('click', async () => {
-        if (!window.confirm('Delete this post? This can’t be undone.')) return;
-        const id = editingId;
-        editingId = null;
-        await Store.deletePost(id);
-        renderUser(username);
+      // Same one-sheet guard as Delete account: the sheet's own Cancel is the
+      // escape hatch, and the danger row is the deliberate act.
+      editForm.querySelector('.edit-delete')?.addEventListener('click', () => {
+        openSheet({
+          title: 'Delete this post? This can’t be undone.',
+          items: [{ label: 'Delete post', icon: 'trash', danger: true, run: async () => {
+            const id = editingId;
+            editingId = null;
+            await Store.deletePost(id);
+            renderUser(username);
+          } }],
+        });
       });
       editForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -3657,7 +3702,7 @@
       n.kind === 'comment' ? `commented on ${label}` :
       n.kind === 'like'    ? `liked ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
-                             `is in for ${label}`;
+                             `is going to ${label}`;
     // Mentions live on someone else's post, so the row walks to that profile;
     // everything else lands on your own column.
     const href = (n.kind === 'mention' && post)
@@ -3821,7 +3866,7 @@
             ? ''   // requests are up top; don't also say "all quiet" beneath them
             : `<p class="feed-empty">${all.length
                 ? 'No mentions yet.'
-                : 'All quiet. When a friend likes, comments, or raises a hand, it lands here.'}</p>`);
+                : 'All quiet. When a friend likes, comments, or says they’re going, it lands here.'}</p>`);
     };
     // Answer a friend request in place. Accept adds them back (→ mutual, they
     // now show in each other's feeds); Ignore clears the request quietly.
@@ -4037,6 +4082,11 @@
   const randomNotePlaceholder = () =>
     NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)];
 
+  // A URL inside a Note renders as plain text (notes don't linkify, on purpose)
+  // — links belong to Finds, where the destination gets a real home. The
+  // composer watches for one and offers the switch (see wireFindNudge).
+  const NOTE_URL_RE = /(https?:\/\/\S+|\bwww\.\S+)/i;
+
   function fieldsFor(type) {
     const tags =
       `<div class="field">` +
@@ -4155,7 +4205,10 @@
 
     // post (Note) — the rich editor: headline + a contenteditable body + the
     // H1/H2/B/I toolbar in one combo box. Wired in mountFields (wireRichEditor).
-    return richNoteField('c', '', '', randomNotePlaceholder()) + tags;
+    // The find-nudge hint sits hidden beneath it until the body holds a URL.
+    return richNoteField('c', '', '', randomNotePlaceholder()) +
+      `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
+        `<button type="button" id="c-make-find">Make it a Find</button></p>` + tags;
   }
 
   // ── Audience picker (design preview) ──────────────────────────────────────
@@ -4314,7 +4367,10 @@
       fieldsEl.innerHTML = fieldsFor(pubType);
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
-      if (pubType === 'note') wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
+      if (pubType === 'note') {
+        wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
+        wireFindNudge();
+      }
       if (pubType === 'photo') wireFrameCapture(fieldsEl);
       if (pubType === 'activity') {
         wireWhenHints(fieldsEl);
@@ -4323,6 +4379,36 @@
       }
       view.querySelectorAll('.type-opt').forEach(b =>
         b.setAttribute('aria-pressed', String(b.dataset.type === pubType)));
+    }
+
+    // The Note field's quiet "that's a link" nudge: shows once the body holds a
+    // URL, and one tap re-mounts the composer as a Find with the title, the
+    // link, and the rest of the words carried across — nothing retyped.
+    function wireFindNudge() {
+      const editor = fieldsEl.querySelector('#c-note');
+      const nudge = fieldsEl.querySelector('#c-find-nudge');
+      if (!editor || !nudge) return;
+      const sync = () => { nudge.hidden = !NOTE_URL_RE.test(editor.textContent); };
+      editor.addEventListener('input', sync);
+      sync();
+      nudge.querySelector('#c-make-find').addEventListener('click', () => {
+        // innerText keeps the block breaks textContent would swallow, so the
+        // leftover words don't run together once the URL is lifted out.
+        const text = editor.innerText || editor.textContent;
+        const m = NOTE_URL_RE.exec(text);
+        // Trim trailing sentence punctuation off the captured URL ("…x.com."),
+        // and give a bare www. link the scheme the Find field validates for.
+        const raw = m ? m[0].replace(/[),.;!?]+$/, '') : '';
+        const link = raw.startsWith('www.') ? 'https://' + raw : raw;
+        const title = (document.getElementById('c-title')?.value || '').trim();
+        const rest = (m ? text.replace(m[0], ' ') : text)
+          .replace(/\s+/g, ' ').trim().slice(0, 180);
+        pubType = 'find';
+        mountFields();
+        const t = document.getElementById('c-title'); if (t) t.value = title;
+        const u = document.getElementById('c-url'); if (u) u.value = link;
+        const n = document.getElementById('c-note'); if (n) n.value = rest;
+      });
     }
 
     view.querySelectorAll('.type-opt').forEach(btn =>
@@ -5415,10 +5501,69 @@
       `<path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" /></svg>`,
     add: `<svg ${ICON_ATTRS}><rect x="4" y="4" width="16" height="16" rx="3.5" />` +
       `<path d="M12 9.2v5.6" /><path d="M9.2 12h5.6" /></svg>`,
+    // Chrome's three-dot menu — the Android counterpart of Safari's Share.
+    menu: `<svg ${ICON_ATTRS}><circle cx="12" cy="5.5" r="1.4" fill="currentColor" stroke="none"/>` +
+      `<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>` +
+      `<circle cx="12" cy="18.5" r="1.4" fill="currentColor" stroke="none"/></svg>`,
   };
 
   function installStep(icon, text) {
     return `<li><span class="install-icon">${icon}</span><span>${text}</span></li>`;
+  }
+
+  // Which phone the install steps speak to. Guessed once from the UA, then the
+  // small iPhone/Android toggle above the steps flips it in place — same three
+  // rows, same footprint, only the words and the lead icon change. Shared by
+  // the welcome front door and the About fold, so they can never drift apart.
+  let installOS = /Android/i.test(navigator.userAgent) ? 'android' : 'ios';
+
+  // The two platform-specific rows as [icon, text] pairs — the shared shape the
+  // first render and the in-place toggle swap both read from.
+  function installStepData() {
+    return installOS === 'android'
+      ? [[INSTALL_ICONS.menu, `Tap the <strong>three-dot menu</strong> in Chrome's toolbar.`],
+         [INSTALL_ICONS.add, `Tap <strong>Add to Home screen</strong>.`]]
+      : [[INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in Safari's toolbar.`],
+         [INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`]];
+  }
+
+  function installStepsHtml() {
+    // The payoff tile IS the Tria app icon (the drifting pastel quartet) — the
+    // same close on either platform.
+    return installStepData().map(([icon, text]) => installStep(icon, text)).join('') +
+      `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +
+        `<span>Tap <strong>Add</strong>. Tria is now on your home screen.</span></li>`;
+  }
+
+  function installToggleHtml() {
+    const opt = (os, label) =>
+      `<button type="button" class="os-opt" data-os="${os}" aria-pressed="${installOS === os}">${label}</button>`;
+    return `<div class="os-toggle" role="group" aria-label="Which phone?">` +
+      opt('ios', 'iPhone') + opt('android', 'Android') + `</div>`;
+  }
+
+  function wireInstallToggle(root) {
+    const wrap = root.querySelector('.os-toggle');
+    if (!wrap) return;
+    wrap.querySelectorAll('.os-opt').forEach(btn =>
+      btn.addEventListener('click', () => {
+        if (btn.dataset.os === installOS) return;
+        installOS = btn.dataset.os;
+        wrap.querySelectorAll('.os-opt').forEach(b =>
+          b.setAttribute('aria-pressed', String(b.dataset.os === installOS)));
+        // Swap only the two rows' CONTENT, never the rows themselves: rebuilding
+        // the list restarts every tile's drift animation from zero (a visible
+        // jolt mid-tap). The <li>s and their .install-icon tiles stay put, so
+        // the drift keeps breathing straight through the switch.
+        const list = root.querySelector('.install-steps');
+        if (!list) return;
+        installStepData().forEach(([icon, text], i) => {
+          const li = list.children[i];
+          if (!li) return;
+          li.querySelector('.install-icon').innerHTML = icon;
+          li.lastElementChild.innerHTML = text;
+        });
+      }));
   }
 
   function renderAbout(gated) {
@@ -5431,14 +5576,8 @@
       `<p>Tria lives on the web, so there's nothing to download and no store in ` +
         `between. Add it to your home screen and it opens full screen, just like ` +
         `any other app on your phone.</p>` +
-      `<ol class="install-steps">` +
-        installStep(INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in Safari's toolbar.`) +
-        installStep(INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`) +
-        // Payoff tile IS the Tria app icon (the drifting pastel quartet), matching
-        // the signed-out welcome front door.
-        `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +
-          `<span>Tap <strong>Add</strong>. Tria is now on your home screen.</span></li>` +
-      `</ol>`;
+      installToggleHtml() +
+      `<ol class="install-steps">${installStepsHtml()}</ol>`;
 
     // Guidelines and FAQ collapse behind their heads (same 0fr→1fr grid tween
     // as the comment threads) so the feedback form isn't a mile of scroll away.
@@ -5617,6 +5756,8 @@
         btn.setAttribute('aria-expanded', String(open));
       });
     });
+
+    wireInstallToggle(view);   // the install fold's iPhone/Android switch
 
     // Deep link: #/about?open=<foldId> (the signup guidelines link) opens that
     // fold and scrolls it into view, so "Community Guidelines" lands you right on
