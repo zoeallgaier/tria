@@ -1026,104 +1026,119 @@ main {
 .card-like:focus-visible,
 .card-like.liked,
 .card-like--owner[aria-expanded="true"] { color: var(--accent); }
-/* A liked heart SETTLES on its post's own type colour and then sits still — no
-   perpetual drift (that kept the compositor awake on every liked card in the
-   feed). The one flourish is at the moment of liking: a single sweep through the
-   four Tria type colors that lands on this post's colour (see .is-liking below).
-   Ink twins: AA in light mode, flipping to the pastels in dark. */
+/* A liked heart settles on its post's own type colour and sits still — no
+   perpetual drift (that kept the compositor awake on every liked card). The
+   flourish is all in the tap, where the heart TAKES INK (see below). Ink twins:
+   AA in light mode, flipping to the pastels in dark. */
 .card-like.liked svg { fill: currentColor; }
 .card-like.liked {
   color: var(--burst, var(--heart-note));
 }
-/* The like tap: one gradient cycle through the quartet, ending on --burst (this
-   post's type colour), held there by `both`. Rides the button's own `color`;
-   the heart svg follows via fill:currentColor. Removing .is-liking afterwards
-   hands off seamlessly to the resting rule above (same final colour). */
-.card-like.liked.is-liking {
-  animation: like-settle 1.15s var(--ease) both;
-}
-@keyframes like-settle {
-  0%   { color: var(--heart-note); }
-  22%  { color: var(--heart-find); }
-  44%  { color: var(--heart-activity); }
-  66%  { color: var(--heart-photo); }
-  100% { color: var(--burst); }
-}
-@media (prefers-reduced-motion: reduce) { .card-like.liked.is-liking { animation: none; } }
 
-/* ── Like tap: scale-pop + a colour glow bloom ──────────────────────────────
-   A tap plays a one-shot scale bounce on the heart, and on LIKE a soft glow
-   blooms behind it in the post's own type colour — the same lit-glow language as
-   the active filters and the nav glide, so it sits with the rest of the site.
-   The settled liked heart is untouched (it keeps its slow colour-drift) — this is
-   purely the moment of the tap. Everything is transform + opacity (the glow is a
-   radial-gradient, not filter:blur), so it composites cleanly on iOS. */
-.card-like { position: relative; }
+/* ── Like tap: an ink stamp ─────────────────────────────────────────────────
+   The most Tria-native like we can do — not particles thrown in the air (that's
+   engagement-bait, the opposite of this app), but one confident editorial mark.
+   Three beats fire together on LIKE, all cheap (transform + clip + mask; no blur
+   filter, no grain):
+     1. the heart SNAPS — a sharp scale punch, no soft anticipation;
+     2. the post's type colour FLOODS UP through the glyph like ink filling it
+        (a masked overlay clip-revealed bottom→top while the outline holds);
+     3. one hairline RING pings out once and vanishes — the burst energy spent
+        in a single stroke instead of scattered confetti.
+   Everything stays inside the card's paint-contained box (the heart sits near
+   the card's bottom edge — see content-visibility on .card), so nothing crops. */
+.card-like {
+  position: relative;
+  /* Filled-heart silhouette, shared by the ink overlay's mask below. */
+  --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z'/%3E%3C/svg%3E");
+}
 /* Burst colour = the post's type colour (matched to the liked-heart palette).
-   It's both the settle target for the like sweep and the tap glow's colour. */
+   The ink the heart takes, the ring, and the resting fill are all this colour. */
 .card-like[data-type="note"]     { --burst: var(--heart-note); }
 .card-like[data-type="find"]     { --burst: var(--heart-find); }
 .card-like[data-type="activity"] { --burst: var(--heart-activity); }
 .card-like[data-type="photo"]    { --burst: var(--heart-photo); }
 
-/* The heart itself bounces. Keeps the row's optical translateY nudge in every
-   frame so the pop doesn't also shift the glyph off its line. */
-.card-like.is-liking .like-heart   { animation: like-pop 0.5s var(--ease) both; }
-.card-like.is-unliking .like-heart { animation: like-unpop 0.35s var(--ease-soft) both; }
+/* 1. The snap. A hard, fast punch to 1.5× then a single undershoot and settle —
+   no anticipation dip, so it reads sharp and dramatic rather than springy. Keeps
+   the row's optical translateY nudge in every frame so the punch doesn't shift
+   the glyph off its line. During the flood the svg's own fill is suppressed so
+   only the outline holds while the ink rises; when .is-liking clears, the resting
+   .liked fill takes over (same colour). The ink overlay (below) rides these SAME
+   keyframes so the outline and its fill punch as one object. */
+.card-like.is-liking .like-heart   { fill: none; animation: like-pop 0.42s var(--ease) both; }
+.card-like.is-unliking .like-heart { animation: like-unpop 0.3s var(--ease-soft) both; }
 @keyframes like-pop {
   0%   { transform: translateY(1.5px) scale(1); }
-  20%  { transform: translateY(1.5px) scale(0.82); }
-  45%  { transform: translateY(1.5px) scale(1.32); }
-  70%  { transform: translateY(1.5px) scale(0.92); }
+  20%  { transform: translateY(1.5px) scale(1.5); }
+  48%  { transform: translateY(1.5px) scale(0.9); }
   100% { transform: translateY(1.5px) scale(1); }
 }
 @keyframes like-unpop {
   0%   { transform: translateY(1.5px) scale(1); }
-  40%  { transform: translateY(1.5px) scale(0.8); }
+  45%  { transform: translateY(1.5px) scale(0.8); }
   100% { transform: translateY(1.5px) scale(1); }
 }
 
-/* Glow: a soft radial bloom behind the heart in the post's colour. A layered
-   radial-gradient — a lit core into a wider halo — swells and fades. No blur
-   filter, so it's iOS-safe; the soft edge lives in the gradient stops. A faint
-   fractal-noise grain rides on top, dithered into the gradient with
-   background-blend-mode (not mix-blend-mode) so it smooths the colour banding
-   without a filter. A radial mask fades the whole layer with the glow's falloff,
-   so the square grain tile never shows a hard edge past the bloom. */
+/* 2. The ink. A solid block of the post's colour, masked to the filled-heart
+   silhouette, sitting exactly over the outline svg and clip-revealed from the
+   bottom up — colour flooding into the glyph. It runs like-pop alongside ink-rise
+   so it scales in lockstep with the outline (clip-path reveals the fill; the
+   transform punches it). Holds full (`both`); when .is-liking clears, the svg's
+   resting fill takes over seamlessly and this vanishes. Only the friend's
+   icon-only heart ever animates, so the overlay is always centred in its 44px
+   button. */
+.card-like.is-liking::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 28px; height: 28px;
+  margin: -14px 0 0 -14px;
+  transform: translateY(1.5px);
+  background: var(--burst);
+  -webkit-mask: var(--heart-mask) center / 100% 100% no-repeat;
+          mask: var(--heart-mask) center / 100% 100% no-repeat;
+  clip-path: inset(100% 0 0 0);
+  pointer-events: none;
+  animation: ink-rise 0.42s var(--ease) both, like-pop 0.42s var(--ease) both;
+}
+@keyframes ink-rise {
+  from { clip-path: inset(100% 0 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+/* 3. The ring. One hairline (1px) circle in the post's colour that emanates from
+   the heart's edge and snaps outward once — the whole burst spent in a single
+   editorial stroke. The heart lives in the card's bottom-right corner, ~18px from
+   the paint-contained edge (and, on phones, the screen edge), so a ring can't
+   grow past that without clipping; we start it at the glyph's rim (not a dot in
+   the middle) and fade it fully to 0 exactly as it reaches the boundary, so the
+   graze is never visible. The scale punch (above) carries the drama the ring
+   can't. */
 .card-like.is-liking::before {
   content: "";
   position: absolute;
   left: 50%; top: 50%;
-  width: 50px; height: 50px;
-  margin: -25px 0 0 -25px;
+  width: 24px; height: 24px;
   border-radius: 50%;
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
-    radial-gradient(circle at center,
-      color-mix(in srgb, var(--burst) 82%, transparent) 0%,
-      color-mix(in srgb, var(--burst) 32%, transparent) 40%,
-      transparent 70%);
-  background-size: 90px 90px, 100% 100%;
-  background-position: center;
-  background-blend-mode: overlay;
-  -webkit-mask: radial-gradient(circle at center, #000 40%, transparent 72%);
-          mask: radial-gradient(circle at center, #000 40%, transparent 72%);
-  transform: scale(0.35);
-  opacity: 0;
+  border: 1px solid var(--burst);
   pointer-events: none;
-  animation: like-glow 0.62s var(--ease) forwards;
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 1.5px)) scale(0.85);
+  animation: like-ring 0.46s var(--ease) forwards;
 }
-@keyframes like-glow {
-  0%   { opacity: 0;    transform: scale(0.35); }
-  24%  { opacity: 0.95; transform: scale(0.95); }
-  46%  { opacity: 0.7;  transform: scale(1.12); }
-  100% { opacity: 0;    transform: scale(1.7); }
+@keyframes like-ring {
+  0%   { opacity: 0.9; transform: translate(-50%, calc(-50% + 1.5px)) scale(0.85); }
+  55%  { opacity: 0.5; }
+  100% { opacity: 0;   transform: translate(-50%, calc(-50% + 1.5px)) scale(1.4); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-like.is-liking .like-heart,
+  /* No motion: the heart just arrives filled — no rise, no ring. */
+  .card-like.is-liking .like-heart   { fill: currentColor; animation: none; }
   .card-like.is-unliking .like-heart { animation: none; }
-  .card-like.is-liking::before { display: none; }
+  .card-like.is-liking::before,
+  .card-like.is-liking::after { display: none; }
 }
 
 /* Attendees (activities). The people-glyph + count on the left; an outline

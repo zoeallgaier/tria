@@ -991,9 +991,9 @@
         `</button>`;
     }
     const liked = Store.likedByMe(post.id);
-    // data-type paints the tap's celebratory burst (ring + confetti) in the post's
-    // own colour; the classed heart is the target of the scale-pop. The settled
-    // liked look (the slow quartet-drift) is unchanged — the tap just adds motion.
+    // data-type paints the tap's glow bloom in the post's own colour (--burst);
+    // the classed heart is the target of the scale-pop. The settled liked look is
+    // a still fill on that same colour — the tap just adds the one-shot motion.
     return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
         `data-type="${post.type}" ` +
         `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
@@ -1599,17 +1599,17 @@
       btn.setAttribute('aria-pressed', String(res.liked));
       btn.setAttribute('aria-label', res.liked ? 'Unlike' : 'Like');
       btn.setAttribute('title', res.liked ? 'Liked' : 'Like');
-      // One-shot celebratory pop: a scale bounce plus (on like) a colour burst,
-      // all transform+opacity so it stays smooth on iOS. Re-add after a reflow so
-      // rapid re-taps replay it; a timer clears the class once everything settles.
-      // The window (1200ms) must outlast the longest .is-liking animation — the
-      // like-settle colour sweep (1.15s) — so it isn't cut mid-flight; the shorter
-      // pop/glow pseudos just hold their final frame until then.
+      // One-shot ink stamp on LIKE: the heart snaps, the type colour floods up
+      // through it, and a hairline ring pings out — all transform/clip/mask, so
+      // it stays smooth on iOS. Re-add after a reflow so rapid re-taps replay it;
+      // a timer clears the class once it settles. The window (700ms) outlasts the
+      // longest .is-liking animation (~0.42s) with margin — the ink overlay holds
+      // its final frame until then, when the resting .liked fill takes over.
       clearTimeout(btn._pop);
       btn.classList.remove('is-liking', 'is-unliking');
       void btn.offsetWidth;
       btn.classList.add(res.liked ? 'is-liking' : 'is-unliking');
-      btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 1200);
+      btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
     });
   }
 
