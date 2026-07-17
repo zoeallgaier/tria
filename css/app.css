@@ -2613,12 +2613,14 @@ body.gate main { padding: 0; }
 /* ── Support (#/support) — Zoe's love letter. Rides the About page's editorial
    body (.about-body / .about-lede) and its hue-drifting glow; adds only a signed
    signature and the share CTA. ── */
-.support-sign {
+.about-body p.support-sign {
   margin-top: 2rem;
   font-family: 'Instrument Serif', serif;
   font-style: italic;
   font-size: 2rem;
   line-height: 1;
+  font-weight: 400;
+  color: var(--text);
 }
 .support-sign a { color: var(--text); text-decoration: none; }
 @media (hover: hover) {
