@@ -69,7 +69,11 @@
   /* Frosted glass — chrome only (nav rail, sticky masthead, lightbox, hero wash).
      Translucent enough to show the blur, opaque enough to hold AA text over it. */
   --glass-bg:      color-mix(in srgb, var(--bg) 74%, transparent);
-  --glass-blur:    20px;
+  /* Single knob for ALL frosted chrome + panels (nav, top bar, seg-tabs, search,
+     modals, sheets, menus, cards). Lower = less GPU per frame but crisper/thinner
+     frost; below ~8px content reads through and the fills need firming. The
+     lightbox/dial veil (6px) and trim UI (12px) keep their own intentional values. */
+  --glass-blur:    8px;
 
   /* iOS installed-shell status-bar scrim — a top wash that backs the OS clock and
      battery glyphs where content scrolls under them (black-translucent bar, so the

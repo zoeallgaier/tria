@@ -1601,13 +1601,15 @@
       btn.setAttribute('title', res.liked ? 'Liked' : 'Like');
       // One-shot celebratory pop: a scale bounce plus (on like) a colour burst,
       // all transform+opacity so it stays smooth on iOS. Re-add after a reflow so
-      // rapid re-taps replay it; a timer clears the class once the burst settles
-      // (removing it mid-flight would cut the ::before/::after pseudos short).
+      // rapid re-taps replay it; a timer clears the class once everything settles.
+      // The window (1200ms) must outlast the longest .is-liking animation — the
+      // like-settle colour sweep (1.15s) — so it isn't cut mid-flight; the shorter
+      // pop/glow pseudos just hold their final frame until then.
       clearTimeout(btn._pop);
       btn.classList.remove('is-liking', 'is-unliking');
       void btn.offsetWidth;
       btn.classList.add(res.liked ? 'is-liking' : 'is-unliking');
-      btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 620);
+      btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 1200);
     });
   }
 

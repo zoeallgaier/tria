@@ -271,8 +271,8 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   background: var(--glass-bg);
   border: 1px solid var(--rule);
   box-shadow: var(--lit-rim), 0 6px 18px rgba(0, 0, 0, 0.12);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   pointer-events: auto;
   transition: color var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease);
 }
@@ -337,8 +337,8 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   border-radius: var(--radius-nav);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   background: color-mix(in srgb, var(--bg) 72%, transparent);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   /* Lit top rim + a soft drop, so the rail visibly floats off the page — the
      same glass language as the mobile nav pill, scaled up to a sidebar. */
   box-shadow:
@@ -813,8 +813,8 @@ main {
   padding: 4px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg) 62%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent),
@@ -912,6 +912,12 @@ main {
 
 .card {
   animation: rise var(--dur-slow) var(--ease) both;
+  /* Skip layout + paint for cards scrolled out of view, so a long feed doesn't
+     pay to render rows nobody's looking at. `auto` remembers each card's real
+     height once seen, so the 420px estimate only ever applies to a card that's
+     never yet been on screen (keeps the scrollbar honest). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
 }
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
@@ -1020,23 +1026,30 @@ main {
 .card-like:focus-visible,
 .card-like.liked,
 .card-like--owner[aria-expanded="true"] { color: var(--accent); }
-/* A filled heart slowly breathes through the four Tria type colors as a
-   whole (ink twins: AA in light mode, and they flip to the pastels in dark) —
-   but it starts on ITS post's own type colour, not always lavender. Same
-   12s loop for every card; a negative delay (set per data-type below) just
-   walks the clock forward to that type's keyframe before frame 1 ever paints. */
+/* A liked heart SETTLES on its post's own type colour and then sits still — no
+   perpetual drift (that kept the compositor awake on every liked card in the
+   feed). The one flourish is at the moment of liking: a single sweep through the
+   four Tria type colors that lands on this post's colour (see .is-liking below).
+   Ink twins: AA in light mode, flipping to the pastels in dark. */
 .card-like.liked svg { fill: currentColor; }
 .card-like.liked {
   color: var(--burst, var(--heart-note));
-  animation: liked-cycle 12s ease-in-out infinite;
 }
-@keyframes liked-cycle {
-  0%, 100% { color: var(--heart-note); }
-  25%      { color: var(--heart-find); }
-  50%      { color: var(--heart-activity); }
-  75%      { color: var(--heart-photo); }
+/* The like tap: one gradient cycle through the quartet, ending on --burst (this
+   post's type colour), held there by `both`. Rides the button's own `color`;
+   the heart svg follows via fill:currentColor. Removing .is-liking afterwards
+   hands off seamlessly to the resting rule above (same final colour). */
+.card-like.liked.is-liking {
+  animation: like-settle 1.15s var(--ease) both;
 }
-@media (prefers-reduced-motion: reduce) { .card-like.liked { animation: none; } }
+@keyframes like-settle {
+  0%   { color: var(--heart-note); }
+  22%  { color: var(--heart-find); }
+  44%  { color: var(--heart-activity); }
+  66%  { color: var(--heart-photo); }
+  100% { color: var(--burst); }
+}
+@media (prefers-reduced-motion: reduce) { .card-like.liked.is-liking { animation: none; } }
 
 /* ── Like tap: scale-pop + a colour glow bloom ──────────────────────────────
    A tap plays a one-shot scale bounce on the heart, and on LIKE a soft glow
@@ -1047,14 +1060,11 @@ main {
    radial-gradient, not filter:blur), so it composites cleanly on iOS. */
 .card-like { position: relative; }
 /* Burst colour = the post's type colour (matched to the liked-heart palette).
-   The animation-delay here is what phases liked-cycle to START on this
-   colour (each stop is 25% of the 12s loop, so the delay is -25%/-50%/-75%
-   of it) — negative because a negative delay fast-forwards into the loop
-   instead of holding the first frame. */
-.card-like[data-type="note"]     { --burst: var(--heart-note);     animation-delay: 0s; }
-.card-like[data-type="find"]     { --burst: var(--heart-find);     animation-delay: -3s; }
-.card-like[data-type="activity"] { --burst: var(--heart-activity); animation-delay: -6s; }
-.card-like[data-type="photo"]    { --burst: var(--heart-photo);    animation-delay: -9s; }
+   It's both the settle target for the like sweep and the tap glow's colour. */
+.card-like[data-type="note"]     { --burst: var(--heart-note); }
+.card-like[data-type="find"]     { --burst: var(--heart-find); }
+.card-like[data-type="activity"] { --burst: var(--heart-activity); }
+.card-like[data-type="photo"]    { --burst: var(--heart-photo); }
 
 /* The heart itself bounces. Keeps the row's optical translateY nudge in every
    frame so the pop doesn't also shift the glyph off its line. */
@@ -1650,8 +1660,8 @@ main {
      sample-radius is a real compositing cost on iOS, and this popover doesn't
      need the extra 6px to read as frosted. Part of the July 2026 crash audit;
      see the page-transition comment above for the fuller context. */
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: var(--radius-card);
   box-shadow:
@@ -1713,8 +1723,8 @@ main {
   /* 24px matches the rest of the floating-panel tier (nav pill, mention popover)
      — standardized in the July 2026 crash audit; sample-radius is a real iOS
      compositing cost and the sheet reads as frosted at 24 just the same. */
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: var(--radius-modal, 20px);
   box-shadow:
@@ -1867,8 +1877,8 @@ main {
   color: #fff;
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   background: color-mix(in srgb, var(--bg) 55%, transparent);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
 }
 .frame-sound {
@@ -2283,8 +2293,8 @@ body.gate main { padding: 0; }
   padding: 1.5rem 1.4rem;
   border-radius: var(--radius-modal);  /* a larger piece of glass, rounder corners */
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-          backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+          backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   box-shadow: var(--lit-rim), 0 12px 30px rgba(0, 0, 0, 0.12);
 }
@@ -2667,8 +2677,8 @@ body.gate main { padding: 0; }
   padding: 1rem 1.15rem;
   border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--bg) 74%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
@@ -3609,8 +3619,8 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-modal);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   /* Trimmed from 30 to 24px, same reasoning as .mention-list above. */
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
@@ -3768,8 +3778,8 @@ body.gate main { padding: 0; }
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     /* Chrome-tier frost (18–24px). Kept at the floor since the bar runs more
        opaque (88%) than the nav pill, so it needs less blur to lift off content. */
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     transition: transform var(--dur-move) var(--ease);
   }
   /* Scrolling down tucks the bar away (see the scroll watcher in app.js);
@@ -3836,8 +3846,8 @@ body.gate main { padding: 0; }
     padding: 0.4rem 0.55rem;
     border-radius: var(--radius-pill);
     background: color-mix(in srgb, var(--bg) 62%, transparent);
-    backdrop-filter: blur(24px) saturate(1.5);
-    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     /* Glass edges: a hairline border, a top inner highlight (the "lit rim"),
        and a soft drop under it so the pill visibly floats off the page. */
     border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
@@ -4028,8 +4038,8 @@ body.gate main { padding: 0; }
     display: grid;
     place-items: center;
     background: color-mix(in srgb, var(--bg) 72%, transparent);
-    backdrop-filter: blur(18px) saturate(1.4);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
   }
@@ -4052,8 +4062,8 @@ body.gate main { padding: 0; }
     inset: 0;
     z-index: 100;                     /* over the page + topbar, under the nav (101) */
     background: color-mix(in srgb, var(--bg) 32%, transparent);
-    backdrop-filter: blur(6px) saturate(0.9);
-    -webkit-backdrop-filter: blur(6px) saturate(0.9);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     opacity: 0;
     transition: opacity var(--dur-quick) var(--ease);
   }
@@ -4513,8 +4523,8 @@ body.gate main { padding: 0; }
   gap: 1rem;
   padding: calc(env(safe-area-inset-top) + 0.75rem) 1.15rem 0.75rem;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border-bottom: 1px solid var(--rule);
 }
 .auth-topbar-brand { display: flex; flex-direction: column; }
