@@ -2617,7 +2617,7 @@ body.gate main { padding: 0; }
   margin-top: 2rem;
   font-family: 'Instrument Serif', serif;
   font-style: italic;
-  font-size: 1.5rem;
+  font-size: 2rem;
   line-height: 1;
 }
 .support-sign a { color: var(--text); text-decoration: none; }
@@ -4218,69 +4218,108 @@ body.gate main { padding: 0; }
   padding-inline: var(--inset);
 }
 .about-body p {
-  line-height: 1.65;
-  margin-bottom: 1rem;
+  line-height: 1.62;
+  margin-bottom: 0.85rem;
   font-weight: 300;
+  font-size: 0.92rem;
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
 }
-.about-body strong { font-weight: 700; }
-.about-lede { font-size: 1.08rem; }
+.about-body strong { font-weight: 600; color: var(--text); }
+/* The two intro paragraphs carry the page: a touch larger, full-strength text. */
+.about-lede {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 0.9rem;
+}
 
-/* Section heads echo the gate's serif italics; a hairline walks the page. */
+/* Section heads: serif (echoing the masthead) but quieted down to a control-sized
+   line, so the folds below read as a clean disclosure list, not a wall of titles. */
 .about-head {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
-  font-style: italic;
-  font-size: 1.9rem;
-  line-height: 1.1;
+  font-style: italic;              /* serif italic = title voice, app-wide */
+  font-size: 1.5rem;
+  line-height: 1.15;
   letter-spacing: -0.01em;
-  border-top: 1px solid var(--rule);
-  margin-top: 3rem;
-  padding-top: 2.4rem;
-  margin-bottom: 1rem;
+  margin: 0;
 }
 .about-body h3 {
-  font-size: 1.02rem;
-  font-weight: 700;
-  margin-top: 1.8rem;
-  margin-bottom: 0.4rem;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 1.45rem;
+  margin-bottom: 0.3rem;
 }
 .about-body h3.faq-q {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
-  font-size: 1.35rem;
-  margin-top: 2.1rem;
+  font-style: italic;
+  font-size: 1.18rem;
+  color: var(--text);
+  margin-top: 1.7rem;
 }
 
-/* Guidelines and FAQ fold behind their heads so the feedback form stays close.
-   Same 0fr→1fr grid tween + opacity lift as .comments-panel. The head becomes a
-   full-width button carrying the .about-head look; a chevron flips when open. */
-.about-fold-head { margin-bottom: 0; }
+/* Each section folds behind its head, so the feedback form stays close. The
+   folds form one connected disclosure list: shared hairlines, a full-width tap
+   row with a round chevron chip (iOS settings-group feel), and the same 0fr→1fr
+   grid tween + opacity lift as .comments-panel when a panel opens. */
+.about-fold { border-top: 1px solid var(--rule); }
+.about-fold:first-of-type { margin-top: 1.4rem; }
+.about-fold:last-of-type { border-bottom: 1px solid var(--rule); }
+.about-fold-head { margin: 0; }
 .about-fold-toggle {
   font: inherit;
   letter-spacing: inherit;
-  color: inherit;
+  color: var(--text);
   background: none;
   border: none;
-  padding: 0;
-  width: 100%;
+  width: calc(100% + 1.6rem);
+  margin-inline: -0.8rem;              /* let the hover tint bleed past the text */
+  padding: 0.85rem 0.8rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   text-align: left;
   cursor: pointer;
+  border-radius: var(--radius-card);
+  transition: background var(--dur-micro) var(--ease);
 }
+@media (hover: hover) {
+  .about-fold-toggle:hover { background: var(--surface); }
+  .about-fold-toggle:hover .about-fold-chev { background: var(--surface-2); }
+}
+/* Round chevron chip — a clear, tappable "expand me" affordance. */
 .about-fold-chev {
-  width: 0.55em;
-  height: 0.55em;
+  position: relative;
   flex: none;
-  margin-right: 0.5rem;                /* indented a touch off the right edge */
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  transition: background var(--dur-micro) var(--ease);
+}
+.about-fold-chev::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0.44rem;
+  height: 0.44rem;
   border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg);            /* points down while closed */
-  transition: transform var(--dur-move) var(--ease);
+  transform: translateY(-1.5px) rotate(45deg);   /* points down while closed */
+  transition: transform var(--dur-move) var(--ease),
+              border-color var(--dur-micro) var(--ease);
 }
-.about-fold.open .about-fold-chev { transform: rotate(225deg); }
+.about-fold.open .about-fold-chev {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+.about-fold.open .about-fold-chev::before {
+  transform: translateY(1.5px) rotate(225deg);
+  border-color: var(--text);
+}
 .about-fold-panel {
   display: grid;
   grid-template-rows: 0fr;
@@ -4290,9 +4329,10 @@ body.gate main { padding: 0; }
 }
 .about-fold.open .about-fold-panel { grid-template-rows: 1fr; opacity: 1; }
 .about-fold-inner { overflow: hidden; min-height: 0; }
-.about-fold-inner > :first-child { margin-top: 1rem; }
+.about-fold-inner > :first-child { margin-top: 0.1rem; }
+.about-fold-inner > :last-child { margin-bottom: 0.9rem; }
 @media (prefers-reduced-motion: reduce) {
-  .about-fold-panel, .about-fold-chev { transition: none; }
+  .about-fold-panel, .about-fold-chev, .about-fold-chev::before { transition: none; }
 }
 
 /* Back to the gate (only rendered when signed out). */
@@ -4308,22 +4348,11 @@ body.gate main { padding: 0; }
 }
 .about-back a:hover { color: var(--text); }
 
-/* Install tutorial: two platform columns; each step wears a small icon tile
-   that resolves into focus (blur + lift on the signature ease), one after
-   another down the list — the page-transition motif in miniature. */
-.install-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 2.4rem;
-  margin-top: 1.6rem;
-}
-.install-browser {
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin-left: 0.3rem;
-}
-.install-steps { list-style: none; padding: 0; margin: 0; }
+/* Install tutorial: a single iOS step list (matches the signed-out welcome
+   front door), each step wearing a small icon tile that resolves into focus
+   (blur + lift on the signature ease), one after another down the list — the
+   page-transition motif in miniature. */
+.install-steps { list-style: none; padding: 0; margin: 1.4rem 0 0; }
 .install-steps li {
   display: flex;
   align-items: center;
@@ -4405,7 +4434,7 @@ body.gate main { padding: 0; }
 /* The last step's tile IS the Tria app icon: the create/publish pastel quartet,
    drifting like the Post button, with the dark-ink serif "t" — the tutorial's
    payoff, and where the loud gradient now lives (not on a button). */
-.welcome-steps .install-appicon {
+.install-appicon {
   background: linear-gradient(115deg,
     var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
@@ -4417,9 +4446,9 @@ body.gate main { padding: 0; }
   animation: install-drift 5.4s var(--ease-soft) infinite,
              publish-shift 14s ease-in-out infinite;
 }
-.welcome-steps .install-appicon .install-t { color: var(--on-type); }
+.install-appicon .install-t { color: var(--on-type); }
 @media (prefers-reduced-motion: reduce) {
-  .welcome-steps .install-appicon { animation: none; background-position: 50% 50%; }
+  .install-appicon { animation: none; background-position: 50% 50%; }
 }
 /* Signed-out brand header — the SAME frosted bar as the signed-in feed header
    (edge-to-edge frost, hairline underline, wordmark at the left, a docked glyph
@@ -4478,7 +4507,5 @@ body.gate main { padding: 0; }
 @media (max-width: 680px) {
   .about-body, .about-back { padding-inline: 0; }   /* already inset by .view here */
   .about-back { margin-top: 1.6rem; }
-  .install-cols { grid-template-columns: 1fr; }
-  .install-col + .install-col { margin-top: 2rem; }
-  .about-head { font-size: 1.7rem; margin-top: 2.6rem; padding-top: 2rem; }
+  .about-head { font-size: 1.4rem; }
 }

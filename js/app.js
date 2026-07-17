@@ -2170,7 +2170,7 @@
     return `<header class="auth-topbar">` +
         `<div class="auth-topbar-brand">` +
           `<span class="brand-mark">tria</span>` +
-          `<span class="auth-topbar-tag">Social media made local.</span>` +
+          `<span class="auth-topbar-tag">Social media made local</span>` +
         `</div>` +
         `<button class="auth-account" type="button" id="auth-account" aria-label="Sign in">` +
           svgIcon('profile', 'auth-account-ico') +
@@ -5413,9 +5413,6 @@
   const INSTALL_ICONS = {
     share: `<svg ${ICON_ATTRS}><path d="M12 15V3" /><path d="M8 6.5 12 3l4 3.5" />` +
       `<path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" /></svg>`,
-    more: `<svg ${ICON_ATTRS}><circle cx="12" cy="5" r="0.9" fill="currentColor" />` +
-      `<circle cx="12" cy="12" r="0.9" fill="currentColor" />` +
-      `<circle cx="12" cy="19" r="0.9" fill="currentColor" /></svg>`,
     add: `<svg ${ICON_ATTRS}><rect x="4" y="4" width="16" height="16" rx="3.5" />` +
       `<path d="M12 9.2v5.6" /><path d="M9.2 12h5.6" /></svg>`,
   };
@@ -5431,23 +5428,17 @@
     // welcome landing is now the primary place this content is shown). Keeps its
     // id="install" via aboutFold, so #/about?open=install still deep-links here.
     const installHtml =
-      `<p>Tria lives on the web, so there is nothing to download and no store in ` +
-        `between. Add it to your homescreen and it opens full screen, just like ` +
+      `<p>Tria lives on the web, so there's nothing to download and no store in ` +
+        `between. Add it to your home screen and it opens full screen, just like ` +
         `any other app on your phone.</p>` +
-      `<div class="install-cols">` +
-        `<div class="install-col"><h3>iPhone &amp; iPad <span class="install-browser">Safari</span></h3>` +
-          `<ol class="install-steps">` +
-          installStep(INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in the toolbar.`) +
-          installStep(INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`) +
-          installStep(`<span class="install-t">t</span>`, `Tap <strong>Add</strong>. That's it, Tria is on your homescreen.`) +
-          `</ol></div>` +
-        `<div class="install-col"><h3>Android <span class="install-browser">Chrome</span></h3>` +
-          `<ol class="install-steps">` +
-          installStep(INSTALL_ICONS.more, `Tap the <strong>three dots</strong> next to the address bar.`) +
-          installStep(INSTALL_ICONS.add, `Tap <strong>Add to Home screen</strong>, then <strong>Install</strong>.`) +
-          installStep(`<span class="install-t">t</span>`, `Confirm. That's it, Tria is on your homescreen.`) +
-          `</ol></div>` +
-      `</div>`;
+      `<ol class="install-steps">` +
+        installStep(INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in Safari's toolbar.`) +
+        installStep(INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`) +
+        // Payoff tile IS the Tria app icon (the drifting pastel quartet), matching
+        // the signed-out welcome front door.
+        `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +
+          `<span>Tap <strong>Add</strong>. Tria is now on your home screen.</span></li>` +
+      `</ol>`;
 
     // Guidelines and FAQ collapse behind their heads (same 0fr→1fr grid tween
     // as the comment threads) so the feedback form isn't a mile of scroll away.
@@ -5605,7 +5596,7 @@
         // brand header here too. Signed in, the real topbar is already up top.
         (gated ? authHeader() : '') +
         (gated ? `<p class="about-back"><a href="#/">&larr; Back to sign in</a></p>` : '') +
-        mastheadEl('Social media made local.', 'About Tria') +
+        mastheadEl('Social media made local', 'About Tria') +
         `<div class="about-body">` +
           `<p class="about-lede">Tria is a social media app built for <em>real ` +
             `relationships</em>. Whether you're keeping up with lifelong friends, ` +
@@ -5615,7 +5606,7 @@
             `no ads, and no algorithm deciding for you.</strong> Just a place to ` +
             `share your life, discover things worth caring about, and stay ` +
             `connected.</p>` +
-          aboutFold('install', 'Add Tria to your homescreen', installHtml) +
+          aboutFold('install', 'Add Tria to your home screen', installHtml) +
           guidelinesHtml + privacyHtml + faqHtml + businessHtml + feedbackHtml +
         `</div>` +
       `</section>`;
