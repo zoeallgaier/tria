@@ -5564,7 +5564,7 @@
 
     const businessHtml = aboutFold('business', 'Tria for business',
       `<p>Tria is available to businesses and nonprofits for ` +
-        `<strong>$149.99 per month</strong>. That's the whole price. No ad ` +
+        `<strong>$99.99 per month</strong>. That's the whole price. No ad ` +
         `auctions, no hidden fees. <strong>Your social strategy is determined by ` +
         `you and your audience, not an algorithm.</strong></p>` +
       `<p>Tria doesn't use an algorithm to push promotional content into anyone's ` +
