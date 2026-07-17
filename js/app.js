@@ -991,9 +991,10 @@
         `</button>`;
     }
     const liked = Store.likedByMe(post.id);
-    // data-type paints the tap's glow bloom in the post's own colour (--burst);
-    // the classed heart is the target of the scale-pop. The settled liked look is
-    // a still fill on that same colour — the tap just adds the one-shot motion.
+    // data-type sets the post's own colour (--burst) for the tap's ink flood and
+    // sparkle burst; the classed heart is the target of the scale-pop. The settled
+    // liked look is a still fill on that same colour — the tap adds the one-shot
+    // motion.
     return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
         `data-type="${post.type}" ` +
         `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
@@ -1568,6 +1569,36 @@
     });
   }
 
+  // Sparkle burst on LIKE. A tight cluster of y2k four-point stars — varied
+  // position (x/y in px), size (s), spin (r deg) and a little stagger (d ms) so
+  // they cascade rather than pop as one. Offsets stay inside a ~16px radius (the
+  // heart hugs the card's bottom-right corner and the card is paint-contained),
+  // and the down/right ones stay small since that's where the clip edge is; the
+  // .spark keyframes fade each fully to 0 before its tip could graze the boundary.
+  const SPARKS = [
+    { x: -13, y: -11, s: 12, r:  18, d:  0 },
+    { x:   2, y: -16, s: 10, r:   8, d: 20 },
+    { x:  11, y: -12, s:  9, r: -15, d: 55 },
+    { x: -15, y:   3, s:  8, r:  12, d: 35 },
+    { x:  12, y:   5, s:  7, r: -18, d: 85 },
+  ];
+  function burstSparkles(btn) {
+    // Reduced-motion: no burst at all (CSS hides it too, belt and suspenders).
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    btn.querySelector('.like-sparkles')?.remove();   // clear a rapid re-tap's layer
+    const layer = document.createElement('span');
+    layer.className = 'like-sparkles';
+    for (const p of SPARKS) {
+      const s = document.createElement('span');
+      s.className = 'spark';
+      s.style.cssText =
+        `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms`;
+      layer.appendChild(s);
+    }
+    btn.appendChild(layer);
+    setTimeout(() => layer.remove(), 700);   // matches the .is-liking window
+  }
+
   function wireLikes(el, post, opts) {
     const btn = el.querySelector('.card-like');
     if (!btn) return;
@@ -1600,15 +1631,17 @@
       btn.setAttribute('aria-label', res.liked ? 'Unlike' : 'Like');
       btn.setAttribute('title', res.liked ? 'Liked' : 'Like');
       // One-shot ink stamp on LIKE: the heart snaps, the type colour floods up
-      // through it, and a hairline ring pings out — all transform/clip/mask, so
-      // it stays smooth on iOS. Re-add after a reflow so rapid re-taps replay it;
-      // a timer clears the class once it settles. The window (700ms) outlasts the
-      // longest .is-liking animation (~0.42s) with margin — the ink overlay holds
-      // its final frame until then, when the resting .liked fill takes over.
+      // through it, and a little cluster of y2k sparkle stars twinkles out — all
+      // transform/clip/mask, so it stays smooth on iOS. Re-add after a reflow so
+      // rapid re-taps replay it; a timer clears the class once it settles. The
+      // window (700ms) outlasts the longest .is-liking animation (~0.42s) with
+      // margin — the ink overlay holds its final frame until then, when the
+      // resting .liked fill takes over. Sparkles fire on LIKE only (see below).
       clearTimeout(btn._pop);
       btn.classList.remove('is-liking', 'is-unliking');
       void btn.offsetWidth;
       btn.classList.add(res.liked ? 'is-liking' : 'is-unliking');
+      if (res.liked) burstSparkles(btn);
       btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
     });
   }
@@ -2123,6 +2156,7 @@
 
     if (!list.length) {
       feedEl.innerHTML = '';
+      justPostedId = null;   // nothing to sparkle if a filter emptied the feed
       // A brand-new account has no friends yet, so its Circle is genuinely empty —
       // point them at Discover rather than leaving a blank "nothing here".
       const noFilter = activeFilter === 'all' && !activeTag;
@@ -2190,6 +2224,58 @@
     // Keep the active-tag highlight current on every chip (reused cards included).
     feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
       btn.classList.toggle('active', btn.dataset.tag === activeTag));
+
+    // Posted! The post you just made lands at the top of the feed — welcome it
+    // with a sparkle. Consume the flag on this one pass (if a filter hid the new
+    // post, the card won't be here and the moment is simply skipped).
+    if (justPostedId != null) {
+      const fresh = [...feedEl.querySelectorAll(':scope > .card')]
+        .find(c => c.dataset.id === justPostedId);
+      justPostedId = null;
+      if (fresh) celebratePost(fresh);
+    }
+  }
+
+  // Sparkle a freshly published post into the feed, reusing the like-tap's y2k
+  // stars. Positions are percentages across the card's top region; sizes (s),
+  // spins (r) and a stagger (d ms) vary so the stars cascade and float up rather
+  // than pop as one. Kept to the card's upper band (byline + first lines) so a
+  // photo post's image stays clean.
+  const POST_SPARKS = [
+    { x: 12, y: 22, s: 14, r:  16, d:   0 },
+    { x: 48, y: 16, s: 16, r:  10, d:  40 },
+    { x: 84, y: 24, s: 13, r:  14, d:  80 },
+    { x: 30, y: 60, s:  9, r: -12, d: 120 },
+    { x: 90, y: 62, s: 11, r: -14, d: 150 },
+    { x: 66, y: 52, s: 10, r: -16, d: 180 },
+    { x: 20, y: 82, s:  8, r: -10, d: 220 },
+    { x: 58, y: 80, s:  9, r:  18, d: 260 },
+    { x: 38, y: 40, s:  7, r:  12, d: 300 },
+  ];
+  function celebratePost(cardEl) {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    // Let the card finish its rise (~0.5s, front-loaded ease) before we anchor to
+    // it, so the fixed overlay lands on the card's resting box, not a moving one.
+    setTimeout(() => {
+      const r = cardEl.getBoundingClientRect();
+      if (!r.width) return;
+      const layer = document.createElement('div');
+      layer.className = 'post-sparkles';
+      layer.dataset.type = cardEl.dataset.type;
+      layer.style.left = r.left + 'px';
+      layer.style.top = r.top + 'px';
+      layer.style.width = r.width + 'px';
+      layer.style.height = Math.min(r.height, 190) + 'px';   // top band only on tall cards
+      for (const p of POST_SPARKS) {
+        const s = document.createElement('span');
+        s.className = 'spark';
+        s.style.cssText =
+          `left:${p.x}%;top:${p.y}%;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms`;
+        layer.appendChild(s);
+      }
+      document.body.appendChild(layer);
+      setTimeout(() => layer.remove(), 1400);
+    }, 200);
   }
 
   // Tag chips inside a feed card filter the feed by that tag; wired once, on the
@@ -4043,6 +4129,7 @@
   let cropper = null;        // set once a still is captured/picked; .export() → data-URI
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
   let stopActiveCapture = null;   // teardown for the live camera/mic (getUserMedia or native preview)
+  let justPostedId = null;   // id of a just-published post → sparkle it in when the feed next paints
 
   // Audience targeting for activities. mode 'circle' = everyone in your circle
   // (default, unchanged behaviour); 'list' = only the chosen usernames, enforced
@@ -5257,6 +5344,7 @@
     clearPostProgress();
     cropper = null;
     videoCapture = null;
+    justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // reset for next time
     go('#/');
   }

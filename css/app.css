@@ -1035,16 +1035,17 @@ main {
   color: var(--burst, var(--heart-note));
 }
 
-/* ── Like tap: an ink stamp ─────────────────────────────────────────────────
-   The most Tria-native like we can do — not particles thrown in the air (that's
-   engagement-bait, the opposite of this app), but one confident editorial mark.
-   Three beats fire together on LIKE, all cheap (transform + clip + mask; no blur
-   filter, no grain):
+/* ── Like tap: ink stamp + sparkle ──────────────────────────────────────────
+   Liking should feel good. Not particles thrown across the screen (that's
+   engagement-bait, the opposite of this app), but one confident editorial mark
+   that twinkles. Three beats fire together on LIKE, all cheap (transform + clip
+   + mask; no blur filter, no grain):
      1. the heart SNAPS — a sharp scale punch, no soft anticipation;
      2. the post's type colour FLOODS UP through the glyph like ink filling it
         (a masked overlay clip-revealed bottom→top while the outline holds);
-     3. one hairline RING pings out once and vanishes — the burst energy spent
-        in a single stroke instead of scattered confetti.
+     3. a tight little cluster of y2k four-point STARS twinkles out of it and
+        winks away (JS injects them on LIKE, see burstSparkles) — the burst
+        energy spent on a smile, not scattered confetti.
    Everything stays inside the card's paint-contained box (the heart sits near
    the card's bottom edge — see content-visibility on .card), so nothing crops. */
 .card-like {
@@ -1107,38 +1108,106 @@ main {
   to   { clip-path: inset(0 0 0 0); }
 }
 
-/* 3. The ring. One hairline (1px) circle in the post's colour that emanates from
-   the heart's edge and snaps outward once — the whole burst spent in a single
-   editorial stroke. The heart lives in the card's bottom-right corner, ~18px from
-   the paint-contained edge (and, on phones, the screen edge), so a ring can't
-   grow past that without clipping; we start it at the glyph's rim (not a dot in
-   the middle) and fade it fully to 0 exactly as it reaches the boundary, so the
-   graze is never visible. The scale punch (above) carries the drama the ring
-   can't. */
-.card-like.is-liking::before {
-  content: "";
+/* 3. The sparkle. A little cluster of y2k four-point stars twinkles out of the
+   heart in the post's colour — each pops from nothing, spins a touch, drifts a
+   hair outward, and winks away. JS injects the .like-sparkles layer on LIKE and
+   pulls it once the burst is spent (see burstSparkles); every spark is a masked
+   SVG star animating transform + opacity only (no blur), one-shot — nothing
+   lingers, nothing loops. The heart lives in the card's bottom-right corner,
+   ~18px from the paint-contained edge, so the offsets stay inside a ~16px radius
+   and each spark fades fully to 0 before any tip reaches the boundary — the same
+   trick the old ring used, so the graze is never visible. Per-spark position
+   (--x/--y), size (--s), spin (--r) and stagger (animation-delay) come inline. */
+.like-sparkles {
   position: absolute;
-  left: 50%; top: 50%;
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  border: 1px solid var(--burst);
+  inset: 0;
   pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, calc(-50% + 1.5px)) scale(0.85);
-  animation: like-ring 0.46s var(--ease) forwards;
+  z-index: 1;
 }
-@keyframes like-ring {
-  0%   { opacity: 0.9; transform: translate(-50%, calc(-50% + 1.5px)) scale(0.85); }
-  55%  { opacity: 0.5; }
-  100% { opacity: 0;   transform: translate(-50%, calc(-50% + 1.5px)) scale(1.4); }
+/* Shared spark: a masked y2k star painted in the post's --burst colour. Position
+   + motion are set per context — the like-tap burst flies out from the heart
+   (below); the fresh-post burst floats up off the card (.post-sparkles). */
+.spark {
+  position: absolute;
+  width: var(--s); height: var(--s);
+  background: var(--burst);
+  -webkit-mask: var(--spark-mask) center / 100% 100% no-repeat;
+          mask: var(--spark-mask) center / 100% 100% no-repeat;
+  opacity: 0;
+  pointer-events: none;
+}
+.like-sparkles .spark {
+  left: 50%; top: 50%;
+  /* Two decoupled tracks so motion leads the light: the star is already flying
+     outward while it's still fading up (position never waits on opacity, and
+     never holds mid-flight). like-fly owns transform, spark-fade owns the
+     opacity envelope; both start together on the same clock. */
+  animation: like-fly 0.5s linear both, spark-fade 0.5s ease-in-out both;
+}
+/* Transform track: launch out from the heart (eased pop), then drift on
+   (linear) — one continuous path, no hold. The per-keyframe timing functions
+   keep the two segments seamless. Reach stays inside a ~16px radius while the
+   star is lit (it's fading by the time it passes 1.1x), so the paint-contained
+   corner never clips a visible tip. */
+@keyframes like-fly {
+  0%   { transform: translate(-50%, -50%) translate(calc(var(--x) * 0.12), calc(var(--y) * 0.12)) scale(0.2) rotate(0deg);
+         animation-timing-function: cubic-bezier(0.15, 0.85, 0.3, 1); }
+  30%  { transform: translate(-50%, -50%) translate(var(--x), var(--y))                           scale(1)   rotate(var(--r));
+         animation-timing-function: linear; }
+  100% { transform: translate(-50%, -50%) translate(calc(var(--x) * 1.3), calc(var(--y) * 1.3))   scale(0.4) rotate(calc(var(--r) + 18deg)); }
+}
+/* Opacity envelope, shared by both bursts: quick in, brief hold, gentle out.
+   Runs on its own clock so the movement is well underway before the star peaks
+   and keeps going while it fades — that's what makes the drift read as fluid. */
+@keyframes spark-fade {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  52%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── Posted! celebration ─────────────────────────────────────────────────────
+   The same y2k sparkle motif, now welcoming a fresh post: the moment you land
+   back on the feed, the post you just made gets a sprinkle of stars that pop and
+   float up off it, tinted to its own type colour. JS anchors a fixed .post-sparkles
+   layer over the new card's box and pulls it once the burst is spent (see
+   celebratePost) — a one-shot, transform+opacity only, no loop. Positions (left/
+   top %), size (--s), spin (--r) and stagger (animation-delay) come inline. */
+.post-sparkles {
+  position: fixed;
+  z-index: 300;
+  pointer-events: none;
+}
+.post-sparkles[data-type="note"]     { --burst: var(--heart-note); }
+.post-sparkles[data-type="find"]     { --burst: var(--heart-find); }
+.post-sparkles[data-type="activity"] { --burst: var(--heart-activity); }
+.post-sparkles[data-type="photo"]    { --burst: var(--heart-photo); }
+.post-sparkles .spark {
+  /* Same decoupled tracks as the like burst: post-rise owns the upward drift,
+     spark-fade owns opacity — so the star is already climbing as it fades in. */
+  animation: post-rise 0.9s linear both, spark-fade 0.9s ease-in-out both;
+}
+/* Transform track: start a hair low, rise to rest (eased pop), then keep
+   floating up (linear) — one continuous climb, never a hold. */
+@keyframes post-rise {
+  0%   { transform: translate(-50%, calc(-50% + 5px))  scale(0.2) rotate(-5deg);
+         animation-timing-function: cubic-bezier(0.15, 0.85, 0.3, 1); }
+  26%  { transform: translate(-50%, -50%)              scale(1)   rotate(var(--r));
+         animation-timing-function: linear; }
+  100% { transform: translate(-50%, calc(-50% - 24px)) scale(0.5) rotate(calc(var(--r) + 26deg)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No motion: the fresh post just arrives (JS also skips spawning the layer). */
+  .post-sparkles { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* No motion: the heart just arrives filled — no rise, no ring. */
+  /* No motion: the heart just arrives filled — no rise, no sparkle. (JS already
+     skips injecting the layer here; this hides it if one ever slips through.) */
   .card-like.is-liking .like-heart   { fill: currentColor; animation: none; }
   .card-like.is-unliking .like-heart { animation: none; }
-  .card-like.is-liking::before,
   .card-like.is-liking::after { display: none; }
+  .like-sparkles { display: none; }
 }
 
 /* Attendees (activities). The people-glyph + count on the left; an outline
@@ -3150,6 +3219,10 @@ body.gate main { padding: 0; }
    per-theme duplicate URIs. */
 :root {
   --check-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  /* Y2K four-point sparkle: sharp points, pinched (concave) waists. Shared by
+     every .spark — the like-tap burst and the fresh-post celebration — each
+     painted in the post's --burst colour like the ink flood. */
+  --spark-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 1c.4 7 3.6 10.6 11 11-7.4.4-10.6 4-11 11-.4-7-3.6-10.6-11-11 7.4-.4 10.6-4 11-11z'/%3E%3C/svg%3E");
 }
 
 /* Two modes grouped in one inset-list card, split by a hairline — no outlines. */
