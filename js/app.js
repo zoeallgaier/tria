@@ -1395,13 +1395,15 @@
       }
     }
 
-    function attach() {
-      // Reduced motion: stay on the poster/tint box, no ambient autoplay —
-      // the clip only ever plays inside the lightbox, on an explicit tap.
-      if (clip || prefersReduced()) return;
+    function attach(opts) {
+      const withSound = !!(opts && opts.withSound);
+      // Reduced motion: stay on the poster/tint box, no ambient autoplay — the
+      // clip only plays on an explicit tap. A sound tap IS that explicit tap
+      // (withSound), so it overrides the ambient-motion gate and plays anyway.
+      if (clip || (prefersReduced() && !withSound)) return;
       clip = document.createElement('video');
       clip.className = 'frame-clip';
-      clip.muted = true; clip.playsInline = true; clip.loop = !win; clip.preload = 'metadata';
+      clip.muted = !withSound; clip.playsInline = true; clip.loop = !win; clip.preload = 'metadata';
       // Ground-truth aspect ratio: once the decoder reports the clip's real
       // dimensions, size the frame box to match so object-fit:cover never crops.
       // The stamped `-WxH` dims usually get this right already, but a Frame with
@@ -1437,7 +1439,19 @@
         if (activeFrameVideo && activeFrameVideo !== clip) activeFrameVideo.pause();
         activeFrameVideo = clip;
         fig.classList.add('frame-video--playing');
-      }).catch(() => detach());
+        if (withSound && soundBtn) {
+          // Only one frame carries sound at a time — hush any other unmuted clip.
+          if (soundedFrameVideo && soundedFrameVideo !== clip) soundedFrameVideo.muted = true;
+          soundedFrameVideo = clip;
+          soundBtn.setAttribute('aria-pressed', 'true');
+          soundBtn.innerHTML = svgIcon('sound', 'frame-sound-ico');
+        }
+      }).catch(() => {
+        // Playback refused even on a tap: fall back to the lightbox so a sound
+        // tap is never a dead end.
+        detach();
+        if (withSound) openLightbox(post.image, alt, true);
+      });
     }
 
     if (frameObserver) {
@@ -1447,9 +1461,10 @@
 
     soundBtn?.addEventListener('click', e => {
       e.stopPropagation();
-      // Nothing playing inline (declined autoplay / reduced motion) → sound
-      // only ever works in the lightbox, so send the tap straight there.
-      if (!clip) { openLightbox(post.image, alt, true); return; }
+      // Nothing playing inline yet (declined autoplay / reduced motion): this tap
+      // is a user gesture, so start the clip right here WITH sound — the speaker
+      // controls audio on the post itself, no tap-through to the lightbox needed.
+      if (!clip) { attach({ withSound: true }); return; }
       if (soundedFrameVideo && soundedFrameVideo !== clip) soundedFrameVideo.muted = true;
       clip.muted = !clip.muted;
       soundedFrameVideo = clip.muted ? null : clip;
@@ -3072,9 +3087,11 @@
           `<div class="pf-photo" id="pf-photo">` +
             `<div class="pf-photo-figure">` +
               avatarEl(u, { cls: 'pf-photo-avatar' }) +
-              `<button type="button" class="pf-photo-edit" id="pf-photo-pick" ` +
+              // Div, not <button>: kills the iOS standalone native pressed-fill
+              // flash on this filled badge (same fix as the composer dropzone).
+              `<div class="pf-photo-edit" id="pf-photo-pick" role="button" tabindex="0" ` +
                 `aria-label="Change your photo" title="Change your photo">` +
-                svgIcon('camera', 'pf-photo-ico') + `</button>` +
+                svgIcon('camera', 'pf-photo-ico') + `</div>` +
             `</div>` +
           `</div>` +
           `<input id="pf-file" type="file" accept="image/*" hidden>` +
@@ -3160,7 +3177,9 @@
     const pfCropImg = modal.querySelector('#pf-cropimg');
     const pfPhotoRow = modal.querySelector('#pf-photo');
     let pfCropper = null;
-    modal.querySelector('#pf-photo-pick').addEventListener('click', () => pfFile.click());
+    const pfPick = modal.querySelector('#pf-photo-pick');   // role=button div, not <button>
+    pfPick.addEventListener('click', () => pfFile.click());
+    pfPick.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pfFile.click(); } });
     pfFile.addEventListener('change', () => {
       const f = pfFile.files && pfFile.files[0];
       if (!f) return;
@@ -4232,10 +4251,14 @@
     return `<div class="field frame-field" hidden>` +
         `<label for="c-file">Photo or clip</label>` +
         `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
-        `<button type="button" class="dropzone" id="c-dropzone">` +
+        // A div, not a <button>: iOS standalone PWAs paint a native pressed-state
+        // fill on filled form controls that -webkit-appearance:none doesn't remove
+        // (the white tap-flash). A role=button element has no native chrome to
+        // paint. Keyboard activation is wired by hand below. Same for #c-replace.
+        `<div class="dropzone" id="c-dropzone" role="button" tabindex="0">` +
           svgIcon('image', 'dropzone-ico') +
           `<span class="dropzone-label">Choose a photo or clip</span>` +
-        `</button>` +
+        `</div>` +
         `<div class="combo-frame">` +
           `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
@@ -4265,7 +4288,7 @@
               `<span class="trim-hint">Scroll to choose the moment. Drag the ends to set length, up to 10 seconds.</span>` +
             `</p>` +
           `</div>` +
-          `<button type="button" class="crop-replace" id="c-replace" hidden>Choose another</button>` +
+          `<div class="crop-replace" id="c-replace" role="button" tabindex="0" hidden>Choose another</div>` +
         `</div>` +
       `</div>`;
   }
@@ -4676,8 +4699,13 @@
     // Open the OS picker. The upload dropzone and the post-pick "Choose another"
     // button both lead here — one way in, the system does the rest.
     const pick = () => file.click();
+    // dropzone + replace are role=button divs (see frameFieldHtml), so wire the
+    // keyboard activation a native <button> would give for free.
+    const pickKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
     dropzone.addEventListener('click', pick);
+    dropzone.addEventListener('keydown', pickKey);
     replace.addEventListener('click', pick);
+    replace.addEventListener('keydown', pickKey);
 
     file.addEventListener('change', () => {
       const f = file.files && file.files[0];

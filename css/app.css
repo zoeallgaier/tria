@@ -3369,10 +3369,14 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-field);
   background: var(--surface);
   cursor: pointer;
-  /* Kill iOS's default tap highlight — a bounding-box rectangle that ignores the
-     radius and reads white over a dark surface. The global html rule doesn't
-     reliably reach <button>s in WebKit, so tappable controls re-pin it locally
-     (see .sheet-item / .sheet-cancel). */
+  /* This is a role=button <div>, NOT a <button> (see frameFieldHtml): a native
+     filled form control paints an un-removable pressed-state fill on iOS
+     standalone PWAs — the white tap-flash — that -webkit-appearance:none can't
+     kill. A div has no native chrome, so it can't. user-select:none replaces
+     what the <button> reset gave (no long-press callout on the label); the
+     tap-highlight is already pinned transparent by the reset's [role=button]. */
+  -webkit-user-select: none;
+  user-select: none;
   -webkit-tap-highlight-color: transparent;
   transition: border-color var(--dur-micro), color var(--dur-micro);
 }
@@ -3661,6 +3665,7 @@ body.gate main { padding: 0; }
    control, not floating glass. */
 .crop-replace {
   display: block;
+  width: fit-content;          /* role=button div: shrink-wrap so margin:auto still centers it */
   margin: 0.8rem auto 0;
   padding: 0.5rem 1.1rem;
   font-size: 0.85rem;
@@ -3671,6 +3676,8 @@ body.gate main { padding: 0; }
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
   -webkit-tap-highlight-color: transparent;   /* same iOS tap-flash fix as .dropzone */
   transition: color var(--dur-micro), border-color var(--dur-micro), background-color var(--dur-micro);
 }
@@ -3699,6 +3706,10 @@ body.gate main { padding: 0; }
   background: var(--accent);
   border: 2px solid var(--bg);
   border-radius: 50%;
+  cursor: pointer;             /* role=button div, not <button> — no free cursor */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
   transition: background-color var(--dur-micro), transform 0.12s;
 }
 .pf-photo-ico { width: 16px; height: 16px; }
