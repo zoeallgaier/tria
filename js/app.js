@@ -145,6 +145,8 @@
     mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
     // Filled triangle — the play affordance on a Frame video that hasn't started.
     play:    '<path d="M8.5 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
+    // A framed picture (sun + hills) — the composer's "add a photo or clip" tool.
+    image:   '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M4.5 17.5 9 13l3 2.5L15.5 12l4 5"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -372,7 +374,10 @@
     dial.querySelectorAll('.nav-dial-item').forEach(item =>
       item.addEventListener('click', (e) => {
         e.preventDefault();
-        pubType = item.dataset.type;   // preselect the composer's type
+        // The four cute icons are smart shortcuts into the one composer: each just
+        // preselects its type filter (Find opens the link field, Frame the picker,
+        // Activity its form). renderPublish reads pubType on mount.
+        pubType = item.dataset.type || 'note';
         closeDial();
         go(item.getAttribute('href'));
       }));
@@ -3579,7 +3584,7 @@
     // The circle / find switch is the shared iOS segmented control, driving the
     // tabpanel below. My circle opts into the brand gradient glow.
     view.innerHTML =
-      `<section class="view">` +
+      `<section class="view view--friends">` +
         mastheadEl(circleCount, 'Friends', searchAction) +
         segTabsEl('friends', FRIENDS_TABS, friendsTab, { glow: true, panelId: 'friends-panel' }) +
         `<div class="seg-panel" id="friends-panel" role="tabpanel" ` +
@@ -4000,7 +4005,7 @@
       // All / Mentions is the shared segmented control, neutral (no brand glow) —
       // colour stays reserved for post types.
       view.innerHTML =
-        `<section class="view">` +
+        `<section class="view view--updates">` +
           mastheadEl('', 'Updates') +
           pushAskHtml() +
           segTabsEl('updates', NOTIF_FILTERS, notifFilter, { label: 'Filter updates', panelId: 'updates-panel' }) +
@@ -4125,10 +4130,17 @@
     { key: 'photo',    label: 'Frame'    },
     { key: 'activity', label: 'Activity' },
   ];
+  // The active post type. One unified composer: the Note rich editor is the base
+  // for note / find / photo (a shared body that persists as you switch among them),
+  // and Activity swaps in its own structured form. A row of type filters (the same
+  // pastel chips as the feed) picks the type — tapping Find opens the link field,
+  // Frame opens the photo picker, Activity swaps forms — and the masthead mark +
+  // the chip both light to match. See renderPublish.
   let pubType = 'note';
   let cropper = null;        // set once a still is captured/picked; .export() → data-URI
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
   let stopActiveCapture = null;   // teardown for the live camera/mic (getUserMedia or native preview)
+  let onCaptureChange = null;     // set by the Post composer so the type indicator re-reads when a frame lands/clears
   let justPostedId = null;   // id of a just-published post → sparkle it in when the feed next paints
 
   // Audience targeting for activities. mode 'circle' = everyone in your circle
@@ -4176,6 +4188,49 @@
   // composer watches for one and offers the switch (see wireFindNudge).
   const NOTE_URL_RE = /(https?:\/\/\S+|\bwww\.\S+)/i;
 
+  // The photo/video capture surface, shipped hidden inside the Post field set and
+  // revealed once a still/clip lands (the Photo tool opens the OS picker directly).
+  // A picked still previews at native aspect; a picked clip drops into the in-app
+  // trim reel, as Frames have always done. wireFrameCapture drives it; the whole
+  // thing lives under a .frame-field wrapper the capture reveals on land and the
+  // type filter folds away when you move off Frame (clearFrame).
+  function frameFieldHtml() {
+    return `<div class="field frame-field" hidden>` +
+        `<div class="combo-frame">` +
+          `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
+          `<div class="crop crop--free" id="c-crop" hidden>` +
+            `<img id="c-cropimg" alt="" draggable="false">` +
+          `</div>` +
+          `<div class="trim" id="c-trim" hidden>` +
+            `<div class="trim-stage">` +
+              `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
+              `<div class="trim-loading" aria-live="polite"><span class="trim-loading-dot"></span>Getting your clip ready</div>` +
+              `<button type="button" class="trim-sound" id="c-trimsound" ` +
+                `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
+            `</div>` +
+            `<div class="reel-wrap" id="c-reelwrap">` +
+              `<div class="reel-ticks" id="c-reelticks" aria-hidden="true"></div>` +
+              `<div class="reel" id="c-reel">` +
+                `<div class="reel-track" id="c-reeltrack"></div>` +
+              `</div>` +
+              `<div class="reel-scrim" id="c-reelscriml" aria-hidden="true"></div>` +
+              `<div class="reel-scrim" id="c-reelscrimr" aria-hidden="true"></div>` +
+              `<div class="reel-frame" id="c-reelframe" role="slider" aria-label="Trim window">` +
+                `<span class="reel-handle reel-handle--l" data-edge="l" aria-hidden="true"></span>` +
+                `<span class="reel-handle reel-handle--r" data-edge="r" aria-hidden="true"></span>` +
+              `</div>` +
+              `<div class="reel-playhead" id="c-reelplayhead" aria-hidden="true"></div>` +
+            `</div>` +
+            `<p class="trim-meta">` +
+              `<span class="trim-dur" id="c-trimdur">0.0s</span>` +
+              `<span class="trim-hint">Scroll to choose the moment. Drag the ends to set length, up to 10 seconds.</span>` +
+            `</p>` +
+          `</div>` +
+          `<button type="button" class="crop-replace" id="c-replace" hidden>Choose another</button>` +
+        `</div>` +
+      `</div>`;
+  }
+
   function fieldsFor(type) {
     const tags =
       `<div class="field">` +
@@ -4184,24 +4239,6 @@
           `placeholder="${randomTagPlaceholder()}">` +
         `<p class="field-hint">Optional · separate with commas.</p>` +
       `</div>`;
-
-    if (type === 'find') {
-      // Title + why-share ride in one bordered box, split by a divider — the
-      // headline reads as the lead, the caption as the note beneath it. The
-      // link rides below, same as every other type keeps its text up top.
-      return `<div class="field field--combo">` +
-          `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
-            `placeholder="Title (optional)" aria-label="Title">` +
-          `<div class="combo-divider" aria-hidden="true"></div>` +
-          `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
-            `placeholder="What made you want to share it?" aria-label="Why share it"></textarea>` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-url">Link</label>` +
-          `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
-            `spellcheck="false" placeholder="https://…" autofocus>` +
-        `</div>` + tags;
-    }
 
     if (type === 'activity') {
       // Headline + details ride in one bordered box, split by a divider — same
@@ -4229,75 +4266,20 @@
         audienceRowHtml() + tags;
     }
 
-    if (type === 'photo') {
-      // Caption + frame ride in one bordered box — same combo pattern as find,
-      // activity, and note, so all four types read the same up top. Caption leads
-      // (like every other type's text); the frame sits directly below with no
-      // divider, the media's own edge is separation enough.
-      return `<div class="field field--combo">` +
-          `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
-            `placeholder="Say something, or let the frame speak." aria-label="Caption"></textarea>` +
-          `<div class="combo-frame">` +
-            `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
-            `<div class="dropzone" id="c-drop">` +
-              `<button type="button" class="dropzone-btn" id="c-pick">Choose a photo or video</button>` +
-              `<p class="field-hint">A photo, or a clip up to 10 seconds.</p>` +
-            `</div>` +
-            `<div class="crop crop--free" id="c-crop" hidden>` +
-              `<img id="c-cropimg" alt="" draggable="false">` +
-            `</div>` +
-            // Trim surface: a playing native preview + the scrollable thumbnail
-            // reel with a draggable ≤10s window. A picked video lands here; the
-            // clip plays and a longer library pick gets trimmed down in-app
-            // instead of getting bounced to Photos. See wireFrameCapture.
-            `<div class="trim" id="c-trim" hidden>` +
-              `<div class="trim-stage">` +
-                `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
-                // Shown only while .trim--loading — a calm shimmer + word so a heavy
-                // clip (4K, iCloud) reads as "working" while its metadata loads,
-                // never frozen. Cleared the moment the preview starts playing.
-                `<div class="trim-loading" aria-live="polite"><span class="trim-loading-dot"></span>Getting your clip ready</div>` +
-                `<button type="button" class="trim-sound" id="c-trimsound" ` +
-                  `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
-              `</div>` +
-              // A full-width, horizontally-scrollable thumbnail reel. A fixed
-              // selection frame sits centered over it: you SCROLL the reel to choose
-              // the moment and drag the frame's ends to set length (≤10s). Time ticks
-              // ride the top; scrims dim the trimmed-away edges; the playhead tracks
-              // playback inside the frame. Thumbnails are sampled off the preview
-              // element (canvas-from-video works on real iOS Safari) but are a
-              // progressive enhancement — the reel scrubs fine with neutral cells.
-              `<div class="reel-wrap" id="c-reelwrap">` +
-                `<div class="reel-ticks" id="c-reelticks" aria-hidden="true"></div>` +
-                `<div class="reel" id="c-reel">` +
-                  `<div class="reel-track" id="c-reeltrack"></div>` +
-                `</div>` +
-                `<div class="reel-scrim" id="c-reelscriml" aria-hidden="true"></div>` +
-                `<div class="reel-scrim" id="c-reelscrimr" aria-hidden="true"></div>` +
-                `<div class="reel-frame" id="c-reelframe" role="slider" aria-label="Trim window">` +
-                  `<span class="reel-handle reel-handle--l" data-edge="l" aria-hidden="true"></span>` +
-                  `<span class="reel-handle reel-handle--r" data-edge="r" aria-hidden="true"></span>` +
-                `</div>` +
-                `<div class="reel-playhead" id="c-reelplayhead" aria-hidden="true"></div>` +
-              `</div>` +
-              `<p class="trim-meta">` +
-                `<span class="trim-dur" id="c-trimdur">0.0s</span>` +
-                `<span class="trim-hint">Scroll to choose the moment. Drag the ends to set length, up to 10 seconds.</span>` +
-              `</p>` +
-            `</div>` +
-            // One text button to swap the frame — re-opens the OS picker. Photos keep
-            // their native aspect (no crop step, by design — see initPhotoPreview).
-            `<button type="button" class="crop-replace" id="c-replace" hidden>Choose another</button>` +
-          `</div>` +
-        `</div>` + tags;
-    }
-
-    // post (Note) — the rich editor: headline + a contenteditable body + the
-    // H1/H2/B/I toolbar in one combo box. Wired in mountFields (wireRichEditor).
-    // The find-nudge hint sits hidden beneath it until the body holds a URL.
+    // The unified Post field set, shared by note / find / photo. The Note rich
+    // editor is the base (headline + a contenteditable body + the H1/H2/B/I toolbar,
+    // 15k). The link row and the frame surface ship hidden; the type filter reveals
+    // the one its type needs — Find shows the link row, Frame opens the picker — so
+    // the body carries over as you switch among the three (see renderPublish).
     return richNoteField('c', '', '', randomNotePlaceholder()) +
       `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
-        `<button type="button" id="c-make-find">Make it a Find</button></p>` + tags;
+        `<button type="button" id="c-make-find">Make it a Find</button></p>` +
+      `<div class="field" id="c-link-row" hidden>` +
+        `<label for="c-url">Link</label>` +
+        `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
+          `spellcheck="false" placeholder="https://…">` +
+      `</div>` +
+      frameFieldHtml() + tags;
   }
 
   // ── Audience picker (design preview) ──────────────────────────────────────
@@ -4418,17 +4400,24 @@
     });
   }
 
+  // The reactive type mark that rides the "New post" masthead (same slot the
+  // Friends search uses). It mirrors the active type filter — note / find → Find /
+  // photo → Frame / activity — and pops when it flips (see paintIndicator).
+  function typeIndicatorHtml() {
+    return `<span class="type-indicator type-icon type-icon--${pubType}" id="c-type-ind" ` +
+      `role="img" aria-label="${TYPE_LABEL[pubType]}">${TYPE_ICON[pubType]}</span>`;
+  }
+
   function renderPublish() {
     view.innerHTML =
       `<section class="view">` +
-        `<h1 class="visually-hidden">New Post</h1>` +
+        mastheadEl('Share to your circle', 'New post', typeIndicatorHtml()) +
+        `<div class="filters compose-filters" role="group" aria-label="What are you posting">` +
+          PUB_TYPES.map(t =>
+            `<button class="filter" type="button" data-filter="${t.key}" ` +
+              `aria-pressed="${t.key === pubType}">${t.label}</button>`).join('') +
+        `</div>` +
         `<form class="composer" id="composer" novalidate>` +
-          `<div class="type-pick" role="group" aria-label="Post type">` +
-            PUB_TYPES.map(t =>
-              `<button class="filter type-opt" type="button" data-type="${t.key}" ` +
-                `data-filter="${t.key}" aria-pressed="${t.key === pubType}">` +
-                `${t.label}</button>`).join('') +
-          `</div>` +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
           `<div class="post-progress" id="c-progress" aria-live="polite">` +
@@ -4440,44 +4429,103 @@
       `</section>`;
 
     const fieldsEl = view.querySelector('#c-fields');
+    let family = null;         // 'base' (note/find/photo share one field set) | 'activity'
+    let lastIndType = null;    // last type the mark showed, so it only pops on a real change
+
+    // Light the active filter chip + morph the masthead mark to the current type.
+    function paint() {
+      view.querySelectorAll('.compose-filters .filter').forEach(b =>
+        b.setAttribute('aria-pressed', String(b.dataset.filter === pubType)));
+      const ind = document.getElementById('c-type-ind');
+      if (!ind || pubType === lastIndType) return;
+      lastIndType = pubType;
+      ind.className = `type-indicator type-icon type-icon--${pubType}`;
+      ind.setAttribute('aria-label', TYPE_LABEL[pubType] || pubType);
+      ind.innerHTML = TYPE_ICON[pubType] || '';
+      ind.classList.remove('is-changing');
+      void ind.offsetWidth;                // restart the pop
+      ind.classList.add('is-changing');
+    }
+
+    const openPicker = () => fieldsEl.querySelector('#c-file')?.click();
+    // Drop any attached photo/clip and fold the frame surface away (used when the
+    // type moves off Frame, since only a Frame carries media).
+    function clearFrame() {
+      if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
+      cropper = null; videoCapture = null;
+      fieldsEl.querySelector('#c-crop')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-trim')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-replace')?.setAttribute('hidden', '');
+      const file = fieldsEl.querySelector('#c-file'); if (file) file.value = '';
+      fieldsEl.querySelector('.frame-field')?.setAttribute('hidden', '');
+      const b = view.querySelector('.composer-submit'); if (b) b.disabled = false;
+    }
+
+    // Reveal the surface the current base type needs and do its opening action:
+    // Find shows + focuses the link row, Frame opens the OS picker, Note bares the
+    // body. Any type but Frame drops a stray attachment first.
+    function applyBaseSurface() {
+      if (family !== 'base') return;
+      const linkRow = fieldsEl.querySelector('#c-link-row');
+      const url     = fieldsEl.querySelector('#c-url');
+      if (pubType !== 'photo') clearFrame();
+      if (linkRow) linkRow.hidden = pubType !== 'find';
+      if (pubType === 'find' && url) url.focus();
+      if (pubType === 'photo' && !(cropper || videoCapture)) openPicker();
+    }
 
     function mountFields() {
-      // Leaving a live camera/mic stream running behind a torn-down capture
-      // surface would keep recording (and draining battery) after the user
-      // switches type or re-mounts — always stop it before replacing the DOM.
+      // Leaving a live camera/mic stream running behind a torn-down capture surface
+      // would keep recording (and draining battery) after a re-mount — always stop
+      // it before replacing the DOM.
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null;
       videoCapture = null;
+      onCaptureChange = null;
       pubAudience = { mode: 'circle', users: [] };   // each fresh composer defaults to the full circle
-      // Fresh fields carry no pending photo decode — clear any hold left on Post
-      // (e.g. switching type away from a photo mid-decode; see wireFrameCapture).
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
-      fieldsEl.innerHTML = fieldsFor(pubType);
+      family = pubType === 'activity' ? 'activity' : 'base';
+      fieldsEl.innerHTML = fieldsFor(family === 'activity' ? 'activity' : 'post');
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
-      if (pubType === 'note') {
-        wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
-        wireFindNudge();
-      }
-      if (pubType === 'photo') wireFrameCapture(fieldsEl);
-      if (pubType === 'activity') {
+      if (family === 'activity') {
         wireWhenHints(fieldsEl);
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
         wireAudienceRow(fieldsEl);
+      } else {
+        wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
+        wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the Post field set
+        wireFindNudge();
       }
-      view.querySelectorAll('.type-opt').forEach(b =>
-        b.setAttribute('aria-pressed', String(b.dataset.type === pubType)));
     }
 
-    // The Note field's quiet "that's a link" nudge: shows once the body holds a
-    // URL, and one tap re-mounts the composer as a Find with the title, the
-    // link, and the rest of the words carried across — nothing retyped.
+    // Pick a type. Within the base family (note/find/photo) the fields stay mounted
+    // so the body carries over — we just swap which surface shows. Crossing to or
+    // from Activity re-mounts. Re-tapping Frame/Find repeats its action (re-open the
+    // picker, re-focus the link) so the chip is a live shortcut, not a dead toggle.
+    function selectType(key) {
+      const repeat = key === pubType;
+      const prevFam = pubType === 'activity' ? 'activity' : 'base';
+      const nextFam = key === 'activity' ? 'activity' : 'base';
+      pubType = key;
+      document.getElementById('c-error').textContent = '';
+      paint();
+      if (nextFam !== prevFam || (repeat && nextFam === 'activity')) { mountFields(); }
+      applyBaseSurface();
+    }
+
+    // The Note body's link sense: a URL typed straight into the body offers to lift
+    // it into the link field and make the post a Find, instead of leaving the link
+    // buried in prose. One quiet promotion, nothing retyped.
     function wireFindNudge() {
-      const editor = fieldsEl.querySelector('#c-note');
-      const nudge = fieldsEl.querySelector('#c-find-nudge');
+      const editor  = fieldsEl.querySelector('#c-note');
+      const nudge   = fieldsEl.querySelector('#c-find-nudge');
       if (!editor || !nudge) return;
-      const sync = () => { nudge.hidden = !NOTE_URL_RE.test(editor.textContent); };
+      const sync = () => {
+        const url = fieldsEl.querySelector('#c-url');
+        nudge.hidden = pubType !== 'note' || !NOTE_URL_RE.test(editor.textContent) || !!(url && url.value.trim());
+      };
       editor.addEventListener('input', sync);
       sync();
       nudge.querySelector('#c-make-find').addEventListener('click', () => {
@@ -4489,31 +4537,30 @@
         // and give a bare www. link the scheme the Find field validates for.
         const raw = m ? m[0].replace(/[),.;!?]+$/, '') : '';
         const link = raw.startsWith('www.') ? 'https://' + raw : raw;
-        const title = (document.getElementById('c-title')?.value || '').trim();
-        const rest = (m ? text.replace(m[0], ' ') : text)
-          .replace(/\s+/g, ' ').trim().slice(0, 180);
+        if (m) editor.textContent = text.replace(m[0], ' ').replace(/[ \t]{2,}/g, ' ').trim();
         pubType = 'find';
-        mountFields();
-        const t = document.getElementById('c-title'); if (t) t.value = title;
-        const u = document.getElementById('c-url'); if (u) u.value = link;
-        const n = document.getElementById('c-note'); if (n) n.value = rest;
+        paint();
+        applyBaseSurface();               // reveals + focuses the link row
+        const url = fieldsEl.querySelector('#c-url');
+        if (url) url.value = link;
+        nudge.hidden = true;
       });
     }
 
-    view.querySelectorAll('.type-opt').forEach(btn =>
-      btn.addEventListener('click', () => {
-        if (btn.dataset.type === pubType) return;
-        pubType = btn.dataset.type;
-        document.getElementById('c-error').textContent = '';
-        mountFields();
-      }));
+    view.querySelectorAll('.compose-filters .filter').forEach(btn =>
+      btn.addEventListener('click', () => selectType(btn.dataset.filter)));
 
     document.getElementById('composer').addEventListener('submit', (e) => {
       e.preventDefault();
       submitComposer();
     });
 
+    // Mount for the type we arrived on (default Note, or a dial shortcut's choice),
+    // then run its opening action so a dial → Find lands with the link field open,
+    // a dial → Frame with the picker up.
     mountFields();
+    paint();
+    applyBaseSurface();
   }
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
@@ -4529,7 +4576,7 @@
 
   function wireFrameCapture(root) {
     const file     = root.querySelector('#c-file');
-    const drop     = root.querySelector('#c-drop');
+    const frameField = root.querySelector('.frame-field');
     const cropEl   = root.querySelector('#c-crop');
     const imgEl    = root.querySelector('#c-cropimg');
     const trimEl     = root.querySelector('#c-trim');
@@ -4582,12 +4629,10 @@
     }
     stopActiveCapture = teardown;
 
-    // Open the OS picker. The dropzone, its button, and the post-pick Choose
-    // another button all lead here — one way in, the system does the rest.
+    // Open the OS picker. The Photo tool and the post-pick "Choose another" button
+    // both lead here — one way in, the system does the rest.
     const pick = () => file.click();
-    root.querySelector('#c-pick').addEventListener('click', pick);
     replace.addEventListener('click', pick);
-    drop.addEventListener('click', (e) => { if (e.target === drop) pick(); });
 
     file.addEventListener('change', () => {
       const f = file.files && file.files[0];
@@ -4602,7 +4647,7 @@
 
     // ── Photo → native-aspect preview ────────────────────────────────────────
     function finishPhoto(dataUrl) {
-      drop.hidden = true;
+      if (frameField) frameField.hidden = false;   // the surface appears now the still has landed
       cropEl.hidden = false;
       // Swapping in from a video pick — tear the trim surface down.
       tPlaying = false;
@@ -4611,6 +4656,7 @@
       replace.hidden = false;
       videoCapture = null;
       cropper = initPhotoPreview(imgEl, dataUrl);
+      onCaptureChange?.();   // a still landed → the Post composer flips its type mark to Frame
       // Hold Post until the preview decodes — export() reads naturalWidth, so
       // posting early would ship a 1x1 canvas. Re-enable on load (or straight away
       // if the browser already had it decoded).
@@ -4637,7 +4683,7 @@
     // still scrubs perfectly even where a device's canvas readback misbehaves. The
     // preview itself is pure native playback (the one thing iOS does reliably).
     async function finishVideo(blob) {
-      drop.hidden = true;
+      if (frameField) frameField.hidden = false;   // the surface appears now the clip has landed
       cropEl.hidden = true;
       cropper = null;
       trimEl.hidden = false;
@@ -4674,8 +4720,9 @@
         trimEl.classList.remove('trim--loading');
         trimEl.hidden = true;
         replace.hidden = true;
-        drop.hidden = false;
         videoCapture = null;
+        if (frameField) frameField.hidden = true;   // no clip landed — fold the surface back away
+        onCaptureChange?.();                         // unlight the Photo tool + reset the type mark
         return;
       }
 
@@ -4684,6 +4731,7 @@
       videoCapture = { blob, mimeType, ext, duration: tD, durationKnown: meta.known,
                        start: tStart, end: tEnd, poster: null, tint: null,
                        dims: (meta.w && meta.h) ? { w: meta.w, h: meta.h } : null };
+      onCaptureChange?.();   // a clip landed → the Post composer flips its type mark to Frame
 
       // Build the reel geometry + tiles + ticks, reflect the initial window.
       buildReel(tD, meta.w, meta.h);
@@ -5287,11 +5335,11 @@
             clearPostProgress();
             if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
             // We released the preview decoder for the re-encode, so rather than leave
-            // a dead trim surface up, drop back to the picker for a clean retry.
+            // a dead trim surface up, fold it away — the Photo tool re-opens the picker.
             videoCapture = null;
             document.getElementById('c-trim')?.setAttribute('hidden', '');
             document.getElementById('c-replace')?.setAttribute('hidden', '');
-            document.getElementById('c-drop')?.removeAttribute('hidden');
+            document.querySelector('.frame-field')?.setAttribute('hidden', '');
             return;
           }
         }
@@ -5345,7 +5393,7 @@
     cropper = null;
     videoCapture = null;
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
-    pubType = 'note';           // reset for next time
+    pubType = 'note';           // next compose opens on Note
     go('#/');
   }
 

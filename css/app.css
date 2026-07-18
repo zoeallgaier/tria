@@ -575,8 +575,7 @@ main {
 /* ── Masthead — the editorial nameplate crowning each page ─────────────────── */
 .masthead {
   margin-bottom: 2.6rem;
-  padding: 0 var(--inset) 1.4rem;
-  border-bottom: 1px solid var(--rule);
+  padding: 0 var(--inset) 0.7rem;
 }
 .masthead-kicker {
   font-family: 'Oxygen', sans-serif;
@@ -603,6 +602,10 @@ main {
   letter-spacing: -0.01em;
   color: var(--text);
 }
+
+/* Updates + Friends titles breathe a touch more before their seg-tabs below. */
+.view--updates .masthead-title,
+.view--friends .masthead-title { padding-bottom: 0.35rem; }
 
 /* Friends search: a magnifier on the title line that wipes a FULL-WIDTH field open
    across the nameplate — the "Friends" title simply vanishes behind it. Same
@@ -693,6 +696,48 @@ main {
   .msb-ico, .masthead-title { transition: opacity var(--dur-quick) ease; }
 }
 
+/* The New-post masthead's reactive type mark: a coloured type-icon in the same
+   right-hand slot the Friends search uses. It doesn't pick the type — it reflects
+   the one the composer inferred (note → find → frame → activity), and pops when it
+   flips (see syncPubType). Sized a touch larger than the feed's inline type-icon
+   so it reads as the page's own mark, not a caption glyph. */
+.type-indicator {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.masthead .type-indicator { width: 2.15rem; height: 2.15rem; }
+@keyframes type-pop {
+  0%   { transform: scale(0.55) rotate(-14deg); opacity: 0; }
+  55%  { transform: scale(1.14) rotate(3deg);   opacity: 1; }
+  100% { transform: scale(1)    rotate(0);      opacity: 1; }
+}
+.type-indicator.is-changing { animation: type-pop var(--dur-move) var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .type-indicator.is-changing { animation: none; }
+}
+
+/* The composer's type filters are a closed set of exactly four, so they spread
+   across the full measure as even columns (rather than the feed's shrink-to-fit,
+   left-packed chips) and run a touch tighter than the feed's row. (.filters.compose-filters
+   beats the plain .filters rule, which is declared later in the file.) */
+.filters.compose-filters {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 1.6rem;
+}
+.compose-filters .filter { text-align: center; }
+
+/* The link field slides down when its filter is picked (or a URL in the note
+   promotes it to a Find), rather than snapping into place. */
+@keyframes field-drop {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#c-link-row:not([hidden]) { animation: field-drop var(--dur-move) var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  #c-link-row:not([hidden]) { animation: none; }
+}
+
 /* Masthead and every content block share one readable measure, centred on the
    same axis — a clean, balanced column rather than a lopsided broadsheet. */
 .masthead,
@@ -774,25 +819,20 @@ main {
 /* The four post types: the clean single-colour toggle — a flat pastel fill, ink
    on top — lit from behind by a soft glow in its own hue (the "colour is light"
    move from the nav's + button and dial). --chip carries the hue so one rule
-   lights them all. Keyed on both data-filter (home / updates rows) and data-type
-   (the composer's type picker) so a chosen post type lights up in its colour. */
-.filter[data-filter="note"][aria-pressed="true"], .filter[data-type="note"][aria-pressed="true"],
-.filter[data-filter="find"][aria-pressed="true"], .filter[data-type="find"][aria-pressed="true"],
-.filter[data-filter="photo"][aria-pressed="true"], .filter[data-type="photo"][aria-pressed="true"],
-.filter[data-filter="activity"][aria-pressed="true"], .filter[data-type="activity"][aria-pressed="true"] {
+   lights them all. Keyed on data-filter (the home / updates type rows). */
+.filter[data-filter="note"][aria-pressed="true"],
+.filter[data-filter="find"][aria-pressed="true"],
+.filter[data-filter="photo"][aria-pressed="true"],
+.filter[data-filter="activity"][aria-pressed="true"] {
   color: var(--on-type);
   box-shadow:
     0 0 15px color-mix(in srgb, var(--chip) 44%, transparent),
     0 0 5px color-mix(in srgb, var(--chip) 30%, transparent);
 }
-.filter[data-filter="note"][aria-pressed="true"],
-.filter[data-type="note"][aria-pressed="true"]         { --chip: var(--type-note); }
-.filter[data-filter="find"][aria-pressed="true"],
-.filter[data-type="find"][aria-pressed="true"]         { --chip: var(--type-find); }
-.filter[data-filter="photo"][aria-pressed="true"],
-.filter[data-type="photo"][aria-pressed="true"]        { --chip: var(--type-photo); }
-.filter[data-filter="activity"][aria-pressed="true"],
-.filter[data-type="activity"][aria-pressed="true"]     { --chip: var(--type-activity); }
+.filter[data-filter="note"][aria-pressed="true"]     { --chip: var(--type-note); }
+.filter[data-filter="find"][aria-pressed="true"]     { --chip: var(--type-find); }
+.filter[data-filter="photo"][aria-pressed="true"]    { --chip: var(--type-photo); }
+.filter[data-filter="activity"][aria-pressed="true"] { --chip: var(--type-activity); }
 
 /* ── Segmented tab control (.seg-tabs) — a reusable iOS segmented control shared
    by the view switchers (Friends' My circle / Find friends, Updates' All /
@@ -2641,6 +2681,11 @@ body.gate main { padding: 0; }
   transition: background-color var(--dur-micro);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
 }
+/* The masthead no longer draws a divider (see .masthead above), so the list
+   itself opens with a top rule — the boundary comes from the content, not the
+   header. Search re-sorts matches to the front of the DOM (see applyFilter
+   below), so :first-child always tracks the visually-first row. */
+.friend:first-child { border-top: 1px solid var(--rule); }
 .friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
 /* When search hides trailing rows, drop the rule under the last VISIBLE row so no
    hairline dangles beneath the results. */
@@ -2884,6 +2929,9 @@ body.gate main { padding: 0; }
   transition: background-color var(--dur-micro);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as the directory rows */
 }
+/* Same reasoning as the Friends directory: no masthead divider now, so the list
+   opens with its own top rule instead. */
+.notif-list li:first-child .notif { border-top: 1px solid var(--rule); }
 .notif-list li:not(:last-child) .notif { border-bottom: 1px solid var(--rule); }
 @media (hover: hover) { .notif:hover { background: var(--surface); } }
 /* Unread: a faint accent wash across the row (the dot still marks it), so fresh
@@ -3755,6 +3803,10 @@ body.gate main { padding: 0; }
   mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
 }
 .friends-list--modal .friend { padding: 0.85rem 1.6rem; }
+/* The modal's top-mask already fades the first row into the frost, so it doesn't
+   need the flat directory's top rule (see .friend:first-child above) — a hard
+   line there would fight the fade. */
+.friends-list--modal .friend:first-child { border-top: none; }
 .friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.4rem; }
 
 .modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
@@ -4258,11 +4310,11 @@ body.gate main { padding: 0; }
   }
   .masthead, .filters { padding-inline: 0; }   /* already inset by .view here */
   .view-title { font-size: 2rem; }
-  .masthead { margin-bottom: 1.8rem; padding-bottom: 1.1rem; }
+  .masthead { margin-bottom: 1.8rem; padding-bottom: 0.5rem; }
   /* Friends / Updates: the seg-tabs that used to sit under the masthead docks to
-     the bottom nav on phones (position: fixed), so its 1.8rem gap would leave the
-     masthead divider hanging with dead space above the first row. Pull the list up
-     close to the rule — the row's own 1.1rem top padding is enough breathing room. */
+     the bottom nav on phones (position: fixed), so its 1.8rem gap would leave
+     dead space above the first row now there's no divider to anchor against. Pull
+     the list up close — the row's own top padding is enough breathing room. */
   .masthead:has(+ .seg-tabs) { margin-bottom: 0.35rem; }
   .masthead-kicker { margin-bottom: 0.7rem; letter-spacing: 0.13em; }
   /* Five chips outgrow a phone row — one swipeable line (edge-to-edge, no
