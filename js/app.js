@@ -5132,12 +5132,13 @@
       const v = document.createElement('video');
       v.src = URL.createObjectURL(blob);
       v.playsInline = true; v.preload = 'auto';
-      let audioSrcNode, audioDestNode, recorder, raf, stopped = false;
+      let audioSrcNode, audioDestNode, silentGainNode, recorder, raf, stopped = false;
       // Detach this clip's nodes from the SHARED context (never close it — it's
       // reused for every trim and re-unlocked per gesture).
       const dropAudioNodes = () => {
         try { audioSrcNode && audioSrcNode.disconnect(); } catch {}
         try { audioDestNode && audioDestNode.disconnect(); } catch {}
+        try { silentGainNode && silentGainNode.disconnect(); } catch {}
       };
       const cleanup = () => {
         stopped = true;
@@ -5176,7 +5177,21 @@
             if (ac && ac.state === 'running') {
               audioDestNode = ac.createMediaStreamDestination();
               audioSrcNode = ac.createMediaElementSource(v);   // once per fresh <video>
-              audioSrcNode.connect(audioDestNode);
+              audioSrcNode.connect(audioDestNode);             // full-volume tap → the recording
+              // WebKit won't actually pump a MediaElementSource's audio unless the
+              // node also reaches ac.destination — a MediaStreamDestination tap
+              // alone leaves the pipeline idle, so the recorded track came out
+              // silent (why trimmed clips had no sound on iPhone). Route a MUTED
+              // branch (gain 0) to destination to keep the decoder running without
+              // playing the clip aloud during the ~10s re-encode; the tap above
+              // still carries the sound into the file. (createMediaElementSource
+              // already reroutes the element's own output through the graph, so
+              // there's nothing to hear beyond this silent branch anyway.)
+              silentGainNode = ac.createGain();
+              silentGainNode.gain.value = 0;
+              audioSrcNode.connect(silentGainNode);
+              silentGainNode.connect(ac.destination);
+              v.muted = false; v.volume = 1;
               tracks = tracks.concat(audioDestNode.stream.getAudioTracks());
             } else {
               v.muted = true;

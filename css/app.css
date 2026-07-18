@@ -2,6 +2,16 @@
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; }
 
+/* WebKit ignores the inherited html tap-highlight for form controls / buttons,
+   so pin it transparent on every tappable control at once. iOS otherwise paints
+   a white bounding-box flash on tap that ignores border-radius (ugly over dark
+   surfaces) — including on file-picker triggers like the composer's Choose field
+   and the Edit-profile avatar button, which just open the native sheet and want
+   no press state of their own. Consolidates the per-control fixes below. */
+button, a, label, summary, input, textarea, select, [role="button"], [tabindex] {
+  -webkit-tap-highlight-color: transparent;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;   /* no grey flash on tap — app feel */
