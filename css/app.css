@@ -1988,9 +1988,15 @@ main {
   width: 34px;
   height: 34px;
   padding: 0;
+  /* A solid dark scrim, not the translucent --bg tint the play badge wears: a white
+     speaker on a light video frame was near-invisible (why the control read as
+     "missing"). Dark reads on any frame, light or dark, so the mute/unmute toggle
+     is unmistakable right on the post — no tap-through required. */
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 .frame-sound-ico { width: 17px; height: 17px; }
-@media (hover: hover) { .frame-sound:hover { background: color-mix(in srgb, var(--bg) 70%, transparent); } }
+@media (hover: hover) { .frame-sound:hover { background: rgba(0, 0, 0, 0.62); } }
 .frame-play {
   top: 50%;
   left: 50%;

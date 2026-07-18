@@ -1344,6 +1344,26 @@
       }, { threshold: 0.6 })
     : null;
 
+  // Loop a <video> inside a stored trim window [start,end] instead of playing the
+  // whole file. We upload originals now, so a trimmed post carries its window in the
+  // URL (clipWindowFromUrl); the feed clip and the lightbox both honor it here. No
+  // window (a whole ≤10s clip) → no-op, the element plays/loops the entire file.
+  function wireClipWindow(video, win) {
+    if (!win) return;
+    video.loop = false;   // native loop restarts at 0 — we own the loop inside the window
+    const toStart = () => { try { video.currentTime = win.start; } catch {} };
+    video.addEventListener('loadedmetadata', () => {
+      if (video.currentTime < win.start - 0.1 || video.currentTime >= win.end) toStart();
+    }, { once: true });
+    video.addEventListener('timeupdate', () => {
+      if (video.currentTime >= win.end - 0.03) toStart();
+    });
+    // If the real clip ends before the window's end (an unmeasured-length blob, or a
+    // window that overshoots the file), loop the window instead of freezing on the
+    // last frame.
+    video.addEventListener('ended', () => { toStart(); video.play().catch(() => {}); });
+  }
+
   function wireFrameVideo(el, post) {
     const fig = el.querySelector('.photo');
     if (!fig) return;
@@ -1352,6 +1372,7 @@
     const soundBtn = fig.querySelector('.frame-sound');
     const progressFill = fig.querySelector('.frame-progress-fill');
     const alt = post.note || 'Frame';
+    const win = clipWindowFromUrl(post.image);   // a trimmed clip loops just this [start,end]
     if (posterImg) revealCardImage(fig, posterImg);
     else fig.classList.add('is-loaded');   // no stored poster: nothing to fade — the clip paints its own first frame
 
@@ -1380,7 +1401,7 @@
       if (clip || prefersReduced()) return;
       clip = document.createElement('video');
       clip.className = 'frame-clip';
-      clip.muted = true; clip.playsInline = true; clip.loop = true; clip.preload = 'metadata';
+      clip.muted = true; clip.playsInline = true; clip.loop = !win; clip.preload = 'metadata';
       // Ground-truth aspect ratio: once the decoder reports the clip's real
       // dimensions, size the frame box to match so object-fit:cover never crops.
       // The stamped `-WxH` dims usually get this right already, but a Frame with
@@ -1394,12 +1415,18 @@
           frame.classList.remove('photo-frame--reserve');
         }
       }, { once: true });
-      // The #t=0.001 media fragment makes the clip self-paint its own first
-      // frame on iOS even before playback starts — the universal poster
-      // fallback for a Frame that has no stored `poster` still.
-      clip.src = post.image + '#t=0.001';
+      // The #t= media fragment makes the clip self-paint its first frame on iOS even
+      // before playback starts — the universal poster fallback for a Frame with no
+      // stored `poster` still. For a trimmed clip that frame is the window's start;
+      // wireClipWindow then keeps playback looping inside [start,end].
+      clip.src = post.image + '#t=' + (win ? Math.max(win.start, 0.001) : 0.001);
+      wireClipWindow(clip, win);
       clip.addEventListener('timeupdate', () => {
-        if (progressFill && clip.duration) progressFill.style.width = (clip.currentTime / clip.duration * 100) + '%';
+        if (!progressFill) return;
+        const frac = win
+          ? (clip.currentTime - win.start) / Math.max(0.1, win.end - win.start)
+          : (clip.duration ? clip.currentTime / clip.duration : 0);
+        progressFill.style.width = (Math.max(0, Math.min(1, frac)) * 100) + '%';
       });
       frame.appendChild(clip);
       // iOS Low Power Mode (and some embedded contexts) refuse even muted
@@ -4582,47 +4609,13 @@
   const MAX_CLIP_SEC = 10;                              // the published clip cap — the trimmer enforces it
   const MAX_SOURCE_SEC = 180;                          // longest source we accept (Tria trims it down to ≤10s)
   const TRIM_MIN_SEC = 1;                               // shortest window you can drag to
-  // A longer library pick doesn't bounce to Photos — the in-app trimmer cuts it to
-  // ≤10s. This cap only rejects a genuinely huge raw file the browser can't seek.
-  const MAX_LIBRARY_VIDEO_BYTES = 300 * 1024 * 1024;
-  // The real upload ceiling: the Storage bucket has no file_size_limit set, so it
-  // inherits the project default of 50 MB. Anything over that fails server-side
-  // with a generic error, so we catch it on the client with copy that says what
-  // to do. Mostly bites the raw-upload path (a short but high-res untrimmed clip);
-  // re-encoded clips downscale to 1280px and land well under this.
-  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-
-  // One shared AudioContext, unlocked on a user gesture, reused for every trim.
-  // iOS/WebKit starts a fresh context 'suspended' and only lets resume() take
-  // inside a live gesture — so we create+resume it on the first pointer down and
-  // again synchronously on the Post tap. reencodeWindow needs it 'running' to mux
-  // the clip's audio; a suspended context there hands MediaRecorder a dead track
-  // that hangs WebKit's mp4 muxer, so it stays the trip-wire that gates audio.
-  let sharedAudioCtx = null;
-  function getAudioCtx() {
-    if (sharedAudioCtx) return sharedAudioCtx;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    try { sharedAudioCtx = new AC(); } catch { return null; }
-    return sharedAudioCtx;
-  }
-  // Nudge the context toward 'running'. Safe to call outside a gesture (it just
-  // won't take on iOS); call it FROM one to actually unlock. Plays a 1-sample
-  // silent buffer, the standard iOS unlock. Never awaited — resume()'s promise can
-  // hang on WebKit, and callers only ever read ctx.state synchronously later.
-  function unlockAudioCtx() {
-    const ac = getAudioCtx();
-    if (!ac) return;
-    try { ac.resume(); } catch {}
-    try {
-      const buf = ac.createBuffer(1, 1, 22050);
-      const src = ac.createBufferSource();
-      src.buffer = buf; src.connect(ac.destination); src.start(0);
-    } catch {}
-  }
-  // First real interaction anywhere unlocks the context, so a later Post tap finds
-  // it already 'running'. Once is enough; pointerdown covers touch + mouse.
-  window.addEventListener('pointerdown', unlockAudioCtx, { once: true, passive: true });
+  // The upload ceiling: the Storage `media` bucket's file_size_limit (150 MB). We
+  // upload the ORIGINAL clip (no in-browser re-encode — that real-time re-encode is
+  // what stripped audio on iOS Safari, a WebKit MediaRecorder+WebAudio bug), so a
+  // trim is stored as a play-window, not a cut. This is therefore the real gate:
+  // anything over it can't post. Caught on the client, at pick time and pre-upload,
+  // with copy that says what to do — not a generic server error.
+  const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;
 
   function wireFrameCapture(root) {
     const file     = root.querySelector('#c-file');
@@ -4988,10 +4981,11 @@
     });
 
     async function handleLibraryVideo(f) {
-      if (f.size > MAX_LIBRARY_VIDEO_BYTES) {
-        // Length is fine (the trimmer cuts to ≤10s) — this only guards raw file
-        // size, which is what the browser struggles to seek, so speak to size.
-        showPickError('That file is too big to load here, try a smaller video.');
+      if (f.size > MAX_UPLOAD_BYTES) {
+        // We upload the original (a trim is a play-window, not a cut), so a source
+        // over the bucket ceiling can never post — bounce it up front, not after
+        // the trim dance. Speak to size, since length alone is fine.
+        showPickError('That clip is over 150 MB. Please pick a shorter or smaller clip.');
         return;
       }
       const err = errEl();
@@ -5059,7 +5053,10 @@
   // (GPU-process canvas) can return an all-black frame from a <video> draw — sample
   // a pixel and bail rather than uploading a black poster; the feed's #t=0.001
   // fragment still self-paints a first frame with no stored poster at all.
-  function grabPosterFromBlob(blob) {
+  // Grab a poster still from a clip's blob. `atSec` seeks to the trim window's first
+  // frame (so a trimmed clip's poster matches where it starts playing); `maxEdge`
+  // downscales the still since we now poster from the ORIGINAL clip, which can be 4K.
+  function grabPosterFromBlob(blob, { atSec = 0.05, maxEdge = 1280 } = {}) {
     return new Promise((resolve) => {
       const v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto';
@@ -5072,17 +5069,22 @@
         const onSeeked = () => {
           clearTimeout(timer);
           try {
+            const vw = v.videoWidth || 1, vh = v.videoHeight || 1;
+            const scale = Math.min(1, maxEdge / Math.max(vw, vh));
+            const cw = Math.max(1, Math.round(vw * scale));
+            const ch = Math.max(1, Math.round(vh * scale));
             const canvas = document.createElement('canvas');
-            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+            canvas.width = cw; canvas.height = ch;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(v, 0, 0);
+            ctx.drawImage(v, 0, 0, cw, ch);
             const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
             cleanup();
             if (r === 0 && g === 0 && b === 0) { resolve({ dataUrl: null }); return; }
-            resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.82), w: v.videoWidth, h: v.videoHeight });
+            resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.82), w: vw, h: vh });
           } catch { cleanup(); resolve({ dataUrl: null }); }
         };
-        v.currentTime = Math.min(0.05, (v.duration || 1) / 2);
+        const dur = Number.isFinite(v.duration) ? v.duration : 0;
+        v.currentTime = dur ? Math.min(Math.max(atSec, 0.05), dur - 0.05) : Math.max(atSec, 0.05);
         v.addEventListener('seeked', onSeeked, { once: true });
       }, { once: true });
     });
@@ -5118,130 +5120,6 @@
   function tickLabel(sec) {
     const s = Math.max(0, Math.floor(sec || 0));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  }
-
-  // Re-encode the [startSec,endSec] window of a clip to a fresh, ≤10s, downscaled
-  // blob — the actual cut. No build step / ffmpeg, so this is a real-time pass:
-  // the source plays start→end while we draw frames to a canvas (captureStream) and
-  // a MediaRecorder muxes the canvas stream (plus the clip's audio when we can carry
-  // it — see below). A 10s selection takes ~10s, hence the Post-time progress.
-  // Downscaling the longest edge to ~1280 keeps the upload small (the raw camera clip
-  // can be 4K). Works in WKWebView (iOS 15+) and desktop.
-  function reencodeWindow(blob, startSec, endSec, { maxEdge = 1280, onProgress } = {}) {
-    return new Promise((resolve, reject) => {
-      const v = document.createElement('video');
-      v.src = URL.createObjectURL(blob);
-      v.playsInline = true; v.preload = 'auto';
-      let audioSrcNode, audioDestNode, silentGainNode, recorder, raf, stopped = false;
-      // Detach this clip's nodes from the SHARED context (never close it — it's
-      // reused for every trim and re-unlocked per gesture).
-      const dropAudioNodes = () => {
-        try { audioSrcNode && audioSrcNode.disconnect(); } catch {}
-        try { audioDestNode && audioDestNode.disconnect(); } catch {}
-        try { silentGainNode && silentGainNode.disconnect(); } catch {}
-      };
-      const cleanup = () => {
-        stopped = true;
-        cancelAnimationFrame(raf);
-        try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch {}
-        dropAudioNodes();
-        try { URL.revokeObjectURL(v.src); } catch {}
-      };
-      const fail = (e) => { cleanup(); reject(e || new Error('trim-failed')); };
-      const guard = setTimeout(() => fail(new Error('trim-timeout')), (endSec - startSec) * 1000 + 15000);
-      v.addEventListener('error', () => fail(new Error('trim-load')), { once: true });
-      v.addEventListener('loadedmetadata', () => {
-        const vw = v.videoWidth || 1, vh = v.videoHeight || 1;
-        const scale = Math.min(1, maxEdge / Math.max(vw, vh));
-        const w = Math.max(2, Math.round(vw * scale / 2) * 2);
-        const h = Math.max(2, Math.round(vh * scale / 2) * 2);
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        v.addEventListener('seeked', () => {
-          const t0 = v.currentTime;   // the parked start frame; playback = currentTime moving past it
-          let tracks = canvas.captureStream(30).getVideoTracks();
-          // Carry the clip's audio through the SHARED, gesture-unlocked WebAudio
-          // graph. It's created + resumed on the first pointer down and again
-          // synchronously on the Post tap, so on iOS homescreen Safari it reads
-          // 'running' by the time this async pass runs — and we mux the sound in.
-          // A *suspended* context is still refused on purpose: it hands
-          // MediaRecorder a dead audio track that hangs WebKit's mp4 muxer forever
-          // (no data, no onstop), which is why a trimmed clip used to never post on
-          // iPhone. So if the unlock somehow didn't take, we fall back to a
-          // rock-solid video-only pass (muted element, silent clip) rather than
-          // risk the hang. An untrimmed short clip skips this path entirely and
-          // keeps its sound by uploading raw.
-          try {
-            const ac = getAudioCtx();
-            if (ac && ac.state === 'running') {
-              audioDestNode = ac.createMediaStreamDestination();
-              audioSrcNode = ac.createMediaElementSource(v);   // once per fresh <video>
-              audioSrcNode.connect(audioDestNode);             // full-volume tap → the recording
-              // WebKit won't actually pump a MediaElementSource's audio unless the
-              // node also reaches ac.destination — a MediaStreamDestination tap
-              // alone leaves the pipeline idle, so the recorded track came out
-              // silent (why trimmed clips had no sound on iPhone). Route a MUTED
-              // branch (gain 0) to destination to keep the decoder running without
-              // playing the clip aloud during the ~10s re-encode; the tap above
-              // still carries the sound into the file. (createMediaElementSource
-              // already reroutes the element's own output through the graph, so
-              // there's nothing to hear beyond this silent branch anyway.)
-              silentGainNode = ac.createGain();
-              silentGainNode.gain.value = 0;
-              audioSrcNode.connect(silentGainNode);
-              silentGainNode.connect(ac.destination);
-              v.muted = false; v.volume = 1;
-              tracks = tracks.concat(audioDestNode.stream.getAudioTracks());
-            } else {
-              v.muted = true;
-            }
-          } catch { v.muted = true; }
-          const cands = ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
-          const mime = cands.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
-          const chunks = [];
-          try { recorder = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime } : undefined); }
-          catch (e) { return fail(e); }
-          recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-          recorder.onstop = () => {
-            clearTimeout(guard);
-            const type = recorder.mimeType || mime || 'video/mp4';
-            const ext = /mp4/i.test(type) ? 'mp4' : /webm/i.test(type) ? 'webm' : 'mov';
-            dropAudioNodes();
-            try { URL.revokeObjectURL(v.src); } catch {}
-            resolve({ blob: new Blob(chunks, { type }), mimeType: type, ext, dims: { w, h } });
-          };
-          v.play().catch(() => {});
-          // rAF drives the draw loop: it ticks even though this <video> is detached
-          // from the DOM, and while the clip is PLAYING every drawImage lands a real
-          // frame anyway. Draw from the outset so the captured stream always has
-          // content, but DON'T start the recorder until playback has moved past the
-          // parked start frame: MediaRecorder counts wall-clock, and WebKit can take
-          // ~1s for play() to begin advancing currentTime — starting any sooner baked
-          // that frozen second onto the front, so the cut ran ~1s long and no longer
-          // matched the window.
-          let recording = false;
-          const draw = () => {
-            if (stopped) return;
-            try { ctx.drawImage(v, 0, 0, w, h); } catch {}
-            if (!recording && v.currentTime > t0 + 0.001) {
-              recording = true;
-              try { recorder.start(); } catch (e) { return fail(e); }
-            }
-            if (recording && onProgress)
-              onProgress(Math.min(1, (v.currentTime - t0) / Math.max(0.1, endSec - t0)));
-            if (recording && (v.currentTime >= endSec || v.ended)) {
-              v.pause();
-              try { if (recorder.state !== 'inactive') recorder.stop(); } catch {}
-              return;
-            }
-            raf = requestAnimationFrame(draw);
-          };
-          raf = requestAnimationFrame(draw);
-        }, { once: true });
-        v.currentTime = Math.min(startSec, Math.max(0, (v.duration || endSec) - 0.1));
-      }, { once: true });
-    });
   }
 
   // A whole-image preview that keeps the photo's native aspect ratio. export()
@@ -5386,70 +5264,32 @@
       if (!cropper && !videoCapture) { errEl.textContent = 'Capture or choose a frame first.'; return; }
       if (videoCapture) {
         const vc = videoCapture;
-        // Unlock the shared AudioContext NOW, while the Post tap's gesture is still
-        // live and synchronous — this is the one moment iOS homescreen Safari lets
-        // resume() take. By the time the async re-encode reads ctx.state it's
-        // 'running', so the trim keeps the clip's sound. (Fires before any await.)
-        unlockAudioCtx();
-        const btn0 = document.querySelector('.composer-submit');
-        const trimmed = vc.start > 0.05 || vc.end < vc.duration - 0.05;
-        // Free the preview's decoder before the re-encode spins up its own — iOS
-        // won't hand out two, and a contended re-encode records black frames.
-        if (stopActiveCapture) stopActiveCapture();
-        let finalBlob = vc.blob;
-        // Cut when the window is shorter than the source, when the source runs past
-        // the cap, OR when we couldn't measure its length (cut defensively so an
-        // over-long clip can never sneak through untrimmed). An untrimmed, known
-        // ≤10s clip uploads as-is — no needless re-encode, no wait. reencodeWindow
-        // bounds itself to [start, start+10] and stops at the real end either way,
-        // so the upload always matches the window the user set.
-        if (trimmed || !vc.durationKnown || vc.duration > MAX_CLIP_SEC + 0.1) {
-          if (btn0) { btn0.disabled = true; btn0.textContent = 'Trimming…'; }
-          errEl.textContent = '';
-          setPostProgress('Trimming', 0);
-          try {
-            const out = await reencodeWindow(vc.blob, vc.start, Math.min(vc.end, vc.start + MAX_CLIP_SEC), {
-              onProgress: (p) => setPostProgress('Trimming', p),
-            });
-            finalBlob = out.blob;
-          } catch {
-            errEl.textContent = 'Couldn’t trim that clip. Pick it again and try a shorter selection.';
-            clearPostProgress();
-            if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
-            // We released the preview decoder for the re-encode, so rather than leave
-            // a dead trim surface up, fold it away and restore the upload field so
-            // they can pick again.
-            videoCapture = null;
-            document.getElementById('c-trim')?.setAttribute('hidden', '');
-            document.getElementById('c-replace')?.setAttribute('hidden', '');
-            document.getElementById('c-dropzone')?.removeAttribute('hidden');
-            return;
-          }
-        }
-        // The real upload ceiling is 50 MB (the bucket's default). Catch it here,
-        // before the upload, with copy that says what to do — otherwise it fails
-        // server-side with a generic error. Mostly bites an untrimmed high-res
-        // clip (uploaded raw at full size). stopActiveCapture already released the
-        // preview decoder above, so the trim surface can't scrub anymore — fold it
-        // away and restore the picker so they pick a smaller/shorter clip (a fresh
-        // pick re-encodes + downscales, which almost always fits).
-        if (finalBlob.size > MAX_UPLOAD_BYTES) {
-          errEl.textContent = 'That clip is over 50 MB. Please choose a shorter or smaller clip.';
-          clearPostProgress();
-          if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
-          videoCapture = null;
-          document.getElementById('c-trim')?.setAttribute('hidden', '');
-          document.getElementById('c-replace')?.setAttribute('hidden', '');
-          document.getElementById('c-dropzone')?.removeAttribute('hidden');
+        // We upload the ORIGINAL clip — no in-browser re-encode (that real-time pass
+        // is what stripped audio on iOS Safari). A trim is stored as a play-window,
+        // not a cut, so the original's size is the real gate: catch it here, before
+        // the upload, with copy that says what to do rather than a generic server
+        // error. The trim surface stays live (we haven't freed the decoder yet), so
+        // they can drag a shorter selection or pick again.
+        if (vc.blob.size > MAX_UPLOAD_BYTES) {
+          errEl.textContent = 'That clip is over 150 MB. Please choose a shorter or smaller clip.';
           return;
         }
-        data.video = finalBlob;
-        // Poster + tint from the FINAL blob's first frame, so a trimmed clip's
-        // poster matches its new start. Best-effort — the feed self-paints a first
-        // frame via #t=0.001 if this fails.
+        data.video = vc.blob;
+        data.imageDims = vc.dims || null;   // native size → filename -WxH stamp + feed reserve box
+        // Store a play-window unless the post is simply a whole, known-≤10s clip:
+        // a moved start, an unmeasured length, or an over-cap source all get windowed
+        // to [start, start+10] so the feed + lightbox loop just that stretch.
+        const windowed = vc.start > 0.05 || !vc.durationKnown || vc.duration > MAX_CLIP_SEC + 0.1;
+        if (windowed) data.clip = { start: vc.start, end: Math.min(vc.end, vc.start + MAX_CLIP_SEC) };
+        // Free the preview decoder before we grab the poster (iOS hands out one).
+        if (stopActiveCapture) stopActiveCapture();
+        // Poster + tint from the window's first frame, so the feed still opens on the
+        // moment the clip starts on. Best-effort — the feed self-paints via #t= if
+        // this fails. The row's dims come from vc.dims (native), not this downscaled
+        // still, so the reserve box keeps the clip's true aspect.
         try {
-          const g = await grabPosterFromBlob(finalBlob);
-          if (g.dataUrl) { data.poster = g.dataUrl; data.imageDims = { w: g.w, h: g.h }; data.imageTint = await tintFromDataUrl(g.dataUrl); }
+          const g = await grabPosterFromBlob(vc.blob, { atSec: vc.start, maxEdge: 1280 });
+          if (g.dataUrl) { data.poster = g.dataUrl; data.imageTint = await tintFromDataUrl(g.dataUrl); }
         } catch {}
       } else {
         data.image = cropper.export();
@@ -5497,9 +5337,9 @@
     go('#/');
   }
 
-  // The composer's shared progress affordance, used for both phases of a video
-  // post: the local trim re-encode, then the network upload. Determinate bar +
-  // a "Label 42%" caption; the Post button mirrors the caption as its text.
+  // The composer's progress affordance for a video post's network upload (the big
+  // transfer — we no longer re-encode). Determinate bar + a "Label 42%" caption;
+  // the Post button mirrors the caption as its text.
   function setPostProgress(label, frac) {
     const wrap = document.getElementById('c-progress');
     const fill = document.getElementById('c-progress-fill');
@@ -5588,12 +5428,20 @@
     // lingers as dead markup once the lightbox is reused for a photo, or vice
     // versa. A Frame plays full sound here — this is the one explicit,
     // user-initiated place unmuted/fullscreen autoplay is safe to assume.
+    // A trimmed clip plays its window here too: seek the initial frame to the start
+    // and let wireClipWindow loop inside [start,end], so the lightbox shows the same
+    // stretch the feed does (not the untrimmed original behind it).
+    const win = isVideo ? clipWindowFromUrl(src) : null;
     lightbox.innerHTML = isVideo
-      ? `<video src="${esc(src)}" playsinline controls autoplay></video>`
+      ? `<video src="${esc(src + (win ? '#t=' + Math.max(win.start, 0.001) : ''))}" playsinline controls autoplay></video>`
       : `<img src="${esc(src)}" alt="${esc(alt || '')}">`;
     // Native video controls (scrub, pause) must not bubble into the backdrop's
     // click-to-close; tapping the photo itself, though, still closes as before.
-    if (isVideo) lightbox.querySelector('video').addEventListener('click', e => e.stopPropagation());
+    if (isVideo) {
+      const v = lightbox.querySelector('video');
+      v.addEventListener('click', e => e.stopPropagation());
+      wireClipWindow(v, win);
+    }
     lightboxReturn = document.activeElement;
     document.body.style.overflow = 'hidden';   // lock the page behind it
     lightbox.classList.add('open');

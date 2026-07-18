@@ -447,7 +447,7 @@ const Store = (() => {
   // is why photos/videos no longer bloat the database — the column just stores
   // the URL. `contentType`/`ext` come from the caller (the recorder's mimeType on
   // web, the native file's type on device) — never assumed to be JPEG.
-  async function uploadMedia(source, kind, { contentType, ext, dims, onProgress } = {}) {
+  async function uploadMedia(source, kind, { contentType, ext, dims, clip, onProgress } = {}) {
     const me = currentUser();
     if (!me) throw new Error('Not signed in.');
     let blob, type = contentType, extension = ext;
@@ -465,7 +465,12 @@ const Store = (() => {
     // the photo/video's space before it loads (see imageDimsFromUrl) — no extra
     // column, no metadata round-trip. Avatars (fixed-size tiles) skip this.
     const dim = dims && dims.w && dims.h ? `-${dims.w}x${dims.h}` : '';
-    const path = `${me.id}/${kind}-${Date.now()}${dim}.${extension}`;
+    // A trimmed clip carries its play-window (start/end, in ms) stamped the same
+    // way — before the -WxH segment so imageDimsFromUrl still matches at the end.
+    // The feed/lightbox loop just this window (clipWindowFromUrl); no DB column.
+    const win = clip && clip.end > clip.start
+      ? `-t${Math.round(clip.start * 1000)}-${Math.round(clip.end * 1000)}` : '';
+    const path = `${me.id}/${kind}-${Date.now()}${win}${dim}.${extension}`;
     // Real byte-level progress (videos are the big upload) needs XHR — supabase-js's
     // .upload() runs on fetch with no progress events. We POST straight to the same
     // Storage REST endpoint it would hit, streaming xhr.upload.onprogress to the
@@ -537,7 +542,7 @@ const Store = (() => {
     if (data.video) {
       try {
         const vExt = /mp4/i.test(data.video.type) ? 'mp4' : /webm/i.test(data.video.type) ? 'webm' : 'mov';
-        row.image = await uploadMedia(data.video, 'video', { contentType: data.video.type || 'video/mp4', ext: vExt, dims: data.imageDims, onProgress });
+        row.image = await uploadMedia(data.video, 'video', { contentType: data.video.type || 'video/mp4', ext: vExt, dims: data.imageDims, clip: data.clip, onProgress });
         // Best-effort: the feed's #t=0.001 fragment self-paints a first frame even
         // without a stored poster, so a failed/skipped poster upload isn't fatal.
         if (data.poster) row.poster = await uploadImage(data.poster, 'poster', data.imageDims);
@@ -963,4 +968,15 @@ function imageDimsFromUrl(url) {
 // by extension so the feed can branch to a <video> instead of an <img>.
 function isVideoUrl(url) {
   return /\.(mp4|webm|mov)$/i.test(url || '');
+}
+
+// A trimmed clip stamps its play-window into the filename (…-t<startMs>-<endMs>…),
+// same trick as the -WxH dims. The feed + lightbox read it straight off the URL and
+// loop just that window — no cut, no re-encode, no metadata round-trip. Whole clips
+// (uploaded untrimmed) carry no stamp and return null (play the entire file).
+function clipWindowFromUrl(url) {
+  const m = /-t(\d+)-(\d+)(?:-\d+x\d+)?\.(?:mp4|webm|mov)(?:$|\?)/i.exec(url || '');
+  if (!m) return null;
+  const start = +m[1] / 1000, end = +m[2] / 1000;
+  return end > start ? { start, end } : null;
 }
