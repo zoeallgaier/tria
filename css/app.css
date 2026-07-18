@@ -3375,6 +3375,11 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-field);
   background: var(--surface);
   cursor: pointer;
+  /* Kill iOS's default tap highlight — a bounding-box rectangle that ignores the
+     radius and reads white over a dark surface. The global html rule doesn't
+     reliably reach <button>s in WebKit, so tappable controls re-pin it locally
+     (see .sheet-item / .sheet-cancel). */
+  -webkit-tap-highlight-color: transparent;
   transition: border-color var(--dur-micro), color var(--dur-micro);
 }
 @media (hover: hover) {
@@ -3672,6 +3677,7 @@ body.gate main { padding: 0; }
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;   /* same iOS tap-flash fix as .dropzone */
   transition: color var(--dur-micro), border-color var(--dur-micro), background-color var(--dur-micro);
 }
 .crop-replace[hidden] { display: none; }
