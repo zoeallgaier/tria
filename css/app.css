@@ -733,9 +733,11 @@ main {
   from { opacity: 0; transform: translateY(-10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-#c-link-row:not([hidden]) { animation: field-drop var(--dur-move) var(--ease); }
+#c-link-row:not([hidden]),
+.frame-field:not([hidden]) { animation: field-drop var(--dur-move) var(--ease); }
 @media (prefers-reduced-motion: reduce) {
-  #c-link-row:not([hidden]) { animation: none; }
+  #c-link-row:not([hidden]),
+  .frame-field:not([hidden]) { animation: none; }
 }
 
 /* Masthead and every content block share one readable measure, centred on the
@@ -2186,21 +2188,9 @@ body.gate main { padding: 0; }
   min-height: 3.4rem;
 }
 .combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
-/* The Frame combo's media slot — the dropzone/crop/trim surfaces live in the
-   note-position of the box (below the caption + divider). The box already frames
-   them, so the dropzone drops its own border and sits flush on the combo surface;
-   a picked photo/clip keeps its rounded preview inside the padding. */
-.combo-frame { padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 12px; }
-.combo-frame .dropzone {
-  border: none;
-  background: none;
-  padding: 1.5rem 0 1.2rem;
-  gap: 0.75rem;
-  cursor: default;
-}
-@media (hover: hover) {
-  .combo-frame .dropzone:hover { border-color: transparent; }
-}
+/* Holds the crop/trim preview once media lands — no padding of its own, so the
+   empty box collapses while the upload dropzone (above it) is showing. */
+.combo-frame { display: flex; flex-direction: column; gap: 12px; }
 /* Signup identity combo: the @handle rides in the note slot, a single line with a
    muted @ prefix (rather than the tall textarea a real note uses). */
 .combo-user { display: flex; align-items: center; padding: 0 0.85rem; }
@@ -3366,42 +3356,38 @@ body.gate main { padding: 0; }
   .aud-pick { animation: none; }
 }
 
-/* ── Frame picker — a plain upload dropzone ─────────────────────────────────
+/* ── Frame picker — a plain upload field ────────────────────────────────────
    Same frame + fill as every other composer field (.field input/textarea) —
-   this is a field that happens to hold a button instead of text, not a
-   separate material. Picking a photo swaps in the .crop preview below;
-   picking a video swaps in the .trim surface. Content, not floating chrome. */
+   a field that happens to hold an upload prompt instead of text, not a separate
+   material. Tapping it opens the OS picker; picking a photo swaps in the .crop
+   preview below, a video swaps in the .trim surface (the dropzone hides while
+   they show). Content, not floating chrome. */
 .dropzone {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1.4rem 1.2rem;
-  text-align: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  color: var(--muted);
+  text-align: left;
   border: 1px solid var(--rule);
+  border-radius: var(--radius-field);
   background: var(--surface);
   cursor: pointer;
-  transition: border-color var(--dur-micro);
+  transition: border-color var(--dur-micro), color var(--dur-micro);
 }
 @media (hover: hover) {
-  .dropzone:hover { border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+  .dropzone:hover {
+    border-color: color-mix(in srgb, var(--text) 28%, transparent);
+    color: var(--text);
+  }
 }
 .dropzone[hidden] { display: none; }
-.dropzone .field-hint { margin: 0; }
-.dropzone-btn {
-  padding: 0.55rem 1.2rem;
-  font-size: 0.9rem;
-  font-weight: 400;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition: border-color var(--dur-micro), background-color var(--dur-micro);
-}
-@media (hover: hover) {
-  .dropzone-btn:hover { border-color: color-mix(in srgb, var(--text) 28%, transparent); }
-}
+.dropzone-ico { width: 22px; height: 22px; flex-shrink: 0; color: var(--muted); }
+/* Same size/family as the Find link input's text (both are plain field inputs,
+   font: inherit) — muted, reading like that field's placeholder prompt. */
+.dropzone-label { font: inherit; }
 
 /* ── Trim surface — the post-capture review + iOS-style scrubber ────────────
    A recorded or library-picked clip plays here (looping inside the window),

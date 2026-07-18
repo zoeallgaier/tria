@@ -1126,7 +1126,7 @@
       const isVideo = post.image && isVideoUrl(post.image);
       const d = post.image ? imageDimsFromUrl(post.image) : null;
       const img = post.image
-        ? { src: isVideo ? (post.poster || null) : post.image, alt: post.note || 'Frame', w: d && d.w, h: d && d.h, tint: post.tint }
+        ? { src: isVideo ? (post.poster || null) : post.image, alt: notePlain(post.note) || post.title || 'Frame', w: d && d.w, h: d && d.h, tint: post.tint }
         : placeholderPhoto(post.id, post.note);
       // Known dimensions → width/height attributes let the browser hold the exact
       // space before the media loads (no feed reflow). Legacy photos without a
@@ -1145,7 +1145,12 @@
       const frameStyle =
         (sized ? `aspect-ratio:${img.w}/${img.h};` : '') +
         (tint ? `--ph-fill:${tint};` : '');
-      const foot = (post.note ? `<p class="card-note">${richText(post.note, post.author)}</p>` : '') + tagChips(post);
+      // The text block above the media reads exactly like a Note's: serif headline
+      // (if any), then the rich caption (headings/emphasis + Read-more clamp), then
+      // tags. cardNoteHtml renders the same rich subset the composer offers, so a
+      // formatted Frame caption no longer arrives as raw markup.
+      const photoTitleHtml = post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '';
+      const foot = photoTitleHtml + cardNoteHtml(post) + tagChips(post);
       const mediaHtml =
         (img.src ? `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` : '') +
         (isVideo
@@ -1191,7 +1196,10 @@
     // A find with no title: the caption itself carries the link (underlined the
     // same way a titled find is), so the destination never gets lost. Rendered
     // whole — the Read-more clamp would nest a button inside the anchor.
-    const linkedNote = post.type === 'find' && post.url && !post.title && post.note;
+    // A titleless find lets the caption itself carry the link, but only when it's a
+    // plain caption — a rich body (headings/emphasis) renders whole via cardNoteHtml
+    // instead, so its markup never leaks as literal text inside the anchor.
+    const linkedNote = post.type === 'find' && post.url && !post.title && post.note && !isRichNote(post.note);
     const noteHtml = linkedNote
       ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
           noteParas(post.note).map((p, i, arr) =>
@@ -1826,7 +1834,10 @@
       `</div>`;
 
     if (post.type === 'find') {
-      return combo('Title (optional)', 'Title', 'What made you want to share it?', 'Why share it', 2) +
+      // A Find shares the Note editor (headline + rich body), same as the composer,
+      // then carries the link field. Keeps create and edit identical, so a formatted
+      // Find edits as rich text instead of raw markup in a flat 180-char box.
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)') +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -1851,17 +1862,12 @@
         `</div>` + tagsInput;
     }
 
-    if (post.type === 'photo') {
-      return `<div class="field">` +
-          `<label for="e-note">Caption</label>` +
-          `<textarea id="e-note" rows="2" maxlength="180" ` +
-            `placeholder="Say something about it (optional).">${esc(post.note || '')}</textarea>` +
-        `</div>` + tagsInput;
-    }
-
-    // post (Note) — the rich editor, prefilled from the stored note (a legacy
-    // plain-text note upgrades to paragraphs; see editorPrefill).
-    return richNoteField('e', post.title, editorPrefill(post.note), 'Say it plainly.') + tagsInput;
+    // post (Note) and photo (Frame) share the rich editor — a Frame is a full post
+    // that also carries media, so it gets the same headline + rich caption (both
+    // optional; the image carries the post). Prefilled from the stored note (a
+    // legacy plain-text note upgrades to paragraphs; see editorPrefill).
+    const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh) + tagsInput;
   }
 
   function makeEditCard(post) {
@@ -4188,16 +4194,23 @@
   // composer watches for one and offers the switch (see wireFindNudge).
   const NOTE_URL_RE = /(https?:\/\/\S+|\bwww\.\S+)/i;
 
-  // The photo/video capture surface, shipped hidden inside the Post field set and
-  // revealed once a still/clip lands (the Photo tool opens the OS picker directly).
+  // The photo/video capture surface. On Frame the field reveals a plain upload
+  // dropzone (a visible, labelled field like every other one — more discoverable
+  // than a chip that silently pops the OS picker); tapping it opens the picker.
   // A picked still previews at native aspect; a picked clip drops into the in-app
   // trim reel, as Frames have always done. wireFrameCapture drives it; the whole
-  // thing lives under a .frame-field wrapper the capture reveals on land and the
-  // type filter folds away when you move off Frame (clearFrame).
+  // thing lives under a .frame-field wrapper the type filter reveals on Frame and
+  // folds away when you move off it (clearFrame). The dropzone hides once media
+  // lands (the crop/trim preview takes over); "Choose another" swaps the pick.
   function frameFieldHtml() {
     return `<div class="field frame-field" hidden>` +
+        `<label for="c-file">Photo or clip</label>` +
+        `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
+        `<button type="button" class="dropzone" id="c-dropzone">` +
+          svgIcon('image', 'dropzone-ico') +
+          `<span class="dropzone-label">Choose a photo or clip</span>` +
+        `</button>` +
         `<div class="combo-frame">` +
-          `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
           `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
           `</div>` +
@@ -4447,30 +4460,31 @@
       ind.classList.add('is-changing');
     }
 
-    const openPicker = () => fieldsEl.querySelector('#c-file')?.click();
     // Drop any attached photo/clip and fold the frame surface away (used when the
-    // type moves off Frame, since only a Frame carries media).
+    // type moves off Frame, since only a Frame carries media). Also resets the
+    // dropzone back to visible so a later return to Frame shows the upload field.
     function clearFrame() {
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null; videoCapture = null;
       fieldsEl.querySelector('#c-crop')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-trim')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-replace')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-dropzone')?.removeAttribute('hidden');
       const file = fieldsEl.querySelector('#c-file'); if (file) file.value = '';
       fieldsEl.querySelector('.frame-field')?.setAttribute('hidden', '');
       const b = view.querySelector('.composer-submit'); if (b) b.disabled = false;
     }
 
-    // Reveal the surface the current base type needs and do its opening action:
-    // Find shows the link row (without grabbing focus, so the keyboard stays
-    // down until you tap in), Frame opens the OS picker, Note bares the body.
-    // Any type but Frame drops a stray attachment first.
+    // Reveal the surface the current base type needs: Find shows the link row
+    // (without grabbing focus, so the keyboard stays down until you tap in),
+    // Frame reveals the upload field (a visible dropzone, no auto-picker), Note
+    // bares the body. Any type but Frame drops a stray attachment first.
     function applyBaseSurface() {
       if (family !== 'base') return;
       const linkRow = fieldsEl.querySelector('#c-link-row');
       if (pubType !== 'photo') clearFrame();
       if (linkRow) linkRow.hidden = pubType !== 'find';
-      if (pubType === 'photo' && !(cropper || videoCapture)) openPicker();
+      if (pubType === 'photo') fieldsEl.querySelector('.frame-field')?.removeAttribute('hidden');
     }
 
     function mountFields() {
@@ -4556,7 +4570,7 @@
 
     // Mount for the type we arrived on (default Note, or a dial shortcut's choice),
     // then run its opening action so a dial → Find lands with the link field open,
-    // a dial → Frame with the picker up.
+    // a dial → Frame with the upload field revealed.
     mountFields();
     paint();
     applyBaseSurface();
@@ -4576,6 +4590,7 @@
   function wireFrameCapture(root) {
     const file     = root.querySelector('#c-file');
     const frameField = root.querySelector('.frame-field');
+    const dropzone = root.querySelector('#c-dropzone');
     const cropEl   = root.querySelector('#c-crop');
     const imgEl    = root.querySelector('#c-cropimg');
     const trimEl     = root.querySelector('#c-trim');
@@ -4628,9 +4643,10 @@
     }
     stopActiveCapture = teardown;
 
-    // Open the OS picker. The Photo tool and the post-pick "Choose another" button
-    // both lead here — one way in, the system does the rest.
+    // Open the OS picker. The upload dropzone and the post-pick "Choose another"
+    // button both lead here — one way in, the system does the rest.
     const pick = () => file.click();
+    dropzone.addEventListener('click', pick);
     replace.addEventListener('click', pick);
 
     file.addEventListener('change', () => {
@@ -4647,6 +4663,7 @@
     // ── Photo → native-aspect preview ────────────────────────────────────────
     function finishPhoto(dataUrl) {
       if (frameField) frameField.hidden = false;   // the surface appears now the still has landed
+      if (dropzone) dropzone.hidden = true;        // the preview takes over from the upload field
       cropEl.hidden = false;
       // Swapping in from a video pick — tear the trim surface down.
       tPlaying = false;
@@ -4683,6 +4700,7 @@
     // preview itself is pure native playback (the one thing iOS does reliably).
     async function finishVideo(blob) {
       if (frameField) frameField.hidden = false;   // the surface appears now the clip has landed
+      if (dropzone) dropzone.hidden = true;        // the trim surface takes over from the upload field
       cropEl.hidden = true;
       cropper = null;
       trimEl.hidden = false;
@@ -4720,7 +4738,7 @@
         trimEl.hidden = true;
         replace.hidden = true;
         videoCapture = null;
-        if (frameField) frameField.hidden = true;   // no clip landed — fold the surface back away
+        if (dropzone) dropzone.hidden = false;      // no clip landed — restore the upload field
         onCaptureChange?.();                         // unlight the Photo tool + reset the type mark
         return;
       }
@@ -5305,6 +5323,9 @@
       data.audience = pubAudience.mode;          // 'circle' | 'list'
       data.audienceUsers = pubAudience.users;    // usernames when 'list'
     } else if (pubType === 'photo') {
+      // A Frame is a full post that carries a photo/clip: keep the headline and the
+      // rich caption (both optional), same as a Note. Only the media is required.
+      data.title = val('c-title');
       if (!cropper && !videoCapture) { errEl.textContent = 'Capture or choose a frame first.'; return; }
       if (videoCapture) {
         const vc = videoCapture;
@@ -5334,11 +5355,12 @@
             clearPostProgress();
             if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
             // We released the preview decoder for the re-encode, so rather than leave
-            // a dead trim surface up, fold it away — the Photo tool re-opens the picker.
+            // a dead trim surface up, fold it away and restore the upload field so
+            // they can pick again.
             videoCapture = null;
             document.getElementById('c-trim')?.setAttribute('hidden', '');
             document.getElementById('c-replace')?.setAttribute('hidden', '');
-            document.querySelector('.frame-field')?.setAttribute('hidden', '');
+            document.getElementById('c-dropzone')?.removeAttribute('hidden');
             return;
           }
         }
@@ -5457,8 +5479,11 @@
       if (!data.title && !data.note) {
         errEl.textContent = 'Write a title or a note first.'; return;
       }
+    } else if (post.type === 'photo') {
+      // Headline + caption both optional (the image carries the post), but save the
+      // title so an edited Frame keeps/gains its headline like a Note.
+      data.title = val('e-title');
     }
-    // photo: caption + tags only, both optional (the image carries the post).
 
     const res = await Store.updatePost(id, data);
     if (!res.ok) { errEl.textContent = res.error; return; }
