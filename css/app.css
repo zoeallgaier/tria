@@ -727,19 +727,6 @@ main {
 }
 .compose-filters .filter { text-align: center; }
 
-/* The link field slides down when its filter is picked (or a URL in the note
-   promotes it to a Find), rather than snapping into place. */
-@keyframes field-drop {
-  from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-#c-link-row:not([hidden]),
-.frame-field:not([hidden]) { animation: field-drop var(--dur-move) var(--ease); }
-@media (prefers-reduced-motion: reduce) {
-  #c-link-row:not([hidden]),
-  .frame-field:not([hidden]) { animation: none; }
-}
-
 /* Masthead and every content block share one readable measure, centred on the
    same axis — a clean, balanced column rather than a lopsided broadsheet. */
 .masthead,
@@ -969,9 +956,9 @@ main {
 }
 
 /* Action row below the post: the social group (headcount / like / comment)
-   sits on the RIGHT for thumb reach; edit + delete tuck away on the left of
-   your own posts. row-reverse keeps the markup order (social first) while
-   pinning the social group to the right even when it's the only group. */
+   sits on the RIGHT for thumb reach; the ••• overflow tucks away on the left.
+   row-reverse keeps the markup order (social first) while pinning the social
+   group to the right even when it's the only group. */
 .card-actions {
   display: flex;
   flex-direction: row-reverse;
@@ -986,7 +973,7 @@ main {
   align-items: center;
   justify-content: center;
   height: 34px;
-  min-width: 34px;        /* 1:1 by default — the owner tools' hover wash is a circle, not an oval */
+  min-width: 34px;        /* 1:1 by default — the ••• hover wash is a circle, not an oval */
   padding: 0;
   color: var(--muted);
   background: none;
@@ -995,30 +982,25 @@ main {
   transition: color var(--dur-micro), background var(--dur-micro);
 }
 .card-actions button svg { width: 18px; height: 18px; }
-/* The social + activity glyphs read larger than the owner tools — they're the
-   invitations, the tools are chores. A bigger 1:1 target too (44px clears the
+/* The social + activity glyphs read larger than the ••• overflow — they're the
+   invitations, the menu is a quiet tool. A bigger 1:1 target too (44px clears the
    mobile touch-target guideline); counted buttons grow wider from here. */
 .card-social button svg,
 .card-meta button svg { width: 28px; height: 28px; }
 .card-social button,
 .card-meta button { height: 44px; min-width: 44px; }
 
-/* Every activity splits the row: calendar + attendee count on the left (the
-   plan), comments/likes/RSVP on the right (the gestures), with the owner's edit
-   pencil trailing rightmost on your own. Natural order, not row-reverse, so the
-   two ends read left→right — identical on the feed and every profile. */
+/* Every activity splits the row: ••• menu + attendee count on the left (the
+   plan), comments/likes/RSVP on the right (the gestures). Natural order, not
+   row-reverse, so the two ends read left→right — identical on the feed and every
+   profile. */
 .card-actions--activity { flex-direction: row; }
 .card-meta { display: flex; align-items: center; gap: 0.35rem; margin-left: -0.4rem; }
-/* The edit pencil leads the meta group (leftmost) but stays a smaller, quieter
-   tool than the plan glyphs beside it — a chore, not an invitation. */
-.card-meta .card-edit { height: 34px; min-width: 34px; }
-.card-meta .card-edit svg { width: 18px; height: 18px; }
 
-/* The ••• overflow rides the bottom-left corner of the row, toned and sized like
-   the edit pencil — a quiet tool. It's a direct child of .card-actions on plain
-   posts (row-reverse floats it leftmost) and leads .card-meta on activities;
-   pin it to the 34px/18px tool scale in both, overriding the 44px/28px meta
-   glyphs it would otherwise inherit on an activity. */
+/* The ••• overflow rides the bottom-left corner of the row — a quiet tool. It's a
+   direct child of .card-actions on plain posts (row-reverse floats it leftmost)
+   and leads .card-meta on activities; pin it to the 34px/18px tool scale in both,
+   overriding the 44px/28px meta glyphs it would otherwise inherit on an activity. */
 .card-menu { color: var(--muted); opacity: 0.6; }
 .card-actions > .card-menu,
 .card-meta .card-menu { height: 34px; min-width: 34px; }
@@ -1318,19 +1300,15 @@ main {
   .count-tick-up, .count-tick-down { animation: none; }
 }
 
-.card-edit:hover, .card-edit:focus-visible {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
-}
-
 /* Inline edit form — a card swapped for its editable fields. Inset to align with
-   the text column; the actions row pairs a quiet Cancel with the accent Save. */
+   the text column; the actions row carries the lone Cancel/Save toggle, pinned
+   right (Delete moved out to the post's ••• menu). */
 .card--editing { padding: 0.35rem var(--inset) 0.9rem; }
 .card--editing.card--photo { padding-inline: var(--inset); }
 .edit-form .field:first-child { margin-top: 0.35rem; }
 .edit-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.6rem;
   margin-top: 1.1rem;
@@ -1358,25 +1336,6 @@ main {
 }
 @media (hover: hover) { .edit-toggle.is-dirty:hover { background: var(--lit-top), var(--accent-press); } }
 
-/* Delete lives here now, not on the card row — a quiet destructive control on the
-   far left, weighted away from Save so it's never the accidental tap. */
-.edit-delete {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--muted);
-  background: none;
-  border: none;
-  padding: 0.55rem 0.95rem;
-  font-size: 0.9rem;
-  border-radius: var(--radius-pill);
-  transition: color var(--dur-micro), background var(--dur-micro);
-}
-.edit-delete svg { width: 18px; height: 18px; }
-.edit-delete:hover, .edit-delete:focus-visible {
-  color: var(--type-find-ink);
-  background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
-}
 .edit-cancel {
   color: var(--muted);
   background: none;
@@ -2211,8 +2170,24 @@ body.gate main { padding: 0; }
 /* ── Rich Note editor (contenteditable) + its formatting toolbar ───────────────
    The body is a contenteditable that renders headings/emphasis live (WYSIWYG) —
    it reuses the same serif heading + Oxygen emphasis styles as the feed, so what
-   you type is what posts. The toolbar is a quiet accessory strip across the
-   box's top; its glyphs are set as specimens (each in the style it applies). */
+   you type is what posts. The toolbar rides in a collapsible panel below the
+   title, opened by the "Aa" toggle — most posts are short and never need it,
+   so it stays out of the way by default; its glyphs are set as specimens (each
+   in the style it applies). */
+.rich-title-row { display: flex; align-items: center; gap: 0.3rem; }
+.rich-title-row .combo-title { width: auto; flex: 1; min-width: 0; }
+/* Grid-rows 0fr→1fr glide (matches .about-fold-panel/.aud-list-wrap). */
+.rich-toolbar-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--dur-move) var(--ease), opacity 0.26s ease;
+}
+.rich-toolbar-panel.is-open { grid-template-rows: 1fr; opacity: 1; }
+.rich-toolbar-inner { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .rich-toolbar-panel { transition: none; }
+}
 .field--rich .rich-note {
   position: relative;
   min-height: 5.5rem;
@@ -2257,7 +2232,6 @@ body.gate main { padding: 0; }
   align-items: center;
   gap: 0.1rem;
   padding: 0.1rem 0.35rem;
-  border-bottom: 1px solid var(--rule);
 }
 .rt-btn {
   -webkit-appearance: none;
@@ -2277,15 +2251,16 @@ body.gate main { padding: 0; }
 }
 @media (hover: hover) { .rt-btn:hover { color: var(--text); background: var(--surface-2); } }
 .rt-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.rt-btn[aria-pressed="true"] { color: var(--text); background: var(--surface-2); }
+.rt-btn[aria-pressed="true"], .rt-toggle[aria-expanded="true"] { color: var(--text); background: var(--surface-2); }
 /* Specimen glyphs: H1 upright serif, H2 italic serif, then B / I in Oxygen. */
 .rt-h1 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-size: 1.15rem; }
 .rt-h2 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-style: italic; font-size: 1.1rem; }
 .rt-b  { font-family: 'Oxygen', sans-serif; font-weight: 700; font-size: 0.9rem; }
 .rt-i  { font-family: 'Oxygen', sans-serif; font-style: italic; font-size: 0.9rem; }
 .rt-sep { width: 1px; height: 1.1rem; background: var(--rule); margin: 0 0.25rem; flex: none; }
+/* The toggle's own specimen — "Aa" stands for text styles in general. */
+.rt-toggle { flex: none; font-family: 'Instrument Serif', 'Times New Roman', serif; font-size: 1.05rem; }
 .rt-count {
-  margin-left: auto;
   padding-right: 0.15rem;
   font-size: 0.72rem;
   color: var(--muted);
@@ -2596,21 +2571,18 @@ body.gate main { padding: 0; }
 @media (hover: hover) {
   .account-badges > button:hover { color: var(--text); border-color: var(--text); }
 }
-.account-edit-ico { width: 15px; height: 15px; }
-.account-share-ico { width: 15px; height: 15px; }
 .account-friend-ico { width: 18px; height: 18px; }
 .account-more-ico { width: 18px; height: 18px; }
-/* Share flashes a check on copy/share — quietly acknowledge, don't shout. */
-.account-share-badge.copied { color: var(--text); border-color: var(--text); }
 /* The friends tie reads as a settled positive state (text ink + a firmer rim),
-   so it sits a touch more present than the neutral Share/Edit discs. */
+   so it sits a touch more present than the neutral ••• disc. */
 .account-friend-badge { color: var(--text); border-color: color-mix(in srgb, var(--text) 22%, transparent); }
 
-/* Reserve room on the name's first line so it clears the corner cluster — more
-   for the two-disc own card, less for a friend's single tie. */
+/* Reserve room on the name's first line so it clears the corner cluster. Every
+   card now carries exactly one disc — the ••• glyph (own card + non-friend
+   visitor, its menu holds Share/Edit or Block/Report) or the friend tie — so a
+   single-disc reserve fits all of them. */
 .account-card:has(.account-friend-badge) .account-name { padding-right: 2rem; }
 .account-card:has(.account-more-badge) .account-name { padding-right: 2rem; }
-.account-card:has(.account-share-badge) .account-name { padding-right: 4.3rem; }
 
 /* Friend toggle (pre-friend states only — add / requested / accept; once you're
    friends it collapses to the corner badge). Centred in the action row. */

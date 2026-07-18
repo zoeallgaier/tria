@@ -449,17 +449,12 @@
   }
 
   // The quiet ••• overflow — it rides the bottom-left corner of the action row,
-  // out of the way, sized and toned like the edit pencil (a tool, not an
-  // invitation). Opens the per-post sheet (Copy link, Add to calendar, Report).
-  // On your OWN posts it's suppressed — nothing to report, and you can share the
-  // profile — EXCEPT on your own upcoming activities, where Add to calendar is a
-  // real self-action (put your own plan on your calendar), so the menu stays.
-  // owner → this card sits on your own profile, where the edit pencil already
-  // leads the row, so your own posts keep an empty ••• (unless it carries a
-  // non-edit action like Add to calendar). In the feed (no pencil, owner falsy)
-  // your own posts DO get the •••: it carries Copy link and Edit post.
-  function menuBtnHtml(post, owner) {
-    if (post.author === Store.session() && owner && !isCalendarable(post)) return '';
+  // out of the way, a tool rather than an invitation. Opens the per-post sheet
+  // (openPostMenu): Copy link for everyone, then Edit + Delete on your own posts
+  // or Report on someone else's, plus Add to calendar on activities. It's the one
+  // and only per-post menu now — the same glyph and the same contents wherever
+  // the card renders (home feed or your own profile).
+  function menuBtnHtml(post) {
     return `<button class="card-menu" type="button" data-menu="${esc(post.id)}" ` +
       `aria-label="More" title="More">${svgIcon('dots')}</button>`;
   }
@@ -613,9 +608,19 @@
 
   // storage → feed: same walk, but text flows through richText (so @mentions link)
   // and blocks carry render classes. Safe to inject: fixed tags, all text escaped.
+  // opts flows into richText ({ link: false } un-links @mentions, for when the
+  // whole body is about to be nested inside another anchor); opts.trailingIcon
+  // splices markup just inside the last block's closing tag (a titleless find's
+  // external-link glyph, placed at the true end of the visible text).
   const RICH_CLASS = { h1: 'card-h1', h2: 'card-h2', p: 'card-note' };
-  const renderRichNote = (html, author) =>
-    richBlocks(parseNoteHtml(html), (t) => richText(t, author), RICH_CLASS).join('');
+  const renderRichNote = (html, author, opts = {}) => {
+    const blocks = richBlocks(parseNoteHtml(html), (t) => richText(t, author, opts), RICH_CLASS);
+    if (opts.trailingIcon && blocks.length) {
+      const last = blocks.length - 1;
+      blocks[last] = blocks[last].replace(/<\/(h1|h2|p)>$/, `${opts.trailingIcon}</$1>`);
+    }
+    return blocks.join('');
+  };
 
   // storage/legacy → editor: clean editable HTML (no classes, no links). A legacy
   // plain-text note becomes paragraphs; a rich note re-walks to the same subset.
@@ -656,8 +661,9 @@
   }
 
   // ── The rich Note field (compose + edit share it) ───────────────────────────
-  // An H1/H2/B/I toolbar across the top, then the title input and a contenteditable
-  // body, all in one bordered combo box. `idp` prefixes the ids: 'c' compose, 'e' edit.
+  // A title row (with a collapsible H1/H2/B/I toolbar behind an "Aa" toggle),
+  // then a contenteditable body, all in one bordered combo box. `idp` prefixes
+  // the ids: 'c' compose, 'e' edit.
   const NOTE_MAX = 15000;   // a Note runs long (a short essay); captions stay 180
 
   function richToolbarHtml(idp) {
@@ -670,15 +676,25 @@
         `<span class="rt-sep" aria-hidden="true"></span>` +
         `<button type="button" class="rt-btn rt-b" data-cmd="bold" aria-pressed="false" aria-label="Bold">B</button>` +
         `<button type="button" class="rt-btn rt-i" data-cmd="italic" aria-pressed="false" aria-label="Italic">I</button>` +
-        `<span class="rt-count" id="${idp}-note-count" aria-hidden="true"></span>` +
       `</div>`;
   }
 
+  // Title + the "Aa" toggle share one row; the toolbar itself rides in a
+  // collapsible panel beneath (closed by default — most posts never touch it),
+  // wired open/closed in wireRichEditor. The count lives on the title row, not
+  // the toolbar, so it stays visible even while the panel is collapsed.
   function richNoteField(idp, titleVal, noteHtml, notePh) {
     return `<div class="field field--combo field--rich">` +
-        richToolbarHtml(idp) +
-        `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
-          `value="${esc(titleVal || '')}" placeholder="Title (optional)" aria-label="Title">` +
+        `<div class="rich-title-row">` +
+          `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
+            `value="${esc(titleVal || '')}" placeholder="Title (optional)" aria-label="Title">` +
+          `<span class="rt-count" id="${idp}-note-count" aria-hidden="true"></span>` +
+          `<button type="button" class="rt-btn rt-toggle" aria-expanded="false" ` +
+            `aria-controls="${idp}-toolbar-panel" aria-label="Text styles">Aa</button>` +
+        `</div>` +
+        `<div class="rich-toolbar-panel" id="${idp}-toolbar-panel">` +
+          `<div class="rich-toolbar-inner">${richToolbarHtml(idp)}</div>` +
+        `</div>` +
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
@@ -692,6 +708,17 @@
     if (!editor) return;
     const toolbar = editor.parentElement.querySelector('.rich-toolbar');
     const len = () => editor.textContent.length;
+
+    // The "Aa" button reveals/hides the toolbar panel — closed by default, so a
+    // short post never shows it at all.
+    const togglePanel = editor.parentElement.querySelector('.rich-toolbar-panel');
+    const toggleBtn = editor.parentElement.querySelector('.rt-toggle');
+    if (toggleBtn && togglePanel) {
+      toggleBtn.addEventListener('click', () => {
+        const open = togglePanel.classList.toggle('is-open');
+        toggleBtn.setAttribute('aria-expanded', String(open));
+      });
+    }
 
     const syncEmpty = () => {
       // Collapse a field left holding only a stray <br>/empty block back to truly
@@ -1076,43 +1103,36 @@
           (n ? `<span class="card-comment-count">${n}</span>` : '') +
         `</button>`
       : '';
-    // Just the edit pencil now — the destructive delete moved inside the edit
-    // form (see makeEditCard), so the card row carries one quiet owner tool that
-    // leads the left of the row (leftmost), ahead of the plan glyphs.
-    const owner = opts.owner
-      ? `<button class="card-edit" type="button" data-edit="${esc(post.id)}" ` +
-          `aria-label="Edit this post" title="Edit post">${svgIcon('pencil')}</button>`
-      : '';
-    // The ••• overflow — leftmost of the left cluster, so it lands in the bottom-
-    // left corner of the card, out of the way. Empty on your own posts.
-    const menu = menuBtnHtml(post, opts.owner);
+    // The ••• overflow carries every owner tool now (Edit, Delete) plus Copy link
+    // and Add to calendar — the same menu whether the card is on your profile or
+    // in the feed. It sits leftmost of the left cluster, bottom-left corner of the
+    // card, out of the way.
+    const menu = menuBtnHtml(post);
 
-    if (!attendees && !rsvp && !like && !comment && !owner && !menu) return '';
+    if (!attendees && !rsvp && !like && !comment && !menu) return '';
 
-    // Activities split into two ends. LEFT: the ••• menu (which carries Add to
-    // calendar), then the owner's edit pencil (own profile only), then the
-    // attendee count — the plan. RIGHT: the RSVP toggle, then comments + likes.
-    // RSVP leads the social cluster so comment + like are ALWAYS the two rightmost
-    // glyphs, in the exact same spot whether or not an RSVP rides along.
+    // Activities split into two ends. LEFT: the ••• menu, then the attendee count
+    // — the plan. RIGHT: the RSVP toggle, then comments + likes. RSVP leads the
+    // social cluster so comment + like are ALWAYS the two rightmost glyphs, in the
+    // exact same spot whether or not an RSVP rides along.
     if (post.type === 'activity') {
-      const meta = `<div class="card-meta">${menu}${owner}${attendees}</div>`;
+      const meta = `<div class="card-meta">${menu}${attendees}</div>`;
       const social = `<div class="card-social">${rsvp}${comment}${like}</div>`;
       return `<div class="card-actions card-actions--activity">${meta}${social}</div>`;
     }
 
-    // Everything non-activity — a single row: social cluster on the right, the
-    // edit tool and ••• menu tucked left (row-reverse, so menu ends up leftmost).
-    return `<div class="card-actions"><div class="card-social">${attendees}${rsvp}${comment}${like}</div>${owner}${menu}</div>`;
+    // Everything non-activity — a single row: social cluster on the right, the •••
+    // menu tucked left (row-reverse, so the menu ends up leftmost).
+    return `<div class="card-actions"><div class="card-social">${attendees}${rsvp}${comment}${like}</div>${menu}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
   // date line instead of the full avatar + name byline.
-  // opts.owner → the viewer owns this post: show a delete control.
   function makeCard(post, opts = {}) {
     const head = opts.solo ? soloMetaEl(post) : bylineEl(post);
     const actions = cardActionsHtml(post, opts);
     const el = document.createElement('article');
-    el.className = `card card--${post.type}${opts.owner ? ' card--owner' : ''}`;
+    el.className = `card card--${post.type}`;
     el.dataset.id = post.id;
     el.dataset.type = post.type;
     el.dataset.tags = (post.tags || []).join(',');
@@ -1195,16 +1215,18 @@
 
     // A find with no title: the caption itself carries the link (underlined the
     // same way a titled find is), so the destination never gets lost. Rendered
-    // whole — the Read-more clamp would nest a button inside the anchor.
-    // A titleless find lets the caption itself carry the link, but only when it's a
-    // plain caption — a rich body (headings/emphasis) renders whole via cardNoteHtml
-    // instead, so its markup never leaks as literal text inside the anchor.
-    const linkedNote = post.type === 'find' && post.url && !post.title && post.note && !isRichNote(post.note);
+    // whole — the Read-more clamp would nest a button inside the anchor. Covers
+    // a rich caption (headings/emphasis) same as a plain one — renderRichNote's
+    // { link: false } keeps a @mention from nesting its own <a> in here too.
+    const linkedNote = post.type === 'find' && post.url && !post.title && post.note;
+    const extIcon = `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>`;
     const noteHtml = linkedNote
       ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
-          noteParas(post.note).map((p, i, arr) =>
-            `<p class="card-note">${richText(p, post.author, { link: false })}${i === arr.length - 1 && external
-              ? `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>` : ''}</p>`).join('') +
+          (isRichNote(post.note)
+            ? renderRichNote(post.note, post.author, { link: false, trailingIcon: external ? extIcon : '' })
+            : noteParas(post.note).map((p, i, arr) =>
+                `<p class="card-note">${richText(p, post.author, { link: false })}${i === arr.length - 1 && external
+                  ? extIcon : ''}</p>`).join('')) +
         `</a>`
       : cardNoteHtml(post);
 
@@ -1746,9 +1768,9 @@
 
     // Adding/removing a comment changes the list + the count, so the card is
     // rebuilt. We swap just this card in place so the surrounding feed/column
-    // never re-animates — including your OWN posts: rather than re-rendering the
-    // whole column (which would replay every card's rise), we rebuild this one
-    // card and re-wire its owner edit/delete controls via opts.wireOwner.
+    // never re-animates — rather than re-rendering the whole column (which would
+    // replay every card's rise), we rebuild this one card. Its ••• menu keeps
+    // working through the delegated click listener, so there's nothing to re-wire.
     const apply = (dir) => {
       openComments.add(post.id);
       const fresh = makeCard(post, opts);
@@ -1757,7 +1779,6 @@
       if (dir) fresh.querySelector('.card-comment-count')
         ?.classList.add(dir === 'up' ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
-      opts.wireOwner?.(fresh);                       // re-attach edit/delete on own posts
       fresh.querySelector('.comment-form textarea')?.focus();
     };
 
@@ -1879,10 +1900,9 @@
         editFieldsFor(post) +
         `<p class="composer-error" id="e-error" role="alert"></p>` +
         `<div class="edit-actions">` +
-          `<button type="button" class="edit-delete" aria-label="Delete this post" ` +
-            `title="Delete post">${svgIcon('trash')}<span>Delete</span></button>` +
           // One button that reads "Cancel" until a field changes, then becomes the
           // accent "Save changes" — see the dirty-tracking wiring in renderUser.
+          // Delete lives in the post's ••• menu now, not here.
           `<button type="button" class="edit-toggle">Cancel</button>` +
         `</div>` +
       `</form>`;
@@ -2734,36 +2754,27 @@
     // below the hero via applyAmbient. The top-corner control is change-photo for
     // the owner, back-to-directory for a visitor.
     // Corner badge cluster (top-right of the card): a row of small glass discs.
-    // Your own card carries Share + Edit (Edit rightmost, in the far corner, where
-    // it's always lived; Share tucks just inside it). A visitor's carries the tie
-    // ONCE you're friends — the same slot, the two never coexist — where a tap
-    // still removes; parking it here rather than as a standing button nudges
-    // people to stay friends and frees the card for the bio.
-    const shareBadge = isSelf
-      ? `<button class="account-share-badge" type="button" id="share" ` +
-          `aria-label="Share your profile" title="Share your profile">` +
-          svgIcon('send', 'account-share-ico') + `</button>`
-      : '';
-    const editBadge = isSelf
-      ? `<button class="account-edit-badge" type="button" id="edit-profile" ` +
-          `aria-label="Edit profile" title="Edit profile">` +
-          svgIcon('pencil', 'account-edit-ico') + `</button>`
-      : '';
+    // Your own card carries a single ••• glyph (far corner, where Edit always
+    // lived); its menu holds Share profile + Edit profile. A visitor's carries the
+    // tie ONCE you're friends — the same slot, the two never coexist — where a tap
+    // still removes; parking it here rather than as a standing button nudges people
+    // to stay friends and frees the card for the bio.
     const friendBadge = areFriends
       ? `<button class="account-friend-badge" type="button" id="friend" data-status="friends" ` +
           `aria-label="Friends, tap to remove" title="Friends · tap to remove">` +
           svgIcon('friends', 'account-friend-ico') + `</button>`
       : '';
-    // A visitor who ISN'T your friend still needs Block + Report reachable (App
-    // Store 1.2 — you must be able to block an abusive person you haven't added).
-    // Friends get those inside the friend badge's menu; this covers everyone else.
-    const moreBadge = (!isSelf && !areFriends)
+    // The ••• glyph: on your own card it carries Share profile + Edit profile; on a
+    // visitor who ISN'T your friend it carries Block + Report (App Store 1.2 — you
+    // must be able to block an abusive person you haven't added). Friends get those
+    // inside the friend badge's menu instead, so the glyph sits out when areFriends.
+    const moreBadge = (isSelf || !areFriends)
       ? `<button class="account-more-badge" type="button" id="account-more" ` +
-          `aria-label="More" title="More">` +
+          `aria-label="${isSelf ? 'Profile options' : 'More'}" title="${isSelf ? 'Options' : 'More'}">` +
           svgIcon('dots', 'account-more-ico') + `</button>`
       : '';
-    const cornerBadges = (shareBadge || editBadge || friendBadge || moreBadge)
-      ? `<div class="account-badges">${shareBadge}${editBadge}${friendBadge}${moreBadge}</div>`
+    const cornerBadges = (friendBadge || moreBadge)
+      ? `<div class="account-badges">${friendBadge}${moreBadge}</div>`
       : '';
 
     // Bio always rides in the identity column beside the photo, on the same left
@@ -2813,18 +2824,6 @@
     // byline). Photos keep the lightbox; tags jump to the home feed filtered.
     const feedEl = view.querySelector('#feed');
 
-    // Wire the owner edit control within a root (the whole column on first
-    // render, or a single rebuilt card after an in-place comment swap — see
-    // wireComments' opts.wireOwner). Edit swaps the card for a form; delete now
-    // lives inside that form (wired below).
-    const wireOwner = (root) => {
-      root.querySelectorAll('.card-edit').forEach(btn =>
-        btn.addEventListener('click', () => {
-          editingId = btn.dataset.edit;
-          renderUser(username);
-        }));
-    };
-
     if (locked) {
       // Private profile, seen by an outsider: no posts, just a warm nudge toward
       // the Add-friend button that already sits in the card above.
@@ -2842,7 +2841,7 @@
       list.forEach((p, i) => {
         const card = (isSelf && p.id === editingId)
           ? makeEditCard(p)
-          : makeCard(p, { solo: true, owner: isSelf, wireOwner });
+          : makeCard(p, { solo: true });
         card.style.animationDelay = staggerDelay(i);
         frag.appendChild(card);
       });
@@ -2870,9 +2869,6 @@
       else scrollTop(false);   // target filtered out — fall back to the top
     }
 
-    // Owner controls (own profile only) for the freshly rendered column.
-    wireOwner(feedEl);
-
     const editForm = feedEl.querySelector('.edit-form');
     if (editForm) {
       // Snapshot the fields exactly as rendered. The lone toggle stays a quiet
@@ -2894,19 +2890,6 @@
       toggle.addEventListener('click', () => {
         if (dirty()) submitEdit(editingId, username);
         else { editingId = null; renderUser(username); }
-      });
-      // Same one-sheet guard as Delete account: the sheet's own Cancel is the
-      // escape hatch, and the danger row is the deliberate act.
-      editForm.querySelector('.edit-delete')?.addEventListener('click', () => {
-        openSheet({
-          title: 'Delete this post? This can’t be undone.',
-          items: [{ label: 'Delete post', icon: 'trash', danger: true, run: async () => {
-            const id = editingId;
-            editingId = null;
-            await Store.deletePost(id);
-            renderUser(username);
-          } }],
-        });
       });
       editForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -2940,8 +2923,24 @@
       renderUser(username);      // reflect the new state in place
     });
 
+    // The ••• glyph on the profile header: your own opens Edit profile; a
+    // non-friend visitor's carries Block + Report.
     const moreBtn = document.getElementById('account-more');
     if (moreBtn) moreBtn.addEventListener('click', () => {
+      if (isSelf) {
+        openSheet({ items: [
+          { label: 'Share profile', icon: 'send', run: () => shareOrCopy({
+              title: `@${u.username} on Tria`,
+              text: `Join me on Tria`,
+              url: profileLink(u.username),
+            }).then(result => {
+              if (result === 'cancelled') return;
+              toast(result === 'copied' ? 'Link copied' : 'Shared');
+            }) },
+          { label: 'Edit profile', icon: 'pencil', run: () => openProfileEditor(() => renderUser(username)) },
+        ] });
+        return;
+      }
       openSheet({
         title: u.name || '@' + u.username,
         items: [
@@ -2950,35 +2949,6 @@
         ],
       });
     });
-
-    const shareBtn = document.getElementById('share');
-    if (shareBtn) shareBtn.addEventListener('click', () => {
-      shareOrCopy({
-        title: `@${u.username} on Tria`,
-        text: `Join me on Tria`,
-        url: profileLink(u.username),
-      }).then(result => {
-        if (result === 'cancelled') return;
-        // Icon badge: flash a check + retitle for the confirmation, then restore
-        // the send glyph. (No text label to swap now that Share is a corner icon.)
-        const msg = result === 'copied' ? 'Link copied' : 'Shared';
-        shareBtn.classList.add('copied');
-        shareBtn.innerHTML = svgIcon('check', 'account-share-ico');
-        shareBtn.title = msg;
-        shareBtn.setAttribute('aria-label', msg);
-        clearTimeout(shareBtn._t);
-        shareBtn._t = setTimeout(() => {
-          shareBtn.classList.remove('copied');
-          shareBtn.innerHTML = svgIcon('send', 'account-share-ico');
-          shareBtn.title = 'Share your profile';
-          shareBtn.setAttribute('aria-label', 'Share your profile');
-        }, 1800);
-      });
-    });
-
-    const editProfileBtn = document.getElementById('edit-profile');
-    if (editProfileBtn) editProfileBtn.addEventListener('click',
-      () => openProfileEditor(() => renderUser(username)));
 
     const friendsBtn = document.getElementById('show-friends');
     if (friendsBtn) friendsBtn.addEventListener('click',
@@ -3439,11 +3409,40 @@
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
     if (isCalendarable(post))
       items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(post) });
-    if (own)
+    if (own) {
       items.push({ label: 'Edit post', icon: 'pencil', run: () => startPostEdit(post) });
-    else
+      items.push({ label: 'Delete post', icon: 'trash', danger: true, run: () => confirmDeletePost(post) });
+    } else {
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
+    }
     openSheet({ items });
+  }
+
+  // Delete confirm for one of your own posts. A nested sheet (its own Cancel is
+  // the escape hatch, the danger row the deliberate act — the same one-sheet guard
+  // Delete account uses). Fired from the post's ••• menu wherever the card lives,
+  // so it refreshes whichever view is showing rather than assuming the profile.
+  function confirmDeletePost(post) {
+    openSheet({
+      title: 'Delete this post? This can’t be undone.',
+      items: [{ label: 'Delete post', icon: 'trash', danger: true, run: async () => {
+        if (editingId === post.id) editingId = null;   // may be open in the inline editor
+        const res = await Store.deletePost(post.id);
+        if (res && res.ok === false) { toast(res.error || 'Couldn’t delete, try again.'); return; }
+        refreshPostViews();
+      } }],
+    });
+  }
+
+  // After a post mutation (delete), re-render whichever of the two surfaces that
+  // can show your OWN posts is live: your profile (renderUser recomputes the
+  // "N posts" stat + empty state) or the home feed (renderFeed reconciles the
+  // card out). A visitor's #/u/<handle> never shows your posts, so it can't be
+  // the delete context.
+  function refreshPostViews() {
+    const path = (location.hash || '#/').split('?')[0];
+    if (path === '#/profile') renderUser(Store.session());
+    else renderFeed();
   }
 
   // Edit swaps the card for a form, but that machinery lives on the profile
@@ -4586,6 +4585,44 @@
   // A longer library pick doesn't bounce to Photos — the in-app trimmer cuts it to
   // ≤10s. This cap only rejects a genuinely huge raw file the browser can't seek.
   const MAX_LIBRARY_VIDEO_BYTES = 300 * 1024 * 1024;
+  // The real upload ceiling: the Storage bucket has no file_size_limit set, so it
+  // inherits the project default of 50 MB. Anything over that fails server-side
+  // with a generic error, so we catch it on the client with copy that says what
+  // to do. Mostly bites the raw-upload path (a short but high-res untrimmed clip);
+  // re-encoded clips downscale to 1280px and land well under this.
+  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+  // One shared AudioContext, unlocked on a user gesture, reused for every trim.
+  // iOS/WebKit starts a fresh context 'suspended' and only lets resume() take
+  // inside a live gesture — so we create+resume it on the first pointer down and
+  // again synchronously on the Post tap. reencodeWindow needs it 'running' to mux
+  // the clip's audio; a suspended context there hands MediaRecorder a dead track
+  // that hangs WebKit's mp4 muxer, so it stays the trip-wire that gates audio.
+  let sharedAudioCtx = null;
+  function getAudioCtx() {
+    if (sharedAudioCtx) return sharedAudioCtx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { sharedAudioCtx = new AC(); } catch { return null; }
+    return sharedAudioCtx;
+  }
+  // Nudge the context toward 'running'. Safe to call outside a gesture (it just
+  // won't take on iOS); call it FROM one to actually unlock. Plays a 1-sample
+  // silent buffer, the standard iOS unlock. Never awaited — resume()'s promise can
+  // hang on WebKit, and callers only ever read ctx.state synchronously later.
+  function unlockAudioCtx() {
+    const ac = getAudioCtx();
+    if (!ac) return;
+    try { ac.resume(); } catch {}
+    try {
+      const buf = ac.createBuffer(1, 1, 22050);
+      const src = ac.createBufferSource();
+      src.buffer = buf; src.connect(ac.destination); src.start(0);
+    } catch {}
+  }
+  // First real interaction anywhere unlocks the context, so a later Post tap finds
+  // it already 'running'. Once is enough; pointerdown covers touch + mouse.
+  window.addEventListener('pointerdown', unlockAudioCtx, { once: true, passive: true });
 
   function wireFrameCapture(root) {
     const file     = root.querySelector('#c-file');
@@ -5095,12 +5132,18 @@
       const v = document.createElement('video');
       v.src = URL.createObjectURL(blob);
       v.playsInline = true; v.preload = 'auto';
-      let audioCtx, recorder, raf, stopped = false;
+      let audioSrcNode, audioDestNode, recorder, raf, stopped = false;
+      // Detach this clip's nodes from the SHARED context (never close it — it's
+      // reused for every trim and re-unlocked per gesture).
+      const dropAudioNodes = () => {
+        try { audioSrcNode && audioSrcNode.disconnect(); } catch {}
+        try { audioDestNode && audioDestNode.disconnect(); } catch {}
+      };
       const cleanup = () => {
         stopped = true;
         cancelAnimationFrame(raf);
         try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch {}
-        try { audioCtx && audioCtx.close(); } catch {}
+        dropAudioNodes();
         try { URL.revokeObjectURL(v.src); } catch {}
       };
       const fail = (e) => { cleanup(); reject(e || new Error('trim-failed')); };
@@ -5117,26 +5160,25 @@
         v.addEventListener('seeked', () => {
           const t0 = v.currentTime;   // the parked start frame; playback = currentTime moving past it
           let tracks = canvas.captureStream(30).getVideoTracks();
-          // Carry the clip's audio, but ONLY through a *running* WebAudio graph. A
-          // suspended AudioContext — the norm by the time this async pass runs on iOS,
-          // where the Post tap's gesture has long expired — hands MediaRecorder a dead
-          // audio track that hangs WebKit's mp4 muxer forever (no data, no onstop),
-          // which is exactly why a trimmed clip could never post on iPhone. The state
-          // reads synchronously (desktop Chrome starts 'running'; iOS/WebKit starts
-          // 'suspended'), and resume() needs a gesture we no longer have AND its promise
-          // can hang on WebKit — so we only ever check it. No running audio → record
-          // video-only (rock-solid on every engine) and mute the element so the pass
-          // stays silent. An untrimmed short clip keeps its sound by uploading raw
-          // instead of ever reaching this path.
+          // Carry the clip's audio through the SHARED, gesture-unlocked WebAudio
+          // graph. It's created + resumed on the first pointer down and again
+          // synchronously on the Post tap, so on iOS homescreen Safari it reads
+          // 'running' by the time this async pass runs — and we mux the sound in.
+          // A *suspended* context is still refused on purpose: it hands
+          // MediaRecorder a dead audio track that hangs WebKit's mp4 muxer forever
+          // (no data, no onstop), which is why a trimmed clip used to never post on
+          // iPhone. So if the unlock somehow didn't take, we fall back to a
+          // rock-solid video-only pass (muted element, silent clip) rather than
+          // risk the hang. An untrimmed short clip skips this path entirely and
+          // keeps its sound by uploading raw.
           try {
-            const ac = new (window.AudioContext || window.webkitAudioContext)();
-            if (ac.state === 'running') {
-              const dest = ac.createMediaStreamDestination();
-              ac.createMediaElementSource(v).connect(dest);
-              audioCtx = ac;
-              tracks = tracks.concat(dest.stream.getAudioTracks());
+            const ac = getAudioCtx();
+            if (ac && ac.state === 'running') {
+              audioDestNode = ac.createMediaStreamDestination();
+              audioSrcNode = ac.createMediaElementSource(v);   // once per fresh <video>
+              audioSrcNode.connect(audioDestNode);
+              tracks = tracks.concat(audioDestNode.stream.getAudioTracks());
             } else {
-              try { ac.close(); } catch {}
               v.muted = true;
             }
           } catch { v.muted = true; }
@@ -5150,7 +5192,7 @@
             clearTimeout(guard);
             const type = recorder.mimeType || mime || 'video/mp4';
             const ext = /mp4/i.test(type) ? 'mp4' : /webm/i.test(type) ? 'webm' : 'mov';
-            try { audioCtx && audioCtx.close(); } catch {}
+            dropAudioNodes();
             try { URL.revokeObjectURL(v.src); } catch {}
             resolve({ blob: new Blob(chunks, { type }), mimeType: type, ext, dims: { w, h } });
           };
@@ -5329,6 +5371,11 @@
       if (!cropper && !videoCapture) { errEl.textContent = 'Capture or choose a frame first.'; return; }
       if (videoCapture) {
         const vc = videoCapture;
+        // Unlock the shared AudioContext NOW, while the Post tap's gesture is still
+        // live and synchronous — this is the one moment iOS homescreen Safari lets
+        // resume() take. By the time the async re-encode reads ctx.state it's
+        // 'running', so the trim keeps the clip's sound. (Fires before any await.)
+        unlockAudioCtx();
         const btn0 = document.querySelector('.composer-submit');
         const trimmed = vc.start > 0.05 || vc.end < vc.duration - 0.05;
         // Free the preview's decoder before the re-encode spins up its own — iOS
@@ -5363,6 +5410,23 @@
             document.getElementById('c-dropzone')?.removeAttribute('hidden');
             return;
           }
+        }
+        // The real upload ceiling is 50 MB (the bucket's default). Catch it here,
+        // before the upload, with copy that says what to do — otherwise it fails
+        // server-side with a generic error. Mostly bites an untrimmed high-res
+        // clip (uploaded raw at full size). stopActiveCapture already released the
+        // preview decoder above, so the trim surface can't scrub anymore — fold it
+        // away and restore the picker so they pick a smaller/shorter clip (a fresh
+        // pick re-encodes + downscales, which almost always fits).
+        if (finalBlob.size > MAX_UPLOAD_BYTES) {
+          errEl.textContent = 'That clip is over 50 MB. Please choose a shorter or smaller clip.';
+          clearPostProgress();
+          if (btn0) { btn0.disabled = false; btn0.textContent = 'Post'; }
+          videoCapture = null;
+          document.getElementById('c-trim')?.setAttribute('hidden', '');
+          document.getElementById('c-replace')?.setAttribute('hidden', '');
+          document.getElementById('c-dropzone')?.removeAttribute('hidden');
+          return;
         }
         data.video = finalBlob;
         // Poster + tint from the FINAL blob's first frame, so a trimmed clip's
