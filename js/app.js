@@ -4462,15 +4462,14 @@
     }
 
     // Reveal the surface the current base type needs and do its opening action:
-    // Find shows + focuses the link row, Frame opens the OS picker, Note bares the
-    // body. Any type but Frame drops a stray attachment first.
+    // Find shows the link row (without grabbing focus, so the keyboard stays
+    // down until you tap in), Frame opens the OS picker, Note bares the body.
+    // Any type but Frame drops a stray attachment first.
     function applyBaseSurface() {
       if (family !== 'base') return;
       const linkRow = fieldsEl.querySelector('#c-link-row');
-      const url     = fieldsEl.querySelector('#c-url');
       if (pubType !== 'photo') clearFrame();
       if (linkRow) linkRow.hidden = pubType !== 'find';
-      if (pubType === 'find' && url) url.focus();
       if (pubType === 'photo' && !(cropper || videoCapture)) openPicker();
     }
 
