@@ -32,7 +32,13 @@ body {
 }
 
 img { max-width: 100%; display: block; }
-button { font: inherit; color: inherit; cursor: pointer; }
+/* appearance:none strips WebKit's native button chrome — including the pale
+   pressed-state overlay iOS paints on tap, which reads as a white flash over a
+   dark surface and is NOT the tap-highlight (that's already transparent above).
+   Every button in the app is fully custom-styled, so removing native appearance
+   is safe and kills the flash on file-picker triggers like the composer dropzone
+   and the avatar edit button. */
+button { font: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
 a { color: inherit; text-decoration: none; }
 
 /* Chrome (nav, buttons, brand) shouldn't be long-press-selectable — that
