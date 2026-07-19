@@ -112,10 +112,37 @@ body[data-ambient="support"] .ambient {
   to { filter: hue-rotate(360deg); }
 }
 
+/* Publish composer: the whole screen washes the inferred post type's hue —
+   lavender Note, peach Find, cyan Frame, lime Activity. A half-screen radial
+   falling from the top (the About glow's shape) but REACTIVE, not drifting:
+   --glow-pub is a registered <color> so the wash tweens between types as you
+   attach a link/photo or switch to Activity; the gradient takes its alpha via
+   color-mix. Driven on <body> in renderPublish / syncType. */
+@property --glow-pub {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b7a6e8;
+}
+body[data-ambient="publish"] .ambient {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  /* Richer than the profile/About washes: a stronger colour core plus a saturate
+     boost so the pastel reads as real colour rather than a faint tint. */
+  background: radial-gradient(ellipse 120% 84% at 50% -18%,
+    color-mix(in srgb, var(--glow-pub) 35%, transparent), transparent 74%);
+  filter: saturate(1.5);
+  opacity: 1;
+  transition: --glow-pub var(--dur-move) var(--ease), opacity 0.4s ease;
+  transform: translateZ(0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ambient { transition: none; }
   body[data-ambient="about"] .ambient,
   body[data-ambient="support"] .ambient { animation: none; }
+  /* Colour still updates on type change, just without the tween. */
+  body[data-ambient="publish"] .ambient { transition: opacity 0.4s ease; }
 }
 
 /* ── Grain ──────────────────────────────────────────────────────────────────
@@ -828,6 +855,7 @@ main {
 .filter[data-filter="note"][aria-pressed="true"],
 .filter[data-filter="find"][aria-pressed="true"],
 .filter[data-filter="photo"][aria-pressed="true"],
+.filter[data-filter="poll"][aria-pressed="true"],
 .filter[data-filter="activity"][aria-pressed="true"] {
   color: var(--on-type);
   box-shadow:
@@ -837,6 +865,7 @@ main {
 .filter[data-filter="note"][aria-pressed="true"]     { --chip: var(--type-note); }
 .filter[data-filter="find"][aria-pressed="true"]     { --chip: var(--type-find); }
 .filter[data-filter="photo"][aria-pressed="true"]    { --chip: var(--type-photo); }
+.filter[data-filter="poll"][aria-pressed="true"]     { --chip: var(--type-poll); }
 .filter[data-filter="activity"][aria-pressed="true"] { --chip: var(--type-activity); }
 
 /* ── Segmented tab control (.seg-tabs) — a reusable iOS segmented control shared
@@ -901,6 +930,9 @@ main {
   pointer-events: none;
 }
 .seg-tabs[data-sel="1"] .seg-tabs-glow { opacity: 0; }
+/* The composer switcher (#c-group-tabs) opts OUT of the brand glow entirely
+   (segTabsEl glow:false, so no glow element is rendered): it's a neutral Post /
+   Activity toggle, and the reactive colour is carried by the full-screen wash. */
 /* Segments — equal-width toggles riding above the thumb. Muted when off, ink
    when on; the thumb supplies the lit surface behind the active label. Centred
    with a 44px floor so the tap target clears the iOS accessibility minimum. */
@@ -967,7 +999,8 @@ main {
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
    match the photo text column; the type reads from the colored tag, not a rule. */
-.card--note .card-main, .card--find .card-main, .card--activity .card-main {
+.card--note .card-main, .card--find .card-main, .card--activity .card-main,
+.card--poll .card-main {
   padding: 0.35rem var(--inset);
 }
 
@@ -1099,6 +1132,7 @@ main {
 .card-like[data-type="find"]     { --burst: var(--heart-find); }
 .card-like[data-type="activity"] { --burst: var(--heart-activity); }
 .card-like[data-type="photo"]    { --burst: var(--heart-photo); }
+.card-like[data-type="poll"]     { --burst: var(--heart-poll); }
 
 /* 1. The snap. A hard, fast punch to 1.5× then a single undershoot and settle —
    no anticipation dip, so it reads sharp and dramatic rather than springy. Keeps
@@ -1222,6 +1256,7 @@ main {
 .post-sparkles[data-type="find"]     { --burst: var(--heart-find); }
 .post-sparkles[data-type="activity"] { --burst: var(--heart-activity); }
 .post-sparkles[data-type="photo"]    { --burst: var(--heart-photo); }
+.post-sparkles[data-type="poll"]     { --burst: var(--heart-poll); }
 .post-sparkles .spark {
   /* Same decoupled tracks as the like burst: post-rise owns the upward drift,
      spark-fade owns opacity — so the star is already climbing as it fades in. */
@@ -1394,13 +1429,19 @@ main {
 /* The ink twins: deeper, AA-legible on light paper; they flip back to the
    pastels in dark mode automatically, so one set of vars covers both. */
 .type-icon--note     { color: var(--type-note-ink); }
+.type-icon--poll     { color: var(--type-poll-ink); }
 .type-icon--find     { color: var(--type-find-ink); }
 .type-icon--photo    { color: var(--type-photo-ink); }
 .type-icon--activity { color: var(--type-activity-ink); }
 /* The note and photo glyphs read a hair smaller than the find/activity ones,
    so nudge them up to sit at the same visual size. */
 .type-icon--note,
-.type-icon--photo    { width: 1.35rem; height: 1.35rem; }
+.type-icon--photo,
+.type-icon--poll     { width: 1.35rem; height: 1.35rem; }
+/* The poll burst fills its viewBox edge-to-edge, so it reads a touch heavier than
+   the others; scale the glyph itself down a hair (works in every container — the
+   feed byline and the composer's larger masthead mark alike). */
+.type-icon--poll svg { transform: scale(0.87); }
 /* An activity whose day has passed: the lime hands back to grey. */
 .type-icon--past     { color: var(--muted); }
 @media (hover: hover) { .byline-link:hover .byline-name { color: var(--muted); } }
@@ -2290,6 +2331,180 @@ body.gate main { padding: 0; }
 }
 .rt-count.is-over { color: var(--type-find-ink); }
 
+/* The Post field's attach bar — link + photo toggles at the FOOT of the note box,
+   the counterweight to the "Aa" styles button in the title row. A hairline lifts
+   it off the body. Each tool tints to the type it makes when it's the active one
+   (Find peach / Frame cyan), the same "colour is meaning" cue the masthead mark
+   and the bottom colour-wash carry. Wired in wireAttachBar (renderPublish). */
+.rich-attach {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.15rem 0.3rem 0.2rem;
+  border-top: 1px solid var(--rule);
+}
+.rt-attach {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-micro), background var(--dur-micro);
+}
+.rt-attach-ico { width: 20px; height: 20px; }
+@media (hover: hover) { .rt-attach:hover { color: var(--text); background: var(--surface-2); } }
+.rt-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#c-add-link[aria-pressed="true"] {
+  color: var(--type-find-ink);
+  background: color-mix(in srgb, var(--type-find) 22%, transparent);
+}
+#c-add-photo[aria-pressed="true"] {
+  color: var(--type-photo-ink);
+  background: color-mix(in srgb, var(--type-photo) 26%, transparent);
+}
+#c-add-poll[aria-pressed="true"] {
+  color: var(--type-poll-ink);
+  background: color-mix(in srgb, var(--type-poll) 24%, transparent);
+}
+/* ── Composer: the poll surface ──────────────────────────────────────────────
+   Flat editorial (a poll is content, never glass): a stack of choice rows, each
+   an input plus a remove ×, then a dashed "add option" that reads as an
+   affordance, not a filled button. The question is the post itself, so there's
+   no question field here. */
+.poll-opts { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+/* The remove × sits OVER the input (absolute), not beside it, so adding or
+   dropping a choice never resizes the field. The input reserves a constant right
+   inset for it whether or not it's shown. */
+.poll-opt-row { position: relative; }
+.poll-opt-row .poll-opt-input { width: 100%; padding-right: 2.5rem; }
+.poll-opt-remove {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 0.4rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: color var(--dur-micro), background var(--dur-micro);
+}
+.poll-opt-remove-ico { width: 15px; height: 15px; }
+@media (hover: hover) {
+  .poll-opt-remove:hover { color: var(--type-poll-ink); background: var(--surface-2); }
+}
+.poll-opt-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* At the two-choice floor the × disappears (a poll needs at least two); the
+   input keeps its right inset so it holds the same width. */
+.poll-opts.is-min .poll-opt-remove { display: none; }
+.poll-add-opt {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-img);
+  cursor: pointer;
+  transition: color var(--dur-micro), border-color var(--dur-micro);
+}
+@media (hover: hover) {
+  .poll-add-opt:hover { color: var(--type-poll-ink); border-color: var(--type-poll); }
+}
+.poll-add-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Poll widget (in the feed card) ──────────────────────────────────────────
+   The question, the choices, then a status line. A choice is a full-width row;
+   once results are revealed a pink fill bar grows behind the label to its share,
+   your pick is bordered + checked, and the leader carries a slightly deeper fill.
+   Content, so it stays flat — no glass — with the pink drawn from the type token. */
+.poll { margin: 0.9rem 0 0.2rem; }
+.poll-options { display: flex; flex-direction: column; gap: 0.5rem; }
+.poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  overflow: hidden;
+  padding: 0.65rem 0.85rem;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  transition: border-color var(--dur-micro), background var(--dur-micro);
+}
+button.poll-option { cursor: pointer; -webkit-appearance: none; appearance: none; }
+@media (hover: hover) {
+  button.poll-option:hover { border-color: var(--type-poll); }
+}
+button.poll-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.poll-option:disabled { cursor: default; }
+/* The share bar: sits behind the label, grows from the leading edge. */
+.poll-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  background: color-mix(in srgb, var(--type-poll) 26%, transparent);
+  border-radius: inherit;
+  transition: width var(--dur-slow, 0.4s) ease;
+  z-index: 0;
+}
+.poll-option.is-leading .poll-fill {
+  background: color-mix(in srgb, var(--type-poll) 42%, transparent);
+}
+.poll-option-label { position: relative; z-index: 1; flex: 1; min-width: 0; }
+.poll-option-pct {
+  position: relative;
+  z-index: 1;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.poll-check {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  color: var(--type-poll-ink);
+}
+.poll-check svg { width: 100%; height: 100%; }
+/* Your pick: a pink hairline + ink so it reads as chosen without shouting. */
+.poll-option.is-mine {
+  border-color: var(--type-poll);
+}
+.poll-option.is-mine .poll-option-pct { color: var(--type-poll-ink); font-weight: 600; }
+.poll-meta {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .poll-fill { transition: none; }
+}
+
 /* An activity's "When" — date + time sharing one row (the date takes the lead),
    so the optional pair reads as a single quiet line, not two more form rows. */
 .when-row { display: flex; gap: 0.6rem; }
@@ -3074,6 +3289,10 @@ body.gate main { padding: 0; }
 }
 .composer .composer-post:disabled { opacity: 0.55; }
 
+/* The reactive colour now lives full-screen: the page ambient wash adopts the
+   inferred type's hue (see body[data-ambient="publish"] .ambient), instead of a
+   pool sitting behind the already-glowing Post pill. */
+
 /* Post progress — the composer's shared bar for a video's two slow phases (local
    trim re-encode, then the byte-level upload). Flat editorial, not glass: it's
    inline status on a content form, so it sits quiet above the Post button. The
@@ -3145,6 +3364,11 @@ body.gate main { padding: 0; }
 .auth-submit.publish-fill.is-solid,
 .friends-share-copy.publish-fill.is-solid,
 .support-share.publish-fill.is-solid {
+  /* The drifting colour band, hoisted into a variable so the composer's Post pill
+     can swap it (Post drops lime, Activity goes lime-forward) without redeclaring
+     the dome radials. Auth / share keep the full quartet. */
+  --pill-band: linear-gradient(115deg,
+    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.16),
     0 10px 24px rgba(0, 0, 0, 0.18);
@@ -3156,7 +3380,7 @@ body.gate main { padding: 0; }
   background:
     radial-gradient(75% 130% at 34% -20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
     radial-gradient(92% 130% at 50% 120%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 55%),
-    linear-gradient(115deg, var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--pill-band);
   background-size: 100% 100%, 100% 100%, 300% 100%;
   background-position: 0 0, 0 0, 0% 50%;
   animation: publish-dome-pill 14s ease-in-out infinite;
@@ -3183,7 +3407,7 @@ body.gate main { padding: 0; }
     background:
       radial-gradient(70% 120% at 34% -16%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 52%),
       radial-gradient(95% 130% at 50% 122%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 55%),
-      linear-gradient(115deg, var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+      var(--pill-band);
     /* The `background` shorthand above resets background-size/position, so restate
        them: the band stays 300%-wide (2-3 colours in view, drifting) like light. */
     background-size: 100% 100%, 100% 100%, 300% 100%;
@@ -4281,6 +4505,28 @@ body.gate main { padding: 0; }
   }
   /* Room to scroll the roster / ledger clear of the docked switcher + nav. */
   .seg-panel { padding-bottom: 5.5rem; }
+  /* The composer's Post / Activity switcher is the exception: it's a form control
+     that belongs ABOVE the note field, not docked chrome floating over the nav.
+     Pin it back inline (the router already skips it in the tuck logic, so it
+     never gets the rise either). */
+  #c-group-tabs {
+    position: static;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto 1.4rem;
+    z-index: auto;
+    transition: none;
+    /* Own containing block for the absolute sliding thumb, WITHOUT position:
+       relative (which yanked the switcher up onto the serif title). The base
+       .seg-tabs is position:relative so its thumb (top/bottom:4px) is bounded by
+       its own little track; the phone rule above flips every .seg-tabs to fixed,
+       and pinning this one back to static stripped that containing block away. So
+       the instant the router transforms .page.enter, that transformed page became
+       the thumb's containing block and top/bottom:4px stretched it into a giant
+       full-column pill flashing in on the way to Publish. translateZ(0) restores a
+       local containing block (a transform is one) with zero layout shift. */
+    transform: translateZ(0);
+  }
   @media (prefers-reduced-motion: reduce) {
     /* No rise — the switcher is simply present. (The router also skips .tuck
        under reduced motion, so this is belt and braces.) */
@@ -4335,7 +4581,8 @@ body.gate main { padding: 0; }
      the hairline dividers run with them. Gap matches the divider padding so the
      line sits centered between entries. */
   .feed { margin-inline: -1.15rem; gap: 0.9rem; }
-  .card--note .card-main, .card--find .card-main, .card--activity .card-main { padding-inline: 1.15rem; }
+  .card--note .card-main, .card--find .card-main, .card--activity .card-main,
+  .card--poll .card-main { padding-inline: 1.15rem; }
   .card--photo .card-actions { padding-inline: 1.15rem; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   .comments-panel, .likers-panel, .going-panel { padding-left: 0.7rem; padding-right: 1.15rem; }

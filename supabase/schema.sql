@@ -5,6 +5,7 @@
 --     empty step-1 scaffolding (no real data yet). Children are dropped first
 --     so the foreign keys unwind cleanly.
 
+drop table if exists public.poll_votes cascade;
 drop table if exists public.headcount cascade;
 drop table if exists public.likes    cascade;
 drop table if exists public.comments cascade;
@@ -30,7 +31,7 @@ create table public.users (
 create table public.posts (
   id         uuid primary key default gen_random_uuid(),
   author     uuid not null references public.users(id) on delete cascade,
-  type       text not null check (type in ('note','find','photo','activity')),
+  type       text not null check (type in ('note','find','photo','activity','poll')),
   title      text,
   url        text,
   note       text,
@@ -38,6 +39,7 @@ create table public.posts (
   tint       text,                          -- photo/poster's average colour (#rrggbb) for the colour-up settle
   poster     text,                          -- first-frame still for a video Frame (image posts leave this null)
   location   text,                          -- where it's happening (activities)
+  poll       jsonb,                          -- { q, options[] } for poll posts; expires 24h after created_at
   tags       text[] not null default '{}',
   created_at timestamptz not null default now()
 );
@@ -70,6 +72,19 @@ create table public.likes (
 create table public.headcount (
   post_id    uuid not null references public.posts(id) on delete cascade,
   user_id    uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+
+-- ── Poll votes ───────────────────────────────────────────────────────────────
+-- One row per (poll, voter); `choice` indexes into posts.poll->'options'. Like
+-- headcount, votes are PUBLIC (who voted for what is the point). Single-select:
+-- the primary key caps it at one vote per person; changing your mind is an UPDATE.
+-- The 24h expiry is enforced in the write policies (see below), not just the UI.
+create table public.poll_votes (
+  post_id    uuid not null references public.posts(id) on delete cascade,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  choice     smallint not null,
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
 );
@@ -120,6 +135,7 @@ alter table public.posts    enable row level security;
 alter table public.comments enable row level security;
 alter table public.likes    enable row level security;
 alter table public.headcount enable row level security;
+alter table public.poll_votes enable row level security;
 alter table public.friends  enable row level security;
 
 create policy "users read all"    on public.users    for select to authenticated using (true);
@@ -149,6 +165,25 @@ create policy "likes delete own" on public.likes for delete to authenticated usi
 create policy "headcount read all"   on public.headcount for select to authenticated using (true);
 create policy "headcount insert own" on public.headcount for insert to authenticated with check (user_id = auth.uid());
 create policy "headcount delete own" on public.headcount for delete to authenticated using (user_id = auth.uid());
+
+-- Poll votes: public reads (who voted for what), write only your own row, and
+-- only while the poll is open (now < created_at + 24h — enforced here, so a
+-- closed poll is closed at the database, not merely greyed out in the UI). You
+-- may retract your vote (delete) any time.
+create policy "poll_votes read all" on public.poll_votes for select to authenticated using (true);
+create policy "poll_votes insert own" on public.poll_votes for insert to authenticated with check (
+  user_id = auth.uid()
+  and exists (select 1 from public.posts p
+              where p.id = post_id and p.type = 'poll' and now() < p.created_at + interval '24 hours')
+);
+create policy "poll_votes update own" on public.poll_votes for update to authenticated
+  using (user_id = auth.uid())
+  with check (
+    user_id = auth.uid()
+    and exists (select 1 from public.posts p
+                where p.id = post_id and p.type = 'poll' and now() < p.created_at + interval '24 hours')
+  );
+create policy "poll_votes delete own" on public.poll_votes for delete to authenticated using (user_id = auth.uid());
 
 -- Read every edge (so a client can tell mutual friends from pending requests).
 -- You may only create YOUR OWN outgoing edge (a = you); either party can delete

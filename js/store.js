@@ -50,7 +50,7 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], friends: {}, audience: [], blocks: [] });
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, audience: [], blocks: [] });
   let state = empty();
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
@@ -78,6 +78,7 @@ const Store = (() => {
     if (p.tint)     o.tint = p.tint;   // photo/poster's average colour → colour-up in the feed
     if (p.poster)   o.poster = p.poster;   // first-frame still for a video Frame
     if (p.location) o.location = p.location;
+    if (p.poll)     o.poll = p.poll;   // { q, options[] } for poll posts
     if (p.event_date) o.eventDate = p.event_date;
     if (p.event_time) o.eventTime = p.event_time;
     o.audience = p.audience || 'circle';   // 'circle' (all) or 'list' (hand-picked)
@@ -108,7 +109,7 @@ const Store = (() => {
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
-    const [u, p, c, l, h, f, pa, bl] = await Promise.all([
+    const [u, p, c, l, h, pv, f, pa, bl] = await Promise.all([
       sb.from('users').select('*'),
       sb.from('posts').select('*'),
       sb.from('comments').select('*').order('created_at', { ascending: true }),
@@ -120,6 +121,9 @@ const Store = (() => {
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
       sb.from('headcount').select('*').order('created_at', { ascending: true }),
+      // Poll votes are public like headcount (who voted for what is the point),
+      // one row per voter. Tolerates a pre-migration DB (no table yet → []).
+      sb.from('poll_votes').select('*').order('created_at', { ascending: true }),
       sb.from('friends').select('*'),
       // Audience allowlist for 'list' posts. RLS hands back only the rows we may
       // see: our own memberships + every row on posts we authored (enough to show
@@ -140,6 +144,7 @@ const Store = (() => {
     }));
     state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
     state.headcount = (h.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
+    state.pollVotes = (pv.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), choice: row.choice, _ts: row.created_at }));
     state.audience = (pa.data || []).map(row => ({ postId: row.post_id, userId: row.user_id }));
     // Directed "add" edges: a row (a, b) means a has added b. A friendship is
     // mutual only when both directions exist; a lone edge is a pending request.
@@ -537,6 +542,7 @@ const Store = (() => {
     if (data.url)      row.url = data.url;
     if (data.note)     row.note = data.note;
     if (data.location) row.location = data.location;
+    if (data.poll)     row.poll = data.poll;   // { q, options[] }
     if (data.eventDate) row.event_date = data.eventDate;
     if (data.eventTime) row.event_time = data.eventTime;
     if (data.video) {
@@ -590,6 +596,7 @@ const Store = (() => {
     state.comments = state.comments.filter(c => c.postId !== id);
     state.likes = state.likes.filter(x => x.postId !== id);
     state.headcount = state.headcount.filter(x => x.postId !== id);
+    state.pollVotes = state.pollVotes.filter(x => x.postId !== id);
     state.audience = state.audience.filter(x => x.postId !== id);
     return { ok: true };
   }
@@ -702,6 +709,46 @@ const Store = (() => {
       if (!goingByMe(postId)) state.headcount.push({ postId, user: me, _ts: new Date().toISOString() });
     }
     return { ok: true, going: !has };
+  }
+
+  // ── Polls ────────────────────────────────────────────────────────────────────
+  // A poll's choices live on the post (post.poll = { q, options[] }); the votes
+  // live in state.pollVotes, public like headcount. A poll closes 24h after it's
+  // posted — closedAt is the single source of truth, mirrored by the RLS write
+  // guard so a closed poll rejects votes at the database too.
+  const POLL_MS = 24 * 60 * 60 * 1000;
+  const pollClosesAt = (post) => new Date(new Date(post._ts).getTime() + POLL_MS);
+  const pollClosed = (post) => Date.now() >= pollClosesAt(post).getTime();
+  const pollVotesFor = (postId) => state.pollVotes.filter(x => x.postId === postId);
+  // My choice on a poll, or null if I haven't voted.
+  function myPollVote(postId) {
+    const v = state.pollVotes.find(x => x.postId === postId && x.user === state.session);
+    return v ? v.choice : null;
+  }
+
+  // Cast or change my vote. Single-select: upsert on (post_id, user_id) so a
+  // second pick overwrites the first. Blocked once the poll has closed (the RLS
+  // guard is the real fence; this is the fast local one). Unlike RSVPs, the
+  // author may vote in their own poll.
+  async function votePoll(postId, choice) {
+    const me = state.session;
+    if (!me) return { ok: false };
+    const post = state.posts.find(p => p.id === postId);
+    if (!post || post.type !== 'poll') return { ok: false };
+    // Voting is a friends-only gesture (same fence as RSVPs), but unlike an RSVP
+    // the author may vote in their own poll.
+    if (post.author !== me && !isFriend(post.author)) return { ok: false };
+    const n = (post.poll && post.poll.options || []).length;
+    if (!(choice >= 0 && choice < n)) return { ok: false };
+    if (pollClosed(post)) return { ok: false, error: 'This poll has closed.' };
+    const mine = idOf(me);
+    const { error } = await sb.from('poll_votes')
+      .upsert({ post_id: postId, user_id: mine, choice }, { onConflict: 'post_id,user_id' });
+    if (error) return { ok: false };
+    const existing = state.pollVotes.find(x => x.postId === postId && x.user === me);
+    if (existing) existing.choice = choice;
+    else state.pollVotes.push({ postId, user: me, choice, _ts: new Date().toISOString() });
+    return { ok: true };
   }
 
   // ── Notifications (derived, no table) ───────────────────────────────────────
@@ -884,6 +931,8 @@ const Store = (() => {
     likesFor, likeCountFor, likedByMe, toggleLike,
     // Headcount
     headcountFor, goingByMe, toggleGoing,
+    // Polls
+    pollVotesFor, myPollVote, votePoll, pollClosed, pollClosesAt,
     // Notifications
     notifications,
     // Push

@@ -33,6 +33,8 @@
   --type-photo-ink:    #1d7391;
   --type-activity:     #b9df7d;  /* lime green */
   --type-activity-ink: #4d7519;
+  --type-poll:         #ea86ae;  /* rose pink */
+  --type-poll-ink:     #b23a68;
   --on-type:           #14171a;
 
   /* Liked-heart quartet — the ink twins nudged toward their pastels so the
@@ -42,6 +44,7 @@
   --heart-find:     color-mix(in srgb, var(--type-find-ink)     70%, var(--type-find));
   --heart-photo:    color-mix(in srgb, var(--type-photo-ink)    70%, var(--type-photo));
   --heart-activity: color-mix(in srgb, var(--type-activity-ink) 70%, var(--type-activity));
+  --heart-poll:     color-mix(in srgb, var(--type-poll-ink)     70%, var(--type-poll));
 
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
@@ -144,11 +147,14 @@
     --type-photo-ink:    #9fd6e8;
     --type-activity:     #b9df7d;
     --type-activity-ink: #b9df7d;
+    --type-poll:         #ea86ae;
+    --type-poll-ink:     #ea86ae;
 
     --heart-note:     var(--type-note-ink);
     --heart-find:     var(--type-find-ink);
     --heart-photo:    var(--type-photo-ink);
     --heart-activity: var(--type-activity-ink);
+    --heart-poll:     var(--type-poll-ink);
 
     /* Lit surfaces on dark paper: the top-white sheen barely reads on the
        near-white fills, so lean on a deeper base shade and a stronger lift. */

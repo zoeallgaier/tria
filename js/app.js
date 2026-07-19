@@ -147,6 +147,9 @@
     play:    '<path d="M8.5 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
     // A framed picture (sun + hills) — the composer's "add a photo or clip" tool.
     image:   '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M4.5 17.5 9 13l3 2.5L15.5 12l4 5"/>',
+    // Three horizontal bars of unequal length — the plain "poll" glyph on the
+    // composer's attach toggle (reads clearer at button scale than the type burst).
+    poll:    '<path d="M5 7.5h13"/><path d="M5 12h9"/><path d="M5 16.5h11"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -243,13 +246,15 @@
     // its own round button on phones. On desktop .nav-pill is display:contents,
     // so the sidebar sees the same flat column of links it always has.
     if (!nav.querySelector('.nav-pill')) {
+      // The four-way speed dial is retired: the composer now surfaces link + photo
+      // inline and Activity is one seg-tab tap away, so the + routes straight to the
+      // Post composer. dialEl/wireDial are kept dormant in case we ever want a
+      // lighter Post/Activity fan here.
       nav.innerHTML =
         `<div class="nav-pill"><span class="nav-glide" aria-hidden="true"></span>` +
           NAV.filter(n => !n.publish).map(link).join('') +
         `</div>` +
-        NAV.filter(n => n.publish).map(link).join('') +
-        dialEl();
-      wireDial(nav);
+        NAV.filter(n => n.publish).map(link).join('');
     }
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
@@ -430,7 +435,14 @@
   // A small colored label marking an entry's type (Note / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
-  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity' };
+  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll' };
+  // Zoe's poll mark — a hand-drawn pink burst/asterisk (icons/poll.svg). This is
+  // the TYPE identity glyph (masthead + filter); the composer's attach toggle uses
+  // the plainer line glyph in ICONS ('poll') for legibility at button scale, the
+  // same way link/image do. fill: currentColor lets it inherit the type's pink.
+  const POLL_ICON_PATH = 'M8.86.75c1.85,0,3.71,2.63.67,7.9,1.89-3.27,3.84-4.4,5.27-4.4,3.18,0,3.78,5.55-4.6,5.55,8.38,0,7.78,5.55,4.6,5.55-1.43,0-3.38-1.13-5.27-4.4,3.04,5.27,1.19,7.9-.67,7.9s-3.71-2.63-.67-7.9c-1.89,3.27-3.84,4.4-5.27,4.4-3.18,0-3.78-5.55,4.6-5.55C-.86,9.8-.26,4.25,2.92,4.25c1.43,0,3.38,1.13,5.27,4.4-3.04-5.27-1.19-7.9.67-7.9M8.86,0c-1.01,0-1.94.56-2.49,1.51-.34.59-.69,1.61-.48,3.15-1.23-.96-2.29-1.16-2.97-1.16-1.09,0-2.04.52-2.55,1.4-.51.88-.48,1.97.06,2.91.34.59,1.05,1.4,2.49,1.99-.38.15-.73.33-1.05.54-1.19.76-1.87,1.85-1.87,2.99,0,1.58,1.25,2.78,2.92,2.78.68,0,1.74-.2,2.97-1.16-.21,1.55.14,2.57.48,3.15.55.94,1.48,1.51,2.49,1.51s1.94-.56,2.49-1.51c.34-.59.69-1.61.48-3.15,1.23.96,2.29,1.16,2.97,1.16,1.66,0,2.92-1.19,2.92-2.78,0-1.14-.68-2.23-1.87-2.99-.32-.2-.67-.38-1.05-.54.38-.15.73-.33,1.05-.54,1.19-.76,1.87-1.85,1.87-2.99,0-1.58-1.25-2.78-2.92-2.78-.68,0-1.74.2-2.97,1.16.21-1.55-.14-2.57-.48-3.15-.55-.94-1.48-1.51-2.49-1.51h0Z';
+  const pollGlyph = (cls) =>
+    `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 17.71 19.61" fill="currentColor" aria-hidden="true"><path d="${POLL_ICON_PATH}"/></svg>`;
   // Single-colour glyphs, one per type, inlined so they inherit the type's own
   // colour via `fill: currentColor` (set on the CSS class) — and grey out for
   // a past activity with no extra markup. viewBoxes are the artboard sizes.
@@ -439,7 +451,19 @@
     find: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,2.76c1.11,0,2.58.43,3.08,1.65.37.9.46,2.94-3.08,6.53-3.54-3.59-3.45-5.63-3.08-6.53.5-1.22,1.97-1.65,3.08-1.65M18.67,8.74c1.77,0,2.58,1.69,2.58,3.26,0,1.57-.81,3.26-2.58,3.26-1.06,0-2.88-.57-5.6-3.26,2.72-2.69,4.55-3.26,5.6-3.26M5.34,8.74c1.06,0,2.88.57,5.6,3.26-2.72,2.69-4.55,3.26-5.6,3.26-1.77,0-2.58-1.69-2.58-3.26s.81-3.26,2.58-3.26M12,13.06c3.54,3.59,3.45,5.63,3.08,6.53-.5,1.22-1.97,1.65-3.08,1.65s-2.58-.43-3.08-1.65c-.37-.9-.46-2.94,3.08-6.53M12,2.01c-3.4,0-6.8,3.2-.41,9.58-2.62-2.62-4.71-3.6-6.26-3.6-4.44,0-4.44,8.01,0,8.01,1.55,0,3.63-.97,6.26-3.6-6.39,6.39-2.99,9.58.41,9.58s6.8-3.2.41-9.58c2.62,2.62,4.71,3.6,6.26,3.6,4.44,0,4.44-8.01,0-8.01-1.55,0-3.63.97-6.26,3.6,6.39-6.39,2.99-9.58-.41-9.58h0Z"/></svg>`,
     photo: `<svg viewBox="2.5 2.5 19 19" fill="currentColor" aria-hidden="true"><path d="M12,4.92c3.91,0,7.08,3.18,7.08,7.08s-3.18,7.08-7.08,7.08-7.08-3.18-7.08-7.08,3.18-7.08,7.08-7.08M12,16.87c2.69,0,4.88-2.19,4.88-4.88s-2.19-4.88-4.88-4.88-4.88,2.19-4.88,4.88,2.19,4.88,4.88,4.88M12,4.17c-4.33,0-7.83,3.51-7.83,7.83s3.51,7.83,7.83,7.83,7.83-3.51,7.83-7.83-3.51-7.83-7.83-7.83h0ZM12,16.12c-2.28,0-4.13-1.85-4.13-4.13s1.85-4.13,4.13-4.13,4.13,1.85,4.13,4.13-1.85,4.13-4.13,4.13h0Z"/></svg>`,
     activity: `<svg viewBox="0 0 18.88 19.82" fill="currentColor" aria-hidden="true"><path d="M9.44,2.85l.33,1.66c.14.72.78,1.25,1.52,1.25.39,0,.76-.15,1.05-.41l1.24-1.15-.71,1.54c-.22.48-.19,1.04.1,1.48.29.45.77.72,1.3.72.06,0,.12,0,.19-.01l1.68-.2-1.48.83c-.49.27-.79.79-.79,1.35s.3,1.08.79,1.35l1.48.83-1.68-.2c-.06,0-.13-.01-.19-.01-.53,0-1.02.27-1.3.72-.29.45-.32,1-.1,1.48l.71,1.54-1.24-1.15c-.29-.27-.66-.41-1.05-.41-.74,0-1.38.53-1.52,1.25l-.33,1.66-.33-1.66c-.14-.72-.78-1.25-1.52-1.25-.39,0-.76.15-1.05.41l-1.24,1.15.71-1.54c.22-.48.19-1.04-.1-1.48-.29-.45-.77-.72-1.3-.72-.06,0-.12,0-.19.01l-1.68.2,1.48-.83c.49-.27.79-.79.79-1.35s-.3-1.08-.79-1.35l-1.48-.83,1.68.2c.06,0,.13.01.19.01.53,0,1.02-.27,1.3-.72.29-.45.32-1,.1-1.48l-.71-1.54,1.24,1.15c.29.27.66.41,1.05.41.74,0,1.38-.53,1.52-1.25l.33-1.66M9.44,0c-.11,0-.21.07-.24.2l-.83,4.18c-.08.4-.43.65-.79.65-.19,0-.38-.07-.54-.21L3.92,1.91c-.05-.05-.11-.07-.16-.07-.16,0-.3.17-.22.35l1.79,3.87c.25.54-.15,1.14-.72,1.14-.03,0-.07,0-.1,0L.27,6.68s-.02,0-.03,0c-.24,0-.34.33-.11.45l3.72,2.08c.55.31.55,1.09,0,1.4L.12,12.69c-.22.12-.13.45.11.45.01,0,.02,0,.03,0l4.23-.5s.07,0,.1,0c.57,0,.97.6.72,1.14l-1.79,3.87c-.08.18.06.35.22.35.06,0,.11-.02.16-.07l3.12-2.89c.16-.15.35-.21.54-.21.36,0,.71.24.79.65l.83,4.18c.03.13.13.2.24.2s.21-.07.24-.2l.83-4.18c.08-.4.43-.65.79-.65.19,0,.38.07.54.21l3.12,2.89c.05.05.11.07.16.07.16,0,.3-.17.22-.35l-1.79-3.87c-.25-.54.15-1.14.72-1.14.03,0,.07,0,.1,0l4.23.5s.02,0,.03,0c.24,0,.34-.33.11-.45l-3.72-2.08c-.55-.31-.55-1.09,0-1.4l3.72-2.08c.22-.12.13-.45-.11-.45-.01,0-.02,0-.03,0l-4.23.5s-.07,0-.1,0c-.57,0-.97-.6-.72-1.14l1.79-3.87c.08-.18-.06-.35-.22-.35-.06,0-.11.02-.16.07l-3.12,2.89c-.16.15-.35.21-.54.21-.36,0-.71-.24-.79-.65L9.68.2c-.03-.13-.13-.2-.24-.2h0Z"/></svg>`,
+    poll: pollGlyph(),
   };
+  // Literal hues (identical in light + dark, per tokens.css) so the composer's
+  // bottom colour-wash can interpolate smoothly via @property --type — a var()
+  // reference wouldn't tween. One per emergent post type.
+  const TYPE_HEX = { note: '#b7a6e8', find: '#f2a58c', photo: '#9fd6e8', activity: '#b9df7d', poll: '#ea86ae' };
+  // The composer's two top-level groups. Post is the unified expression form (its
+  // real type — note / find / frame — is inferred from what you attach); Activity
+  // is the structured plan form. Replaces the old four-way type picker.
+  const PUB_GROUPS = [
+    { key: 'post',     label: 'Post' },
+    { key: 'activity', label: 'Activity' },
+  ];
   function typeTagEl(post) {
     const past = isPastActivity(post);
     const label = past ? 'Happened' : (TYPE_LABEL[post.type] || post.type);
@@ -698,6 +722,17 @@
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
+        // Bottom-right attach bar: link + photo. Each is a live toggle that flips the
+        // post's inferred type (link → Find, photo → Frame) and pops the masthead mark.
+        // Wired in renderPublish (wireAttachBar); only the composer's Post form mounts it.
+        `<div class="rich-attach" role="group" aria-label="Attach to your post">` +
+          `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
+            `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
+          `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
+            `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
+          `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
+            `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+        `</div>` +
       `</div>`;
   }
 
@@ -1090,6 +1125,66 @@
       `</div>`;
   }
 
+  // A poll's live countdown, said plainly. Coarse on purpose (minutes, then
+  // hours) — a poll isn't a stopwatch, and re-renders on interaction/navigation
+  // keep it fresh enough without a ticking timer.
+  function pollTimeLabel(post) {
+    const ms = Store.pollClosesAt(post).getTime() - Date.now();
+    if (ms <= 0) return 'Poll closed';
+    const mins = Math.round(ms / 60000);
+    if (mins < 60) return `Closes in ${mins} min${mins === 1 ? '' : 's'}`;
+    const hrs = Math.round(mins / 60);
+    return `Closes in ${hrs} hour${hrs === 1 ? '' : 's'}`;
+  }
+
+  // The poll widget under a poll card: the question, then the choices, then a
+  // status line. Results stay HIDDEN until you cast a vote (no bandwagon) — then
+  // each choice grows a fill bar with its share, your pick is checked, and the
+  // leader is marked. A closed poll locks to a read-only final tally. Voting is
+  // friends-only (canSocial); a non-friend viewing a public account sees the
+  // choices statically with no results and no way to vote.
+  function pollWidgetHtml(post) {
+    if (post.type !== 'poll' || !post.poll) return '';
+    const options = post.poll.options || [];
+    const closed = Store.pollClosed(post);
+    const myChoice = Store.myPollVote(post.id);
+    const voted = myChoice !== null;
+    const reveal = voted || closed;
+    const interactive = canSocial(post) && !closed;
+    const votes = Store.pollVotesFor(post.id).filter(v => !Blocks.has(v.user));
+    const total = votes.length;
+    const counts = options.map((_, i) => votes.filter(v => v.choice === i).length);
+    const max = Math.max(0, ...counts);
+
+    const rows = options.map((label, i) => {
+      const n = counts[i];
+      const pct = total ? Math.round((n / total) * 100) : 0;
+      const mine = myChoice === i;
+      const leads = reveal && n > 0 && n === max;
+      const cls = ['poll-option', mine ? 'is-mine' : '', reveal ? 'is-revealed' : '',
+                   leads ? 'is-leading' : ''].filter(Boolean).join(' ');
+      const inner =
+        (reveal ? `<span class="poll-fill" style="width:${pct}%"></span>` : '') +
+        `<span class="poll-option-label">${esc(label)}</span>` +
+        (reveal ? `<span class="poll-option-pct">${pct}%</span>` : '') +
+        (mine ? `<span class="poll-check" aria-hidden="true">${svgIcon('check')}</span>` : '');
+      return interactive
+        ? `<button type="button" class="${cls}" data-choice="${i}"${mine ? ' aria-pressed="true"' : ''}>${inner}</button>`
+        : `<div class="${cls}">${inner}</div>`;
+    }).join('');
+
+    const meta = reveal
+      ? `${total} vote${total === 1 ? '' : 's'} · ${pollTimeLabel(post)}`
+      : interactive
+        ? `Vote to see results · ${pollTimeLabel(post)}`
+        : pollTimeLabel(post);
+
+    return `<div class="poll${closed ? ' is-closed' : ''}" data-poll="${post.id}">` +
+        `<div class="poll-options">${rows}</div>` +
+        `<p class="poll-meta">${meta}</p>` +
+      `</div>`;
+  }
+
   function cardActionsHtml(post, opts) {
     const attendees = attendeesHtml(post);
     const rsvp = goingToggleHtml(post);
@@ -1257,6 +1352,7 @@
         head +
         titleHtml +
         noteHtml +
+        pollWidgetHtml(post) +
         locationHtml +
         whenHtml +
         audienceHtml +
@@ -1268,6 +1364,7 @@
       commentsPanelHtml(post);
     el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
     wireReadMore(el, post);
+    wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
     wireComments(el, post, opts);
@@ -1596,6 +1693,27 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  // Casting (or changing) a vote. Tapping your current pick is a no-op; any other
+  // choice writes through Store.votePoll and rebuilds the card in place (like an
+  // RSVP flip) so the just-revealed tallies settle without a feed reflow.
+  function wirePoll(el, post, opts) {
+    const widget = el.querySelector('.poll');
+    if (!widget) return;
+    const buttons = widget.querySelectorAll('.poll-option[data-choice]');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const choice = Number(btn.dataset.choice);
+        if (Store.myPollVote(post.id) === choice) return;   // re-tapping your pick does nothing
+        buttons.forEach(b => b.disabled = true);
+        const res = await Store.votePoll(post.id, choice);
+        if (!res.ok) { buttons.forEach(b => b.disabled = false); return; }
+        const fresh = makeCard(post, opts);
+        fresh.style.animation = 'none';
+        el.replaceWith(fresh);
+      });
+    });
   }
 
   function wireGoing(el, post, opts) {
@@ -2171,6 +2289,7 @@
     { key: 'note',     label: 'Notes' },
     { key: 'find',     label: 'Finds' },
     { key: 'photo',    label: 'Frames' },
+    { key: 'poll',     label: 'Polls' },
     { key: 'activity', label: 'Activities' },
   ];
   let activeFilter = 'all';
@@ -3456,7 +3575,10 @@
     if (isCalendarable(post))
       items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(post) });
     if (own) {
-      items.push({ label: 'Edit post', icon: 'pencil', run: () => startPostEdit(post) });
+      // Polls aren't editable — the choices are fixed once posted (editing them out
+      // from under people who already voted makes no sense), so it's delete-only.
+      if (post.type !== 'poll')
+        items.push({ label: 'Edit post', icon: 'pencil', run: () => startPostEdit(post) });
       items.push({ label: 'Delete post', icon: 'trash', danger: true, run: () => confirmDeletePost(post) });
     } else {
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
@@ -4181,12 +4303,12 @@
     { key: 'photo',    label: 'Frame'    },
     { key: 'activity', label: 'Activity' },
   ];
-  // The active post type. One unified composer: the Note rich editor is the base
-  // for note / find / photo (a shared body that persists as you switch among them),
-  // and Activity swaps in its own structured form. A row of type filters (the same
-  // pastel chips as the feed) picks the type — tapping Find opens the link field,
-  // Frame opens the photo picker, Activity swaps forms — and the masthead mark +
-  // the chip both light to match. See renderPublish.
+  // The composer has two groups (see PUB_GROUPS): Post and Activity, chosen by a
+  // seg-tab switcher. Within Post, the real type is INFERRED, not picked — attach a
+  // link and it's a Find, a photo and it's a Frame, otherwise a Note. `pubGroup` is
+  // the switcher's value; `pubType` is the inferred/active type the data layer + the
+  // masthead mark + the bottom colour-wash read. Activity fixes pubType='activity'.
+  let pubGroup = 'post';
   let pubType = 'note';
   let cropper = null;        // set once a still is captured/picked; .export() → data-URI
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
@@ -4341,7 +4463,34 @@
         `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
           `spellcheck="false" placeholder="https://…">` +
       `</div>` +
+      pollFieldHtml() +
       frameFieldHtml() + tags;
+  }
+
+  // The poll surface, shipped hidden in the Post field set — revealed when the
+  // poll attach toggle is on (which also makes the post a Poll). Just the choices:
+  // the QUESTION is the post itself (headline / body), so there's no separate
+  // question field. 2 to start, up to 4 via "Add option", each removable down to
+  // the minimum two. Flat editorial, like the rest of the composer (never glass).
+  const POLL_OPT_PH = ['First choice', 'Second choice', 'Third choice', 'Fourth choice'];
+  function pollOptRowHtml(i) {
+    return `<div class="poll-opt-row">` +
+        `<input class="poll-opt-input" type="text" maxlength="60" ` +
+          `aria-label="Choice ${i + 1}" placeholder="${POLL_OPT_PH[i] || 'Choice'}">` +
+        `<button type="button" class="poll-opt-remove" aria-label="Remove choice ${i + 1}">` +
+          `${svgIcon('close', 'poll-opt-remove-ico')}</button>` +
+      `</div>`;
+  }
+  function pollFieldHtml() {
+    return `<div class="field poll-field" id="c-poll-row" hidden>` +
+        `<label>Poll choices</label>` +
+        `<div class="poll-opts" id="c-poll-opts">` +
+          pollOptRowHtml(0) +
+          pollOptRowHtml(1) +
+        `</div>` +
+        `<button type="button" class="poll-add-opt" id="c-poll-add">Add option</button>` +
+        `<p class="field-hint">2 to 4 choices. Closes a day after you post it.</p>` +
+      `</div>`;
   }
 
   // ── Audience picker (design preview) ──────────────────────────────────────
@@ -4471,47 +4620,78 @@
   }
 
   function renderPublish() {
+    // The composer never persists a draft across navigations, so every entry opens
+    // fresh on the Post group (a plain Note until something's attached).
+    pubGroup = 'post';
+    pubType = 'note';
+    // The reactive colour lives full-screen now: the page ambient wash adopts the
+    // inferred type's hue (see body[data-ambient="publish"] .ambient), keyed off
+    // --glow-pub which syncType keeps in step. Set it before the wash fades in so
+    // it opens on the right colour rather than tweening up from the default.
+    document.body.dataset.ambient = 'publish';
+    document.body.style.setProperty('--glow-pub', TYPE_HEX[pubType]);
     view.innerHTML =
       `<section class="view">` +
         mastheadEl('Share to your circle', 'New post', typeIndicatorHtml()) +
-        `<div class="filters compose-filters" role="group" aria-label="What are you posting">` +
-          PUB_TYPES.map(t =>
-            `<button class="filter" type="button" data-filter="${t.key}" ` +
-              `aria-pressed="${t.key === pubType}">${t.label}</button>`).join('') +
-        `</div>` +
         `<form class="composer" id="composer" novalidate>` +
+          // The Post / Activity switcher sits inline just above the note field (not
+          // docked to the nav like the Friends / Updates one — see #c-group-tabs).
+          // Neutral (no brand glow): colour is carried by the full-screen wash.
+          segTabsEl('c-group', PUB_GROUPS, pubGroup,
+            { glow: false, label: 'What are you posting', panelId: 'c-fields' }) +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
           `<div class="post-progress" id="c-progress" aria-live="polite">` +
             `<span class="post-progress-label" id="c-progress-label"></span>` +
             `<div class="post-progress-track"><div class="post-progress-fill" id="c-progress-fill"></div></div>` +
           `</div>` +
-          `<button class="composer-submit composer-post publish-fill is-solid" type="submit">Post</button>` +
+          `<button class="composer-submit composer-post publish-fill is-solid" type="submit">Share</button>` +
         `</form>` +
       `</section>`;
 
     const fieldsEl = view.querySelector('#c-fields');
-    let family = null;         // 'base' (note/find/photo share one field set) | 'activity'
-    let lastIndType = null;    // last type the mark showed, so it only pops on a real change
+    let family = null;              // 'base' (the unified Post form) | 'activity'
+    let lastIndType = null;         // last type the mark showed, so it only pops on a real change
+    let wantLink = false;           // link row open → this Post is a Find
+    let wantPhoto = false;          // frame surface open → this Post is a Frame
+    let wantPoll = false;           // poll surface open → this Post is a Poll
 
-    // Light the active filter chip + morph the masthead mark to the current type.
-    function paint() {
-      view.querySelectorAll('.compose-filters .filter').forEach(b =>
-        b.setAttribute('aria-pressed', String(b.dataset.filter === pubType)));
-      const ind = document.getElementById('c-type-ind');
-      if (!ind || pubType === lastIndType) return;
-      lastIndType = pubType;
-      ind.className = `type-indicator type-icon type-icon--${pubType}`;
-      ind.setAttribute('aria-label', TYPE_LABEL[pubType] || pubType);
-      ind.innerHTML = TYPE_ICON[pubType] || '';
-      ind.classList.remove('is-changing');
-      void ind.offsetWidth;                // restart the pop
-      ind.classList.add('is-changing');
+    // Within the Post group the type is INFERRED from what's attached: a photo wins
+    // (strongest visual), then a poll, then a link, else a plain Note. The three
+    // attachments are mutually exclusive (opening one folds the others), so at most
+    // one is ever active. Activity fixes itself.
+    function derivePostType() {
+      if (wantPhoto || cropper || videoCapture) return 'photo';
+      if (wantPoll) return 'poll';
+      const url = fieldsEl.querySelector('#c-url');
+      if (wantLink || (url && url.value.trim())) return 'find';
+      return 'note';
     }
 
-    // Drop any attached photo/clip and fold the frame surface away (used when the
-    // type moves off Frame, since only a Frame carries media). Also resets the
-    // dropzone back to visible so a later return to Frame shows the upload field.
+    // Re-infer the active type, then reflect it: pop the masthead mark, shift the
+    // bottom colour-wash to the type's hue, and light the matching attach button.
+    function syncType() {
+      pubType = pubGroup === 'activity' ? 'activity' : derivePostType();
+      const ind = document.getElementById('c-type-ind');
+      if (ind && pubType !== lastIndType) {
+        lastIndType = pubType;
+        ind.className = `type-indicator type-icon type-icon--${pubType}`;
+        ind.setAttribute('aria-label', TYPE_LABEL[pubType] || pubType);
+        ind.innerHTML = TYPE_ICON[pubType] || '';
+        ind.classList.remove('is-changing');
+        void ind.offsetWidth;                // restart the pop
+        ind.classList.add('is-changing');
+      }
+      // Full-screen ambient wash adopts the inferred hue; registered --glow-pub
+      // tweens the colour (see the publish .ambient rule).
+      document.body.style.setProperty('--glow-pub', TYPE_HEX[pubType] || TYPE_HEX.note);
+      fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
+      fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
+      fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
+    }
+
+    // Drop any attached photo/clip and fold the frame surface away. Also resets the
+    // dropzone back to visible so a later re-open shows the upload field.
     function clearFrame() {
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null; videoCapture = null;
@@ -4524,16 +4704,16 @@
       const b = view.querySelector('.composer-submit'); if (b) b.disabled = false;
     }
 
-    // Reveal the surface the current base type needs: Find shows the link row
-    // (without grabbing focus, so the keyboard stays down until you tap in),
-    // Frame reveals the upload field (a visible dropzone, no auto-picker), Note
-    // bares the body. Any type but Frame drops a stray attachment first.
+    // Show the surfaces the attach toggles asked for: the link row when wantLink,
+    // the frame field when wantPhoto. Both ship hidden; the body carries throughout.
     function applyBaseSurface() {
       if (family !== 'base') return;
       const linkRow = fieldsEl.querySelector('#c-link-row');
-      if (pubType !== 'photo') clearFrame();
-      if (linkRow) linkRow.hidden = pubType !== 'find';
-      if (pubType === 'photo') fieldsEl.querySelector('.frame-field')?.removeAttribute('hidden');
+      if (linkRow) linkRow.hidden = !wantLink;
+      const frameField = fieldsEl.querySelector('.frame-field');
+      if (frameField) frameField.hidden = !wantPhoto;
+      const pollRow = fieldsEl.querySelector('#c-poll-row');
+      if (pollRow) pollRow.hidden = !wantPoll;
     }
 
     function mountFields() {
@@ -4544,10 +4724,13 @@
       cropper = null;
       videoCapture = null;
       onCaptureChange = null;
+      wantLink = false;
+      wantPhoto = false;
+      wantPoll = false;
       pubAudience = { mode: 'circle', users: [] };   // each fresh composer defaults to the full circle
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
-      family = pubType === 'activity' ? 'activity' : 'base';
+      family = pubGroup === 'activity' ? 'activity' : 'base';
       fieldsEl.innerHTML = fieldsFor(family === 'activity' ? 'activity' : 'post');
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
@@ -4559,22 +4742,103 @@
         wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
         wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the Post field set
         wireFindNudge();
+        wireAttachBar();
+        onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       }
+      applyBaseSurface();
     }
 
-    // Pick a type. Within the base family (note/find/photo) the fields stay mounted
-    // so the body carries over — we just swap which surface shows. Crossing to or
-    // from Activity re-mounts. Re-tapping Frame/Find repeats its action (re-open the
-    // picker, re-focus the link) so the chip is a live shortcut, not a dead toggle.
-    function selectType(key) {
-      const repeat = key === pubType;
-      const prevFam = pubType === 'activity' ? 'activity' : 'base';
-      const nextFam = key === 'activity' ? 'activity' : 'base';
-      pubType = key;
+    // Switch top-level group (Post ⇄ Activity). Each crossing re-mounts the field
+    // set (they share nothing structurally) and resets to a fresh, plain form.
+    function selectGroup(key) {
+      if (key === pubGroup) return;
+      pubGroup = key;
       document.getElementById('c-error').textContent = '';
-      paint();
-      if (nextFam !== prevFam || (repeat && nextFam === 'activity')) { mountFields(); }
-      applyBaseSurface();
+      mountFields();
+      syncType();
+    }
+
+    // The two attach toggles at the note field's foot. Link opens the link row (and
+    // makes it a Find); Photo opens the frame field and pops the OS picker (a Frame).
+    // Both are live toggles: tap again to fold the surface and revert the type.
+    function wireAttachBar() {
+      const linkBtn  = fieldsEl.querySelector('#c-add-link');
+      const photoBtn = fieldsEl.querySelector('#c-add-photo');
+      const pollBtn  = fieldsEl.querySelector('#c-add-poll');
+      // The three attachments are one-at-a-time: turning one on folds the others so
+      // the inferred type is never ambiguous. Photo owns a live picker/capture, so
+      // clearing it routes through clearFrame (stops any stream); link + poll just
+      // fold their rows (leaving typed content, so a mis-tap doesn't wipe it).
+      const foldPhoto = () => { if (wantPhoto) { wantPhoto = false; clearFrame(); } };
+      const foldLink  = () => { wantLink = false; };
+      const foldPoll  = () => { wantPoll = false; };
+      linkBtn?.addEventListener('click', () => {
+        wantLink = !wantLink;
+        document.getElementById('c-error').textContent = '';
+        if (wantLink) { foldPhoto(); foldPoll(); }
+        else { const u = fieldsEl.querySelector('#c-url'); if (u) u.value = ''; }
+        applyBaseSurface();
+        syncType();
+        if (wantLink) fieldsEl.querySelector('#c-url')?.focus();
+      });
+      photoBtn?.addEventListener('click', () => {
+        const opening = !wantPhoto;
+        wantPhoto = opening;
+        document.getElementById('c-error').textContent = '';
+        if (opening) {
+          foldLink(); foldPoll();
+          applyBaseSurface();                          // reveal the frame field first
+          fieldsEl.querySelector('#c-file')?.click();  // then pop the picker
+        } else {
+          clearFrame();                                // drop any media + fold it away
+        }
+        syncType();
+      });
+      pollBtn?.addEventListener('click', () => {
+        wantPoll = !wantPoll;
+        document.getElementById('c-error').textContent = '';
+        if (wantPoll) { foldPhoto(); foldLink(); }
+        applyBaseSurface();
+        syncType();
+        if (wantPoll) fieldsEl.querySelector('#c-poll-opts .poll-opt-input')?.focus();
+      });
+      wirePollOpts();
+    }
+
+    // The choice list: grow from 2 up to 4 ("Add option", which hides at 4), and
+    // remove any row back down to the minimum 2 (the × hides when only two remain,
+    // so a poll can never drop below a real choice). After either, renumber the
+    // rows so aria-labels + placeholders stay in order.
+    function wirePollOpts() {
+      const addBtn = fieldsEl.querySelector('#c-poll-add');
+      const opts = fieldsEl.querySelector('#c-poll-opts');
+      if (!addBtn || !opts) return;
+      const rows = () => opts.querySelectorAll('.poll-opt-row');
+      const renumber = () => {
+        rows().forEach((row, i) => {
+          const input = row.querySelector('.poll-opt-input');
+          input.setAttribute('aria-label', `Choice ${i + 1}`);
+          input.placeholder = POLL_OPT_PH[i] || 'Choice';
+          row.querySelector('.poll-opt-remove')?.setAttribute('aria-label', `Remove choice ${i + 1}`);
+        });
+        const n = rows().length;
+        addBtn.hidden = n >= 4;
+        opts.classList.toggle('is-min', n <= 2);   // CSS hides the × at the floor
+      };
+      addBtn.addEventListener('click', () => {
+        if (rows().length >= 4) return;
+        opts.insertAdjacentHTML('beforeend', pollOptRowHtml(rows().length));
+        renumber();
+        opts.querySelector('.poll-opt-row:last-child .poll-opt-input')?.focus();
+      });
+      // Delegate removal — rows come and go, so listen on the container.
+      opts.addEventListener('click', (e) => {
+        const btn = e.target.closest('.poll-opt-remove');
+        if (!btn || rows().length <= 2) return;
+        btn.closest('.poll-opt-row')?.remove();
+        renumber();
+      });
+      renumber();
     }
 
     // The Note body's link sense: a URL typed straight into the body offers to lift
@@ -4600,29 +4864,26 @@
         const raw = m ? m[0].replace(/[),.;!?]+$/, '') : '';
         const link = raw.startsWith('www.') ? 'https://' + raw : raw;
         if (m) editor.textContent = text.replace(m[0], ' ').replace(/[ \t]{2,}/g, ' ').trim();
-        pubType = 'find';
-        paint();
-        applyBaseSurface();               // reveals + focuses the link row
+        wantLink = true;
+        applyBaseSurface();               // reveals the link row
         const url = fieldsEl.querySelector('#c-url');
-        if (url) url.value = link;
+        if (url) { url.value = link; url.focus(); }
+        syncType();
         nudge.hidden = true;
       });
     }
 
-    view.querySelectorAll('.compose-filters .filter').forEach(btn =>
-      btn.addEventListener('click', () => selectType(btn.dataset.filter)));
+    const groupTabs = view.querySelector('#c-group-tabs');
+    if (groupTabs) wireSegTabs(groupTabs, PUB_GROUPS, () => pubGroup, selectGroup);
 
     document.getElementById('composer').addEventListener('submit', (e) => {
       e.preventDefault();
       submitComposer();
     });
 
-    // Mount for the type we arrived on (default Note, or a dial shortcut's choice),
-    // then run its opening action so a dial → Find lands with the link field open,
-    // a dial → Frame with the upload field revealed.
+    // Mount the group we arrived on (default Post), then reflect its inferred type.
     mountFields();
-    paint();
-    applyBaseSurface();
+    syncType();
   }
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
@@ -5324,6 +5585,16 @@
         data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
         data.imageTint = cropper.tint(); // photo's average colour → colour-up in the feed
       }
+    } else if (pubType === 'poll') {
+      // The QUESTION is the post itself (headline and/or body), same as a Note —
+      // no separate question field. The choices come from the list, trimmed with
+      // empties dropped, so a blank box just isn't a choice.
+      data.title = val('c-title');
+      const options = Array.from(document.querySelectorAll('#c-poll-opts .poll-opt-input'))
+        .map(el => el.value.trim()).filter(Boolean);
+      if (!data.title && !data.note) { errEl.textContent = 'Ask your poll a question first.'; return; }
+      if (options.length < 2) { errEl.textContent = 'Give the poll at least two choices.'; return; }
+      data.poll = { options };
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {
@@ -5334,7 +5605,8 @@
     // Good-faith objectionable-content gate (App Store 1.2). Checks the text
     // fields the composer collected; a hit stops the post with a nudge toward the
     // guidelines rather than silently eating it.
-    if (BLOCKLIST.hits(data.note, data.title, data.location)) {
+    if (BLOCKLIST.hits(data.note, data.title, data.location,
+        ...(data.poll ? data.poll.options : []))) {
       errEl.textContent = 'That looks like it breaks our community guidelines. Please revise before posting.';
       return;
     }
@@ -5342,7 +5614,7 @@
     // Writes now hit the network (and, for photos/videos, an upload), so reflect
     // the wait rather than freezing on click.
     const btn = document.querySelector('.composer-submit');
-    if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
     errEl.textContent = '';
 
     // A video shows a real, byte-level upload bar (it's the big transfer). Photos
@@ -5354,14 +5626,15 @@
     if (!res.ok) {
       errEl.textContent = res.error;
       clearPostProgress();
-      if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
       return;
     }
     clearPostProgress();
     cropper = null;
     videoCapture = null;
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
-    pubType = 'note';           // next compose opens on Note
+    pubGroup = 'post';          // next compose opens on the Post group…
+    pubType = 'note';           // …as a plain Note until something's attached
     go('#/');
   }
 
@@ -6019,7 +6292,7 @@
       // its rise (unless reduced motion, which shows it in place). Tuck-commit-
       // release so it lifts from behind the nav on landing.
       if (!reduce) {
-        const seg = page.querySelector('.seg-tabs');
+        const seg = page.querySelector('.seg-tabs:not(#c-group-tabs)');
         if (seg) {
           seg.classList.add('tuck');
           void seg.offsetWidth;                     // commit the tucked start state
@@ -6056,7 +6329,7 @@
     // A docked view switcher (Friends / Updates on mobile) starts tucked behind
     // the nav so it can rise once the page settles (see cleanup) rather than
     // riding the horizontal page slide. No-op on pages without one.
-    page.querySelector('.seg-tabs')?.classList.add('tuck');
+    page.querySelector('.seg-tabs:not(#c-group-tabs)')?.classList.add('tuck');
 
     prev.className = 'page';    // clear any stale transition classes before reuse
     prev.classList.add('leave', leaveTo);
@@ -6085,7 +6358,7 @@
       // The page has settled and its transform is gone, so the fixed switcher
       // now anchors to the viewport — drop .tuck and it rises straight up from
       // behind the nav on its own transition.
-      page.querySelector('.seg-tabs')?.classList.remove('tuck');
+      page.querySelector('.seg-tabs:not(#c-group-tabs)')?.classList.remove('tuck');
     };
     const onSettle = (e) => {
       if (e.target === page && e.propertyName === settleProp) cleanup();
