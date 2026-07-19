@@ -526,7 +526,13 @@ const Store = (() => {
     });
   }
   function uploadImage(dataURI, kind, dims) {
-    return uploadMedia(dataURI, kind, { contentType: 'image/jpeg', ext: 'jpg', dims });
+    // Cropped/re-encoded photos, posters, and avatars are always canvas JPEGs —
+    // but a Frame GIF rides through untouched (see initPhotoPreview), so read
+    // its real MIME off the data URI rather than assuming JPEG.
+    const m = /^data:([^;]+);/.exec(dataURI);
+    const type = m ? m[1] : 'image/jpeg';
+    const ext = type === 'image/gif' ? 'gif' : 'jpg';
+    return uploadMedia(dataURI, kind, { contentType: type, ext, dims });
   }
 
   async function createPost(data, { onProgress } = {}) {
@@ -1013,7 +1019,7 @@ function placeholderPhoto(id, alt) {
 // Legacy photos (uploaded before the stamp) and avatars return null and fall back
 // gracefully.
 function imageDimsFromUrl(url) {
-  const m = /-(\d+)x(\d+)\.(?:jpe?g|mp4|webm|mov)/i.exec(url || '');
+  const m = /-(\d+)x(\d+)\.(?:jpe?g|gif|mp4|webm|mov)/i.exec(url || '');
   if (!m) return null;
   const w = +m[1], h = +m[2];
   return w && h ? { w, h } : null;

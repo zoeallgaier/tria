@@ -5140,7 +5140,14 @@
       const f = file.files && file.files[0];
       if (!f) return;
       if (f.type.startsWith('video/')) handleLibraryVideo(f);
-      else {
+      else if (f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES) {
+        // GIFs upload as their original bytes (see initPhotoPreview) — no
+        // in-browser re-encode to shrink them, so the bucket ceiling is the
+        // real gate. Catch it here rather than after the read.
+        showPickError('That GIF is over 150 MB. Please choose a smaller one.');
+      } else {
+        const err = errEl();
+        if (err) err.textContent = '';
         const reader = new FileReader();
         reader.onload = () => finishPhoto(reader.result);
         reader.readAsDataURL(f);
@@ -5585,11 +5592,19 @@
   function initPhotoPreview(imgEl, src) {
     imgEl.style.transform = '';
     imgEl.src = src;
+    // A GIF drawn to canvas would flatten to whatever frame happened to be
+    // showing — the animation is gone for good. Ship the original bytes
+    // untouched instead (same call as video: no in-browser re-encode).
+    const isGif = /^data:image\/gif;/i.test(src);
     const api = {
       dims: null,   // {w, h} of the last export — stamped into the upload filename
       export(maxEdge = 1400) {
         const iw = imgEl.naturalWidth  || 1;
         const ih = imgEl.naturalHeight || 1;
+        if (isGif) {
+          api.dims = { w: iw, h: ih };
+          return src;
+        }
         const scale = Math.min(1, maxEdge / Math.max(iw, ih));
         const w = Math.max(1, Math.round(iw * scale));
         const h = Math.max(1, Math.round(ih * scale));
