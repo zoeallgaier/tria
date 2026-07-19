@@ -4779,7 +4779,6 @@
         else { const u = fieldsEl.querySelector('#c-url'); if (u) u.value = ''; }
         applyBaseSurface();
         syncType();
-        if (wantLink) fieldsEl.querySelector('#c-url')?.focus();
       });
       photoBtn?.addEventListener('click', () => {
         const opening = !wantPhoto;
@@ -4800,7 +4799,6 @@
         if (wantPoll) { foldPhoto(); foldLink(); }
         applyBaseSurface();
         syncType();
-        if (wantPoll) fieldsEl.querySelector('#c-poll-opts .poll-opt-input')?.focus();
       });
       wirePollOpts();
     }
