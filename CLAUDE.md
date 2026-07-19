@@ -73,8 +73,8 @@ exempt). Voice is playful but not trying-too-hard.
 
 ## Design system (short version)
 Austere, editorial, cool greyscale base. The only chromatic color is a pastel
-quartet reserved for the four post types: note = lavender, find = coral,
-photo = cyan, activity = lime. Instrument Serif on titles only; Oxygen everywhere
+quintet reserved for the five post types: note = lavender, find = coral,
+photo = cyan, activity = lime, poll = rose. Instrument Serif on titles only; Oxygen everywhere
 else. Circular avatars. Don't touch the hue-drift gate wash — Zoe loves it. All
 motion is reduced-motion aware.
 
@@ -99,7 +99,7 @@ to every button, or it stops meaning anything.
 
 **Lit dome — the primary-action material.** The two hero commit buttons — the
 compose **+ FAB** (`.nav-publish`) and the composer's **Post** pill
-(`.composer-post`) — aren't flat pastel discs: the drifting quartet sits under a
+(`.composer-post`) — aren't flat pastel discs: the drifting quintet sits under a
 fixed lit dome (top-left specular hotspot + base cavity shadow + contact/ambient
 float) so they read as glossy 3D objects with a real, non-wandering light source
 (only the colour band drifts; the highlight/cavity stay pinned). **Dark mode

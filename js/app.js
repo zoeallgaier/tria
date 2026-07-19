@@ -126,6 +126,11 @@
     // Magnifier for the Friends search field, and the X it morphs into when open.
     search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
+    // Two sliders — the feed's type filter, worn by the masthead button that
+    // fans open the filter dial. Each row's knob sits at a different stop so it
+    // reads as "tune what you see," not a plain list. Two rows, not three, keeps
+    // it cleaner at the small masthead scale.
+    sliders: '<path d="M4 9h9"/><path d="M17 9h3"/><circle cx="15" cy="9" r="2"/><path d="M4 15h4"/><path d="M12 15h8"/><circle cx="10" cy="15" r="2"/>',
     // Padlock — marks an activity shared with a hand-picked few, not the whole circle.
     lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
     // Horizontal ellipsis — the quiet "more" overflow on a post header. Opens the
@@ -133,7 +138,7 @@
     // small header scale where a hairline outline would nearly vanish.
     dots:    '<circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
     // A little chain link — Copy link.
-    link:    '<path d="M9.5 14.5 14.5 9.5"/><path d="M11 7l1.5-1.5a3.5 3.5 0 0 1 5 5L16 12"/><path d="M13 17l-1.5 1.5a3.5 3.5 0 0 1-5-5L8 12"/>',
+    link:    '<path d="M10.3 13.7a4 4 0 0 0 6 .43l2.4-2.4a4 4 0 1 0-5.66-5.66l-1.38 1.37"/><path d="M13.7 10.3a4 4 0 0 0-6-.43l-2.4 2.4a4 4 0 1 0 5.66 5.66l1.37-1.37"/>',
     // A pennant on a staff — Report. Rides the report row inside the sheets.
     flag:    '<path d="M6 21V4"/><path d="M6 5h11l-2 3 2 3H6"/>',
     // No-entry circle — Block a user.
@@ -453,6 +458,17 @@
     activity: `<svg viewBox="0 0 18.88 19.82" fill="currentColor" aria-hidden="true"><path d="M9.44,2.85l.33,1.66c.14.72.78,1.25,1.52,1.25.39,0,.76-.15,1.05-.41l1.24-1.15-.71,1.54c-.22.48-.19,1.04.1,1.48.29.45.77.72,1.3.72.06,0,.12,0,.19-.01l1.68-.2-1.48.83c-.49.27-.79.79-.79,1.35s.3,1.08.79,1.35l1.48.83-1.68-.2c-.06,0-.13-.01-.19-.01-.53,0-1.02.27-1.3.72-.29.45-.32,1-.1,1.48l.71,1.54-1.24-1.15c-.29-.27-.66-.41-1.05-.41-.74,0-1.38.53-1.52,1.25l-.33,1.66-.33-1.66c-.14-.72-.78-1.25-1.52-1.25-.39,0-.76.15-1.05.41l-1.24,1.15.71-1.54c.22-.48.19-1.04-.1-1.48-.29-.45-.77-.72-1.3-.72-.06,0-.12,0-.19.01l-1.68.2,1.48-.83c.49-.27.79-.79.79-1.35s-.3-1.08-.79-1.35l-1.48-.83,1.68.2c.06,0,.13.01.19.01.53,0,1.02-.27,1.3-.72.29-.45.32-1,.1-1.48l-.71-1.54,1.24,1.15c.29.27.66.41,1.05.41.74,0,1.38-.53,1.52-1.25l.33-1.66M9.44,0c-.11,0-.21.07-.24.2l-.83,4.18c-.08.4-.43.65-.79.65-.19,0-.38-.07-.54-.21L3.92,1.91c-.05-.05-.11-.07-.16-.07-.16,0-.3.17-.22.35l1.79,3.87c.25.54-.15,1.14-.72,1.14-.03,0-.07,0-.1,0L.27,6.68s-.02,0-.03,0c-.24,0-.34.33-.11.45l3.72,2.08c.55.31.55,1.09,0,1.4L.12,12.69c-.22.12-.13.45.11.45.01,0,.02,0,.03,0l4.23-.5s.07,0,.1,0c.57,0,.97.6.72,1.14l-1.79,3.87c-.08.18.06.35.22.35.06,0,.11-.02.16-.07l3.12-2.89c.16-.15.35-.21.54-.21.36,0,.71.24.79.65l.83,4.18c.03.13.13.2.24.2s.21-.07.24-.2l.83-4.18c.08-.4.43-.65.79-.65.19,0,.38.07.54.21l3.12,2.89c.05.05.11.07.16.07.16,0,.3-.17.22-.35l-1.79-3.87c-.25-.54.15-1.14.72-1.14.03,0,.07,0,.1,0l4.23.5s.02,0,.03,0c.24,0,.34-.33.11-.45l-3.72-2.08c-.55-.31-.55-1.09,0-1.4l3.72-2.08c.22-.12.13-.45-.11-.45-.01,0-.02,0-.03,0l-4.23.5s-.07,0-.1,0c-.57,0-.97-.6-.72-1.14l1.79-3.87c.08-.18-.06-.35-.22-.35-.06,0-.11.02-.16.07l-3.12,2.89c-.16.15-.35.21-.54.21-.36,0-.71-.24-.79-.65L9.68.2c-.03-.13-.13-.2-.24-.2h0Z"/></svg>`,
     poll: pollGlyph(),
   };
+  // The "All" filter's own mark — a pentad, one dot per post type in its own
+  // hue, gathered into a ring. Says "all five" literally instead of a generic
+  // four-dot grid, and it's the one place the quintet earns colour outside the
+  // chips themselves — ties the fold-out button to the rows it opens.
+  const ICON_ALL = `<svg viewBox="0 0 24 24" aria-hidden="true">` +
+    `<circle cx="12" cy="4.6" r="2.5" fill="var(--type-note)"/>` +
+    `<circle cx="19.1" cy="9.8" r="2.5" fill="var(--type-find)"/>` +
+    `<circle cx="16.4" cy="18.2" r="2.5" fill="var(--type-photo)"/>` +
+    `<circle cx="7.6" cy="18.2" r="2.5" fill="var(--type-activity)"/>` +
+    `<circle cx="4.9" cy="9.8" r="2.5" fill="var(--type-poll)"/>` +
+  `</svg>`;
   // Literal hues (identical in light + dark, per tokens.css) so the composer's
   // bottom colour-wash can interpolate smoothly via @property --type — a var()
   // reference wouldn't tween. One per emergent post type.
@@ -1143,7 +1159,25 @@
   // leader is marked. A closed poll locks to a read-only final tally. Voting is
   // friends-only (canSocial); a non-friend viewing a public account sees the
   // choices statically with no results and no way to vote.
-  function pollWidgetHtml(post) {
+  // `justVoted` (a choice index or null) is set only when re-rendering the widget
+  // straight after a tap — it flags the freshly cast pick so CSS runs the reward
+  // flourish (bars grow from zero, your pick washes with the rotating Tria
+  // gradient before it settles to the neutral outline). A plain render (feed,
+  // navigation, reload) passes null and the results just sit there, flat.
+  // The settling burst: the same y2k stars as the like tap (position x/y px, size
+  // s, spin r deg, stagger d ms), reused verbatim but painted in page ink so colour
+  // stays reserved for the gradient. Fanned up-and-out; offsets stay inside the
+  // ~16px radius the shared .spark keyframes fully fade within, so nothing grazes
+  // the row's overflow edge (and the layer anchor is clamped off the side walls).
+  const POLL_SPARKS = [
+    { x:  -2, y: -15, s: 11, r:  16, d:  0 },
+    { x: -13, y:  -9, s:  9, r:  -8, d: 30 },
+    { x:  14, y:  -8, s: 10, r:  14, d: 20 },
+    { x: -16, y:   3, s:  8, r: -14, d: 55 },
+    { x:  15, y:   4, s:  8, r:  12, d: 45 },
+    { x:  -6, y:  11, s:  7, r: -18, d: 70 },
+  ];
+  function pollWidgetHtml(post, justVoted = null) {
     if (post.type !== 'poll' || !post.poll) return '';
     const options = post.poll.options || [];
     const closed = Store.pollClosed(post);
@@ -1163,11 +1197,26 @@
       const leads = reveal && n > 0 && n === max;
       const cls = ['poll-option', mine ? 'is-mine' : '', reveal ? 'is-revealed' : '',
                    leads ? 'is-leading' : ''].filter(Boolean).join(' ');
+      const fillCls = 'poll-fill' + (justVoted === i ? ' is-voting' : '');
+      // Your freshly cast pick also (a) rolls its percentage in with the same
+      // count-tick used by likes/RSVPs and (b) throws a one-shot quintet burst
+      // off the fill's leading edge once the sweep lands — "got it, here's where
+      // you stand." Both only on the just-voted row, both gated for reduced motion.
+      const isFresh = justVoted === i;
+      const pctCls = 'poll-option-pct' + (isFresh ? ' count-tick-up' : '');
+      const burst = isFresh
+        ? `<span class="poll-burst" style="left:clamp(22px, ${pct}%, calc(100% - 22px))" aria-hidden="true">` +
+            POLL_SPARKS.map(p =>
+              `<span class="spark" style="--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;` +
+                `animation-delay:calc(0.92s + ${p.d}ms)"></span>`).join('') +
+          `</span>`
+        : '';
       const inner =
-        (reveal ? `<span class="poll-fill" style="width:${pct}%"></span>` : '') +
+        (reveal ? `<span class="${fillCls}" style="width:${pct}%"></span>` : '') +
         `<span class="poll-option-label">${esc(label)}</span>` +
-        (reveal ? `<span class="poll-option-pct">${pct}%</span>` : '') +
-        (mine ? `<span class="poll-check" aria-hidden="true">${svgIcon('check')}</span>` : '');
+        (reveal ? `<span class="${pctCls}">${pct}%</span>` : '') +
+        (mine ? `<span class="poll-check" aria-hidden="true">${svgIcon('check')}</span>` : '') +
+        burst;
       return interactive
         ? `<button type="button" class="${cls}" data-choice="${i}"${mine ? ' aria-pressed="true"' : ''}>${inner}</button>`
         : `<div class="${cls}">${inner}</div>`;
@@ -1179,7 +1228,7 @@
         ? `Vote to see results · ${pollTimeLabel(post)}`
         : pollTimeLabel(post);
 
-    return `<div class="poll${closed ? ' is-closed' : ''}" data-poll="${post.id}">` +
+    return `<div class="poll${closed ? ' is-closed' : ''}${justVoted !== null ? ' poll--just-voted' : ''}" data-poll="${post.id}">` +
         `<div class="poll-options">${rows}</div>` +
         `<p class="poll-meta">${meta}</p>` +
       `</div>`;
@@ -1696,8 +1745,10 @@
   }
 
   // Casting (or changing) a vote. Tapping your current pick is a no-op; any other
-  // choice writes through Store.votePoll and rebuilds the card in place (like an
-  // RSVP flip) so the just-revealed tallies settle without a feed reflow.
+  // choice writes through Store.votePoll, then swaps just the poll widget in place
+  // (no card reflow) for a fresh copy rendered in the "just voted" flourish state:
+  // the bars grow from zero and your pick washes once with the Tria gradient
+  // before it settles to the flat result (see the .poll--just-voted CSS).
   function wirePoll(el, post, opts) {
     const widget = el.querySelector('.poll');
     if (!widget) return;
@@ -1709,9 +1760,15 @@
         buttons.forEach(b => b.disabled = true);
         const res = await Store.votePoll(post.id, choice);
         if (!res.ok) { buttons.forEach(b => b.disabled = false); return; }
-        const fresh = makeCard(post, opts);
-        fresh.style.animation = 'none';
-        el.replaceWith(fresh);
+        const wrap = document.createElement('div');
+        wrap.innerHTML = pollWidgetHtml(post, choice);
+        const fresh = wrap.firstElementChild;
+        widget.replaceWith(fresh);
+        wirePoll(el, post, opts);   // rewire the new widget's choice buttons
+        // Let the gradient linger a beat, then drop .is-voting so the fill
+        // cross-fades down to the neutral outline (color reserved for the tap).
+        const votingFill = fresh.querySelector('.poll-fill.is-voting');
+        if (votingFill) setTimeout(() => votingFill.classList.remove('is-voting'), 1500);
       });
     });
   }
@@ -2295,28 +2352,133 @@
   let activeFilter = 'all';
   let activeTag = null;
 
+  // The masthead's filter control: the sliders glyph plus a hue dot that lights
+  // (in the active type's colour) only when a filter is on, so a folded menu
+  // still tells you the feed is narrowed. Tapping it fans the filter dial open.
+  function filterBtnEl() {
+    const on = activeFilter !== 'all';
+    return `<button class="masthead-filter" type="button" id="home-filter-btn" ` +
+        `aria-haspopup="menu" aria-expanded="false" aria-label="Filter the feed"` +
+        `${on ? ` data-active="${activeFilter}"` : ''}>` +
+        svgIcon('sliders', 'masthead-filter-ico') +
+        `<span class="masthead-filter-dot" aria-hidden="true"${on ? '' : ' hidden'}></span>` +
+      `</button>`;
+  }
+  // Reflect the current filter onto the masthead button without a full re-render
+  // (so picking one doesn't flash the whole page): light/clear the dot + hue.
+  function syncFilterBtn() {
+    const btn = view.querySelector('#home-filter-btn');
+    if (!btn) return;
+    const on = activeFilter !== 'all';
+    if (on) btn.setAttribute('data-active', activeFilter);
+    else btn.removeAttribute('data-active');
+    const dot = btn.querySelector('.masthead-filter-dot');
+    if (dot) dot.hidden = !on;
+  }
+
   function renderHome() {
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('', 'My Circle') +
-        `<div class="filters" role="group" aria-label="Filter by type">` +
-          FILTERS.map(f =>
-            `<button class="filter" type="button" data-filter="${f.key}" ` +
-              `aria-pressed="${f.key === activeFilter}">${f.label}</button>`).join('') +
-        `</div>` +
+        mastheadEl('', 'My Circle', filterBtnEl()) +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
-    view.querySelectorAll('.filter').forEach(btn =>
-      btn.addEventListener('click', () => {
-        activeFilter = btn.dataset.filter;
-        activeTag = null;
-        renderFeed();
-        view.querySelectorAll('.filter').forEach(b =>
-          b.setAttribute('aria-pressed', String(b.dataset.filter === activeFilter)));
-      }));
+    view.querySelector('#home-filter-btn')
+      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget));
 
     renderFeed();
+  }
+
+  /* ── Filter dial ──────────────────────────────────────────────────────────────
+     The feed's type filter, fanned from the masthead sliders button as a floating
+     glass menu — the same speed-dial idiom as the + FAB (labelled rows, each with
+     its type colour glowing behind the glyph), just dropping DOWN from the top
+     control instead of rising from the nav. Data-driven off FILTERS, so a new post
+     type is one array entry, not a layout change. Glass per the material rule (a
+     menu floats above content); reduced-motion aware; WAI-ARIA menu semantics. */
+  let filterDialOpen = false;
+  function openFilterDial(anchor) {
+    if (filterDialOpen) return;
+    filterDialOpen = true;
+    anchor.setAttribute('aria-expanded', 'true');
+
+    const scrim = document.createElement('div');
+    scrim.className = 'filter-dial-scrim';
+    const rows = FILTERS.map((f, i) => {
+      const on = f.key === activeFilter;
+      const glyph = f.key === 'all' ? ICON_ALL : (TYPE_ICON[f.key] || '');
+      // --glow = the pastel that blooms behind the glyph; the glyph itself takes
+      // the type's deep -ink via `color` (fill:currentColor). All's pentad paints
+      // its own five hues directly (no currentColor), so it skips the glow wash
+      // entirely — the grey radial bloom read muddy on a white ground, and the
+      // dots already carry plenty of colour on their own. Set inline rather than
+      // via .type-icon--x, whose own sizing rules would fight the 46px disc.
+      const glow = f.key === 'all' ? 'transparent' : `var(--type-${f.key})`;
+      const ink  = f.key === 'all' ? 'var(--muted)' : `var(--type-${f.key}-ink)`;
+      return `<button class="filter-dial-item${on ? ' is-on' : ''}" type="button" ` +
+          `role="menuitemradio" aria-checked="${on}" data-filter="${f.key}" style="--i:${i}">` +
+          `<span class="filter-dial-label">${f.label}</span>` +
+          `<span class="filter-dial-ico" style="--glow:${glow}; color:${ink}">${glyph}</span>` +
+        `</button>`;
+    }).join('');
+    scrim.innerHTML = `<div class="filter-dial" role="menu" aria-label="Filter the feed">${rows}</div>`;
+    document.body.appendChild(scrim);
+    document.body.style.overflow = 'hidden';
+
+    // Pin the dial's right edge under the button so the icon chips stack straight
+    // down from it (label floating to the left — the speed-dial reading, mirrored).
+    const dial = scrim.querySelector('.filter-dial');
+    const r = anchor.getBoundingClientRect();
+    dial.style.top = (r.bottom + 10) + 'px';
+    dial.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+
+    const opener = anchor;
+    const items = () => [...scrim.querySelectorAll('.filter-dial-item')];
+    requestAnimationFrame(() => {
+      scrim.classList.add('open');
+      (items().find(b => b.classList.contains('is-on')) || items()[0])?.focus();
+    });
+
+    const close = (then) => {
+      if (!filterDialOpen) return;
+      filterDialOpen = false;
+      document.removeEventListener('keydown', onKey);
+      scrim.classList.remove('open');
+      document.body.style.overflow = '';
+      anchor.setAttribute('aria-expanded', 'false');
+      if (opener && opener.focus) opener.focus();
+      const done = () => { scrim.remove(); if (then) then(); };
+      if (prefersReduced()) done(); else setTimeout(done, 220);
+    };
+    function onKey(e) {
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const f = items();
+        const cur = f.indexOf(document.activeElement);
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        f[(cur + dir + f.length) % f.length]?.focus();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const f = items();
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
+    items().forEach(btn => btn.addEventListener('click', () => {
+      const key = btn.dataset.filter;
+      close(() => {
+        activeFilter = key;
+        activeTag = null;
+        syncFilterBtn();
+        renderFeed();
+      });
+    }));
+    document.addEventListener('keydown', onKey);
   }
 
   function renderFeed() {
@@ -3968,6 +4130,7 @@
       n.kind === 'comment' ? `commented on ${label}` :
       n.kind === 'like'    ? `liked ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
+      n.kind === 'vote'    ? `voted in ${label}` :
                              `is going to ${label}`;
     // Mentions live on someone else's post, so the row walks to that profile;
     // everything else lands on your own column.
@@ -4159,7 +4322,8 @@
         openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
         if (a.dataset.kind === 'comment' || a.dataset.kind === 'mention') openComments.add(id);
         else if (a.dataset.kind === 'like') openLikers.add(id);
-        else openGoing.add(id);
+        else if (a.dataset.kind === 'going') openGoing.add(id);
+        // 'vote' opens no panel (a poll has none) — just spotlights the post.
         spotlightPost = id;
       });
     }
@@ -5916,7 +6080,7 @@
   }
 
   function installStepsHtml() {
-    // The payoff tile IS the Tria app icon (the drifting pastel quartet) — the
+    // The payoff tile IS the Tria app icon (the drifting pastel quintet) — the
     // same close on either platform.
     return installStepData().map(([icon, text]) => installStep(icon, text)).join('') +
       `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +

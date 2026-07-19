@@ -63,8 +63,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=257" />
-  <link rel="stylesheet" href="css/app.css?v=257" />
+  <link rel="stylesheet" href="css/tokens.css?v=263" />
+  <link rel="stylesheet" href="css/app.css?v=263" />
 </head>
 
 <body>
@@ -77,17 +77,18 @@
 
   <a href="#main" class="skip-link">Skip to main content</a>
 
-  <!-- Off-screen gradient def: lets an SVG stroke carry the same quartet
-       gradient as the "going ✓" text — the four type colours, matching the
+  <!-- Off-screen gradient def: lets an SVG stroke carry the same quintet
+       gradient as the "going ✓" text — the five type colours, matching the
        liked heart's palette (stops are themed in css/app.css, so they flip with
        light/dark). Zero-size, purely a paint source. -->
   <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
     <defs>
       <linearGradient id="going-grad" x1="0" y1="0" x2="1" y2="1">
         <stop class="going-grad-a" offset="0" />
-        <stop class="going-grad-b" offset="0.34" />
-        <stop class="going-grad-c" offset="0.67" />
-        <stop class="going-grad-d" offset="1" />
+        <stop class="going-grad-b" offset="0.25" />
+        <stop class="going-grad-c" offset="0.5" />
+        <stop class="going-grad-d" offset="0.75" />
+        <stop class="going-grad-e" offset="1" />
       </linearGradient>
     </defs>
   </svg>
@@ -141,9 +142,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=257"></script>
-  <script src="js/store.js?v=257"></script>
-  <script src="js/app.js?v=257"></script>
+  <script src="js/config.js?v=263"></script>
+  <script src="js/store.js?v=263"></script>
+  <script src="js/app.js?v=263"></script>
 </body>
 
 </html>

@@ -781,6 +781,12 @@ const Store = (() => {
     for (const h of state.headcount)
       if (mine.has(h.postId) && h.user !== me)
         evts.push({ kind: 'going', postId: h.postId, user: h.user, _ts: h._ts || '' });
+    // Poll votes on MY polls (public like headcount). Updates-only, no push —
+    // a vote is quieter than a comment, so it lands in the ledger but never
+    // buzzes a device.
+    for (const v of state.pollVotes)
+      if (mine.has(v.postId) && v.user !== me)
+        evts.push({ kind: 'vote', postId: v.postId, user: v.user, _ts: v._ts || '' });
     return evts.sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
   }
 

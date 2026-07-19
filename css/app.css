@@ -113,7 +113,7 @@ body[data-ambient="support"] .ambient {
 }
 
 /* Publish composer: the whole screen washes the inferred post type's hue —
-   lavender Note, peach Find, cyan Frame, lime Activity. A half-screen radial
+   lavender Note, peach Find, cyan Frame, lime Activity, rose Poll. A half-screen radial
    falling from the top (the About glow's shape) but REACTIVE, not drifting:
    --glow-pub is a registered <color> so the wash tweens between types as you
    attach a link/photo or switch to Activity; the gradient takes its alpha via
@@ -189,7 +189,7 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 
 /* ── Boot splash ────────────────────────────────────────────────────────────
    A full-page curtain in the page's own paper, crowned by a serif t wearing
-   the Post button's drifting pastel gradient (same keyframes, same quartet).
+   the Post button's drifting pastel gradient (same keyframes, same quintet).
    Painted from static HTML before any JS runs; app.js adds .splash--out after
    the first render and removes the node once the fade lands. The t arrives
    the way cards do — a soft rise — plus the site's blur-settle. */
@@ -209,14 +209,14 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   line-height: 1;
   padding: 0 0.15em 0.1em;          /* clip-to-text crops at the box — keep air around the glyph */
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
   -webkit-background-clip: text;
           background-clip: text;
   color: transparent;
   animation:
     splash-in var(--dur-slow) var(--ease) both,
-    publish-shift 2s ease-in-out infinite;  /* faster than the Post button's 5s: splashes are brief, show more of the quartet */
+    publish-shift 2s ease-in-out infinite;  /* faster than the Post button's 5s: splashes are brief, show more of the quintet */
 }
 /* Grain the whole curtain — paper and the gradient glyph together — so the boot
    screen carries the same tactile surface as the app (the global body::after
@@ -435,7 +435,7 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   border-radius: inherit;
   padding: 2px;                     /* the ring's thickness */
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
   animation: publish-shift 14s ease-in-out infinite;
   /* Ring mode: keep only the 2px band between padding-box and border-box. */
@@ -759,6 +759,173 @@ main {
   .type-indicator.is-changing { animation: none; }
 }
 
+/* ── Masthead filter button ────────────────────────────────────────────────
+   The sliders glyph at the right of the "My Circle" nameplate (the slot the
+   Friends page spends on its search magnifier). Tapping it fans the filter dial.
+   A hue dot rides its upper-right ONLY when a filter is on, so a folded menu
+   still signals the feed is narrowed — the dot carries the active type's colour;
+   All (no narrowing) carries no dot. */
+.masthead-filter {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  transition: color var(--dur-micro), transform var(--dur-quick) var(--ease);
+}
+@media (hover: hover) { .masthead-filter:hover { color: var(--text); } }
+.masthead-filter[aria-expanded="true"] { color: var(--text); }
+.masthead-filter:active { transform: scale(0.92); }
+.masthead-filter-ico { width: 22px; height: 22px; }
+.masthead-filter-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot, var(--accent));
+  box-shadow:
+    0 0 0 2px var(--bg),                  /* punch it clear of the glyph strokes */
+    0 0 8px color-mix(in srgb, var(--dot, var(--accent)) 70%, transparent);
+}
+.masthead-filter[data-active="note"]     { --dot: var(--type-note); }
+.masthead-filter[data-active="find"]     { --dot: var(--type-find); }
+.masthead-filter[data-active="photo"]    { --dot: var(--type-photo); }
+.masthead-filter[data-active="poll"]     { --dot: var(--type-poll); }
+.masthead-filter[data-active="activity"] { --dot: var(--type-activity); }
+
+/* ── Filter dial ───────────────────────────────────────────────────────────
+   The type-filter menu the masthead sliders button fans open: the + FAB's
+   speed-dial recipe — labelled rows, the type colour blooming behind a frosted
+   glyph disc — dropped DOWN from the top control instead of rising from the nav.
+   The scrim dims + blurs the page and catches the tap-out; it sits ABOVE the nav
+   (a top-anchored menu must clear it), unlike the FAB veil that tucks under it.
+   Data-driven off FILTERS, so a new post type is one row, not a re-layout. */
+.filter-dial-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: color-mix(in srgb, var(--bg) 32%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.filter-dial-scrim.open { opacity: 1; }
+.filter-dial {
+  position: fixed;
+  display: flex;
+  flex-direction: column;      /* All (DOM-first) rests nearest the button */
+  align-items: flex-end;       /* chips stack in a column straight under it */
+  gap: 0.55rem;
+}
+.filter-dial-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0;
+  background: none;             /* the button's default grey chrome, gone */
+  border: 0;
+  /* Collapsed: lifted toward the button + faded. Open: dropped into place, each
+     staggered a beat behind the one above (nearest the button springs first). */
+  opacity: 0;
+  transform: translateY(-14px) scale(0.9);
+  transition:
+    opacity var(--dur-quick) var(--ease),
+    transform var(--dur-quick) var(--ease);
+}
+.filter-dial-scrim.open .filter-dial-item {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i) * 0.04s);
+}
+/* No pill behind an idle label — the blurred scrim plus the chip's own shadow
+   carry the separation; a page-coloured halo keeps the words legible over
+   whatever the scrim is dimming. */
+.filter-dial-label {
+  padding: 0 0.1rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  white-space: nowrap;
+  text-shadow:
+    0 0 10px var(--bg),
+    0 1px 3px color-mix(in srgb, var(--bg) 65%, transparent);
+}
+/* The active row wears a pill outline round its label — the reference's centred
+   "Cycling" tell — so the current filter reads at a glance even mid-fan. */
+.filter-dial-item.is-on .filter-dial-label {
+  padding: 0.34rem 0.72rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  text-shadow: none;
+}
+/* The type colour glows from behind the glyph on a frosted disc (the dial/FAB
+   "colour is light" move), not a hard chip. */
+.filter-dial-ico {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  transition: transform 0.08s var(--ease);
+}
+.filter-dial-ico::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(64% 64% at 50% 50%, var(--glow) 0%, transparent 66%);
+  opacity: 0.7;
+}
+.filter-dial-ico svg { position: relative; width: 1.5rem; height: 1.5rem; }
+/* Active chip: a ring in its own hue seals it as the current pick. */
+.filter-dial-item.is-on .filter-dial-ico {
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.14),
+    0 0 0 2px color-mix(in srgb, var(--glow) 55%, transparent);
+}
+.filter-dial-item:active .filter-dial-ico { transform: scale(0.92); }
+
+@media (prefers-reduced-motion: reduce) {
+  .filter-dial-item { transform: none; transition: opacity var(--dur-micro) ease; }
+  .filter-dial-scrim.open .filter-dial-item { transition-delay: 0s; }
+  .filter-dial-scrim { transition: none; }
+}
+
+/* Dark glass: run the frosted disc less transparent and deepen its shadow so it
+   reads over dark content, and pull the pastel bloom down so the deep-ink glyph
+   stays legible on the brighter disc — the same treatment the FAB dial takes. */
+@media (prefers-color-scheme: dark) {
+  .filter-dial-scrim { background: color-mix(in srgb, var(--bg) 44%, transparent); }
+  .filter-dial-ico {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  }
+  .filter-dial-ico::before { opacity: 0.5; }
+  .filter-dial-item.is-on .filter-dial-ico {
+    box-shadow:
+      0 6px 18px rgba(0, 0, 0, 0.5),
+      0 0 0 2px color-mix(in srgb, var(--glow) 60%, transparent);
+  }
+}
+
 /* The composer's type filters are a closed set of exactly four, so they spread
    across the full measure as even columns (rather than the feed's shrink-to-fit,
    left-packed chips) and run a touch tighter than the feed's row. (.filters.compose-filters
@@ -913,13 +1080,13 @@ main {
 }
 .seg-tabs[data-sel="1"] .seg-tabs-thumb { transform: translateX(100%); }
 /* Brand glow inside the thumb — lit only at index 0 (Friends' My circle); it
-   fades out when the second segment is active. The drifting quartet masked to a
+   fades out when the second segment is active. The drifting quintet masked to a
    soft core and blurred into coloured light, exactly the nav glide's engine. */
 .seg-tabs-glow {
   position: absolute;
   inset: 0;
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
   animation: publish-shift 14s ease-in-out infinite;
   -webkit-mask: radial-gradient(circle at 50% 50%, #000 20%, transparent 95%);
@@ -1301,7 +1468,7 @@ main {
 
 /* RSVP toggle (activities, friends). A word toggle on the right: "going?" at
    rest, "going ✓" once you're in. Active state paints the TEXT and ICON with the
-   four-colour type quartet — the liked heart's palette — not a background pill,
+   five-colour type quintet — the liked heart's palette — not a background pill,
    matching how the other glyphs carry their colour. Slim padding — it reads as a
    label, not a button. */
 .card-going {
@@ -1317,16 +1484,17 @@ main {
 .card-social .card-going { transform: translateY(-1.5px); }
 .card-going:hover,
 .card-going:focus-visible { color: var(--type-photo-ink); }
-/* Quartet gradient stops (themed here so they flip with light/dark, like the
-   -ink twins): the darkened type inks on paper — bright as the quartet gets
+/* Quintet gradient stops (themed here so they flip with light/dark, like the
+   -ink twins): the darkened type inks on paper — bright as the quintet gets
    while text still clears WCAG AA — and the full pastels in the dark. */
 #going-grad .going-grad-a { stop-color: var(--type-note-ink); }
-#going-grad .going-grad-b { stop-color: var(--type-find-ink); }
-#going-grad .going-grad-c { stop-color: var(--type-activity-ink); }
-#going-grad .going-grad-d { stop-color: var(--type-photo-ink); }
+#going-grad .going-grad-b { stop-color: var(--type-poll-ink); }
+#going-grad .going-grad-c { stop-color: var(--type-find-ink); }
+#going-grad .going-grad-d { stop-color: var(--type-activity-ink); }
+#going-grad .going-grad-e { stop-color: var(--type-photo-ink); }
 .card-going.going { color: transparent; }
 .card-going.going span {
-  background: linear-gradient(115deg, var(--type-note-ink),
+  background: linear-gradient(115deg, var(--type-note-ink), var(--type-poll-ink),
     var(--type-find-ink), var(--type-activity-ink), var(--type-photo-ink));
   -webkit-background-clip: text;
           background-clip: text;
@@ -2461,26 +2629,82 @@ button.poll-option { cursor: pointer; -webkit-appearance: none; appearance: none
 }
 button.poll-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.poll-option:disabled { cursor: default; }
-/* The share bar: sits behind the label, grows from the leading edge. */
+/* The share bar. Results are monochrome by design: a quiet wash of the page ink
+   that fills to each share. Colour is spent on the VOTE (the gradient flourish
+   below), never left sitting on the card. The left corners are clipped round by
+   the row (overflow:hidden); the right edge stays a clean vertical level line.
+   Grows from the leading edge. */
 .poll-fill {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  background: color-mix(in srgb, var(--type-poll) 26%, transparent);
-  border-radius: inherit;
-  transition: width var(--dur-slow, 0.4s) ease;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 0;
+  transform-origin: left center;
   z-index: 0;
 }
 .poll-option.is-leading .poll-fill {
-  background: color-mix(in srgb, var(--type-poll) 42%, transparent);
+  background: color-mix(in srgb, var(--text) 15%, transparent);
 }
-.poll-option-label { position: relative; z-index: 1; flex: 1; min-width: 0; }
+/* The vote flourish overlay: your freshly cast pick washes with the Tria quintet
+   (same gradient as the Post button) in a single sweep. Painted on a pseudo that
+   cross-fades out when JS drops .is-voting, so colour rewards the tap and then
+   falls away to the flat result. Sits at opacity 0 on every other bar. */
+.poll-fill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+  background-size: 300% 100%;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease);
+  pointer-events: none;
+}
+.poll-fill.is-voting::before {
+  opacity: 1;
+  animation: poll-sweep 1s ease-out both;   /* one pass, matching the one-way growth */
+}
+@keyframes poll-sweep {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+/* Just voted: every revealed bar grows out from zero (one-shot, transform only);
+   the gradient rides along on the pseudo above. */
+.poll--just-voted .poll-fill { animation: poll-grow 0.55s var(--ease) both; }
+@keyframes poll-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+/* The "weighed" beat: once the sweep lands (~0.92s in), a one-shot cluster of the
+   SAME y2k stars as the like tap twinkles off the fill's leading edge — a quick
+   "got it, here's where you stand," then gone. Two differences from the like burst:
+   they're painted in page ink (--burst: --text, so black on light / white on dark)
+   so colour stays reserved for the gradient, and they're anchored at the fill edge
+   (left:pct%, clamped off the side walls). Everything else is shared: same star
+   mask, and the same decoupled tracks (like-fly owns transform, spark-fade owns
+   opacity, one clock) so the motion leads the light. Lives inside the row overflow;
+   the stars fully fade before any tip reaches the boundary (see the JS spark table). */
+.poll-burst {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+  --burst: var(--text);
+}
+.poll-burst .spark {
+  left: 0; top: 0;
+  animation: like-fly 0.5s linear both, spark-fade 0.5s ease-in-out both;
+}
+.poll-option-label { position: relative; z-index: 1; flex: 1; min-width: 0; transition: color 0.6s var(--ease); }
 .poll-option-pct {
   position: relative;
   z-index: 1;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+  transition: color 0.6s var(--ease);
 }
 .poll-check {
   position: relative;
@@ -2488,21 +2712,40 @@ button.poll-option:disabled { cursor: default; }
   display: inline-flex;
   width: 1rem;
   height: 1rem;
-  color: var(--type-poll-ink);
+  color: var(--text);
+  transition: color 0.6s var(--ease);
 }
 .poll-check svg { width: 100%; height: 100%; }
-/* Your pick: a pink hairline + ink so it reads as chosen without shouting. */
+/* Your pick: a firmer neutral hairline + the check mark it (no colour — that's
+   reserved for the tap). */
 .poll-option.is-mine {
-  border-color: var(--type-poll);
+  border-color: color-mix(in srgb, var(--text) 40%, transparent);
 }
-.poll-option.is-mine .poll-option-pct { color: var(--type-poll-ink); font-weight: 600; }
+.poll-option.is-mine .poll-option-pct { color: var(--text); font-weight: 600; }
+/* Dark mode: the bright pastels wash out the row's near-white text while the vote
+   flourishes, and the text straddles the growing fill edge (the label's tail on a
+   low share, the pct/check on a high one). Rather than recolour the text — which
+   would need shadows to survive both sides of the edge, and would invert any emoji
+   in a label — deepen the gradient itself: still a saturated sweep of colour, now
+   dark enough that the plain white text reads over it AND over the dark surface,
+   seamlessly across the edge. Nothing touches the glyphs, so emoji stay intact. */
+@media (prefers-color-scheme: dark) {
+  /* Keep the flourish deepened for its whole life — through the cross-fade out
+     after .is-voting drops — so it never flashes back to full brightness as it
+     settles. (Harmless on the resting bars: their ::before sits at opacity 0.) */
+  .poll-fill::before { filter: brightness(0.55) saturate(1.2); }
+}
 .poll-meta {
   margin-top: 0.6rem;
   font-size: 0.78rem;
   color: var(--muted);
 }
 @media (prefers-reduced-motion: reduce) {
-  .poll-fill { transition: none; }
+  /* Drop the growth and the sweep; the pick still cross-fades from gradient to
+     the flat result (an opacity change, not motion). */
+  .poll--just-voted .poll-fill { animation: none; }
+  .poll-fill.is-voting::before { animation: none; opacity: 1; }
+  .poll-burst { display: none; }
 }
 
 /* An activity's "When" — date + time sharing one row (the date takes the lead),
@@ -3296,7 +3539,7 @@ button.poll-option:disabled { cursor: default; }
 /* Post progress — the composer's shared bar for a video's two slow phases (local
    trim re-encode, then the byte-level upload). Flat editorial, not glass: it's
    inline status on a content form, so it sits quiet above the Post button. The
-   fill wears a still slice of the publish quartet so it reads as the same brand
+   fill wears a still slice of the publish quintet so it reads as the same brand
    gesture as the button it feeds, without competing with it. */
 .post-progress {
   display: flex;
@@ -3337,7 +3580,7 @@ button.poll-option:disabled { cursor: default; }
   height: 100%;
   width: 0;
   border-radius: inherit;
-  /* Lit top rim over the drifting quartet so the fill reads as a filled bar, not a
+  /* Lit top rim over the drifting quintet so the fill reads as a filled bar, not a
      flat block — same family as the publish button it feeds. */
   background:
     linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%),
@@ -3357,7 +3600,7 @@ button.poll-option:disabled { cursor: default; }
 
 /* The hero Post wears the same lit dome as the compose "+" (.nav-publish): a
    top-left specular gloss and a base cavity shadow layered over the drifting
-   quartet, plus a contact + ambient drop, so it reads as a glossy 3D object,
+   quintet, plus a contact + ambient drop, so it reads as a glossy 3D object,
    not a flat pill. Only the colour band drifts; the highlight and cavity stay
    put so the light source never wanders (mirrors publish-dome on the FAB). */
 .composer .composer-post.publish-fill.is-solid,
@@ -3366,9 +3609,9 @@ button.poll-option:disabled { cursor: default; }
 .support-share.publish-fill.is-solid {
   /* The drifting colour band, hoisted into a variable so the composer's Post pill
      can swap it (Post drops lime, Activity goes lime-forward) without redeclaring
-     the dome radials. Auth / share keep the full quartet. */
+     the dome radials. Auth / share keep the full quintet. */
   --pill-band: linear-gradient(115deg,
-    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.16),
     0 10px 24px rgba(0, 0, 0, 0.18);
@@ -4242,7 +4485,7 @@ button.poll-option:disabled { cursor: default; }
   .nav-link[aria-current="page"] { color: var(--accent); }
   .nav-link:active { transform: scale(0.92); transition: transform 0.08s; }
   /* Ambient light, not a chip: the active marker glows like the dial icons.
-     The Post button's drifting quartet (publish-shift, shared keyframes) is the
+     The Post button's drifting quintet (publish-shift, shared keyframes) is the
      colour engine so it cycles the brand hues; a tight radial mask pulls that
      into a hot core fading to nothing (the dial's radial bloom), and a blur
      turns it into coloured light pooling under the icon and spilling into the
@@ -4257,7 +4500,7 @@ button.poll-option:disabled { cursor: default; }
     z-index: -1;
     border-radius: var(--radius-pill);
     background: linear-gradient(115deg,
-      var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+      var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
     background-size: 300% 100%;
     animation: publish-shift 14s ease-in-out infinite;
     -webkit-mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 58%);
@@ -4270,13 +4513,13 @@ button.poll-option:disabled { cursor: default; }
   @media (prefers-reduced-motion: reduce) {
     .nav-glide {
       animation: none;
-      background-position: 50% 50%;   /* rest on a static mid-quartet blend */
+      background-position: 50% 50%;   /* rest on a static mid-quintet blend */
       transition: opacity var(--dur-micro) ease;
     }
   }
 
   /* Post breaks out of the pill as a round button. On a screen a gradient
-     reads best as LIGHT, so this isn't a flat quartet disc: the four type
+     reads best as LIGHT, so this isn't a flat quintet disc: the five type
      colours drift UNDERNEATH a fixed lit dome — a specular hotspot up at the
      top-left and a soft cavity shadow pooling at the base — so it reads as a
      glossy, lit object with a real light direction. All of it lives in the
@@ -4307,7 +4550,7 @@ button.poll-option:disabled { cursor: default; }
     background:
       radial-gradient(72% 62% at 32% 24%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 46%),
       radial-gradient(85% 52% at 50% 112%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 52%),
-      linear-gradient(125deg, var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+      linear-gradient(125deg, var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
     background-size: 100% 100%, 100% 100%, 300% 100%;
     background-position: 0 0, 0 0, 0% 50%;
     animation: publish-dome 16s ease-in-out infinite;
@@ -4873,12 +5116,12 @@ button.poll-option:disabled { cursor: default; }
 }
 .welcome-lede strong { color: var(--text); font-weight: 500; }
 .welcome-steps { margin-top: 1.8rem; }
-/* The last step's tile IS the Tria app icon: the create/publish pastel quartet,
+/* The last step's tile IS the Tria app icon: the create/publish pastel quintet,
    drifting like the Post button, with the dark-ink serif "t" — the tutorial's
    payoff, and where the loud gradient now lives (not on a button). */
 .install-appicon {
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
   background-size: 300% 100%;
   border: none;
   box-shadow: var(--lit-rim), var(--lit-drop);

@@ -1,7 +1,7 @@
 /* ── Tria design tokens ───────────────────────────────────────────────────
    An editorial, portfolio-minded system. The UI is a cool, near-neutral
    greyscale — a deep off-black on a cool off-white — and the ONLY chromatic
-   color is a pastel quartet, reserved for post types and surfaced on the
+   color is a pastel quintet, reserved for post types and surfaced on the
    filter menu and the Publish button. Type is Instrument Serif (display) over Oxygen (the quiet
    functional layer). The grid and its whitespace carry the design. */
 
@@ -20,11 +20,11 @@
   --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
   --on-accent:    var(--bg);
 
-  /* Post types — a pastel quartet: lavender / peach-coral / baby cyan / lime.
-     Each type carries two faces: the pastel itself is the FILL (active filter
-     chips, the shifting Publish button), and a deepened -ink twin carries
+  /* Post types — a pastel quintet: lavender / peach-coral / baby cyan / lime /
+     rose. Each type carries two faces: the pastel itself is the FILL (active
+     filter chips, the shifting Publish button), and a deepened -ink twin carries
      text/labels on paper (AA). --on-type is the ink that sits on any pastel
-     fill — near-black, AA on all four in both modes. */
+     fill — near-black, AA on all five in both modes. */
   --type-note:         #b7a6e8;  /* lavender */
   --type-note-ink:     #6247b8;
   --type-find:         #f2a58c;  /* peach / coral */
@@ -37,7 +37,7 @@
   --type-poll-ink:     #b23a68;
   --on-type:           #14171a;
 
-  /* Liked-heart quartet — the ink twins nudged toward their pastels so the
+  /* Liked-heart quintet — the ink twins nudged toward their pastels so the
      filled heart reads brighter on paper (it's an icon, not text, so it can
      sit lighter than AA). Dark mode resets these to the inks (= pastels). */
   --heart-note:     color-mix(in srgb, var(--type-note-ink)     70%, var(--type-note));
