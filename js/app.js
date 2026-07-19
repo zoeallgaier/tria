@@ -538,6 +538,7 @@
   // out to the text's real height. Below the clamp the copy softly fades (a mask,
   // not a splice) to signal there's more.
   const READMORE_MIN = 320;   // notes shorter than this are shown whole
+  const READMORE_MIN_BLOCKS = 5;   // …or with fewer paragraph/heading blocks than this
 
   // Split a note's plain text into paragraphs (blank-line separated).
   const noteParas = (text) =>
@@ -689,8 +690,12 @@
       : noteParas(post.note).map(p => notePara(p, post.author)).join('');
     // Gate Read-more on the visible text length, not the raw markup (headings and
     // emphasis tags would otherwise trip the teaser on a short, formatted note).
+    // A caption written as many short lines (a recipe, a list) blows past the
+    // teaser's ~6-line clamp well under the character threshold, so also gate on
+    // how many paragraph/heading blocks it renders as — whichever trips first.
     const plainLen = rich ? post.note.replace(/<[^>]+>/g, '').length : post.note.length;
-    if (plainLen <= READMORE_MIN) return body;
+    const blockCount = rich ? (body.match(/<(?:h1|h2|p)[ >]/g) || []).length : noteParas(post.note).length;
+    if (plainLen <= READMORE_MIN && blockCount < READMORE_MIN_BLOCKS) return body;
 
     const open = openReadMore.has(post.id);
     return `<div class="readmore${open ? ' open' : ''}">` +
@@ -1340,6 +1345,7 @@
       el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
       if (isVideo) wireFrameVideo(el, post);
       else wirePhoto(el, img);
+      wireReadMore(el, post);
       wireLikes(el, post, opts);
       wireComments(el, post, opts);
       wireCardCollapse(el, post);
