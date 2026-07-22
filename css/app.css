@@ -2201,7 +2201,9 @@ main {
   display: flex; align-items: center; gap: 0.7rem; width: 100%;
   padding: 0.85rem 0.9rem; border: none; background: none; cursor: pointer;
   font: inherit; font-size: 0.98rem; color: var(--text); text-align: left;
-  border-radius: var(--radius-img, 8px);
+  /* Nests inside the panel's 20px minus its 0.3rem padding — an 8px row inside a
+     20px sheet read as a different corner language. */
+  border-radius: var(--radius-card, 14px);
   -webkit-tap-highlight-color: transparent;
 }
 .sheet-item + .sheet-item { position: relative; }
@@ -2209,10 +2211,13 @@ main {
   content: ""; position: absolute; left: 0.9rem; right: 0.9rem; top: 0;
   border-top: 1px solid var(--rule);
 }
-.sheet-item:active { background: var(--surface-2); }
-@media (hover: hover) { .sheet-item:hover { background: var(--surface-2); } }
+/* No fill on tap: the press engine's compression + spring release IS the tap
+   feedback here, and an opaque --surface-2 block punched a hole in the frost.
+   Hover keeps a whisper of a tint so a pointer still knows which row it's on —
+   translucent, so the glass reads through it. */
+@media (hover: hover) { .sheet-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } }
 .sheet-item:focus-visible,
-.sheet-cancel:focus-visible { outline: none; background: var(--surface-2); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent); }
+.sheet-cancel:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent); }
 .sheet-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
 .sheet-item--danger { color: var(--type-find-ink); }
 .sheet-item--danger .sheet-ico { color: currentColor; }
@@ -2221,7 +2226,14 @@ main {
   font: inherit; font-size: 0.98rem; font-weight: 700; color: var(--text);
   -webkit-tap-highlight-color: transparent;
 }
-.sheet-cancel:active { background: var(--surface-2); }
+/* Tint as a background-IMAGE layer: Cancel is its own glass panel, so restating
+   `background` here would blow away its frosted fill. */
+@media (hover: hover) {
+  .sheet-cancel:hover {
+    background-image: linear-gradient(color-mix(in srgb, var(--text) 6%, transparent),
+                                      color-mix(in srgb, var(--text) 6%, transparent));
+  }
+}
 @media (prefers-color-scheme: dark) {
   .sheet-items, .sheet-cancel {
     background: color-mix(in srgb, var(--bg) 82%, transparent);
@@ -2233,6 +2245,13 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .sheet-scrim, .sheet { transition: none; }
   .sheet { transform: none; }
+  /* The press engine sits out under reduced motion, so the tint comes back as
+     the tap confirmation — still translucent, still the row's own radius. */
+  .sheet-item:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+  .sheet-cancel:active {
+    background-image: linear-gradient(color-mix(in srgb, var(--text) 8%, transparent),
+                                      color-mix(in srgb, var(--text) 8%, transparent));
+  }
 }
 
 /* ── Blocked wall — a blocked person's profile in place of their content ────── */
