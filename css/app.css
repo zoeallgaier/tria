@@ -515,15 +515,14 @@ main {
    moves from the left, and same-level swaps / the auth gate cross-fade. One
    template, driven only by the direction classes the router toggles.
 
-   MOTION BUDGET (why it's shaped this way): animating `filter: blur()` forces
-   the whole moving page to re-rasterize every frame, and it's a MULTIPLIER on
-   everything beneath it (the feed, each rising card, the glass) — the root of
-   the iOS jitter. So the blur is a brief focus-in cue only: 6px that clears in
-   the first ~third of the slide (filter transition 0.12s vs the var(--dur-move) slide),
-   after which the move is pure transform + opacity, which the GPU composites
-   for free. The leaving page gets no blur at all — it's exiting/covered, so it
-   doesn't need the cue and stays cheap. `will-change` promotes each page to its
-   own layer for the move, then releases when the class clears. */
+   MOTION BUDGET (why it's shaped this way): the whole move is pure transform +
+   opacity, which the GPU composites for free. There used to be a brief 6px
+   focus-in blur on the entering page, but `filter: blur()` re-rasterizes the
+   whole page every frame (a MULTIPLIER on everything beneath it — the root of
+   the old iOS jitter), and it read as a smeared frame on the card-dense Circle
+   while being invisible elsewhere — so it's gone, and every page arrives crisp.
+   `will-change` promotes each page to its own layer for the move, then releases
+   when the class clears. */
 #view { position: relative; overflow-x: clip; }
 
 .page {
@@ -531,24 +530,27 @@ main {
               opacity   0.30s ease;
 }
 
-/* Entering page — offset, transparent, and softly out of focus … */
+/* Entering page — offset and transparent … */
 .page.enter {
   will-change: transform, opacity;
   transition: transform var(--dur-move) var(--ease),
-              opacity   0.30s ease,
-              filter    0.12s ease-out;   /* clears fast: focus-in, not a held blur */
+              opacity   0.30s ease;
 }
-.page.enter.from-right { transform: translateX(38px);  opacity: 0; filter: blur(6px); }
-.page.enter.from-left  { transform: translateX(-38px); opacity: 0; filter: blur(6px); }
-.page.enter.fade       { transform: none;              opacity: 0; filter: blur(6px); }
-/* … then settles into focus (later rule wins at equal specificity). */
-.page.enter.active { transform: none; opacity: 1; filter: blur(0); }
+.page.enter.from-right { transform: translateX(38px);  opacity: 0; }
+.page.enter.from-left  { transform: translateX(-38px); opacity: 0; }
+.page.enter.fade       { transform: none;              opacity: 0; }
+/* … then settles into place (later rule wins at equal specificity). */
+.page.enter.active { transform: none; opacity: 1; }
 
 /* Leaving page — lifted out of flow so it overlays, slides out on transform +
-   opacity only (no blur: cheap, and it's on its way out). */
+   opacity only (no blur: cheap, and it's on its way out). The slight scale is
+   the iOS push-parallax depth cue: the old page RECEDES while the new one slides
+   over. Its transform-origin is set inline by renderPage to the viewport's
+   visible centre (the page itself can be thousands of px tall), and renderPage
+   also pins `top` to the scroll position being read — the scroll-anchor fix. */
 .page.leave { position: absolute; inset: 0 0 auto 0; will-change: transform, opacity; }
-.page.leave.active.to-left  { transform: translateX(-38px); opacity: 0; }
-.page.leave.active.to-right { transform: translateX(38px);  opacity: 0; }
+.page.leave.active.to-left  { transform: translateX(-38px) scale(0.985); opacity: 0; }
+.page.leave.active.to-right { transform: translateX(38px)  scale(0.985); opacity: 0; }
 .page.leave.active.fade     { transform: none;              opacity: 0; }
 
 /* In-page glass goes quiet for the whole move (transform runs the full var(--dur-move),
@@ -843,7 +845,8 @@ main {
 .masthead-row > .masthead-filter { margin-right: -8px; }
 @media (hover: hover) { .masthead-filter:hover { color: var(--text); } }
 .masthead-filter[aria-expanded="true"] { color: var(--text); }
-.masthead-filter:active { transform: scale(0.92); }
+/* Press feedback comes from the shared press engine (app.js) — it animates the
+   `scale` property so it composes with any transform a control already carries. */
 .masthead-filter-ico { width: 22px; height: 22px; }
 .masthead-filter-dot {
   position: absolute;
@@ -1263,27 +1266,17 @@ main {
 /* The social + activity glyphs read larger than the ••• overflow — they're the
    invitations, the menu is a quiet tool. A bigger 1:1 target too (44px clears the
    mobile touch-target guideline); counted buttons grow wider from here. */
-.card-social button svg,
-.card-meta button svg { width: 28px; height: 28px; }
-.card-social button,
-.card-meta button { height: 44px; min-width: 44px; }
+.card-social button svg { width: 28px; height: 28px; }
+.card-social button { height: 44px; min-width: 44px; }
 
-/* Every activity splits the row: ••• menu + attendee count on the left (the
-   plan), comments/likes/RSVP on the right (the gestures). Natural order, not
-   row-reverse, so the two ends read left→right — identical on the feed and every
-   profile. */
-.card-actions--activity { flex-direction: row; }
-.card-meta { display: flex; align-items: center; gap: 0.35rem; margin-left: -0.4rem; }
-
-/* The ••• overflow rides the bottom-left corner of the row — a quiet tool. It's a
-   direct child of .card-actions on plain posts (row-reverse floats it leftmost)
-   and leads .card-meta on activities; pin it to the 34px/18px tool scale in both,
-   overriding the 44px/28px meta glyphs it would otherwise inherit on an activity. */
+/* The ••• overflow rides the bottom-left corner of the row — a quiet tool, held
+   at the 34px/18px tool scale against the 44px/28px social glyphs. It's a direct
+   child of .card-actions on every card type (row-reverse floats it leftmost);
+   activities no longer split the row into two ends, since the headcount and the
+   RSVP are one control now and sit in the social cluster with the rest. */
 .card-menu { color: var(--muted); opacity: 0.6; }
-.card-actions > .card-menu,
-.card-meta .card-menu { height: 34px; min-width: 34px; }
-.card-menu svg,
-.card-meta .card-menu svg { width: 18px; height: 18px; }
+.card-actions > .card-menu { height: 34px; min-width: 34px; }
+.card-menu svg { width: 18px; height: 18px; }
 .card-menu:active { opacity: 1; color: var(--text); }
 @media (hover: hover) { .card-menu:hover { opacity: 1; color: var(--text); } }
 
@@ -1549,55 +1542,74 @@ main {
   .like-sparkles { display: none; }
 }
 
-/* Attendees (activities). The people-glyph + count on the left; an outline
-   glyph carrying the activity ink (it's a public tally, not a toggle), no
-   hover pill. Tapping opens who's-going. */
+/* Headcount + RSVP, one control (activities). Person-glyph + count, leading the
+   social cluster and built like the comment count beside it — same 44px target,
+   same 0.82rem bold number, growing leftward from the glyph's square. No
+   background pill; the glyph carries the colour the way every other social glyph
+   does. At rest it's muted like its neighbours (it's a tally you may join, not a
+   standing claim); once you're in, it takes the activity ink. */
 .card-attendees {
   justify-content: flex-start;
   gap: 0.4rem;
   padding-inline: 0.35rem 0.55rem;
-  color: var(--type-activity-ink);
+  /* Sits a clear step off comment + like. The headcount is the plan; those two
+     are gestures. Activities lost their two-ended row when this control merged,
+     so this gap is what's left holding that distinction — and the glyph needs
+     the air anyway, since its ink fills only the left half of the box (the right
+     half is the check's landing space, see .check-arm). */
+  margin-right: 0.5rem;
 }
 .card-attendees-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 .card-attendees:hover,
 .card-attendees:focus-visible,
-.card-attendees[aria-expanded="true"] { color: var(--type-activity-ink); }
+.card-attendees[aria-expanded="true"] { color: var(--accent); }
 
-/* RSVP toggle (activities, friends). A word toggle on the right: "going?" at
-   rest, "going ✓" once you're in. Active state paints the TEXT and ICON with the
-   five-colour type quintet — the liked heart's palette — not a background pill,
-   matching how the other glyphs carry their colour. Slim padding — it reads as a
-   label, not a button. */
-.card-going {
-  gap: 0.28rem;
-  padding-inline: 0.3rem;
-  margin-right: 0.3rem;   /* a touch of air before comment + like */
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--type-activity-ink);
+/* The check arm ships inside the glyph at every state and is dashed fully out
+   until you're in — so joining DRAWS it on (below) instead of swapping icons,
+   and the person never shifts to make room. State reads without colour (the arm
+   is a shape change), which is what keeps the control legible to anyone who
+   can't separate the grey from the green. */
+.card-attendees .check-arm { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.card-attendees.going,
+.card-attendees.going:hover,
+.card-attendees.going:focus-visible,
+.card-attendees.going[aria-expanded="true"] { color: var(--type-activity-ink); }
+.card-attendees.going .check-arm { stroke-dashoffset: 0; stroke-width: 2.4; }
+
+/* RSVP reward — the moment you join, the check DRAWS itself onto the person
+   (stroke walking its path; the arm carries pathLength=1 in the icon so the dash
+   spans its real geometry) while the quintet gradient sweeps once across the
+   count and SETTLES on green: the sweep ends with the pure activity-ink third of
+   the gradient in view, so the class lift is invisible. The RSVP's own
+   celebration verb, deliberately not another sparkle burst. */
+.card-attendees.rsvp-inked .check-arm {
+  animation: rsvp-draw 0.5s var(--ease) 0.1s both;
 }
-.card-social .card-going svg { width: 18px; height: 18px; }
-/* Optical nudge: the "going" label rides low against the heart's line — lift it. */
-.card-social .card-going { transform: translateY(-1.5px); }
-.card-going:hover,
-.card-going:focus-visible { color: var(--type-photo-ink); }
-/* Quintet gradient stops (themed here so they flip with light/dark, like the
-   -ink twins): the darkened type inks on paper — bright as the quintet gets
-   while text still clears WCAG AA — and the full pastels in the dark. */
-#going-grad .going-grad-a { stop-color: var(--type-note-ink); }
-#going-grad .going-grad-b { stop-color: var(--type-poll-ink); }
-#going-grad .going-grad-c { stop-color: var(--type-find-ink); }
-#going-grad .going-grad-d { stop-color: var(--type-activity-ink); }
-#going-grad .going-grad-e { stop-color: var(--type-photo-ink); }
-.card-going.going { color: transparent; }
-.card-going.going span {
-  background: linear-gradient(115deg, var(--type-note-ink), var(--type-poll-ink),
-    var(--type-find-ink), var(--type-activity-ink), var(--type-photo-ink));
+@keyframes rsvp-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.card-attendees.rsvp-inked .card-attendees-count {
+  /* Green flat through 36%: at 300% size the visible window is a third, so the
+     final frame (position 0%) is solid activity-ink, matching the resting state. */
+  background: linear-gradient(115deg,
+    var(--type-activity-ink) 0%, var(--type-activity-ink) 36%,
+    var(--type-photo-ink) 52%, var(--type-find-ink) 68%,
+    var(--type-poll-ink) 84%, var(--type-note-ink) 100%);
+  background-size: 300% 100%;
   -webkit-background-clip: text;
           background-clip: text;
   color: transparent;
+  animation: rsvp-sweep 0.9s var(--ease-soft) both;
 }
-.card-going.going svg { stroke: url(#going-grad); stroke-width: 2.4; }
+@keyframes rsvp-sweep {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-attendees.rsvp-inked .check-arm,
+  .card-attendees.rsvp-inked .card-attendees-count { animation: none; }
+}
 
 /* Count tick — when a tap changes a count (raise a hand, add a comment), the
    new number rolls in: up when it grows, down when it shrinks. Transform +
@@ -1614,6 +1626,31 @@ main {
 .count-tick-down { display: inline-block; animation: count-tick-down var(--dur-move) var(--ease); }
 @media (prefers-reduced-motion: reduce) {
   .count-tick-up, .count-tick-down { animation: none; }
+}
+
+/* Odometer roll (odoTick in app.js) — where the OLD value is known (attendee and
+   comment counts move by exactly one), the count becomes a one-glyph slot: the
+   old number rolls out one way while the new one springs in the other, clipped
+   to the line box. Polls keep the plain tick above (their numbers jump). */
+.odo { position: relative; display: inline-block; overflow: hidden; }
+.odo .odo-new { display: inline-block; }
+.odo .odo-old { position: absolute; left: 0; top: 0; }
+.odo--up .odo-new   { animation: count-tick-up 0.5s var(--spring) both; }
+.odo--up .odo-old   { animation: odo-out-up 0.3s var(--ease-soft) both; }
+.odo--down .odo-new { animation: count-tick-down 0.5s var(--spring) both; }
+.odo--down .odo-old { animation: odo-out-down 0.3s var(--ease-soft) both; }
+@keyframes odo-out-up {
+  from { transform: translateY(0);       opacity: 1; }
+  to   { transform: translateY(-0.9em);  opacity: 0; }
+}
+@keyframes odo-out-down {
+  from { transform: translateY(0);       opacity: 1; }
+  to   { transform: translateY(0.9em);   opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* odoTick itself bails under reduced motion; this is the CSS backstop. */
+  .odo .odo-new { animation: none; }
+  .odo .odo-old { display: none; }
 }
 
 /* Inline edit form — a card swapped for its editable fields. Inset to align with
@@ -1933,6 +1970,33 @@ main {
 }
 .liker .comment-body { display: flex; align-items: center; min-height: 26px; }
 .likers-empty { font-size: 0.85rem; color: var(--muted); }
+
+/* "Can't make it" — the way back out of a plan, at the FOOT of the who's-going
+   list rather than on the card. Joining is one tap; leaving costs a deliberate
+   second one, because the host planned around this headcount. A quiet muted row,
+   warming to the delete red only on approach — it's a change of plans, not a
+   destruction, so it never sits red at rest. No rule above it: the list of names
+   ends and the muted row reads as a different kind of thing on its own. The 26px
+   glyph column lines it up with the avatars above. */
+.going-out {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin-top: 0.7rem;
+  padding: 0 0 0.1rem;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--dur-micro);
+}
+.going-out svg { width: 26px; height: 26px; flex-shrink: 0; }
+.going-out:active { color: var(--type-find-ink); }
+@media (hover: hover) { .going-out:hover { color: var(--type-find-ink); } }
 
 /* Reset the list's default padding/bullets so rows align to the thread's edge. */
 .comments-list {
@@ -2353,6 +2417,62 @@ main {
 .lightbox img,
 .lightbox video { max-width: 92vw; max-height: 90vh; border-radius: var(--radius-img); }
 .lightbox video { background: #000; }
+
+/* ── Pull-to-refresh indicator ─────────────────────────────────────────────
+   A little drifting-quintet dot (the brand's colour engine, worn small) that
+   rides the iOS rubber band down from under the status bar: JS (the ptr module)
+   drives --ptr-y/--ptr-p/--ptr-r straight from the overscroll, so while the
+   finger is down there's no transition — the bounce IS the easing. The dot pops
+   on the spring when the pull arms, and churns (gradient drift + turn) while
+   the refresh runs. Floats above content, never glass — it's a signal, not a
+   surface. */
+.ptr {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  z-index: 60;
+  margin-left: -16px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0) scale(0.6);
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
+}
+.ptr--show {
+  opacity: var(--ptr-p, 0);
+  transform: translateY(var(--ptr-y, 0px)) rotate(var(--ptr-r, 0deg))
+             scale(calc(0.6 + 0.4 * var(--ptr-p, 0)));
+  transition: none;   /* follow the rubber band raw */
+}
+.ptr--spin {
+  opacity: 1;
+  transform: translateY(52px) scale(1);
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
+}
+.ptr-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(115deg,
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+  background-size: 300% 100%;
+  box-shadow: var(--lit-rim), var(--lit-base), var(--lit-drop);
+  transition: scale 0.3s var(--spring);
+}
+.ptr--armed .ptr-dot { scale: 1.18; }   /* the "you can let go now" pop */
+.ptr--spin .ptr-dot { animation: ptr-churn 1.1s linear infinite; }
+@keyframes ptr-churn {
+  from { background-position: 0% 50%;   transform: rotate(0deg); }
+  to   { background-position: 300% 50%; transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptr--show { transform: translateY(var(--ptr-y, 0px)); }
+  .ptr--armed .ptr-dot { scale: 1; }
+  .ptr--spin .ptr-dot { animation: none; }
+}
 
 /* ── Auth gate (setup / login) ───────────────────────────────────────────────
    Shown before sign-in. The whole chrome (sidebar + nav) is hidden; a single
@@ -3166,7 +3286,6 @@ button.poll-option:disabled { cursor: default; }
   transition: color var(--dur-micro), border-color var(--dur-micro),
               background-color var(--dur-micro), transform 0.12s;
 }
-.account-badges > button:active { transform: scale(0.92); }
 @media (hover: hover) {
   .account-badges > button:hover { color: var(--text); border-color: var(--text); }
 }
@@ -3289,7 +3408,6 @@ button.poll-option:disabled { cursor: default; }
   font-weight: 700;
   transition: background-color var(--dur-micro), border-color var(--dur-micro);
 }
-.friend-add:active { transform: scale(0.96); }
 @media (hover: hover) {
   .friend-add:hover { background: var(--accent-press); border-color: var(--accent-press); }
 }
@@ -3576,7 +3694,6 @@ button.poll-option:disabled { cursor: default; }
   font-weight: 700;
   transition: background-color var(--dur-micro), border-color var(--dur-micro);
 }
-.request-accept:active { transform: scale(0.96); }
 @media (hover: hover) {
   .request-accept:hover { background: var(--accent-press); border-color: var(--accent-press); }
 }
@@ -4299,7 +4416,6 @@ button.poll-option:disabled { cursor: default; }
   transition: background-color var(--dur-micro), transform 0.12s;
 }
 .pf-photo-ico { width: 16px; height: 16px; }
-.pf-photo-edit:active { transform: scale(0.92); }
 @media (hover: hover) { .pf-photo-edit:hover { background: var(--accent-press); } }
 
 /* ── Modal (avatar editor) — a frosted overlay + a calm card ───────────────── */
@@ -4606,7 +4722,8 @@ button.poll-option:disabled { cursor: default; }
      The icon stays --accent (bright in dark, ink in light) — it's LIT by the
      glow behind it, not sitting on a chip, so the pill supplies its contrast. */
   .nav-link[aria-current="page"] { color: var(--accent); }
-  .nav-link:active { transform: scale(0.92); transition: transform 0.08s; }
+  /* Press compression lives in the shared press engine (app.js) — `scale`, so it
+     never fights the FAB's own transforms or the glide. */
   /* Ambient light, not a chip: the active marker glows like the dial icons.
      The Post button's drifting quintet (publish-shift, shared keyframes) is the
      colour engine so it cycles the brand hues; a tight radial mask pulls that

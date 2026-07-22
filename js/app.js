@@ -25,6 +25,16 @@
   const prefersReduced = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // The --spring token (tokens.css) doubles as the WAAPI easing for the press
+  // engine and the lightbox flight — WAAPI takes the same easing strings CSS
+  // does, so the token stays the single source of truth. Read once, lazily.
+  let springCache = null;
+  const springEase = () =>
+    springCache ??
+    (springCache =
+      getComputedStyle(document.documentElement).getPropertyValue('--spring').trim() ||
+      'cubic-bezier(0.3, 1.35, 0.45, 1)');
+
   // Scroll the page back to the top. Smooth when asked (and motion is allowed),
   // instant on a plain route change.
   const scrollTop = (smooth) =>
@@ -74,6 +84,24 @@
   // capped so a long list doesn't trail on forever. Shared by every list view.
   const staggerDelay = (i) => Math.min(i * 0.05, 0.4).toFixed(2) + 's';
 
+  // Counts roll like a little odometer: the outgoing value hands off through a
+  // one-glyph slot while the new one springs in (the masthead title-swap
+  // pattern, miniaturized). Card rebuilds only ever move a count by one, so the
+  // old value is derivable from the fresh markup — no need to thread it through.
+  function odoTick(countEl, dir) {
+    if (!countEl || prefersReduced()) return;
+    const now = parseInt(countEl.textContent, 10);
+    if (isNaN(now)) return;
+    const was = dir === 'up' ? now - 1 : now + 1;
+    countEl.classList.add('odo', dir === 'up' ? 'odo--up' : 'odo--down');
+    countEl.innerHTML =
+      `<span class="odo-new">${now}</span><span class="odo-old">${was}</span>`;
+    setTimeout(() => {
+      countEl.classList.remove('odo', 'odo--up', 'odo--down');
+      countEl.textContent = String(now);
+    }, 540);
+  }
+
   // A cheap, stable fingerprint of a string. makeCard stamps each card with a
   // hash of its own rendered markup so the feed can tell, on a quiet refresh,
   // whether a card's content actually changed — and leave the unchanged ones
@@ -106,11 +134,15 @@
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
-    // A person with a check — the headcount's "I'm in" on an activity. The person
-    // sits left and the check lifts clear into the upper-right; the old layout ran
-    // the check straight through the shoulder line and read as a squiggle.
-    going:   '<circle cx="8.5" cy="8.5" r="3.1"/><path d="M3 20a5.5 5.5 0 0 1 11 0"/><path d="m15.5 12.5 2.2 2.2 4.2-4.2"/>',
-    // Bare check — rides the "going" RSVP toggle once you're in.
+    // The headcount control's glyph, both states in one drawing. The person sits
+    // LEFT of centre so the check has somewhere to land — a centred figure would
+    // have to jump sideways to make room, which reads as a bug. The check arm
+    // ships in every copy and stays hidden (dashed fully out, see .check-arm)
+    // until aria-pressed flips: joining DRAWS it on rather than swapping icons.
+    // pathLength normalizes the dash math to the arm's real geometry.
+    going:   '<circle cx="8.5" cy="8.5" r="3.1"/><path d="M3 20a5.5 5.5 0 0 1 11 0"/>' +
+             '<path class="check-arm" pathLength="1" d="m15.5 12.5 2.2 2.2 4.2-4.2"/>',
+    // Bare check — the poll's "your pick" mark.
     check:   '<path d="M5 12.5 10 17.5 19 7"/>',
     // The going person with an x where the check was — the "can't make it"
     // sheet action, so backing out reads as the mirror of joining.
@@ -1108,35 +1140,36 @@
       `</button>`;
   }
 
-  // Attendees — activities only, and public (unlike likes): the count is the
-  // point. The people-glyph + count anchor the LEFT of the action row for host
-  // and guests alike (gradient-filled like a liked heart — see .card-attendees);
-  // tapping opens the who's-going panel.
-  function attendeesHtml(post) {
+  // Headcount AND RSVP, one control — activities only. The count is public
+  // (unlike likes) and YOU ARE IN IT: joining rolls the number up by one, which
+  // is the whole feedback. State lives in the glyph (a check draws onto the
+  // person) and its colour, never in a word, so this stays the same species as
+  // the comment count beside it instead of being the row's one text toggle.
+  //
+  // Three shapes, one button:
+  //   · friend, plan still ahead → a toggle. One tap puts you in; tapping again
+  //     opens the list. Backing out lives at the foot of that panel, one level
+  //     down, because an accidental un-RSVP is a genuinely bad outcome (a stray
+  //     un-like isn't).
+  //   · the host, or a plan that's already happened → plain disclosure. Same
+  //     pixels, no toggle.
+  // aria-expanded rides every state (the button always controls the panel);
+  // aria-pressed appears only where it's actually a toggle, which is also how
+  // wireGoing tells the two apart.
+  function goingControlHtml(post) {
     if (post.type !== 'activity') return '';
     if (!canSocial(post)) return '';
     const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
     const open = openGoing.has(post.id);
-    return `<button class="card-attendees" type="button" ` +
-        `aria-expanded="${open}" aria-label="${n} going, see who" title="Who’s going">` +
+    const rsvpable = post.author !== Store.session() && !isPastActivity(post);
+    const going = rsvpable && Store.goingByMe(post.id);
+    return `<button class="card-attendees${going ? ' going' : ''}" type="button" ` +
+        `aria-expanded="${open}"${rsvpable ? ` aria-pressed="${going}"` : ''} ` +
+        `aria-label="${n} going${going ? ', including you' : ''}. ` +
+          `${rsvpable && !going ? 'Count me in' : 'See who'}" ` +
+        `title="${rsvpable && !going ? 'Count me in' : 'Who’s going'}">` +
         svgIcon('going') +
         `<span class="card-attendees-count">${n}</span>` +
-      `</button>`;
-  }
-
-  // RSVP toggle — activities, friends only (the host doesn't RSVP to their own
-  // plan). A word toggle on the RIGHT: "going?" at rest, "going ✓" once you're
-  // in (gradient treatment). Flipping it rebuilds the card so the attendee count
-  // on the left updates too.
-  function goingToggleHtml(post) {
-    if (post.type !== 'activity' || !canSocial(post)) return '';
-    if (post.author === Store.session()) return '';
-    if (isPastActivity(post)) return '';   // the plan's Happened — nothing left to RSVP to
-    const going = Store.goingByMe(post.id);
-    return `<button class="card-going${going ? ' going' : ''}" type="button" aria-pressed="${going}" ` +
-        `aria-label="${going ? 'You’re going. Tap if you can’t make it' : 'Count me in'}" ` +
-        `title="${going ? 'You’re in' : 'Count me in'}">` +
-        (going ? `<span>going</span>${svgIcon('check')}` : `<span>going?</span>`) +
       `</button>`;
   }
 
@@ -1153,12 +1186,20 @@
     if (!canSocial(post)) return '';
     const list = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user));
     const open = openGoing.has(post.id);
+    // The way back out sits under the list, the mirror of joining and one level
+    // down from it — the host planned around this headcount, so changing your
+    // mind should cost a deliberate second tap rather than ride the same button
+    // you joined with.
+    const out = post.author !== Store.session() && !isPastActivity(post) && Store.goingByMe(post.id)
+      ? `<button class="going-out" type="button">${svgIcon('notgoing')}<span>Can’t make it</span></button>`
+      : '';
     return `<div class="going-panel${open ? ' open' : ''}">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
             (list.length
               ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
               : `<p class="likers-empty">No one’s going yet.</p>`) +
+            out +
           `</div>` +
         `</div>` +
       `</div>`;
@@ -1258,8 +1299,7 @@
   }
 
   function cardActionsHtml(post, opts) {
-    const attendees = attendeesHtml(post);
-    const rsvp = goingToggleHtml(post);
+    const going = goingControlHtml(post);
     const like = likeButtonHtml(post);
     const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
     const expanded = openComments.has(post.id);
@@ -1276,21 +1316,16 @@
     // card, out of the way.
     const menu = menuBtnHtml(post);
 
-    if (!attendees && !rsvp && !like && !comment && !menu) return '';
+    if (!going && !like && !comment && !menu) return '';
 
-    // Activities split into two ends. LEFT: the ••• menu, then the attendee count
-    // — the plan. RIGHT: the RSVP toggle, then comments + likes. RSVP leads the
-    // social cluster so comment + like are ALWAYS the two rightmost glyphs, in the
-    // exact same spot whether or not an RSVP rides along.
-    if (post.type === 'activity') {
-      const meta = `<div class="card-meta">${menu}${attendees}</div>`;
-      const social = `<div class="card-social">${rsvp}${comment}${like}</div>`;
-      return `<div class="card-actions card-actions--activity">${meta}${social}</div>`;
-    }
-
-    // Everything non-activity — a single row: social cluster on the right, the •••
-    // menu tucked left (row-reverse, so the menu ends up leftmost).
-    return `<div class="card-actions"><div class="card-social">${attendees}${rsvp}${comment}${like}</div>${menu}</div>`;
+    // One row for every card type now that the headcount and the RSVP are a
+    // single control: social cluster on the right, the ••• menu tucked left
+    // (row-reverse, so the menu ends up leftmost). Activities used to split the
+    // row into two ends to keep the plan away from the gestures — with one fewer
+    // control they sit flush with notes and photos instead, which is most of what
+    // made them read busy in the feed. The headcount leads the cluster, so
+    // comment + like stay the two rightmost glyphs on every card.
+    return `<div class="card-actions"><div class="card-social">${going}${comment}${like}</div>${menu}</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
@@ -1503,7 +1538,7 @@
     if (!fig) return;
     const im = fig.querySelector('img');
     if (im) revealCardImage(fig, im);
-    const open = () => openLightbox(img.src, img.alt);
+    const open = () => openLightbox(img.src, img.alt, false, im);
     fig.addEventListener('click', open);
     fig.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
@@ -1826,51 +1861,65 @@
   }
 
   function wireGoing(el, post, opts) {
-    // The attendee count opens the who's-going panel — pure CSS reveal, same
-    // grid-rows ease as the comment thread, for host and friends alike.
-    const countBtn = el.querySelector('.card-attendees');
+    const btn = el.querySelector('.card-attendees');
     const panel = el.querySelector('.going-panel');
-    if (countBtn && panel) {
-      countBtn.addEventListener('click', () => {
-        const open = openGoing.has(post.id);
-        if (open) openGoing.delete(post.id); else openGoing.add(post.id);
-        if (!open) { collapseComments(el, post.id); collapseLikers(el, post.id); }
-        countBtn.setAttribute('aria-expanded', String(!open));
-        panel.classList.toggle('open', !open);
-      });
-    }
+    if (!btn || !panel) return;
 
-    // The hand-up toggle (friends only). Flipping it changes the public count
-    // AND the who's-going list, so the card is rebuilt in place — no rise flash,
-    // same pattern as adding a comment.
-    const toggleBtn = el.querySelector('.card-going');
-    if (!toggleBtn) return;
+    // The who's-going panel — pure CSS reveal, same grid-rows ease as the
+    // comment thread.
+    const setPanel = (open) => {
+      if (open) openGoing.add(post.id); else openGoing.delete(post.id);
+      if (open) { collapseComments(el, post.id); collapseLikers(el, post.id); }
+      btn.setAttribute('aria-expanded', String(open));
+      panel.classList.toggle('open', open);
+    };
+
+    // Joining changes the count, the glyph, the who's-going list AND whether the
+    // way back out exists, so the card is rebuilt in place — no rise flash, same
+    // pattern as adding a comment.
     const flip = async () => {
-      toggleBtn.disabled = true;
+      btn.disabled = true;
       const res = await Store.toggleGoing(post.id);
-      toggleBtn.disabled = false;
+      btn.disabled = false;
       if (!res.ok) return;
+      // Joining lands you on the list: you see who you just joined, and the way
+      // back out is right there under them. Bowing out leaves it open too — you
+      // were already reading it.
+      if (res.going) openGoing.add(post.id);
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';
-      // Roll the attendee count in its new direction — up when you join, down
-      // when you bow out.
-      fresh.querySelector('.card-attendees-count')
-        ?.classList.add(res.going ? 'count-tick-up' : 'count-tick-down');
+      // Roll the count in its new direction — up when you join, down when you
+      // bow out. The number moving IS the confirmation that you're in it.
+      odoTick(fresh.querySelector('.card-attendees-count'), res.going ? 'up' : 'down');
       el.replaceWith(fresh);
+      // Joining earns the RSVP's own reward beat (see celebrateGoing).
+      if (res.going) celebrateGoing(fresh);
     };
-    toggleBtn.addEventListener('click', () => {
-      // Backing out is a small commitment to undo — the host planned around the
-      // headcount — so it gets the sheet (not a bare confirm). Joining stays
-      // one tap. Not a danger row: it's a change of plans, not a destruction.
-      if (Store.goingByMe(post.id)) {
-        openSheet({
-          title: 'Can’t make it?',
-          items: [{ label: 'Can’t make it', icon: 'notgoing', run: flip }],
-        });
-        return;
-      }
-      flip();
+
+    // Only a friend looking at a plan that hasn't happened gets a toggle;
+    // goingControlHtml marks those with aria-pressed. Everyone else's tap is
+    // purely the disclosure.
+    const rsvpable = btn.hasAttribute('aria-pressed');
+    btn.addEventListener('click', () => {
+      if (rsvpable && btn.getAttribute('aria-pressed') === 'false') { flip(); return; }
+      setPanel(!openGoing.has(post.id));
     });
+
+    el.querySelector('.going-out')?.addEventListener('click', flip);
+  }
+
+  // The RSVP's own reward verb (deliberately NOT a fifth sparkle — that motif
+  // belongs to likes, comments, polls, and fresh posts): the check draws itself
+  // onto the person glyph while the quintet gradient sweeps once across the
+  // count and settles on the resting activity green. Both halves run in CSS
+  // (see .rsvp-inked); the check arm carries pathLength=1 in the icon itself, so
+  // the dash math covers its real geometry exactly.
+  function celebrateGoing(card) {
+    if (prefersReduced()) return;
+    const btn = card.querySelector('.card-attendees.going');
+    if (!btn) return;
+    btn.classList.add('rsvp-inked');
+    setTimeout(() => btn.classList.remove('rsvp-inked'), 1100);
   }
 
   // Sparkle burst on LIKE. A tight cluster of y2k four-point stars — varied
@@ -2045,8 +2094,7 @@
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';               // no rise flash on an in-place swap
       // Roll the comment count in its new direction (up on add, down on delete).
-      if (dir) fresh.querySelector('.card-comment-count')
-        ?.classList.add(dir === 'up' ? 'count-tick-up' : 'count-tick-down');
+      if (dir) odoTick(fresh.querySelector('.card-comment-count'), dir);
       el.replaceWith(fresh);
       fresh.querySelector('.comment-form textarea')?.focus();
       return fresh;
@@ -3452,6 +3500,19 @@
      to reveal an inline square cropper; Save commits the words and, if you chose
      a new photo, the crop too. Saves via Store.updateProfile / updateAvatar, then
      calls `done` to re-render the profile in place. */
+  /* The Private account hint, written in the present tense about the profile as
+     it stands. Since Stage 2 the account flag no longer gates who can read a
+     post (each post carries its own audience), so it describes what it actually
+     still does: pick the default the composer preselects in "Who can see this?".
+     Both states name the activity default too, since it doesn't follow the flag. */
+  function privacyHint(isPrivate) {
+    return isPrivate
+      ? `Your profile is private. New posts are visible to your circle by ` +
+        `default. Activities are visible to your circle by default.`
+      : `Your profile is public. New posts are visible to everyone by default. ` +
+        `Activities are visible to your circle by default.`;
+  }
+
   function openProfileEditor(done) {
     const u = Store.currentUser();
     if (!u) return;
@@ -3490,17 +3551,22 @@
               `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
           `</div>` +
           `<p class="field-hint field-hint--combo" id="pf-count"></p>` +
-          // Privacy + notifications sit below the identity as quiet settings.
+          // Notifications + privacy sit below the identity as quiet settings.
+          // Notifications lead: it's the smaller, self-contained switch, so the
+          // privacy pair (switch + its live sentence) closes the group instead of
+          // being split by another row.
+          pushToggleHtml() +
           `<div class="push-toggle-row">` +
-            `<span class="push-toggle-label">Private account</span>` +
+            `<span class="push-toggle-label" id="privacy-label">Private account</span>` +
             `<button type="button" class="push-toggle" role="switch" id="privacy-toggle" ` +
               `aria-checked="${u.private !== false}" ` +
-              `aria-label="Private account, only friends can see your posts">` +
+              `aria-labelledby="privacy-label privacy-hint">` +
               `<span class="push-toggle-knob" aria-hidden="true"></span>` +
             `</button>` +
           `</div>` +
-          `<p class="field-hint">When on, only friends can see your posts. Activities are always friends only.</p>` +
-          pushToggleHtml() +
+          // The hint states what the profile *is* right now, not what the switch
+          // would do — one less translation step between the control and reality.
+          `<p class="field-hint" id="privacy-hint">${privacyHint(u.private !== false)}</p>` +
           `<p class="composer-error" id="pf-error" role="alert"></p>` +
           // Cancel + Save are the form's commit row. Account actions (Log out,
           // Delete) live in their own zone below, split off by a hairline — they
@@ -3532,9 +3598,11 @@
 
     // A plain UI switch — it holds its state until Save commits it alongside the
     // words (Cancel discards it, same as name/bio).
+    const privacyHintEl = modal.querySelector('#privacy-hint');
     privacyBtn.addEventListener('click', () => {
       const on = privacyBtn.getAttribute('aria-checked') === 'true';
       privacyBtn.setAttribute('aria-checked', String(!on));
+      privacyHintEl.textContent = privacyHint(!on);
     });
 
     const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
@@ -6036,7 +6104,10 @@
   /* ── Lightbox ────────────────────────────────────────────────────────────── */
   let lightbox = null;
   let lightboxReturn = null;   // element to restore focus to on close
-  function openLightbox(src, alt, isVideo) {
+  let lbOrigin = null;         // the feed <img> a photo flew out of (hidden mid-flight)
+  let lbBaseRect = null;       // the lightbox img's untransformed layout box
+  let lbClosing = false;       // swallow re-entry while the close flight runs
+  function openLightbox(src, alt, isVideo, originEl) {
     if (!lightbox) {
       lightbox = document.createElement('div');
       lightbox.className = 'lightbox';
@@ -6065,25 +6136,208 @@
       v.addEventListener('click', e => e.stopPropagation());
       wireClipWindow(v, win);
     }
+    lbClosing = false;
+    lbOrigin = null;
+    lbBaseRect = null;
     lightboxReturn = document.activeElement;
     document.body.style.overflow = 'hidden';   // lock the page behind it
     lightbox.classList.add('open');
     lightbox.focus();
     document.addEventListener('keydown', onKey);
+
+    // Shared-element flight (photos only): FLIP — measure the tapped card image,
+    // invert the lightbox image onto it, then release, so the photo FLIES from
+    // its card into the viewer instead of fading in. Transform-only (translate +
+    // scale about 0 0), one promoted layer, and the origin img is hidden for the
+    // whole session so there's exactly one copy of the photo moving.
+    const pic = isVideo ? null : lightbox.querySelector('img');
+    if (pic) wireLightboxDrag(pic);
+    if (!pic || !originEl?.isConnected || prefersReduced()) return;
+    const r0 = originEl.getBoundingClientRect();
+    if (!r0.width || !r0.height) return;
+    pic.style.opacity = '0';           // hold until it's decoded and measurable
+    const fly = () => {
+      pic.style.opacity = '';
+      if (lbClosing) return;
+      const r1 = pic.getBoundingClientRect();
+      if (!r1.width || !r1.height) return;
+      // The feed crops tall media toward 5:4; a big shape mismatch would shear
+      // mid-flight, so past ~20% keep the old plain fade.
+      const shear = (r0.width / r0.height) / (r1.width / r1.height);
+      if (shear > 1.2 || shear < 0.83) return;
+      lbOrigin = originEl;
+      lbBaseRect = r1;
+      originEl.style.visibility = 'hidden';
+      try {
+        pic.animate([
+          { transformOrigin: '0 0',
+            transform: `translate(${r0.left - r1.left}px, ${r0.top - r1.top}px) ` +
+                       `scale(${r0.width / r1.width}, ${r0.height / r1.height})` },
+          { transformOrigin: '0 0', transform: 'none' },
+        ], { duration: 480, easing: springEase() });
+      } catch { /* no WAAPI transform support: the photo simply appears in place */ }
+    };
+    if (pic.complete && pic.naturalWidth) fly();
+    else {
+      pic.addEventListener('load', fly, { once: true });
+      pic.addEventListener('error', () => { pic.style.opacity = ''; }, { once: true });
+    }
   }
   function closeLightbox() {
-    if (!lightbox) return;
+    if (!lightbox || lbClosing) return;
+    lbClosing = true;                 // reset by the next openLightbox
     // A playing <video> must be stopped, not just visually hidden, or it keeps
     // decoding (and, if unmuted, keeps making sound) behind the closed sheet.
     const v = lightbox.querySelector('video');
     if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+    // Reverse flight: fly the photo home while the veil fades, then reveal the
+    // (hidden) card image right as they trade places. Departs from wherever a
+    // drag left it — the current visual box is re-expressed as a transform of
+    // the layout box so both keyframes share origin 0 0 and nothing snaps. If
+    // home has left the DOM (a background refresh rebuilt the card), it's the
+    // plain fade, and the fresh card was never hidden anyway.
+    const pic = lightbox.querySelector('img');
+    const home = lbOrigin;
+    lbOrigin = null;
+    const unhide = () => { if (home) home.style.visibility = ''; };
+    let flying = false;
+    if (pic && lbBaseRect && home?.isConnected && !prefersReduced()) {
+      const r0 = home.getBoundingClientRect();
+      const r1 = lbBaseRect;
+      if (r0.width && r1.width) {
+        const rc = pic.getBoundingClientRect();
+        pic.style.transform = '';     // keyframes own it from here; no paint between
+        try {
+          const flight = pic.animate([
+            { transformOrigin: '0 0',
+              transform: `translate(${rc.left - r1.left}px, ${rc.top - r1.top}px) ` +
+                         `scale(${rc.width / r1.width}, ${rc.height / r1.height})` },
+            { transformOrigin: '0 0',
+              transform: `translate(${r0.left - r1.left}px, ${r0.top - r1.top}px) ` +
+                         `scale(${r0.width / r1.width}, ${r0.height / r1.height})` },
+          ], { duration: 260, easing: 'cubic-bezier(0.32, 0.72, 0.35, 1)', fill: 'forwards' });
+          flying = true;
+          flight.onfinish = unhide;
+          setTimeout(unhide, 400);    // backstop if the event is ever missed
+        } catch { /* fall through to the plain fade */ }
+      }
+    }
+    if (!flying) unhide();
+    lbBaseRect = null;
     lightbox.classList.remove('open');
+    lightbox.style.opacity = '';      // clear any drag dim; the fade takes over
     document.body.style.overflow = '';
     document.removeEventListener('keydown', onKey);
     if (lightboxReturn && lightboxReturn.focus) lightboxReturn.focus();
     lightboxReturn = null;
   }
   const onKey = (e) => { if (e.key === 'Escape') closeLightbox(); };
+
+  // Drag to dismiss (photos only — a video keeps its native controls): the image
+  // follows the finger, the veil thins with distance, and a real flick or a long
+  // pull lets go — closeLightbox then flies it home from wherever it was
+  // released. A short drag springs back to centre on the shared spring.
+  function wireLightboxDrag(pic) {
+    pic.style.touchAction = 'none';   // the drag owns this surface; page is locked anyway
+    let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, raf = 0;
+    let lastY = 0, lastT = 0, vy = 0;
+    pic.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || lbClosing) return;
+      dragging = true;
+      sx = e.clientX; sy = e.clientY; dx = dy = vy = 0;
+      lastY = e.clientY; lastT = e.timeStamp;
+      try { pic.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+    });
+    pic.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      dx = e.clientX - sx; dy = e.clientY - sy;
+      if (e.timeStamp > lastT) {      // velocity for the flick test, px/ms
+        vy = (e.clientY - lastY) / (e.timeStamp - lastT);
+        lastY = e.clientY; lastT = e.timeStamp;
+      }
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!dragging) return;
+        const d = Math.hypot(dx, dy);
+        pic.style.transform =
+          `translate(${dx}px, ${dy}px) scale(${Math.max(0.82, 1 - d / 1400)})`;
+        // The veil thins as the photo pulls away (its own transition smooths it).
+        lightbox.style.opacity = String(Math.max(0.45, 1 - d / 520));
+      });
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      const d = Math.hypot(dx, dy);
+      // A drag was a drag: swallow the click that follows so it can't double-close
+      // (or close against the user after a spring-back).
+      if (d > 8) {
+        const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+        lightbox.addEventListener('click', stop, { capture: true, once: true });
+        setTimeout(() => lightbox.removeEventListener('click', stop, { capture: true }), 120);
+      }
+      if ((Math.abs(vy) > 0.55 || d > 110) && !lbClosing) { closeLightbox(); return; }
+      lightbox.style.opacity = '';    // re-thicken the veil
+      if (d > 2) {
+        try {
+          const back = pic.animate({ transform: 'none' },
+            { duration: 460, easing: springEase() });
+          back.onfinish = () => { pic.style.transform = ''; back.cancel(); };
+        } catch { pic.style.transform = ''; }
+      } else pic.style.transform = '';
+    };
+    pic.addEventListener('pointerup', end);
+    pic.addEventListener('pointercancel', end);
+  }
+
+  /* ── Press grammar ──────────────────────────────────────────────────────────
+     One delegated engine gives every tappable control the same physical
+     response: a fast compression the instant a finger lands, a springy release
+     on let-go. It animates the `scale` property (NOT `transform`) so it
+     composes with whatever transform a control already carries — the going
+     label's optical nudge, the FAB's glide, the dome — with zero collisions.
+     WAAPI rather than CSS :active because (a) the release can ride the shared
+     --spring token and (b) a CSS transition on scale would clobber each
+     control's own transition shorthand. Elements whose press is a child-icon
+     pop (the dial items) keep their CSS :active rules and stay off this list. */
+  const PRESS_TARGETS = [
+    '.card-social button', '.card-menu', '.going-out',
+    '.seg-tab', '.sheet-item', '.sheet-cancel',
+    '.comment-form button', '.modal-actions button',
+    '.masthead-filter', '.friend-add', '.request-accept', '.request-ignore',
+    '.account-badges > button', '.pf-photo-edit', '.nav-link',
+    '.feed-empty-cta', '.composer-post',
+  ].join(', ');
+  let pressing = null;   // { el, scale, down } while a finger is down
+  function pressRelease() {
+    if (!pressing) return;
+    const { el, scale, down } = pressing;
+    pressing = null;
+    try {
+      const up = el.animate({ scale: [String(scale), '1'] },
+        { duration: 480, easing: springEase() });
+      up.onfinish = () => up.cancel();   // hand the property back to CSS at rest
+      down.cancel();
+    } catch { down.cancel(); }
+  }
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button > 0 || prefersReduced()) return;
+    const el = e.target.closest?.(PRESS_TARGETS);
+    if (!el || el.disabled) return;
+    pressRelease();                      // a stray press whose pointerup got lost
+    // Same grammar, sized to the object: rows barely compress, buttons more.
+    const w = el.offsetWidth;
+    const scale = w > 240 ? 0.98 : w > 120 ? 0.96 : 0.93;
+    try {
+      const down = el.animate({ scale: ['1', String(scale)] },
+        { duration: 90, easing: 'ease-out', fill: 'forwards' });
+      pressing = { el, scale, down };
+    } catch { /* engine can't animate `scale`: no press feedback, no harm */ }
+  }, { passive: true });
+  document.addEventListener('pointerup', pressRelease, { passive: true });
+  document.addEventListener('pointercancel', pressRelease, { passive: true });
 
   /* ── Ambient wash ───────────────────────────────────────────────────────────
      The soft background glow (see .ambient) is on-brand by default. On a profile
@@ -6572,7 +6826,8 @@
      Profile(3) · Publish(4). A move to a higher index slides the new page in
      from the RIGHT; a lower index slides it in from the LEFT; a same-level swap
      (or the auth gate, index −1) cross-fades. Each page rides in on
-     blur+opacity+movement so it resolves into focus rather than merely sliding.
+     opacity+movement, crisp the whole way (no entry blur — it re-rasterized the
+     page and only ever showed on the card-dense Circle).
      This is the only place direction is decided — every view renders the same
      way and inherits the transition. */
   function pageOrder(path) {
@@ -6585,7 +6840,9 @@
 
   // Build the next page, drop it into the stage, and animate the swap. `renderFn`
   // fills the fresh `view`; direction comes from newIndex vs. the current route.
-  function renderPage(newIndex, renderFn) {
+  // `keepScroll` is the spotlight path: the scroll is NOT snapped to the top, so
+  // the leaving page keeps its natural (top-anchored) position.
+  function renderPage(newIndex, renderFn, keepScroll) {
     const reduce = prefersReduced();
     const prev = view;
     const token = ++navToken;
@@ -6655,6 +6912,23 @@
 
     prev.className = 'page';    // clear any stale transition classes before reuse
     prev.classList.add('leave', leaveTo);
+
+    // Scroll anchor. The leaving page is lifted out of flow TOP-anchored while
+    // route() snaps the window to 0 — so leaving from deep in a feed used to
+    // flash the old page's masthead during the slide instead of what you were
+    // reading. Pin the leaving page at exactly the region that was on screen,
+    // reset the scroll underneath it, and the exit now departs from where you
+    // actually were. (keepScroll leaves both alone: the scroll isn't resetting,
+    // so the top-anchored default is already right.)
+    const fromY = window.scrollY;
+    if (!keepScroll && fromY > 0) {
+      prev.style.top = -fromY + 'px';
+      window.scrollTo(0, 0);
+    }
+    // Push depth: the exit also recedes a touch (see .page.leave.active). Scale
+    // it about the viewport's visible centre, not the tall page's far-off middle,
+    // or the recede would read as a vertical slide.
+    prev.style.transformOrigin = `50% ${fromY + window.innerHeight / 2}px`;
 
     void stage.offsetWidth;    // commit the start states before flipping to rest
     requestAnimationFrame(() => {
@@ -6791,11 +7065,13 @@
         case '#/support': renderSupport(); break;
         default:          location.hash = '#/';
       }
-    });
+    }, spotlighting);
 
     if (!spotlighting) scrollTop(false);   // spotlight scrolls itself (see above)
     nudgeNav();           // iOS standalone: re-composite the nav's frosted layer
-    refreshWorld(path);   // Circle/Updates: quietly re-pull behind the render
+    // Deliberately NO background re-pull here: a refresh that lands mid-slide
+    // can rebuild rows under the transition. Refresh is always an explicit
+    // gesture now — re-tapping the tab you're on, or pulling the feed down.
   }
 
   // iOS Safari (standalone) sometimes drops the fixed, backdrop-filtered nav's
@@ -6848,17 +7124,20 @@
     ('requestIdleCallback' in window) ? requestIdleCallback(run, { timeout: 2000 }) : setTimeout(run, 400);
   }
 
-  /* ── Nav-tap refresh ────────────────────────────────────────────────────────
-     Landing on (or re-tapping) Circle, Discover, or Updates quietly re-pulls the
-     world in the background — the page renders from cache instantly, and only if
-     something actually changed does the view re-render, so the new cards rise
-     in with the usual entrance and an unchanged page never flickers. This is
-     the pull-to-refresh stand-in: the tab tap IS the refresh gesture. */
+  /* ── Explicit refresh ───────────────────────────────────────────────────────
+     Re-tapping the tab you're on, or pulling the feed down, quietly re-pulls the
+     world — the page renders from cache instantly, and only if something
+     actually changed does the view re-render, so new cards rise in with the
+     usual entrance and an unchanged page never flickers. Plain navigation
+     deliberately does NOT refresh (a re-pull landing mid-slide can rebuild rows
+     under the transition); the world is otherwise refreshed at boot and on
+     foreground. */
   let refreshSeq = 0;
   let lastRefresh = Date.now();   // boot just loaded the world — don't re-pull it
-  async function refreshWorld(path) {
+  async function refreshWorld(path, force) {
     if (path !== '#/' && path !== '#/discover' && path !== '#/updates') return;
-    if (Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
+    // `force` is the pull-to-refresh path: an explicit gesture skips the guard.
+    if (!force && Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
     const changed = await Store.refresh();
@@ -6927,6 +7206,80 @@
         ticking = false;
       });
     }, { passive: true });
+  })();
+
+  /* ── Pull-to-refresh ────────────────────────────────────────────────────────
+     Standalone PWAs don't get Safari's native pull-to-refresh, so the feed
+     pages grow their own. iOS's rubber band does all the physics: overscrolling
+     at the top drives window.scrollY NEGATIVE, and that reading IS the pull —
+     no preventDefault, no scroll hijack, and engines without the bounce simply
+     never produce a negative scrollY (so this is inert on desktop). The
+     indicator is a little drifting-quintet dot that descends with the pull,
+     pops when armed, then churns while the same quiet re-pull a tab re-tap
+     runs. Reduced motion keeps the feature, drops the theatrics (CSS side). */
+  (() => {
+    const THRESHOLD = 72;
+    let ptr = null, pulling = false, raf = 0, busy = false;
+    const el = () => {
+      if (!ptr) {
+        ptr = document.createElement('div');
+        ptr.className = 'ptr';
+        ptr.setAttribute('aria-hidden', 'true');
+        ptr.innerHTML = '<span class="ptr-dot"></span>';
+        document.body.appendChild(ptr);
+      }
+      return ptr;
+    };
+    const herePath = () => (location.hash || '#/').split('?')[0];
+    const eligible = () =>
+      Store.isAuthed() && !busy
+      && (herePath() === '#/' || herePath() === '#/discover' || herePath() === '#/updates')
+      && document.body.style.overflow !== 'hidden';   // not under a lightbox/modal
+    const draw = () => {
+      raf = 0;
+      if (!pulling) return;
+      const d = Math.max(0, -window.scrollY);
+      const box = el();
+      if (d <= 0) { box.classList.remove('ptr--show', 'ptr--armed'); return; }
+      const p = Math.min(d / THRESHOLD, 1);
+      box.classList.add('ptr--show');
+      box.classList.toggle('ptr--armed', p >= 1);
+      box.style.setProperty('--ptr-p', p.toFixed(3));
+      box.style.setProperty('--ptr-y', (Math.min(d, 140) * 0.72).toFixed(1) + 'px');
+      box.style.setProperty('--ptr-r', (p * 270).toFixed(0) + 'deg');
+    };
+    const onScroll = () => { if (pulling && !raf) raf = requestAnimationFrame(draw); };
+    window.addEventListener('touchstart', () => {
+      if (window.scrollY > 1 || !eligible()) return;
+      pulling = true;
+      window.addEventListener('scroll', onScroll, { passive: true });
+    }, { passive: true });
+    const finish = async () => {
+      if (!pulling) return;
+      pulling = false;
+      window.removeEventListener('scroll', onScroll);
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      const d = Math.max(0, -window.scrollY);
+      const box = el();
+      if (d >= THRESHOLD && !busy) {
+        busy = true;
+        box.classList.add('ptr--spin');
+        // Hold the churn a beat even when nothing changed, so the gesture
+        // always visibly did something.
+        try {
+          await Promise.all([
+            refreshWorld(herePath(), true),
+            new Promise(r => setTimeout(r, 650)),
+          ]);
+        } catch { /* offline pull: let go quietly */ }
+        box.classList.remove('ptr--spin', 'ptr--show', 'ptr--armed');
+        busy = false;
+      } else {
+        box.classList.remove('ptr--show', 'ptr--armed');
+      }
+    };
+    window.addEventListener('touchend', finish, { passive: true });
+    window.addEventListener('touchcancel', finish, { passive: true });
   })();
 
   // ── Self-update ────────────────────────────────────────────────────────────

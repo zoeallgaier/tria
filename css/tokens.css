@@ -114,12 +114,32 @@
      reveals). Soft, never springy; durations step in a small, calm scale. */
   --ease:      cubic-bezier(0.16, 1, 0.3, 1);  /* signature easeOut — settles gently */
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);   /* symmetric — for cross-fades */
+  /* The playful counterpart: a real spring for press releases and reward beats.
+     This bezier is the broad-support stand-in (a touch of overshoot); the
+     @supports block below upgrades it to a sampled underdamped spring where
+     linear() exists (Safari 17.2+). Reserved for RESPONSES to a touch — press
+     release, count rolls, reward pops — never for page-level moves, which keep
+     the calm signature ease. */
+  --spring: cubic-bezier(0.3, 1.35, 0.45, 1);
   --dur-micro: 0.15s;   /* hovers, colour shifts */
   --dur-quick: 0.24s;   /* small reveals, modal rise, fades */
   --dur-move:  0.36s;   /* page + big transitions */
   --dur-slow:  0.5s;    /* card rise, generous eases */
 
   color-scheme: light;
+}
+
+/* Where linear() easing exists (Safari 17.2+ / modern engines), --spring becomes
+   a sampled underdamped spring: ~10% overshoot, a whisper of settle. A bezier
+   can only overshoot once; this is what makes releases feel physical. */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --spring: linear(
+      0, 0.008, 0.035, 0.078, 0.136, 0.207, 0.288, 0.377, 0.47, 0.565, 0.658,
+      0.746, 0.828, 0.9, 0.962, 1.013, 1.052, 1.079, 1.095, 1.101, 1.099, 1.09,
+      1.075, 1.057, 1.038, 1.02, 1.005, 0.993, 0.985, 0.98, 0.979, 0.981,
+      0.984, 0.988, 0.993, 0.997, 1, 1.002, 1.003, 1.002, 1.001, 1);
+  }
 }
 
 /* ── Dark mode — deep cool black, cool off-white ink; RYB lifted to stay vivid. */
