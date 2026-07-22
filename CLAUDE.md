@@ -57,16 +57,26 @@ exempt). Voice is playful but not trying-too-hard.
 - Login is by **email**; username is the public handle. Email confirmation is off.
 - The Supabase service key was rotated/deleted, so **only Zoe has DB admin** —
   Claude can't run SQL or clear accounts. Migrations in `supabase/*.sql` are run
-  by her in the dashboard (`schema.sql` already folds them in for fresh installs).
+  by her in the dashboard; `schema.sql` folds them all in for fresh installs.
+  **Careful with `create or replace function` in a new migration** — a rewritten
+  `can_view_post` once silently dropped the block gate a previous migration had
+  folded into it (see `restore-block-gate.sql`). When you touch that function,
+  restate *every* clause it's accumulated, and re-read the current definition
+  first rather than layering on an older copy.
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. **Friends are directed edges** (request → mutual on accept).
-- **Private accounts** (`users.private`, defaults true, so new signups open
-  closed): when private, only mutual friends see your posts. Enforced at BOTH
-  layers — the profile view shows non-friends an "add them to see posts" nudge,
-  and RLS won't hand them the rows (`can_view_post` wraps `can_see_post` with a
-  mutual-friend check; see `supabase/profile-privacy.sql`). Toggle lives in Edit
-  profile. Activities stay friends-only regardless (app-level gate, unchanged).
+- **Audience is per-post authoritative** (`posts.audience`, one of `public` /
+  `circle` / `list`; see `supabase/post-audience-public.sql`). `can_view_post`
+  decides reads from the post's own tag: public → everyone · author → self ·
+  list → the `post_audience` allowlist · circle → mutual friends only. `circle`
+  means friends-only for EVERY account, public ones included. Any post type can
+  be made public, activities included, and public posts are what feed Discover.
+- **`users.private`** (defaults true, so new signups open closed) no longer gates
+  reads at all. It does two things: picks the composer's default audience (a
+  public account's posts default to `public`, activities stay `circle`-first),
+  and shows non-friends the "add them to see posts" nudge on a private profile —
+  softened when that person has public posts to show.
 - Post photos are stored at native aspect ratio (not cropped); only avatars crop
   (circular). Push notifications: see `supabase/PUSH-SETUP.md`; the Edge Function's
   real slug is `swift-processor`, not `push`.
@@ -83,15 +93,17 @@ blur + hairline border + lit top rim + float shadow) is reserved for the layer
 that *floats above* content, never for content itself. Two tiers: **chrome**
 (nav rail, seg-tabs, search field, nav dial — `blur(18–24px)`) and **floating
 panels** (modals, autocomplete menus, and the Updates notification + soft-ask
-cards — `blur(24–30px)`). Content lists — the feed, the Friends *directory*,
+cards — `blur(24–30px)`). Content lists — the feed, Discover's people rows,
 comments — stay flat editorial rows. The Friends *modal* (a popover) is glass;
-the Friends *page* (a roster) is flat — that split is correct, not inconsistent
-(mirrors iOS: lock-screen notifications are glass, Contacts rows are not). On
-phones the Friends/Updates view switcher (seg-tabs) is docked chrome, not an
-inline row: it floats just above the bottom nav and *rises up from behind it*
-when a page becomes active (router tucks it while the page slides in, releases
-it on settle). The bottom nav hugs the home indicator (small float, iOS Liquid
-Glass style), not lifted into the screen. **Corner scale:** 3px incidental (`--radius`) · 8px small containers
+a *roster* of people (Discover's search results, your profile's circle) is flat
+— that split is correct, not inconsistent (mirrors iOS: lock-screen
+notifications are glass, Contacts rows are not). On phones the Updates view
+switcher (seg-tabs) is docked chrome, not an inline row: it floats just above
+the bottom nav and *rises up from behind it* when a page becomes active (router
+tucks it while the page slides in, releases it on settle). The composer's
+Post/Activity switcher is the one seg-tabs that stays inline — it's excluded by
+`:not(#c-group-tabs)` wherever the router tucks them. The bottom nav hugs the
+home indicator (small float, iOS Liquid Glass style), not lifted into the screen. **Corner scale:** 3px incidental (`--radius`) · 8px small containers
 (`--radius-img`) · 12px composer inputs · 14px photos + glass menus/cards ·
 18px nav rail · 20px glass modals · 999px pills. The pastel `publish-fill`
 gradient stays reserved for the primary publish/share action — don't spread it

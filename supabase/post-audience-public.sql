@@ -14,6 +14,11 @@
 -- 'circle' post is friends-only no matter how the account is set. `users.private`
 -- now only drives the composer DEFAULT and the profile nudge, not visibility.
 --
+-- ⚠️  1c below overwrites can_view_post WITHOUT the is_blocked_pair() clause that
+--     blocks.sql folded in, which silently disables blocking at the DB. Run
+--     restore-block-gate.sql immediately after this file — it re-adds that one
+--     clause and keeps everything else here intact.
+--
 -- Layers on activity-audience.sql (audience column + post_audience + the
 -- SECURITY DEFINER visibility helpers) and profile-privacy.sql (can_view_post).
 -- Same recursion-dodging trick: the read policy resolves through a definer
