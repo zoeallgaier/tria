@@ -236,6 +236,18 @@ const Store = (() => {
     return posts().filter(p => circle.has(p.author));
   }
 
+  // Discover: public posts from across Tria, newest first — the meeting ground
+  // for people outside your circle. Drops your own (they already live in My
+  // Circle). Audience is now per-post authoritative (Stage 2): a post surfaces
+  // here iff it's marked 'public', whatever the author's account privacy — so a
+  // private account can float a single thought out, and a public account can
+  // still keep a post to its circle. Blocked authors are filtered in the view.
+  function discover() {
+    return posts().filter(p =>
+      p.author !== state.session &&
+      p.audience === 'public');
+  }
+
   // All posts, newest first, by real server timestamp (stable).
   function posts() {
     return [...state.posts].sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
@@ -539,11 +551,15 @@ const Store = (() => {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
     const row = { author: idOf(me), type: data.type, tags: data.tags || [] };
+    // Three audience levels: 'public' (Anyone, discoverable), 'list' (hand-picked
+    // people via post_audience), or 'circle' (mutual friends, the default).
     // Targeted only when the composer picked 'list' AND named at least one person;
     // "choose people" with nobody picked falls back to the whole circle.
     const targetIds = (data.audience === 'list' ? (data.audienceUsers || []) : [])
       .map(idOf).filter(Boolean);
-    row.audience = targetIds.length ? 'list' : 'circle';
+    row.audience = data.audience === 'public'
+      ? 'public'
+      : (targetIds.length ? 'list' : 'circle');
     if (data.title)    row.title = data.title;
     if (data.url)      row.url = data.url;
     if (data.note)     row.note = data.note;
@@ -925,7 +941,7 @@ const Store = (() => {
 
   return {
     init, refresh,
-    users, user, currentUser, isPrivate, friends, friendsOf, feed, posts, postsBy, audienceCount,
+    users, user, currentUser, isPrivate, friends, friendsOf, feed, discover, posts, postsBy, audienceCount,
     // Auth
     session, isAuthed, signup, login, logout, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,

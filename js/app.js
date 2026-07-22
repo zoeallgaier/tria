@@ -16,7 +16,7 @@
   let navIndex = -1;          // spatial index of the current route (for direction)
   let navToken = 0;           // guards against a stale transition cleaning up a new one
   let lastPath = null;        // the path we were on before the current one (for back links)
-  let profileOrigin = '#/friends';  // where a friend profile's "← Back" returns to
+  let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
   const TRANSITION_MS = 360;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
@@ -88,9 +88,13 @@
      One list drives the desktop top-right links and the mobile bottom tab bar.
      The publish "+" is the primary action (filled pill on desktop). */
   const ICONS = {
-    // Three interlocking rings — your "circle" of friends, and a nod
-    // to the name (Tria). Kept as an outline to sit with the other nav glyphs.
+    // Three interlocking rings — overlapping circles, a nod to the name (Tria)
+    // and to the wider community you meet on Discover. Kept an outline to sit
+    // with the other nav glyphs.
     circle:  '<circle cx="8.5" cy="10" r="3.8"/><circle cx="15.5" cy="10" r="3.8"/><circle cx="12" cy="15.5" r="3.8"/>',
+    // One ring — your single, intimate circle (the home feed). The plainest mark
+    // against Discover's three, so "the small private one" reads at a glance.
+    myCircle: '<circle cx="12" cy="12" r="7"/>',
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
@@ -133,6 +137,8 @@
     sliders: '<path d="M4 9h9"/><path d="M17 9h3"/><circle cx="15" cy="9" r="2"/><path d="M4 15h4"/><path d="M12 15h8"/><circle cx="10" cy="15" r="2"/>',
     // Padlock — marks an activity shared with a hand-picked few, not the whole circle.
     lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+    // Globe — the "Anyone" audience level (a public post, discoverable by all).
+    globe:   '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4a12 12 0 0 1 0 16 12 12 0 0 1 0-16"/>',
     // Horizontal ellipsis — the quiet "more" overflow on a post header. Opens the
     // per-post action sheet (Copy link, Report). Filled dots so it reads at the
     // small header scale where a hairline outline would nearly vanish.
@@ -230,8 +236,8 @@
     };
   })();
   const NAV = [
-    { route: '#/',        key: 'circle',  label: 'My Circle' },
-    { route: '#/friends', key: 'friends', label: 'Friends' },
+    { route: '#/',         key: 'myCircle', label: 'My Circle' },
+    { route: '#/discover', key: 'circle',   label: 'Discover' },
     { route: '#/updates', key: 'bell',    label: 'Updates' },
     { route: '#/profile', key: 'profile', label: 'Profile' },
     { route: '#/publish', key: 'publish', label: 'Post', publish: true },
@@ -728,7 +734,8 @@
   // collapsible panel beneath (closed by default — most posts never touch it),
   // wired open/closed in wireRichEditor. The count lives on the title row, not
   // the toolbar, so it stays visible even while the panel is collapsed.
-  function richNoteField(idp, titleVal, noteHtml, notePh) {
+  function richNoteField(idp, titleVal, noteHtml, notePh, opts = {}) {
+    const tools = opts.tools !== false;   // attach toggles: composer only (see the foot bar below)
     return `<div class="field field--combo field--rich">` +
         `<div class="rich-title-row">` +
           `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
@@ -743,17 +750,28 @@
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
-        // Bottom-right attach bar: link + photo. Each is a live toggle that flips the
-        // post's inferred type (link → Find, photo → Frame) and pops the masthead mark.
-        // Wired in renderPublish (wireAttachBar); only the composer's Post form mounts it.
-        `<div class="rich-attach" role="group" aria-label="Attach to your post">` +
-          `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
-            `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
-          `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
-            `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
-          `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
-            `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
-        `</div>` +
+        // Foot bar. Right (opts.tools): link + photo + poll toggles — each a live toggle
+        // that flips the post's inferred type (link → Find, photo → Frame, poll → Poll)
+        // and pops the masthead mark. Left (opts.lock): the audience lock, so who sees it
+        // and what it is share one row. Both are composer-only — wired in renderPublish
+        // (wireAttachBar + wireAudienceLock). An edit card reuses this field with NEITHER:
+        // you can't swap a post's media or its type after the fact, so offering the
+        // buttons there would only promise something the editor can't do.
+        (tools || opts.lock
+          ? `<div class="rich-attach${opts.lock ? ' rich-attach--withlock' : ''}" role="group" aria-label="Post options">` +
+              (opts.lock ? audienceLockHtml() : '') +
+              (tools
+                ? `<div class="rich-attach-tools">` +
+                    `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
+                      `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
+                    `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
+                      `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
+                    `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
+                      `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+                  `</div>`
+                : '') +
+            `</div>`
+          : '') +
       `</div>`;
   }
 
@@ -1310,9 +1328,12 @@
       // the decoded image then eases in over it on a plain scale + opacity settle.
       // A video Frame with no stored poster skips straight to that tint box —
       // wireFrameVideo's own #t=0.001 clip self-paints the first frame instead.
+      // Frames cap at 5:4 tall — a taller photo reserves (and centre-crops into)
+      // the capped box, so the outline you see before it lands is the real crop.
       const tint = img.tint;
+      const cropped = sized && frameIsTall(img.w, img.h);
       const frameStyle =
-        (sized ? `aspect-ratio:${img.w}/${img.h};` : '') +
+        (sized ? `aspect-ratio:${frameRatio(img.w, img.h)};` : '') +
         (tint ? `--ph-fill:${tint};` : '');
       // The text block above the media reads exactly like a Note's: serif headline
       // (if any), then the rich caption (headings/emphasis + Read-more clamp), then
@@ -1334,7 +1355,7 @@
           head +
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
           `<figure class="photo${isVideo ? ' frame-video' : ''}" tabindex="0" role="button" aria-label="${isVideo ? 'Play frame' : 'Enlarge photo'}">` +
-            `<div class="photo-frame${sized ? '' : ' photo-frame--reserve'}"${frameStyle ? ` style="${frameStyle}"` : ''}>` +
+            `<div class="photo-frame${sized ? '' : ' photo-frame--reserve'}${cropped ? ' photo-frame--crop' : ''}"${frameStyle ? ` style="${frameStyle}"` : ''}>` +
               mediaHtml +
             `</div>` +
           `</figure>` +
@@ -1391,11 +1412,12 @@
           `target="_blank" rel="noopener noreferrer">${svgIcon('pin', 'card-location-ico')}` +
           `<span>${esc(post.location)}</span></a></p>`
       : '';
-    // Targeted activity: a quiet lock line. The author sees the headcount they
-    // picked (feed + their profile); an invited viewer just sees that it's private
-    // (they can't read the full allowlist anyway — RLS hands them only their row).
+    // Targeted post ('list', any type): a quiet lock line. The author sees the
+    // headcount they picked (feed + their profile); an invited viewer just sees
+    // that it's private (they can't read the full allowlist anyway — RLS hands
+    // them only their row).
     const iAmAuthor = post.author === Store.session();
-    const audienceHtml = post.type === 'activity' && post.audience === 'list'
+    const audienceHtml = post.audience === 'list'
       ? `<p class="card-location card-audience">${svgIcon('lock', 'card-location-ico')}` +
           `<span>${iAmAuthor
             ? `Shared with ${audienceCountLabel(Store.audienceCount(post.id))}`
@@ -1427,6 +1449,25 @@
     return el;
   }
 
+  // ── The 5:4 ceiling on feed frames ────────────────────────────────────────
+  // A frame in the feed is never taller than 5:4 (height ≤ 1.25 × width). Phone
+  // screenshots run 9:19.5, and a screenshot of a playing video arrives padded
+  // with black bars top and bottom — at full height both eat the whole column and
+  // read as broken. Anything past the ceiling is centre-cropped into it (the bars
+  // are the first thing to go). Nothing is lost: tapping still opens the whole
+  // uncropped image in the lightbox, which is what tap-to-open is for.
+  const FRAME_MAX_TALL = 5 / 4;
+  const frameIsTall = (w, h) => !!(w && h) && h / w > FRAME_MAX_TALL;
+  // What the frame should reserve: the media's own shape, or the capped box.
+  const frameRatio = (w, h) => frameIsTall(w, h) ? '4 / 5' : `${w} / ${h}`;
+  // Stamp that onto a live .photo-frame. .photo-frame--crop is what switches the
+  // media from "fill the width, take its own height" to "cover the capped box".
+  function capFrame(frame, w, h) {
+    if (!frame || !w || !h) return;
+    frame.style.aspectRatio = frameRatio(w, h);
+    frame.classList.toggle('photo-frame--crop', frameIsTall(w, h));
+  }
+
   // Fades a card's <img> in once its bitmap is fully decoded, and releases the
   // frame's reserved box so it takes the image's true height. `complete` covers
   // a warm cache; `error` reveals a broken image rather than leaving it invisible.
@@ -1443,7 +1484,11 @@
   function revealCardImage(fig, im) {
     const landed = () => {
       fig.classList.add('is-loaded');
-      fig.querySelector('.photo-frame')?.classList.remove('photo-frame--reserve');
+      const frame = fig.querySelector('.photo-frame');
+      frame?.classList.remove('photo-frame--reserve');
+      // Legacy media carries no stamped size, so the cap can only be applied once
+      // the bitmap is here and its real shape is known.
+      if (im.naturalWidth) capFrame(frame, im.naturalWidth, im.naturalHeight);
     };
     const reveal = () => im.decode ? im.decode().then(landed).catch(landed) : landed();
     if (im.complete && im.naturalWidth) reveal();
@@ -1557,15 +1602,16 @@
       clip.className = 'frame-clip';
       clip.muted = !withSound; clip.playsInline = true; clip.loop = !win; clip.preload = 'metadata';
       // Ground-truth aspect ratio: once the decoder reports the clip's real
-      // dimensions, size the frame box to match so object-fit:cover never crops.
-      // The stamped `-WxH` dims usually get this right already, but a Frame with
-      // no stored poster AND no stamped size otherwise falls back to the 3:2
-      // reserve box — which would crop the video. Reading videoWidth/Height off
-      // the live element is definitionally correct: the box matches exactly what
-      // this element will paint, so the clip keeps its aspect on any device.
+      // dimensions, size the frame box to match so object-fit:cover never crops
+      // (below the 5:4 ceiling, where capFrame does mean to crop). The stamped
+      // `-WxH` dims usually get this right already, but a Frame with no stored
+      // poster AND no stamped size otherwise falls back to the 3:2 reserve box —
+      // which would crop the video. Reading videoWidth/Height off the live element
+      // is definitionally correct: the box matches exactly what this element will
+      // paint, so the clip keeps its aspect on any device.
       clip.addEventListener('loadedmetadata', () => {
         if (clip && clip.videoWidth && clip.videoHeight) {
-          frame.style.aspectRatio = clip.videoWidth + '/' + clip.videoHeight;
+          capFrame(frame, clip.videoWidth, clip.videoHeight);
           frame.classList.remove('photo-frame--reserve');
         }
       }, { once: true });
@@ -2003,6 +2049,7 @@
         ?.classList.add(dir === 'up' ? 'count-tick-up' : 'count-tick-down');
       el.replaceWith(fresh);
       fresh.querySelector('.comment-form textarea')?.focus();
+      return fresh;
     };
 
     panel.querySelector('.comment-form').addEventListener('submit', async (e) => {
@@ -2010,7 +2057,12 @@
       if (submitBtn.disabled) return;               // empty, or a submit already in flight
       submitBtn.disabled = true;                    // debounce: no double-post on a fast double-tap
       const res = await Store.addComment(post.id, e.target.elements.text.value);
-      if (res.ok) { apply('up'); return; }          // card rebuilt — its fresh button starts disabled
+      if (res.ok) {
+        const fresh = apply('up');                  // card rebuilt — its fresh button starts disabled
+        const mine = [...fresh.querySelectorAll('.comments-list > .comment')].pop();
+        celebrateComment(mine, post.type);
+        return;
+      }
       submitBtn.disabled = false;                   // failed — let them try again
     });
 
@@ -2081,7 +2133,7 @@
       // A Find shares the Note editor (headline + rich body), same as the composer,
       // then carries the link field. Keeps create and edit identical, so a formatted
       // Find edits as rich text instead of raw markup in a flat 180-char box.
-      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)') +
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -2111,7 +2163,7 @@
     // optional; the image carries the post). Prefilled from the stored note (a
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
-    return richNoteField('e', post.title, editorPrefill(post.note), notePh) + tagsInput;
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false }) + tagsInput;
   }
 
   function makeEditCard(post) {
@@ -2123,10 +2175,12 @@
         editFieldsFor(post) +
         `<p class="composer-error" id="e-error" role="alert"></p>` +
         `<div class="edit-actions">` +
-          // One button that reads "Cancel" until a field changes, then becomes the
-          // accent "Save changes" — see the dirty-tracking wiring in renderUser.
-          // Delete lives in the post's ••• menu now, not here.
-          `<button type="button" class="edit-toggle">Cancel</button>` +
+          // Cancel and Save are both always on screen (the same commit row Edit
+          // profile uses), so backing out is never hidden behind "have I changed
+          // anything yet". Save just sits disabled until a field diverges — see the
+          // dirty-tracking wiring in renderUser. Delete lives in the ••• menu.
+          `<button type="button" class="edit-cancel">Cancel</button>` +
+          `<button type="submit" class="composer-submit edit-save" disabled>Save changes</button>` +
         `</div>` +
       `</form>`;
     wireWhenHints(el);
@@ -2361,22 +2415,24 @@
   // The masthead's filter control: the sliders glyph plus a hue dot that lights
   // (in the active type's colour) only when a filter is on, so a folded menu
   // still tells you the feed is narrowed. Tapping it fans the filter dial open.
-  function filterBtnEl() {
-    const on = activeFilter !== 'all';
-    return `<button class="masthead-filter" type="button" id="home-filter-btn" ` +
+  // `id` namespaces the button so Home and Discover can each carry their own
+  // filter (they hold separate state — narrowing one never touches the other).
+  function filterBtnEl(id, filterVal) {
+    const on = filterVal !== 'all';
+    return `<button class="masthead-filter" type="button" id="${id}" ` +
         `aria-haspopup="menu" aria-expanded="false" aria-label="Filter the feed"` +
-        `${on ? ` data-active="${activeFilter}"` : ''}>` +
+        `${on ? ` data-active="${filterVal}"` : ''}>` +
         svgIcon('sliders', 'masthead-filter-ico') +
         `<span class="masthead-filter-dot" aria-hidden="true"${on ? '' : ' hidden'}></span>` +
       `</button>`;
   }
   // Reflect the current filter onto the masthead button without a full re-render
   // (so picking one doesn't flash the whole page): light/clear the dot + hue.
-  function syncFilterBtn() {
-    const btn = view.querySelector('#home-filter-btn');
+  function syncFilterBtn(id, filterVal) {
+    const btn = view.querySelector('#' + id);
     if (!btn) return;
-    const on = activeFilter !== 'all';
-    if (on) btn.setAttribute('data-active', activeFilter);
+    const on = filterVal !== 'all';
+    if (on) btn.setAttribute('data-active', filterVal);
     else btn.removeAttribute('data-active');
     const dot = btn.querySelector('.masthead-filter-dot');
     if (dot) dot.hidden = !on;
@@ -2385,12 +2441,15 @@
   function renderHome() {
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('', 'My Circle', filterBtnEl()) +
+        mastheadEl('', 'My Circle', filterBtnEl('home-filter-btn', activeFilter)) +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
     view.querySelector('#home-filter-btn')
-      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget));
+      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
+        current: activeFilter,
+        onPick: (key) => { activeFilter = key; activeTag = null; syncFilterBtn('home-filter-btn', activeFilter); renderFeed(); },
+      }));
 
     renderFeed();
   }
@@ -2403,15 +2462,19 @@
      type is one array entry, not a layout change. Glass per the material rule (a
      menu floats above content); reduced-motion aware; WAI-ARIA menu semantics. */
   let filterDialOpen = false;
-  function openFilterDial(anchor) {
+  function openFilterDial(anchor, opts = {}) {
     if (filterDialOpen) return;
     filterDialOpen = true;
     anchor.setAttribute('aria-expanded', 'true');
+    // Caller supplies the current selection (for the checkmark) and what to do on
+    // a pick, so the one dial drives either the home feed or Discover.
+    const current = opts.current || 'all';
+    const onPick = opts.onPick || (() => {});
 
     const scrim = document.createElement('div');
     scrim.className = 'filter-dial-scrim';
     const rows = FILTERS.map((f, i) => {
-      const on = f.key === activeFilter;
+      const on = f.key === current;
       const glyph = f.key === 'all' ? ICON_ALL : (TYPE_ICON[f.key] || '');
       // --glow = the pastel that blooms behind the glyph; the glyph itself takes
       // the type's deep -ink via `color` (fill:currentColor). All's pentad paints
@@ -2433,10 +2496,12 @@
 
     // Pin the dial's right edge under the button so the icon chips stack straight
     // down from it (label floating to the left — the speed-dial reading, mirrored).
+    // A small extra gutter (past the button's own overhang past --inset) keeps the
+    // chips from hugging the screen edge.
     const dial = scrim.querySelector('.filter-dial');
     const r = anchor.getBoundingClientRect();
     dial.style.top = (r.bottom + 10) + 'px';
-    dial.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+    dial.style.right = Math.max(8, window.innerWidth - r.right + 8) + 'px';
 
     const opener = anchor;
     const items = () => [...scrim.querySelectorAll('.filter-dial-item')];
@@ -2477,12 +2542,7 @@
     scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
     items().forEach(btn => btn.addEventListener('click', () => {
       const key = btn.dataset.filter;
-      close(() => {
-        activeFilter = key;
-        activeTag = null;
-        syncFilterBtn();
-        renderFeed();
-      });
+      close(() => onPick(key));
     }));
     document.addEventListener('keydown', onKey);
   }
@@ -2523,7 +2583,7 @@
       if (noFilter && Store.friends().length === 0) {
         feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
           `<p>Your circle is empty, for now.</p>` +
-          `<a class="feed-empty-cta" href="#/friends">Find people to add →</a>` +
+          `<a class="feed-empty-cta" href="#/discover">Discover people to add →</a>` +
         `</div>`;
       } else {
         feedEl.innerHTML = `<p class="feed-empty">Nothing here yet.` +
@@ -2636,6 +2696,32 @@
       document.body.appendChild(layer);
       setTimeout(() => layer.remove(), 1400);
     }, 200);
+  }
+
+  // Sparkle a freshly posted comment — the same y2k motif as the post/like
+  // bursts, dialed down: three stars instead of five-to-nine, smaller, dimmer
+  // peak, gone quicker. A nod that it landed, not a fanfare (a comment is
+  // lower-stakes than a post). Anchored over the new <li>'s avatar corner.
+  const COMMENT_SPARKS = [
+    { x: -9, y: -8, s: 7, r:  14, d:  0 },
+    { x:  8, y: -9, s: 6, r: -10, d: 30 },
+    { x:  2, y:  9, s: 5, r:  16, d: 60 },
+  ];
+  function celebrateComment(li, type) {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    if (!li) return;
+    const layer = document.createElement('span');
+    layer.className = 'comment-sparkles';
+    layer.dataset.type = type;
+    for (const p of COMMENT_SPARKS) {
+      const s = document.createElement('span');
+      s.className = 'spark';
+      s.style.cssText =
+        `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms`;
+      layer.appendChild(s);
+    }
+    li.appendChild(layer);
+    setTimeout(() => layer.remove(), 600);
   }
 
   // Tag chips inside a feed card filter the feed by that tag; wired once, on the
@@ -3022,9 +3108,14 @@
     // too — RLS won't hand a non-friend a private author's rows.) A public profile
     // still shows notes/finds/photos to anyone; activities stay circle business,
     // hidden until you've added each other.
+    // A private account fences its circle to friends, but can now float individual
+    // posts public (Stage 2). So an outsider isn't shown a bare wall — they see the
+    // public posts RLS actually hands over, plus a softened nudge that the rest is
+    // friends-only. Activities stay circle business unless explicitly made public.
     const locked = Store.isPrivate(u.username) && !isSelf && !isFriend;
-    const list = locked ? [] : Store.postsBy(u.username)
-      .filter(p => p.type !== 'activity' || isSelf || isFriend);
+    const list = Store.postsBy(u.username).filter(p =>
+      (p.type !== 'activity' || isSelf || isFriend || p.audience === 'public') &&
+      (!locked || p.audience === 'public'));
     const friendStatus = isSelf ? null : Store.friendStatus(u.username);
     const areFriends = friendStatus === 'friends';
 
@@ -3153,15 +3244,21 @@
     // byline). Photos keep the lightbox; tags jump to the home feed filtered.
     const feedEl = view.querySelector('#feed');
 
-    if (locked) {
-      // Private profile, seen by an outsider: no posts, just a warm nudge toward
-      // the Add-friend button that already sits in the card above.
-      feedEl.innerHTML =
-        `<div class="profile-locked">` +
-          svgIcon('lock', 'profile-locked-ico') +
-          `<p class="profile-locked-line">${esc(u.name)} keeps their posts for friends.</p>` +
-          `<p class="profile-locked-sub">Add them and, once they add you back, their posts show up here.</p>` +
-        `</div>`;
+    // A warm nudge toward the Add-friend button (which already sits in the card
+    // above). Full when there's nothing public to show; softened when we're
+    // rendering their public posts and only the circle is held back.
+    const lockedNudge = (soft) =>
+      `<div class="profile-locked${soft ? ' profile-locked--soft' : ''}">` +
+        svgIcon('lock', 'profile-locked-ico') +
+        `<p class="profile-locked-line">${soft
+          ? `More from ${esc(u.name)} is for friends.`
+          : `${esc(u.name)} keeps their posts for friends.`}</p>` +
+        `<p class="profile-locked-sub">Add them and, once they add you back, the rest of their posts show up here.</p>` +
+      `</div>`;
+
+    if (locked && !list.length) {
+      // Private profile, seen by an outsider, with nothing public to show.
+      feedEl.innerHTML = lockedNudge(false);
     } else if (!list.length) {
       feedEl.innerHTML = `<p class="feed-empty">` +
         `${isSelf ? 'Nothing posted yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
@@ -3175,6 +3272,8 @@
         frag.appendChild(card);
       });
       feedEl.appendChild(frag);
+      // Their public posts are shown; tell an outsider the circle holds more.
+      if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
     }
 
     // An Updates row targeted this post: bring it into view with a brief wash,
@@ -3200,26 +3299,20 @@
 
     const editForm = feedEl.querySelector('.edit-form');
     if (editForm) {
-      // Snapshot the fields exactly as rendered. The lone toggle stays a quiet
-      // "Cancel" until any field diverges from that baseline, then flips to the
-      // accent "Save changes" — so Save never shows on an untouched form, and
-      // reverting an edit drops it back to Cancel.
-      const toggle = editForm.querySelector('.edit-toggle');
+      // Snapshot the fields exactly as rendered. Save stays disabled until a field
+      // diverges from that baseline (and re-disables if the edit is reverted), so it
+      // can never commit a no-op; Cancel sits beside it the whole time as the way
+      // back out, rather than being the same button wearing a different name.
+      const cancelBtn = editForm.querySelector('.edit-cancel');
+      const saveBtn = editForm.querySelector('.edit-save');
       const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea, [contenteditable]'))
         .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
       const baseline = snapshot();
       const dirty = () => snapshot() !== baseline;
-      const syncToggle = () => {
-        const d = dirty();
-        toggle.classList.toggle('is-dirty', d);
-        toggle.textContent = d ? 'Save changes' : 'Cancel';
-      };
-      editForm.addEventListener('input', syncToggle);
-      editForm.addEventListener('change', syncToggle);
-      toggle.addEventListener('click', () => {
-        if (dirty()) submitEdit(editingId, username);
-        else { editingId = null; renderUser(username); }
-      });
+      const syncSave = () => { saveBtn.disabled = !dirty(); };
+      editForm.addEventListener('input', syncSave);
+      editForm.addEventListener('change', syncSave);
+      cancelBtn.addEventListener('click', () => { editingId = null; renderUser(username); });
       editForm.addEventListener('submit', (e) => {
         e.preventDefault();
         if (dirty()) submitEdit(editingId, username);   // Enter saves, but never a no-op
@@ -3532,15 +3625,15 @@
   }
 
   // The "← Back" link atop a friend's profile points wherever you came from
-  // (home, Friends, your own profile…), not always Friends. `profileOrigin` is
+  // (home, Discover, your own profile…), not always one place. `profileOrigin` is
   // set by the router when you enter a profile from a non-profile page.
   function backTarget() {
     const labels = {
       '#/': 'My Circle',
-      '#/friends': 'Friends',
+      '#/discover': 'Discover',
       '#/profile': 'Profile',
     };
-    const href = labels[profileOrigin] ? profileOrigin : '#/friends';
+    const href = labels[profileOrigin] ? profileOrigin : '#/discover';
     return { href, label: labels[href] || 'Back' };
   }
 
@@ -3834,31 +3927,25 @@
     if (post) openPostMenu(post);
   });
 
-  /* ── Friends (your mutual circle) + Discover (people you haven't added) ───────
-     A segmented control (seg-tabs) splits the page: My circle wears the brand
-     gradient glow under the thumb, Find friends rests monochrome. */
-  const FRIENDS_TABS = [
-    { key: 'circle', label: 'My circle' },
-    { key: 'find',   label: 'Find friends' },
-  ];
-  let friendsTab = 'circle';
-  let friendsQuery = '';   // live filter over the shown list (name + @username)
-  function renderFriends() {
+  /* ── Discover — the meeting ground ───────────────────────────────────────────
+     A chronological feed of PUBLIC posts from across Tria (people outside your
+     circle), so you meet folks the natural way: read something you like, tap
+     through, add them. No algorithm, no infinite scroll — a bounded public
+     square, in keeping with the ethos. The masthead search (lifted from the old
+     Friends page) now spans both people AND their public posts: names,
+     @usernames, tags, keywords. This page replaces the Friends page outright —
+     your own circle roster lives on your profile now, and incoming requests live
+     on Updates, so nothing here is orphaned. */
+  let discoverQuery = '';    // live search over public people + posts
+  let discoverFilter = 'all'; // type filter, its own state (never touches My Circle's)
+  function renderDiscover() {
     const me = Store.session();
     const friendSet = new Set(Store.friends());
-    const byName = (a, b) => a.name.localeCompare(b.name);
+    const notBlocked = (name) => !Blocks.has(name);
+    const typeOk = (p) => discoverFilter === 'all' || p.type === discoverFilter;
 
-    const friends = Store.friends().map(Store.user).filter(Boolean)
-      .filter(u => !Blocks.has(u.username)).sort(byName);
-    // Everyone signed up who isn't you, isn't already a friend, and isn't blocked.
-    const discover = Store.users()
-      .filter(u => u.username !== me && !friendSet.has(u.username) && !Blocks.has(u.username))
-      .sort(byName);
-
-    // The inline control on a Discover row, keyed to where the tie stands:
-    //   none     → Add       (send a request)
-    //   incoming → Accept     (they asked first; add them back → mutual)
-    //   sent     → Requested  (muted; tap to take my request back)
+    // The inline tie control on a person row (search results only):
+    //   none → Add · incoming → Accept · sent → Requested (tap to take back).
     const addBtn = (u) => {
       const s = Store.friendStatus(u.username);
       if (s === 'sent')
@@ -3870,24 +3957,24 @@
         `${accept ? 'Accept' : 'Add'}</button>`;
     };
 
-    // A directory row. `discover` rows swap the go-arrow for the status control
-    // above so you can add (or answer) someone without leaving the page.
-    const row = (u, add) =>
-      `<a class="friend" href="#/u/${encodeURIComponent(u.username)}" ` +
-        `data-name="${esc(u.name.toLowerCase())}" data-user="${esc(u.username.toLowerCase())}">` +
-        avatarEl(u, { cls: 'friend-avatar' }) +
-        `<span class="friend-text">` +
-          `<span class="friend-name">${esc(u.name)}</span>` +
-          `<span class="friend-user">@${esc(u.username)}</span>` +
-          (u.bio ? `<span class="friend-bio">${esc(u.bio)}</span>` : '') +
-        `</span>` +
-        (add ? addBtn(u) : `<span class="friend-go" aria-hidden="true">→</span>`) +
-      `</a>`;
+    // A person row (search results). You or an existing friend gets a go-arrow;
+    // anyone else gets the add tie so you can reach out without leaving the page.
+    const personRow = (u) => {
+      const tie = (u.username === me || friendSet.has(u.username))
+        ? `<span class="friend-go" aria-hidden="true">→</span>` : addBtn(u);
+      return `<a class="friend" href="#/u/${encodeURIComponent(u.username)}">` +
+          avatarEl(u, { cls: 'friend-avatar' }) +
+          `<span class="friend-text">` +
+            `<span class="friend-name">${esc(u.name)}</span>` +
+            `<span class="friend-user">@${esc(u.username)}</span>` +
+            (u.bio ? `<span class="friend-bio">${esc(u.bio)}</span>` : '') +
+          `</span>` +
+          tie +
+        `</a>`;
+    };
 
-    const circleCount = `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} in your circle`;
-    const onCircle = friendsTab === 'circle';
-    // The soft ask to share Tria stands at the foot of Find Friends always — a
-    // standing invite, not just what you see when there's no one new to add.
+    // The standing "share Tria" invite at the foot of the default feed (hidden
+    // while searching) — a gentle way to bring someone new into the square.
     const shareAsk =
       `<div class="feed-empty friends-share">` +
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
@@ -3897,163 +3984,176 @@
           `<span>Share Tria</span>` +
         `</button>` +
       `</div>`;
-    // The tab panel: the "no matches" note plus the active tab's list. Rebuilt in
-    // place on a tab switch (the masthead, search field, and tabs all persist), so
-    // switching slides the thumb and keeps any open search rather than tearing the
-    // whole view down.
-    const panelHtml = () => {
-      const listHtml = friendsTab === 'circle'
-        ? (friends.length
-            ? `<div class="friends-list">` + friends.map(u => row(u, false)).join('') + `</div>`
-            : `<p class="feed-empty">Your circle is empty, for now.</p>`)
-        : (discover.length
-            ? `<div class="friends-list">` + discover.map(u => row(u, true)).join('') + `</div>` + shareAsk
-            : `<p class="feed-empty">No one new to add right now.</p>` + shareAsk);
-      return `<p class="feed-empty friend-search-empty" hidden>No one by that name.</p>` + listHtml;
-    };
+
     const searchAction =
       `<div class="masthead-search">` +
-        `<input type="search" id="friend-search" class="masthead-search-field" ` +
+        `<input type="search" id="discover-search" class="masthead-search-field" ` +
           `autocapitalize="none" autocomplete="off" spellcheck="false" tabindex="-1" ` +
-          `placeholder="Search by name or @username" aria-label="Search people">` +
-        `<button type="button" class="masthead-search-btn" id="friend-search-toggle" ` +
-          `aria-label="Search people" aria-expanded="false">` +
+          `placeholder="Search people, posts, tags" aria-label="Search Tria">` +
+        `<button type="button" class="masthead-search-btn" id="discover-search-toggle" ` +
+          `aria-label="Search Tria" aria-expanded="false">` +
           `<span class="msb-ico msb-ico--search">${svgIcon('search')}</span>` +
           `<span class="msb-ico msb-ico--close">${svgIcon('close')}</span>` +
         `</button>` +
       `</div>`;
-    // The circle / find switch is the shared iOS segmented control, driving the
-    // tabpanel below. My circle opts into the brand gradient glow.
+
+    // Search then filter, grouped at the right of the nameplate. Opening search
+    // wipes its field left across the title, but it's inset to STOP short of the
+    // filter (see .view--discover .masthead-search-field) so the filter stays put
+    // and tappable on the far right.
+    const actions =
+      `<div class="masthead-actions">` +
+        searchAction +
+        filterBtnEl('discover-filter-btn', discoverFilter) +
+      `</div>`;
+
     view.innerHTML =
-      `<section class="view view--friends">` +
-        mastheadEl(circleCount, 'Friends', searchAction) +
-        segTabsEl('friends', FRIENDS_TABS, friendsTab, { glow: true, panelId: 'friends-panel' }) +
-        `<div class="seg-panel" id="friends-panel" role="tabpanel" ` +
-          `aria-labelledby="friends-tab-${friendsTab}" tabindex="0">` +
-          panelHtml() +
-        `</div>` +
+      `<section class="view view--discover">` +
+        mastheadEl('', 'Discover', actions) +
+        `<div class="discover-body" id="discover-body"></div>` +
       `</section>`;
 
-    // Live search over the shown list — filter rows in place (no re-render, so the
-    // field keeps focus as you type) against name + @username. The share ask and
-    // "no matches" note toggle to match. State persists in friendsQuery so the
-    // filter survives a tab switch's re-render.
-    const searchEl = view.querySelector('#friend-search');
-    const toggleBtn = view.querySelector('#friend-search-toggle');
+    const bodyEl = view.querySelector('#discover-body');
     const masthead = view.querySelector('.masthead');
-    // Stable containers: the panel keeps its identity across tab-switch swaps
-    // (only its innerHTML changes), so the search filter always re-queries the
-    // current list/share/empty nodes from it rather than caching stale ones.
-    const panel = view.querySelector('#friends-panel');
-    const tablist = view.querySelector('#friends-tabs');
-    // Rank a row against the query: 2 = a name-word or the username STARTS with it
-    // (the strong match), 1 = it appears somewhere, 0 = no match. Both the profile
-    // name and the @username are searched.
-    const scoreRow = (r, q) => {
-      const name = r.dataset.name || '', user = r.dataset.user || '';
+    const searchEl = view.querySelector('#discover-search');
+    const toggleBtn = view.querySelector('#discover-search-toggle');
+
+    // makeCard returns a live, fully self-wired node — photos fade in, read-more
+    // clamps, and the friends-only social gates (like/comment/RSVP) all resolve
+    // inside it, so a stranger's card correctly shows no social controls. We only
+    // re-point its tag chips at Discover's own search (the home feed's wireFeedCard
+    // would call renderFeed, the wrong page).
+    const mountCards = (container, list) => {
+      list.forEach((p, i) => {
+        const node = makeCard(p);
+        node.style.animationDelay = staggerDelay(i);
+        container.appendChild(node);
+        node.querySelectorAll('.tag[data-tag]').forEach(btn =>
+          btn.addEventListener('click', () => {
+            openSearch();
+            searchEl.value = discoverQuery = btn.dataset.tag;
+            paint();
+          }));
+      });
+    };
+
+    // Rank a person against the query: 2 = a name-word or @username STARTS with it,
+    // 1 = appears somewhere, 0 = no match.
+    const scoreName = (u, q) => {
+      const name = (u.name || '').toLowerCase(), user = (u.username || '').toLowerCase();
       if (user.startsWith(q) || name.split(' ').some(w => w.startsWith(q))) return 2;
       if (user.includes(q) || name.includes(q)) return 1;
       return 0;
     };
-    const applyFilter = () => {
-      const listEl = panel.querySelector('.friends-list');
-      const searchEmpty = panel.querySelector('.friend-search-empty');
-      const shareEl = panel.querySelector('.friends-share');
-      if (!listEl) { if (searchEmpty) searchEmpty.hidden = true; return; }
-      const q = friendsQuery.trim().toLowerCase();
-      const rows = [...listEl.querySelectorAll('.friend')];
-      if (!q) {   // cleared — restore the natural order, show everyone
-        rows.sort((a, b) => a.dataset.order - b.dataset.order)
-            .forEach(r => { r.hidden = false; listEl.appendChild(r); });
-        if (searchEmpty) searchEmpty.hidden = true;
-        if (shareEl) shareEl.hidden = false;
-        return;
-      }
-      // Matches float to the top (best first, ties keep natural order); the rest
-      // sink and hide. Re-appending existing nodes reorders without replaying the
-      // rise animation, so the list settles rather than flashes.
-      const ranked = rows
-        .map(r => ({ r, s: scoreRow(r, q), o: +r.dataset.order }))
-        .sort((a, b) => b.s - a.s || a.o - b.o);
-      let shown = 0;
-      ranked.forEach(({ r, s }) => {
-        r.hidden = s === 0;
-        if (s > 0) shown++;
-        listEl.appendChild(r);
-      });
-      if (searchEmpty) searchEmpty.hidden = shown !== 0;
-      if (shareEl) shareEl.hidden = true;   // the standing invite steps aside while searching
+    // A public post matches if the query appears in its title, body, tags, or its
+    // author's name/@handle — so "search anything" (tags, interests, keywords,
+    // names) all land.
+    const postHaystack = (p) => {
+      const au = Store.user(p.author);
+      return [p.title, notePlain(p.note), (p.tags || []).join(' '),
+        au && au.name, p.author].filter(Boolean).join(' ').toLowerCase();
     };
 
-    // Wire the freshly mounted rows: stamp each one's natural order + feed stagger
-    // (so search can restore order after reordering), then attach the per-row
-    // controls (add / accept / cancel) and the share ask. Runs on first render and
-    // after every tab-switch panel swap.
-    function wirePanel() {
-      panel.querySelectorAll('.friend').forEach((el, i) => {
-        el.style.animationDelay = staggerDelay(i);
-        el.dataset.order = i;
-      });
-      // Add (or accept) from a Discover row: create my edge, then re-render — a
-      // mutual add moves them into your circle, a fresh one flips to "Requested".
-      // The button sits inside the row link, so stop it navigating.
-      panel.querySelectorAll('.friend-add[data-add]').forEach(btn =>
-        btn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          btn.disabled = true;
-          await Store.addFriend(btn.dataset.add);
-          renderFriends();
-        }));
-      // Take back a request already sent (the "Requested" pill).
-      panel.querySelectorAll('.friend-add[data-cancel]').forEach(btn =>
-        btn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          btn.disabled = true;
-          await Store.removeFriend(btn.dataset.cancel);
-          renderFriends();
-        }));
-      // The share ask: native share sheet where it exists, clipboard copy as the
-      // desktop fallback. Confirm softly either way.
-      const shareBtn = panel.querySelector('.friends-share-copy');
-      if (shareBtn) shareBtn.addEventListener('click', async () => {
-        const result = await shareOrCopy({
-          title: 'Tria',
-          text: 'Join me on Tria',
-          url: 'https://triaonline.com',
-        });
+    // Build the body for the current query. Empty → the public feed + share ask.
+    // A query → matching People (top) then matching Posts.
+    const paint = () => {
+      const q = discoverQuery.trim().toLowerCase();
+
+      if (!q) {
+        const posts = Store.discover().filter(p => notBlocked(p.author) && typeOk(p));
+        bodyEl.innerHTML = posts.length
+          ? `<div class="feed" id="discover-feed"></div>`
+          : `<p class="feed-empty">Nothing here yet.</p>`;
+        const feedEl = bodyEl.querySelector('#discover-feed');
+        if (feedEl) mountCards(feedEl, posts);
+        bodyEl.insertAdjacentHTML('beforeend', shareAsk);
+        wireShare();
+        return;
+      }
+
+      // People: any account (public OR private — you can still find and add a
+      // specific person by name) that matches, strong matches first.
+      const people = Store.users()
+        .filter(u => u.username !== me && notBlocked(u.username) && scoreName(u, q) > 0)
+        .sort((a, b) => scoreName(b, q) - scoreName(a, q) || (a.name || '').localeCompare(b.name || ''));
+      // Posts: public posts whose haystack contains the query, newest first,
+      // honouring the type filter alongside search.
+      const posts = Store.discover().filter(p => notBlocked(p.author) && typeOk(p) && postHaystack(p).includes(q));
+
+      let html = '';
+      if (people.length)
+        html += `<h2 class="discover-section-title">People</h2>` +
+          `<div class="friends-list">${people.map(personRow).join('')}</div>`;
+      if (posts.length)
+        html += `<h2 class="discover-section-title">Posts</h2>` +
+          `<div class="feed" id="discover-feed"></div>`;
+      if (!html)
+        html = `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>`;
+      bodyEl.innerHTML = html;
+
+      bodyEl.querySelectorAll('.friend').forEach((el, i) => el.style.animationDelay = staggerDelay(i));
+      const feedEl = bodyEl.querySelector('#discover-feed');
+      if (feedEl) mountCards(feedEl, posts);
+      wirePeople();
+    };
+
+    // Share Tria: native share sheet where it exists, clipboard copy otherwise.
+    function wireShare() {
+      const shareBtn = bodyEl.querySelector('.friends-share-copy');
+      if (!shareBtn) return;
+      shareBtn.addEventListener('click', async () => {
+        const result = await shareOrCopy({ title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com' });
         if (result === 'cancelled') return;
         const label = shareBtn.querySelector('span');
         label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
         setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
       });
     }
-    wirePanel();
 
-    // Open/close the field. The icon fans it out over the nameplate and focuses
-    // it; tapping again (or Escape) folds it back and clears the filter so the
-    // full list returns. `foldIfEmpty` reflects the collapsed state without
-    // touching a live query (used on blur-away and the reveal helpers).
+    // Add / accept / cancel from a person row, then repaint in place. The button
+    // sits inside the row link, so stop it navigating.
+    function wirePeople() {
+      bodyEl.querySelectorAll('.friend-add[data-add]').forEach(btn =>
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          btn.disabled = true;
+          await Store.addFriend(btn.dataset.add);
+          friendSet.add(btn.dataset.add);
+          paint();
+        }));
+      bodyEl.querySelectorAll('.friend-add[data-cancel]').forEach(btn =>
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          btn.disabled = true;
+          await Store.removeFriend(btn.dataset.cancel);
+          friendSet.delete(btn.dataset.cancel);
+          paint();
+        }));
+    }
+
+    // Open/close the search field. The icon fans it out over the nameplate and
+    // focuses it; tapping again (or Escape) folds it back and clears the query so
+    // the full feed returns. Declared (not const) so mountCards can reopen it from
+    // a tag-chip tap before this point in the source.
     const foldIfEmpty = () => {
       if (searchEl.value.trim()) return;
       masthead.classList.remove('searching');
       toggleBtn.setAttribute('aria-expanded', 'false');
-      toggleBtn.setAttribute('aria-label', 'Search people');
+      toggleBtn.setAttribute('aria-label', 'Search Tria');
       searchEl.tabIndex = -1;
     };
-    const openSearch = () => {
+    function openSearch() {
       masthead.classList.add('searching');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('aria-label', 'Close search');
       searchEl.tabIndex = 0;
       searchEl.focus();
-    };
+    }
     const closeSearch = () => {
-      if (friendsQuery) { friendsQuery = searchEl.value = ''; applyFilter(); }
+      if (discoverQuery) { discoverQuery = searchEl.value = ''; paint(); }
       masthead.classList.remove('searching');
       toggleBtn.setAttribute('aria-expanded', 'false');
-      toggleBtn.setAttribute('aria-label', 'Search people');
+      toggleBtn.setAttribute('aria-label', 'Search Tria');
       searchEl.tabIndex = -1;
       toggleBtn.focus();
     };
@@ -4065,29 +4165,24 @@
       masthead.classList.contains('searching') ? closeSearch() : openSearch());
     searchEl.addEventListener('blur', foldIfEmpty);
     searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
+    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paint(); });
 
-    // Reopen (without stealing focus) if a query carried over a tab-switch re-render.
-    searchEl.value = friendsQuery;
-    if (friendsQuery) {
+    // The type filter — same dial as My Circle, on its own state, repainting
+    // Discover (not the home feed) when you pick a type.
+    view.querySelector('#discover-filter-btn')?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
+      current: discoverFilter,
+      onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paint(); },
+    }));
+
+    // Restore an in-flight query if a background refresh re-rendered the page.
+    searchEl.value = discoverQuery;
+    if (discoverQuery.trim()) {
       masthead.classList.add('searching');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('aria-label', 'Close search');
       searchEl.tabIndex = 0;
     }
-    searchEl.addEventListener('input', () => { friendsQuery = searchEl.value; applyFilter(); });
-    applyFilter();
-
-    // Switch tabs in place: the shared control slides the thumb + updates aria;
-    // here we swap only the panel and keep the masthead and any open search
-    // intact. A full renderFriends only runs when membership changes (an add or
-    // accept), which the row handlers in wirePanel trigger.
-    wireSegTabs(tablist, FRIENDS_TABS, () => friendsTab, (tab) => {
-      friendsTab = tab;
-      panel.setAttribute('aria-labelledby', 'friends-tab-' + tab);
-      panel.innerHTML = panelHtml();
-      wirePanel();
-      applyFilter();
-    });
+    paint();
   }
 
   /* ── Updates — a quiet ledger, visited on your own time ────────────────────
@@ -4603,6 +4698,11 @@
           `<div class="combo-divider" aria-hidden="true"></div>` +
           `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
             `placeholder="When to show up, what to bring." aria-label="Details"></textarea>` +
+          // The audience lock rides the box's foot, same as the Post note's attach
+          // bar — one consistent place for "who sees this" across every composer.
+          `<div class="rich-attach rich-attach--withlock" role="group" aria-label="Post options">` +
+            audienceLockHtml() +
+          `</div>` +
         `</div>` +
         `<div class="field">` +
           `<label for="c-location">Where</label>` +
@@ -4616,8 +4716,7 @@
             `<input id="c-time" type="time" aria-label="Time" placeholder="--:-- --">` +
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
-        `</div>` +
-        audienceRowHtml() + tags;
+        `</div>` + tags;
     }
 
     // The unified Post field set, shared by note / find / photo. The Note rich
@@ -4625,7 +4724,7 @@
     // 15k). The link row and the frame surface ship hidden; the type filter reveals
     // the one its type needs — Find shows the link row, Frame opens the picker — so
     // the body carries over as you switch among the three (see renderPublish).
-    return richNoteField('c', '', '', randomNotePlaceholder()) +
+    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true }) +
       `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
         `<button type="button" id="c-make-find">Make it a Find</button></p>` +
       `<div class="field" id="c-link-row" hidden>` +
@@ -4663,27 +4762,33 @@
       `</div>`;
   }
 
-  // ── Audience picker (design preview) ──────────────────────────────────────
-  // A settings-style disclosure row under the activity fields: label left, the
-  // current audience + a chevron right. Tapping opens a glass sheet to switch
-  // between the whole circle and a hand-picked list (reuses the friend rows and
-  // the mention/tagging model). Demo-gated until the backend lands.
-  function audienceRowHtml() {
-    const val = pubAudience.mode === 'circle'
-      ? 'Everyone in your circle'
-      : audienceCountLabel(pubAudience.users.length);
-    return `<div class="field">` +
-        `<button type="button" class="audience-row" id="c-audience">` +
-          `<span class="audience-row-key">Shared with</span>` +
-          `<span class="audience-row-val" id="c-audience-val">${esc(val)}` +
-            `<span class="audience-row-chev" aria-hidden="true"></span></span>` +
-        `</button>` +
-        `<p class="field-hint">Everyone in your circle can see this, or pick a few.</p>` +
-      `</div>`;
+  // ── Audience lock ─────────────────────────────────────────────────────────
+  // One flat control, shared by every composer: a lock button showing who can
+  // see this post (Anyone / My circle / N people). Tapping opens the glass sheet
+  // (openAudienceSheet). It rides the foot of the Post note (bottom-left of the
+  // attach bar) and stands as its own field on the Activity form. 'public' wears
+  // a globe; circle/list wear a padlock. Flat editorial — the composer is content.
+  function audienceLockText() {
+    if (pubAudience.mode === 'public') return 'Anyone';
+    if (pubAudience.mode === 'circle') return 'My circle';
+    return audienceCountLabel(pubAudience.users.length);   // 'list'
   }
-  function wireAudienceRow(root) {
+  function audienceLockInner() {
+    const glyph = pubAudience.mode === 'public' ? 'globe' : 'lock';
+    return svgIcon(glyph, 'aud-lock-ico') +
+      `<span class="aud-lock-label" id="c-audience-val">${esc(audienceLockText())}</span>`;
+  }
+  function audienceLockHtml() {
+    return `<button type="button" class="aud-lock" id="c-audience" ` +
+        `aria-label="Who can see this post">` + audienceLockInner() + `</button>`;
+  }
+  function wireAudienceLock(root) {
     const btn = root.querySelector('#c-audience');
     if (btn) btn.addEventListener('click', () => openAudienceSheet(root));
+  }
+  function syncAudienceLock(scope) {
+    const btn = (scope || document).querySelector('#c-audience');
+    if (btn) btn.innerHTML = audienceLockInner();
   }
   function openAudienceSheet(root) {
     const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
@@ -4718,7 +4823,8 @@
       `<div class="modal-card modal-card--glass modal-card--list">` +
         `<h2 class="modal-title">Who can see this?</h2>` +
         `<div class="aud-modes">` +
-          modeBtn('circle', 'Everyone in your circle', 'All your mutual friends') +
+          modeBtn('public', 'Anyone', 'Everyone on Tria, friend or not') +
+          modeBtn('circle', 'My circle', 'Only your mutual friends') +
           modeBtn('list', 'Choose people', 'Only who you pick') +
         `</div>` +
         `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}">` +
@@ -4765,18 +4871,12 @@
       }));
 
     modal.querySelector('#aud-done').addEventListener('click', () => {
-      // Picking nobody in "Choose people" is really the whole circle again.
+      // Picking nobody in "Choose people" falls back to My circle (no empty list).
       const users = [...chosen];
-      pubAudience = (mode === 'list' && users.length)
-        ? { mode: 'list', users }
-        : { mode: 'circle', users: [] };
-      const valEl = root.querySelector('#c-audience-val');
-      if (valEl) {
-        valEl.textContent = pubAudience.mode === 'circle'
-          ? 'Everyone in your circle'
-          : audienceCountLabel(pubAudience.users.length);
-        valEl.insertAdjacentHTML('beforeend', `<span class="audience-row-chev" aria-hidden="true"></span>`);
-      }
+      if (mode === 'public') pubAudience = { mode: 'public', users: [] };
+      else if (mode === 'list' && users.length) pubAudience = { mode: 'list', users };
+      else pubAudience = { mode: 'circle', users: [] };
+      syncAudienceLock(root);
       close();
     });
   }
@@ -4784,6 +4884,11 @@
   // The reactive type mark that rides the "New post" masthead (same slot the
   // Friends search uses). It mirrors the active type filter — note / find → Find /
   // photo → Frame / activity — and pops when it flips (see paintIndicator).
+  // The composer nameplate names what you're actually making: New note until an
+  // attachment reshapes it (New find / New frame / New poll), or New activity.
+  function pubTitle() {
+    return `New ${(TYPE_LABEL[pubType] || 'post').toLowerCase()}`;
+  }
   function typeIndicatorHtml() {
     return `<span class="type-indicator type-icon type-icon--${pubType}" id="c-type-ind" ` +
       `role="img" aria-label="${TYPE_LABEL[pubType]}">${TYPE_ICON[pubType]}</span>`;
@@ -4802,7 +4907,11 @@
     document.body.style.setProperty('--glow-pub', TYPE_HEX[pubType]);
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('Share to your circle', 'New post', typeIndicatorHtml()) +
+        // No kicker: the audience row below now says who this reaches, so
+        // "Share to your circle" was both redundant and sometimes wrong. The
+        // title names the inferred type instead (see syncTitle), so the word
+        // rides in a span the swap animation can hand off between.
+        mastheadEl('', `<span class="title-word">${pubTitle()}</span>`, typeIndicatorHtml()) +
         `<form class="composer" id="composer" novalidate>` +
           // The Post / Activity switcher sits inline just above the note field (not
           // docked to the nav like the Friends / Updates one — see #c-group-tabs).
@@ -4820,6 +4929,8 @@
       `</section>`;
 
     const fieldsEl = view.querySelector('#c-fields');
+    const titleEl = view.querySelector('.masthead-title');
+    titleEl?.classList.add('masthead-title--swap');   // hosts the outgoing ghost word
     let family = null;              // 'base' (the unified Post form) | 'activity'
     let lastIndType = null;         // last type the mark showed, so it only pops on a real change
     let wantLink = false;           // link row open → this Post is a Find
@@ -4838,13 +4949,14 @@
       return 'note';
     }
 
-    // Re-infer the active type, then reflect it: pop the masthead mark, shift the
-    // bottom colour-wash to the type's hue, and light the matching attach button.
+    // Re-infer the active type, then reflect it: swap the nameplate, pop the masthead
+    // mark, shift the bottom colour-wash to the type's hue, light the attach button.
     function syncType() {
       pubType = pubGroup === 'activity' ? 'activity' : derivePostType();
       const ind = document.getElementById('c-type-ind');
       if (ind && pubType !== lastIndType) {
         lastIndType = pubType;
+        syncTitle();                         // nameplate and mark flip together
         ind.className = `type-indicator type-icon type-icon--${pubType}`;
         ind.setAttribute('aria-label', TYPE_LABEL[pubType] || pubType);
         ind.innerHTML = TYPE_ICON[pubType] || '';
@@ -4897,7 +5009,12 @@
       wantLink = false;
       wantPhoto = false;
       wantPoll = false;
-      pubAudience = { mode: 'circle', users: [] };   // each fresh composer defaults to the full circle
+      // A public account's posts default to Anyone (continuity: their notes/finds/
+      // photos were world-readable before). Activities stay circle-first regardless,
+      // matching how they've always been friends-only until you opt them public.
+      const me = Store.currentUser();
+      const defaultPublic = pubGroup !== 'activity' && !!(me && me.private === false);
+      pubAudience = { mode: defaultPublic ? 'public' : 'circle', users: [] };
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
       family = pubGroup === 'activity' ? 'activity' : 'base';
@@ -4907,15 +5024,37 @@
       if (family === 'activity') {
         wireWhenHints(fieldsEl);
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
-        wireAudienceRow(fieldsEl);
+        wireAudienceLock(fieldsEl);
       } else {
         wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
         wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the Post field set
         wireFindNudge();
         wireAttachBar();
+        wireAudienceLock(fieldsEl);        // the lock rides the attach bar's bottom-left
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       }
       applyBaseSurface();
+    }
+
+    // The nameplate rides the inferred type alongside the mark: attach a link and
+    // "New note" hands off to "New find", a photo to "New frame", and so on. The
+    // live <h1> takes the new word straight away (so the row's width is right from
+    // frame one) and a cloned ghost of the old word sinks out over the top of it.
+    // Any stale ghost is swept first, so fast toggling can't strand a word.
+    function syncTitle() {
+      const word = titleEl?.querySelector('.title-word:not(.title-word--out)');
+      const next = pubTitle();
+      if (!word || word.textContent === next) return;
+      titleEl.querySelectorAll('.title-word--out').forEach(g => g.remove());
+      const ghost = word.cloneNode(true);
+      ghost.classList.add('title-word--out');
+      ghost.setAttribute('aria-hidden', 'true');
+      word.textContent = next;
+      word.classList.remove('title-word--in');
+      void word.offsetWidth;                          // restart the rise
+      word.classList.add('title-word--in');
+      titleEl.appendChild(ghost);
+      ghost.addEventListener('animationend', () => ghost.remove(), { once: true });
     }
 
     // Switch top-level group (Post ⇄ Activity). Each crossing re-mounts the field
@@ -4925,7 +5064,7 @@
       pubGroup = key;
       document.getElementById('c-error').textContent = '';
       mountFields();
-      syncType();
+      syncType();                            // carries the nameplate swap with it
     }
 
     // The two attach toggles at the note field's foot. Link opens the link row (and
@@ -6437,7 +6576,7 @@
      This is the only place direction is decided — every view renders the same
      way and inherits the transition. */
   function pageOrder(path) {
-    if (path === '#/friends') return 1;
+    if (path === '#/discover') return 1;
     if (path === '#/updates') return 2;
     if (path === '#/profile' || path.startsWith('#/u/')) return 3;
     if (path === '#/publish') return 4;
@@ -6642,9 +6781,10 @@
         return;
       }
       switch (path) {
-        case '#/':        renderHome(); break;
-        case '#/friends': renderFriends(); break;
-        case '#/updates': renderUpdates(); break;
+        case '#/':         renderHome(); break;
+        case '#/discover': renderDiscover(); break;
+        case '#/friends':  go('#/discover'); break;   // Friends folded into Discover; keep old links alive
+        case '#/updates':  renderUpdates(); break;
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
         case '#/about':   renderAbout(false); break;
@@ -6709,15 +6849,15 @@
   }
 
   /* ── Nav-tap refresh ────────────────────────────────────────────────────────
-     Landing on (or re-tapping) Circle or Updates quietly re-pulls the world in
-     the background — the page renders from cache instantly, and only if
+     Landing on (or re-tapping) Circle, Discover, or Updates quietly re-pulls the
+     world in the background — the page renders from cache instantly, and only if
      something actually changed does the view re-render, so the new cards rise
      in with the usual entrance and an unchanged page never flickers. This is
      the pull-to-refresh stand-in: the tab tap IS the refresh gesture. */
   let refreshSeq = 0;
   let lastRefresh = Date.now();   // boot just loaded the world — don't re-pull it
   async function refreshWorld(path) {
-    if (path !== '#/' && path !== '#/updates') return;
+    if (path !== '#/' && path !== '#/discover' && path !== '#/updates') return;
     if (Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
@@ -6727,7 +6867,9 @@
     if ((location.hash || '#/').split('?')[0] !== path) return;   // navigated away
     // Never yank the page out from under a half-typed comment.
     if (document.activeElement?.matches?.('input, textarea')) return;
-    if (path === '#/') renderFeed(); else renderUpdates();
+    if (path === '#/') renderFeed();
+    else if (path === '#/discover') renderDiscover();
+    else renderUpdates();
   }
 
   // Tapping the tab (or the brand) for the page you're already on scrolls back

@@ -646,15 +646,39 @@ main {
   color: var(--text);
 }
 
-/* Updates + Friends titles breathe a touch more before their seg-tabs below. */
-.view--updates .masthead-title,
-.view--friends .masthead-title { padding-bottom: 0.35rem; }
+/* Updates title breathes a touch more before its seg-tabs below. */
+.view--updates .masthead-title { padding-bottom: 0.35rem; }
 
-/* Friends search: a magnifier on the title line that wipes a FULL-WIDTH field open
-   across the nameplate — the "Friends" title simply vanishes behind it. Same
-   reveal-from-the-control feel as the + speed dial, but the bar spans the whole
-   measure so it reads as one clean input, not a menu floating over a menu. The
-   icon itself morphs into an X while open, so the same control closes it. */
+/* Discover's People / Posts section labels — the editorial small-caps kicker
+   idiom, reused as in-page dividers between the two search-result groups. */
+.discover-section-title {
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
+  font-size: var(--kicker);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin: 1.6rem 0 0.6rem;
+}
+.discover-body > .discover-section-title:first-child { margin-top: 0.4rem; }
+
+/* Masthead search (Discover): a magnifier on the title line that wipes a
+   FULL-WIDTH field open across the nameplate — the "Discover" title simply
+   vanishes behind it. Same reveal-from-the-control feel as the + speed dial, but
+   the bar spans the whole measure so it reads as one clean input, not a menu
+   floating over a menu. The icon itself morphs into an X while open, so the same
+   control closes it. */
+/* Discover groups search + type filter at the right of the nameplate. The group
+   isn't a positioning context, so the search field's absolute wipe still resolves
+   to .masthead-row. The field is inset on the right by the filter's slot (its
+   40px width + this gap) so opening search leaves the filter clear on the far
+   right, and the X lands on the field's own edge rather than floating past it. */
+/* Nudged 8px past the --inset column so the search/filter glyphs (centered in
+   their 40px tap circles) read as flush with the post padding edge instead of
+   sitting inboard of it. The search field's stop-offset below tracks this same
+   8px so it still just clears the filter button with no gap or overlap. */
+.masthead-actions { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; margin-right: -8px; }
+.view--discover .masthead-search-field { right: calc(40px + 0.35rem - 8px); }
 .masthead-search { flex-shrink: 0; }
 .masthead-search-btn {
   position: relative;
@@ -759,6 +783,38 @@ main {
   .type-indicator.is-changing { animation: none; }
 }
 
+/* Composer nameplate swap — the title follows the Post ⇄ Activity switcher. The
+   outgoing word sinks and blurs away while the new one rises through it: the same
+   depth-under-glass move the search bar plays on this title, so the header changes
+   rather than hard-cuts. The ghost is absolutely placed over the real <h1>, which
+   already carries the new word, so the row never reflows mid-swap. */
+.masthead-title--swap { position: relative; white-space: nowrap; }
+.masthead-title--swap .title-word { display: inline-block; will-change: transform; }
+.title-word--in { animation: title-rise var(--dur-move) var(--ease); }
+/* max-content, or the ghost's shrink-to-fit width gets capped by the <h1> it sits
+   in — leaving "New activity" wrapped onto two lines while the shorter "New post"
+   is the one setting the width. */
+.title-word--out {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  pointer-events: none;
+  animation: title-sink var(--dur-move) var(--ease) forwards;
+}
+@keyframes title-rise {
+  from { opacity: 0; transform: translateY(0.4em);  filter: blur(5px); }
+  to   { opacity: 1; transform: translateY(0);      filter: blur(0); }
+}
+@keyframes title-sink {
+  from { opacity: 1; transform: translateY(0);      filter: blur(0); }
+  to   { opacity: 0; transform: translateY(-0.4em); filter: blur(5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-word--in  { animation: fade var(--dur-quick) ease; }
+  .title-word--out { animation: fade-out var(--dur-quick) ease forwards; }
+}
+
 /* ── Masthead filter button ────────────────────────────────────────────────
    The sliders glyph at the right of the "My Circle" nameplate (the slot the
    Friends page spends on its search magnifier). Tapping it fans the filter dial.
@@ -780,6 +836,11 @@ main {
   color: var(--muted);
   transition: color var(--dur-micro), transform var(--dur-quick) var(--ease);
 }
+/* Home carries the filter alone (no .masthead-actions wrapper — that's
+   Discover's), so it needs its own 8px nudge past --inset to match; scoped to
+   a direct child of .masthead-row so it doesn't double up with Discover's
+   nested filter, which gets its shift from .masthead-actions instead. */
+.masthead-row > .masthead-filter { margin-right: -8px; }
 @media (hover: hover) { .masthead-filter:hover { color: var(--text); } }
 .masthead-filter[aria-expanded="true"] { color: var(--text); }
 .masthead-filter:active { transform: scale(0.92); }
@@ -870,8 +931,11 @@ main {
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   text-shadow: none;
 }
-/* The type colour glows from behind the glyph on a frosted disc (the dial/FAB
-   "colour is light" move), not a hard chip. */
+/* The type colour glows from behind the glyph on a translucent disc (the
+   dial/FAB "colour is light" move), not a hard chip. No backdrop-filter of its
+   own — the scrim behind the whole dial already blurs the frozen page, so a
+   second blur per disc was redundant work fighting the stagger-in transform
+   each row animates through (chopped up the fan-open motion). */
 .filter-dial-ico {
   position: relative;
   width: 46px;
@@ -880,8 +944,6 @@ main {
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
   transition: transform 0.08s var(--ease);
@@ -1443,6 +1505,41 @@ main {
   .post-sparkles { display: none; }
 }
 
+/* ── Comment posted: a quieter echo ─────────────────────────────────────────
+   Same y2k sparkle motif, dialed down for the lower-stakes moment of landing a
+   comment: three stars instead of five-to-nine, smaller, a dimmer peak, gone
+   quicker. JS anchors a .comment-sparkles layer over the new comment's avatar
+   corner and pulls it once spent (see celebrateComment), tinted to the post's
+   own type colour like the like/post bursts. */
+.comment { position: relative; }
+.comment-sparkles {
+  position: absolute;
+  left: 0; top: 0;
+  width: 30px; height: 30px;
+  pointer-events: none;
+  z-index: 1;
+}
+.comment-sparkles[data-type="note"]     { --burst: var(--heart-note); }
+.comment-sparkles[data-type="find"]     { --burst: var(--heart-find); }
+.comment-sparkles[data-type="activity"] { --burst: var(--heart-activity); }
+.comment-sparkles[data-type="photo"]    { --burst: var(--heart-photo); }
+.comment-sparkles[data-type="poll"]     { --burst: var(--heart-poll); }
+.comment-sparkles .spark {
+  left: 50%; top: 50%;
+  animation: like-fly 0.4s linear both, comment-spark-fade 0.4s ease-in-out both;
+}
+/* Same envelope shape as spark-fade, just a lower ceiling (0.7 not 1) — the
+   dimmer peak is most of what reads as "more subtle" at this small size. */
+@keyframes comment-spark-fade {
+  0%   { opacity: 0; }
+  18%  { opacity: 0.7; }
+  52%  { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .comment-sparkles { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* No motion: the heart just arrives filled — no rise, no sparkle. (JS already
      skips injecting the layer here; this hides it if one ever slips through.) */
@@ -1520,8 +1617,8 @@ main {
 }
 
 /* Inline edit form — a card swapped for its editable fields. Inset to align with
-   the text column; the actions row carries the lone Cancel/Save toggle, pinned
-   right (Delete moved out to the post's ••• menu). */
+   the text column; the actions row carries Cancel + Save together, pinned right
+   (Delete moved out to the post's ••• menu). */
 .card--editing { padding: 0.35rem var(--inset) 0.9rem; }
 .card--editing.card--photo { padding-inline: var(--inset); }
 .edit-form .field:first-child { margin-top: 0.35rem; }
@@ -1532,28 +1629,18 @@ main {
   gap: 0.6rem;
   margin-top: 1.1rem;
 }
-/* One button, two lives: a quiet "Cancel" on an untouched form, the accent
-   "Save changes" pill once a field changes (.is-dirty, mirroring .composer-submit).
-   The size/weight shift is the tell that there's something to save. */
-.edit-toggle {
-  color: var(--muted);
-  background: none;
-  border: none;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
-  font-weight: 400;
-  border-radius: var(--radius-pill);
-  transition: color var(--dur-micro), background-color var(--dur-micro);
-}
-@media (hover: hover) { .edit-toggle:not(.is-dirty):hover { color: var(--text); } }
-.edit-toggle.is-dirty {
-  color: var(--on-accent);
-  background: var(--lit-top), var(--accent);
-  font-weight: 700;
+/* Both commit buttons stay on screen — the quiet Cancel and the accent Save pill,
+   the same pairing (and sizing) Edit profile's .modal-actions uses. Save dims to
+   half while the form is untouched, so "nothing to save yet" reads without the
+   button ever leaving, and backing out is always one tap away. */
+.edit-actions .composer-submit {
+  width: auto;
+  margin: 0;
   padding: 0.6rem 1.4rem;
-  box-shadow: var(--lit-rim), var(--lit-drop);
+  /* Dirty state flips on every keystroke, so fade the dim rather than snapping it. */
+  transition: background-color var(--dur-micro), opacity var(--dur-micro);
 }
-@media (hover: hover) { .edit-toggle.is-dirty:hover { background: var(--lit-top), var(--accent-press); } }
+.edit-actions .composer-submit:disabled { opacity: 0.5; }
 
 .edit-cancel {
   color: var(--muted);
@@ -2147,6 +2234,18 @@ main {
   transform-origin: center;
   transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
 }
+/* Past the 5:4 ceiling (see capFrame): the frame holds the capped box and the
+   image covers it from the centre instead of setting its own height. Kills the
+   column-eating phone screenshot, and the black bars on a letterboxed grab are
+   the first thing the crop takes. Tap still opens the full photo in the
+   lightbox — the crop is a feed manner, not a destructive edit. */
+.photo-frame--crop img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .photo.is-loaded .photo-frame img { opacity: 1; transform: none; }
 .photo.is-loaded .photo-frame { background: none; box-shadow: none; }
 
@@ -2377,6 +2476,12 @@ body.gate main { padding: 0; }
   line-height: 1.5;
   min-height: 3.4rem;
 }
+/* The Activity composer's Details box is the only .combo-note without the Note
+   editor's .rich-note class riding along — give it the same floor as the Note
+   body (5.5rem) so the two composer types' main field read as one size. */
+.composer .field--combo:not(.field--rich) .combo-note {
+  min-height: 5.5rem;
+}
 .combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
 /* Holds the crop/trim preview once media lands — no padding of its own, so the
    empty box collapses while the upload dropzone (above it) is showing. */
@@ -2509,6 +2614,10 @@ body.gate main { padding: 0; }
   justify-content: flex-end;
   align-items: center;
   gap: 0.1rem;
+  min-height: 2.75rem;  /* .rt-attach (2.4rem) plus this bar's own vertical
+                            padding, so a tools-less bar (the Activity field's
+                            lone audience lock) sits at the same total height
+                            (~44px) as a Post's icon-bearing bar. */
   padding: 0.15rem 0.3rem 0.2rem;
   border-top: 1px solid var(--rule);
 }
@@ -3001,6 +3110,16 @@ button.poll-option:disabled { cursor: default; }
   font-size: 0.9rem;
   line-height: 1.5;
 }
+/* Softened variant: shown BELOW an outsider's visible public posts (their circle
+   holds more), so it's a quiet footer, not a full wall. Lighter padding + a
+   hairline above to set it off from the last card. */
+.profile-locked--soft {
+  padding: 1.75rem 1.25rem 1rem;
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+}
+.profile-locked--soft .profile-locked-ico { width: 24px; height: 24px; margin-bottom: 0.6rem; }
+.profile-locked--soft .profile-locked-line { font-size: 0.94rem; }
 
 /* Back to the directory, above a friend's card. */
 .profile-back {
@@ -3676,39 +3795,39 @@ button.poll-option:disabled { cursor: default; }
 /* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
    "Shared with  Everyone in your circle ›". Reads as a field, opens the picker
    sheet. (Design preview, demo-gated.) */
-.audience-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-field);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  transition: border-color var(--dur-micro);
-}
-@media (hover: hover) { .audience-row:hover { border-color: var(--muted); } }
-.audience-row-key { color: var(--muted); font-size: 0.9rem; }
-.audience-row-val {
+/* Audience lock — the shared "who sees this" control at the foot of every
+   composer. Flat editorial (the composer is content, never glass): a quiet pill
+   of icon + current level. It sits bottom-left of the Post attach bar and as its
+   own field on the Activity form. */
+.aud-lock {
+  -webkit-appearance: none;
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-weight: 700;
-  font-size: 0.92rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-micro), border-color var(--dur-micro), background var(--dur-micro);
 }
-/* A right-pointing chevron drawn from a rotated corner (matches the → arrows). */
-.audience-row-chev {
-  width: 7px;
-  height: 7px;
-  border-right: 1.6px solid var(--muted);
-  border-top: 1.6px solid var(--muted);
-  transform: rotate(45deg);
-  margin-left: 0.1rem;
+.aud-lock-ico { width: 16px; height: 16px; flex-shrink: 0; }
+.aud-lock-label { white-space: nowrap; }
+@media (hover: hover) {
+  .aud-lock:hover { color: var(--text); border-color: var(--muted); background: var(--surface-2); }
 }
+.aud-lock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Attach bar with the lock present: lock hugs the left, the link/photo/poll tools
+   stay clustered on the right. With no tools (the Activity box) the lone lock
+   still lands left, since space-between puts a single child at the start. */
+.rich-attach--withlock { justify-content: space-between; }
+.rich-attach-tools { display: flex; align-items: center; gap: 0.1rem; }
 
 /* Audience sheet — a clean iOS checkmark list. No hard borders (they read as
    harsh rings on frosted glass); selection is carried by a soft tint + an
@@ -4394,12 +4513,16 @@ button.poll-option:disabled { cursor: default; }
 
   /* Sprout docks into the header bar: bare glyph pushed to the right edge
      (opposite the wordmark), no glass disc — the frosted topbar already is the
-     chrome, so a disc-on-glass would double up. Full 44px tap target. */
+     chrome, so a disc-on-glass would double up. Full 44px tap target, which
+     centres the 22px glyph 11px in from the bar's padding; the -10px pulls the
+     glyph itself out to the masthead filter/search line (those are 40px boxes
+     nudged -8px, so they sit 1px in) without shrinking the tap area. */
   .support-link {
     position: static;
     top: auto;
     right: auto;
     margin-left: auto;
+    margin-right: -10px;
     background: none;
     border: none;
     box-shadow: none;
