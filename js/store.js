@@ -106,34 +106,75 @@ const Store = (() => {
     state.session = me ? me.username : null;
   }
 
+  // Read a whole table, however big it is.
+  //
+  // PostgREST answers with at most the project's "max rows" (1000 out of the
+  // box) and says NOTHING about the cut — no error, no flag, just a short array.
+  // Asking in ascending order, as these reads do, that means you get the OLDEST
+  // 1000 rows and the table appears to stop growing: every new comment lands in
+  // the database, fires its push notification, and is never seen again. That is
+  // exactly how comments vanished the day that table crossed 1000 rows, with no
+  // deploy to blame — so no read here may assume one request is the whole table.
+  //
+  // So ask the count along with the first page: `count: 'exact'` is the total
+  // past RLS, which makes "have we got it all?" a fact instead of a guess. A
+  // short page can't answer it — a table of 300 and a cap of 300 look identical
+  // — and guessing wrong truncates in silence, which is the whole bug. A table
+  // under the cap still costs exactly one request; only a full one pays for more.
+  //
+  // Paging is sound only under a TOTAL order: two rows tied on a timestamp could
+  // otherwise straddle a page boundary, repeating one and losing the other. So
+  // every table sorts by its key, not just by date.
+  const PAGE = 1000;
+  async function readAll(table, order) {
+    const page = (from, size) =>
+      order.reduce((q, col) => q.order(col, { ascending: true }),
+                   sb.from(table).select('*', { count: 'exact' }))
+           .range(from, from + size - 1);
+
+    const first = await page(0, PAGE);
+    if (first.error) return first;
+    const rows = first.data || [];
+    const total = first.count ?? rows.length;    // everything I'm allowed to see
+    const size = rows.length;                    // what this project actually serves
+    while (size && rows.length < total) {
+      const next = await page(rows.length, size);
+      if (next.error) return next;               // partial read → caller keeps its cache
+      const got = next.data || [];
+      if (!got.length) break;                    // count and rows disagree — don't spin
+      rows.push(...got);
+    }
+    return { data: rows, error: null };
+  }
+
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
     const [u, p, c, l, h, pv, f, pa, bl] = await Promise.all([
-      sb.from('users').select('*'),
-      sb.from('posts').select('*'),
-      sb.from('comments').select('*').order('created_at', { ascending: true }),
+      readAll('users', ['created_at', 'id']),
+      readAll('posts', ['created_at', 'id']),
+      readAll('comments', ['created_at', 'id']),
       // RLS only hands back the like rows we're allowed to see: our own, plus
       // every like on our own posts. So the cache literally can't compute a count
       // for someone else's post — the rows aren't here.
-      sb.from('likes').select('*').order('created_at', { ascending: true }),
+      readAll('likes', ['created_at', 'post_id', 'user_id']),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
-      sb.from('headcount').select('*').order('created_at', { ascending: true }),
+      readAll('headcount', ['created_at', 'post_id', 'user_id']),
       // Poll votes are public like headcount (who voted for what is the point),
       // one row per voter. Tolerates a pre-migration DB (no table yet → []).
-      sb.from('poll_votes').select('*').order('created_at', { ascending: true }),
-      sb.from('friends').select('*'),
+      readAll('poll_votes', ['created_at', 'post_id', 'user_id']),
+      readAll('friends', ['a', 'b']),
       // Audience allowlist for 'list' posts. RLS hands back only the rows we may
       // see: our own memberships + every row on posts we authored (enough to show
       // the author a "shared with N" count). Tolerates a pre-migration DB (→ []).
-      sb.from('post_audience').select('*'),
+      readAll('post_audience', ['post_id', 'user_id']),
       // People I've blocked. RLS hands back only my own block rows (blocker =
       // me), so every row here is someone I blocked. Tolerates a pre-migration DB
       // (no blocks table yet → error, data null → []); the app keeps a localStorage
       // mirror so blocking still works before this migration is run.
-      sb.from('blocks').select('*'),
+      readAll('blocks', ['blocker', 'blocked']),
     ]);
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
@@ -144,8 +185,10 @@ const Store = (() => {
     // Note what this can and can't catch: a real error (offline, a dropped
     // table, a 400) arrives as `error` and is caught here. RLS refusing you is
     // NOT an error — Postgres answers a missing SELECT policy with zero rows and
-    // a clean 200, which is indistinguishable from an empty table. If content
-    // vanishes with no warning below, suspect a policy, not the network.
+    // a clean 200, which is indistinguishable from an empty table. Neither is a
+    // truncated read: PostgREST's row cap also returns a clean 200, just with the
+    // tail missing (readAll above pages past it). If content vanishes with no
+    // warning below, suspect the fences and the ceiling, not the network.
     const core = (res, label, map, prev) => {
       if (!res.error) return (res.data || []).map(map);
       console.warn(`[tria] could not read ${label}, keeping the last good copy:`,
