@@ -4293,15 +4293,17 @@
       onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paint(); },
     }));
 
-    // A background re-pull while you're standing on Discover repaints the body in
-    // place instead of re-rendering the whole view (which would tear down the
-    // masthead and replay every card). Skipped mid-search: results shifting under
-    // a query you're still typing is worse than showing them a beat late.
-    // Answers false only if this closure has gone stale (the view was rebuilt
-    // under it), which is the caller's cue to render Discover from scratch.
-    discoverRepaint = () => {
+    // A re-pull while you're standing on Discover repaints the body in place
+    // instead of re-rendering the whole view (which would tear down the masthead
+    // and replay every card). A quiet refresh skips a live search — results
+    // shifting under a query you're still typing is worse than showing them a
+    // beat late — but an explicit tab re-tap (`force`) repaints regardless,
+    // because a refresh you asked for has to answer. Returns false only if this
+    // closure has gone stale (the view was rebuilt under it), which is the
+    // caller's cue to render Discover from scratch.
+    discoverRepaint = (force) => {
       if (!bodyEl.isConnected) return false;
-      if (!discoverQuery.trim()) paint();
+      if (force || !discoverQuery.trim()) paint();
       return true;
     };
 
@@ -7210,11 +7212,12 @@
      actually changed does the view re-render, so new cards rise in with the
      usual entrance and an unchanged page never flickers. Plain navigation
      deliberately does NOT refresh (a re-pull landing mid-slide can rebuild rows
-     under the transition); the world is otherwise refreshed at boot, on
-     foreground, and on a slow beat while you're standing on one of those pages
-     (see "Live pages" below). */
+     under the transition); the world is otherwise refreshed at boot and on
+     foreground. Nothing polls on a timer — a page you're reading stays put until
+     you ask it for more, which is the whole point of a feed that doesn't chase
+     you. */
 
-  // Rows a background render may splice in ABOVE what you're reading.
+  // Rows a re-render may splice in ABOVE what you're reading.
   const LIVE_ROWS = '#feed > .card, #discover-feed > .card, .notif-list > li';
 
   // Hold the reader's place across a render. A post that lands while you're deep
@@ -7240,9 +7243,13 @@
 
   let refreshSeq = 0;
   let lastRefresh = Date.now();   // boot just loaded the world — don't re-pull it
-  async function refreshWorld(path, force) {
+  // `force` marks a gesture you actually made (a tab re-tap, a pull): it skips the
+  // spam guard, because a tap that visibly does nothing reads as a broken tap.
+  // `hold` keeps your place across the render — right for a refresh that arrives
+  // while you're reading, wrong for a re-tap, which is already taking you to the
+  // top and would only fight the scroll.
+  async function refreshWorld(path, { force = false, hold = true } = {}) {
     if (path !== '#/' && path !== '#/discover' && path !== '#/updates') return;
-    // `force` is the pull-to-refresh path: an explicit gesture skips the guard.
     if (!force && Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
@@ -7252,41 +7259,21 @@
     if ((location.hash || '#/').split('?')[0] !== path) return;   // navigated away
     // Never yank the page out from under a half-typed comment.
     if (document.activeElement?.matches?.('input, textarea')) return;
-    keepPlace(() => {
+    const paint = () => {
       if (path === '#/') renderFeed();
-      else if (path === '#/discover') { if (!discoverRepaint?.()) renderDiscover(); }
+      else if (path === '#/discover') { if (!discoverRepaint?.(force)) renderDiscover(); }
       else renderUpdates();
-    });
+    };
+    hold ? keepPlace(paint) : paint();
   }
 
-  /* ── Live pages ─────────────────────────────────────────────────────────────
-     Otherwise nothing arrives on its own: the world is only re-pulled at boot, on
-     foreground, on a tab re-tap and on a pull, so an hour spent on Circle is an
-     hour of a frozen page (and standalone Safari has no native pull-to-refresh to
-     fall back on). While one of the three live pages is open and visible, re-pull
-     on a slow beat and let the usual reconcile rise new posts in — no "3 new
-     posts" pill to sit there tugging at you, which is a device for feeds that
-     move faster than a small circle ever will. Stops itself when the app is
-     backgrounded, and after a long stretch of no interaction, so a window left
-     open on a desk isn't quietly pulling the world all afternoon. */
-  (() => {
-    const BEAT = 60000, IDLE = 15 * 60000;
-    let touched = Date.now();
-    const poke = () => { touched = Date.now(); };
-    ['pointerdown', 'keydown', 'scroll'].forEach(ev =>
-      window.addEventListener(ev, poke, { passive: true }));
-    document.addEventListener('visibilitychange', poke);
-    setInterval(() => {
-      if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
-      if (Date.now() - touched > IDLE) return;
-      refreshWorld((location.hash || '#/').split('?')[0]);
-    }, BEAT);
-  })();
-
   // Tapping the tab (or the brand) for the page you're already on scrolls back
-  // to the top — and on Home also clears any active filter/tag. No `hashchange`
-  // fires when the target matches the current route, so we catch it here. This
-  // is the familiar bottom-tab-bar gesture on mobile.
+  // to the top, clears any active filter/tag on Home, and re-pulls the world.
+  // No `hashchange` fires when the target matches the current route, so we catch
+  // it here. This is the familiar bottom-tab-bar gesture on mobile, and on Tria
+  // it's THE refresh: nothing polls on a timer, so this tap (or a pull) is how a
+  // page you're standing on catches up. It forces past the spam guard for that
+  // reason — an explicit tap has to visibly do something every time.
   function reclick(route) {
     const path = (location.hash || '#/').split('?')[0];
     if (route === '#/' && path === '#/' && (activeFilter !== 'all' || activeTag)) {
@@ -7295,7 +7282,7 @@
       renderHome();
     }
     scrollTop(true);
-    refreshWorld(route);
+    refreshWorld(route, { force: true, hold: false });
   }
 
   document.getElementById('nav').addEventListener('click', (e) => {
@@ -7400,7 +7387,7 @@
         // always visibly did something.
         try {
           await Promise.all([
-            refreshWorld(herePath(), true),
+            refreshWorld(herePath(), { force: true }),
             new Promise(r => setTimeout(r, 650)),
           ]);
         } catch { /* offline pull: let go quietly */ }

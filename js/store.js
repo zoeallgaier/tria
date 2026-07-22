@@ -135,28 +135,53 @@ const Store = (() => {
       // mirror so blocking still works before this migration is run.
       sb.from('blocks').select('*'),
     ]);
-    state.users = (u.data || []).map(mapUser);
+    // A read that FAILED must not read as "there's nothing there". This whole
+    // load is a full replace, so one erroring table used to blank that table's
+    // content everywhere — a live comment thread turning into an empty box, with
+    // nothing said anywhere about why. Keep the last good copy instead, and put
+    // the reason in the console.
+    //
+    // Note what this can and can't catch: a real error (offline, a dropped
+    // table, a 400) arrives as `error` and is caught here. RLS refusing you is
+    // NOT an error — Postgres answers a missing SELECT policy with zero rows and
+    // a clean 200, which is indistinguishable from an empty table. If content
+    // vanishes with no warning below, suspect a policy, not the network.
+    const core = (res, label, map, prev) => {
+      if (!res.error) return (res.data || []).map(map);
+      console.warn(`[tria] could not read ${label}, keeping the last good copy:`,
+        res.error.message || res.error);
+      return prev;
+    };
+    state.users = core(u, 'users', mapUser, state.users);
     const nameById = nameMap();
-    state.posts = (p.data || []).map(row => mapPost(row, nameById));
-    state.comments = (c.data || []).map(row => ({
+    state.posts = core(p, 'posts', row => mapPost(row, nameById), state.posts);
+    state.comments = core(c, 'comments', row => ({
       id: row.id, postId: row.post_id, author: nameById.get(row.author),
       text: row.body, date: dateOf(row.created_at), _ts: row.created_at,
-    }));
-    state.likes = (l.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
+    }), state.comments);
+    state.likes = core(l, 'likes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.likes);
     state.headcount = (h.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
     state.pollVotes = (pv.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), choice: row.choice, _ts: row.created_at }));
     state.audience = (pa.data || []).map(row => ({ postId: row.post_id, userId: row.user_id }));
     // Directed "add" edges: a row (a, b) means a has added b. A friendship is
     // mutual only when both directions exist; a lone edge is a pending request.
     // The map keys each user to the people THEY have added (out-edges only).
-    const fr = {};
-    const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
-    for (const row of f.data || []) {
-      const a = nameById.get(row.a), b = nameById.get(row.b);
-      if (a && b) link(a, b);
+    // Guarded like the rest: a failed edge read would otherwise empty everyone's
+    // circle at once, which reads as "all my friends are gone" rather than as a
+    // network blip.
+    if (f.error) {
+      console.warn('[tria] could not read friends, keeping the last good copy:',
+        f.error.message || f.error);
+    } else {
+      const fr = {};
+      const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
+      for (const row of f.data || []) {
+        const a = nameById.get(row.a), b = nameById.get(row.b);
+        if (a && b) link(a, b);
+      }
+      for (const x of state.users) fr[x.username] || (fr[x.username] = []);
+      state.friends = fr;
     }
-    for (const x of state.users) fr[x.username] || (fr[x.username] = []);
-    state.friends = fr;
     // Usernames I've blocked (RLS already scoped these rows to me). Empty on a
     // pre-migration DB — the localStorage mirror in app.js covers that gap.
     state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
