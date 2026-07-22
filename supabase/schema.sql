@@ -361,3 +361,29 @@ as $$
   select not exists (select 1 from public.users where username = lower(u));
 $$;
 grant execute on function public.username_available(text) to anon, authenticated;
+
+-- ── Delete your own account ───────────────────────────────────────────────────
+-- Leaving has to be as easy as joining, and it has to reach auth.users, which no
+-- signed-in client may touch. This SECURITY DEFINER function deletes exactly one
+-- row, the caller's own, and takes no arguments — there is no id to pass and so
+-- no id to tamper with. The delete cascades back through public.users to every
+-- post, comment, like, headcount row, poll vote, friend edge, block, and push
+-- subscription above. Storage files (media/{uid}/…) are outside the FK graph, so
+-- the client clears them first under "media delete own" — see js/store.js.
+create or replace function public.delete_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Not signed in.' using errcode = '28000';
+  end if;
+  delete from auth.users where id = uid;
+end;
+$$;
+revoke all on function public.delete_account() from public, anon;
+grant execute on function public.delete_account() to authenticated;

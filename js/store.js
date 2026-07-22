@@ -453,28 +453,45 @@ const Store = (() => {
   }
 
   // Permanently deletes the signed-in user's account: their Storage folder
-  // (avatars + post photos, which sit outside the DB) and their auth.users row,
-  // which cascades through public.users to every post, comment, like, friend
-  // edge, block, and push subscription (see schema.sql's `on delete cascade`
-  // chain). The actual deletion needs the service role, so this calls a small
-  // Edge Function (supabase/functions/delete-account) that verifies the caller's
-  // own session token before doing anything — see supabase/DELETE-ACCOUNT-SETUP.md.
+  // (avatars + post photos + videos, which sit outside the DB) and their
+  // auth.users row, which cascades through public.users to every post, comment,
+  // like, headcount row, poll vote, friend edge, block, and push subscription
+  // (see schema.sql's `on delete cascade` chain).
+  //
+  // Storage goes FIRST, and not just for tidiness: those files are the one thing
+  // the cascade can't reach, and storage.objects carries its own reference back
+  // to the owner, so a leftover file can refuse the row delete outright. The row
+  // itself goes through the delete_account() RPC — a SECURITY DEFINER function
+  // that deletes the caller's own row and nobody else's (supabase/delete-account-rpc.sql).
+  // This used to be an Edge Function; that needed a deploy step that never
+  // happened, so every tap 404'd. Postgres needs no deploy.
   async function deleteAccount() {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) return { ok: false, error: 'You need to be signed in.' };
-    let res;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return { ok: false, error: 'You need to be signed in.' };
+
+    // Best effort — a file we can't clear shouldn't strand someone in an account
+    // they've asked to leave. `list` pages at 100, so keep asking until it runs dry.
     try {
-      res = await fetch(`${url}/functions/v1/delete-account`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, apikey: key },
-      });
-    } catch {
-      return { ok: false, error: 'Couldn’t reach the server. Check your connection and try again.' };
+      for (;;) {
+        const { data: files, error } = await sb.storage.from('media')
+          .list(user.id, { limit: 100 });
+        if (error || !files || !files.length) break;
+        const { error: rmErr } = await sb.storage.from('media')
+          .remove(files.map((f) => `${user.id}/${f.name}`));
+        if (rmErr) break;
+        if (files.length < 100) break;
+      }
+    } catch { /* fall through to the row delete */ }
+
+    const { error } = await sb.rpc('delete_account');
+    if (error) {
+      console.error('delete_account failed', error);
+      return { ok: false, error: 'Couldn’t delete your account. Try again in a moment.' };
     }
-    const body = await res.json().catch(() => null);
-    if (!res.ok || !body || !body.ok)
-      return { ok: false, error: (body && body.error) || 'Couldn’t delete your account. Try again in a moment.' };
-    await sb.auth.signOut();
+
+    // Local scope only: the account this session belonged to no longer exists, so
+    // asking the server to revoke its token would just 403 on the way out.
+    await sb.auth.signOut({ scope: 'local' }).catch(() => {});
     recovering = false;
     state = empty();
     return { ok: true };
