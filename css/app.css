@@ -1051,8 +1051,7 @@ main {
    .publish-fill pills (e.g. the profile Share) — those spend their ::after on the
    grain layer, so a tap overlay here would fight it; they size the hit area with
    real padding instead. */
-.filter::after,
-.friend-btn::after {
+.filter::after {
   content: '';
   position: absolute;
   left: 0;
@@ -3323,22 +3322,39 @@ button.poll-option:disabled { cursor: default; }
 
 /* Friend toggle (pre-friend states only — add / requested / accept; once you're
    friends it collapses to the corner badge). Centred in the action row. */
+/* Every state is the SAME box — Add friend, Requested, Following, Add back all
+   draw at one size, so the button never resizes under your thumb when it flips.
+   Sizing lives here and only here; the state rules below change dress (gradient
+   vs. outline), never geometry. The 44pt HIG target is drawn rather than bought
+   with the shared ::after overlay, because the publish-fill variant spends
+   ::after on its grain layer (see the .filter::after note). border-box is global,
+   so the outline state's 1px border doesn't make it a pixel taller. */
 .friend-btn {
-  position: relative;               /* anchors the 44pt tap-target overlay */
-  display: inline-block;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin: 0;
   min-width: 122px;
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  padding: 0.46rem 1.35rem;
+  font-weight: 700;
+  font-size: 0.87rem;
+  line-height: 1;
+  transition: color var(--dur-micro), background-color var(--dur-micro), border-color var(--dur-micro);
+}
+/* The accent fill is the NON-gradient dress (only "Requested" wears it now, via
+   [aria-pressed] below). Scoped off .publish-fill so it can't override the
+   gradient's own background/border/colour — .friend-btn is later in the file and
+   would otherwise win on equal specificity. */
+.friend-btn:not(.publish-fill) {
   color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: var(--radius-pill);
-  padding: 0.46rem 1.15rem;
-  font-weight: 700;
-  font-size: 0.87rem;
-  transition: color var(--dur-micro), background-color var(--dur-micro), border-color var(--dur-micro);
 }
 @media (hover: hover) {
-  .friend-btn:hover { background: var(--accent-press); border-color: var(--accent-press); }
+  .friend-btn:not(.publish-fill):hover { background: var(--accent-press); border-color: var(--accent-press); }
 }
 .friend-btn[aria-pressed="true"] {
   color: var(--muted);

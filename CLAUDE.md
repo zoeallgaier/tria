@@ -65,7 +65,26 @@ exempt). Voice is playful but not trying-too-hard.
   first rather than layering on an older copy.
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
-  public** by design. **Friends are directed edges** (request → mutual on accept).
+  public** by design.
+- **Friends are directed edges, and one edge means two different things.** A lone
+  `a → b` row is a *follow* when b is public (immediate, nothing pending) and a
+  *request* when b is private (waiting on b). Mutual is always friendship. Which
+  one it is depends on the TARGET's privacy for outgoing edges and on MY privacy
+  for incoming ones — so a public account has no friend requests at all, only
+  followers. `store.js` splits this in one place (`outgoingEdges`/`incomingEdges`
+  → `following`/`followers`/`requestsSent`/`requestsReceived`); don't re-derive it
+  per view. Following buys exactly one thing: that account's **public** posts join
+  your home feed. Their circle posts stay circle business until you're mutual, and
+  the DB agrees — `can_view_post`'s circle branch needs both edges.
+- **Two interaction gates, not one** (`app.js`). The split isn't cheap-vs-costly,
+  it's *stays on the screen* vs *lands in the real world*. `canSocial` (likes,
+  comments, **poll votes**) is open on your own post, a friend's, *or any public
+  post* — Discover only builds relationships if strangers can react, and a poll
+  made public is asking the wider room. `canJoin` (RSVP/headcount,
+  add-to-calendar) is activities-only and stays friends-only on purpose: a public
+  activity carries a place and a time, so anyone may see it but only your circle
+  shows up to it. The store guards every write behind the matching rule; keep the
+  two in sync.
 - **Audience is per-post authoritative** (`posts.audience`, one of `public` /
   `circle` / `list`; see `supabase/post-audience-public.sql`). `can_view_post`
   decides reads from the post's own tag: public → everyone · author → self ·
@@ -73,10 +92,11 @@ exempt). Voice is playful but not trying-too-hard.
   means friends-only for EVERY account, public ones included. Any post type can
   be made public, activities included, and public posts are what feed Discover.
 - **`users.private`** (defaults true, so new signups open closed) no longer gates
-  reads at all. It does two things: picks the composer's default audience (a
+  reads at all. It does three things: picks the composer's default audience (a
   public account's posts default to `public`, activities stay `circle`-first),
-  and shows non-friends the "add them to see posts" nudge on a private profile —
-  softened when that person has public posts to show.
+  shows non-friends the "add them to see posts" nudge on a private profile —
+  softened when that person has public posts to show — and decides whether a
+  one-way edge is a follow or a request (see above).
 - Post photos are stored at native aspect ratio (not cropped); only avatars crop
   (circular). Push notifications: see `supabase/PUSH-SETUP.md`; the Edge Function's
   real slug is `swift-processor`, not `push`.

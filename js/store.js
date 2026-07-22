@@ -199,16 +199,19 @@ const Store = (() => {
     return friendsOf(state.session);
   }
 
-  // Requests I've sent that haven't been answered — I added them, they haven't
-  // added me back. These are my outstanding "pending" invites.
-  function requestsSent() {
+  // One-way edges I've made: people I've added who haven't added me back. The
+  // SAME row means two different things depending on who it points AT, so every
+  // caller below splits this list on the target's privacy:
+  //   → a PUBLIC account: a follow. Nothing is pending, it already took effect.
+  //   → a PRIVATE account: a request, waiting on them.
+  function outgoingEdges() {
     const me = state.session;
     return (state.friends[me] || []).filter(u => !(state.friends[u] || []).includes(me));
   }
-
-  // Requests waiting on ME — people who've added me, whom I haven't added back.
-  // Answer one by adding them (→ mutual) or removing it (→ declined).
-  function requestsReceived() {
+  // One-way edges pointing AT me: people who've added me, whom I haven't added
+  // back. Same split, but on MY privacy — if my account is public they're
+  // followers (nothing to approve); if it's private they're requests.
+  function incomingEdges() {
     const me = state.session;
     return state.users
       .map(u => u.username)
@@ -217,23 +220,48 @@ const Store = (() => {
         !(state.friends[me] || []).includes(u));
   }
 
+  // Public accounts I follow. A follow is immediate and one-way — no approval —
+  // and what it BUYS is their public posts in my feed (see feed() below).
+  const following = () => outgoingEdges().filter(u => !isPrivate(u));
+  // People following me. Only meaningful while I'm public; a private account's
+  // incoming edges are requests, not follows.
+  const followers = () => isPrivate(state.session) ? [] : incomingEdges();
+
+  // Requests I've sent that haven't been answered. Follows are NOT requests, so
+  // a public target's edge doesn't belong here — it isn't pending on anyone.
+  const requestsSent = () => outgoingEdges().filter(u => isPrivate(u));
+  // Requests waiting on ME — answer by adding them back (→ mutual) or removing
+  // (→ declined). A public account has none: nobody needs its permission.
+  const requestsReceived = () => isPrivate(state.session) ? incomingEdges() : [];
+
   // My relationship to `username`, as one word — drives the profile button and
-  // the directory rows: 'self' | 'friends' | 'sent' | 'incoming' | 'none'.
+  // the directory rows:
+  //   'self' | 'friends' | 'following' | 'sent' | 'follower' | 'incoming' | 'none'
+  // 'following'/'sent' are the same edge seen against a public/private target;
+  // 'follower'/'incoming' are the same edge pointing at a public/private ME.
   function friendStatus(username) {
     const me = state.session;
     if (!me || username === me) return 'self';
     const iAdded = (state.friends[me] || []).includes(username);
     const theyAdded = (state.friends[username] || []).includes(me);
     if (iAdded && theyAdded) return 'friends';
-    if (iAdded) return 'sent';
-    if (theyAdded) return 'incoming';
+    if (iAdded) return isPrivate(username) ? 'sent' : 'following';
+    if (theyAdded) return isPrivate(me) ? 'incoming' : 'follower';
     return 'none';
   }
 
-  // Home feed: your mutual friends' posts, plus your own, newest first.
+  // Home feed: your mutual friends' posts, plus your own, plus the PUBLIC posts
+  // of the public accounts you follow — newest first. Following is the one way
+  // into this feed that doesn't need consent on both sides, so it's deliberately
+  // narrow: only their public posts ride along. Their circle posts stay circle
+  // business until you're actually mutual (the DB agrees — can_view_post's
+  // circle branch needs both edges, so those rows never reach this cache).
   function feed() {
     const circle = new Set([state.session, ...friends()]);
-    return posts().filter(p => circle.has(p.author));
+    const followed = new Set(following());
+    return posts().filter(p =>
+      circle.has(p.author) ||
+      (followed.has(p.author) && p.audience === 'public'));
   }
 
   // Discover: public posts from across Tria, newest first — the meeting ground
@@ -654,7 +682,10 @@ const Store = (() => {
     if (!text) return { ok: false, error: 'Say something first.' };
     const post = state.posts.find(p => p.id === postId);
     if (!post) return { ok: false, error: 'That post no longer exists.' };
-    if (post.author !== me && !isFriend(post.author))
+    // Comments open on a PUBLIC post to anyone who can see it — Discover only
+    // builds relationships if strangers can say something. Circle/list posts stay
+    // friends-only. (RLS permits the insert either way; this is the product rule.)
+    if (post.author !== me && !isFriend(post.author) && post.audience !== 'public')
       return { ok: false, error: 'You can only comment on friends’ posts.' };
 
     const { data: c, error } = await sb.from('comments')
@@ -684,14 +715,16 @@ const Store = (() => {
   const likeCountFor = (postId) => likesFor(postId).length;
   const likedByMe = (postId) => state.likes.some(x => x.postId === postId && x.user === state.session);
 
-  // Toggle my like on a friend's post. You can't like your own post (the heart is
-  // the author's window onto who liked, not a self-like), and likes — like
-  // comments — are a friends-only gesture.
+  // Toggle my like. You can't like your own post (the heart is the author's
+  // window onto who liked, not a self-like). Open on a friend's post AND on any
+  // public post — a like leaks nothing to the room either way, since RLS shows
+  // the count only to the author.
   async function toggleLike(postId) {
     const me = state.session;
     if (!me) return { ok: false };
     const post = state.posts.find(p => p.id === postId);
-    if (!post || post.author === me || !isFriend(post.author)) return { ok: false };
+    if (!post || post.author === me) return { ok: false };
+    if (!isFriend(post.author) && post.audience !== 'public') return { ok: false };
     const mine = idOf(me);
     const has = likedByMe(postId);
     if (has) {
@@ -714,6 +747,10 @@ const Store = (() => {
   const headcountFor = (postId) => state.headcount.filter(x => x.postId === postId);
   const goingByMe = (postId) => state.headcount.some(x => x.postId === postId && x.user === state.session);
 
+  // The one gesture deliberately NOT opened to public posts (likes, comments and
+  // poll votes all were): a public activity carries a place and a time, and
+  // joining it is a real-world act, not a signal. Anyone may SEE a public
+  // activity; only the circle shows up to it.
   async function toggleGoing(postId) {
     const me = state.session;
     if (!me) return { ok: false };
@@ -757,9 +794,11 @@ const Store = (() => {
     if (!me) return { ok: false };
     const post = state.posts.find(p => p.id === postId);
     if (!post || post.type !== 'poll') return { ok: false };
-    // Voting is a friends-only gesture (same fence as RSVPs), but unlike an RSVP
-    // the author may vote in their own poll.
-    if (post.author !== me && !isFriend(post.author)) return { ok: false };
+    // Voting sits with likes and comments, not with RSVPs: a poll made public is
+    // asking the wider room, so anyone who can see it can answer it. A circle
+    // poll stays friends-only. Unlike an RSVP, the author may vote in their own.
+    if (post.author !== me && !isFriend(post.author) && post.audience !== 'public')
+      return { ok: false };
     const n = (post.poll && post.poll.options || []).length;
     if (!(choice >= 0 && choice < n)) return { ok: false };
     if (pollClosed(post)) return { ok: false, error: 'This poll has closed.' };
@@ -947,7 +986,7 @@ const Store = (() => {
     requestPasswordReset, updatePassword, resendConfirmation,
     isRecovering, onRecovery,
     // Friends
-    isFriend, areFriends, addFriend, removeFriend,
+    isFriend, areFriends, addFriend, removeFriend, following, followers,
     requestsSent, requestsReceived, friendStatus,
     // Blocking
     isBlocked, block, unblock,

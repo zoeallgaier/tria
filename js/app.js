@@ -1100,12 +1100,37 @@
       `</div>`;
   }
 
-  // Likes, comments, headcount, and add-to-calendar are all friends-only gestures:
-  // you can act on a friend's post (or your own), never a stranger's. On a
-  // non-friend's profile their posts still show, but with no thread and no social
-  // row. One gate for all of them (the store guards each write too — see
-  // Store.addComment / toggleLike / toggleGoing).
+  /* The one-way-tie vocabulary, in ONE place. A one-way tie to a public account
+     is named in four spots — the profile button, the Discover pill, the Updates
+     ledger line, and that section's kicker — so they live here rather than as
+     four loose strings that drift apart. Change the word once, it changes
+     everywhere. (The commit button stays "Add friend": you're always reaching
+     for the same thing, a mutual tie. This names what you get until they reach
+     back.) */
+  const FOLLOW_STATE = 'Following';           // the committed state, on a button
+  const FOLLOW_NOUN  = 'follower';            // pluralised for the ledger kicker
+  const FOLLOW_LINE  = 'started following you';   // the ledger row itself
+
+  // Two gates, because the gestures split now that Discover puts strangers in
+  // front of each other. The line between them isn't "cheap vs. costly" — it's
+  // whether the gesture stays on the screen or lands in the real world.
+  //
+  // canSocial — likes, comments, AND poll votes. Open on your own post, a
+  // friend's, OR any public post. Discover only builds relationships if a
+  // stranger can react to what they found; a like leaks nothing (RLS shows the
+  // count to the author alone), a comment is the actual conversation, and a
+  // public poll wants the wider read — that's the whole reason to make one
+  // public.
+  //
+  // canJoin — RSVP/headcount and add-to-calendar. Activities only, and still
+  // friends-only on purpose: a public activity carries a place and a time, so
+  // anyone may SEE it but only your circle shows up to it.
+  //
+  // The store guards every write behind the matching rule too — see
+  // Store.addComment / toggleLike / votePoll (open) vs toggleGoing (closed).
   const canSocial = (post) =>
+    post.author === Store.session() || Store.isFriend(post.author) || post.audience === 'public';
+  const canJoin = (post) =>
     post.author === Store.session() || Store.isFriend(post.author);
 
   // The card's action row, tucked below the post: the like heart + comment toggle
@@ -1158,7 +1183,7 @@
   // wireGoing tells the two apart.
   function goingControlHtml(post) {
     if (post.type !== 'activity') return '';
-    if (!canSocial(post)) return '';
+    if (!canJoin(post)) return '';
     const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
     const open = openGoing.has(post.id);
     const rsvpable = post.author !== Store.session() && !isPastActivity(post);
@@ -1178,12 +1203,12 @@
   // somewhere else" action, sibling to Copy link, so it lives in the ••• menu
   // rather than as its own glyph (see openPostMenu). This predicate gates it.
   function isCalendarable(post) {
-    return post.type === 'activity' && post.eventDate && !isPastActivity(post) && canSocial(post);
+    return post.type === 'activity' && post.eventDate && !isPastActivity(post) && canJoin(post);
   }
 
   function goingPanelHtml(post) {
     if (post.type !== 'activity') return '';
-    if (!canSocial(post)) return '';
+    if (!canJoin(post)) return '';
     const list = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user));
     const open = openGoing.has(post.id);
     // The way back out sits under the list, the mirror of joining and one level
@@ -1220,9 +1245,11 @@
   // The poll widget under a poll card: the question, then the choices, then a
   // status line. Results stay HIDDEN until you cast a vote (no bandwagon) — then
   // each choice grows a fill bar with its share, your pick is checked, and the
-  // leader is marked. A closed poll locks to a read-only final tally. Voting is
-  // friends-only (canSocial); a non-friend viewing a public account sees the
-  // choices statically with no results and no way to vote.
+  // leader is marked. A closed poll locks to a read-only final tally. Voting
+  // follows canSocial, so a PUBLIC poll takes anyone's vote — a poll made public
+  // is asking the wider room, and a room that can't answer isn't one. A circle
+  // poll stays friends-only: a non-friend sees the choices statically, with no
+  // results and no way to vote.
   // `justVoted` (a choice index or null) is set only when re-rendering the widget
   // straight after a tap — it flags the freshly cast pick so CSS runs the reward
   // flourish (bars grow from zero, your pick washes with the rotating Tria
@@ -2595,6 +2622,55 @@
     document.addEventListener('keydown', onKey);
   }
 
+  /* Reconcile a list of cards against what's already on screen rather than wiping
+     it. A refresh re-pulls the whole world, but most pulls change nothing in view
+     (or just a like/comment on one post). Rebuilding every card from scratch would
+     replay each photo's fade-in — the "already seen it, why did it reload" jitter.
+     So: keep unchanged cards (and their loaded images) in place, rise in only
+     genuinely new posts, drop posts that left, and re-render in place only the
+     cards whose content truly changed. `wire` hooks up every node built here (the
+     home feed and Discover wire their tag chips to different pages). */
+  function syncCards(container, list, wire) {
+    const desired = new Set(list.map(p => String(p.id)));
+    container.querySelectorAll(':scope > .card').forEach(c => {
+      if (!desired.has(c.dataset.id)) c.remove();          // gone from the feed
+    });
+    container.querySelectorAll(':scope > :not(.card)').forEach(n => n.remove()); // stale empty-state
+    const existing = new Map();
+    container.querySelectorAll(':scope > .card').forEach(c => existing.set(c.dataset.id, c));
+
+    list.forEach((p, i) => {
+      const id = String(p.id);
+      const old = existing.get(id);
+      let node;
+      if (old) {
+        const fresh = makeCard(p);
+        if (fresh.dataset.sig === old.dataset.sig) {
+          node = old;                          // unchanged — leave the live node alone
+        } else {
+          // Content changed (a new like/comment, an edit). Swap in the new render,
+          // but carry over an already-loaded photo when the image itself is the
+          // same, and don't re-run the rise — it's an update, not an arrival.
+          const oldImg = old.querySelector('.photo img');
+          const newFig = fresh.querySelector('.photo');
+          if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
+            newFig.replaceWith(oldImg.closest('.photo'));
+          }
+          fresh.style.animation = 'none';
+          wire(fresh);
+          old.replaceWith(fresh);
+          node = fresh;
+        }
+      } else {
+        node = makeCard(p);                    // brand-new post — rise it in
+        node.style.animationDelay = staggerDelay(i);
+        wire(node);
+      }
+      const ref = container.children[i] || null;   // slot it into the right position
+      if (node !== ref) container.insertBefore(node, ref);
+    });
+  }
+
   function renderFeed() {
     const feedEl = view.querySelector('#feed');
     if (!feedEl) return;
@@ -2643,51 +2719,7 @@
       return;
     }
 
-    // Reconcile the feed against what's already on screen rather than wiping it.
-    // A nav-tap refresh re-pulls the whole world, but most taps change nothing
-    // in view (or just a like/comment on one post). Rebuilding every card from
-    // scratch would replay each photo's fade-in — the "already seen it, why did
-    // it reload" jitter. So: keep unchanged cards (and their loaded images) in
-    // place, rise in only genuinely new posts, drop posts that left the feed,
-    // and re-render in place only the cards whose content truly changed.
-    const desired = new Set(list.map(p => String(p.id)));
-    feedEl.querySelectorAll(':scope > .card').forEach(c => {
-      if (!desired.has(c.dataset.id)) c.remove();          // gone from the feed
-    });
-    feedEl.querySelectorAll(':scope > :not(.card)').forEach(n => n.remove()); // stale empty-state
-    const existing = new Map();
-    feedEl.querySelectorAll(':scope > .card').forEach(c => existing.set(c.dataset.id, c));
-
-    list.forEach((p, i) => {
-      const id = String(p.id);
-      const old = existing.get(id);
-      let node;
-      if (old) {
-        const fresh = makeCard(p);
-        if (fresh.dataset.sig === old.dataset.sig) {
-          node = old;                          // unchanged — leave the live node alone
-        } else {
-          // Content changed (a new like/comment, an edit). Swap in the new render,
-          // but carry over an already-loaded photo when the image itself is the
-          // same, and don't re-run the rise — it's an update, not an arrival.
-          const oldImg = old.querySelector('.photo img');
-          const newFig = fresh.querySelector('.photo');
-          if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
-            newFig.replaceWith(oldImg.closest('.photo'));
-          }
-          fresh.style.animation = 'none';
-          wireFeedCard(fresh);
-          old.replaceWith(fresh);
-          node = fresh;
-        }
-      } else {
-        node = makeCard(p);                    // brand-new post — rise it in
-        node.style.animationDelay = staggerDelay(i);
-        wireFeedCard(node);
-      }
-      const ref = feedEl.children[i] || null;  // slot it into the right position
-      if (node !== ref) feedEl.insertBefore(node, ref);
-    });
+    syncCards(feedEl, list, wireFeedCard);
 
     // Keep the active-tag highlight current on every chip (reused cards included).
     feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
@@ -3202,15 +3234,22 @@
     // corner badge too).
     const action = (isSelf || areFriends) ? ''
       : (() => {
-          // Three pre-friend states: add / requested (pending, sent) / accept
-          // (they asked first). Only "sent" is a committed state (muted outline,
-          // undo on tap); add + accept wear the filled accent and create my edge.
+          // Five pre-friend states. Two are already-done and undo on tap
+          // ("Requested" on a private account, "Following" on a public one) —
+          // muted outline. The other three are the live commit, and are the one
+          // primary action on a visitor's card (Share lives in the ••• menu
+          // here), so they wear the publish-fill gradient. The done states
+          // deliberately do NOT: the gradient means "this is the move", not
+          // "you already did it".
           const s = friendStatus;
-          const label = { none: 'Add friend', sent: 'Requested', incoming: 'Accept request' }[s];
-          const committed = s === 'sent';
-          const title = s === 'sent' ? ' title="Tap to cancel your request"' : '';
+          const label = { none: 'Add friend', sent: 'Requested', following: FOLLOW_STATE,
+                          incoming: 'Accept request', follower: 'Add back' }[s];
+          const committed = s === 'sent' || s === 'following';
+          const title = s === 'sent' ? ' title="Tap to cancel your request"'
+            : s === 'following' ? ` title="Tap to stop ${FOLLOW_STATE.toLowerCase()}"` : '';
+          const fill = committed ? '' : ' publish-fill is-solid';
           return `<div class="account-actions">` +
-            `<button class="friend-btn" type="button" id="friend" ` +
+            `<button class="friend-btn${fill}" type="button" id="friend" ` +
               `data-status="${s}" aria-pressed="${committed}"${title}>${esc(label)}</button>` +
           `</div>`;
         })();
@@ -3388,7 +3427,8 @@
       // accept both create my edge.
       const status = friendBtn.dataset.status;
       if (status === 'friends') { openFriendMenu(u.username, () => renderUser(username)); return; }
-      if (status === 'sent') await Store.removeFriend(u.username);
+      // sent → cancel the request · following → unfollow. Both drop my edge.
+      if (status === 'sent' || status === 'following') await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
     });
@@ -4006,23 +4046,31 @@
      on Updates, so nothing here is orphaned. */
   let discoverQuery = '';    // live search over public people + posts
   let discoverFilter = 'all'; // type filter, its own state (never touches My Circle's)
+  let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   function renderDiscover() {
     const me = Store.session();
     const friendSet = new Set(Store.friends());
     const notBlocked = (name) => !Blocks.has(name);
     const typeOk = (p) => discoverFilter === 'all' || p.type === discoverFilter;
 
-    // The inline tie control on a person row (search results only):
-    //   none → Add · incoming → Accept · sent → Requested (tap to take back).
+    // The inline tie control on a person row (search results only). The two
+    // already-done states wear the pending dress and take the edge back on tap:
+    //   sent → Requested (private account) · following → Following (public one).
+    // The rest create my edge: none → Add · incoming → Accept · follower → Add back.
     const addBtn = (u) => {
       const s = Store.friendStatus(u.username);
-      if (s === 'sent')
+      if (s === 'sent' || s === 'following') {
+        const done = s === 'sent' ? 'Requested' : FOLLOW_STATE;
+        const undo = s === 'sent' ? `Cancel your request to ${esc(u.name)}` : `Stop ${FOLLOW_STATE.toLowerCase()} ${esc(u.name)}`;
         return `<button class="friend-add friend-add--pending" type="button" data-cancel="${esc(u.username)}" ` +
-          `aria-label="Cancel your request to ${esc(u.name)}">Requested</button>`;
-      const accept = s === 'incoming';
+          `aria-label="${undo}">${done}</button>`;
+      }
+      const label = { none: 'Add', incoming: 'Accept', follower: 'Add back' }[s] || 'Add';
+      const aria = { none: `Add ${esc(u.name)} as a friend`,
+                     incoming: `Accept ${esc(u.name)}’s request`,
+                     follower: `Add ${esc(u.name)} back` }[s] || `Add ${esc(u.name)} as a friend`;
       return `<button class="friend-add" type="button" data-add="${esc(u.username)}" ` +
-        `aria-label="${accept ? 'Accept ' + esc(u.name) + '’s request' : 'Add ' + esc(u.name) + ' as a friend'}">` +
-        `${accept ? 'Accept' : 'Add'}</button>`;
+        `aria-label="${aria}">${label}</button>`;
     };
 
     // A person row (search results). You or an existing friend gets a go-arrow;
@@ -4091,18 +4139,13 @@
     // inside it, so a stranger's card correctly shows no social controls. We only
     // re-point its tag chips at Discover's own search (the home feed's wireFeedCard
     // would call renderFeed, the wrong page).
-    const mountCards = (container, list) => {
-      list.forEach((p, i) => {
-        const node = makeCard(p);
-        node.style.animationDelay = staggerDelay(i);
-        container.appendChild(node);
-        node.querySelectorAll('.tag[data-tag]').forEach(btn =>
-          btn.addEventListener('click', () => {
-            openSearch();
-            searchEl.value = discoverQuery = btn.dataset.tag;
-            paint();
-          }));
-      });
+    const wireDiscoverCard = (node) => {
+      node.querySelectorAll('.tag[data-tag]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          openSearch();
+          searchEl.value = discoverQuery = btn.dataset.tag;
+          paint();
+        }));
     };
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with it,
@@ -4129,13 +4172,21 @@
 
       if (!q) {
         const posts = Store.discover().filter(p => notBlocked(p.author) && typeOk(p));
-        bodyEl.innerHTML = posts.length
-          ? `<div class="feed" id="discover-feed"></div>`
-          : `<p class="feed-empty">Nothing here yet.</p>`;
-        const feedEl = bodyEl.querySelector('#discover-feed');
-        if (feedEl) mountCards(feedEl, posts);
-        bodyEl.insertAdjacentHTML('beforeend', shareAsk);
-        wireShare();
+        // The share ask is the tell that the body is ALREADY the default view, so
+        // this repaint can happen in place — new posts rise in, the rest stay put
+        // (a background refresh comes through here too, and a full rebuild would
+        // replay every card). Any other body, or an emptied list, builds fresh.
+        let feedEl = (posts.length && bodyEl.querySelector('.friends-share'))
+          ? bodyEl.querySelector('#discover-feed') : null;
+        if (!feedEl) {
+          bodyEl.innerHTML = posts.length
+            ? `<div class="feed" id="discover-feed"></div>`
+            : `<p class="feed-empty">Nothing here yet.</p>`;
+          feedEl = bodyEl.querySelector('#discover-feed');
+          bodyEl.insertAdjacentHTML('beforeend', shareAsk);
+          wireShare();
+        }
+        if (feedEl) syncCards(feedEl, posts, wireDiscoverCard);
         return;
       }
 
@@ -4161,7 +4212,7 @@
 
       bodyEl.querySelectorAll('.friend').forEach((el, i) => el.style.animationDelay = staggerDelay(i));
       const feedEl = bodyEl.querySelector('#discover-feed');
-      if (feedEl) mountCards(feedEl, posts);
+      if (feedEl) syncCards(feedEl, posts, wireDiscoverCard);
       wirePeople();
     };
 
@@ -4201,8 +4252,8 @@
 
     // Open/close the search field. The icon fans it out over the nameplate and
     // focuses it; tapping again (or Escape) folds it back and clears the query so
-    // the full feed returns. Declared (not const) so mountCards can reopen it from
-    // a tag-chip tap before this point in the source.
+    // the full feed returns. Declared (not const) so wireDiscoverCard can reopen it
+    // from a tag-chip tap before this point in the source.
     const foldIfEmpty = () => {
       if (searchEl.value.trim()) return;
       masthead.classList.remove('searching');
@@ -4241,6 +4292,18 @@
       current: discoverFilter,
       onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paint(); },
     }));
+
+    // A background re-pull while you're standing on Discover repaints the body in
+    // place instead of re-rendering the whole view (which would tear down the
+    // masthead and replay every card). Skipped mid-search: results shifting under
+    // a query you're still typing is worse than showing them a beat late.
+    // Answers false only if this closure has gone stale (the view was rebuilt
+    // under it), which is the caller's cue to render Discover from scratch.
+    discoverRepaint = () => {
+      if (!bodyEl.isConnected) return false;
+      if (!discoverQuery.trim()) paint();
+      return true;
+    };
 
     // Restore an in-flight query if a background refresh re-rendered the page.
     searchEl.value = discoverQuery;
@@ -4336,27 +4399,41 @@
   // All filter (a request isn't a mention). Empty string when nobody's asked.
   function friendRequestsHtml() {
     if (notifFilter !== 'all') return '';
-    const reqs = Store.requestsReceived().map(Store.user).filter(Boolean)
+    const people = (list) => list.map(Store.user).filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
-    if (!reqs.length) return '';
-    // Each request reads like a ledger row — "<name> wants to be friends" in the
-    // same notif voice — but carries Accept / Ignore where a passive row's dot
+    const reqs = people(Store.requestsReceived());
+    const folls = people(Store.followers());
+    if (!reqs.length && !folls.length) return '';
+
+    // A ledger row in the notif voice, with buttons where a passive row's dot
     // would sit. The avatar + text link walks to their profile, like a notif.
-    const rows = reqs.map(u =>
-      `<li class="request-row" data-key="req:${esc(u.username)}">` +
+    const row = (u, key, line, actions) =>
+      `<li class="request-row" data-key="${key}:${esc(u.username)}">` +
         `<a class="request-who" href="#/u/${encodeURIComponent(u.username)}">` +
           avatarEl(u, { cls: 'comment-avatar' }) +
-          `<span class="request-text"><strong>${esc(u.name)}</strong> wants to be friends</span>` +
+          `<span class="request-text"><strong>${esc(u.name)}</strong> ${line}</span>` +
         `</a>` +
-        `<span class="request-actions">` +
-          `<button class="request-accept" type="button" data-accept="${esc(u.username)}">Accept</button>` +
-          `<button class="request-ignore" type="button" data-ignore="${esc(u.username)}" ` +
-            `aria-label="Ignore request from ${esc(u.name)}">Ignore</button>` +
-        `</span>` +
-      `</li>`).join('');
+        `<span class="request-actions">${actions}</span>` +
+      `</li>`;
+
+    // Requests need an answer, so they keep Accept / Ignore.
+    const reqRows = reqs.map(u => row(u, 'req', 'wants to be friends',
+      `<button class="request-accept" type="button" data-accept="${esc(u.username)}">Accept</button>` +
+      `<button class="request-ignore" type="button" data-ignore="${esc(u.username)}" ` +
+        `aria-label="Ignore request from ${esc(u.name)}">Ignore</button>`)).join('');
+
+    // Follows DON'T. Nothing is pending — the tie already exists, and on a public
+    // account it never needed your permission. So this row is news, not a
+    // decision: no Ignore (there's nothing to decline), just the open door back.
+    const folRows = folls.map(u => row(u, 'fol', FOLLOW_LINE,
+      `<button class="request-accept" type="button" data-accept="${esc(u.username)}" ` +
+        `aria-label="Add ${esc(u.name)} back">Add back</button>`)).join('');
+
+    const section = (kicker, rows) => rows
+      ? `<p class="requests-kicker">${kicker}</p><ul class="requests-list">${rows}</ul>` : '';
     return `<div class="requests">` +
-        `<p class="requests-kicker">Friend request${reqs.length === 1 ? '' : 's'}</p>` +
-        `<ul class="requests-list">${rows}</ul>` +
+        section(`Friend request${reqs.length === 1 ? '' : 's'}`, reqRows) +
+        section(`New ${FOLLOW_NOUN}${folls.length === 1 ? '' : 's'}`, folRows) +
       `</div>`;
   }
 
@@ -4464,7 +4541,7 @@
             ? ''   // requests are up top; don't also say "all quiet" beneath them
             : `<p class="feed-empty">${all.length
                 ? 'No mentions yet.'
-                : 'All quiet. When a friend likes, comments, or says they’re going, it lands here.'}</p>`);
+                : 'When a friend likes, comments, or says they’re going, it lands here.'}</p>`);
     };
     // Answer a friend request in place. Accept adds them back (→ mutual, they
     // now show in each other's feeds); Ignore clears the request quietly.
@@ -5913,6 +5990,11 @@
     const errEl = document.getElementById('c-error');
     const val = (id) => (document.getElementById(id)?.value || '').trim();
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
+    // Audience rides EVERY post type, not just activities — the lock is on the
+    // note box's foot too, and a picked 'public' that never reached the row is
+    // how a public post quietly landed back in 'circle' (and out of Discover).
+    data.audience = pubAudience.mode;          // 'public' | 'circle' | 'list'
+    data.audienceUsers = pubAudience.users;    // usernames when 'list'
 
     if (pubType === 'find') {
       data.url = val('c-url');
@@ -5934,8 +6016,6 @@
       if (data.eventTime && !data.eventDate) {
         errEl.textContent = 'Add a date to go with that time.'; return;
       }
-      data.audience = pubAudience.mode;          // 'circle' | 'list'
-      data.audienceUsers = pubAudience.users;    // usernames when 'list'
     } else if (pubType === 'photo') {
       // A Frame is a full post that carries a photo/clip: keep the headline and the
       // rich caption (both optional), same as a Note. Only the media is required.
@@ -6306,7 +6386,7 @@
     '.card-social button', '.card-menu', '.going-out',
     '.seg-tab', '.sheet-item', '.sheet-cancel',
     '.comment-form button', '.modal-actions button',
-    '.masthead-filter', '.friend-add', '.request-accept', '.request-ignore',
+    '.masthead-filter', '.friend-add', '.friend-btn', '.request-accept', '.request-ignore',
     '.account-badges > button', '.pf-photo-edit', '.nav-link',
     '.feed-empty-cta', '.composer-post',
   ].join(', ');
@@ -7130,8 +7210,34 @@
      actually changed does the view re-render, so new cards rise in with the
      usual entrance and an unchanged page never flickers. Plain navigation
      deliberately does NOT refresh (a re-pull landing mid-slide can rebuild rows
-     under the transition); the world is otherwise refreshed at boot and on
-     foreground. */
+     under the transition); the world is otherwise refreshed at boot, on
+     foreground, and on a slow beat while you're standing on one of those pages
+     (see "Live pages" below). */
+
+  // Rows a background render may splice in ABOVE what you're reading.
+  const LIVE_ROWS = '#feed > .card, #discover-feed > .card, .notif-list > li';
+
+  // Hold the reader's place across a render. A post that lands while you're deep
+  // in the feed would otherwise shove everything down under your eyes — and
+  // WebKit has no scroll anchoring of its own to catch it. So: note where the
+  // topmost visible row sits, render, find that row again, and take the drift
+  // back out of the scroll. At the very top there's nothing to hold (new cards
+  // simply arrive where you're already looking), so it stays out of the way.
+  function keepPlace(render) {
+    const key = (el) => el.dataset.id ?? el.dataset.key;
+    const anchor = window.scrollY > 0
+      ? [...document.querySelectorAll(LIVE_ROWS)].find(el => el.getBoundingClientRect().bottom > 0)
+      : null;
+    const id = anchor && key(anchor);
+    const was = anchor && anchor.getBoundingClientRect().top;
+    render();
+    if (id == null) return;
+    const again = [...document.querySelectorAll(LIVE_ROWS)].find(el => key(el) === id);
+    if (!again) return;
+    const drift = again.getBoundingClientRect().top - was;
+    if (drift) window.scrollBy(0, drift);
+  }
+
   let refreshSeq = 0;
   let lastRefresh = Date.now();   // boot just loaded the world — don't re-pull it
   async function refreshWorld(path, force) {
@@ -7146,10 +7252,36 @@
     if ((location.hash || '#/').split('?')[0] !== path) return;   // navigated away
     // Never yank the page out from under a half-typed comment.
     if (document.activeElement?.matches?.('input, textarea')) return;
-    if (path === '#/') renderFeed();
-    else if (path === '#/discover') renderDiscover();
-    else renderUpdates();
+    keepPlace(() => {
+      if (path === '#/') renderFeed();
+      else if (path === '#/discover') { if (!discoverRepaint?.()) renderDiscover(); }
+      else renderUpdates();
+    });
   }
+
+  /* ── Live pages ─────────────────────────────────────────────────────────────
+     Otherwise nothing arrives on its own: the world is only re-pulled at boot, on
+     foreground, on a tab re-tap and on a pull, so an hour spent on Circle is an
+     hour of a frozen page (and standalone Safari has no native pull-to-refresh to
+     fall back on). While one of the three live pages is open and visible, re-pull
+     on a slow beat and let the usual reconcile rise new posts in — no "3 new
+     posts" pill to sit there tugging at you, which is a device for feeds that
+     move faster than a small circle ever will. Stops itself when the app is
+     backgrounded, and after a long stretch of no interaction, so a window left
+     open on a desk isn't quietly pulling the world all afternoon. */
+  (() => {
+    const BEAT = 60000, IDLE = 15 * 60000;
+    let touched = Date.now();
+    const poke = () => { touched = Date.now(); };
+    ['pointerdown', 'keydown', 'scroll'].forEach(ev =>
+      window.addEventListener(ev, poke, { passive: true }));
+    document.addEventListener('visibilitychange', poke);
+    setInterval(() => {
+      if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
+      if (Date.now() - touched > IDLE) return;
+      refreshWorld((location.hash || '#/').split('?')[0]);
+    }, BEAT);
+  })();
 
   // Tapping the tab (or the brand) for the page you're already on scrolls back
   // to the top — and on Home also clears any active filter/tag. No `hashchange`
