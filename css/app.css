@@ -1559,6 +1559,12 @@ main {
   margin-right: 0.5rem;
 }
 .card-attendees-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
+/* Before you're in, the check's landing zone (the glyph's empty right half) sits
+   between the person and the count, so the number reads detached. Pull it back
+   across that zone so it rests the same short step off the person that it rests
+   off the check once you've joined. Released in .going, where the check fills the
+   zone and needs the room — the card is rebuilt on RSVP, so there's no jump. */
+.card-attendees:not(.going) .card-attendees-count { margin-left: -0.55rem; }
 .card-attendees:hover,
 .card-attendees:focus-visible,
 .card-attendees[aria-expanded="true"] { color: var(--accent); }
@@ -1568,12 +1574,19 @@ main {
    and the person never shifts to make room. State reads without colour (the arm
    is a shape change), which is what keeps the control legible to anyone who
    can't separate the grey from the green. */
-.card-attendees .check-arm { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.card-attendees .check-arm {
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  /* Belt AND braces: the dash trick above hides the arm only where pathLength is
+     honoured. Safari ignores pathLength, so it paints the un-normalized dashes as
+     a stray dotted remnant (a phantom "•" beside the person). visibility keeps it
+     gone at rest regardless — the dash math still drives the draw once you're in. */
+  visibility: hidden;
+}
 .card-attendees.going,
 .card-attendees.going:hover,
 .card-attendees.going:focus-visible,
 .card-attendees.going[aria-expanded="true"] { color: var(--type-activity-ink); }
-.card-attendees.going .check-arm { stroke-dashoffset: 0; stroke-width: 2.4; }
+.card-attendees.going .check-arm { stroke-dashoffset: 0; stroke-width: 2.4; visibility: visible; }
 
 /* RSVP reward — the moment you join, the check DRAWS itself onto the person
    (stroke walking its path; the arm carries pathLength=1 in the icon so the dash
@@ -2355,10 +2368,20 @@ main {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* The clip is inserted as the LAST child of .photo-frame, so without a z-index
+     it paints over the sound chip + progress bar (both earlier siblings) the whole
+     time it plays — hiding them AND swallowing their taps (the sound toggle read
+     as dead because the click landed on the video). Pin the clip below the
+     controls: like the lightbox's native controls, ours stay above the picture. */
+  z-index: 1;
 }
 /* Small floating icon controls over the clip are chrome ABOVE content, not
    content themselves, so they wear the same frosted-chip material as the nav
-   dial's icons rather than a flat scrim. */
+   dial's icons rather than a flat scrim. They sit above .frame-clip (z-index:1)
+   so they're visible and tappable while the clip plays, not just before/after. */
+.frame-sound,
+.frame-play,
+.frame-progress { z-index: 2; }
 .frame-sound,
 .frame-play {
   position: absolute;

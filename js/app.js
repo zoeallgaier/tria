@@ -1194,6 +1194,9 @@
           `${rsvpable && !going ? 'Count me in' : 'See who'}" ` +
         `title="${rsvpable && !going ? 'Count me in' : 'Who’s going'}">` +
         svgIcon('going') +
+        // Always present, even at 0: the headcount is a public planning number
+        // ("nobody's in yet" is real info), and the span has to exist for the
+        // odometer to roll it on the 0<->1 boundary when you join or bow out.
         `<span class="card-attendees-count">${n}</span>` +
       `</button>`;
   }
@@ -1684,7 +1687,9 @@
       clip.src = post.image + '#t=' + (win ? Math.max(win.start, 0.001) : 0.001);
       wireClipWindow(clip, win);
       clip.addEventListener('timeupdate', () => {
-        if (!progressFill) return;
+        // A final timeupdate can fire after detach() has already nulled `clip`
+        // (the card scrolled out mid-play) — bail before dereferencing it.
+        if (!clip || !progressFill) return;
         const frac = win
           ? (clip.currentTime - win.start) / Math.max(0.1, win.end - win.start)
           : (clip.duration ? clip.currentTime / clip.duration : 0);
@@ -6217,6 +6222,7 @@
       const v = lightbox.querySelector('video');
       v.addEventListener('click', e => e.stopPropagation());
       wireClipWindow(v, win);
+      wireLightboxDrag(v, true);   // swipe-out to dismiss, without stealing the native controls
     }
     lbClosing = false;
     lbOrigin = null;
@@ -6233,7 +6239,7 @@
     // scale about 0 0), one promoted layer, and the origin img is hidden for the
     // whole session so there's exactly one copy of the photo moving.
     const pic = isVideo ? null : lightbox.querySelector('img');
-    if (pic) wireLightboxDrag(pic);
+    if (pic) wireLightboxDrag(pic, false);
     if (!pic || !originEl?.isConnected || prefersReduced()) return;
     const r0 = originEl.getBoundingClientRect();
     if (!r0.width || !r0.height) return;
@@ -6315,24 +6321,52 @@
   }
   const onKey = (e) => { if (e.key === 'Escape') closeLightbox(); };
 
-  // Drag to dismiss (photos only — a video keeps its native controls): the image
-  // follows the finger, the veil thins with distance, and a real flick or a long
-  // pull lets go — closeLightbox then flies it home from wherever it was
-  // released. A short drag springs back to centre on the shared spring.
-  function wireLightboxDrag(pic) {
-    pic.style.touchAction = 'none';   // the drag owns this surface; page is locked anyway
-    let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, raf = 0;
+  // Drag to dismiss: the media follows the finger, the veil thins with distance,
+  // and a real flick or a long pull lets go — closeLightbox then flies a photo
+  // home from wherever it was released (a video just fades out in place). A short
+  // drag springs back to centre on the shared spring.
+  //
+  // A photo owns its whole surface, so it can capture the pointer the instant a
+  // finger lands. A video can't — its native controls (scrub, pause, tap-to-play)
+  // need those same taps and sideways drags. So a video *arms* the dismiss only
+  // once the finger commits to a vertical pull, and never from the bottom control
+  // strip: taps and horizontal scrubs fall straight through to the controls.
+  function wireLightboxDrag(mover, isVideo) {
+    // touch-action:none is what actually hands us the vertical drag on a touch
+    // device — without it the browser claims the pull as a (dead) page scroll and
+    // we never see the moves to arm, so the swipe silently does nothing. It does
+    // NOT gag a video's native controls: touch-action gates the browser's own
+    // scroll/zoom gestures, not event delivery, so the scrubber's shadow-DOM
+    // widget still gets its taps and drags. The video keeps them usable through
+    // the arm-on-vertical-intent + skip-the-control-strip logic below, not by
+    // leaving its surface pannable.
+    mover.style.touchAction = 'none';
+    const CTRL_STRIP = 56;   // px of native controls along a video's bottom edge, left to the UA
+    let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, armed = false, raf = 0;
     let lastY = 0, lastT = 0, vy = 0;
-    pic.addEventListener('pointerdown', (e) => {
+    mover.addEventListener('pointerdown', (e) => {
       if (!e.isPrimary || lbClosing) return;
+      // A press that lands on the control strip is a scrub or a pause, never a swipe-out.
+      if (isVideo) {
+        const r = mover.getBoundingClientRect();
+        if (e.clientY > r.bottom - CTRL_STRIP) return;
+      }
       dragging = true;
+      armed = !isVideo;      // a photo is armed at once; a video waits for vertical intent
       sx = e.clientX; sy = e.clientY; dx = dy = vy = 0;
       lastY = e.clientY; lastT = e.timeStamp;
-      try { pic.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+      if (armed) { try { mover.setPointerCapture(e.pointerId); } catch { /* older engines */ } }
     });
-    pic.addEventListener('pointermove', (e) => {
+    mover.addEventListener('pointermove', (e) => {
       if (!dragging) return;
       dx = e.clientX - sx; dy = e.clientY - sy;
+      // Video: commit to the dismiss only once the pull is real and vertical-dominant.
+      // A mostly-sideways move is a scrub, so bail (un-dragged) and let the controls have it.
+      if (!armed) {
+        if (Math.abs(dy) < 10 || Math.abs(dy) <= Math.abs(dx)) return;
+        armed = true;
+        try { mover.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+      }
       if (e.timeStamp > lastT) {      // velocity for the flick test, px/ms
         vy = (e.clientY - lastY) / (e.timeStamp - lastT);
         lastY = e.clientY; lastT = e.timeStamp;
@@ -6340,11 +6374,11 @@
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        if (!dragging) return;
+        if (!dragging || !armed) return;
         const d = Math.hypot(dx, dy);
-        pic.style.transform =
+        mover.style.transform =
           `translate(${dx}px, ${dy}px) scale(${Math.max(0.82, 1 - d / 1400)})`;
-        // The veil thins as the photo pulls away (its own transition smooths it).
+        // The veil thins as the media pulls away (its own transition smooths it).
         lightbox.style.opacity = String(Math.max(0.45, 1 - d / 520));
       });
     });
@@ -6352,6 +6386,8 @@
       if (!dragging) return;
       dragging = false;
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (!armed) return;      // a tap or a scrub: it never became a drag, nothing to undo
+      armed = false;
       const d = Math.hypot(dx, dy);
       // A drag was a drag: swallow the click that follows so it can't double-close
       // (or close against the user after a spring-back).
@@ -6364,14 +6400,14 @@
       lightbox.style.opacity = '';    // re-thicken the veil
       if (d > 2) {
         try {
-          const back = pic.animate({ transform: 'none' },
+          const back = mover.animate({ transform: 'none' },
             { duration: 460, easing: springEase() });
-          back.onfinish = () => { pic.style.transform = ''; back.cancel(); };
-        } catch { pic.style.transform = ''; }
-      } else pic.style.transform = '';
+          back.onfinish = () => { mover.style.transform = ''; back.cancel(); };
+        } catch { mover.style.transform = ''; }
+      } else mover.style.transform = '';
     };
-    pic.addEventListener('pointerup', end);
-    pic.addEventListener('pointercancel', end);
+    mover.addEventListener('pointerup', end);
+    mover.addEventListener('pointercancel', end);
   }
 
   /* ── Press grammar ──────────────────────────────────────────────────────────
