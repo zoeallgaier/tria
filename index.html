@@ -40,11 +40,18 @@
     @media (prefers-color-scheme: dark) { html { background: #0e1012; } }
   </style>
 
-  <!-- Installable web app (bookmark / add-to-home-screen). -->
+  <!-- Installable web app (bookmark / add-to-home-screen). The icons ship with a
+       transparent background on purpose: the source is icons/SVG/triaiconfinal.svg,
+       a pastel disc with the t knocked clean out of it, centred at 80% of the tile
+       with nothing behind it. iOS/Safari fills the plate itself (white in light,
+       near-black in dark) and the knockout picks up whichever it lands on, so one
+       file reads correctly in both schemes. Don't bake a background back in.
+       The Android maskable is the exception — adaptive icons must be opaque, so
+       that one keeps a white plate (and sits inside the 80% safe circle). -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=290" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=290" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=290" />
+  <link rel="icon" href="icons/icon-32.png?v=291" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=291" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=291" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -63,8 +70,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=290" />
-  <link rel="stylesheet" href="css/app.css?v=290" />
+  <link rel="stylesheet" href="css/tokens.css?v=291" />
+  <link rel="stylesheet" href="css/app.css?v=291" />
 </head>
 
 <body>
@@ -127,9 +134,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=290"></script>
-  <script src="js/store.js?v=290"></script>
-  <script src="js/app.js?v=290"></script>
+  <script src="js/config.js?v=291"></script>
+  <script src="js/store.js?v=291"></script>
+  <script src="js/app.js?v=291"></script>
 </body>
 
 </html>
