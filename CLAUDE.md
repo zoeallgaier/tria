@@ -107,7 +107,14 @@ exempt). Voice is playful but not trying-too-hard.
   count, via `--cols`. Five **trending tags** head the page, each a shortcut
   into search. A tile shows the person's **name only, no @handle** (search still
   matches handles), and speaks the post's **caption**, falling back to its title
-  only when there is no caption.
+  only when there is no caption. Its filter dial carries one row Home's can't
+  (`DISCOVER_FILTERS`): **People**, directly under All, which drops every post and
+  gives each account the portrait tile, alphabetically — the directory answer to
+  "I know roughly who I'm after", since the browse grid is chronological and
+  capped so a quiet account sits a long way down it. People takes **no pastel**
+  (the quintet is reserved for post types) and its masthead dot is ink. Search
+  under it still reaches post text via `saidBy`, so hunting by interest works on a
+  page of faces.
 - **`users.private`** (defaults true, so new signups open closed) no longer gates
   reads at all. It does three things: picks the composer's default audience (a
   public account's posts default to `public`, activities stay `circle`-first),

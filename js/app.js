@@ -2551,6 +2551,13 @@
     { key: 'poll',     label: 'Polls' },
     { key: 'activity', label: 'Activities' },
   ];
+  // Discover's dial carries one row the home feed has no use for: People, which
+  // drops the posts and faces every account with its portrait, turning the grid
+  // into a directory. It sits directly under All because those two are the whole
+  // room seen two ways (everything, or everyone) and the five type rows narrow
+  // beneath both. It takes no pastel: the quintet is reserved for post types, and
+  // People isn't one.
+  const DISCOVER_FILTERS = [FILTERS[0], { key: 'people', label: 'People' }, ...FILTERS.slice(1)];
   let activeFilter = 'all';
   let activeTag = null;
 
@@ -2559,10 +2566,13 @@
   // still tells you the feed is narrowed. Tapping it fans the filter dial open.
   // `id` namespaces the button so Home and Discover can each carry their own
   // filter (they hold separate state — narrowing one never touches the other).
-  function filterBtnEl(id, filterVal) {
+  // `label` names what's being narrowed, because Discover isn't a feed and its
+  // dial can now pick People — "Filter the feed" would be announcing the wrong
+  // thing twice over.
+  function filterBtnEl(id, filterVal, label = 'Filter the feed') {
     const on = filterVal !== 'all';
     return `<button class="masthead-filter" type="button" id="${id}" ` +
-        `aria-haspopup="menu" aria-expanded="false" aria-label="Filter the feed"` +
+        `aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}"` +
         `${on ? ` data-active="${filterVal}"` : ''}>` +
         svgIcon('sliders', 'masthead-filter-ico') +
         `<span class="masthead-filter-dot" aria-hidden="true"${on ? '' : ' hidden'}></span>` +
@@ -2612,27 +2622,36 @@
     // a pick, so the one dial drives either the home feed or Discover.
     const current = opts.current || 'all';
     const onPick = opts.onPick || (() => {});
+    // Which rows to fan. Home takes the five types; Discover adds People (see
+    // DISCOVER_FILTERS), so the dial itself stays a dumb renderer of a list.
+    const filters = opts.filters || FILTERS;
 
     const scrim = document.createElement('div');
     scrim.className = 'filter-dial-scrim';
-    const rows = FILTERS.map((f, i) => {
+    const rows = filters.map((f, i) => {
       const on = f.key === current;
-      const glyph = f.key === 'all' ? ICON_ALL : (TYPE_ICON[f.key] || '');
+      const glyph = f.key === 'all' ? ICON_ALL
+        : f.key === 'people' ? svgIcon('friends')
+        : (TYPE_ICON[f.key] || '');
       // --glow = the pastel that blooms behind the glyph; the glyph itself takes
       // the type's deep -ink via `color` (fill:currentColor). All's pentad paints
       // its own five hues directly (no currentColor), so it skips the glow wash
       // entirely — the grey radial bloom read muddy on a white ground, and the
-      // dots already carry plenty of colour on their own. Set inline rather than
-      // via .type-icon--x, whose own sizing rules would fight the 46px disc.
-      const glow = f.key === 'all' ? 'transparent' : `var(--type-${f.key})`;
-      const ink  = f.key === 'all' ? 'var(--muted)' : `var(--type-${f.key}-ink)`;
+      // dots already carry plenty of colour on their own. People skips it for the
+      // other reason: it isn't a post type, and spending one of the five hues on
+      // it would blunt what the quintet means. Set inline rather than via
+      // .type-icon--x, whose own sizing rules would fight the 46px disc.
+      const plain = f.key === 'all' || f.key === 'people';
+      const glow = plain ? 'transparent' : `var(--type-${f.key})`;
+      const ink  = plain ? 'var(--muted)' : `var(--type-${f.key}-ink)`;
       return `<button class="filter-dial-item${on ? ' is-on' : ''}" type="button" ` +
           `role="menuitemradio" aria-checked="${on}" data-filter="${f.key}" style="--i:${i}">` +
           `<span class="filter-dial-label">${f.label}</span>` +
           `<span class="filter-dial-ico" style="--glow:${glow}; color:${ink}">${glyph}</span>` +
         `</button>`;
     }).join('');
-    scrim.innerHTML = `<div class="filter-dial" role="menu" aria-label="Filter the feed">${rows}</div>`;
+    scrim.innerHTML = `<div class="filter-dial" role="menu" ` +
+      `aria-label="${esc(opts.label || 'Filter the feed')}">${rows}</div>`;
     document.body.appendChild(scrim);
     document.body.style.overflow = 'hidden';
 
@@ -4164,13 +4183,19 @@
      person who said it. It runs wider than the browse grid on purpose: no
      per-person cap and hand-addressed posts fold back in, because a courtesy
      that hides what you're hunting for isn't one.
-     The type filter narrows the grid to tiles of that type. Private
+     The filter dial narrows the grid to tiles of one type, or — one row below
+     All — to PEOPLE, which drops the posts and gives every account rule 4's
+     portrait tile in alphabetical order. That row is the answer to "I know
+     roughly who I'm looking for": the browse grid is chronological and capped, so
+     a quiet account can sit a long way down it, and a directory doesn't care when
+     anyone last posted. Search still reaches post text there (see saidBy), so
+     hunting by interest works on a page of faces too. Private
      accounts are listed but wear a lock (see isLocked), so you know before the
      tap. This page replaced the Friends page outright — your own
      circle roster lives on your profile, and incoming requests live on Updates,
      so nothing here is orphaned. */
   let discoverQuery = '';     // live search over people + the text of every post here
-  let discoverFilter = 'all'; // narrows the grid to tiles of one post type
+  let discoverFilter = 'all'; // 'all' · 'people' (a directory of portraits) · one post type
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   let discoverResizeOff = null; // drops the grid's resize listener when the view goes
   function renderDiscover() {
@@ -4395,7 +4420,7 @@
     const actions =
       `<div class="masthead-actions">` +
         searchAction +
-        filterBtnEl('discover-filter-btn', discoverFilter) +
+        filterBtnEl('discover-filter-btn', discoverFilter, 'Filter Discover') +
       `</div>`;
 
     view.innerHTML =
@@ -4417,10 +4442,26 @@
       if (user.includes(q) || name.includes(q)) return 1;
       return 0;
     };
+    // Everything one account has said here, joined. A portrait tile carries no
+    // post to match against, so without this, searching under the People filter
+    // would only reach names and "who here is into ceramics" would come back
+    // empty on the very view that's meant to answer it. Built once per paint and
+    // only when a search actually asks for it.
+    let saidCache = null;
+    const saidBy = (name) => {
+      if (!saidCache) {
+        saidCache = new Map();
+        Store.discover({ addressed: true }).forEach(p =>
+          saidCache.set(p.author, (saidCache.get(p.author) || '') + ' ' + postHaystack(p)));
+      }
+      return saidCache.get(name) || '';
+    };
+
     // A tile matches on WHO it's by first and WHAT it says second, so typing a
     // name still puts that person's tiles up top even if a stranger mentioned them.
     const tileScore = (t, q) =>
-      scoreName(t.user, q) || (t.post && postHaystack(t.post).includes(q) ? 0.5 : 0);
+      scoreName(t.user, q) ||
+      ((t.post ? postHaystack(t.post) : saidBy(t.user.username)).includes(q) ? 0.5 : 0);
 
     // Every tile on the page, in ONE grid — see rules 5 and 6. Chronological,
     // newest first, with elbow room.
@@ -4490,6 +4531,15 @@
       // Everyone but me (you aren't discovering yourself) and anyone blocked.
       const pool = new Set(Store.users().map(u => u.username)
         .filter(n => !!n && n !== me && notBlocked(n)));
+      // People: the room as a directory. Every account gets rule 4's portrait
+      // tile, so nobody's row depends on whether they posted lately — which is
+      // the whole point of asking for people rather than for posts. Alphabetical,
+      // because a directory sorted by recency is just the grid again.
+      if (discoverFilter === 'people') {
+        return [...pool].map(n => Store.user(n)).filter(Boolean)
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          .map(u => ({ user: u, post: null }));
+      }
       const posts = spaced(
         Store.discover({ addressed: searching }).filter(p => pool.has(p.author)),
         searching ? Infinity : TILE_CAP, searching ? 0 : FACE_GAP);
@@ -4576,8 +4626,12 @@
     // re-pull would replay the stagger and re-run every photo fade.
     const paint = () => {
       lockCache.clear();
+      saidCache = null;
       const q = discoverQuery.trim().toLowerCase();
-      const keep = (t) => discoverFilter === 'all' || (t.post && t.post.type === discoverFilter);
+      // People has already built exactly the tiles it wants, so it keeps them all;
+      // a type keeps the tiles faced by it.
+      const keep = (t) => discoverFilter === 'all' || discoverFilter === 'people'
+        || (t.post && t.post.type === discoverFilter);
       let tiles = buildTiles(!!q).filter(keep);
       if (q) tiles = tiles.filter(t => tileScore(t, q) > 0)
         .sort((a, b) => tileScore(b, q) - tileScore(a, q));   // stable: ties keep grid order
@@ -4592,13 +4646,20 @@
       bodyEl.dataset.sig = sig;
       const empty = q
         ? `No one matches “${esc(discoverQuery.trim())}”.`
-        : discoverFilter !== 'all'
-          ? `No ${TYPE_PLURAL[discoverFilter] || 'posts'} out here yet.`
+        : TYPE_PLURAL[discoverFilter]
+          ? `No ${TYPE_PLURAL[discoverFilter]} out here yet.`
           : 'Nobody here yet.';
       bodyEl.innerHTML = tagRail(tags, q) + (tiles.length
         ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
         : `<p class="feed-empty">${empty}</p>`);
-      if (!q && discoverFilter === 'all') { bodyEl.insertAdjacentHTML('beforeend', shareAsk); wireShare(); }
+      // The share ask ends the page, so it follows the two views that ARE the
+      // page (All and People) and stays out of a narrowed one. It earns its place
+      // under People especially: a list of everyone here is exactly where "know
+      // someone who'd like it?" lands.
+      if (!q && (discoverFilter === 'all' || discoverFilter === 'people')) {
+        bodyEl.insertAdjacentHTML('beforeend', shareAsk);
+        wireShare();
+      }
       layoutGrid(true);
       wireFaces();
       wireTags();
@@ -4663,12 +4724,15 @@
     searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
     searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paint(); });
 
-    // The type filter — same dial as My Circle, on its own state. It narrows the
-    // grid to tiles FACED by that type, so picking Frame gives you a wall of
-    // photos and the people behind them. Accounts with nothing to show drop out
-    // while a filter is on: they have no face to match.
+    // The filter — same dial as My Circle, on its own state, plus the People row
+    // (DISCOVER_FILTERS). A type narrows the grid to tiles FACED by that type, so
+    // picking Frame gives you a wall of photos and the people behind them, and
+    // accounts with nothing to show drop out: they have no face to match. People
+    // is the opposite move — it drops every post and faces everyone alike.
     view.querySelector('#discover-filter-btn')?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
       current: discoverFilter,
+      filters: DISCOVER_FILTERS,
+      label: 'Filter Discover',
       onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paint(); },
     }));
 

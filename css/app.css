@@ -855,6 +855,9 @@ main {
 .masthead-filter[data-active="photo"]    { --dot: var(--type-photo); }
 .masthead-filter[data-active="poll"]     { --dot: var(--type-poll); }
 .masthead-filter[data-active="activity"] { --dot: var(--type-activity); }
+/* Discover's People row isn't a post type, so its dot stays ink rather than
+   borrowing one of the five pastels — on is still unmistakably on. */
+.masthead-filter[data-active="people"]   { --dot: var(--text); }
 
 /* ── Filter dial ───────────────────────────────────────────────────────────
    The type-filter menu the masthead sliders button fans open: the + FAB's
