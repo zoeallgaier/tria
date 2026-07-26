@@ -7174,19 +7174,13 @@
 
     const businessHtml = aboutFold('business', 'Tria for business',
       `<p>Tria is available to businesses and nonprofits for ` +
-        `<strong>$99.99 per month</strong>. That's the whole price. No ad ` +
+        `<strong>$49.99 per month</strong>. That's the whole price. No ad ` +
         `auctions, no hidden fees. <strong>Your social strategy is determined by ` +
         `you and your audience, not an algorithm.</strong></p>` +
-      `<p>Tria doesn't use an algorithm to push promotional content into anyone's ` +
-        `feed. Instead, organizations share posts the same way people do, and those ` +
-        `posts reach the people who choose to follow them.</p>` +
-      `<p>This is why an organization account costs a flat monthly fee instead of ` +
-        `thousands in ad spend. We're not selling attention or building profiles to ` +
-        `target you. We're just letting the people who already care about your ` +
-        `organization keep up with it.</p>` +
-      `<p>Organization accounts follow the same community guidelines as everyone ` +
-        `else. <strong>No spam, no deceptive promotion, no buying your way past the ` +
-        `people who didn't ask to hear from you.</strong></p>` +
+      `<p>We charge an affordable monthly fee because <strong>Tria doesn't collect ` +
+        `or sell user information.</strong> Organization accounts follow the same ` +
+        `community guidelines as everyone else. No spam, no deceptive ` +
+        `promotion.</p>` +
       `<h3>Interested?</h3>` +
       `<p>If you'd like to set up an organization account, reach us through the ` +
         `Feedback form below and we'll help you get started.</p>`);
