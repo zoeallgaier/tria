@@ -4202,13 +4202,32 @@
     const me = Store.session();
     const notBlocked = (name) => !Blocks.has(name);
 
+    // Store.discover() re-sorts the whole post cache on every call, and one paint
+    // asks for it up to three times over: the grid, the trending rail, and (while
+    // searching) saidBy. Hold each variant for the life of ONE paint — cleared at
+    // the top of paint, so a background re-pull is never served a stale world.
+    let pools = {};
+    const discoverPool = (addressed) => {
+      const k = addressed ? 'addressed' : 'browse';
+      return pools[k] || (pools[k] = Store.discover({ addressed }));
+    };
+
     // A post's searchable text: title, body, tags, and its author's name/@handle
     // — so "search anything" (tags, interests, keywords, names) all land on the
-    // person who said it.
+    // person who said it. Cached per post for the life of the view: search asks
+    // for the same haystack once per keystroke, and building one means reading a
+    // rich note (see notePlain's memo). Keyed by the post OBJECT, so a re-pull
+    // that mints fresh rows gets fresh haystacks for free.
+    const haystacks = new WeakMap();
     const postHaystack = (p) => {
-      const au = Store.user(p.author);
-      return [p.title, notePlain(p.note), (p.tags || []).join(' '),
-        au && au.name, p.author].filter(Boolean).join(' ').toLowerCase();
+      let h = haystacks.get(p);
+      if (h === undefined) {
+        const au = Store.user(p.author);
+        h = [p.title, notePlain(p.note), (p.tags || []).join(' '),
+          au && au.name, p.author].filter(Boolean).join(' ').toLowerCase();
+        haystacks.set(p, h);
+      }
+      return h;
     };
 
     // Is this account's feed fenced to me? The same test the profile page runs:
@@ -4364,7 +4383,7 @@
       // votes once. Counts the BROWSE pool, which is why tapping a tag can
       // surface more posts than the number says: the tap runs a search, and
       // search reaches hand-addressed posts the rail deliberately doesn't count.
-      Store.discover().filter(p => notBlocked(p.author)).forEach(p =>
+      discoverPool(false).filter(p => notBlocked(p.author)).forEach(p =>
         new Set((p.tags || []).map(t => String(t).trim().toLowerCase().replace(/^#/, '')))
           .forEach(k => { if (k) n.set(k, (n.get(k) || 0) + 1); }));
       return [...n.entries()].filter(([, c]) => c > 1)
@@ -4451,7 +4470,7 @@
     const saidBy = (name) => {
       if (!saidCache) {
         saidCache = new Map();
-        Store.discover({ addressed: true }).forEach(p =>
+        discoverPool(true).forEach(p =>
           saidCache.set(p.author, (saidCache.get(p.author) || '') + ' ' + postHaystack(p)));
       }
       return saidCache.get(name) || '';
@@ -4491,6 +4510,10 @@
     // back in. Looking something up should reach every account and every post
     // that could answer it.
     const TILE_CAP = 3, FACE_GAP = 2, HOLD_MAX = 3;
+    // How long typing has to settle before the grid rebuilds. Short enough that
+    // it reads as "keeping up" rather than as a wait, long enough that a normal
+    // typing burst lands one paint instead of eight.
+    const SEARCH_BEAT = 110;
 
     const spaced = (posts, cap, gap) => {
       const out = [], held = [], count = new Map();
@@ -4541,7 +4564,7 @@
           .map(u => ({ user: u, post: null }));
       }
       const posts = spaced(
-        Store.discover({ addressed: searching }).filter(p => pool.has(p.author)),
+        discoverPool(searching).filter(p => pool.has(p.author)),
         searching ? Infinity : TILE_CAP, searching ? 0 : FACE_GAP);
       const loud = new Set(posts.map(p => p.author));
       const quiet = [...pool].filter(n => !loud.has(n)).map(n => Store.user(n)).filter(Boolean)
@@ -4624,7 +4647,14 @@
     // background refreshes land here too. Sign what the tiles actually render
     // and skip the rebuild when nothing in view moved, otherwise every quiet
     // re-pull would replay the stagger and re-run every photo fade.
-    const paint = () => {
+    // `stage` is the tile entrance. It plays when a DISCRETE act changed what the
+    // page is showing — landing here, picking a filter, tapping a tag, clearing
+    // the search — and stays out of the two cases where it reads as noise rather
+    // than feedback: mid-TYPING (a fresh stagger of the whole grid on every
+    // letter is the page flinching at you while you work), and a background
+    // re-pull (one new post arriving should not restage seventy tiles).
+    const paint = ({ stage = true } = {}) => {
+      pools = {};
       lockCache.clear();
       saidCache = null;
       const q = discoverQuery.trim().toLowerCase();
@@ -4633,8 +4663,12 @@
       const keep = (t) => discoverFilter === 'all' || discoverFilter === 'people'
         || (t.post && t.post.type === discoverFilter);
       let tiles = buildTiles(!!q).filter(keep);
-      if (q) tiles = tiles.filter(t => tileScore(t, q) > 0)
-        .sort((a, b) => tileScore(b, q) - tileScore(a, q));   // stable: ties keep grid order
+      // Score ONCE per tile, then sort the scores. Scoring inside the comparator
+      // read every haystack O(n log n) times instead of once, which on a page
+      // this size is the difference between a keystroke you feel and one you
+      // don't. Sort is stable, so ties still keep grid order.
+      if (q) tiles = tiles.map(t => ({ t, s: tileScore(t, q) })).filter(x => x.s > 0)
+        .sort((a, b) => b.s - a.s).map(x => x.t);
       // The rail is deliberately NOT rebuilt from the query: it's the index of
       // the page, so it has to stay put and stay tappable while you're standing
       // inside one of its tags, or there's no way back out but the X.
@@ -4660,7 +4694,7 @@
         bodyEl.insertAdjacentHTML('beforeend', shareAsk);
         wireShare();
       }
-      layoutGrid(true);
+      layoutGrid(stage);
       wireFaces();
       wireTags();
     };
@@ -4698,7 +4732,7 @@
       if (focus) searchEl.focus();
     };
     const closeSearch = () => {
-      if (discoverQuery) { discoverQuery = searchEl.value = ''; paint(); }
+      if (discoverQuery) { discoverQuery = searchEl.value = ''; paintNow(); }
       foldSearch();
       toggleBtn.focus();
     };
@@ -4711,7 +4745,7 @@
         const on = btn.getAttribute('aria-pressed') === 'true';
         discoverQuery = searchEl.value = on ? '' : btn.dataset.tag;
         if (discoverQuery) openSearch(false); else foldSearch();
-        paint();
+        paintNow();
       }));
     };
 
@@ -4722,7 +4756,26 @@
       masthead.classList.contains('searching') ? closeSearch() : openSearch());
     searchEl.addEventListener('blur', foldIfEmpty);
     searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
-    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paint(); });
+    // Typing repaints on a short trailing beat rather than per letter. A paint
+    // here is a full rebuild — search lifts the per-person cap and folds the
+    // hand-addressed posts back in, so the grid it builds is roughly double the
+    // browse grid, and every letter was re-laying out every tile. Coalescing a
+    // burst into one paint at the end of it costs nothing you can perceive (the
+    // field itself is native and never waits) and takes the work per word from
+    // one-per-keystroke to one. `discoverQuery` still moves on the keystroke, so
+    // anything else reading it (a background re-pull's guard, a re-render
+    // restoring the field) sees what's actually typed.
+    let searchTimer = 0;
+    const paintSoon = () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        if (bodyEl.isConnected) paint({ stage: false });
+      }, SEARCH_BEAT);
+    };
+    // Any discrete gesture (Escape, the X, a tag) paints straight away and must
+    // cancel a beat still in flight, or the stale one lands on top of it.
+    const paintNow = (opts) => { clearTimeout(searchTimer); paint(opts); };
+    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); });
 
     // The filter — same dial as My Circle, on its own state, plus the People row
     // (DISCOVER_FILTERS). A type narrows the grid to tiles FACED by that type, so
@@ -4733,7 +4786,7 @@
       current: discoverFilter,
       filters: DISCOVER_FILTERS,
       label: 'Filter Discover',
-      onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paint(); },
+      onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paintNow(); },
     }));
 
     // A re-pull while you're standing on Discover repaints the body in place
@@ -4746,7 +4799,7 @@
     // caller's cue to render Discover from scratch.
     discoverRepaint = (force) => {
       if (!bodyEl.isConnected) return false;
-      if (force || !discoverQuery.trim()) paint();
+      if (force || !discoverQuery.trim()) paintNow({ stage: false });
       return true;
     };
 
@@ -4800,12 +4853,29 @@
   // a rich note's headings/emphasis markup would otherwise leak in. Strips the
   // rich-note tags to their words (blocks joined by a space) and collapses
   // whitespace; a legacy plain-text note just gets its whitespace collapsed.
+  //
+  // MEMOISED, because a rich note costs a whole inert DOMParser document to
+  // read and this is on the hottest path in the app: Discover's search calls it
+  // through postHaystack for every post it can show, and Discover's tiles call
+  // it again through `said` for every tile. One keystroke was building 574
+  // documents on a 144-post instance (~36ms on a desktop, several times that on
+  // a phone). A note is an immutable string — an edit mints a new one — so the
+  // string IS the cache key and a hit can never be stale. Capped so a long
+  // editing session can't grow it without bound; at the cap it simply starts
+  // over, which costs one re-parse per note and nothing else.
+  const NOTE_PLAIN_MAX = 600;
+  const notePlainCache = new Map();
   function notePlain(note) {
     if (!note) return '';
+    const hit = notePlainCache.get(note);
+    if (hit !== undefined) return hit;
     const text = isRichNote(note)
       ? Array.from(parseNoteHtml(note).childNodes).map(n => n.textContent || '').join(' ')
       : note;
-    return text.replace(/\s+/g, ' ').trim();
+    const out = text.replace(/\s+/g, ' ').trim();
+    if (notePlainCache.size >= NOTE_PLAIN_MAX) notePlainCache.clear();
+    notePlainCache.set(note, out);
+    return out;
   }
 
   // "…liked ‘Metalheart’" — name the post by its title or a note snippet, so a
@@ -7428,7 +7498,15 @@
     // were otherwise stacking their own translateY layers on top of the swap — the
     // Updates-page stutter/refresh. Rows that arrive later without a page change
     // (refreshWorld / the Updates reconcile) are untouched and still rise in.
-    page.querySelectorAll('.card, .notif, .request-row').forEach(c => { c.style.animation = 'none'; });
+    //
+    // `.ptile` is in this list for the same reason and is the worst offender of
+    // the lot: Discover mounts the entire grid at once, so arriving there was
+    // running the page's opacity ramp plus one rise per tile — measured at 87
+    // concurrent animations on a 72-tile grid, on top of two promoted page
+    // layers and a burst of photo bitmaps decoding. That is the exact pile-up
+    // the note above blames for the iOS WebKit crash, and Discover is the one
+    // page that hits it every single time you open it.
+    page.querySelectorAll('.card, .notif, .request-row, .ptile').forEach(c => { c.style.animation = 'none'; });
 
     // A docked view switcher (Updates on mobile) starts tucked behind the nav so
     // it can rise once the page settles (see cleanup) rather than cross-fading

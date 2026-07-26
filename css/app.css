@@ -585,8 +585,13 @@ main {
    Card rise itself no longer runs during a navigation at all — renderPage
    freezes freshly-mounted cards so they ride the page's own dissolve (see the
    freeze in app.js), which both removes the old white flash and drops the card
-   layers entirely. */
-.page.enter .photo-frame img, .page.leave .photo-frame img {
+   layers entirely.
+   Discover's tiles carry the same contract under a different class, and they
+   carry it dozens at a time — a grid landing mid-dissolve is the densest burst
+   of fresh bitmaps anywhere in the app, so it is the last place that wants an
+   extra opacity layer per photo riding along. */
+.page.enter .photo-frame img, .page.leave .photo-frame img,
+.page.enter .ptile-face--media img, .page.leave .ptile-face--media img {
   transition: none;
 }
 
@@ -3289,6 +3294,14 @@ button.poll-option:disabled { cursor: default; }
   max-width: var(--feed-width);
   /* 1.4rem of air under the tags, less the rail's own bottom padding below. */
   margin: 0 auto 0.64rem;
+  /* Inset to the same axis as the masthead's type. The rail and the grid share a
+     box, but the rail is TYPE and the grid is media, and this page follows the
+     same rule the feed does: text lines up with the nameplate, media reaches the
+     edge of the measure. Without this, "TRENDING" started 26px left of
+     "Discover" — two labels a few pixels apart on the page, each on its own
+     axis. Mobile zeroes it again (see the mobile block), where .view already
+     supplies the inset and the masthead drops its own. */
+  padding-inline: var(--inset);
 }
 .dtags-cap {
   /* Likewise: the 0.35rem gap to the tags, less the rail's top padding. The
@@ -3541,6 +3554,27 @@ button.poll-option:disabled { cursor: default; }
   .ptile { margin-bottom: 1.05rem; }
   .ptile-foot { padding: 0.85rem 0.95rem 0.9rem; }
 }
+
+/* ── The sidebar band: back to two ─────────────────────────────────────────────
+   Every breakpoint on this page measures the VIEWPORT, but the grid doesn't live
+   in the viewport — it lives in the column left over after the sidebar, which
+   appears at 681px and takes 268px with it. So the grid gets NARROWER as the
+   window gets wider across that line: 203px tiles at 680, and 111px tiles at 700
+   with the column count still on three. For most of this band a tile was smaller
+   than the same tile on a phone, which is backwards, and at the bottom of it the
+   name wrapped to two lines on every single tile.
+   Three columns are worth having again once the leftover column can hold them at
+   something like the phone's tile width, which is around 900. Below that, two. */
+@media (min-width: 681px) and (max-width: 899px) {
+  .pgrid { --cols: 2; }
+}
+
+/* Three is the ceiling. A fourth column shipped briefly and came straight back
+   out: it needs Discover to drop --feed-width and take the whole content box
+   (four tiles don't fit a 660px measure at any usable size), and at 196px a tile
+   is narrow enough that the say-face runs about fourteen characters a line and
+   the name starts wrapping beside its avatar. The denser wall wasn't worth the
+   page leaving the measure every other page shares. */
 
 /* A private profile, seen by an outsider: the posts column is replaced by a
    quiet, centred nudge toward adding them. Flat editorial (content, not glass),
@@ -5333,7 +5367,10 @@ button.poll-option:disabled { cursor: default; }
     padding-top: calc(env(safe-area-inset-top) + 5.2rem);   /* clears the fixed .auth-topbar */
     padding-bottom: calc(env(safe-area-inset-bottom) + 3rem);
   }
-  .masthead, .filters { padding-inline: 0; }   /* already inset by .view here */
+  /* Already inset by .view here, so the type-axis padding comes back off. .dtags
+     rides with them: on a phone the rail, the title and the grid all sit on the
+     view's own inset and no second one is wanted. */
+  .masthead, .filters, .dtags { padding-inline: 0; }
   .view-title { font-size: 2rem; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 0.5rem; }
   /* Friends / Updates: the seg-tabs that used to sit under the masthead docks to

@@ -104,7 +104,19 @@ exempt). Voice is playful but not trying-too-hard.
   (`spaced` in app.js). Its masonry columns are **dealt by JS** (`layoutGrid`),
   because CSS `columns` fills column one to the bottom first and would turn a
   chronological list into parallel timelines side by side; CSS owns only the
-  count, via `--cols`. Five **trending tags** head the page, each a shortcut
+  count, via `--cols` — 2 on a phone, 3 from tablet, and **3 is the ceiling** (a
+  4-up shipped for an afternoon and came out: it only fits if the page abandons
+  `--feed-width` for the full content box, and 196px tiles wrap the name beside
+  its avatar). Note every breakpoint here reads the VIEWPORT while the grid lives
+  in the column left over after the 268px sidebar, which is why 681–899px is
+  pinned back to 2: three columns there
+  made a tile *narrower* than the same tile on a phone. **Discover's paint is the
+  app's hottest path** — a repaint is a full rebuild, and search doubles the grid
+  (no cap, hand-addressed folded in). Keep it cheap: `notePlain` is memoised
+  (a rich note costs a DOMParser document, and this walks every post), haystacks
+  are cached per post object, `Store.discover()` is pooled per paint, scoring
+  happens once per tile rather than inside the sort comparator, and typing paints
+  on a trailing `SEARCH_BEAT` rather than per keystroke. Five **trending tags** head the page, each a shortcut
   into search. A tile shows the person's **name only, no @handle** (search still
   matches handles), and speaks the post's **caption**, falling back to its title
   only when there is no caption. Its filter dial carries one row Home's can't
@@ -178,6 +190,20 @@ snapping and glitching rather than loading. Opacity has nothing to be out of ste
 with. Don't reintroduce a slide, a scale, or an entry blur, and keep pages off
 `will-change: transform` — it makes a page a containing block for its
 `position: fixed` children (the docked seg-tabs).
+
+**Nothing else animates during a page change.** The dissolve is the whole move:
+`renderPage` freezes every row it just mounted (`.card, .notif, .request-row,
+.ptile`) so they ride the page's own fade instead of stacking a per-row rise on
+top of it, and CSS kills the photo fade on `.photo-frame img` +
+`.ptile-face--media img` for the same window. **Any new page-level row entrance
+has to join that list.** Discover is why the rule is strict rather than tidy: it
+mounts its whole grid at once, so before the freeze covered `.ptile` an arrival
+there ran 87 concurrent animations over two promoted page layers with a burst of
+bitmaps decoding under them — the exact pile-up behind the iOS WebKit crash. The
+entrance itself is not gone, it is scoped: it plays on a **discrete act**
+(landing, a filter, a tag, clearing search) and stays out of **typing** and
+**background re-pulls**, via `paint({ stage })` → `layoutGrid(fresh)` →
+`.pgrid--settled`.
 
 **Share is the tray, and the header tray shares.** `ICONS.send` is the
 arrow-out-of-a-box the OS itself draws for share, not an envelope (an envelope
