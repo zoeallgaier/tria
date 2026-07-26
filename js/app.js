@@ -211,9 +211,13 @@
     // the character as a colour emoji, which we never want.
     extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
     bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
-    // A little letter — the friendliest "send it to someone." A softened
-    // envelope whose flap curves like a smile. Worn by the share buttons.
-    send:    '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M4.5 8.7Q12 14.2 19.5 8.7"/>',
+    // The tray — an arrow lifting out of an open box. Worn by every share
+    // affordance. It replaced an envelope, which promised a message you compose
+    // and send; what these buttons actually do is hand a link to the OS. iOS and
+    // Android both draw share this way, so the gesture arrives already learned.
+    // The header's one-tap Share Tria inlines this same path data in index.html
+    // (it has to paint before JS runs) — keep the two in step.
+    send:    '<path d="M12 15V3"/><path d="M8 6.5 12 3l4 3.5"/><path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9"/>',
     // Magnifier for the Friends search field, and the X it morphs into when open.
     search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
@@ -6953,8 +6957,6 @@
     // same either side of sign-in. Locked to the viewport bottom (see .ambient),
     // rising up under the guidelines and the floating nav.
     if (path.split('?')[0] === '#/about') { body.dataset.ambient = 'about'; return; }
-    // Support wears the same self-lit, hue-drifting glow as About.
-    if (path.split('?')[0] === '#/support') { body.dataset.ambient = 'support'; return; }
     if (!user || !user.avatar) return;             // non-profile, or no photo → clean
     sampleColor(user.avatar).then(rgb => {
       if (seq !== ambientSeq) return;
@@ -7185,6 +7187,22 @@
       `<p>If you'd like to set up an organization account, reach us through the ` +
         `Feedback form below and we'll help you get started.</p>`);
 
+    // Zoe's letter, rehoused. It used to be its own page (#/support) behind the
+    // header's sprout, which put a page between someone and the share button at
+    // the bottom of it. The tray in the header shares directly now, so the note
+    // keeps only the part a button can't do: saying why this exists. Last fold
+    // before Feedback on purpose — here's why I made it, now tell me what you
+    // think. Keeps its .about-lede voice so it reads warmer than the policy folds.
+    const noteHtml = aboutFold('note', 'A note from the designer',
+      `<p class="about-lede">I built Tria because I believe online community ` +
+        `should be <em>fun, authentic, and free.</em> The internet needs a ` +
+        `place for people you actually know and love.</p>` +
+      `<p class="about-lede">The best way to help Tria grow is the simplest: ` +
+        `<strong>invite your friends to join you here.</strong> Every circle that ` +
+        `starts here is proof that social media can be fun again. The share ` +
+        `button at the top of the screen will hand someone the link.</p>` +
+      `<p class="about-sign">&mdash; <a href="#/u/zoe">Zoe</a></p>`);
+
     const feedbackHtml = aboutFold('feedback', 'Feedback',
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
       `<p>Whether you've found a bug, have an idea, or ` +
@@ -7220,7 +7238,7 @@
             `share your life, discover things worth caring about, and stay ` +
             `connected.</p>` +
           aboutFold('install', 'Add Tria to your home screen', installHtml) +
-          guidelinesHtml + privacyHtml + faqHtml + businessHtml + feedbackHtml +
+          guidelinesHtml + privacyHtml + faqHtml + businessHtml + noteHtml + feedbackHtml +
         `</div>` +
       `</section>`;
 
@@ -7279,54 +7297,6 @@
         btn.textContent = 'Send feedback';
       }
     });
-  }
-
-  /* ── Support (#/support) ─────────────────────────────────────────────────────
-     A quiet love letter from Zoe with a soft ask: invite the people you want in
-     your circle. Reachable only from the sprout glyph in the header, which the
-     signed-out gate hides — so this is signed-in only (the route() gate would
-     redirect a logged-out hash here to the login screen regardless). Reuses the
-     About page's editorial body + hue-drifting glow (data-ambient="support"). */
-  function renderSupport() {
-    // Root invite link (drop any #/… route), so the share points at Tria itself.
-    const shareUrl = /^https?:/.test(location.origin)
-      ? location.origin + location.pathname
-      : location.href;
-
-    view.innerHTML =
-      `<section class="view about support">` +
-        mastheadEl('A note from the designer', 'Thank you') +
-        `<div class="about-body">` +
-          `<p class="about-lede">I built Tria because I believe online community ` +
-            `should be <em>fun, authentic, and free.</em> The internet needs a ` +
-            `place for people you actually know and love.</p>` +
-          `<p class="about-lede">The best way to help Tria grow is the simplest: ` +
-            `<strong>invite your friends to join you here.</strong> Every circle that ` +
-            `starts here is proof that social media can be fun again.</p>` +
-          `<p class="support-sign">&mdash; <a href="#/u/zoe">Zoe</a></p>` +
-          `<button class="support-share publish-fill is-solid" type="button" ` +
-            `aria-label="Share Tria with a friend">` +
-            svgIcon('send', 'support-share-ico') +
-            `<span>Share Tria</span>` +
-          `</button>` +
-        `</div>` +
-      `</section>`;
-
-    // Native share sheet where it exists (mobile/PWA), clipboard copy on desktop.
-    const shareBtn = view.querySelector('.support-share');
-    shareBtn.addEventListener('click', async () => {
-      const result = await shareOrCopy({
-        title: 'Join me on Tria',
-        text: 'Join me on Tria',
-        url: shareUrl,
-      });
-      if (result === 'cancelled') return;
-      const label = shareBtn.querySelector('span');
-      label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
-      setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
-    });
-
-    wireAuthAccount();   // no-op when signed in (the header is signed-out only)
   }
 
   /* ── Router + page transitions ─────────────────────────────────────────────
@@ -7550,7 +7520,9 @@
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
         case '#/about':   renderAbout(false); break;
-        case '#/support': renderSupport(); break;
+        // #/support is retired — the note from the designer is an About fold now
+        // and the header tray shares directly. Old links land on the letter.
+        case '#/support': go('#/about?open=note'); break;
         default:          location.hash = '#/';
       }
     }, spotlighting);
@@ -7710,6 +7682,19 @@
       e.preventDefault();
       reclick('#/about');
     }
+  });
+
+  // The header tray IS the share, not a door to a page holding one. Native sheet
+  // on mobile, clipboard copy on desktop — and the copy path gets a toast,
+  // because a bare glyph has no label to flip to "Link copied" and a silent tap
+  // reads as a dead button. A shared/cancelled result stays quiet: the OS sheet
+  // already said its piece. Always the canonical URL, never location.href, so an
+  // invite sent from a dev server or a deep route still points at Tria's door.
+  document.querySelector('.share-tria').addEventListener('click', async () => {
+    const result = await shareOrCopy({
+      title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com',
+    });
+    if (result === 'copied') toast('Link copied. Send it to someone good.');
   });
 
   window.addEventListener('hashchange', route);

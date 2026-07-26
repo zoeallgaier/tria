@@ -172,6 +172,19 @@ with. Don't reintroduce a slide, a scale, or an entry blur, and keep pages off
 `will-change: transform` — it makes a page a containing block for its
 `position: fixed` children (the docked seg-tabs).
 
+**Share is the tray, and the header tray shares.** `ICONS.send` is the
+arrow-out-of-a-box the OS itself draws for share, not an envelope (an envelope
+promises a message you compose; these buttons hand a link to the OS). Its mouth
+matters: an early circular vessel with a narrow break reads as the IEC
+standby/power glyph at 22px, so if the vessel is ever redrawn, check it at true
+disc size, not at 96px. The header glyph is the share — it fires `shareOrCopy`
+in place and goes nowhere. It used to be a sprout opening `#/support`, a note
+from Zoe with the share button at the bottom, which put a page between someone
+and the thing they meant to do; the note is an About fold (`#note`) now and the
+retired route redirects to `#/about?open=note`. index.html **inlines** the tray's
+path data because the header paints before app.js runs, so that copy and
+`ICONS.send` have to be changed together.
+
 **Comments are a growing textarea, not a one-line input.** The comment composer
 auto-grows to fit its text (wraps into view instead of scrolling off one line);
 Enter posts, Shift+Enter breaks a line. It stays flat editorial (comments are

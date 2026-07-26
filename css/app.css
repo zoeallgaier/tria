@@ -97,8 +97,7 @@ body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); op
    the box reach the true viewport top, keeping the glow's bright base flush
    with the screen edge regardless of browser chrome. The GPU promotion keeps
    the hue-drift filter off the scroll path. */
-body[data-ambient="about"] .ambient,
-body[data-ambient="support"] .ambient {
+body[data-ambient="about"] .ambient {
   position: fixed;
   inset: 0;
   height: auto;
@@ -139,8 +138,7 @@ body[data-ambient="publish"] .ambient {
 
 @media (prefers-reduced-motion: reduce) {
   .ambient { transition: none; }
-  body[data-ambient="about"] .ambient,
-  body[data-ambient="support"] .ambient { animation: none; }
+  body[data-ambient="about"] .ambient { animation: none; }
   /* Colour still updates on type change, just without the tween. */
   body[data-ambient="publish"] .ambient { transition: opacity 0.4s ease; }
 }
@@ -295,12 +293,19 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 }
 .topbar .brand { pointer-events: auto; }
 
-/* Support entry (the sprout). Desktop: the topbar is a left rail, so this breaks
+/* Share Tria (the tray). Desktop: the topbar is a left rail, so this breaks
    out of it and floats as a small glass disc pinned to the viewport's top-right
    corner over content — floating chrome, hence the glass material (blur + rim +
    float). On phones it sheds the disc and docks bare into the header bar (mobile
-   block below). pointer-events re-enabled since the desktop topbar is inert. */
-.support-link {
+   block below). pointer-events re-enabled since the desktop topbar is inert.
+   A <button> now, not a link: it fires the OS share sheet rather than going
+   anywhere, so the appearance reset comes with it. */
+.share-tria {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
   position: fixed;
   top: 1.15rem;
   right: 1.15rem;
@@ -319,12 +324,12 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   pointer-events: auto;
   transition: color var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease);
 }
-.support-link svg { width: 22px; height: 22px; }
+.share-tria svg { width: 22px; height: 22px; }
 @media (hover: hover) {
-  .support-link:hover { color: var(--text); transform: translateY(-1px); }
+  .share-tria:hover { color: var(--text); transform: translateY(-1px); }
 }
-.support-link:active { transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) { .support-link { transition: color var(--dur-micro) var(--ease); } }
+.share-tria:active { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .share-tria { transition: color var(--dur-micro) var(--ease); } }
 
 /* Status-bar legibility scrim — only the installed iOS shell needs it (see the
    note by the element in index.html). Off everywhere else. On a device with no
@@ -3744,10 +3749,12 @@ button.poll-option:disabled { cursor: default; }
 }
 .friends-share-ico { width: 15px; height: 15px; }
 
-/* ── Support (#/support) — Zoe's love letter. Rides the About page's editorial
-   body (.about-body / .about-lede) and its hue-drifting glow; adds only a signed
-   signature and the share CTA. ── */
-.about-body p.support-sign {
+/* Zoe's signature, closing the note fold on About. The only handwritten-feeling
+   thing in the app: serif italic at display size, so the letter ends in a voice
+   rather than in another paragraph. (It outlived the #/support page it was drawn
+   for — the note is an About fold now and the share CTA under it is gone, since
+   the header tray does that job in one tap.) */
+.about-body p.about-sign {
   margin-top: 2rem;
   font-family: 'Instrument Serif', serif;
   font-style: italic;
@@ -3756,24 +3763,10 @@ button.poll-option:disabled { cursor: default; }
   font-weight: 400;
   color: var(--text);
 }
-.support-sign a { color: var(--text); text-decoration: none; }
+.about-sign a { color: var(--text); text-decoration: none; }
 @media (hover: hover) {
-  .support-sign a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .about-sign a:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
-.support-share {
-  display: flex;
-  width: fit-content;
-  min-width: 13rem;                 /* the hero Post pill's presence */
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 2.4rem auto 0;            /* centered under the letter */
-  border-radius: var(--radius-pill);
-  padding: 0.7rem 1.3rem;
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-.support-share-ico { width: 17px; height: 17px; }
 
 /* ── Push pre-prompt — the soft ask on Updates. Still editorial (serif title,
    not a system alert), but on the same frosted-glass card material as the
@@ -4145,8 +4138,7 @@ button.poll-option:disabled { cursor: default; }
    put so the light source never wanders (mirrors publish-dome on the FAB). */
 .composer .composer-post.publish-fill.is-solid,
 .auth-submit.publish-fill.is-solid,
-.friends-share-copy.publish-fill.is-solid,
-.support-share.publish-fill.is-solid {
+.friends-share-copy.publish-fill.is-solid {
   /* The drifting colour band, hoisted into a variable so the composer's Post pill
      can swap it (Post drops lime, Activity goes lime-forward) without redeclaring
      the dome radials. Auth / share keep the full quintet. */
@@ -4158,8 +4150,7 @@ button.poll-option:disabled { cursor: default; }
 }
 .composer .composer-post.publish-fill.is-solid::before,
 .auth-submit.publish-fill.is-solid::before,
-.friends-share-copy.publish-fill.is-solid::before,
-.support-share.publish-fill.is-solid::before {
+.friends-share-copy.publish-fill.is-solid::before {
   background:
     radial-gradient(75% 130% at 34% -20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
     radial-gradient(92% 130% at 50% 120%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 55%),
@@ -4175,8 +4166,7 @@ button.poll-option:disabled { cursor: default; }
 @media (prefers-color-scheme: dark) {
   .composer .composer-post.publish-fill.is-solid,
   .auth-submit.publish-fill.is-solid,
-  .friends-share-copy.publish-fill.is-solid,
-  .support-share.publish-fill.is-solid {
+  .friends-share-copy.publish-fill.is-solid {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.7),        /* lit top rim (reads on dark) */
       inset 0 -10px 18px rgba(0, 0, 0, 0.28),         /* cavity depth into the fill */
@@ -4185,8 +4175,7 @@ button.poll-option:disabled { cursor: default; }
   }
   .composer .composer-post.publish-fill.is-solid::before,
   .auth-submit.publish-fill.is-solid::before,
-  .friends-share-copy.publish-fill.is-solid::before,
-  .support-share.publish-fill.is-solid::before {
+  .friends-share-copy.publish-fill.is-solid::before {
     background:
       radial-gradient(70% 120% at 34% -16%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 52%),
       radial-gradient(95% 130% at 50% 122%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 55%),
@@ -4206,8 +4195,7 @@ button.poll-option:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   .composer .composer-post.publish-fill.is-solid::before,
   .auth-submit.publish-fill.is-solid::before,
-  .friends-share-copy.publish-fill.is-solid::before,
-  .support-share.publish-fill.is-solid::before {
+  .friends-share-copy.publish-fill.is-solid::before {
     animation: none;
     background-position: 0 0, 0 0, 50% 50%;
   }
@@ -4935,13 +4923,13 @@ button.poll-option:disabled { cursor: default; }
   @media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
   .brand-mark { font-size: 1.6rem; }
 
-  /* Sprout docks into the header bar: bare glyph pushed to the right edge
+  /* Tray docks into the header bar: bare glyph pushed to the right edge
      (opposite the wordmark), no glass disc — the frosted topbar already is the
      chrome, so a disc-on-glass would double up. Full 44px tap target, which
      centres the 22px glyph 11px in from the bar's padding; the -10px pulls the
      glyph itself out to the masthead filter/search line (those are 40px boxes
      nudged -8px, so they sit 1px in) without shrinking the tap area. */
-  .support-link {
+  .share-tria {
     position: static;
     top: auto;
     right: auto;

@@ -55,9 +55,9 @@
        The maskable additionally sits at 78% to clear Android's 80% safe
        circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=302" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=302" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=302" />
+  <link rel="icon" href="icons/icon-32.png?v=303" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=303" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=303" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -76,8 +76,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=302" />
-  <link rel="stylesheet" href="css/app.css?v=302" />
+  <link rel="stylesheet" href="css/tokens.css?v=303" />
+  <link rel="stylesheet" href="css/app.css?v=303" />
 </head>
 
 <body>
@@ -101,19 +101,23 @@
     <a class="brand" href="#/about" aria-label="Tria, about">
       <span class="brand-mark">tria</span>
     </a>
-    <!-- Support: a note from Zoe + a soft ask to invite people. A sprout (grow
-         your circle) rather than a heart (too close to the like button). Sits at
-         the header's right edge on phones; floats top-right over content on
-         desktop, where the topbar is a left rail (see .support-link). The whole
-         topbar is hidden signed-out, so this is signed-in only for free. -->
-    <a class="support-link" href="#/support" aria-label="A note from Zoe">
+    <!-- Share Tria: one tap straight to the OS share sheet (clipboard copy on
+         desktop). This used to be a sprout leading to a note from Zoe that held
+         the share button, which made handing Tria to a friend a two-tap errand
+         through a page; the note now lives on About and the glyph does the job
+         itself. Sits at the header's right edge on phones; floats top-right over
+         content on desktop, where the topbar is a left rail (see .share-tria).
+         The whole topbar is hidden signed-out, so this is signed-in only for
+         free. The tray is inlined rather than drawn by svgIcon('send') because
+         the header paints before app.js runs — the two must stay in step. -->
+    <button class="share-tria" type="button" aria-label="Share Tria">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 20.5 V12" />
-        <path d="M12 14 C7.5 14 5 11 5 6.5 C9.5 6.5 12 9.5 12 14 Z" />
-        <path d="M12 12 C12 8.2 14.2 5.8 18.5 5.8 C18.5 9.4 16.3 12 12 12 Z" />
+        <path d="M12 15V3" />
+        <path d="M8 6.5 12 3l4 3.5" />
+        <path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
       </svg>
-    </a>
+    </button>
   </header>
 
   <!-- Legibility scrim for the iOS status bar. black-translucent (above) forces
@@ -140,9 +144,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=302"></script>
-  <script src="js/store.js?v=302"></script>
-  <script src="js/app.js?v=302"></script>
+  <script src="js/config.js?v=303"></script>
+  <script src="js/store.js?v=303"></script>
+  <script src="js/app.js?v=303"></script>
 </body>
 
 </html>
