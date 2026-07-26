@@ -510,52 +510,45 @@ main {
 }
 
 /* ── Page transitions ──────────────────────────────────────────────────────
-   The router (app.js) swaps one `.page` for the next inside #view. Forward moves
-   along the nav line (Home→Friends→Profile→Publish) enter from the right, back
-   moves from the left, and same-level swaps / the auth gate cross-fade. One
-   template, driven only by the direction classes the router toggles.
+   The router (app.js) swaps one `.page` for the next inside #view, and the swap
+   is a plain CROSS DISSOLVE: the outgoing page fades out while the incoming one
+   fades in, same curve, same duration. No direction, no movement, one rule for
+   every route.
 
-   MOTION BUDGET (why it's shaped this way): the whole move is pure transform +
-   opacity, which the GPU composites for free. There used to be a brief 6px
-   focus-in blur on the entering page, but `filter: blur()` re-rasterizes the
-   whole page every frame (a MULTIPLIER on everything beneath it — the root of
-   the old iOS jitter), and it read as a smeared frame on the card-dense Circle
-   while being invisible elsewhere — so it's gone, and every page arrives crisp.
-   `will-change` promotes each page to its own layer for the move, then releases
-   when the class clears. */
+   MOTION BUDGET (why it's shaped this way): pages used to slide along a nav line
+   (forward entered from the right, back from the left, and the outgoing page
+   receded a touch for an iOS-style push-parallax). That reads fine on a page of
+   text and badly on Discover, where the grid is dozens of photos still decoding
+   while the slide runs: the movement turned every late tile into a glitch rather
+   than a load, and the page looked like it was snapping into place. A fade has
+   nothing to be out of step with — tiles paint whenever they're ready,
+   underneath an opacity ramp that doesn't care. It's also the cheapest thing the
+   compositor can do: one layer per page, no per-frame geometry.
+   (There was a 6px focus-in blur on the entering page even earlier; `filter:
+   blur()` re-rasterizes the whole page every frame, which is what the old iOS
+   jitter was. Long gone — don't bring either back.)
+
+   `will-change: opacity` promotes each page for the move and releases when the
+   class clears. Deliberately NOT `will-change: transform`: that makes a page a
+   containing block for its `position: fixed` children (the docked seg-tabs),
+   which is the constraint the slide had to work around. */
 #view { position: relative; overflow-x: clip; }
 
-.page {
-  transition: transform var(--dur-move) var(--ease),
-              opacity   0.30s ease;
-}
+.page { transition: opacity 0.3s var(--ease-soft); }
 
-/* Entering page — offset and transparent … */
-.page.enter {
-  will-change: transform, opacity;
-  transition: transform var(--dur-move) var(--ease),
-              opacity   0.30s ease;
-}
-.page.enter.from-right { transform: translateX(38px);  opacity: 0; }
-.page.enter.from-left  { transform: translateX(-38px); opacity: 0; }
-.page.enter.fade       { transform: none;              opacity: 0; }
-/* … then settles into place (later rule wins at equal specificity). */
-.page.enter.active { transform: none; opacity: 1; }
+/* Entering page — transparent … */
+.page.enter { opacity: 0; will-change: opacity; }
+/* … then settles in (later rule wins at equal specificity). */
+.page.enter.active { opacity: 1; }
 
-/* Leaving page — lifted out of flow so it overlays, slides out on transform +
-   opacity only (no blur: cheap, and it's on its way out). The slight scale is
-   the iOS push-parallax depth cue: the old page RECEDES while the new one slides
-   over. Its transform-origin is set inline by renderPage to the viewport's
-   visible centre (the page itself can be thousands of px tall), and renderPage
-   also pins `top` to the scroll position being read — the scroll-anchor fix. */
-.page.leave { position: absolute; inset: 0 0 auto 0; will-change: transform, opacity; }
-.page.leave.active.to-left  { transform: translateX(-38px) scale(0.985); opacity: 0; }
-.page.leave.active.to-right { transform: translateX(38px)  scale(0.985); opacity: 0; }
-.page.leave.active.fade     { transform: none;              opacity: 0; }
+/* Leaving page — lifted out of flow so it overlays and the two fades cross
+   instead of the layout collapsing between them. renderPage pins its `top` to
+   the scroll position being read — the scroll-anchor fix. */
+.page.leave { position: absolute; inset: 0 0 auto 0; will-change: opacity; }
+.page.leave.active { opacity: 0; }
 
-/* In-page glass goes quiet for the whole move (transform runs the full var(--dur-move),
-   even after the blur has cleared). iOS WebKit (standalone especially) keeps
-   trying to sample backdrop-filter inside a transforming/promoted layer and the
+/* In-page glass goes quiet for the whole move. iOS WebKit (standalone especially)
+   keeps trying to sample backdrop-filter inside a promoted, fading layer and the
    frost visibly jumps — exactly on the pages that carry in-page glass (Friends:
    seg-tabs + search; Updates: seg-tabs + soft-ask; Profile: the account-card,
    a big piece of glass whose large sample area was crashing iOS WebKit outright
@@ -580,20 +573,21 @@ main {
    pile-up of simultaneous compositor layers + fresh large bitmaps is what was
    crashing Safari on iOS ("A problem repeatedly occurred") on page switches,
    not the glass. Letting photos snap in instead of fading during the move (they
-   still reveal the instant they decode, just without an extra transform/opacity
-   layer riding along) cuts the concurrent-layer count during the one window
-   that matters; fades return to normal the moment renderPage's cleanup clears
-   these classes. Card rise itself no longer runs during a navigation at all —
-   renderPage freezes freshly-mounted cards so they ride the page's own slide
-   (see the freeze in app.js), which both removes the old white flash and drops
-   the card layers entirely. */
+   still reveal the instant they decode, just without an extra opacity layer
+   riding along) cuts the concurrent-layer count during the one window that
+   matters, and stops a photo from double-fading inside an already-fading page;
+   fades return to normal the moment renderPage's cleanup clears these classes.
+   Card rise itself no longer runs during a navigation at all — renderPage
+   freezes freshly-mounted cards so they ride the page's own dissolve (see the
+   freeze in app.js), which both removes the old white flash and drops the card
+   layers entirely. */
 .page.enter .photo-frame img, .page.leave .photo-frame img {
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   /* Match .page.enter's specificity so the override actually wins (the router
-     also skips the slide path entirely under reduced motion — belt and braces). */
+     also skips the dissolve entirely under reduced motion — belt and braces). */
   .page, .page.enter, .page.leave { transition: none; will-change: auto; }
 }
 
@@ -5317,11 +5311,11 @@ button.poll-option:disabled { cursor: default; }
        relative (which yanked the switcher up onto the serif title). The base
        .seg-tabs is position:relative so its thumb (top/bottom:4px) is bounded by
        its own little track; the phone rule above flips every .seg-tabs to fixed,
-       and pinning this one back to static stripped that containing block away. So
-       the instant the router transforms .page.enter, that transformed page became
-       the thumb's containing block and top/bottom:4px stretched it into a giant
-       full-column pill flashing in on the way to Publish. translateZ(0) restores a
-       local containing block (a transform is one) with zero layout shift. */
+       and pinning this one back to static stripped that containing block away —
+       the thumb then resolved against whatever positioned ancestor it found and
+       top/bottom:4px stretched it into a giant full-column pill flashing in on
+       the way to Publish. translateZ(0) restores a local containing block (a
+       transform is one) with zero layout shift. */
     transform: translateZ(0);
   }
   @media (prefers-reduced-motion: reduce) {

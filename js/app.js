@@ -8,16 +8,15 @@
   'use strict';
 
   // `stage` is the fixed shell (#view); `view` is the current *page* inside it
-  // that every render function fills. The router (see renderPage) swaps one page
-  // for the next with a directional slide, so render code just targets `view`
-  // and never has to know a transition is happening.
+  // that every render function fills. The router (see renderPage) cross-dissolves
+  // one page into the next, so render code just targets `view` and never has to
+  // know a transition is happening.
   const stage = document.getElementById('view');
   let view = null;
-  let navIndex = -1;          // spatial index of the current route (for direction)
   let navToken = 0;           // guards against a stale transition cleaning up a new one
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
-  const TRANSITION_MS = 360;
+  const TRANSITION_MS = 300;   // page cross-dissolve, must match .page in app.css
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -3017,10 +3016,10 @@
       warmImages();   // world just loaded for this account — warm its images too
     });
 
-    // Toggle signup ⇄ login through the same soft blur-dissolve the pages use, so
+    // Toggle signup ⇄ login through the same soft cross-dissolve the pages use, so
     // the switch feels like part of the app rather than an instant redraw.
     document.getElementById('auth-toggle').addEventListener('click',
-      () => renderPage(-1, () => renderAuth(isSignup ? 'login' : 'signup')));
+      () => renderPage(() => renderAuth(isSignup ? 'login' : 'signup')));
   }
 
   /* ── Install-first welcome (signed-out browser front door) ────────────────────
@@ -7337,27 +7336,19 @@
   }
 
   /* ── Router + page transitions ─────────────────────────────────────────────
-     The nav order is a line: Home(0) · Friends(1) · Notifications(2) ·
-     Profile(3) · Publish(4). A move to a higher index slides the new page in
-     from the RIGHT; a lower index slides it in from the LEFT; a same-level swap
-     (or the auth gate, index −1) cross-fades. Each page rides in on
-     opacity+movement, crisp the whole way (no entry blur — it re-rasterized the
-     page and only ever showed on the card-dense Circle).
-     This is the only place direction is decided — every view renders the same
-     way and inherits the transition. */
-  function pageOrder(path) {
-    if (path === '#/discover') return 1;
-    if (path === '#/updates') return 2;
-    if (path === '#/profile' || path.startsWith('#/u/')) return 3;
-    if (path === '#/publish') return 4;
-    return 0;                  // home (and any unknown route, which redirects home)
-  }
+     Every route change is the same CROSS DISSOLVE — the outgoing page fades out
+     while the incoming one fades in. There is no direction and no movement:
+     pages used to slide along a nav line, but Discover's grid is dozens of
+     photos still decoding while the slide ran, so the movement read as the page
+     snapping and glitching rather than loading. A fade lets a tile land whenever
+     it's ready. (See the page-transition block in app.css for the full why.)
+     One path, so every view renders the same way and inherits it. */
 
-  // Build the next page, drop it into the stage, and animate the swap. `renderFn`
-  // fills the fresh `view`; direction comes from newIndex vs. the current route.
-  // `keepScroll` is the spotlight path: the scroll is NOT snapped to the top, so
-  // the leaving page keeps its natural (top-anchored) position.
-  function renderPage(newIndex, renderFn, keepScroll) {
+  // Build the next page, drop it into the stage, and dissolve to it. `renderFn`
+  // fills the fresh `view`. `keepScroll` is the spotlight path: the scroll is NOT
+  // snapped to the top, so the leaving page keeps its natural (top-anchored)
+  // position.
+  function renderPage(renderFn, keepScroll) {
     const reduce = prefersReduced();
     const prev = view;
     const token = ++navToken;
@@ -7365,24 +7356,17 @@
     // Snap away anything a previous (possibly interrupted) transition left behind.
     Array.from(stage.children).forEach(el => { if (el !== prev) el.remove(); });
 
-    // Gate (−1) always fades; otherwise compare positions on the nav line.
-    let dir = 0;
-    if (prev && !reduce && newIndex >= 0 && navIndex >= 0) {
-      dir = Math.sign(newIndex - navIndex);
-    }
-    navIndex = newIndex;
-
     const page = document.createElement('div');
     page.className = 'page';
 
-    // First paint / reduced motion: no slide. Mount, THEN render — render code
+    // First paint / reduced motion: no dissolve. Mount, THEN render — render code
     // resolves its own nodes via document.getElementById, so the page has to be
     // in the document before renderFn runs.
     if (!prev || reduce) {
       view = page;
       stage.replaceChildren(page);
       renderFn();
-      // First paint / deep-link: no page slide, but a docked switcher still gets
+      // First paint / deep-link: no page fade, but a docked switcher still gets
       // its rise (unless reduced motion, which shows it in place). Tuck-commit-
       // release so it lifts from behind the nav on landing.
       if (!reduce) {
@@ -7396,18 +7380,16 @@
       return;
     }
 
-    // Mount the entering page in its offset start state, ahead of the outgoing
-    // one, so during the brief overlap its ids (e.g. #feed) win getElementById.
-    // The leaving page is position:absolute, so it still paints on top regardless.
-    const enterFrom = dir > 0 ? 'from-right' : dir < 0 ? 'from-left' : 'fade';
-    const leaveTo   = dir > 0 ? 'to-left'    : dir < 0 ? 'to-right'  : 'fade';
-    page.classList.add('enter', enterFrom);
+    // Mount the entering page transparent, ahead of the outgoing one, so during
+    // the brief overlap its ids (e.g. #feed) win getElementById. The leaving page
+    // is position:absolute, so it still paints on top regardless.
+    page.classList.add('enter');
     stage.insertBefore(page, prev);
     view = page;
     renderFn();                // render into the mounted new page
 
-    // Content mounted during a navigation rides in on the page's own slide+fade —
-    // it does NOT also play its per-row rise. Freezing every fresh row here (not
+    // Content mounted during a navigation rides in on the page's own fade — it
+    // does NOT also play its per-row rise. Freezing every fresh row here (not
     // pausing it in CSS) keeps it VISIBLE for the whole move instead of held at the
     // rise's transparent first frame: that blank window over the near-white page
     // was the "white flash" on the card-heavy Circle. Inline, so it survives the
@@ -7415,24 +7397,24 @@
     // with no row animation in flight the move carries the fewest possible layers
     // (the same iOS-crash win the old CSS pause was after). Covers feed .card AND
     // the Updates ledger (.notif / .request-row), which carry the same rise and
-    // were otherwise stacking their translateY layers on top of the slide — the
+    // were otherwise stacking their own translateY layers on top of the swap — the
     // Updates-page stutter/refresh. Rows that arrive later without a page change
     // (refreshWorld / the Updates reconcile) are untouched and still rise in.
     page.querySelectorAll('.card, .notif, .request-row').forEach(c => { c.style.animation = 'none'; });
 
-    // A docked view switcher (Friends / Updates on mobile) starts tucked behind
-    // the nav so it can rise once the page settles (see cleanup) rather than
-    // riding the horizontal page slide. No-op on pages without one.
+    // A docked view switcher (Updates on mobile) starts tucked behind the nav so
+    // it can rise once the page settles (see cleanup) rather than cross-fading
+    // ghosted over the outgoing page's copy. No-op on pages without one.
     page.querySelector('.seg-tabs:not(#c-group-tabs)')?.classList.add('tuck');
 
     prev.className = 'page';    // clear any stale transition classes before reuse
-    prev.classList.add('leave', leaveTo);
+    prev.classList.add('leave');
 
     // Scroll anchor. The leaving page is lifted out of flow TOP-anchored while
     // route() snaps the window to 0 — so leaving from deep in a feed used to
-    // flash the old page's masthead during the slide instead of what you were
+    // flash the old page's masthead during the swap instead of what you were
     // reading. Pin the leaving page at exactly the region that was on screen,
-    // reset the scroll underneath it, and the exit now departs from where you
+    // reset the scroll underneath it, and the exit now fades from where you
     // actually were. (keepScroll leaves both alone: the scroll isn't resetting,
     // so the top-anchored default is already right.)
     const fromY = window.scrollY;
@@ -7440,10 +7422,6 @@
       prev.style.top = -fromY + 'px';
       window.scrollTo(0, 0);
     }
-    // Push depth: the exit also recedes a touch (see .page.leave.active). Scale
-    // it about the viewport's visible centre, not the tall page's far-off middle,
-    // or the recede would read as a vertical slide.
-    prev.style.transformOrigin = `50% ${fromY + window.innerHeight / 2}px`;
 
     void stage.offsetWidth;    // commit the start states before flipping to rest
     requestAnimationFrame(() => {
@@ -7455,10 +7433,8 @@
     // clear the transition classes — which also releases the will-change layer AND
     // hands the in-page glass back its live frost (see the glass rule in app.css),
     // so the frost returns exactly as motion ends, no flat tail. Driven by the
-    // entering page's own transitionend on the property that finishes LAST (the
-    // slide's transform, or opacity on a fade — the filter clears early and must
-    // not trigger cleanup). A timeout backs it up if the event is ever missed.
-    const settleProp = dir === 0 ? 'opacity' : 'transform';
+    // entering page's own transitionend on opacity (the only property in the
+    // move). A timeout backs it up if the event is ever missed.
     let cleaned = false;
     const cleanup = () => {
       if (cleaned || token !== navToken) return;   // a newer navigation owns the stage
@@ -7466,13 +7442,12 @@
       page.removeEventListener('transitionend', onSettle);
       prev.remove();
       page.className = 'page';
-      // The page has settled and its transform is gone, so the fixed switcher
-      // now anchors to the viewport — drop .tuck and it rises straight up from
-      // behind the nav on its own transition.
+      // The page has settled — drop .tuck and the docked switcher rises straight
+      // up from behind the nav on its own transition.
       page.querySelector('.seg-tabs:not(#c-group-tabs)')?.classList.remove('tuck');
     };
     const onSettle = (e) => {
-      if (e.target === page && e.propertyName === settleProp) cleanup();
+      if (e.target === page && e.propertyName === 'opacity') cleanup();
     };
     page.addEventListener('transitionend', onSettle);
     window.setTimeout(cleanup, TRANSITION_MS + 120);
@@ -7517,7 +7492,7 @@
       // (its pastel now comes from the gradient submit button).
       document.body.dataset.ambient =
         (gatePath === '#/about' || showWelcome) ? 'about' : 'none';
-      renderPage(-1, () => {
+      renderPage(() => {
         // A live recovery session (from the reset link) always wins: set-new-
         // password, whatever the hash says.
         if (Store.isRecovering()) return renderNewPassword();
@@ -7568,7 +7543,7 @@
     // Drop it on the way out; renderDiscover re-arms one on the way back in.
     if (path !== '#/discover') discoverResizeOff?.();
 
-    renderPage(pageOrder(path), () => {
+    renderPage(() => {
       if (path.startsWith('#/u/')) {
         renderUser(decodeURIComponent(path.slice(4)));
         return;
@@ -7588,7 +7563,7 @@
 
     if (!spotlighting) scrollTop(false);   // spotlight scrolls itself (see above)
     nudgeNav();           // iOS standalone: re-composite the nav's frosted layer
-    // Deliberately NO background re-pull here: a refresh that lands mid-slide
+    // Deliberately NO background re-pull here: a refresh that lands mid-dissolve
     // can rebuild rows under the transition. Refresh is always an explicit
     // gesture now — re-tapping the tab you're on, or pulling the feed down.
   }

@@ -141,7 +141,7 @@ that bill lands, so they keep the fill + hairline + lit rim + float shadow and
 drop only the sample-and-blur. On phones the Updates view
 switcher (seg-tabs) is docked chrome, not an inline row: it floats just above
 the bottom nav and *rises up from behind it* when a page becomes active (router
-tucks it while the page slides in, releases it on settle). The composer's
+tucks it while the page fades in, releases it on settle). The composer's
 Post/Activity switcher is the one seg-tabs that stays inline — it's excluded by
 `:not(#c-group-tabs)` wherever the router tucks them. The bottom nav hugs the
 home indicator (small float, iOS Liquid Glass style), not lifted into the screen. **Corner scale:** 3px incidental (`--radius`) · 8px small containers
@@ -161,6 +161,16 @@ but vanish on a dark surface, so dark brightens the hotspot and adds a crisp lit
 top rim instead. Keep the colour-band scale (`300%`, 2–3 hues in view) identical
 across modes — only the gloss is scheme-tuned; redeclaring the `background`
 shorthand silently resets `background-size`, so always restate it.
+
+**Page changes are a cross dissolve, and only that.** Every route swap fades the
+outgoing page out while the incoming one fades in, 0.3s, same curve, no
+direction. Pages used to slide along a nav line (forward from the right, back
+from the left, outgoing page receding for depth), but Discover's grid is dozens
+of photos still decoding while the slide ran, so the movement read as the page
+snapping and glitching rather than loading. Opacity has nothing to be out of step
+with. Don't reintroduce a slide, a scale, or an entry blur, and keep pages off
+`will-change: transform` — it makes a page a containing block for its
+`position: fixed` children (the docked seg-tabs).
 
 **Comments are a growing textarea, not a one-line input.** The comment composer
 auto-grows to fit its text (wraps into view instead of scrolling off one line);
