@@ -90,7 +90,24 @@ exempt). Voice is playful but not trying-too-hard.
   decides reads from the post's own tag: public → everyone · author → self ·
   list → the `post_audience` allowlist · circle → mutual friends only. `circle`
   means friends-only for EVERY account, public ones included. Any post type can
-  be made public, activities included, and public posts are what feed Discover.
+  be made public, activities included.
+- **Discover is the whole room, not the public square.** Its grid shows every
+  post you're allowed to see that isn't yours: strangers' public posts *and*
+  your circle's circle posts, in ONE grid (no bands). `Store.discover()` mirrors
+  `can_view_post` client-side rather than trusting the cache to have been
+  filtered. Hand-addressed (`list`) posts are the one exclusion, and they fold
+  back in for SEARCH, which also drops the per-person cap: a browsing courtesy
+  must never hide the thing someone is hunting for. The grid is
+  **chronological** (the About page's promise) and only *nudged*, never
+  re-sorted: a face that just appeared waits a slot or two, nobody holds more
+  than 3 tiles, and the nudge yields back to time order rather than drifting
+  (`spaced` in app.js). Its masonry columns are **dealt by JS** (`layoutGrid`),
+  because CSS `columns` fills column one to the bottom first and would turn a
+  chronological list into parallel timelines side by side; CSS owns only the
+  count, via `--cols`. Five **trending tags** head the page, each a shortcut
+  into search. A tile shows the person's **name only, no @handle** (search still
+  matches handles), and speaks the post's **caption**, falling back to its title
+  only when there is no caption.
 - **`users.private`** (defaults true, so new signups open closed) no longer gates
   reads at all. It does three things: picks the composer's default audience (a
   public account's posts default to `public`, activities stay `circle`-first),
@@ -113,11 +130,15 @@ blur + hairline border + lit top rim + float shadow) is reserved for the layer
 that *floats above* content, never for content itself. Two tiers: **chrome**
 (nav rail, seg-tabs, search field, nav dial — `blur(18–24px)`) and **floating
 panels** (modals, autocomplete menus, and the Updates notification + soft-ask
-cards — `blur(24–30px)`). Content lists — the feed, Discover's people rows,
-comments — stay flat editorial rows. The Friends *modal* (a popover) is glass;
-a *roster* of people (Discover's search results, your profile's circle) is flat
-— that split is correct, not inconsistent (mirrors iOS: lock-screen
-notifications are glass, Contacts rows are not). On phones the Updates view
+cards — `blur(24–30px)`). Content lists — the feed, comments, your profile's
+circle roster — stay flat editorial rows. The Friends *modal* (a popover) is
+glass; a *roster* of people (your profile's circle) is flat — that split is
+correct, not inconsistent (mirrors iOS: lock-screen notifications are glass,
+Contacts rows are not). **Discover's grid is the one glass-minus-blur surface**:
+its tiles float above the page so the material is right, but a `backdrop-filter`
+is per-element compositor work and a scrolling masonry grid is exactly where
+that bill lands, so they keep the fill + hairline + lit rim + float shadow and
+drop only the sample-and-blur. On phones the Updates view
 switcher (seg-tabs) is docked chrome, not an inline row: it floats just above
 the bottom nav and *rises up from behind it* when a page becomes active (router
 tucks it while the page slides in, releases it on settle). The composer's

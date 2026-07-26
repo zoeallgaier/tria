@@ -651,18 +651,9 @@ main {
 /* Updates title breathes a touch more before its seg-tabs below. */
 .view--updates .masthead-title { padding-bottom: 0.35rem; }
 
-/* Discover's People / Posts section labels — the editorial small-caps kicker
-   idiom, reused as in-page dividers between the two search-result groups. */
-.discover-section-title {
-  font-family: 'Oxygen', sans-serif;
-  font-weight: 700;
-  font-size: var(--kicker);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  margin: 1.6rem 0 0.6rem;
-}
-.discover-body > .discover-section-title:first-child { margin-top: 0.4rem; }
+/* Discover has no seg-tabs (one grid, no tabs), so its title parts from the
+   grid on its own. */
+.view--discover .masthead-title { padding-bottom: 0.6rem; }
 
 /* Masthead search (Discover): a magnifier on the title line that wipes a
    FULL-WIDTH field open across the nameplate — the "Discover" title simply
@@ -3245,6 +3236,310 @@ button.poll-option:disabled { cursor: default; }
   color: var(--text);
 }
 
+/* ── Discover — the masonry grid of people ─────────────────────────────────
+   One surface, two columns, ragged. Each tile is a person faced by whatever
+   they posted, so tile heights vary by CONTENT rather than by design: a photo
+   takes its own aspect ratio, a note takes as many lines as it needs, a quiet
+   account takes a square portrait. That variation IS the masonry — we don't
+   compose it, we just stop flattening it.
+
+   The columns are REAL elements dealt by JS (see layoutGrid), not CSS
+   `columns`. CSS columns fill column one to the bottom before starting column
+   two, so a chronological list comes out as N parallel timelines standing side
+   by side, the top of the second column already dozens of posts old. Discover
+   reads in time order (rule 5 in renderDiscover), and that layout would hide
+   the very thing the order fixes. So JS owns the deal and CSS owns the count:
+   --cols is the one knob, and the breakpoint below is the only place it's set.
+
+   Glass, minus the blur. These float above the page so the material is right,
+   but a backdrop-filter is per-element work the compositor cannot share and a
+   scrolling grid is exactly where that bill lands. So the fill, the hairline,
+   the lit top rim and the float shadow carry it, and the sample-and-blur goes.
+   The fill sits on --surface rather than --glass-bg for the same reason: a blur
+   is what normally separates glass from the paper behind it, and without one a
+   --bg-tinted fill lands at the page's own value and stops reading as raised. */
+.pgrid {
+  --cols: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  max-width: var(--feed-width);
+  margin-inline: auto;
+}
+.pgrid-col { flex: 1 1 0; min-width: 0; }
+/* Set by layoutGrid on a re-deal (a rotate, a window resize) rather than a
+   repaint. Re-dealing detaches every tile, and a detached element restarts its
+   CSS animation the moment it goes back in — so without this the whole page
+   would play its entrance again because the phone turned. */
+.pgrid--settled .ptile { animation: none; }
+
+/* ── Trending tags — the one index on Discover (rule 7 in renderDiscover) ─────
+   Flat editorial, NOT glass. It's a contents strip for the page below it, and
+   the material rule reserves frosted glass for what floats ABOVE content.
+
+   Five words separated by hairlines, not five chips: pills would make this a
+   filter bar, and a filter bar at the top of Discover competes with the actual
+   filter already sitting in the masthead. The tag is set in the serif because
+   it's the only word on the row doing display work; the count stays in Oxygen at
+   caption size so it reads as an annotation rather than a score. It's the one
+   number allowed anywhere on this page (tiles carry none, on purpose). */
+.dtags {
+  max-width: var(--feed-width);
+  /* 1.4rem of air under the tags, less the rail's own bottom padding below. */
+  margin: 0 auto 0.64rem;
+}
+.dtags-cap {
+  /* Likewise: the 0.35rem gap to the tags, less the rail's top padding. The
+     padding is a tap target (see .dtag), not spacing, so it's taken back here
+     rather than allowed to push the strip open. */
+  margin: 0 0 -0.41rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* One line that scrolls sideways rather than wrapping — a tag list that reflows
+   onto a second row on a phone starts fighting the grid for the top of the page.
+   No visible scrollbar: the last tag clipping at the edge is the affordance.
+   overscroll-behavior-x keeps the swipe INSIDE the rail: without it, running out
+   of tags hands the gesture on, and in an installed iOS app the thing waiting to
+   catch a horizontal swipe is the back navigation. touch-action stays `auto` on
+   purpose (unlike .reel, which owns its drag) so a finger that lands on the rail
+   can still scroll the page down. */
+.dtags-rail {
+  display: flex;
+  align-items: baseline;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.dtags-rail::-webkit-scrollbar { display: none; }
+/* A tag is one line of type, about 23px tall — half Apple's 44pt tap floor. The
+   .filter chips solve that with an invisible ::after extender, but that trick
+   can't work in here: `overflow-x: auto` on the rail forces overflow-y to auto
+   as well, so anything reaching past the line would be clipped (and could even
+   open a vertical scrollbar inside the strip). So the padding is REAL, and the
+   spacing it would otherwise add is taken back on .dtags above. */
+.dtag {
+  flex: 0 0 auto;
+  position: relative;               /* anchors the hairline divider */
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-right: 0.8rem;
+  padding: 0.76rem 0.8rem 0.76rem 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 0.18s var(--ease-soft);
+}
+/* The divider is drawn, not a border, so it stays the height of the WORD while
+   the button around it grows to a thumb. A border-right would have stretched to
+   44px and turned a hairline into a rule. */
+.dtag::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 1px;
+  height: 1.15rem;
+  transform: translateY(-50%);
+  background: var(--rule);
+}
+.dtag:last-child { margin-right: 0; padding-right: 0; }
+.dtag:last-child::after { content: none; }
+.dtag:active { opacity: 0.55; }
+.dtag-name {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.24rem;
+  line-height: 1;
+}
+.dtag-hash { color: var(--muted); }
+.dtag-n {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.dtag-go {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+/* The live tag underlines its word — the same "this is what's narrowing the
+   page" language the seg-tabs and the filter dial already speak. */
+.dtag[aria-pressed="true"] .dtag-name,
+.dtag[aria-pressed="true"] .dtag-hash { color: var(--text); }
+.dtag[aria-pressed="true"] .dtag-name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+@media (hover: hover) {
+  .dtag:hover .dtag-name {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+}
+
+.ptile {
+  display: block;
+  margin-bottom: 0.85rem;              /* layoutGrid reads this to balance the columns */
+  overflow: hidden;                    /* the face is full-bleed; the tile clips it */
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: var(--lit-rim), 0 6px 18px rgba(0, 0, 0, 0.10);
+  transition: transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick) var(--ease);
+  animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
+}
+@media (hover: hover) {
+  .ptile:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--lit-rim), 0 12px 26px rgba(0, 0, 0, 0.13);
+  }
+}
+
+/* ── Face 1: a Frame ─────────────────────────────────────────────────────
+   The box is stamped with the media's real aspect ratio and filled with its
+   average colour (the `tint` column) before anything loads, so the grid settles
+   once and the bitmap eases in over its own colour instead of popping in over
+   grey. Same reserve-then-settle contract as .photo-frame in the feed. */
+.ptile-face--media {
+  position: relative;
+  background: var(--ph-fill, var(--surface-2));
+}
+.ptile-face--media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.ptile-face--media img.is-loaded { opacity: 1; }
+/* No type glyph over a photo, on purpose: a photo announces itself, so a badge
+   there would be labelling the one face that never needed a label (and it had
+   to wear a plate to stay legible over arbitrary media, which is a lot of
+   apparatus for no information). The say faces keep theirs, where it works. */
+/* A clip shows its play mark but never plays here — see the JS note. */
+.ptile-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+}
+.ptile-play-ico { width: 2.4rem; height: 2.4rem; }
+
+/* ── Face 2: the post speaks ─────────────────────────────────────────────
+   Everything that isn't a photo becomes type: the post's own headline in the
+   serif, its type glyph above in that type's colour, and a quiet second line
+   where there's one (a find's domain, an activity's place). Clamped so one
+   long-winded note can't run a column on its own. */
+.ptile-face--say {
+  padding: 1rem 0.95rem 1.05rem;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+.ptile-type { margin-bottom: 0.5rem; }
+.ptile-say {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(1.1rem, 4.6vw, 1.3rem);
+  line-height: 1.22;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ptile-sub {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Face 3: nothing public to show ──────────────────────────────────────
+   The portrait, full square, corners cut by the tile. Strips the profile hero's
+   floating-panel dress (its own frame, radius, shadow, negative margins). This
+   is the tile that keeps a private account from reading as a gap in the grid,
+   so it is deliberately the SAME size as everyone else's face, not smaller. */
+.ptile-face--who {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  flex: none;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 0;
+  box-shadow: none;
+}
+/* The monogram scales with the square it sits in, so an account with no photo
+   reads as a deliberate letterform rather than a small mark in a big empty box. */
+.ptile .account-photo-initial { font-size: clamp(2.6rem, 15vw, 4rem); }
+
+/* ── The identity foot ───────────────────────────────────────────────────── */
+.ptile-foot { padding: 0.7rem 0.8rem 0.75rem; }
+/* Portrait (only when the face is a post), name, arrow — one line of identity,
+   no @handle under it (see tileEl). With the second line gone the row centres on
+   the name instead of hanging off its top. */
+.ptile-who {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ptile-av { width: 30px; height: 30px; font-size: 1rem; }
+.ptile-id { min-width: 0; flex: 1; }
+.ptile .account-name {
+  font-size: clamp(1.02rem, 4vw, 1.2rem);
+  overflow-wrap: anywhere;             /* a long unbroken name must not shove the arrow off */
+}
+.ptile .friend-go { flex-shrink: 0; font-size: 1rem; }
+
+/* Only ever on a portrait-faced tile — a person with nothing public to say gets
+   to say it in words instead. Two lines, then ellipsis. */
+.ptile-bio {
+  margin-top: 0.5rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The tile carries NO counts. A post count and a friend count on every tile made
+   the grid a page of scoreboards, and neither number is why anyone taps. The one
+   mark left is the lock, and it isn't a statistic: it's a heads-up that the tap
+   lands on a wall. It rides the NAME (the handle it used to sit on is gone)
+   because being closed is a property of the ACCOUNT, not of the post above it. */
+.ptile-lock {
+  width: 0.82rem;
+  height: 0.82rem;
+  margin-left: 0.3rem;
+  vertical-align: -0.09em;
+  color: var(--muted);
+}
+
+/* Room to breathe once there is any: three columns and a bigger type scale from
+   tablet up, where a 2-up grid would leave the tiles absurdly wide. */
+@media (min-width: 620px) {
+  .pgrid { --cols: 3; gap: 1.05rem; }
+  .ptile { margin-bottom: 1.05rem; }
+  .ptile-foot { padding: 0.85rem 0.95rem 0.9rem; }
+}
+
 /* A private profile, seen by an outsider: the posts column is replaced by a
    quiet, centred nudge toward adding them. Flat editorial (content, not glass),
    in the same muted register as .feed-empty. */
@@ -3404,13 +3699,12 @@ button.poll-option:disabled { cursor: default; }
 .card-solometa .dot { opacity: 0.5; margin: 0 0.15rem; }
 .card--photo .card-solometa { padding-inline: var(--inset); margin-bottom: 1.15rem; }
 
-/* ── Friends directory — a quiet list of rows linking out to each profile ──── */
-.friend-search-empty { margin-top: 0.6rem; }
-
+/* ── Friends directory — a quiet list of rows linking out to each profile ────
+   These rows only appear inside modals now (someone's circle, the composer's
+   audience picker). Discover, which used to render them inline with a live
+   search over them, is a grid of .ptile instead — so nothing filters this list
+   any more, and the [hidden] machinery that went with it is gone. */
 .friends-list { display: flex; flex-direction: column; }
-/* A filtered-out row: the `hidden` attribute alone loses to `.friend`'s own
-   `display: flex`, so hide it explicitly (higher specificity wins). */
-.friend[hidden] { display: none; }
 .friend {
   display: flex;
   align-items: center;
@@ -3419,29 +3713,15 @@ button.poll-option:disabled { cursor: default; }
   transition: background-color var(--dur-micro);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
 }
-/* The masthead no longer draws a divider (see .masthead above), so the list
-   itself opens with a top rule — the boundary comes from the content, not the
-   header. Search re-sorts matches to the front of the DOM (see applyFilter
-   below), so :first-child always tracks the visually-first row. */
+/* The list opens with a top rule of its own — the boundary comes from the
+   content, not from a header divider. */
 .friend:first-child { border-top: 1px solid var(--rule); }
 .friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
-/* When search hides trailing rows, drop the rule under the last VISIBLE row so no
-   hairline dangles beneath the results. */
-.friend:not([hidden]):not(:has(~ .friend:not([hidden]))) { border-bottom: none; }
 @media (hover: hover) { .friend:hover { background: var(--surface); } }
 .friend .avatar { width: 56px; height: 56px; font-size: 1.8rem; }
 .friend-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
 .friend-name { font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--text); }
 .friend-user { font-size: 0.82rem; color: var(--muted); }
-.friend-bio {
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-weight: 300;
-  margin-top: 0.15rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .friend-go {
   flex-shrink: 0;
   color: var(--muted);
@@ -3449,36 +3729,8 @@ button.poll-option:disabled { cursor: default; }
   transition: color var(--dur-micro), transform var(--dur-micro);
 }
 @media (hover: hover) {
-  .friend:hover .friend-go { color: var(--text); transform: translateX(3px); }
-}
-
-/* ── Discover ("Find friends" tab) — people you haven't added yet, each row
-   carrying an inline Add in place of the go-arrow. ─────────────────────────── */
-/* Compact filled pill; sits where the go-arrow does on a friend's row. */
-.friend-add {
-  flex-shrink: 0;
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-pill);
-  padding: 0.4rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  transition: background-color var(--dur-micro), border-color var(--dur-micro);
-}
-@media (hover: hover) {
-  .friend-add:hover { background: var(--accent-press); border-color: var(--accent-press); }
-}
-/* Already-sent request: a muted outline pill (echoes the profile's "Requested"
-   button), tapped to take the request back. */
-.friend-add--pending {
-  color: var(--muted);
-  background: none;
-  border-color: var(--rule);
-  font-weight: 400;
-}
-@media (hover: hover) {
-  .friend-add--pending:hover { color: var(--text); background: none; border-color: var(--text); }
+  .friend:hover .friend-go,
+  .ptile:hover .friend-go { color: var(--text); transform: translateX(3px); }
 }
 
 /* Empty Discover list: the "no one new" note plus a soft ask to share Tria,
@@ -4653,8 +4905,12 @@ button.poll-option:disabled { cursor: default; }
 .modal--closing .modal-card { animation: sink var(--dur-quick) var(--ease) forwards; }
 @media (prefers-reduced-motion: reduce) {
   .modal--closing, .modal--closing .modal-card { animation: fade-out var(--dur-micro) ease forwards; }
+  /* Entrances and the tile's hover lift go. What stays is the tile face's
+     opacity fade — a cross-fade isn't motion, and without it a photo would
+     still pop in over its placeholder. */
+  .card, .friend, .ptile, .notif, .request-row { animation: none; }
+  .ptile, .ptile:hover { transform: none; transition: none; }
 }
-@media (prefers-reduced-motion: reduce) { .card, .friend, .notif, .request-row { animation: none; } }
 
 /* ── Mobile: sidebar → top brand bar + bottom tab bar; entries go edge-to-edge ── */
 @media (max-width: 680px) {

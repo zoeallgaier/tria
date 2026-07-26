@@ -332,16 +332,41 @@ const Store = (() => {
       (followed.has(p.author) && p.audience === 'public'));
   }
 
-  // Discover: public posts from across Tria, newest first — the meeting ground
-  // for people outside your circle. Drops your own (they already live in My
-  // Circle). Audience is now per-post authoritative (Stage 2): a post surfaces
-  // here iff it's marked 'public', whatever the author's account privacy — so a
-  // private account can float a single thought out, and a public account can
-  // still keep a post to its circle. Blocked authors are filtered in the view.
-  function discover() {
-    return posts().filter(p =>
-      p.author !== state.session &&
-      p.audience === 'public');
+  // Discover: everything on Tria you're allowed to see that isn't yours, newest
+  // first. This used to mean "public posts only", which was the right shape
+  // while Discover was strictly a stranger-meeting page. It's now the whole room
+  // in one grid (see renderDiscover), so a friend's circle post belongs here
+  // too: you can already read it in your feed, and browsing your own people in
+  // that format is half of why the page stays worth opening once your circle
+  // fills in.
+  //
+  // This widens NOTHING about who may see what. The cache only ever holds rows
+  // RLS handed over, so a stranger still contributes public posts and nothing
+  // else, and audience stays per-post authoritative — a private account's one
+  // public thought is here, a public account's circle post is not (unless we're
+  // mutual, in which case it was always mine to read).
+  //
+  // `addressed` folds in 'list' posts, the ones hand-sent to named people. They
+  // stay out of the browse grid, because a letter shouldn't be re-shelved as
+  // something to browse, and they come back for SEARCH on the same principle
+  // that lifts the per-person cap there: never hide the thing someone is
+  // actively looking for. Your own posts are out either way (you aren't
+  // discovering yourself), and blocked authors are filtered in the view.
+  //
+  // The audience test mirrors can_view_post's rather than trusting the cache to
+  // have been filtered: RLS is the real gate, but a browse surface that shows
+  // everything it happens to be holding is one stale row away from showing it to
+  // the wrong person, and the client already knows enough to check. Missing
+  // audience reads as 'circle', which is the column's default.
+  function discover({ addressed = false } = {}) {
+    const circle = new Set(friends());
+    return posts().filter(p => {
+      if (p.author === state.session) return false;
+      const aud = p.audience || 'circle';
+      if (aud === 'public') return true;
+      if (aud === 'list') return addressed;
+      return circle.has(p.author);
+    });
   }
 
   // All posts, newest first, by real server timestamp (stable).
