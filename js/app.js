@@ -1154,11 +1154,22 @@
     });
   }
 
-  // The tag chips, wrapped — reused in text and photo entries.
+  // The tag chips, wrapped — reused in text and photo entries. A daily answer
+  // leads with the question it answered (a link to everyone else's) in place of
+  // the machine tag that carries it; see DAILY_TAG_RE for why the slug never
+  // shows. The chip is a link, not a filter button, so the feed's tag wiring
+  // (which looks for [data-tag]) leaves it alone.
   function tagChips(post) {
-    if (!post.tags || !post.tags.length) return '';
+    const occ = dailyForPost(post);
+    const tags = shownTags(post);
+    if (!occ && !tags.length) return '';
     return `<div class="tags">` +
-      post.tags.map(t => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('') +
+      (occ ? `<a class="tag tag--daily" data-type="${occ.type}" ` +
+          `href="#/daily/${encodeURIComponent(occ.slug)}">` +
+          `<span class="tag-daily-cap">Daily</span>` +
+          `<span class="tag-daily-q">${esc(occ.prompt)}</span>` +
+        `</a>` : '') +
+      tags.map(t => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('') +
       `</div>`;
   }
 
@@ -2256,7 +2267,10 @@
       `<div class="field">` +
         `<label for="e-tags">Tags</label>` +
         `<input id="e-tags" type="text" autocapitalize="none" ` +
-          `value="${esc((post.tags || []).join(', '))}" placeholder="garden, clay">` +
+          // shownTags, not post.tags: a daily answer's join tag is invisible here
+          // too, and saveEdit puts it back (otherwise editing a typo in the
+          // caption would quietly drop the post off the daily page).
+          `value="${esc(shownTags(post).join(', '))}" placeholder="garden, clay">` +
         `<p class="field-hint">Optional · separate with commas.</p>` +
       `</div>`;
 
@@ -3331,6 +3345,108 @@
       .forEach((p, i) => { p.t.style.animationDelay = staggerDelay(i); });
   }
 
+  /* ── The grid tile ────────────────────────────────────────────────────────────
+     One tile, three callers: Discover's wall of people, and now a daily's wall of
+     answers (a profile's frame wall keeps its own bare face — every tile there is
+     the same person, so a foot naming them forty times is noise). It takes
+     `{ user, post }` and faces it by what's there: a photo posts its media, any
+     other type speaks, and a person with nothing to show gets their portrait.
+
+     Same reason dealMasonry is shared: two copies of a tile is two places to keep
+     a decision, and every decision written into this one is load-bearing. */
+
+  // What a post SAYS, in one line: its caption, and its title only when there
+  // isn't a caption. One rule for all five types, because every type carries a
+  // title field (see the composer) and none of them treats it as the voice —
+  // the caption is the person talking, the title is the label they filed it
+  // under, and a browse surface should show the talking. `poll.q` is a legacy
+  // shape: the composer has stored a poll's question in title/note for a while
+  // now, so it's a last resort rather than the first look.
+  const saidOf = (p) =>
+    notePlain(p.note) || p.title || (p.poll && p.poll.q) || '';
+
+  // Everything that isn't a photo speaks instead: what it said, set in the
+  // serif, with a quiet second line where the type has one worth adding. A
+  // note set large is a better tile than a bad selfie, which is most of why
+  // the text face exists at all rather than falling back to a portrait.
+  const TILE_SUB = {
+    find:     (p) => domainOf(p.url || ''),
+    activity: (p) => p.location || '',
+  };
+  const tileTypeGlyph = (p) =>
+    `<span class="type-icon type-icon--${p.type}" role="img" ` +
+      `aria-label="${esc(TYPE_LABEL[p.type] || p.type)}">${TYPE_ICON[p.type] || ''}</span>`;
+  function sayFaceEl(p) {
+    const sub = TILE_SUB[p.type] ? TILE_SUB[p.type](p) : '';
+    return `<div class="ptile-face ptile-face--say">` +
+        `<span class="ptile-type">${tileTypeGlyph(p)}</span>` +
+        `<p class="ptile-say">${esc(saidOf(p) || TYPE_LABEL[p.type] || '')}</p>` +
+        (sub ? `<p class="ptile-sub">${esc(sub)}</p>` : '') +
+      `</div>`;
+  }
+
+  // Nothing to show here: the portrait, full square. See rule 4 in renderDiscover
+  // — this is the tile that keeps a private account from reading as a gap.
+  const whoFaceEl = (u) =>
+    `<div class="account-photo ptile-face ptile-face--who${u.avatar ? '' : ' account-photo--empty'}">` +
+      (u.avatar
+        ? `<img src="${esc(u.avatar)}" alt="" loading="lazy" decoding="async">`
+        : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
+    `</div>`;
+
+  // Face on top, the person underneath. The name is a <p>, not the profile's
+  // <h1> — a page of h1s is a heading outline that says nothing.
+  //
+  // The tie is a go-arrow, and there is no Add anywhere on these grids. That
+  // isn't a shortcut, it's the point: adding someone is a commitment, and a
+  // page whose job is browsing shouldn't ask for one at every tile. The arrow
+  // says "go look", their profile carries the real Add.
+  //
+  // NO counts. A post count and a friend count on every tile turned the grid
+  // into a page of scoreboards, and neither number is why you'd tap: the face
+  // already tells you what this person makes, and how many friends a stranger
+  // has is nobody's decision criterion. The only mark left is the lock, which
+  // isn't a statistic — it's a warning that the tap lands on a wall, and it
+  // rides the NAME because it's a property of the account, not of the post.
+  // `fenced` is the caller's answer, because both callers already cache it.
+  //
+  // NO @handle either. It's the second line of every one of these feet, it's a
+  // database key rather than a way anyone thinks of a person, and on a page
+  // whose whole job is faces it doubles the identity block to say the same
+  // thing twice. Search still matches handles (see scoreName) — you can look
+  // someone up by one, it just isn't printed forty times down the page.
+  //
+  // A post tile deep-links to the post ON their profile (?p=<id>, the same
+  // link Copy-link mints), so tapping a thing you're curious about takes you
+  // to that thing rather than dumping you at the top of a stranger's page.
+  function ptileEl(t, fenced) {
+    const u = t.user;
+    const fence = fenced
+      ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
+    // The portrait rejoins the foot only when the face is a POST — otherwise
+    // the face already is their photo and a second copy is just noise. Same
+    // reason the bio only shows on a portrait tile: one thing per tile.
+    const av = t.post ? avatarEl(u, { cls: 'ptile-av' }) : '';
+    const href = `#/u/${encodeURIComponent(u.username)}` +
+      (t.post ? `?p=${encodeURIComponent(t.post.id)}` : '');
+    return `<a class="ptile" href="${href}">` +
+        (t.post
+          ? (t.post.type === 'photo' && t.post.image
+            ? mediaFaceEl(t.post, saidOf(t.post))
+            : sayFaceEl(t.post))
+          : whoFaceEl(u)) +
+        `<div class="ptile-foot">` +
+          `<div class="ptile-who">` + av +
+            `<div class="ptile-id">` +
+              `<p class="account-name">${esc(u.name)}${fence}</p>` +
+            `</div>` +
+            `<span class="friend-go" aria-hidden="true">→</span>` +
+          `</div>` +
+          (!t.post && u.bio ? `<p class="ptile-bio">${esc(u.bio)}</p>` : '') +
+        `</div>` +
+      `</a>`;
+  }
+
   /* ── Profile (own account or any friend, at #/u/username) ─────────────────────
      One view renders both: the signed-in identity + their posts as a single-
      author column. Your own profile carries a Log out; a friend's carries a
@@ -4077,6 +4193,9 @@
       '#/discover': 'Discover',
       '#/profile': 'Profile',
     };
+    // A daily's answers are a browsing surface too, so a profile opened from one
+    // goes back to the question rather than dumping you on Discover.
+    if (profileOrigin.startsWith('#/daily/')) return { href: profileOrigin, label: 'Daily' };
     const href = labels[profileOrigin] ? profileOrigin : '#/discover';
     return { href, label: labels[href] || 'Back' };
   }
@@ -4371,6 +4490,407 @@
     if (post) openPostMenu(post);
   });
 
+  /* ── Dailies — one prompt, twenty-four hours, the whole room ─────────────────
+     A daily is a question everybody gets on the same day, and ANSWERING IT IS
+     JUST POSTING. Each daily names the post type it wants ("post the best thing
+     you ate this week" wants a Frame) and an answer is an ordinary post carrying
+     the daily's tag. No new content type, no new privacy rule, no new table —
+     which is why the whole feature is the array below plus one view.
+
+     THE TYPE IT NAMES IS BINDING (see dailyAccepts). A prompt that asks for a
+     photo and accepts a paragraph isn't a prompt, it's a suggestion box, and the
+     page it fills stops being a set of answers to one question. So the tag only
+     rides along when what you made is what was asked for: drop the link out of a
+     Find and you've written a note, and a note isn't an answer to "share the tab
+     you never close". A daily can waive this with `accepts: 'any'` when the
+     question genuinely takes either shape — that's a per-prompt decision, made
+     when it's written, not a hole in the rule.
+
+     The constraint is never stated up front. The composer opens pre-aimed on the
+     right type, so the default path can't trip it; it only bites when you change
+     the type on purpose, and that's when the banner says so (see renderPublish).
+     Fine print nobody needs to read is worse than a sentence that arrives exactly
+     when it's true.
+
+     THE TYPE IS THE COLOUR. A daily wearing `photo` is a cyan card on Discover
+     and opens a cyan page, because the quintet already means the five post types
+     and a daily is a request for one of them. ACTIVITIES ARE EXCLUDED on purpose:
+     an activity carries a place and a time and lands in the real world, and the
+     app's second interaction gate (canJoin) keeps that circle-only. A prompt that
+     asks the whole room to show up somewhere is the one thing it's built not to do.
+
+     THE SCHEDULE IS THE ARRAY. Day 0 is DAILY_EPOCH, in local time, and the list
+     rotates from there — N prompts is an N-day loop that never runs out and never
+     needs a server. Editing it reschedules everything from today forward and
+     touches nothing behind: posted answers keep their tag AND the question printed
+     on them, because a post resolves its prompt by slug rather than by recomputing
+     the calendar (see dailyForPost, which is where that has to hold).
+
+     AN ANSWER IS A TAGGED POST, and the tag is `daily-<slug>`. That buys the whole
+     feature for free: answers ride the same audience rules as any other post (a
+     private account's answer reaches their circle, not the room, which is the right
+     behaviour for an app whose whole pitch is local), they're editable and
+     deletable from their own card, they show up on their author's profile, and
+     search already finds them. The 24-hour WINDOW is what keeps the rotation
+     honest: an answer counts for the occurrence it was posted inside, so when a
+     prompt comes round again three weeks later it opens empty rather than on last
+     month's replies.
+
+     Daily tags are held out of Discover's trending rail (see topTags): the rail
+     indexes what the room brought up on its own, and a tag the app hands out to
+     everybody would win it every single day. */
+  // Day 0 of the rotation, at local midnight. Launch day, and a Tuesday: the code
+  // shipped the evening before so every home-screen install had the night to pick
+  // up the new build (the ?v= self-updater only fires on launch/foreground), and
+  // then the first card appeared for everybody at once with a full 24h on it
+  // rather than trickling out mid-afternoon with seven hours left. Before this
+  // date dailyOn returns null and no card renders at all, which is what made that
+  // possible. MOVING THIS MOVES EVERY WEEKDAY — see the rotation below.
+  const DAILY_EPOCH = '2026-07-28';
+
+  /* The rotation. `type` picks the colour, what the composer opens as, AND what
+     counts as an answer — one of note / find / photo / poll. `hint` is the quiet
+     line under the prompt: say what a good answer looks like, not what the button
+     does. `accepts: 'any'` opens a prompt to every type (still not activities);
+     it keeps its `type` for the colour and for the surface the composer raises,
+     which becomes a suggestion rather than a requirement.
+
+     TWENTY-ONE, AND THAT NUMBER IS LOAD-BEARING: 21 is 3 × 7, so every prompt
+     keeps the same weekday forever. That's the whole scheduling tool. Day 0 is a
+     TUESDAY (see DAILY_EPOCH), so the Mondays are indexes 6, 13 and 20 and the
+     Thursdays are 2, 9 and 16 — count from the epoch's weekday, not from the top
+     of the list. Mondays are always cheap because nobody has the energy; Thursday
+     is always the Find, one link a week on a known day; Friday drifted
+     argumentative (laughed, hot take, pettiest hill) and it stays that way; Sunday
+     is the soft landing. Keep the count a multiple of 7 or the pattern dissolves,
+     and if the epoch ever moves, ROTATE THE ARRAY BY THE SAME NUMBER OF DAYS or
+     every one of those roles slides onto the wrong weekday.
+
+     WEEK ONE IS DELIBERATELY ALL CHEAP, and it opens on a photograph everybody
+     already has in their pocket. A launch week that starts with a wall gets
+     answered by nobody, and an empty daily page on day one is an argument against
+     dailies. The first prompt asking for real effort is nine days in, by which
+     point a daily is a thing people recognise rather than a thing they're meeting.
+
+     NO POLLS, NO ACTIVITIES. Activities are excluded structurally (see the note
+     up top). Polls are excluded editorially: every other prompt asks you for a
+     thing you already have, and a poll asks you to author a question — the one
+     prompt in the set with real setup cost, on the day most likely to look empty.
+     `type: 'poll'` still works everywhere if that ever changes; it's simply not
+     scheduled, which is why a daily is a three-colour feature.
+
+     WRITE FOR THE LOOP: this comes round every three weeks, so a prompt has to be
+     re-answerable. "What song is stuck in your head" survives forever because the
+     answer moves; "what's your favourite X" doesn't, because you have one and the
+     second time round it's a chore. `meme` is the knowing exception, kept because
+     it's funny and expected to thin out on later runs — if it does, the fix is to
+     date it ("the meme you've sent the most this week"). Slang dates faster than
+     structure, so the humour lives in the specificity, not the vocabulary. */
+  const DAILIES = [
+    // ── Week one, all cheap ──                                     Tue
+    { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.',       hint: 'No scrolling. The last one.' },
+    { slug: 'stuck',          type: 'note',  prompt: 'What song is stuck in your head?',               hint: 'Blame whoever put it there.' },
+    { slug: 'must-watch',     type: 'find',  prompt: 'Share the video you’ve made someone watch.',    hint: 'A link, and who you inflicted it on.' },
+    { slug: 'laughed',        type: 'note',  prompt: 'What actually made you laugh this week?',        hint: 'Not a polite exhale through your nose.' },
+    { slug: 'ate',            type: 'photo', prompt: 'Show the best thing you ate this week.',         hint: 'Bad lighting encouraged.' },
+    // The open one. "What can you see" is answered just as well by the photograph
+    // as by the description of it, so it takes either.                Sun
+    { slug: 'window',         type: 'note',  prompt: 'What can you see out your window?',              hint: 'A few lines, or just show us.', accepts: 'any' },
+
+    // ── Week two ──                                                 Mon
+    { slug: 'npc',            type: 'note',  prompt: 'What’s the most NPC thing you did today?',       hint: 'The autopilot moment. We all have them.' },
+    { slug: 'meme',           type: 'photo', prompt: 'Post your favorite meme.',                       hint: 'The one you keep re-sending.' },
+    { slug: 'dinner',         type: 'note',  prompt: 'What did you actually have for dinner?',         hint: 'Cereal counts. Girl dinner counts.' },
+    { slug: 'worth-it',       type: 'find',  prompt: 'Share something you read that was worth it.',    hint: 'Long is fine.' },
+    { slug: 'hot-take',       type: 'note',  prompt: 'What’s a hot take you’d defend in court?',       hint: 'Bring evidence.' },
+    { slug: 'made',           type: 'photo', prompt: 'Post something you made this week.',             hint: 'Cooked, drew, built, badly is fine.' },
+    { slug: 'on-repeat',      type: 'photo', prompt: 'Screenshot what you’ve had on repeat.',          hint: 'No skips, no shame.' },
+
+    // ── Week three ──                                               Mon
+    { slug: 'drinking',       type: 'photo', prompt: 'Show us what you’re drinking right now.',        hint: 'Water counts. Barely.' },
+    { slug: 'animal',         type: 'photo', prompt: 'Show us the animal you saw today.',              hint: 'Someone else’s dog counts.' },
+    { slug: 'overthink',      type: 'note',  prompt: 'What are you overthinking right now?',           hint: 'Say it out loud, it gets smaller.' },
+    { slug: 'one-song',       type: 'find',  prompt: 'Share one song the room needs to hear.',         hint: 'One link, one line on why.' },
+    { slug: 'petty',          type: 'note',  prompt: 'What’s the pettiest hill you’re dying on?',      hint: 'Villain arc encouraged.' },
+    { slug: 'desk',           type: 'photo', prompt: 'Show us your desk, no tidying.',                 hint: 'The mess is the point.' },
+    { slug: 'flowers',        type: 'note',  prompt: 'Who deserves their flowers today?',              hint: 'Say the name. They might be reading.' },
+    // Closing Monday. The loop turns from "who deserves their flowers" straight
+    // into this, which is the warmest handoff the twenty-one had in them.
+    { slug: 'vibe-check',     type: 'note',  prompt: 'What’s the vibe today, in five words or fewer?', hint: 'Five words. Punctuation is free.' },
+  ];
+
+  const DAY_MS = 86400000;
+  const dailyEpochParts = () => DAILY_EPOCH.split('-').map(Number);
+  // Whole days since the epoch, counted between local midnights rather than in raw
+  // milliseconds so a daylight-saving shift can't slide the day over by an hour.
+  function dayNumber(now = new Date()) {
+    const [y, m, d] = dailyEpochParts();
+    const from = new Date(y, m - 1, d);
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((to - from) / DAY_MS);
+  }
+
+  // One prompt ON one day: the prompt plus the window it's open for. Everything
+  // downstream takes one of these, so "today's" and "the last time this one ran"
+  // are the same shape and the page doesn't care which it was handed.
+  function occurrenceOf(d, day) {
+    const [y, m, dd] = dailyEpochParts();
+    return {
+      ...d,
+      day,
+      tag: 'daily-' + d.slug,
+      opens: new Date(y, m - 1, dd + day),
+      closes: new Date(y, m - 1, dd + day + 1),
+    };
+  }
+  // Which prompt the wheel lands on for a given day.
+  function dailyOn(day) {
+    if (!DAILIES.length || day < 0) return null;
+    return occurrenceOf(DAILIES[day % DAILIES.length], day);
+  }
+  const todaysDaily = () => dailyOn(dayNumber());
+  // The most recent run of one prompt, so a link to #/daily/<slug> keeps working
+  // after its day is out: it lands on that round's answers instead of nothing.
+  function lastDailyFor(slug) {
+    const i = DAILIES.findIndex(d => d.slug === slug);
+    if (i < 0) return null;
+    const today = dayNumber(), n = DAILIES.length;
+    return dailyOn(today - (((today - i) % n) + n) % n);
+  }
+  const dailyIsOpen = (occ, now = Date.now()) =>
+    !!occ && now >= +occ.opens && now < +occ.closes;
+
+  // Every answer to one occurrence, newest first. Reads the whole cache rather
+  // than Store.discover() because my OWN answer belongs on this page too, and the
+  // cache only ever holds what can_view_post already handed over — so this widens
+  // nothing. Window-scoped (see the note up top); blocked authors drop out.
+  function dailyAnswers(occ) {
+    if (!occ) return [];
+    const from = +occ.opens, to = +occ.closes;
+    return Store.posts().filter(p => {
+      if (!(p.tags || []).includes(occ.tag)) return false;
+      const t = +new Date(p._ts);
+      return t >= from && t < to && !Blocks.has(p.author);
+    });
+  }
+
+  /* The tag is a JOIN, and it is never a label. `daily-<slug>` rides on the post
+     so the page can find its answers without a table — but it must not show up
+     among the poster's own tags. Tags are words someone chose for their own
+     shelf; the moment app-issued slugs start appearing in that row it reads as
+     metadata leaking into writing, and every answer on the page wears a barcode.
+
+     So: the `daily-` namespace is reserved (nothing a person types can enter it —
+     see parseTags), it's stripped everywhere tags render or get edited, and it
+     rides along invisibly on save. What shows in its place is the QUESTION, as a
+     link back to what everyone else said — which is the thing the slug was
+     standing in for anyway, and a much better link than a word in a chip. */
+  const DAILY_TAG_RE = /^daily-/;
+  const dailyTagOf = (post) => (post.tags || []).find(t => DAILY_TAG_RE.test(t)) || null;
+  const shownTags = (post) => (post.tags || []).filter(t => !DAILY_TAG_RE.test(t));
+  /* Which occurrence a post answered. Resolved by SLUG, from the tag the post is
+     carrying, and dated to the day it was posted.
+
+     It has to be the slug, because the alternative — re-deriving the prompt from
+     `day % DAILIES.length` — makes the schedule immutable the moment the app has
+     users. Change the array's LENGTH and every past day maps onto a different
+     prompt, so every answer ever posted stops matching its own tag and quietly
+     loses the question off the bottom of its card. That's a rewrite of history as
+     the price of adding one prompt, and we will want to add prompts.
+
+     Reading the slug instead, the wheel decides only what comes next, never what
+     already happened: reorder freely, append freely. The one edit that still
+     costs something is DELETING an entry, which retires its label from old
+     answers (they degrade to a plain post, tag still hidden, nothing broken). If
+     a prompt is ever retired for real, leave its row in the array and move it out
+     of the rotation instead. */
+  function dailyForPost(post) {
+    const tag = dailyTagOf(post);
+    if (!tag || !post._ts) return null;
+    const d = DAILIES.find(x => 'daily-' + x.slug === tag);
+    return d ? occurrenceOf(d, dayNumber(new Date(post._ts))) : null;
+  }
+
+  // "6h left" / "42m left" — coarse on purpose. A ticking clock on a card is a
+  // pressure device and this app doesn't run on urgency; the number is here so you
+  // know whether you have the evening or the hour, and it never counts seconds.
+  function dailyLeft(occ, now = Date.now()) {
+    const ms = +occ.closes - now;
+    if (ms <= 0) return 'closed';
+    const h = Math.floor(ms / 3600000);
+    return h >= 1 ? `${h}h left` : `${Math.max(1, Math.ceil(ms / 60000))}m left`;
+  }
+
+  // Have I already answered this one? A daily takes ONE answer each: the page is
+  // meant to be a room full of different people, and the second answer from the
+  // same person is where a prompt starts turning into a feed you can hold the
+  // floor in. It's a client-side rule (the tag is just a tag, the database has no
+  // idea a daily exists), which is the right weight for something protecting the
+  // shape of a page rather than anyone's privacy.
+  const myAnswer = (occ, answers) =>
+    (answers || dailyAnswers(occ)).find(p => p.author === Store.session()) || null;
+
+  // Does this post type answer that question? The prompt named a type and the type
+  // is binding, unless the prompt waived it with `accepts: 'any'`. ACTIVITIES are
+  // out either way, including of an open prompt: the exclusion isn't about shape,
+  // it's that an activity lands in the real world behind a friends-only gate, and
+  // a page of answers from the whole room is the wrong doorway to that.
+  //
+  // This is the ONE place the rule lives — the banner reads it to know what to say
+  // and submitComposer reads it to know whether to attach the tag, so the sentence
+  // on screen and the tag on the post can't disagree.
+  const dailyAccepts = (occ, type) =>
+    !!occ && type !== 'activity' && (occ.accepts === 'any' || type === occ.type);
+
+  // The invitation, in ONE place so the card and the page can't drift. Not
+  // "Answer": a prompt that asks and then commands is a worksheet, and the arrow
+  // is doing the "go" half anyway.
+  const DAILY_CTA = 'Add yours';
+
+  // Send the composer to answer this daily: it opens on the type the prompt asked
+  // for, and the daily's tag rides along invisibly at submit (see submitComposer).
+  // `answeringDaily` outlives the render so a posted answer lands back on the
+  // question it answered instead of on the home feed.
+  let pendingDaily = null;
+  let answeringDaily = null;
+  function answerDaily(occ) {
+    if (!occ || myAnswer(occ)) return;   // one each — the UI shouldn't have offered
+    pendingDaily = occ;
+    go('#/publish');
+  }
+
+  /* The card on Discover: coloured glass, the one piece of the page that carries a
+     hue. It floats above the grid, so the material rule says glass — and unlike the
+     tiles it's a single element that doesn't scroll a hundred copies of itself, so
+     it can afford the real sample-and-blur.
+
+     The whole card is the tap (a stretched link over it), with Answer sitting on
+     top as its own control — read the room, or go say your bit, and nothing in
+     between. The faces are who has answered; the count beside them is the one
+     number Discover allows besides the trending rail's, and it's here because
+     "12 answers" is the difference between a party and an empty room. */
+  function dailyCardEl(occ, answers) {
+    const faces = answers.slice(0, 4).map(p => Store.user(p.author)).filter(Boolean);
+    const n = answers.length;
+    const mine = myAnswer(occ, answers);
+    return `<section class="daily-card" data-type="${occ.type}">` +
+        // No coloured dot here. The card IS the colour — a hue-filled panel with a
+        // hue-filled disc on it is the same fact said twice, and the second time
+        // reads as decoration.
+        `<p class="daily-kicker">` +
+          `Today’s daily<span class="daily-sep" aria-hidden="true">·</span>` +
+          `<span class="daily-left">${esc(dailyLeft(occ))}</span>` +
+        `</p>` +
+        `<a class="daily-open" href="#/daily/${encodeURIComponent(occ.slug)}">` +
+          `<span class="daily-prompt">${esc(occ.prompt)}</span>` +
+        `</a>` +
+        (occ.hint ? `<p class="daily-hint">${esc(occ.hint)}</p>` : '') +
+        `<div class="daily-foot">` +
+          (n
+            ? `<div class="daily-answered">` +
+                `<div class="daily-faces" aria-hidden="true">` +
+                  faces.map(u => avatarEl(u, { cls: 'daily-face' })).join('') +
+                `</div>` +
+                `<span class="daily-count">${n} answer${n === 1 ? '' : 's'}</span>` +
+              `</div>`
+            : `<span class="daily-count daily-count--none">No answers yet</span>`) +
+          // Answered: the invitation is simply gone, with nothing in its place.
+          // "Yours is in" was a caption on an absence — the faces and the count
+          // beside them already changed when you posted, and your own answer is
+          // waiting one tap away. A card that reports your own action back to you
+          // is talking about the app instead of the room.
+          (mine ? ''
+            : `<button type="button" class="daily-answer">${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span></button>`) +
+        `</div>` +
+      `</section>`;
+  }
+
+  /* ── The daily's own page (#/daily/<slug>) ────────────────────────────────────
+     Discover, held to one question. The page takes the daily's colour through the
+     ambient wash (the same full-screen mechanism the composer uses for the type
+     it's inferring) so opening the card feels like stepping INTO the card, and the
+     answers deal into the same masonry grid the rest of the app browses with.
+
+     Reading it is open to everyone; ANSWERING closes with the window. A daily
+     whose day has passed still shows what it got, because the archive is the
+     reward for having answered, and its Answer button is simply gone — a dead
+     control that explains itself is still a dead control. */
+  let dailyResizeOff = null;
+  function renderDaily(slug) {
+    const occ = lastDailyFor(slug);
+    if (!occ) { go('#/discover'); return; }
+    const me = Store.session();
+    const open = dailyIsOpen(occ);
+    const answers = dailyAnswers(occ);
+
+    const fenced = (name) => Store.isPrivate(name) && name !== me
+      && Store.friendStatus(name) !== 'friends';
+    const tiles = answers
+      .map(p => ({ user: Store.user(p.author), post: p }))
+      .filter(t => t.user);
+
+    // The invitation is gone once it's been taken (one each) or once the day is
+    // out. Your own answer is on the page below either way, which says "you're in"
+    // better than a disabled button ever could.
+    const canAnswer = open && !myAnswer(occ, answers);
+
+    /* The kicker carries the whole status line: what this is, how long it has
+       left, and the way in. All three are the same KIND of fact — small print
+       about the occasion rather than the occasion itself — so they share one
+       tracked micro-caps line, caption left and control right. That's the
+       masthead's own arrangement (nameplate left, filter right) moved up a line,
+       and it spares the row an action parked beside a two-line serif question
+       that never had a baseline to sit on. The standing half is dimmed so the
+       live half reads as the live half. */
+    const kicker =
+      `<span class="daily-when">Daily` +
+        `<span class="daily-sep" aria-hidden="true">·</span>` +
+        `${open ? esc(dailyLeft(occ)) : 'closed'}</span>` +
+      (canAnswer
+        ? `<button type="button" class="daily-answer daily-answer--inline" ` +
+          `id="daily-answer">${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span></button>`
+        : '');
+
+    view.innerHTML =
+      `<section class="view view--daily" data-type="${occ.type}">` +
+        `<a class="profile-back" href="#/discover">← Discover</a>` +
+        mastheadEl(kicker, `<span class="masthead-title--daily">${esc(occ.prompt)}</span>`, '') +
+        (occ.hint ? `<p class="daily-lede">${esc(occ.hint)}</p>` : '') +
+        `<div class="daily-body" id="daily-body"></div>` +
+      `</section>`;
+
+    const bodyEl = view.querySelector('#daily-body');
+    bodyEl.innerHTML = tiles.length
+      ? `<div class="pgrid">${tiles.map(t => ptileEl(t, fenced(t.user.username))).join('')}</div>`
+      : `<p class="feed-empty">${open
+        ? 'Nobody’s answered yet. Go first?'
+        : 'This one went by without an answer.'}</p>`;
+
+    const layout = (fresh) => dealMasonry(bodyEl.querySelector('.pgrid'), fresh);
+    layout(true);
+    wireFrameFades(bodyEl);
+    view.querySelector('#daily-answer')?.addEventListener('click', () => answerDaily(occ));
+
+    // Same contract as Discover's grid: a WIDTH change re-deals the columns (the
+    // count flips at the breakpoint), a height change — the iOS keyboard, the URL
+    // bar collapsing — is ignored, and a re-deal parks the entrance rather than
+    // replaying it because the phone turned.
+    dailyResizeOff?.();
+    let sizeTimer = 0, lastW = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastW) return;
+      lastW = window.innerWidth;
+      clearTimeout(sizeTimer);
+      sizeTimer = setTimeout(() => { if (bodyEl.isConnected) layout(false); }, 120);
+    };
+    window.addEventListener('resize', onResize, { passive: true });
+    dailyResizeOff = () => {
+      clearTimeout(sizeTimer);
+      window.removeEventListener('resize', onResize);
+      dailyResizeOff = null;
+    };
+  }
+
   /* ── Discover — the meeting ground ───────────────────────────────────────────
      ONE surface: a masonry grid where every tile is a post you're allowed to see
      with the person who made it attached, plus a portrait tile for anyone with
@@ -4495,103 +5015,12 @@
       return lockCache.get(name);
     };
 
-    /* ── The three faces ─────────────────────────────────────────────────── */
-
-    // A Frame: the shared media face (see mediaFaceEl), captioned by whatever
-    // the post says so the alt text is the person's own words. The say faces
-    // keep their type glyph because there the glyph is doing real work.
-    const mediaFace = (p) => mediaFaceEl(p, said(p));
-
-    // What a post SAYS, in one line: its caption, and its title only when there
-    // isn't a caption. One rule for all five types, because every type carries a
-    // title field (see the composer) and none of them treats it as the voice —
-    // the caption is the person talking, the title is the label they filed it
-    // under, and a browse surface should show the talking. `poll.q` is a legacy
-    // shape: the composer has stored a poll's question in title/note for a while
-    // now, so it's a last resort rather than the first look.
-    const said = (p) =>
-      notePlain(p.note) || p.title || (p.poll && p.poll.q) || '';
-
-    // Everything that isn't a photo speaks instead: what it said, set in the
-    // serif, with a quiet second line where the type has one worth adding. A
-    // note set large is a better tile than a bad selfie, which is most of why
-    // the text face exists at all rather than falling back to a portrait.
-    const SUB = {
-      find:     (p) => domainOf(p.url || ''),
-      activity: (p) => p.location || '',
-    };
-    const typeGlyph = (p) =>
-      `<span class="type-icon type-icon--${p.type}" role="img" ` +
-        `aria-label="${esc(TYPE_LABEL[p.type] || p.type)}">${TYPE_ICON[p.type] || ''}</span>`;
-    const sayFace = (p) => {
-      const sub = SUB[p.type] ? SUB[p.type](p) : '';
-      return `<div class="ptile-face ptile-face--say">` +
-          `<span class="ptile-type">${typeGlyph(p)}</span>` +
-          `<p class="ptile-say">${esc(said(p) || TYPE_LABEL[p.type] || '')}</p>` +
-          (sub ? `<p class="ptile-sub">${esc(sub)}</p>` : '') +
-        `</div>`;
-    };
-
-    // Nothing to show here: the portrait, full square. See rule 4 up top —
-    // this is the tile that keeps a private account from reading as a gap.
-    const whoFace = (u) =>
-      `<div class="account-photo ptile-face ptile-face--who${u.avatar ? '' : ' account-photo--empty'}">` +
-        (u.avatar
-          ? `<img src="${esc(u.avatar)}" alt="" loading="lazy" decoding="async">`
-          : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
-      `</div>`;
-
     /* ── The tile ────────────────────────────────────────────────────────── */
 
-    // Face on top, the person underneath. The name is a <p>, not the profile's
-    // <h1> — a page of h1s is a heading outline that says nothing.
-    //
-    // The tie is a go-arrow, and there is no Add anywhere on this page. That
-    // isn't a shortcut, it's the point: adding someone is a commitment, and a
-    // page whose job is browsing shouldn't ask for one at every tile. The arrow
-    // says "go look", their profile carries the real Add.
-    //
-    // NO counts. A post count and a friend count on every tile turned the grid
-    // into a page of scoreboards, and neither number is why you'd tap: the face
-    // already tells you what this person makes, and how many friends a stranger
-    // has is nobody's decision criterion. The only mark left is the lock, which
-    // isn't a statistic — it's a warning that the tap lands on a wall, and it
-    // rides the NAME because it's a property of the account, not of the post.
-    //
-    // NO @handle either. It's the second line of every one of these feet, it's a
-    // database key rather than a way anyone thinks of a person, and on a page
-    // whose whole job is faces it doubles the identity block to say the same
-    // thing twice. Search still matches handles (see scoreName) — you can look
-    // someone up by one, it just isn't printed forty times down the page.
-    //
-    // A post tile deep-links to the post ON their profile (?p=<id>, the same
-    // link Copy-link mints), so tapping a thing you're curious about takes you
-    // to that thing rather than dumping you at the top of a stranger's page.
-    const tileEl = (t) => {
-      const u = t.user;
-      const fence = isLocked(u.username)
-        ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
-      // The portrait rejoins the foot only when the face is a POST — otherwise
-      // the face already is their photo and a second copy is just noise. Same
-      // reason the bio only shows on a portrait tile: one thing per tile.
-      const av = t.post ? avatarEl(u, { cls: 'ptile-av' }) : '';
-      const href = `#/u/${encodeURIComponent(u.username)}` +
-        (t.post ? `?p=${encodeURIComponent(t.post.id)}` : '');
-      return `<a class="ptile" href="${href}">` +
-          (t.post
-            ? (t.post.type === 'photo' && t.post.image ? mediaFace(t.post) : sayFace(t.post))
-            : whoFace(u)) +
-          `<div class="ptile-foot">` +
-            `<div class="ptile-who">` + av +
-              `<div class="ptile-id">` +
-                `<p class="account-name">${esc(u.name)}${fence}</p>` +
-              `</div>` +
-              `<span class="friend-go" aria-hidden="true">→</span>` +
-            `</div>` +
-            (!t.post && u.bio ? `<p class="ptile-bio">${esc(u.bio)}</p>` : '') +
-          `</div>` +
-        `</a>`;
-    };
+    // The faces and the tile itself live at module scope (see ptileEl) — they're
+    // the third caller of the same grid now that a daily's answers deal into one
+    // too. All this view still owns is WHO is fenced, which it caches per paint.
+    const tileEl = (t) => ptileEl(t, isLocked(t.user.username));
 
     /* ── Trending tags: the one index on the page (rule 7) ────────────────────
        The five tags carried by the most posts Discover can show. Counted across
@@ -4613,9 +5042,14 @@
       // votes once. Counts the BROWSE pool, which is why tapping a tag can
       // surface more posts than the number says: the tap runs a search, and
       // search reaches hand-addressed posts the rail deliberately doesn't count.
+      //
+      // A daily's tag never trends. The rail indexes what the room brought up on
+      // its own; a tag the app itself hands to everybody on the same morning would
+      // hold the top slot every day and say nothing (the daily has its own card
+      // three inches above, which is a better link than a word in a strip).
       discoverPool(false).filter(p => notBlocked(p.author)).forEach(p =>
         new Set((p.tags || []).map(t => String(t).trim().toLowerCase().replace(/^#/, '')))
-          .forEach(k => { if (k) n.set(k, (n.get(k) || 0) + 1); }));
+          .forEach(k => { if (k && !k.startsWith('daily-')) n.set(k, (n.get(k) || 0) + 1); }));
       return [...n.entries()].filter(([, c]) => c > 1)
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .slice(0, 5);
@@ -4838,9 +5272,18 @@
       // the page, so it has to stay put and stay tappable while you're standing
       // inside one of its tags, or there's no way back out but the X.
       const tags = topTags();
-      const sig = JSON.stringify([q, discoverFilter, tags, tiles.map(t =>
-        [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
-          t.post && t.post.id, isLocked(t.user.username)])]);
+      // Today's daily heads the page, above the rail: it's the one thing here
+      // with a deadline, and it's the same for everybody, so it reads as the
+      // room's headline rather than as a tile that happens to be first. It stays
+      // out of SEARCH — you asked a question, the page owes you an answer and not
+      // a card — but rides every filter, because the card isn't part of the grid
+      // it would be narrowing.
+      const occ = q ? null : todaysDaily();
+      const answers = occ ? dailyAnswers(occ) : [];
+      const sig = JSON.stringify([q, discoverFilter, tags,
+        occ && [occ.slug, answers.length], tiles.map(t =>
+          [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
+            t.post && t.post.id, isLocked(t.user.username)])]);
       if (bodyEl.dataset.sig === sig) return;
       bodyEl.dataset.sig = sig;
       const empty = q
@@ -4848,9 +5291,11 @@
         : TYPE_PLURAL[discoverFilter]
           ? `No ${TYPE_PLURAL[discoverFilter]} out here yet.`
           : 'Nobody here yet.';
-      bodyEl.innerHTML = tagRail(tags, q) + (tiles.length
+      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') + tagRail(tags, q) + (tiles.length
         ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
         : `<p class="feed-empty">${empty}</p>`);
+      bodyEl.querySelector('.daily-answer')
+        ?.addEventListener('click', () => answerDaily(occ));
       // The share ask ends the page, so it follows the two views that ARE the
       // page (All and People) and stays out of a narrowed one. It earns its place
       // under People especially: a list of everyone here is exactly where "know
@@ -5746,10 +6191,18 @@
   }
 
   function renderPublish() {
+    // Answering a daily is the one thing that opens the composer pre-aimed: the
+    // prompt already said which type it wants, so the form opens with that
+    // attachment's surface up and the daily's tag in the field. Consumed once —
+    // navigate away and come back and you get a plain composer, because the
+    // intent belonged to the tap, not to the page.
+    const daily = pendingDaily;
+    pendingDaily = null;
+    answeringDaily = daily;
     // The composer never persists a draft across navigations, so every entry opens
     // fresh on the Post group (a plain Note until something's attached).
     pubGroup = 'post';
-    pubType = 'note';
+    pubType = daily ? daily.type : 'note';
     // The reactive colour lives full-screen now: the page ambient wash adopts the
     // inferred type's hue (see body[data-ambient="publish"] .ambient), keyed off
     // --glow-pub which syncType keeps in step. Set it before the wash fades in so
@@ -5763,6 +6216,33 @@
         // title names the inferred type instead (see syncTitle), so the word
         // rides in a span the swap animation can hand off between.
         mastheadEl('', `<span class="title-word">${pubTitle()}</span>`, typeIndicatorHtml()) +
+        // What you're answering: the daily page's own masthead in miniature, the
+        // caption over the question, tinted with that daily's ink. It sits OUTSIDE
+        // the form and on the nameplate's axis, because it's a lede for the page
+        // rather than a field in the form — inside, it started var(--inset) to the
+        // left of the title it hangs under (the composer's boxes are outdented on
+        // purpose; a line of type isn't a box).
+        //
+        // It is also the live readout of whether this still counts. The type is
+        // binding (see dailyAccepts), and the type here is INFERRED from what's
+        // attached, so it can stop being an answer while you're mid-compose: drop
+        // the link and you're writing a note. Nothing is blocked — the switcher
+        // and the attach buttons all still work, because someone who came to
+        // answer "post a meme" and writes a note instead has changed their mind,
+        // and that's allowed. The banner just stops claiming otherwise: it drains
+        // to grey and its caption falls back to a bare "Daily:". Re-attach and it
+        // lights up again.
+        //
+        // While it's live, its hue is the DAILY's rather than pubType's: it names
+        // the question, not what you're making. (The two agree whenever it's live
+        // and typed; they part only on an `accepts: 'any'` prompt, where the
+        // question's own colour is the right one to keep.)
+        (daily
+          ? `<div class="daily-banner" data-type="${daily.type}" id="daily-banner">` +
+              `<p class="daily-banner-cap" id="daily-banner-cap">Answering the daily</p>` +
+              `<p class="daily-banner-prompt">${esc(daily.prompt)}</p>` +
+            `</div>`
+          : '') +
         `<form class="composer" id="composer" novalidate>` +
           // The Post / Activity switcher sits inline just above the note field (not
           // docked to the nav like the Friends / Updates one — see #c-group-tabs).
@@ -5821,6 +6301,24 @@
       fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
+      syncDailyBanner();
+    }
+
+    // The banner tracks the inferred type: lit while this still answers the daily,
+    // drained the moment it doesn't. Off, the caption says NOTHING — it drops to
+    // "Daily:", grey, a colon pointing at the question below it. The drained
+    // colour is the whole signal, and a caption that explained itself ("the daily
+    // wants a Find") was an instruction nobody asked for, on a screen where the
+    // person has just told the app what they want by changing the type. It also
+    // needed a special case for activities, which is how you end up writing a
+    // sentence like "an activity leaves the daily". One label, every case.
+    function syncDailyBanner() {
+      const el = document.getElementById('daily-banner');
+      if (!el) return;
+      const ok = dailyAccepts(daily, pubType);
+      el.classList.toggle('daily-banner--off', !ok);
+      const cap = document.getElementById('daily-banner-cap');
+      if (cap) cap.textContent = ok ? 'Answering the daily' : 'Daily:';
     }
 
     // Drop any attached photo/clip and fold the frame surface away. Also resets the
@@ -6041,6 +6539,18 @@
 
     // Mount the group we arrived on (default Post), then reflect its inferred type.
     mountFields();
+    // A daily aims the freshly mounted form: raise the surface its type needs. The
+    // photo surface opens WITHOUT popping the OS picker — the attach button does
+    // that because you asked for it right then, and a file dialog that opens by
+    // itself on arrival is a page grabbing the wheel. Nothing goes in the tag
+    // field: the join tag rides along at submit (see submitComposer), because that
+    // field holds the poster's own words and not the app's bookkeeping.
+    if (daily && family === 'base') {
+      if (daily.type === 'photo') wantPhoto = true;
+      else if (daily.type === 'find') wantLink = true;
+      else if (daily.type === 'poll') wantPoll = true;
+      applyBaseSurface();
+    }
     syncType();
   }
 
@@ -6689,13 +7199,29 @@
     };
   }
 
+  // The `daily-` namespace is reserved for the join tag (see DAILY_TAG_RE), so
+  // nothing typed into a tag field can land in it — otherwise a post could talk
+  // its way onto a daily page it never answered, and the strip-on-display rule
+  // would swallow someone's real tag on the way there.
   const parseTags = (str) => [...new Set(String(str || '').split(',')
-    .map(t => t.trim().replace(/^#/, '').toLowerCase()).filter(Boolean))].slice(0, 6);
+    .map(t => t.trim().replace(/^#/, '').toLowerCase())
+    .filter(t => t && !DAILY_TAG_RE.test(t)))].slice(0, 6);
 
   async function submitComposer() {
     const errEl = document.getElementById('c-error');
     const val = (id) => (document.getElementById(id)?.value || '').trim();
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
+    // A daily answer carries its join tag invisibly — it's the app's bookkeeping,
+    // not one of the poster's words, so it never sat in the field they can see.
+    // It rides PAST the six-tag cap for the same reason: it isn't one of theirs.
+    // The tag goes on only if what you made is what the prompt asked for
+    // (dailyAccepts, which is also what the banner has been showing you the whole
+    // time), and only once — one answer each (see myAnswer). A post that misses
+    // either test is just a post: it publishes normally and lands on the home
+    // feed instead of the daily page (see the routing after res).
+    if (dailyAccepts(answeringDaily, pubType) && !myAnswer(answeringDaily)) {
+      data.tags.push(answeringDaily.tag);
+    }
     // Audience rides EVERY post type, not just activities — the lock is on the
     // note box's foot too, and a picked 'public' that never reached the row is
     // how a public post quietly landed back in 'circle' (and out of Discover).
@@ -6811,6 +7337,16 @@
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubGroup = 'post';          // next compose opens on the Post group…
     pubType = 'note';           // …as a plain Note until something's attached
+    // An answer goes home to its question: the point of answering is seeing what
+    // everyone else said, and the home feed is not where that is. Only if the tag
+    // actually survived — someone who deleted it out of the field posted a normal
+    // post, and dropping them on a page their post isn't on would be a small lie.
+    const answered = answeringDaily;
+    answeringDaily = null;
+    if (answered && (res.post.tags || []).includes(answered.tag)) {
+      go(`#/daily/${encodeURIComponent(answered.slug)}`);
+      return;
+    }
     go('#/');
   }
 
@@ -6849,6 +7385,10 @@
     if (!post) { editingId = null; renderUser(username); return; }
 
     const data = { note: readNoteField('e-note'), tags: parseTags(val('e-tags')) };
+    // The daily join tag isn't in the field (see editFieldsFor), so put it back —
+    // an edit is a change to what you SAID, never a retraction of the answer.
+    const carried = dailyTagOf(post);
+    if (carried) data.tags.push(carried);
 
     if (post.type === 'find') {
       data.url = val('e-url');
@@ -7256,6 +7796,16 @@
     // same either side of sign-in. Locked to the viewport bottom (see .ambient),
     // rising up under the guidelines and the floating nav.
     if (path.split('?')[0] === '#/about') { body.dataset.ambient = 'about'; return; }
+    // A daily washes the whole page in its post type's hue, so opening the card
+    // reads as stepping into it. Same full-screen mechanism the composer uses for
+    // the type it's inferring, on its own custom property.
+    if (path.startsWith('#/daily/')) {
+      const occ = lastDailyFor(decodeURIComponent(path.slice(8).split('?')[0]));
+      if (!occ) return;
+      body.style.setProperty('--glow-daily', TYPE_HEX[occ.type] || TYPE_HEX.note);
+      body.dataset.ambient = 'daily';
+      return;
+    }
     if (!user || !user.avatar) return;             // non-profile, or no photo → clean
     sampleColor(user.avatar).then(rgb => {
       if (seq !== ambientSeq) return;
@@ -7815,10 +8365,18 @@
     if (path !== '#/discover') discoverResizeOff?.();
     // A profile's frame wall is the same deal, so it keeps the same listener.
     if (!path.startsWith('#/u/') && path !== '#/profile') profileResizeOff?.();
+    // And a daily's wall of answers, which is the same grid a third time.
+    if (!path.startsWith('#/daily/')) dailyResizeOff?.();
 
     renderPage(() => {
       if (path.startsWith('#/u/')) {
         renderUser(decodeURIComponent(path.slice(4)));
+        return;
+      }
+      // A daily lives at #/daily/<slug> — like a profile it highlights no nav tab,
+      // because it's somewhere you went, not one of the four places you live.
+      if (path.startsWith('#/daily/')) {
+        renderDaily(decodeURIComponent(path.slice(8)));
         return;
       }
       switch (path) {

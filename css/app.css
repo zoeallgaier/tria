@@ -136,6 +136,21 @@ body[data-ambient="publish"] .ambient {
   transform: translateZ(0);
 }
 
+/* A daily's page: the same full-screen wash, held at the ONE hue the daily wears
+   (the post type it asks for). Nothing tweens it — a daily doesn't change type
+   under you the way the composer does as you attach things — so it's a plain
+   custom property rather than a registered one, set by applyAmbient. */
+body[data-ambient="daily"] .ambient {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  background: radial-gradient(ellipse 120% 84% at 50% -18%,
+    color-mix(in srgb, var(--glow-daily, transparent) 30%, transparent), transparent 74%);
+  filter: saturate(1.4);
+  opacity: 1;
+  transform: translateZ(0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ambient { transition: none; }
   body[data-ambient="about"] .ambient { animation: none; }
@@ -567,6 +582,7 @@ main {
 .page.enter .seg-tabs, .page.leave .seg-tabs,
 .page.enter .masthead-search-field, .page.leave .masthead-search-field,
 .page.enter .push-ask, .page.leave .push-ask,
+.page.enter .daily-card, .page.leave .daily-card,
 .page.enter .account-card, .page.leave .account-card {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -1011,6 +1027,8 @@ main {
 .notif-list,
 .requests,
 .profile-shelf,
+.daily-lede,
+.daily-banner,
 .feed-empty { max-width: var(--feed-width); margin-inline: auto; }
 .view-sub {
   color: var(--muted);
@@ -3577,6 +3595,307 @@ button.poll-option:disabled { cursor: default; }
    the name starts wrapping beside its avatar. The denser wall wasn't worth the
    page leaving the measure every other page shares. */
 
+/* ── Dailies — the coloured card, and the page it opens ───────────────────────
+   A daily wears the colour of the post type it asks for, so a prompt that wants a
+   Frame is cyan all the way through: the card on Discover, the chip on an answer,
+   and the wash behind the page that card opens. That's the quintet doing
+   exactly the job it already has (five colours, five post types) rather than a
+   sixth colour meaning "daily" — the colour still tells you what to make.
+
+   COLOURED GLASS, and real glass this time. The material rule reserves frost for
+   what floats above content, which this does. The masonry tiles drop the blur
+   because a scrolling grid pays that bill per tile dozens of times over; this is
+   ONE card that sits still at the top of the page, so it can afford the
+   sample-and-blur that makes the material read.
+
+   The whole card is the tap (a stretched link over it) with Answer riding on top
+   as its own control: read the room, or go say your bit, and nothing in between. */
+.daily-card {
+  --daily: var(--type-note);
+  --daily-ink: var(--type-note-ink);
+  position: relative;
+  max-width: var(--feed-width);
+  /* 2rem below, not 1.2: this is a floating panel and the trending rail under it
+     is flat type, so the two need more air between them than two paragraphs
+     would. At 1.2rem the card also sat closer to the strip below it than to the
+     masthead above (2.6rem), which reads as the card belonging to the rail. It
+     belongs to neither: it's the page's headline, on its own. */
+  margin: 0 auto 2rem;
+  padding: 1rem 1.15rem 0.95rem;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--daily) 26%, var(--glass-bg));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid color-mix(in srgb, var(--daily-ink) 30%, transparent);
+  box-shadow: var(--lit-rim), 0 8px 22px rgba(0, 0, 0, 0.10);
+}
+/* The one place the type→colour map is written for dailies. Activities are absent
+   on purpose: a daily never asks for one (see the note above DAILIES in app.js). */
+.daily-card[data-type="note"],  .view--daily[data-type="note"],  .tag--daily[data-type="note"],  .daily-banner[data-type="note"]  { --daily: var(--type-note);  --daily-ink: var(--type-note-ink); }
+.daily-card[data-type="find"],  .view--daily[data-type="find"],  .tag--daily[data-type="find"],  .daily-banner[data-type="find"]  { --daily: var(--type-find);  --daily-ink: var(--type-find-ink); }
+.daily-card[data-type="photo"], .view--daily[data-type="photo"], .tag--daily[data-type="photo"], .daily-banner[data-type="photo"] { --daily: var(--type-photo); --daily-ink: var(--type-photo-ink); }
+.daily-card[data-type="poll"],  .view--daily[data-type="poll"],  .tag--daily[data-type="poll"],  .daily-banner[data-type="poll"]  { --daily: var(--type-poll);  --daily-ink: var(--type-poll-ink); }
+
+/* Dark mode: the pastel is a LIGHT colour, so the same 26% wash over a dark glass
+   fill lands as a milky panel rather than a tinted one. Less pigment, and the ink
+   twin is the pastel itself down here, so the border carries the hue instead. */
+@media (prefers-color-scheme: dark) {
+  .daily-card {
+    background: color-mix(in srgb, var(--daily) 15%, var(--glass-bg));
+    border-color: color-mix(in srgb, var(--daily) 34%, transparent);
+  }
+}
+
+/* No dot before the words. The card is a hue-filled panel; a hue-filled disc sat
+   on top of it said the same thing twice, and the second time is decoration. */
+.daily-kicker {
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
+  font-size: var(--kicker);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--daily-ink);
+  margin-bottom: 0.5rem;
+}
+.daily-sep { opacity: 0.45; margin: 0 0.3rem; }
+
+/* The prompt is the card. Serif, big enough to read as the page's headline and
+   small enough that a two-line question doesn't push the grid off the screen. */
+.daily-open { display: block; color: var(--text); }
+.daily-open::after {                  /* the stretched link: the whole card taps */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.daily-prompt {
+  display: block;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(1.5rem, 4.4vw, 1.95rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.daily-hint {
+  margin-top: 0.4rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Who has answered, and the way in. The faces are the honest version of a count
+   (you recognise people, you don't recognise a number), and the number beside
+   them is the one Discover allows besides the trending rail's — "12 answers" is
+   the difference between walking into a party and walking into an empty room. */
+.daily-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.95rem;
+}
+.daily-answered { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.daily-faces { display: flex; }
+.daily-face.avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+  border: 2px solid color-mix(in srgb, var(--daily) 30%, var(--bg));
+}
+.daily-face.avatar + .daily-face.avatar { margin-left: -0.5rem; }
+.daily-count { font-size: 0.82rem; color: var(--muted); }
+
+/* The invitation is TYPE, not a button. The card is already a filled coloured
+   object and a second filled object sitting inside it is what made a pill here
+   read as cheap — so this is the daily's own ink plus the go-arrow the tiles and
+   the tag rail already use, and no fill at all. The word matters as much as the
+   material: "Answer" is a command stacked on a question, which turns a prompt
+   into a worksheet. "Add yours" is an invitation, and the arrow does the going. */
+.daily-answer {
+  position: relative;                 /* rides above the stretched link */
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0.2rem 0;
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--daily-ink);
+  transition: opacity var(--dur-micro) var(--ease);
+}
+.daily-go { font-size: 1rem; transition: transform var(--dur-micro) var(--ease); }
+@media (hover: hover) {
+  .daily-answer:hover .daily-go { transform: translateX(2px); }
+}
+.daily-answer:active { opacity: 0.55; }
+/* Already answered (one each): the invitation is spent and nothing replaces it.
+   There's no "yours is in" line here — the faces and the count already moved when
+   you posted, and a card that narrates your own action back to you is talking
+   about the app instead of about the room. */
+
+/* On the daily's own page the invitation rides the kicker line, so it takes that
+   line's type wholesale: the same micro-caps at the same tracking. Caption left,
+   control right — the masthead's own arrangement, moved up a line. The arrow
+   drops the tracking (0.16em after a glyph is a trailing gap, not letter-spacing)
+   and sizes to the caps around it. */
+.daily-answer--inline {
+  padding: 0;
+  gap: 0.22rem;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.daily-answer--inline .daily-go { font-size: 0.8rem; letter-spacing: 0; }
+/* The standing half of the line, dimmed so the live half reads as the live half. */
+.daily-when { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) {
+  .daily-answer, .daily-go { transition: none; }
+}
+
+/* ── The daily's own page ─────────────────────────────────────────────────────
+   Discover held to one question: the prompt as the nameplate, the answers dealt
+   into the same masonry grid, and the daily's hue washing the whole page through
+   the ambient (see body[data-ambient="daily"]) so opening the card reads as
+   stepping into it. The prompt is a SENTENCE, so it can't take the display size a
+   one-word nameplate wears — it steps down to roughly a post headline. */
+/* The masthead's own clearance, for a prompt with no hint under it. */
+.view--daily .masthead { margin-bottom: 2.4rem; }
+/* More air under the back link than a profile gives it: there, it sits above a
+   card with its own border to push off. Here it's a small grey line directly
+   above a tracked caption in colour, and 1rem left the two reading as one stack
+   of small print with the page's question buried in it. */
+.view--daily .profile-back { margin-bottom: 1.7rem; }
+/* The hint belongs to the title, not to the page. The masthead's page-level gap
+   moves to the BOTTOM of the lede so the two sit as one block: 0.7rem between
+   them (the masthead's own padding, all that's left once the margin goes) and
+   the full clearance below. Before this they were 1.7rem apart and 1.9rem off
+   the grid, which left the caption floating exactly halfway between the question
+   it explains and the answers it doesn't. */
+.view--daily .masthead:has(+ .daily-lede) { margin-bottom: 0; }
+/* The status line is a row: "Daily · 6h left" left, the invitation right. */
+.view--daily .masthead-kicker {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--daily-ink);
+}
+.masthead-title--daily {
+  display: block;
+  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  line-height: 1.08;
+}
+/* Capped and centred with the masthead (it joins the shared content-block list
+   above), then inset to the same axis its type sits on. Both are needed: the cap
+   puts it in the same column, the inset lines its first letter up with the
+   nameplate's. Without the cap it ran the full width of the view and started
+   113px to the left of the title it captions. */
+.daily-lede {
+  margin-bottom: 2.6rem;
+  padding: 0 var(--inset);
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+/* Nothing sits beside the prompt: the invitation moved up onto the kicker line
+   (see .daily-answer--inline), which is where the rest of the small print about
+   the occasion already lives. The masthead row is the question alone. */
+
+/* ── The chip on an answer's own card ─────────────────────────────────────────
+   What a daily answer wears in the tag row instead of the `daily-<slug>` join
+   tag that actually carries it. Tags are words a person chose; a slug sitting
+   among them reads as metadata leaking into writing, and every answer on the
+   page ends up wearing a barcode. So the chip says the QUESTION, tinted in the
+   daily's hue, and links to everyone else's answers — which is what the slug
+   was standing in for, and a far better thing to be able to tap.
+
+   It's a .tag first, so it keeps the row's shape; the prompt truncates rather
+   than wrapping a chip to three lines. */
+.tag--daily {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--daily-ink);
+  border-color: color-mix(in srgb, var(--daily-ink) 32%, transparent);
+  background: color-mix(in srgb, var(--daily) 18%, transparent);
+}
+.tag-daily-cap {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+.tag-daily-q {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .tag--daily:hover { color: var(--daily-ink); border-color: color-mix(in srgb, var(--daily-ink) 60%, transparent); }
+}
+
+/* ── The composer, answering ──────────────────────────────────────────────────
+   The daily's masthead in miniature, directly under the composer's: the tracked
+   caption over the question in serif, in that daily's ink. Arriving from the card
+   then reads as one continuous surface — the wash is already the right colour,
+   the nameplate names what you're making, and this says what you're answering, in
+   the same voice the page you just left used to ask it.
+
+   It lives OUTSIDE the form and takes the masthead's own inset. The composer's
+   fields sit var(--inset) further left on purpose (a box outdented against the
+   type looks right; the boxes ARE the left edge), but a line of type hanging
+   under a title has to start where the title starts. Same rule that put
+   .daily-lede on the nameplate's axis, and it joins the same two lists. */
+.daily-banner {
+  --daily: var(--type-note);
+  --daily-ink: var(--type-note-ink);
+  padding: 0 var(--inset);
+  margin-bottom: 2rem;
+}
+/* Pulled up tight to the nameplate: this captions it, so the masthead's full
+   2.6rem clearance would leave the caption floating between two things. */
+.masthead:has(+ .daily-banner) { margin-bottom: 0.9rem; }
+.daily-banner-cap {
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
+  font-size: var(--kicker);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--daily-ink);
+  margin-bottom: 0.4rem;
+}
+.daily-banner-prompt {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(1.25rem, 3.4vw, 1.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+/* Not an answer any more: the type on the page stopped matching the type the
+   prompt asked for (see dailyAccepts). The question doesn't vanish — you may
+   still be about to go back to it, and a banner that disappeared would read as
+   the app losing your place — it goes grey and its caption names the way back.
+   Draining the colour is the whole signal: the ink was the only thing tying this
+   line to the coloured page you came from, and without it this is just a note
+   about a question you're no longer answering. The tween matches the ambient
+   wash's own colour shift, so the banner and the page turn together. */
+.daily-banner--off .daily-banner-cap,
+.daily-banner--off .daily-banner-prompt { color: var(--muted); }
+.daily-banner-cap,
+.daily-banner-prompt { transition: color var(--dur-move) var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .daily-banner-cap, .daily-banner-prompt { transition: none; }
+}
+
 /* ── A profile's frame wall ─────────────────────────────────────────────
    Frames is the one row on a profile's dial that changes the LAYOUT instead of
    just narrowing the column: that person's photographs, dealt by the same
@@ -5446,7 +5765,7 @@ button.poll-option:disabled { cursor: default; }
   /* Already inset by .view here, so the type-axis padding comes back off. .dtags
      rides with them: on a phone the rail, the title and the grid all sit on the
      view's own inset and no second one is wanted. */
-  .masthead, .filters, .dtags { padding-inline: 0; }
+  .masthead, .filters, .dtags, .daily-lede, .daily-banner { padding-inline: 0; }
   /* The profile shelf rides with them for the same reason — its caption is on
      the view's own inset here, and its rule runs the full width of the column
      (the shelf keeps the block padding, so only the inline half is dropped). */
