@@ -127,6 +127,31 @@ exempt). Voice is playful but not trying-too-hard.
   (the quintet is reserved for post types) and its masthead dot is ink. Search
   under it still reaches post text via `saidBy`, so hunting by interest works on a
   page of faces.
+- **A profile carries the same dial, and Frames is a wall.** Between the identity
+  card and the posts sits the **profile shelf** (`.profile-shelf`): a tracked
+  micro-caps caption naming the pane below, with `filterBtnEl` at its right — the
+  masthead's own arrangement borrowed for a page whose masthead is a photograph.
+  Flat editorial, never glass (it captions content; a second frosted bar under
+  the frosted card is two panes with nothing between). Three rules make it a
+  profile filter rather than a copy of Home's: its rows are **derived from what
+  that person actually posted** (All + only the present types, in `FILTERS`
+  order — no dead ends, no People row), the whole shelf is **absent** when
+  there's nothing to narrow (one type and one layout isn't a choice; a single
+  photo still earns it), and **Frames swaps the layout** — that person's
+  photographs dealt into the same masonry grid Discover uses, at their real
+  aspect ratios. That ragged edge is the point: a square contact sheet flattens
+  a portrait and a landscape into one brick, and Tria stores photos uncropped so
+  it doesn't have to. A wall tile is the **face and nothing else** (no foot, no
+  byline, no counts — every tile is the same person), and it carries the real
+  `?p=<id>` deep link, so the wall is an *index into* a long profile: a tap drops
+  back into the post column with that card spotlighted. `profileFilter` resets
+  whenever you land on a different person, and a pending spotlight or open editor
+  always forces the column. Both grids share `dealMasonry`, `mediaFaceEl` and
+  `wireFrameFades` at module scope — one grid, two callers, no second set of
+  breakpoints. (`.pgrid--frames` needs an explicit `width: 100%`: `.pgrid`
+  centres with `margin-inline: auto`, and an auto cross-axis margin cancels the
+  stretch inside `#feed`'s flex column, which collapsed every `flex: 1 1 0`
+  column to nothing.)
 - **`users.private`** (defaults true, so new signups open closed) no longer gates
   reads at all. It does three things: picks the composer's default audience (a
   public account's posts default to `public`, activities stay `circle`-first),
@@ -153,11 +178,11 @@ cards — `blur(24–30px)`). Content lists — the feed, comments, your profile
 circle roster — stay flat editorial rows. The Friends *modal* (a popover) is
 glass; a *roster* of people (your profile's circle) is flat — that split is
 correct, not inconsistent (mirrors iOS: lock-screen notifications are glass,
-Contacts rows are not). **Discover's grid is the one glass-minus-blur surface**:
-its tiles float above the page so the material is right, but a `backdrop-filter`
-is per-element compositor work and a scrolling masonry grid is exactly where
-that bill lands, so they keep the fill + hairline + lit rim + float shadow and
-drop only the sample-and-blur. On phones the Updates view
+Contacts rows are not). **The masonry grid is the one glass-minus-blur surface**
+(Discover's, and a profile's frame wall): its tiles float above the page so the
+material is right, but a `backdrop-filter` is per-element compositor work and a
+scrolling masonry grid is exactly where that bill lands, so they keep the fill +
+hairline + lit rim + float shadow and drop only the sample-and-blur. On phones the Updates view
 switcher (seg-tabs) is docked chrome, not an inline row: it floats just above
 the bottom nav and *rises up from behind it* when a page becomes active (router
 tucks it while the page fades in, releases it on settle). The composer's
@@ -203,7 +228,10 @@ bitmaps decoding under them — the exact pile-up behind the iOS WebKit crash. T
 entrance itself is not gone, it is scoped: it plays on a **discrete act**
 (landing, a filter, a tag, clearing search) and stays out of **typing** and
 **background re-pulls**, via `paint({ stage })` → `layoutGrid(fresh)` →
-`.pgrid--settled`.
+`.pgrid--settled`. A profile's frame wall inherits all of it for free: its tiles
+are `.ptile`, so the freeze already covers them, and `paintPosts(stage)` →
+`dealMasonry(fresh)` is the same contract (a filter pick stages, a re-deal on
+resize parks).
 
 **Share is the tray, and the header tray shares.** `ICONS.send` is the
 arrow-out-of-a-box the OS itself draws for share, not an envelope (an envelope

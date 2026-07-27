@@ -3234,6 +3234,103 @@
     });
   }
 
+  /* ── A frame's face, and its settle ───────────────────────────────────────────
+     The photo (or a video's poster still) at its own aspect ratio, which is what
+     gives both masonry grids their ragged edge in the first place. Same
+     reserve-then-settle trick the feed uses — the box holds the media's real
+     shape filled with its average colour (the `tint` column) and the bitmap eases
+     in over it, so nothing reflows and nothing pops. A video shows its play mark
+     but never plays inside a grid: autoplaying clips on a surface you're only
+     browsing is both a data bill and a tone we don't want.
+
+     Deliberately NO type glyph over it: a photo announces itself as a photo, so
+     the badge would be labelling the one face that never needed a label. */
+  function mediaFaceEl(p, label) {
+    const isVideo = isVideoUrl(p.image);
+    const src = isVideo ? p.poster : p.image;
+    const d = imageDimsFromUrl(p.image);
+    const style = `aspect-ratio:${d ? frameRatio(d.w, d.h) : '1 / 1'};` +
+      (p.tint ? `--ph-fill:${p.tint};` : '');
+    return `<div class="ptile-face ptile-face--media" style="${style}">` +
+        (src ? `<img src="${esc(src)}" alt="${esc(label || 'Frame')}" ` +
+               `loading="lazy" decoding="async">` : '') +
+        (isVideo ? `<span class="ptile-play" aria-hidden="true">${svgIcon('play', 'ptile-play-ico')}</span>` : '') +
+      `</div>`;
+  }
+
+  /* Photos settle rather than pop: the tinted box already holds the right shape,
+     so the bitmap just fades in over it once it's decoded. A photo that never
+     arrives drops out and leaves the tint behind, which is a calmer failure than
+     a broken-image glyph in the middle of a grid. */
+  function wireFrameFades(root) {
+    root.querySelectorAll('.ptile-face--media img').forEach(img => {
+      if (img.complete && img.naturalWidth) { img.classList.add('is-loaded'); return; }
+      img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
+      img.addEventListener('error', () => img.remove(), { once: true });
+    });
+  }
+
+  /* ── The masonry deal ─────────────────────────────────────────────────────────
+     Shared by the two grids in the app: Discover's wall of people, and a
+     profile's wall of frames. Both hand this a `.pgrid` holding a flat run of
+     `.ptile`s and get real columns back.
+
+     Deal the tiles into real columns, ROW-MAJOR: newest across the top, then
+     the next row. CSS `columns` can't do this — it fills one column to the
+     bottom before starting the next, which turns a chronological list into N
+     parallel timelines side by side, the second one starting dozens of posts
+     back. Both callers are in time order (rule 5 in renderDiscover; a profile
+     is newest-first), and that layout would hide the very thing the order fixes.
+
+     Every tile starts in column one, because the columns are `flex: 1 1 0` and
+     therefore already at final WIDTH from the first frame — so the heights read
+     here are the heights we'll get, text wrapping included. Then each tile goes
+     to whichever column is currently shortest, which is row-major while the
+     rows are even and self-corrects when a tall photo lands. One forced layout
+     read, in the same task as the writes, so nothing paints mid-shuffle.
+
+     The deal hands us the entrance stagger for free, so we take it here rather
+     than measuring again: a tile's top IS the running height of the column it
+     lands in, and its column index stands in for left, so sorting by (top,
+     column) gives the reading order exactly. Tiles must arrive by ROW — a
+     stagger in DOM order would light one whole column and then the next, which
+     reads as several loads instead of one grid landing.
+
+     `fresh` is the entrance. Clearing the grid detaches every tile, which
+     cancels and restarts its CSS animation on re-insert — right on a repaint,
+     wrong on a rotate, where the entrance already played and replaying the
+     whole page because the phone turned is just noise. So a re-layout parks
+     the animation instead of re-timing it. */
+  function dealMasonry(grid, fresh) {
+    if (!grid) return;
+    const tiles = [...grid.querySelectorAll('.ptile')];
+    if (!tiles.length) return;
+    const n = Math.max(1, parseInt(getComputedStyle(grid).getPropertyValue('--cols'), 10) || 1);
+    grid.textContent = '';
+    const cols = Array.from({ length: n }, () => {
+      const c = document.createElement('div');
+      c.className = 'pgrid-col';
+      grid.append(c);
+      return c;
+    });
+    tiles.forEach(t => cols[0].append(t));
+    const gap = parseFloat(getComputedStyle(tiles[0]).marginBottom) || 0;
+    const h = tiles.map(t => t.offsetHeight + gap);      // the one read pass
+    const run = new Array(n).fill(0);
+    const placed = tiles.map((t, i) => {
+      let k = 0;
+      for (let j = 1; j < n; j++) if (run[j] < run[k]) k = j;
+      if (k) cols[k].append(t);                          // k === 0 is already home
+      const at = { t, top: run[k], col: k };
+      run[k] += h[i];
+      return at;
+    });
+    grid.classList.toggle('pgrid--settled', !fresh);
+    if (!fresh) return;
+    placed.sort((a, b) => a.top - b.top || a.col - b.col)
+      .forEach((p, i) => { p.t.style.animationDelay = staggerDelay(i); });
+  }
+
   /* ── Profile (own account or any friend, at #/u/username) ─────────────────────
      One view renders both: the signed-in identity + their posts as a single-
      author column. Your own profile carries a Log out; a friend's carries a
@@ -3255,6 +3352,20 @@
     const btn = document.getElementById('unblock');
     if (btn) btn.addEventListener('click', () => { Blocks.remove(u.username); renderUser(u.username); });
   }
+
+  /* The profile's own view filter — the same dial Home and Discover carry, in
+     the same place relative to the page's nameplate, just narrowing ONE person's
+     posts. Two things make it worth having here rather than being a copy of
+     Home's: its rows are derived from what that person has actually posted (a
+     dial offering Polls on a profile with no polls is a control that lies), and
+     Frames doesn't narrow the column, it replaces it with a masonry wall of that
+     person's photographs (see the frame wall in renderUser). `profileFilterFor`
+     remembers whose profile the choice was made on, so it resets the moment you
+     land on someone else: arriving at a stranger's page already in a mode their
+     posts can't fill is nobody's idea of a profile. */
+  let profileFilter = 'all';
+  let profileFilterFor = null;
+  let profileResizeOff = null;   // drops the frame wall's resize listener when the view goes
 
   function renderUser(username) {
     const u = Store.user(username);
@@ -3284,6 +3395,23 @@
       (!locked || p.audience === 'public'));
     const friendStatus = isSelf ? null : Store.friendStatus(u.username);
     const areFriends = friendStatus === 'friends';
+
+    // The dial's rows: All, then only the types this person has actually posted,
+    // in FILTERS order. There's no People row here (a profile is one person) and
+    // no dead ends, which is the whole reason the dial takes its list as an
+    // argument. A profile with nothing but notes gets no control at all — one
+    // type and one layout isn't a choice — but a single photo earns one on its
+    // own, because Frames isn't a narrowing, it's the wall.
+    const types = new Set(list.map(p => p.type));
+    const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))];
+    const canFilter = filters.length > 2 || types.has('photo');
+    if (profileFilterFor !== u.username) { profileFilter = 'all'; profileFilterFor = u.username; }
+    // A spotlight is aimed at one CARD — a copied link, an Updates row, an Edit
+    // handed over from the feed — so it always lands in the post column.
+    if (spotlightPost || (isSelf && editingId)) profileFilter = 'all';
+    // The world moves under a held filter (their last frame gets deleted while
+    // you're standing in the wall), so re-check rather than trust it.
+    if (!canFilter || !filters.some(f => f.key === profileFilter)) profileFilter = 'all';
 
     // One inline metadata line on the identity's left axis: "N posts · N friends".
     // Friend COUNT is public (same on your card and anyone else's), but WHO those
@@ -3378,6 +3506,23 @@
     const back = isSelf ? '' : (() => { const b = backTarget();
       return `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>`; })();
 
+    // The seam between the identity and the posts: a quiet caption naming what
+    // the pane below is, with the same sliders dial at its right. It's the
+    // masthead's own arrangement (nameplate left, filter right) borrowed for a
+    // page whose masthead is a photograph — set as flat editorial type, not
+    // chrome, because it captions content rather than floating above it. Absent
+    // entirely when there's nothing to narrow, so a quiet profile reads exactly
+    // as it always did.
+    const shelfLabel = () => profileFilter === 'all' ? 'All posts'
+      : (FILTERS.find(f => f.key === profileFilter) || {}).label || 'All posts';
+    const shelf = canFilter
+      ? `<div class="profile-shelf">` +
+          `<p class="profile-shelf-cap">${esc(shelfLabel())}</p>` +
+          filterBtnEl('profile-filter-btn', profileFilter,
+            isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`) +
+        `</div>`
+      : '';
+
     view.innerHTML =
       `<section class="view">` +
         back +
@@ -3410,6 +3555,7 @@
             `</div>` +
           `</div>` +
         `</div>` +
+        shelf +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
@@ -3429,15 +3575,64 @@
         `<p class="profile-locked-sub">Add them and, once they add you back, the rest of their posts show up here.</p>` +
       `</div>`;
 
-    if (locked && !list.length) {
-      // Private profile, seen by an outsider, with nothing public to show.
-      feedEl.innerHTML = lockedNudge(false);
-    } else if (!list.length) {
-      feedEl.innerHTML = `<p class="feed-empty">` +
-        `${isSelf ? 'Nothing posted yet. Whenever you’re ready.' : 'Nothing here yet.'}</p>`;
-    } else {
+    /* ── The frame wall ───────────────────────────────────────────────────────
+       Frames is the one dial row that changes the LAYOUT rather than just
+       narrowing the column: this person's photographs, dealt into the same
+       masonry grid Discover uses, at their own aspect ratios. That ragged edge
+       is the whole point — a square-cropped contact sheet flattens a portrait
+       and a wide landscape into the same brick, which is what every other
+       platform's profile grid does and precisely the thing Tria doesn't (photos
+       are stored uncropped; only avatars crop).
+
+       A tile is the face and nothing else: no foot, no byline, no caption, no
+       counts. Discover's tiles carry a person because the grid is a room full of
+       strangers; here every tile is the same person and repeating them forty
+       times down the page would be forty labels saying what the card at the top
+       already said.
+
+       Tapping one is the real deep link (?p=<id>, the same one Copy-link mints),
+       so it drops back into the post column with that card spotlighted — the
+       wall is an INDEX into a long profile, not a dead-end lightbox, and you
+       land on the thing with its caption, likes and comments attached. */
+    const postRoute = isSelf ? '#/profile' : `#/u/${encodeURIComponent(u.username)}`;
+    const frameTile = (p) => {
+      const cap = notePlain(p.note) || p.title || '';
+      return `<a class="ptile ptile--frame" href="${postRoute}?p=${encodeURIComponent(p.id)}" ` +
+          `aria-label="${esc(cap || 'Frame')}">` +
+          mediaFaceEl(p, cap) +
+        `</a>`;
+    };
+
+    /* Paint the posts pane for the current filter, in place. The identity card
+       above never rebuilds, so picking a filter doesn't flash the photograph or
+       re-run the ambient wash — the page stays exactly where it was and only the
+       thing you asked to change changes. `stage` is the grid entrance, taken on
+       a discrete act (landing, picking a row) and parked on a re-deal, same
+       contract as Discover's. */
+    const paintPosts = (stage) => {
+      feedEl.textContent = '';
+      const shown = profileFilter === 'all' ? list : list.filter(p => p.type === profileFilter);
+      if (locked && !shown.length) {
+        // Private profile, seen by an outsider, with nothing public to show.
+        feedEl.innerHTML = lockedNudge(false);
+        return;
+      }
+      if (!shown.length) {
+        feedEl.innerHTML = `<p class="feed-empty">` +
+          (profileFilter !== 'all' ? `No ${TYPE_PLURAL[profileFilter]} here yet.`
+            : isSelf ? 'Nothing posted yet. Whenever you’re ready.'
+            : 'Nothing here yet.') + `</p>`;
+        return;
+      }
+      if (profileFilter === 'photo') {
+        feedEl.innerHTML = `<div class="pgrid pgrid--frames">${shown.map(frameTile).join('')}</div>`;
+        if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
+        dealMasonry(feedEl.querySelector('.pgrid'), stage);
+        wireFrameFades(feedEl);
+        return;
+      }
       const frag = document.createDocumentFragment();
-      list.forEach((p, i) => {
+      shown.forEach((p, i) => {
         const card = (isSelf && p.id === editingId)
           ? makeEditCard(p)
           : makeCard(p, { solo: true });
@@ -3447,7 +3642,10 @@
       feedEl.appendChild(frag);
       // Their public posts are shown; tell an outsider the circle holds more.
       if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
-    }
+      wirePosts();
+    };
+
+    paintPosts(true);
 
     // An Updates row or a Discover tile targeted this post: bring it into view
     // with a brief wash, so the tap visibly lands on the thing you asked for.
@@ -3472,41 +3670,91 @@
       else scrollTop(false);   // target filtered out — fall back to the top
     }
 
-    const editForm = feedEl.querySelector('.edit-form');
-    if (editForm) {
-      // Snapshot the fields exactly as rendered. Save stays disabled until a field
-      // diverges from that baseline (and re-disables if the edit is reverted), so it
-      // can never commit a no-op; Cancel sits beside it the whole time as the way
-      // back out, rather than being the same button wearing a different name.
-      const cancelBtn = editForm.querySelector('.edit-cancel');
-      const saveBtn = editForm.querySelector('.edit-save');
-      const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea, [contenteditable]'))
-        .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
-      const baseline = snapshot();
-      const dirty = () => snapshot() !== baseline;
-      const syncSave = () => { saveBtn.disabled = !dirty(); };
-      editForm.addEventListener('input', syncSave);
-      editForm.addEventListener('change', syncSave);
-      cancelBtn.addEventListener('click', () => { editingId = null; renderUser(username); });
-      editForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        if (dirty()) submitEdit(editingId, username);   // Enter saves, but never a no-op
-      });
-      const eNote = editForm.querySelector('#e-note');
-      wireMentions(eNote);
-      if (eNote && eNote.isContentEditable) wireRichEditor(eNote, editForm.querySelector('#e-note-count'));
-      // Don't auto-focus on touch: it yanks up the keyboard and the viewport
-      // jumps to center the field, which reads as a jarring lurch. Let the tap
-      // that opens the field raise the keyboard instead. Desktop still autofocuses.
-      if (window.matchMedia('(hover: hover) and (pointer: fine)').matches)
-        editForm.querySelector('#e-note')?.focus();
+    // Everything the post COLUMN needs hooked up. Called by paintPosts rather
+    // than once at the end of the render, because the column is now rebuilt
+    // whenever the dial moves and its wiring has to come back with it. (The
+    // frame wall needs none of it: a tile is a link and nothing else.)
+    function wirePosts() {
+      const editForm = feedEl.querySelector('.edit-form');
+      if (editForm) {
+        // Snapshot the fields exactly as rendered. Save stays disabled until a field
+        // diverges from that baseline (and re-disables if the edit is reverted), so it
+        // can never commit a no-op; Cancel sits beside it the whole time as the way
+        // back out, rather than being the same button wearing a different name.
+        const cancelBtn = editForm.querySelector('.edit-cancel');
+        const saveBtn = editForm.querySelector('.edit-save');
+        const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea, [contenteditable]'))
+          .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
+        const baseline = snapshot();
+        const dirty = () => snapshot() !== baseline;
+        const syncSave = () => { saveBtn.disabled = !dirty(); };
+        editForm.addEventListener('input', syncSave);
+        editForm.addEventListener('change', syncSave);
+        cancelBtn.addEventListener('click', () => { editingId = null; renderUser(username); });
+        editForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          if (dirty()) submitEdit(editingId, username);   // Enter saves, but never a no-op
+        });
+        const eNote = editForm.querySelector('#e-note');
+        wireMentions(eNote);
+        if (eNote && eNote.isContentEditable) wireRichEditor(eNote, editForm.querySelector('#e-note-count'));
+        // Don't auto-focus on touch: it yanks up the keyboard and the viewport
+        // jumps to center the field, which reads as a jarring lurch. Let the tap
+        // that opens the field raise the keyboard instead. Desktop still autofocuses.
+        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches)
+          editForm.querySelector('#e-note')?.focus();
+      }
+      feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          activeFilter = 'all';
+          activeTag = btn.dataset.tag;
+          location.hash = '#/';
+        }));
     }
-    feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
-      btn.addEventListener('click', () => {
-        activeFilter = 'all';
-        activeTag = btn.dataset.tag;
-        location.hash = '#/';
+
+    // The dial. Picking a row repaints only the pane below the card and relabels
+    // the shelf in place — no page re-render, so the identity, its wash and your
+    // scroll position all stay exactly where they were. An open inline editor is
+    // dropped the same way navigating away drops it: the row you just picked is
+    // the newer intent.
+    const shelfCap = view.querySelector('.profile-shelf-cap');
+    view.querySelector('#profile-filter-btn')
+      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
+        current: profileFilter,
+        filters,
+        label: isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`,
+        onPick: (key) => {
+          if (key === profileFilter) return;
+          profileFilter = key;
+          profileFilterFor = u.username;
+          editingId = null;
+          syncFilterBtn('profile-filter-btn', profileFilter);
+          if (shelfCap) shelfCap.textContent = shelfLabel();
+          paintPosts(true);
+        },
       }));
+
+    // JS deals the frame wall's columns, so a WIDTH change is ours to answer —
+    // the same contract as Discover's, and it watches width and nothing else for
+    // the same reason: on iOS a `resize` is mostly a HEIGHT event (the keyboard
+    // rising, Safari's URL bar collapsing as you scroll), and re-dealing then is
+    // a forced reflow of the whole wall for an answer that cannot have changed.
+    profileResizeOff?.();
+    let sizeTimer = 0, lastW = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastW) return;
+      lastW = window.innerWidth;
+      clearTimeout(sizeTimer);
+      sizeTimer = setTimeout(() => {
+        if (feedEl.isConnected) dealMasonry(feedEl.querySelector('.pgrid'), false);
+      }, 120);
+    };
+    window.addEventListener('resize', onResize, { passive: true });
+    profileResizeOff = () => {
+      clearTimeout(sizeTimer);
+      window.removeEventListener('resize', onResize);
+      profileResizeOff = null;
+    };
 
     const friendBtn = document.getElementById('friend');
     if (friendBtn) friendBtn.addEventListener('click', async () => {
@@ -4249,28 +4497,10 @@
 
     /* ── The three faces ─────────────────────────────────────────────────── */
 
-    // A Frame: the photo (or a video's poster still) at its own aspect ratio,
-    // which is what gives the grid its ragged masonry edge in the first place.
-    // Same reserve-then-settle trick the feed uses — the box holds the media's
-    // real shape filled with its average colour (the `tint` column) and the
-    // bitmap eases in over it, so nothing reflows and nothing pops. A video
-    // shows its play mark but never plays here: autoplaying strangers' clips on
-    // a browse page is both a data bill and a tone we don't want.
-    // Deliberately NO type glyph: a photo announces itself as a photo, so the
-    // badge would be labelling the one face that never needed a label. The say
-    // faces keep theirs because there the glyph is doing real work.
-    const mediaFace = (p) => {
-      const isVideo = isVideoUrl(p.image);
-      const src = isVideo ? p.poster : p.image;
-      const d = imageDimsFromUrl(p.image);
-      const style = `aspect-ratio:${d ? frameRatio(d.w, d.h) : '1 / 1'};` +
-        (p.tint ? `--ph-fill:${p.tint};` : '');
-      return `<div class="ptile-face ptile-face--media" style="${style}">` +
-          (src ? `<img src="${esc(src)}" alt="${esc(said(p) || 'Frame')}" ` +
-                 `loading="lazy" decoding="async">` : '') +
-          (isVideo ? `<span class="ptile-play" aria-hidden="true">${svgIcon('play', 'ptile-play-ico')}</span>` : '') +
-        `</div>`;
-    };
+    // A Frame: the shared media face (see mediaFaceEl), captioned by whatever
+    // the post says so the alt text is the person's own words. The say faces
+    // keep their type glyph because there the glyph is doing real work.
+    const mediaFace = (p) => mediaFaceEl(p, said(p));
 
     // What a post SAYS, in one line: its caption, and its title only when there
     // isn't a caption. One rule for all five types, because every type carries a
@@ -4573,74 +4803,9 @@
         .concat(quiet.map(u => ({ user: u, post: null })));
     };
 
-    // Photos settle rather than pop: the tinted box already holds the right
-    // shape, so the bitmap just fades in over it once it's decoded. A photo that
-    // never arrives drops out and leaves the tint behind, which is a calmer
-    // failure than a broken-image glyph in the middle of the grid.
-    const wireFaces = () => {
-      bodyEl.querySelectorAll('.ptile-face--media img').forEach(img => {
-        if (img.complete && img.naturalWidth) { img.classList.add('is-loaded'); return; }
-        img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
-        img.addEventListener('error', () => img.remove(), { once: true });
-      });
-    };
+    const wireFaces = () => wireFrameFades(bodyEl);
 
-    // Deal the tiles into real columns, ROW-MAJOR: newest across the top, then
-    // the next row. CSS `columns` can't do this — it fills one column to the
-    // bottom before starting the next, which turns a chronological list into N
-    // parallel timelines side by side, the second one starting dozens of posts
-    // back. Since rule 5 puts this page in time order, that layout would hide
-    // the very thing the order fixes.
-    //
-    // Every tile starts in column one, because the columns are `flex: 1 1 0` and
-    // therefore already at final WIDTH from the first frame — so the heights read
-    // here are the heights we'll get, text wrapping included. Then each tile goes
-    // to whichever column is currently shortest, which is row-major while the
-    // rows are even and self-corrects when a tall photo lands. One forced layout
-    // read, in the same task as the writes, so nothing paints mid-shuffle.
-    //
-    // The deal hands us the entrance stagger for free, so we take it here rather
-    // than measuring again: a tile's top IS the running height of the column it
-    // lands in, and its column index stands in for left, so sorting by (top,
-    // column) gives the reading order exactly. Tiles must arrive by ROW — a
-    // stagger in DOM order would light one whole column and then the next, which
-    // reads as several loads instead of one grid landing.
-    //
-    // `fresh` is the entrance. Clearing the grid detaches every tile, which
-    // cancels and restarts its CSS animation on re-insert — right on a repaint,
-    // wrong on a rotate, where the entrance already played and replaying the
-    // whole page because the phone turned is just noise. So a re-layout parks
-    // the animation instead of re-timing it.
-    const layoutGrid = (fresh) => {
-      const grid = bodyEl.querySelector('.pgrid');
-      if (!grid) return;
-      const tiles = [...grid.querySelectorAll('.ptile')];
-      if (!tiles.length) return;
-      const n = Math.max(1, parseInt(getComputedStyle(grid).getPropertyValue('--cols'), 10) || 1);
-      grid.textContent = '';
-      const cols = Array.from({ length: n }, () => {
-        const c = document.createElement('div');
-        c.className = 'pgrid-col';
-        grid.append(c);
-        return c;
-      });
-      tiles.forEach(t => cols[0].append(t));
-      const gap = parseFloat(getComputedStyle(tiles[0]).marginBottom) || 0;
-      const h = tiles.map(t => t.offsetHeight + gap);      // the one read pass
-      const run = new Array(n).fill(0);
-      const placed = tiles.map((t, i) => {
-        let k = 0;
-        for (let j = 1; j < n; j++) if (run[j] < run[k]) k = j;
-        if (k) cols[k].append(t);                          // k === 0 is already home
-        const at = { t, top: run[k], col: k };
-        run[k] += h[i];
-        return at;
-      });
-      grid.classList.toggle('pgrid--settled', !fresh);
-      if (!fresh) return;
-      placed.sort((a, b) => a.top - b.top || a.col - b.col)
-        .forEach((p, i) => { p.t.style.animationDelay = staggerDelay(i); });
-    };
+    const layoutGrid = (fresh) => dealMasonry(bodyEl.querySelector('.pgrid'), fresh);
 
     // Build the grid for the current query + filter. A grid has no per-tile
     // reconciliation the way the feed does, so a repaint is a full rebuild, and
@@ -7648,6 +7813,8 @@
     // Discover's grid is laid out by JS, so it keeps a resize listener alive.
     // Drop it on the way out; renderDiscover re-arms one on the way back in.
     if (path !== '#/discover') discoverResizeOff?.();
+    // A profile's frame wall is the same deal, so it keeps the same listener.
+    if (!path.startsWith('#/u/') && path !== '#/profile') profileResizeOff?.();
 
     renderPage(() => {
       if (path.startsWith('#/u/')) {

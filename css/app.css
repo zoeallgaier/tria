@@ -1010,6 +1010,7 @@ main {
 .account,
 .notif-list,
 .requests,
+.profile-shelf,
 .feed-empty { max-width: var(--feed-width); margin-inline: auto; }
 .view-sub {
   color: var(--muted);
@@ -3576,6 +3577,37 @@ button.poll-option:disabled { cursor: default; }
    the name starts wrapping beside its avatar. The denser wall wasn't worth the
    page leaving the measure every other page shares. */
 
+/* ── A profile's frame wall ─────────────────────────────────────────────
+   Frames is the one row on a profile's dial that changes the LAYOUT instead of
+   just narrowing the column: that person's photographs, dealt by the same
+   dealMasonry into the same .pgrid Discover uses. So it inherits everything
+   above — the column count, the gaps, the tile material, the breakpoints. Three
+   is still the ceiling and the 681–899 sidebar band still drops back to two;
+   there is no second set of rules to keep in sync.
+
+   Tiles keep their real aspect ratios, and that IS the feature. A square-cropped
+   contact sheet flattens a portrait and a wide landscape into the same brick,
+   which is what every other platform's profile grid does and precisely what Tria
+   stores photos uncropped to avoid (only avatars crop). The ragged edge is the
+   photographs being themselves.
+
+   A tile is the face and nothing else — no foot, no byline, no caption, no
+   counts. Discover's tiles carry a person because that grid is a room full of
+   strangers; here every tile is the same person, and repeating them down the
+   page would be forty labels saying what the card at the top already said. So
+   there is barely a rule to write: dropping .ptile-foot from the markup is the
+   whole design, and .ptile's own clip, hairline, lit rim and float shadow frame
+   the photograph on their own. */
+/* The one rule the wall needs of its own, and it's a flexbox trap rather than a
+   design decision: .pgrid centres itself with `margin-inline: auto`, which is
+   free inside Discover's block-level body but lands here inside #feed, a FLEX
+   column. An auto margin on the cross axis cancels the default stretch, so the
+   grid shrink-wrapped its content — and since .pgrid-col is `flex: 1 1 0`, its
+   content had no width to wrap, which collapsed every column to nothing and
+   every aspect-ratio face with it. Take the full column back explicitly; the
+   feed is already capped at --feed-width, so this centres on the same axis. */
+.pgrid--frames { width: 100%; margin-top: 0.15rem; }
+
 /* A private profile, seen by an outsider: the posts column is replaced by a
    quiet, centred nudge toward adding them. Flat editorial (content, not glass),
    in the same muted register as .feed-empty. */
@@ -3626,6 +3658,50 @@ button.poll-option:disabled { cursor: default; }
 /* Their posts sit below the card as a single-author column, with a clear gap so
    the card reads as its own header, not the top of the feed. */
 .account + .feed { margin-top: 2.4rem; }
+
+/* ── The profile shelf ────────────────────────────────────────────────────────
+   The seam between the identity card and the posts: a caption naming the pane
+   below it, with the type dial at the far right. That's the masthead's own
+   arrangement (nameplate left, filter right) borrowed for a page whose masthead
+   is a photograph — so the caption takes the same tracked micro-caps the kicker
+   and Discover's "TRENDING" wear, and the control is literally .masthead-filter,
+   hue dot and all. One idiom, three pages.
+
+   Flat editorial, deliberately NOT glass. It captions the content below rather
+   than floating above it, and a second frosted bar tucked under the frosted
+   identity card would be two panes of glass stacked with nothing in between. A
+   hairline does the parting instead, the same rule the feed's own cards sit on.
+
+   It renders only when there's something to narrow (see renderUser), so a quiet
+   profile still runs its card straight into its posts, exactly as before. When
+   it IS there it takes over the gap from .account + .feed, which is why the
+   margins below are asymmetric: the long breath stays above the shelf, and the
+   posts sit close under their own caption. */
+.account + .profile-shelf { margin-top: 2.2rem; }
+.profile-shelf {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.1rem;
+  padding-inline: var(--inset);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+/* The dial is a 40px disc on a ~17px line, so it sets the row height and would
+   otherwise push the hairline miles off the caption. Half its overhang is taken
+   back top and bottom (the tap target stays 40px — only the box it reserves
+   shrinks), and the 8px nudge past --inset is the same optical alignment
+   .masthead-row gives its own copy. */
+.profile-shelf > .masthead-filter { margin-block: -0.55rem; margin-right: -8px; }
+.profile-shelf-cap {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* The shelf replaces the card-to-feed gap when it's present. */
+.profile-shelf + .feed { margin-top: 0; }
 
 /* The pre-friend tie sits at the foot of the identity column, on the same left
    axis as everything above it. (Your own card has no in-flow action — Share +
@@ -5371,6 +5447,15 @@ button.poll-option:disabled { cursor: default; }
      rides with them: on a phone the rail, the title and the grid all sit on the
      view's own inset and no second one is wanted. */
   .masthead, .filters, .dtags { padding-inline: 0; }
+  /* The profile shelf rides with them for the same reason — its caption is on
+     the view's own inset here, and its rule runs the full width of the column
+     (the shelf keeps the block padding, so only the inline half is dropped). */
+  .profile-shelf { padding-inline: 0; }
+  /* The frame wall lives inside #feed, which breaks out by 1.15rem on a phone to
+     put post photos screen-edge-to-edge. A masonry grid doesn't want that: it's
+     already on Discover's axis and the card above it is on the view's, so the
+     bleed is taken straight back. */
+  .pgrid--frames { padding-inline: 1.15rem; }
   .view-title { font-size: 2rem; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 0.5rem; }
   /* Friends / Updates: the seg-tabs that used to sit under the masthead docks to
