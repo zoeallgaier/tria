@@ -152,6 +152,46 @@ exempt). Voice is playful but not trying-too-hard.
   centres with `margin-inline: auto`, and an auto cross-axis margin cancels the
   stretch inside `#feed`'s flex column, which collapsed every `flex: 1 1 0`
   column to nothing.)
+- **A daily is a question, and answering it is just posting.** One prompt for the
+  whole room, 24h, heading Discover as a coloured glass card and opening a page
+  washed in the same hue. An answer is an **ordinary post carrying a `daily-<slug>`
+  tag**, which is why the feature needed no table, no migration and no new privacy
+  rule: answers inherit the audience rules, the edit path, the profile column and
+  search for free. **The schedule is an array** (`DAILIES` in `app.js`) rotating
+  from `DAILY_EPOCH` in local time, so N prompts is an N-day loop with no server.
+  Twenty-one is **3 × 7 and therefore load-bearing**: every prompt keeps a
+  permanent weekday, which is the whole scheduling tool (cheap Mondays, Thursday
+  is always the Find, Friday is argumentative, Sunday lands soft). Day 0 is a
+  **Tuesday**, so Mondays are indexes 6/13/20 — count from the epoch's weekday,
+  not the top of the list, and if the epoch moves, **rotate the array by the same
+  number of days** or every role slides. A post resolves its prompt **by slug**,
+  never by recomputing `day % length` (`dailyForPost`): the old derivation made
+  the array's *length* immutable, since changing it remapped every past day and
+  silently stripped the question off every answer ever posted. Deleting a row
+  still retires its label, so retire by moving out of the rotation, not out of the
+  array. **The named type is binding** (`dailyAccepts`, the one home of the rule,
+  read by both the composer banner and the submit gate so they can't disagree):
+  the tag rides along only if what you made is what was asked for, nothing is ever
+  blocked, and the banner just drains to a grey `Daily:`. `accepts: 'any'` waives
+  it per prompt. **Activities are excluded from every daily**, open ones included:
+  an activity lands in the real world behind `canJoin`'s friends-only gate, and a
+  page of answers from the whole room is the wrong doorway to that. **Polls are
+  excluded editorially, not structurally** (`type: 'poll'` still works) — every
+  other prompt asks for a thing you already have, a poll asks you to author a
+  question. One answer each, window-scoped, so a prompt coming round again opens
+  empty rather than on last month's replies. Daily tags are held out of the
+  trending rail (`topTags`) and out of the tag chips (`DAILY_TAG_RE`,
+  `shownTags`) — the question shows in place of the slug, as a link to everyone
+  else's answers. **Never add:** streaks, push for the daily, a missed-day
+  counter, a leaderboard. The 24h window plus a coarse timer is the whole
+  pressure budget; each of those will look like an obvious improvement and each
+  one turns an invitation into a chore.
+- **A daily answer never touches your audience.** The composer opens on its normal
+  default and the answer goes wherever your account sends things, so a private
+  account's answer reaches its circle and not the daily page. That thins the page
+  on purpose: nudging someone public because they answered a prompt would be the
+  app quietly widening an audience the user chose, which is the one thing this
+  app doesn't do. The cold-start answer is seeding by hand, not a default change.
 - **`users.private`** (defaults true, so new signups open closed) no longer gates
   reads at all. It does three things: picks the composer's default audience (a
   public account's posts default to `public`, activities stay `circle`-first),
@@ -182,7 +222,13 @@ Contacts rows are not). **The masonry grid is the one glass-minus-blur surface**
 (Discover's, and a profile's frame wall): its tiles float above the page so the
 material is right, but a `backdrop-filter` is per-element compositor work and a
 scrolling masonry grid is exactly where that bill lands, so they keep the fill +
-hairline + lit rim + float shadow and drop only the sample-and-blur. On phones the Updates view
+hairline + lit rim + float shadow and drop only the sample-and-blur. **The daily
+card is the one piece of glass that carries a hue**, and it keeps the real blur:
+it's a single element sitting still at the top of Discover, not dozens of them
+scrolling, so it can afford what the tiles can't. The colour is the post type the
+prompt asks for, straight from the quintet — a daily wanting a Frame is cyan on
+the card, on the chip an answer wears, and in the page wash behind it, so the
+colour still says *what to make* rather than a sixth hue meaning "daily". On phones the Updates view
 switcher (seg-tabs) is docked chrome, not an inline row: it floats just above
 the bottom nav and *rises up from behind it* when a page becomes active (router
 tucks it while the page fades in, releases it on settle). The composer's
