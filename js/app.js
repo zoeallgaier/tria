@@ -4566,10 +4566,12 @@
      and if the epoch ever moves, ROTATE THE ARRAY BY THE SAME NUMBER OF DAYS or
      every one of those roles slides onto the wrong weekday.
 
-     WEEK ONE IS DELIBERATELY ALL CHEAP, and it opens on a photograph everybody
-     already has in their pocket. A launch week that starts with a wall gets
-     answered by nobody, and an empty daily page on day one is an argument against
-     dailies. The first prompt asking for real effort is nine days in, by which
+     WEEK ONE IS DELIBERATELY ALL CHEAP, and it opens on a meme: the one photograph
+     everybody has already saved, already sent, and doesn't have to make, take or
+     even look up. A launch week that starts with a wall gets answered by nobody,
+     and an empty daily page on day one is an argument against dailies. Day 0 also
+     costs nothing to get wrong, which is what a first impression of the feature
+     should cost. The first prompt asking for real effort is nine days in, by which
      point a daily is a thing people recognise rather than a thing they're meeting.
 
      NO POLLS, NO ACTIVITIES. Activities are excluded structurally (see the note
@@ -4583,12 +4585,14 @@
      re-answerable. "What song is stuck in your head" survives forever because the
      answer moves; "what's your favourite X" doesn't, because you have one and the
      second time round it's a chore. `meme` is the knowing exception, kept because
-     it's funny and expected to thin out on later runs — if it does, the fix is to
-     date it ("the meme you've sent the most this week"). Slang dates faster than
+     it's funny and expected to thin out on later runs — which is exactly why it
+     leads: run one is the fullest it will ever be, and that run is launch day. If
+     it does thin, the fix is to date it ("the meme you've sent the most this
+     week") rather than to move it. Slang dates faster than
      structure, so the humour lives in the specificity, not the vocabulary. */
   const DAILIES = [
     // ── Week one, all cheap ──                                     Tue
-    { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.',       hint: 'No scrolling. The last one.' },
+    { slug: 'meme',           type: 'photo', prompt: 'Post your favorite meme.',                       hint: 'The one you keep re-sending.' },
     { slug: 'stuck',          type: 'note',  prompt: 'What song is stuck in your head?',               hint: 'Blame whoever put it there.' },
     { slug: 'must-watch',     type: 'find',  prompt: 'Share the video you’ve made someone watch.',    hint: 'A link, and who you inflicted it on.' },
     { slug: 'laughed',        type: 'note',  prompt: 'What actually made you laugh this week?',        hint: 'Not a polite exhale through your nose.' },
@@ -4599,7 +4603,7 @@
 
     // ── Week two ──                                                 Mon
     { slug: 'npc',            type: 'note',  prompt: 'What’s the most NPC thing you did today?',       hint: 'The autopilot moment. We all have them.' },
-    { slug: 'meme',           type: 'photo', prompt: 'Post your favorite meme.',                       hint: 'The one you keep re-sending.' },
+    { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.',       hint: 'No scrolling. The last one.' },
     { slug: 'dinner',         type: 'note',  prompt: 'What did you actually have for dinner?',         hint: 'Cereal counts. Girl dinner counts.' },
     { slug: 'worth-it',       type: 'find',  prompt: 'Share something you read that was worth it.',    hint: 'Long is fine.' },
     { slug: 'hot-take',       type: 'note',  prompt: 'What’s a hot take you’d defend in court?',       hint: 'Bring evidence.' },
