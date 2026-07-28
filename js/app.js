@@ -246,7 +246,13 @@
     sound:   '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/>',
     mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
     // Filled triangle — the play affordance on a Frame video that hasn't started.
-    play:    '<path d="M8.5 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
+    // Optically centred IN THE PATH, and only here: the bbox (x 7 → 18.5) sits 0.75
+    // units right of the box's middle, ~6% of the triangle's width, because a
+    // right-pointing triangle carries its mass at the base and reads left-heavy when
+    // its bbox is centred exactly. Don't add a margin to the rendered icon on top of
+    // this — the old path leaned right AND .frame-play-ico nudged it right again,
+    // which put the triangle 4px off the middle of its own disc.
+    play:    '<path d="M7 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
     // A framed picture (sun + hills) — the composer's "add a photo or clip" tool.
     image:   '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M4.5 17.5 9 13l3 2.5L15.5 12l4 5"/>',
     // Three horizontal bars of unequal length — the plain "poll" glyph on the

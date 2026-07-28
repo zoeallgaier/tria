@@ -2427,16 +2427,24 @@ main {
 }
 .frame-sound-ico { width: 17px; height: 17px; }
 @media (hover: hover) { .frame-sound:hover { background: rgba(0, 0, 0, 0.62); } }
+/* 42px, not the 52 this shipped at. The feed plays one clip at a time on purpose
+   (iOS caps concurrent decoders), so every video that isn't the active one wears
+   this badge permanently — it's standing chrome on most video cards, not a flash
+   before playback. At 42 it reads as an invitation rather than a lid on the
+   photograph, and it still earns its place: under reduced motion nothing autoplays
+   ever, and iOS Low Power Mode refuses too, so on those frames the badge is the
+   only cue that a tap does anything. */
 .frame-play {
   top: 50%;
   left: 50%;
-  width: 52px;
-  height: 52px;
+  width: 42px;
+  height: 42px;
   transform: translate(-50%, -50%);
   pointer-events: none;
   transition: opacity var(--dur-quick) var(--ease);
 }
-.frame-play-ico { width: 22px; height: 22px; margin-left: 2px; }   /* optical centring for a triangle */
+/* No margin here — the triangle's optical nudge lives in ICONS.play's own path. */
+.frame-play-ico { width: 18px; height: 18px; }
 .frame-video--playing .frame-play { opacity: 0; }
 /* A 2px cyan hairline pinned to the frame's bottom edge — information, not
    motion, so it stays even under reduced motion (the clip just never advances
