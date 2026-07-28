@@ -4549,11 +4549,23 @@
   const DAILY_EPOCH = '2026-07-28';
 
   /* The rotation. `type` picks the colour, what the composer opens as, AND what
-     counts as an answer — one of note / find / photo / poll. `hint` is the quiet
-     line under the prompt: say what a good answer looks like, not what the button
-     does. `accepts: 'any'` opens a prompt to every type (still not activities);
-     it keeps its `type` for the colour and for the surface the composer raises,
-     which becomes a suggestion rather than a requirement.
+     counts as an answer — one of note / find / photo / poll. `accepts: 'any'`
+     opens a prompt to every type (still not activities); it keeps its `type` for
+     the colour and for the surface the composer raises, which becomes a
+     suggestion rather than a requirement.
+
+     NO HINTS, AND THAT'S THE DESIGN. The optional `hint` field still renders
+     everywhere it used to (the card's quiet line, the daily page's lede) and a
+     prompt can take one back at any time — but the shipped rotation has none, so
+     don't read the empty column as an oversight. Every hint the set started with
+     was doing the same job: telling people a low-effort answer was allowed
+     ("cereal counts", "bad lighting encouraged", "water counts, barely"). Five of
+     them were literally the same "X counts / X is fine" sentence. That's a
+     question apologising for itself, and it reads as the app being nervous on
+     your behalf. The fix isn't a better hint, it's a prompt specific enough to
+     imply its own low bar — "the SMALLEST good thing", "something you've KEPT for
+     years" — so the question carries the permission instead of a caption under
+     it. If a prompt seems to need a hint, rewrite the prompt.
 
      TWENTY-ONE, AND THAT NUMBER IS LOAD-BEARING: 21 is 3 × 7, so every prompt
      keeps the same weekday forever. That's the whole scheduling tool. Day 0 is a
@@ -4590,37 +4602,70 @@
      it does thin, the fix is to date it ("the meme you've sent the most this
      week") rather than to move it. Slang dates faster than
      structure, so the humour lives in the specificity, not the vocabulary. */
+  /* THE TYPE ALTERNATES, AND THAT'S A CONSTRAINT, NOT A COINCIDENCE. Read the
+     type column top to bottom: no two neighbouring days ask for the same thing,
+     with exactly one deliberate exception at the very bottom. Four photo prompts
+     once sat at 11–14 and the run read as a wall of frames — a week where the
+     daily stopped being a question and became "post a picture again".
+
+     ONE REPEAT IS FORCED, so it's spent on purpose. With the Thursday finds and
+     the Friday notes pinned, strict alternation across the free runs needs 8
+     photos and 6 notes; the mix has 7 of each left over. The arithmetic doesn't
+     close, so exactly one neighbouring pair must match. It's flowers → vibe-check
+     at 19/20: two notes read as two questions, where two photos read as a clump,
+     and that pair is the warmest handoff the set has. If the mix ever changes,
+     re-derive this rather than assuming the old positions still work.
+
+     What that costs: Tuesday used to be camera-roll day (meme → last one →
+     never-delete, shared then random then chosen) and alternation broke it up.
+     The escalation was a nice accident, not a rule, and it isn't worth a wall. */
   const DAILIES = [
     // ── Week one, all cheap ──                                     Tue
-    { slug: 'meme',           type: 'photo', prompt: 'Post your favorite meme.',                       hint: 'The one you keep re-sending.' },
-    { slug: 'stuck',          type: 'note',  prompt: 'What song is stuck in your head?',               hint: 'Blame whoever put it there.' },
-    { slug: 'must-watch',     type: 'find',  prompt: 'Share the video you’ve made someone watch.',    hint: 'A link, and who you inflicted it on.' },
-    { slug: 'laughed',        type: 'note',  prompt: 'What actually made you laugh this week?',        hint: 'Not a polite exhale through your nose.' },
-    { slug: 'ate',            type: 'photo', prompt: 'Show the best thing you ate this week.',         hint: 'Bad lighting encouraged.' },
-    // The open one. "What can you see" is answered just as well by the photograph
-    // as by the description of it, so it takes either.                Sun
-    { slug: 'window',         type: 'note',  prompt: 'What can you see out your window?',              hint: 'A few lines, or just show us.', accepts: 'any' },
+    { slug: 'meme',           type: 'photo', prompt: 'Post your favorite meme.' },
+    { slug: 'stuck',          type: 'note',  prompt: 'What song is stuck in your head?' },
+    { slug: 'must-watch',     type: 'find',  prompt: 'Share a video you’ve made someone watch.' },
+    { slug: 'laughed',        type: 'note',  prompt: 'What actually made you laugh this week?' },
+    { slug: 'ate',            type: 'photo', prompt: 'Show the best thing you ate this week.' },
+    // The open one, and the only prompt in the 21 that waives its type. "The
+    // smallest good thing" is answered just as well by the photograph of it as by
+    // the sentence, and week one's Sunday is the wrong place to tell someone the
+    // form was wrong. Keep one of these alive: with none, `accepts` is a code path
+    // with no callers.                                               Sun
+    { slug: 'small-good',     type: 'note',  prompt: 'What’s the smallest good thing that happened this week?', accepts: 'any' },
+    // Cheapest photo in the set, on the cheapest day, closing the cheapest week:
+    // you open the camera roll and you're done, no thinking at all.   Mon
+    { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.' },
 
-    // ── Week two ──                                                 Mon
-    { slug: 'npc',            type: 'note',  prompt: 'What’s the most NPC thing you did today?',       hint: 'The autopilot moment. We all have them.' },
-    { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.',       hint: 'No scrolling. The last one.' },
-    { slug: 'dinner',         type: 'note',  prompt: 'What did you actually have for dinner?',         hint: 'Cereal counts. Girl dinner counts.' },
-    { slug: 'worth-it',       type: 'find',  prompt: 'Share something you read that was worth it.',    hint: 'Long is fine.' },
-    { slug: 'hot-take',       type: 'note',  prompt: 'What’s a hot take you’d defend in court?',       hint: 'Bring evidence.' },
-    { slug: 'made',           type: 'photo', prompt: 'Post something you made this week.',             hint: 'Cooked, drew, built, badly is fine.' },
-    { slug: 'on-repeat',      type: 'photo', prompt: 'Screenshot what you’ve had on repeat.',          hint: 'No skips, no shame.' },
+    // ── Week two ──                                                 Tue
+    { slug: 'npc',            type: 'note',  prompt: 'What’s the most NPC thing you did today?' },
+    { slug: 'on-repeat',      type: 'photo', prompt: 'Screenshot what you’ve had on repeat.' },
+    // Thursday's find, on the reason rather than the medium: made-someone-watch,
+    // keep-coming-back, room-needs-to-hear are three different questions. Sorted
+    // by recommendation type they were one question asked three ways.
+    { slug: 'come-back',      type: 'find',  prompt: 'Share something you keep coming back to.' },
+    { slug: 'hot-take',       type: 'note',  prompt: 'What’s a hot take you’d defend in court?' },
+    { slug: 'made',           type: 'photo', prompt: 'Post something you made this week.' },
+    // Sunday, and the softest of the three: the first prompt in the rotation that
+    // asks you to REMEMBER something rather than report what's in front of you.
+    { slug: 'miss',           type: 'note',  prompt: 'What do you miss that you didn’t expect to?' },
+    { slug: 'desk',           type: 'photo', prompt: 'Show us your desk, no tidying.' },
 
-    // ── Week three ──                                               Mon
-    { slug: 'drinking',       type: 'photo', prompt: 'Show us what you’re drinking right now.',        hint: 'Water counts. Barely.' },
-    { slug: 'animal',         type: 'photo', prompt: 'Show us the animal you saw today.',              hint: 'Someone else’s dog counts.' },
-    { slug: 'overthink',      type: 'note',  prompt: 'What are you overthinking right now?',           hint: 'Say it out loud, it gets smaller.' },
-    { slug: 'one-song',       type: 'find',  prompt: 'Share one song the room needs to hear.',         hint: 'One link, one line on why.' },
-    { slug: 'petty',          type: 'note',  prompt: 'What’s the pettiest hill you’re dying on?',      hint: 'Villain arc encouraged.' },
-    { slug: 'desk',           type: 'photo', prompt: 'Show us your desk, no tidying.',                 hint: 'The mess is the point.' },
-    { slug: 'flowers',        type: 'note',  prompt: 'Who deserves their flowers today?',              hint: 'Say the name. They might be reading.' },
-    // Closing Monday. The loop turns from "who deserves their flowers" straight
-    // into this, which is the warmest handoff the twenty-one had in them.
-    { slug: 'vibe-check',     type: 'note',  prompt: 'What’s the vibe today, in five words or fewer?', hint: 'Five words. Punctuation is free.' },
+    // ── Week three ──                                               Tue
+    { slug: 'overthink',      type: 'note',  prompt: 'What are you overthinking right now?' },
+    // Still cheap — you look around the room, you don't make anything — but the
+    // object has a history, which is the difference between retrieval and
+    // inventory, and retrieval is what survives a three-week loop.
+    { slug: 'kept',           type: 'photo', prompt: 'Show us something you’ve kept for years.' },
+    { slug: 'one-song',       type: 'find',  prompt: 'Share one song the room needs to hear.' },
+    { slug: 'petty',          type: 'note',  prompt: 'What’s the pettiest hill you’re dying on?' },
+    // Same shrug of effort as the camera-roll prompts, pointed at a chosen picture
+    // instead of an arbitrary one.
+    { slug: 'never-delete',   type: 'photo', prompt: 'Show us a photo you’d never delete.' },
+    { slug: 'flowers',        type: 'note',  prompt: 'Who deserves their flowers today?' },
+    // Closing Monday, and the one repeated type in the rotation (see above). The
+    // loop turns from "who deserves their flowers" straight into this, which is
+    // the warmest handoff the twenty-one had in them and worth the repeat.
+    { slug: 'vibe-check',     type: 'note',  prompt: 'What’s the vibe today, in five words or fewer?' },
   ];
 
   const DAY_MS = 86400000;
