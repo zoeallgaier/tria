@@ -49,9 +49,64 @@ const Store = (() => {
   //   posts: [{id, author(username), type, date, tags, title?, url?, note?, image?, _ts}]
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
+  //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
+  //   declines: usernames whose request I turned down (durably — see declineRequest)
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, audience: [], blocks: [] });
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, edgeTs: {}, declines: [], audience: [], blocks: [] });
   let state = empty();
+
+  /* ── A write that lands mid-load ────────────────────────────────────────────
+     loadWorld REPLACES every table wholesale, with rows from reads that were
+     issued before it resolved. So a write made while a pull is in the air is
+     overwritten by data that predates it: you comment, the comment saves, the
+     refresh that was already in flight lands, and your comment is gone from the
+     cache while sitting safely in the database. Nothing errors, and refresh()
+     compares the world to how it looked BEFORE both, so it reports "nothing
+     changed" and nothing repaints either — the comment stays on screen until
+     something else rebuilds that card, and then it quietly isn't there. Same
+     for a new post, a like, an RSVP, a vote, a name change. It is intermittent
+     because it needs a load in flight, and loads are silent: the app pulls the
+     world every time it comes back to the foreground, which is exactly what
+     picking a photo, answering a push or taking a call does.
+
+     So every cache write goes through `write()`, which records what it did for
+     as long as any load is in flight, and loadWorld REPLAYS those writes on top
+     of the world it just fetched — anything written while we were waiting is
+     newer than anything we read. Replay is safe because every write is
+     idempotent: removals are filters, and additions go through `upsert`, which
+     replaces the row of the same identity rather than appending a second. That
+     matters because the read may or may not have caught the new row (its
+     snapshot is taken when the statement starts, not when the request was made),
+     and both outcomes have to end the same way.
+
+         EVERY CACHE WRITE GOES THROUGH write(). Assign to state.<table>
+         directly only inside loadWorld, which IS the load.
+
+     `worldGen` is the other half: signing out replaces the whole world, so a
+     load still in the air has to be dropped on arrival rather than repopulating
+     the app of someone who just left. */
+  let loadsInFlight = 0;
+  let worldGen = 0;
+  let pendingWrites = [];
+  function write(key, fn) {
+    state[key] = fn(state[key]);
+    if (loadsInFlight) pendingWrites.push([key, fn]);
+  }
+  // The add half of every write: replace the row with this identity, or append.
+  const upsert = (rows, row, same) => {
+    const i = rows.findIndex(same);
+    if (i < 0) return rows.concat([row]);
+    const out = rows.slice();
+    out[i] = row;
+    return out;
+  };
+  // Throw the world away (sign-out, account deletion). Any load in flight is
+  // answering a question that no longer has an asker.
+  function clearWorld() {
+    worldGen++;
+    pendingWrites = [];
+    state = empty();
+  }
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
   const dateOf = (ts) => (ts ? dayMT(ts) : TODAY);
@@ -100,7 +155,7 @@ const Store = (() => {
 
   // Set state.session from an auth session and load (or clear) the world.
   async function hydrate(session) {
-    if (!session) { state = empty(); return; }
+    if (!session) { clearWorld(); return; }
     await loadWorld();
     const me = state.users.find(u => u.id === session.user.id);
     state.session = me ? me.username : null;
@@ -121,6 +176,15 @@ const Store = (() => {
   // short page can't answer it — a table of 300 and a cap of 300 look identical
   // — and guessing wrong truncates in silence, which is the whole bug. A table
   // under the cap still costs exactly one request; only a full one pays for more.
+  //
+  // The count is not free — PostgREST spells it `COUNT(*) OVER()` in the same
+  // statement, so Postgres evaluates the RLS predicate against every row rather
+  // than stopping when the page fills — and dropping it was tried, by paging
+  // until a page came back short. Don't: without a total, "did the page fill?"
+  // can only be answered by asking for another one, so EVERY table paid a second
+  // round trip on every load. On a phone the round trip is the expensive part
+  // and the count is not; the version that looked cheaper on the database made
+  // the app slower to open. Keep the count.
   //
   // Paging is sound only under a TOTAL order: two rows tied on a timestamp could
   // otherwise straddle a page boundary, repeating one and losing the other. So
@@ -150,7 +214,21 @@ const Store = (() => {
   // Pull every profile / post / comment / friendship into the cache. Reads are
   // RLS-gated to signed-in users, so this only returns data once authenticated.
   async function loadWorld() {
-    const [u, p, c, l, h, pv, f, pa, bl] = await Promise.all([
+    // Where this load stands relative to everything else (see write() above):
+    // which world it was asked for, and where the journal was when it started.
+    const gen = worldGen;
+    const mark = pendingWrites.length;
+    loadsInFlight++;
+    try { await readWorld(gen, mark); }
+    finally {
+      loadsInFlight--;
+      // A journal entry is only ever wanted by a load that's still waiting.
+      if (!loadsInFlight) pendingWrites = [];
+    }
+  }
+
+  async function readWorld(gen, mark) {
+    const read = await Promise.all([
       readAll('users', ['created_at', 'id']),
       readAll('posts', ['created_at', 'id']),
       readAll('comments', ['created_at', 'id']),
@@ -166,6 +244,11 @@ const Store = (() => {
       // one row per voter. Tolerates a pre-migration DB (no table yet → []).
       readAll('poll_votes', ['created_at', 'post_id', 'user_id']),
       readAll('friends', ['a', 'b']),
+      // Requests I've turned down. RLS scopes these to me (nobody may learn they
+      // were declined), so every row here is one I wrote. Tolerates a
+      // pre-migration DB (no table → error, data null → []); app.js keeps a
+      // localStorage mirror so a decline still sticks on this device meanwhile.
+      readAll('friend_declines', ['decliner', 'declined']),
       // Audience allowlist for 'list' posts. RLS hands back only the rows we may
       // see: our own memberships + every row on posts we authored (enough to show
       // the author a "shared with N" count). Tolerates a pre-migration DB (→ []).
@@ -176,6 +259,10 @@ const Store = (() => {
       // mirror so blocking still works before this migration is run.
       readAll('blocks', ['blocker', 'blocked']),
     ]);
+    // Signed out while this was in the air: the world it answers no longer has
+    // an owner, so none of it may be written anywhere.
+    if (gen !== worldGen) return;
+    const [u, p, c, l, h, pv, f, fd, pa, bl] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -203,9 +290,14 @@ const Store = (() => {
       text: row.body, date: dateOf(row.created_at), _ts: row.created_at,
     }), state.comments);
     state.likes = core(l, 'likes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.likes);
-    state.headcount = (h.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }));
-    state.pollVotes = (pv.data || []).map(row => ({ postId: row.post_id, user: nameById.get(row.user_id), choice: row.choice, _ts: row.created_at }));
-    state.audience = (pa.data || []).map(row => ({ postId: row.post_id, userId: row.user_id }));
+    // Guarded like the four above, and for the same reason: these tables exist
+    // now, so an errored read here is a blip, not a pre-migration DB, and
+    // blanking them empties every RSVP, every vote and every "shared with N" in
+    // the app at once. On a DB that genuinely hasn't got the table the last good
+    // copy is [] anyway, so tolerating the error still costs nothing.
+    state.headcount = core(h, 'headcount', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.headcount);
+    state.pollVotes = core(pv, 'poll votes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), choice: row.choice, _ts: row.created_at }), state.pollVotes);
+    state.audience = core(pa, 'post audience', row => ({ postId: row.post_id, userId: row.user_id }), state.audience);
     // Directed "add" edges: a row (a, b) means a has added b. A friendship is
     // mutual only when both directions exist; a lone edge is a pending request.
     // The map keys each user to the people THEY have added (out-edges only).
@@ -217,17 +309,33 @@ const Store = (() => {
         f.error.message || f.error);
     } else {
       const fr = {};
+      const ts = {};
       const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
       for (const row of f.data || []) {
         const a = nameById.get(row.a), b = nameById.get(row.b);
-        if (a && b) link(a, b);
+        if (!a || !b) continue;
+        link(a, b);
+        // An edge's stamp is what turns "they added you" into an event that can
+        // be filed and aged (see notifications). Undefined on a pre-migration DB,
+        // and null on rows that predate friend-declines.sql — both read as "no
+        // time", and an untimed edge is never announced.
+        if (row.created_at) ts[edgeKey(a, b)] = row.created_at;
       }
       for (const x of state.users) fr[x.username] || (fr[x.username] = []);
       state.friends = fr;
+      state.edgeTs = ts;
     }
+    // People I turned down. Read-failure and empty are the same thing here (a
+    // pre-migration DB has no table), and app.js's localStorage mirror is folded
+    // in on top by declined() so the answer sticks either way.
+    state.declines = (fd.data || []).map(row => nameById.get(row.declined)).filter(Boolean);
     // Usernames I've blocked (RLS already scoped these rows to me). Empty on a
     // pre-migration DB — the localStorage mirror in app.js covers that gap.
     state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
+
+    // Everything written while we were waiting is newer than everything we just
+    // read, so it goes back on top (see write()).
+    for (const [key, fn] of pendingWrites.slice(mark)) state[key] = fn(state[key]);
   }
 
   // Re-pull the whole world on demand (nav re-taps, the app foregrounding).
@@ -239,10 +347,62 @@ const Store = (() => {
   };
   async function refresh() {
     if (!state.session) return false;
+    const gen = worldGen;
     const before = worldPrint();
     try { await loadWorld(); } catch { return false; }   // offline — keep the cache
+    // Signed out while we were pulling: the world emptying isn't a change worth
+    // repainting a page that's already on its way to the gate.
+    if (gen !== worldGen) return false;
     return worldPrint() !== before;
   }
+
+  /* ── Derived indexes ────────────────────────────────────────────────────────
+     Everything hanging off a post — comments, likes, hands-up, votes, audience —
+     lives in one flat array per kind, and the obvious read is a filter. That is
+     one scan of the whole table per post per render, so a screen of 40 cards
+     walked the comments table 40 times; the cost is posts x comments and it goes
+     up as the square as Tria fills in, which is exactly the shape of an app that
+     was fine in testing and treacle a year later.
+
+     So group each table by post once, and hand every reader the same Map. The
+     cache is a WeakMap keyed on the ARRAY ITSELF, which makes it self-clearing:
+     a new array is a new key, and the old index is garbage the moment the old
+     array is. That works only under one rule, and it is load-bearing:
+
+        EVERY WRITE REPLACES THE ARRAY IT TOUCHES. Nothing here mutates a state
+        array in place — no push, no splice, no element assignment.
+
+     The rule is grep-able and the alternative — an explicit invalidate call at
+     every write site — fails silently the first time someone forgets one, and a
+     stale like count is worse than a slow one.
+
+     Since the write journal (top of the file) it is also the *same* rule as the
+     one that keeps a mid-load write alive, and both are enforced in one place:
+     every array here is replaced by a `write()` callback, and a callback that
+     replaces rather than mutates is exactly a callback that can be replayed over
+     the world a load just fetched. That extends the rule to row objects too —
+     changing someone's poll choice regroups nothing, but a row mutated in place
+     is a change with nothing to replay, so votes go through `upsert` now.
+
+     Readers get the grouped array directly, not a copy: every caller filters or
+     counts, none of them mutate what they're handed. Keep it that way. */
+  const groups = new WeakMap();
+  const NO_ROWS = Object.freeze([]);
+  function byPost(rows) {
+    let m = groups.get(rows);
+    if (!m) {
+      m = new Map();
+      for (const r of rows) {
+        const list = m.get(r.postId);
+        if (list) list.push(r); else m.set(r.postId, [r]);
+      }
+      groups.set(rows, m);
+    }
+    return m;
+  }
+  const rowsFor = (rows, postId) => byPost(rows).get(postId) || NO_ROWS;
+  const mineIn = (rows, postId) =>
+    rowsFor(rows, postId).find(x => x.user === state.session) || null;
 
   // ── Reads (synchronous, off the cache) ─────────────────────────────────────
   const users = () => state.users;
@@ -276,6 +436,41 @@ const Store = (() => {
     const me = state.session;
     return (state.friends[me] || []).filter(u => !(state.friends[u] || []).includes(me));
   }
+  // When a directed edge was made, keyed "adder\nadded". Newline because a
+  // username can't contain one. '' when the edge doesn't exist OR predates
+  // friend-declines.sql (those rows carry no stamp on purpose — see the
+  // migration), and an untimed edge is one nothing may be announced about.
+  const edgeKey = (a, b) => a + '\n' + b;
+  const edgeTs = (a, b) => state.edgeTs[edgeKey(a, b)] || '';
+
+  // ── Declined requests ───────────────────────────────────────────────────────
+  // People whose request I turned down. Server rows (RLS-scoped to me) plus a
+  // per-device localStorage mirror, so a decline sticks even on a DB that hasn't
+  // run friend-declines.sql — same belt-and-braces as blocking.
+  const declineKey = () => `tria:declines:${state.session}`;
+  // Read once per session rather than per call. friendStatus consults this and
+  // is asked per TILE on Discover and on a daily page — a JSON.parse of
+  // localStorage behind the app's hottest paint is exactly the kind of cost that
+  // doesn't show up until the grid is full.
+  let mirror = null, mirrorFor = null;
+  function localDeclines() {
+    if (!state.session) return [];
+    if (mirrorFor !== state.session) {
+      mirrorFor = state.session;
+      try { mirror = JSON.parse(localStorage.getItem(declineKey()) || '[]'); } catch { mirror = []; }
+      if (!Array.isArray(mirror)) mirror = [];
+    }
+    return mirror;
+  }
+  function setLocalDeclines(list) {
+    if (!state.session) return;
+    mirrorFor = state.session; mirror = list;
+    try { localStorage.setItem(declineKey(), JSON.stringify(list)); } catch { /* private mode */ }
+  }
+  const declined = () => [...new Set([...state.declines, ...localDeclines()])];
+  const isDeclined = (username) =>
+    state.declines.includes(username) || localDeclines().includes(username);
+
   // One-way edges pointing AT me: people who've added me, whom I haven't added
   // back. Same split, but on MY privacy — if my account is public they're
   // followers (nothing to approve); if it's private they're requests.
@@ -292,15 +487,22 @@ const Store = (() => {
   // and what it BUYS is their public posts in my feed (see feed() below).
   const following = () => outgoingEdges().filter(u => !isPrivate(u));
   // People following me. Only meaningful while I'm public; a private account's
-  // incoming edges are requests, not follows.
+  // incoming edges are requests, not follows. Note what this is NOT: the Updates
+  // page used to render this list as standing rows above the ledger, which meant
+  // every follower you didn't add back sat there with a button on them forever.
+  // A follow is an event now (notifications(), kind 'follow') and this is just
+  // the roster.
   const followers = () => isPrivate(state.session) ? [] : incomingEdges();
 
   // Requests I've sent that haven't been answered. Follows are NOT requests, so
   // a public target's edge doesn't belong here — it isn't pending on anyone.
   const requestsSent = () => outgoingEdges().filter(u => isPrivate(u));
-  // Requests waiting on ME — answer by adding them back (→ mutual) or removing
-  // (→ declined). A public account has none: nobody needs its permission.
-  const requestsReceived = () => isPrivate(state.session) ? incomingEdges() : [];
+  // Requests waiting on ME — answer by adding them back (→ mutual) or declining
+  // (declineRequest). A public account has none: nobody needs its permission.
+  // Someone I've already declined never appears again, however many times they
+  // re-add me; that's what makes the answer an answer rather than a delay.
+  const requestsReceived = () =>
+    isPrivate(state.session) ? incomingEdges().filter(u => !isDeclined(u)) : [];
 
   // My relationship to `username`, as one word — drives the profile button and
   // the directory rows:
@@ -314,7 +516,12 @@ const Store = (() => {
     const theyAdded = (state.friends[username] || []).includes(me);
     if (iAdded && theyAdded) return 'friends';
     if (iAdded) return isPrivate(username) ? 'sent' : 'following';
-    if (theyAdded) return isPrivate(me) ? 'incoming' : 'follower';
+    // A person I declined is a stranger to me again, even if they've re-added
+    // me since: their profile offers "Add friend", not "Accept request". Tapping
+    // it clears the decline and, because their edge is still there, makes us
+    // mutual on the spot — which is right, both of us have now asked.
+    if (theyAdded) return isDeclined(username) ? 'none'
+      : (isPrivate(me) ? 'incoming' : 'follower');
     return 'none';
   }
 
@@ -369,15 +576,26 @@ const Store = (() => {
     });
   }
 
-  // All posts, newest first, by real server timestamp (stable).
+  // All posts, newest first, by real server timestamp (stable). Sorted once per
+  // version of the array rather than once per caller — feed(), discover(),
+  // postsBy() and half a dozen lookups in app.js all come through here, and a
+  // single paint used to re-sort the whole table for each of them. Same WeakMap
+  // rule as the indexes above: replace state.posts, never mutate it, and this
+  // can't go stale.
+  const sorted = new WeakMap();
   function posts() {
-    return [...state.posts].sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
+    let list = sorted.get(state.posts);
+    if (!list) {
+      list = [...state.posts].sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
+      sorted.set(state.posts, list);
+    }
+    return list;
   }
   const postsBy = (username) => posts().filter(p => p.author === username);
 
   // How many people a targeted post is shared with. Accurate for posts you
   // authored (RLS gives you all their allowlist rows); 0 for others' posts.
-  const audienceCount = (postId) => state.audience.filter(a => a.postId === postId).length;
+  const audienceCount = (postId) => rowsFor(state.audience, postId).length;
 
   // ── Auth (async writes) ────────────────────────────────────────────────────
   // Create an account: Supabase Auth owns the email + password; the username and
@@ -439,7 +657,7 @@ const Store = (() => {
   async function logout() {
     await sb.auth.signOut();
     recovering = false;
-    state = empty();
+    clearWorld();
   }
 
   async function requestPasswordReset(email) {
@@ -518,7 +736,7 @@ const Store = (() => {
     // asking the server to revoke its token would just 403 on the way out.
     await sb.auth.signOut({ scope: 'local' }).catch(() => {});
     recovering = false;
-    state = empty();
+    clearWorld();
     return { ok: true };
   }
 
@@ -530,13 +748,18 @@ const Store = (() => {
   const areFriends = (a, b) =>
     (state.friends[a] || []).includes(b) && (state.friends[b] || []).includes(a);
 
-  const linkCache = (a, b) => {
-    const l = state.friends[a] || (state.friends[a] = []);
+  const linkCache = (a, b) => write('friends', fr => {
+    const l = fr[a] || (fr[a] = []);
     if (!l.includes(b)) l.push(b);
-  };
+    return fr;
+  });
   const unlinkCache = (a, b) => {
-    const l = state.friends[a]; if (!l) return;
-    const i = l.indexOf(b); if (i > -1) l.splice(i, 1);
+    write('edgeTs', ts => { delete ts[edgeKey(a, b)]; return ts; });
+    write('friends', fr => {
+      const l = fr[a];
+      if (l) { const i = l.indexOf(b); if (i > -1) l.splice(i, 1); }
+      return fr;
+    });
   };
 
   // Add someone: create MY directed edge (me → them). If they'd already added
@@ -551,6 +774,43 @@ const Store = (() => {
     const { error } = await sb.from('friends').insert({ a: mine, b: theirs });
     if (error && !/duplicate|unique/i.test(error.message)) return;  // already added → fine
     linkCache(me, username);
+    const stamp = new Date().toISOString();
+    write('edgeTs', ts => { ts[edgeKey(me, username)] = stamp; return ts; });
+    // Reaching out to someone I once declined withdraws the decline — otherwise
+    // a change of heart leaves them permanently muted on a tie I just made.
+    if (isDeclined(username)) await undecline(username);
+  }
+
+  // Turn down a request. The edge goes (removeFriend, same as cancelling or
+  // unfriending) AND the answer is remembered, which is the half that was
+  // missing: a deleted edge stops nothing, so the same person re-adding you put
+  // the request straight back at the top of Updates. With the row here they can
+  // add you as often as they like and you never hear about it again — no row, no
+  // push, nothing on their profile. Silent on their end by design: being
+  // declined is not news anyone is owed, exactly like a block.
+  async function declineRequest(username) {
+    const me = state.session;
+    if (!me || username === me) return;
+    await removeFriend(username);
+    write('declines', d => (d.includes(username) ? d : d.concat([username])));
+    // The mirror is written FIRST and unconditionally: it's what carries the
+    // decline on a DB that hasn't run friend-declines.sql, and it costs nothing
+    // when the insert below does work.
+    setLocalDeclines([...new Set([...localDeclines(), username])]);
+    const mine = idOf(me), theirs = idOf(username);
+    if (!mine || !theirs) return;
+    await sb.from('friend_declines').insert({ decliner: mine, declined: theirs });
+  }
+
+  // Withdraw a decline (I've added them after all, or cleared it by hand).
+  async function undecline(username) {
+    const me = state.session;
+    if (!me) return;
+    write('declines', d => d.filter(u => u !== username));
+    setLocalDeclines(localDeclines().filter(u => u !== username));
+    const mine = idOf(me), theirs = idOf(username);
+    if (!mine || !theirs) return;
+    await sb.from('friend_declines').delete().eq('decliner', mine).eq('declined', theirs);
   }
 
   // Remove the tie in BOTH directions — one call covers cancelling a request I
@@ -584,7 +844,7 @@ const Store = (() => {
     await removeFriend(username);
     const { error } = await sb.from('blocks').insert({ blocker: mine, blocked: theirs });
     if (error && !/duplicate|unique/i.test(error.message)) return;  // table missing / already blocked → localStorage covers it
-    if (!state.blocks.includes(username)) state.blocks.push(username);
+    write('blocks', b => (b.includes(username) ? b : b.concat([username])));
   }
 
   async function unblock(username) {
@@ -592,7 +852,7 @@ const Store = (() => {
     if (!me) return;
     const mine = idOf(me), theirs = idOf(username);
     if (mine && theirs) await sb.from('blocks').delete().eq('blocker', mine).eq('blocked', theirs);
-    state.blocks = state.blocks.filter(u => u !== username);
+    write('blocks', b => b.filter(u => u !== username));
   }
 
   // ── Compose (async writes) ──────────────────────────────────────────────────
@@ -737,11 +997,12 @@ const Store = (() => {
         await sb.from('posts').delete().eq('id', inserted.id);
         return { ok: false, error: 'Couldn’t set who can see it, try again.' };
       }
-      for (const uid of targetIds) state.audience.push({ postId: inserted.id, userId: uid });
+      const rows = targetIds.map(uid => ({ postId: inserted.id, userId: uid }));
+      write('audience', a => a.filter(x => x.postId !== inserted.id).concat(rows));
     }
 
     const post = mapPost(inserted, nameMap());
-    state.posts.push(post);
+    write('posts', ps => upsert(ps, post, x => x.id === post.id));
     return { ok: true, post };
   }
 
@@ -752,12 +1013,12 @@ const Store = (() => {
       return { ok: false, error: 'That post isn’t yours to delete.' };
     const { error } = await sb.from('posts').delete().eq('id', id);
     if (error) return { ok: false, error: 'Couldn’t delete, try again.' };
-    state.posts.splice(i, 1);
-    state.comments = state.comments.filter(c => c.postId !== id);
-    state.likes = state.likes.filter(x => x.postId !== id);
-    state.headcount = state.headcount.filter(x => x.postId !== id);
-    state.pollVotes = state.pollVotes.filter(x => x.postId !== id);
-    state.audience = state.audience.filter(x => x.postId !== id);
+    write('posts', ps => ps.filter(p => p.id !== id));
+    write('comments', cs => cs.filter(c => c.postId !== id));
+    write('likes', xs => xs.filter(x => x.postId !== id));
+    write('headcount', xs => xs.filter(x => x.postId !== id));
+    write('pollVotes', xs => xs.filter(x => x.postId !== id));
+    write('audience', xs => xs.filter(x => x.postId !== id));
     return { ok: true };
   }
 
@@ -778,12 +1039,15 @@ const Store = (() => {
 
     const { data: updated, error } = await sb.from('posts').update(patch).eq('id', id).select().single();
     if (error) return { ok: false, error: 'Couldn’t save, try again.' };
-    state.posts[i] = mapPost(updated, nameMap());
-    return { ok: true, post: state.posts[i] };
+    const fresh = mapPost(updated, nameMap());
+    // map, not upsert: if the post isn't in the world we just read it was
+    // deleted somewhere else, and an edit shouldn't resurrect it.
+    write('posts', ps => ps.map(p => (p.id === id ? fresh : p)));
+    return { ok: true, post: fresh };
   }
 
   // ── Comments (async writes) ─────────────────────────────────────────────────
-  const commentsFor = (postId) => state.comments.filter(c => c.postId === postId);
+  const commentsFor = (postId) => rowsFor(state.comments, postId);
 
   async function addComment(postId, text) {
     const me = state.session;
@@ -801,8 +1065,9 @@ const Store = (() => {
     const { data: c, error } = await sb.from('comments')
       .insert({ post_id: postId, author: idOf(me), body: text }).select().single();
     if (error) return { ok: false, error: 'Couldn’t post your comment, try again.' };
-    state.comments.push({ id: c.id, postId, author: me, text, date: dateOf(c.created_at), _ts: c.created_at });
-    return { ok: true, comment: state.comments[state.comments.length - 1] };
+    const added = { id: c.id, postId, author: me, text, date: dateOf(c.created_at), _ts: c.created_at };
+    write('comments', cs => upsert(cs, added, x => x.id === added.id));
+    return { ok: true, comment: added };
   }
 
   async function deleteComment(id) {
@@ -812,7 +1077,7 @@ const Store = (() => {
       return { ok: false, error: 'That comment isn’t yours to delete.' };
     const { error } = await sb.from('comments').delete().eq('id', id);
     if (error) return { ok: false, error: 'Couldn’t delete, try again.' };
-    state.comments.splice(i, 1);
+    write('comments', cs => cs.filter(c => c.id !== id));
     return { ok: true };
   }
 
@@ -821,9 +1086,9 @@ const Store = (() => {
   // filtered: for your own post that's the full set (count + who); for anyone
   // else's it's at most your own row. So likeCountFor is meaningful only to the
   // author — exactly the point.
-  const likesFor = (postId) => state.likes.filter(x => x.postId === postId);
+  const likesFor = (postId) => rowsFor(state.likes, postId);
   const likeCountFor = (postId) => likesFor(postId).length;
-  const likedByMe = (postId) => state.likes.some(x => x.postId === postId && x.user === state.session);
+  const likedByMe = (postId) => !!mineIn(state.likes, postId);
 
   // Toggle my like. You can't like your own post (the heart is the author's
   // window onto who liked, not a self-like). Open on a friend's post AND on any
@@ -840,11 +1105,12 @@ const Store = (() => {
     if (has) {
       const { error } = await sb.from('likes').delete().eq('post_id', postId).eq('user_id', mine);
       if (error) return { ok: false };
-      state.likes = state.likes.filter(x => !(x.postId === postId && x.user === me));
+      write('likes', xs => xs.filter(x => !(x.postId === postId && x.user === me)));
     } else {
       const { error } = await sb.from('likes').insert({ post_id: postId, user_id: mine });
       if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
-      if (!likedByMe(postId)) state.likes.push({ postId, user: me, _ts: new Date().toISOString() });
+      const row = { postId, user: me, _ts: new Date().toISOString() };
+      write('likes', xs => upsert(xs, row, x => x.postId === postId && x.user === me));
     }
     return { ok: true, liked: !has };
   }
@@ -854,8 +1120,8 @@ const Store = (() => {
   // see the activity sees the count and the names. You can raise or lower only
   // your own hand, and — like commenting — it's a friends-only gesture. The
   // author hosts rather than RSVPs, so their own hand stays out of the list.
-  const headcountFor = (postId) => state.headcount.filter(x => x.postId === postId);
-  const goingByMe = (postId) => state.headcount.some(x => x.postId === postId && x.user === state.session);
+  const headcountFor = (postId) => rowsFor(state.headcount, postId);
+  const goingByMe = (postId) => !!mineIn(state.headcount, postId);
 
   // The one gesture deliberately NOT opened to public posts (likes, comments and
   // poll votes all were): a public activity carries a place and a time, and
@@ -871,11 +1137,12 @@ const Store = (() => {
     if (has) {
       const { error } = await sb.from('headcount').delete().eq('post_id', postId).eq('user_id', mine);
       if (error) return { ok: false };
-      state.headcount = state.headcount.filter(x => !(x.postId === postId && x.user === me));
+      write('headcount', xs => xs.filter(x => !(x.postId === postId && x.user === me)));
     } else {
       const { error } = await sb.from('headcount').insert({ post_id: postId, user_id: mine });
       if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
-      if (!goingByMe(postId)) state.headcount.push({ postId, user: me, _ts: new Date().toISOString() });
+      const row = { postId, user: me, _ts: new Date().toISOString() };
+      write('headcount', xs => upsert(xs, row, x => x.postId === postId && x.user === me));
     }
     return { ok: true, going: !has };
   }
@@ -888,10 +1155,10 @@ const Store = (() => {
   const POLL_MS = 24 * 60 * 60 * 1000;
   const pollClosesAt = (post) => new Date(new Date(post._ts).getTime() + POLL_MS);
   const pollClosed = (post) => Date.now() >= pollClosesAt(post).getTime();
-  const pollVotesFor = (postId) => state.pollVotes.filter(x => x.postId === postId);
+  const pollVotesFor = (postId) => rowsFor(state.pollVotes, postId);
   // My choice on a poll, or null if I haven't voted.
   function myPollVote(postId) {
-    const v = state.pollVotes.find(x => x.postId === postId && x.user === state.session);
+    const v = mineIn(state.pollVotes, postId);
     return v ? v.choice : null;
   }
 
@@ -916,9 +1183,9 @@ const Store = (() => {
     const { error } = await sb.from('poll_votes')
       .upsert({ post_id: postId, user_id: mine, choice }, { onConflict: 'post_id,user_id' });
     if (error) return { ok: false };
-    const existing = state.pollVotes.find(x => x.postId === postId && x.user === me);
-    if (existing) existing.choice = choice;
-    else state.pollVotes.push({ postId, user: me, choice, _ts: new Date().toISOString() });
+    // One row per voter, so changing a vote and casting one are the same write.
+    const row = { postId, user: me, choice, _ts: new Date().toISOString() };
+    write('pollVotes', xs => upsert(xs, row, x => x.postId === postId && x.user === me));
     return { ok: true };
   }
 
@@ -958,10 +1225,49 @@ const Store = (() => {
     for (const v of state.pollVotes)
       if (mine.has(v.postId) && v.user !== me)
         evts.push({ kind: 'vote', postId: v.postId, user: v.user, _ts: v._ts || '' });
+    // Someone adding you is news, and news belongs in the ledger — dated, ageing
+    // down the list like everything else here. It used to be drawn as a standing
+    // row pinned above this list with an "Add back" button on it, which never
+    // left: on a public account, where nothing is pending and there is nothing to
+    // answer, that put a permanent chore on the page for the crime of being
+    // followed. Three things stay out:
+    //   · a PENDING request (private account, waiting on my answer) — it's still
+    //     pinned above with Accept / Ignore, and one event mustn't sit in two
+    //     places at once. It files itself here once it's settled.
+    //   · anyone I've DECLINED, forever, however often they re-add me.
+    //   · an edge with no stamp — every row that predates friend-declines.sql.
+    //     Announcing history nobody was told about at the time would dump your
+    //     whole circle at the top of Updates the day the migration ran.
+    // Adding someone back does NOT retract their row: a ledger is a record, and a
+    // line that deletes itself the moment you answer it is the pinned-forever bug
+    // wearing the opposite coat.
+    const pending = new Set(requestsReceived());
+    const turnedDown = new Set(declined());
+    for (const u of Object.keys(state.friends)) {
+      if (u === me || pending.has(u) || turnedDown.has(u)) continue;
+      const theirs = edgeTs(u, me);
+      if (!theirs) continue;
+      // `back` when THEY were the one answering — their edge is the later of the
+      // pair. It is only a wording difference, so it rides on the event rather
+      // than being re-derived in the view.
+      const ours = edgeTs(me, u);
+      evts.push({ kind: 'follow', user: u, back: !!ours && theirs > ours, _ts: theirs });
+    }
     return evts.sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
   }
 
   // ── Profile (async writes) ──────────────────────────────────────────────────
+  // Edit my row in the cache. Goes through write() like every other cache change
+  // (see the top of the file), so an edit made while a load is in flight isn't
+  // overwritten by the version of me that load started out reading. A key set to
+  // null is removed, because that's how the mappers spell "no avatar".
+  const patchUser = (id, patch) => write('users', us => us.map(x => {
+    if (x.id !== id) return x;
+    const o = Object.assign({}, x, patch);
+    for (const k of Object.keys(patch)) if (o[k] == null) delete o[k];
+    return o;
+  }));
+
   // Set (or clear) the signed-in user's avatar — a cropped square that gets
   // uploaded to Storage (see uploadImage), or null to fall back to the initial tile.
   // Optimistic: the cache is updated to the local crop synchronously (before the
@@ -970,18 +1276,19 @@ const Store = (() => {
   async function updateAvatar(dataURI) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
-    const prev = u.avatar;
-    if (dataURI) u.avatar = dataURI; else delete u.avatar;   // optimistic, synchronous
-    const revert = () => { if (prev) u.avatar = prev; else delete u.avatar; };
+    const id = u.id;
+    const prev = u.avatar || null;
+    patchUser(id, { avatar: dataURI || null });               // optimistic, synchronous
+    const revert = () => patchUser(id, { avatar: prev });
 
     let url = null;
     if (dataURI) {
       try { url = await uploadImage(dataURI, 'avatar'); }
       catch { revert(); return { ok: false, error: 'Couldn’t upload, try again.' }; }
     }
-    const { error } = await sb.from('users').update({ avatar: url }).eq('id', u.id);
+    const { error } = await sb.from('users').update({ avatar: url }).eq('id', id);
     if (error) { revert(); return { ok: false, error: 'Couldn’t save your photo.' }; }
-    if (url) u.avatar = url; else delete u.avatar;
+    patchUser(id, { avatar: url });
     return { ok: true };
   }
 
@@ -1004,19 +1311,141 @@ const Store = (() => {
       ({ error } = await sb.from('users').update(patch).eq('id', u.id));
     }
     if (error) return { ok: false, error: 'Couldn’t save your changes.' };
-    u.name = name; u.bio = bio;
-    if ('private' in patch) u.private = patch.private;
+    patchUser(u.id, patch);
     return { ok: true };
   }
 
-  // ── Push notifications (Web Push) ────────────────────────────────────────────
-  // The device subscribes with the VAPID public key; we store the subscription
-  // against the signed-in user so the push Edge Function can reach them. Reads
-  // stay sync elsewhere in Store; these are the only push-specific async writes.
-  // On iOS this all only works from a home-screen install, and the permission
-  // prompt must come from a user tap — the app's soft pre-prompt handles that.
+  // ── Push notifications ───────────────────────────────────────────────────────
+  // TWO TRANSPORTS, ONE SWITCH. The web subscribes through a service worker with
+  // the VAPID key (Web Push); the App Store build registers with APNs instead,
+  // because a WKWebView has no PushManager at all — the Push API on iOS is
+  // Safari-and-home-screen-only, so in the app the web path isn't degraded, it
+  // is simply absent. That's the whole reason push went quiet in the app: nothing
+  // broke, `pushSupported()` just answered false and every piece of push UI
+  // correctly hid itself.
+  //
+  // Only the ADDRESS differs. The pre-prompt card, the profile toggle, the
+  // Edge Function's fan-out and the `push_subscriptions` table are all shared, and
+  // an APNs row is an ordinary row: `endpoint = 'apns:<hex device token>'` with
+  // empty keys. That prefix is doing the work a `platform` column would, which is
+  // why this needed no migration — the sender branches on it and the RLS,
+  // uniqueness and per-user index it already had all still mean the right thing.
+  //
+  // The permission prompt must come from a tap on both sides (iOS gives one shot
+  // and a "no" is permanent), which is what the soft pre-prompt exists to protect.
+
+  // The App Store build. Capacitor injects its bridge before any app JS runs, so
+  // the bridge itself is the tell — same predicate as app.js's `nativeShell()`,
+  // duplicated rather than shared because store.js loads first and knows nothing
+  // about the view layer.
+  const nativeShell = () => !!window.Capacitor?.toNative;
+  // No build step, so no `registerPlugin` wrapper (it's an ES module) — the raw
+  // bridge instead, exactly as app.js does for Haptics. Push needs answers back,
+  // though, so it's `nativePromise` for calls and `nativeCallback` for events,
+  // not the fire-and-forget `toNative`.
+  const capPush = (method, options) =>
+    window.Capacitor.nativePromise('PushNotifications', method, options || {});
+  const onPush = (eventName, fn) => {
+    try { window.Capacitor.nativeCallback('PushNotifications', 'addListener', { eventName }, fn); }
+    catch { /* older bridge; the listener just never fires */ }
+  };
+
+  // Last known OS permission in the native shell, primed at boot. The web reads
+  // `Notification.permission` synchronously and the push UI is built
+  // synchronously, so the native side has to keep a cached answer to match —
+  // there is no sync read of UNUserNotificationCenter. Null means "not asked yet",
+  // which reads as 'default' and is the truth on a first launch anyway.
+  let nativePerm = null;
+  // The APNs token this device last handed us, so `disablePush` knows which row
+  // to drop and a re-launch can tell a rotated token from an unchanged one.
+  const APNS_KEY = 'tria:apns-token';
+
   function pushSupported() {
+    if (nativeShell()) return true;
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  // Hand the reader to Tria's own page in iOS Settings, resolving true only if
+  // the OS actually took the hand-off. This is the escape hatch from the one
+  // permanent push state: `requestAuthorization` is a ONE-SHOT per install, so a
+  // "Don't Allow" (or a later switch-off in Settings) can never be undone from
+  // inside the app — `requestPermissions` just resolves 'denied' with no prompt,
+  // forever. Without a route out, the profile's Notifications switch is a
+  // control that visibly does nothing, which is the same class of bug as the
+  // inert `target="_blank"` link.
+  //
+  // Native only, and it has to be: `location.href = 'app-settings:'` is
+  // completely inert in the webview and @capacitor/browser takes web URLs only.
+  // `TriaSettings` is Tria's own one-method plugin, registered from
+  // `TriaViewController.capacitorDidLoad`. False on the web, where a browser's
+  // permission is re-askable from site settings the reader already knows.
+  async function openAppSettings() {
+    if (!nativeShell()) return false;
+    try {
+      await window.Capacitor.nativePromise('TriaSettings', 'openSettings', {});
+      return true;
+    } catch { return false; }
+  }
+
+  // Permission as the three words the web uses, whichever shell we're in. The
+  // push UI is rendered synchronously and can't await, and reaching for
+  // `Notification.permission` directly in the app would throw — there is no
+  // `Notification` in a WKWebView.
+  function pushPermission() {
+    if (nativeShell()) return nativePerm === 'granted' ? 'granted'
+      : nativePerm === 'denied' ? 'denied' : 'default';
+    return typeof Notification !== 'undefined' ? Notification.permission : 'denied';
+  }
+
+  // Ask the OS for the token and resolve with it. `register()` resolves the
+  // instant it has *asked*; the token arrives later on the `registration` event,
+  // so the listener has to be in place before the call. A device with no network
+  // can leave both events unfired, hence the timeout — a hung promise here would
+  // hang the "Turning on…" button forever.
+  function apnsToken() {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const settle = (fn, v) => { if (!done) { done = true; fn(v); } };
+      onPush('registration', (d) => settle(resolve, d && d.value));
+      onPush('registrationError', () => settle(reject, new Error('apns')));
+      setTimeout(() => settle(reject, new Error('timeout')), 12000);
+      capPush('register').catch(() => settle(reject, new Error('register')));
+    });
+  }
+
+  async function saveEndpoint(row) {
+    const { error } = await sb.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' });
+    return !error;
+  }
+
+  // Boot work for the native shell: learn the permission state, and if push is
+  // already on, re-register. APNs tokens ROTATE (a restore from backup, a
+  // reinstall, occasionally an OS update), and a rotated token fails silently —
+  // the old row stays, Apple returns Unregistered, and notifications just stop
+  // with nothing anywhere to say why. So every launch re-reads the token and
+  // re-upserts it, dropping the previous row if it changed.
+  async function pushResume() {
+    if (!nativeShell()) return;
+    try { nativePerm = (await capPush('checkPermissions'))?.receive || 'prompt'; }
+    catch { nativePerm = 'prompt'; }
+    if (nativePerm !== 'granted') return;
+    const u = currentUser();
+    if (!u) return;
+    // Resume only what was already ON. Turning push off leaves the OS permission
+    // granted (see disablePush) and only drops the row, so "granted" alone is not
+    // consent — without this the next launch would quietly re-subscribe a device
+    // whose owner had just switched it off.
+    const had = localStorage.getItem(APNS_KEY) || '';
+    if (!had) return;
+    try {
+      const token = await apnsToken();
+      if (!token) return;
+      if (await saveEndpoint({ user_id: u.id, endpoint: 'apns:' + token, p256dh: '', auth: '' })) {
+        localStorage.setItem(APNS_KEY, token);
+        if (had && had !== token)
+          await sb.from('push_subscriptions').delete().eq('endpoint', 'apns:' + had);
+      }
+    } catch { /* no token this launch; the stored row keeps working or gets pruned */ }
   }
 
   // VAPID public key is base64url; PushManager wants the raw bytes.
@@ -1036,19 +1465,45 @@ const Store = (() => {
 
   // Is THIS device currently subscribed and still permitted?
   async function pushSubscribed() {
-    if (!pushSupported() || Notification.permission !== 'granted') return false;
+    if (!pushSupported()) return false;
+    if (nativeShell()) {
+      try { nativePerm = (await capPush('checkPermissions'))?.receive || 'prompt'; } catch { /* keep the cache */ }
+      return nativePerm === 'granted' && !!localStorage.getItem(APNS_KEY);
+    }
+    if (Notification.permission !== 'granted') return false;
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       return !!(reg && await reg.pushManager.getSubscription());
     } catch { return false; }
   }
 
-  // Turn ON. Must be called from a user gesture (iOS raises the OS prompt only
-  // then). Registers the worker, asks permission, subscribes, and stores it.
+  // Turn ON. Must be called from a user gesture — both platforms raise the OS
+  // prompt only then, and on iOS a decline is permanent. Asks permission, gets
+  // this device's address, stores it against the signed-in user.
   async function enablePush() {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
     if (!pushSupported()) return { ok: false, error: 'This device can’t do notifications.' };
+
+    if (nativeShell()) {
+      let perm;
+      try { perm = (await capPush('requestPermissions'))?.receive; }
+      catch { return { ok: false, error: 'Couldn’t reach notification settings.' }; }
+      nativePerm = perm || 'denied';
+      if (perm !== 'granted')
+        return { ok: false, error: 'Notifications are off. You can turn them on in your settings.', blocked: perm === 'denied' };
+
+      let token;
+      try { token = await apnsToken(); }
+      catch { return { ok: false, error: 'Couldn’t set up notifications on this device.' }; }
+      if (!token) return { ok: false, error: 'Couldn’t set up notifications on this device.' };
+
+      if (!(await saveEndpoint({ user_id: u.id, endpoint: 'apns:' + token, p256dh: '', auth: '' })))
+        return { ok: false, error: 'Couldn’t save your notification settings.' };
+      localStorage.setItem(APNS_KEY, token);
+      return { ok: true };
+    }
+
     const key = (window.TRIA_CONFIG || {}).vapidPublicKey;
     if (!key) return { ok: false, error: 'Notifications aren’t set up yet.' };
 
@@ -1067,15 +1522,26 @@ const Store = (() => {
     } catch { return { ok: false, error: 'Couldn’t set up notifications on this device.' }; }
 
     const j = sub.toJSON();
-    const { error } = await sb.from('push_subscriptions').upsert(
-      { user_id: u.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth },
-      { onConflict: 'endpoint' });
-    if (error) return { ok: false, error: 'Couldn’t save your notification settings.' };
+    if (!(await saveEndpoint({ user_id: u.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth })))
+      return { ok: false, error: 'Couldn’t save your notification settings.' };
     return { ok: true };
   }
 
-  // Turn OFF. Unsubscribe on the device and drop the stored row (best effort).
+  // Turn OFF. Dropping the stored row IS the off switch on both sides — it's the
+  // only thing the sender consults. The web also unsubscribes the device (there's
+  // a live PushManager subscription to release); iOS keeps the OS permission,
+  // since taking it back would mean re-spending the one prompt to turn push on
+  // again, and the row being gone already means nothing is sent.
   async function disablePush() {
+    if (nativeShell()) {
+      const token = localStorage.getItem(APNS_KEY);
+      localStorage.removeItem(APNS_KEY);
+      try {
+        await capPush('unregister');
+        if (token) await sb.from('push_subscriptions').delete().eq('endpoint', 'apns:' + token);
+      } catch { /* the sender prunes an unreachable token on its next send */ }
+      return { ok: true };
+    }
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       const sub = reg && await reg.pushManager.getSubscription();
@@ -1098,6 +1564,7 @@ const Store = (() => {
     // Friends
     isFriend, areFriends, addFriend, removeFriend, following, followers,
     requestsSent, requestsReceived, friendStatus,
+    declineRequest, undecline, isDeclined, declined,
     // Blocking
     isBlocked, block, unblock,
     // Compose
@@ -1113,7 +1580,8 @@ const Store = (() => {
     // Notifications
     notifications,
     // Push
-    pushSupported, pushSubscribed, enablePush, disablePush,
+    pushSupported, pushPermission, pushSubscribed, pushResume, enablePush, disablePush,
+    openAppSettings,
     // Profile
     updateAvatar, updateProfile,
   };

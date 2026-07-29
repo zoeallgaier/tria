@@ -6,6 +6,14 @@ www
 *.MOV
 *.mov
 
+# Design and store sources — the material a shipped asset was MADE from, which
+# is not the same thing as the asset. Neither is loaded by the app, and this
+# repo is also the web server: anything here is publicly downloadable at
+# triaonline.com. The screenshot photos are licensed stock plus one personal
+# photo, and they're 14MB, which git would carry in every clone forever.
+Tria Marketing images/
+*.af
+
 # Xcode / Capacitor build artifacts (the ios/App project itself is checked in)
 ios/App/App/public
 ios/DerivedData

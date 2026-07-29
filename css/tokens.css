@@ -5,6 +5,80 @@
    filter menu and the Publish button. Type is Instrument Serif (display) over Oxygen (the quiet
    functional layer). The grid and its whitespace carry the design. */
 
+/* ── The two faces, self-hosted ───────────────────────────────────────────────
+   Both families used to arrive from fonts.googleapis.com. The type IS the
+   design here, and renting it from a third party meant the first screen waited
+   on two extra handshakes on the web and on the network itself in the bundled
+   iOS app — where a cold launch with no signal drew Tria in system sans. These
+   are Google's own woff2 subsets, byte for byte, served from css/fonts (112KB
+   for all ten, and the iOS build already bundles the css folder).
+
+   Kept as separate latin / latin-ext files with their unicode-range intact, the
+   way Google serves them: a name with an accent in it still resolves, and the
+   ~40% of the payload that only exists for those accents is fetched only by the
+   people who need it. `swap` because a self-hosted file is either there or
+   something is very wrong — better a frame of fallback than invisible text. */
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/instrument-serif-400-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/instrument-serif-400-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic; font-weight: 400; font-display: swap;
+  src: url(fonts/instrument-serif-400i-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic; font-weight: 400; font-display: swap;
+  src: url(fonts/instrument-serif-400i-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal; font-weight: 300; font-display: swap;
+  src: url(fonts/oxygen-300-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal; font-weight: 300; font-display: swap;
+  src: url(fonts/oxygen-300-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/oxygen-400-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/oxygen-400-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal; font-weight: 700; font-display: swap;
+  src: url(fonts/oxygen-700-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal; font-weight: 700; font-display: swap;
+  src: url(fonts/oxygen-700-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
   /* Neutrals — cool off-white, deep cool off-black. The whole UI lives here. */
   --bg:        #edeef0;   /* cool paper */
@@ -56,6 +130,16 @@
   --radius-card:  14px;   /* photos, and floating glass menus / cards */
   --radius-nav:   18px;   /* the nav rail */
   --radius-modal: 20px;   /* glass modals + sheets */
+  /* Concentric corners (the iOS 26 rule): a nested corner is its PARENT's radius
+     minus the padding between them, so the two curves stay parallel instead of
+     the inner one bending tighter and reading as a different corner language.
+     It only applies when the child actually reaches the parent's corner — a form
+     field 1.6rem inside a modal is nowhere near it and keeps its own radius.
+     --pad-panel is the inner pad every row-holding glass panel shares, so the two
+     derived radii below stay correct if it ever moves. */
+  --pad-panel:      0.3rem;
+  --radius-row:     calc(var(--radius-card)  - var(--pad-panel));   /* rows in a menu  */
+  --radius-row-lg:  calc(var(--radius-modal) - var(--pad-panel));   /* rows in a sheet */
   --sidebar-w: 268px;
   --topbar-h:  88px;
   --feed-width: 660px;
@@ -69,14 +153,59 @@
   --body:     1rem;                            /* captions / notes */
   --kicker:   0.78rem;                         /* the uppercase date/section label */
 
-  /* Frosted glass — chrome only (nav rail, sticky masthead, lightbox, hero wash).
-     Translucent enough to show the blur, opaque enough to hold AA text over it. */
-  --glass-bg:      color-mix(in srgb, var(--bg) 74%, transparent);
-  /* Single knob for ALL frosted chrome + panels (nav, top bar, seg-tabs, search,
-     modals, sheets, menus, cards). Lower = less GPU per frame but crisper/thinner
-     frost; below ~8px content reads through and the fills need firming. The
-     lightbox/dial veil (6px) and trim UI (12px) keep their own intentional values. */
-  --glass-blur:    8px;
+  /* ── Liquid glass — the material for the layer that floats above content ────
+     The WHOLE recipe lives here now: fill, blur, edge, rim, lift. It used to be
+     copy-pasted at ~20 sites in five slightly different flavours (fills from 62%
+     to 88%, rims from #fff 12% to 40%, each with its own dark-mode block
+     restating all of it), so "our glass" was really nine glasses that happened to
+     look alike. A surface now names its TIER and inherits the rest, and dark mode
+     is answered once, at the bottom of this file, instead of per component.
+
+     THE TIERS ARE ABOUT WHAT'S BEHIND THEM, not about what the element is called.
+     A backdrop-filter only costs anything when its backdrop CHANGES, so the bill
+     is area x radius x frames-that-move:
+
+       chrome  — fixed over a feed that scrolls under it (top bar, nav pill,
+                 seg-tabs, search, the daily card). Re-samples every frame of
+                 every scroll. Stays lean.
+       panel   — sits over a page that is frozen behind it (modals, sheets,
+                 menus, the lightbox). Re-samples once and then holds. Can afford
+                 the deep blur that actually reads as glass.
+
+     That keeps the July 2026 battery pass intact rather than reverting it. The
+     heat came from thirty surfaces re-rasterizing during scroll; those are still
+     the cheap ones, and the deep blur went where nothing is moving. Chrome is at
+     15px rather than the 24 it ran before that pass, and saturate() comes back
+     only on the static tier.
+
+     Fill is THIN, and that is the single biggest reason the old glass read as
+     frosted plastic: a 62-88% fill behind an 8px blur is the inverse of every
+     native material, which is a thin fill over a deep blur. You are meant to see
+     content through glass. The blur is what keeps it from competing with the
+     text, not the fill. */
+  --glass-blur:       15px;
+  --glass-blur-panel: 30px;
+  /* saturate() is what makes a native material pick up the colour of whatever
+     passes behind it. Static tier only — it rides on the blur that's already
+     happening, but a colour matrix is still per-pixel work and chrome pays that
+     bill on every scroll frame. */
+  --glass-filter-panel: blur(var(--glass-blur-panel)) saturate(1.7);
+
+  --glass-bg:       color-mix(in srgb, var(--bg) 58%, transparent);
+  --glass-bg-panel: color-mix(in srgb, var(--bg) 70%, transparent);
+
+  /* The specular edge. Native glass lights its whole perimeter and varies around
+     it: brightest where the light strikes, nearly gone on the far side. The old
+     rim was one `inset 0 1px 0` line, which is a lit LIP — a bright top and three
+     dead sides. Two insets at opposite offsets give the full perimeter WITH the
+     falloff, at the same cost of nothing (a box-shadow is not a filter). The
+     light is top-left, the same fixed source the lit dome uses. */
+  --glass-rim:
+    inset  1px  1px 0 color-mix(in srgb, #fff 52%, transparent),
+    inset -1px -1px 0 color-mix(in srgb, #fff 14%, transparent);
+  --glass-edge: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  --glass-lift:       0 10px 30px rgba(0, 0, 0, 0.14);
+  --glass-lift-panel: 0 24px 60px rgba(0, 0, 0, 0.28);
 
   /* iOS installed-shell status-bar scrim — a top wash that backs the OS clock and
      battery glyphs where content scrolls under them (black-translucent bar, so the
@@ -185,8 +314,22 @@
     --lit-base: inset 0 -3px 6px rgba(0, 0, 0, 0.14);
     --lit-drop: 0 3px 13px rgba(0, 0, 0, 0.5);
 
-    /* Dark glass needs a touch more opacity to keep chrome legible over content. */
-    --glass-bg:      color-mix(in srgb, var(--bg) 68%, transparent);
+    /* Dark glass, answered once for every surface. Chrome runs a shade thinner
+       than light (dark paper already suppresses what's behind it, so the same
+       fill reads heavier), and panels a shade THICKER — they carry form fields
+       and dense rows, and a bright photo behind an under-filled panel is where
+       dark mode loses its text. The rim is the real difference: a near-white
+       specular line on a near-black surface is a neon strip, so it drops to a
+       sixth of its light-mode strength and the falloff side nearly vanishes.
+       Shadows deepen, because a 14% black shadow on #0e1012 is not a shadow. */
+    --glass-bg:       color-mix(in srgb, var(--bg) 55%, transparent);
+    --glass-bg-panel: color-mix(in srgb, var(--bg) 74%, transparent);
+    --glass-rim:
+      inset  1px  1px 0 color-mix(in srgb, #fff 17%, transparent),
+      inset -1px -1px 0 color-mix(in srgb, #fff 5%, transparent);
+    --glass-edge: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
+    --glass-lift:       0 10px 30px rgba(0, 0, 0, 0.5);
+    --glass-lift-panel: 0 24px 60px rgba(0, 0, 0, 0.5);
 
     /* Flip the status-bar scrim dark: iOS paints light glyphs on the dark
        theme-color, so they need a dark backing to read over light content. */

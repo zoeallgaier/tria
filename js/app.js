@@ -2,27 +2,58 @@
    A tiny hash router over a handful of views — My Circle (the feed), Friends,
    Updates, Profile (own + any friend's, at #/u/username), Publish, and the
    public About page. Every view renders into #view and inherits the router's
-   directional page transition (see renderPage). */
+   page transition (see renderPage). */
 
 (function () {
   'use strict';
 
   // `stage` is the fixed shell (#view); `view` is the current *page* inside it
-  // that every render function fills. The router (see renderPage) cross-dissolves
-  // one page into the next, so render code just targets `view` and never has to
-  // know a transition is happening.
+  // that every render function fills. The router (see renderPage) dissolves the
+  // outgoing page away over the next one, so render code just targets `view` and
+  // never has to know a transition is happening.
   const stage = document.getElementById('view');
   let view = null;
   let navToken = 0;           // guards against a stale transition cleaning up a new one
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
-  const TRANSITION_MS = 300;   // page cross-dissolve, must match .page in app.css
+  const TRANSITION_MS = 240;   // page fade-out, must match --dur-quick / .page.leave in app.css
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   const prefersReduced = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Tria runs in three shells: a browser tab, a home-screen PWA, and (since the
+  // App Store build) a native iOS app wrapping the same files. Capacitor injects
+  // its bridge into the webview before any app JS runs, so the global's presence
+  // IS the shell test — no user-agent sniffing, and it's the same object the
+  // haptics talk to, so one truth serves both.
+  //
+  // It has to be a function, not a captured boolean: this module is evaluated
+  // from a <script> in <head> order, and reading the global once at parse time
+  // is exactly the kind of thing that works until it silently doesn't.
+  const nativeShell = () => !!window.Capacitor?.toNative;
+
+  // "Am I installed?" — a DIFFERENT question from "am I the native app?", and the
+  // three shells each answer it in their own dialect: the App Store build has the
+  // Capacitor bridge, an iOS home-screen PWA has navigator.standalone, and every
+  // other installed PWA reports display-mode: standalone. No shell answers more
+  // than one of those, which is why asking only one of them is always a bug in
+  // the other two.
+  //
+  // It kept being asked in CSS, where only the third dialect exists. That's how
+  // .statusbar-scrim ended up dead in the App Store build: it was gated on
+  // `@media (display-mode: standalone)`, and Capacitor's webview reports
+  // `browser`. So the answer is stamped onto <html> once, here, and the
+  // stylesheet reads the attribute instead of re-deriving it from a media
+  // feature that only one of the three shells sets.
+  const installedShell = () =>
+    nativeShell() ||
+    navigator.standalone === true ||
+    window.matchMedia?.('(display-mode: standalone)').matches === true;
+
+  document.documentElement.dataset.shell = installedShell() ? 'installed' : 'browser';
 
   // The --spring token (tokens.css) doubles as the WAAPI easing for the press
   // engine and the lightbox flight — WAAPI takes the same easing strings CSS
@@ -38,6 +69,39 @@
   // instant on a plain route change.
   const scrollTop = (smooth) =>
     window.scrollTo({ top: 0, behavior: smooth && !prefersReduced() ? 'smooth' : 'auto' });
+
+  /* ── The top bar's hidden state ─────────────────────────────────────────────
+     Mobile: the bar steps out of the way while you read down a feed and returns
+     the moment you scroll back up (the watcher is further down; the transform
+     lives in CSS and only applies at phone widths).
+
+     Hiding is INFERRED from a scroll delta, and that is fine for a thumb — but a
+     navigation is not a thumb, and the bar was being left to a scroll event that
+     may never come. The router places the window itself (top, a remembered
+     position, a spotlighted card), and if the destination happens to already be
+     where the window sits, nothing scrolls, no event fires, and the bar keeps a
+     `hidden` that was a statement about a page that isn't on screen any more.
+     Worse, the page you land on is often SHORTER than the one you left: at the
+     top of a page with nothing to scroll there is no gesture left that can bring
+     the bar back, so it is gone until you navigate somewhere tall. Hence: the
+     router STATES the bar the same way it states the scroll, rather than hoping
+     to infer it.
+
+     Two rules, and the asymmetry is deliberate. At the top of a page the bar is
+     always shown, because "hidden" only ever meant "you are reading DOWN
+     something". Anywhere else it is left exactly as the reader set it — a
+     spotlight lands a thousand pixels into a feed, and slamming the bar back
+     there would staple a second move onto a navigation meant to be one fade. */
+  let barLastY = 0;
+  function syncTopbar() {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    const y = window.scrollY;
+    // Also show it on a page too short to scroll at all: there is no way back.
+    const canScroll = document.documentElement.scrollHeight - window.innerHeight > 48;
+    if (y < 48 || !canScroll) bar.classList.remove('topbar--hidden');
+    barLastY = y;    // a placed scroll is not a gesture — don't let the next one measure from it
+  }
 
   // Collapsing a long post (a folded note or a dropdown) can drop the timeline out
   // from under you — you were deep inside an essay, and now everything below it
@@ -79,23 +143,28 @@
     });
   }
 
-  // Glide to a card that may be a long way down, and RE-AIM every frame instead
-  // of committing to one offset up front the way scrollIntoView does.
+  // Put a targeted card where it needs to be, with NO travel — the page's own
+  // cross dissolve is the transition, and this just makes sure the right thing is
+  // underneath it when it fades up.
   //
-  // The one-shot version was landing wide on older posts, and the further down
-  // the target sat the worse it got. Everything between here and there is
-  // lazy-loaded, so it loads as the scroll passes it: legacy photos swap their
-  // 3:2 reserve box for the media's real shape, videos resolve, avatars arrive.
-  // All of that moves the target AFTER the animation has already decided where
-  // to stop, and the error is cumulative — hence overshoot, and only on the
-  // long trips. Measuring the card live absorbs every bit of it.
+  // It used to glide: a 460ms eased scroll to the card, then a tinted wash over
+  // it, both starting 120ms after the route settled. Three moves stacked on one
+  // tap — fade the page in, THEN travel, THEN flash — and the travel got longer
+  // and more obviously wrong the older the post was, because a spotlight from
+  // Discover or Updates routinely aims a thousand pixels down a feed. Landing
+  // already there is not a cheaper version of that animation, it's the correct
+  // one: you asked for a post, the post is what fades in.
   //
-  // Then it HOLDS: for a beat after the move it keeps snapping to the live aim
-  // each frame, so anything that reflows late reads as the page settling around
-  // a card that stays put. That's scroll anchoring, done by hand because WebKit
-  // doesn't give it to us. Any real input and we're gone; nothing here fights
-  // the user's own scroll.
-  function glideToCard(el) {
+  // The HOLD survives, and matters more now than it did. Everything between the
+  // top of the feed and the target is lazy-loaded, so it resolves over the next
+  // few hundred ms: legacy photos swap their 3:2 reserve box for the media's real
+  // shape, videos resolve, avatars arrive. Each one that lands ABOVE the card
+  // shoves it down, and mid-dissolve that reads as the post sliding away from
+  // you. So for a beat we keep re-aiming every frame — the content moves, the
+  // card doesn't. That's scroll anchoring, done by hand because WebKit won't do
+  // it for us. Any real input and we're gone; this never fights the user's own
+  // scroll.
+  function parkCard(el) {
     const aim = () => {
       const r = el.getBoundingClientRect();
       const vh = window.innerHeight;
@@ -106,11 +175,12 @@
       const max = Math.max(0, document.documentElement.scrollHeight - vh);
       return Math.min(max, Math.max(0, window.scrollY + r.top - pad));
     };
-    if (prefersReduced()) { window.scrollTo(window.scrollX, aim()); return; }
 
-    const from = window.scrollY;
+    window.scrollTo(window.scrollX, aim());   // synchronous: before the first paint of the new page
+    if (prefersReduced()) return;
+
     const t0 = performance.now();
-    const GLIDE = 460, HOLD = 900;
+    const HOLD = 900;
     const events = ['wheel', 'touchstart', 'keydown'];
     let stopped = false;
     const bail = () => { stopped = true; };
@@ -118,18 +188,9 @@
     events.forEach(ev => window.addEventListener(ev, bail, { passive: true }));
 
     const step = (now) => {
-      if (stopped) return done();
-      const t = now - t0, want = aim();
-      if (t < GLIDE) {
-        const e = 1 - Math.pow(1 - t / GLIDE, 3);          // ease-out cubic
-        window.scrollTo(window.scrollX, from + (want - from) * e);
-      } else if (t < GLIDE + HOLD) {
-        // Settled. Correct on the very next frame so a late shift never reads
-        // as drift — the content moves, the card doesn't.
-        if (Math.abs(want - window.scrollY) > 0.5) window.scrollTo(window.scrollX, want);
-      } else {
-        return done();
-      }
+      if (stopped || now - t0 > HOLD) return done();
+      const want = aim();
+      if (Math.abs(want - window.scrollY) > 0.5) window.scrollTo(window.scrollX, want);
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -1180,14 +1241,14 @@
   }
 
   /* The one-way-tie vocabulary, in ONE place. A one-way tie to a public account
-     is named in four spots — the profile button, the Discover pill, the Updates
-     ledger line, and that section's kicker — so they live here rather than as
-     four loose strings that drift apart. Change the word once, it changes
-     everywhere. (The commit button stays "Add friend": you're always reaching
-     for the same thing, a mutual tie. This names what you get until they reach
-     back.) */
+     is named in two spots — the profile button and the Updates ledger line — so
+     they live here rather than as loose strings that drift apart. Change the word
+     once, it changes everywhere. (The commit button stays "Add friend": you're
+     always reaching for the same thing, a mutual tie. This names what you get
+     until they reach back.) There was a third, the kicker over a standing
+     "followers" block on Updates; that block is gone — a follow is an event in
+     the ledger now, not a list of people waiting on an answer they never needed. */
   const FOLLOW_STATE = 'Following';           // the committed state, on a button
-  const FOLLOW_NOUN  = 'follower';            // pluralised for the ledger kicker
   const FOLLOW_LINE  = 'started following you';   // the ledger row itself
 
   // Two gates, because the gestures split now that Discover puts strangers in
@@ -1958,6 +2019,7 @@
         buttons.forEach(b => b.disabled = true);
         const res = await Store.votePoll(post.id, choice);
         if (!res.ok) { buttons.forEach(b => b.disabled = false); return; }
+        hapticTap('LIGHT');
         const wrap = document.createElement('div');
         wrap.innerHTML = pollWidgetHtml(post, choice);
         const fresh = wrap.firstElementChild;
@@ -1993,6 +2055,10 @@
       const res = await Store.toggleGoing(post.id);
       btn.disabled = false;
       if (!res.ok) return;
+      // Joining is the one gesture here that commits you to a place and a time,
+      // so it's the one that gets the heavier knock. Bowing out is just a screen
+      // changing its mind.
+      hapticTap(res.going ? 'MEDIUM' : 'LIGHT');
       // Joining lands you on the list: you see who you just joined, and the way
       // back out is right there under them. Bowing out leaves it open too — you
       // were already reading it.
@@ -2018,6 +2084,79 @@
 
     el.querySelector('.going-out')?.addEventListener('click', flip);
   }
+
+  /* ── Haptics ────────────────────────────────────────────────────────────────
+     The reward moments have a visual voice already (the sparkle burst, the ink
+     stamp, the RSVP check). Inside the installed iOS app they get a physical one.
+
+     Capacitor injects its native bridge into the webview before any app JS runs,
+     so `window.Capacitor.toNative(plugin, method, options)` is simply there when
+     Tria is the app and undefined everywhere else — the same file boots on the
+     web untouched, which is the whole reason to reach for the bridge's raw call
+     instead of @capacitor/haptics' tidier `registerPlugin` wrapper. That wrapper
+     is an ES module and Tria has no build step. The wire format is identical,
+     and fire-and-forget allocates nothing (no promise, no stored callback id),
+     which is what a buzz thrown from a tap handler wants.
+
+     Deliberately NOT gated on prefers-reduced-motion, unlike the sparkles. A
+     haptic isn't motion; iOS has its own system-wide switch for it (Sounds &
+     Haptics → System Haptics, which UIFeedbackGenerator obeys long before we
+     hear about it); and someone who turned the animations down has *lost* their
+     confirmation that a tap landed, so the buzz is worth more to them, not less.
+
+     Every call fires on the CONFIRMED WRITE, never on the touch. The buzz means
+     "that saved" — a thing worth feeling — where "you touched glass" is
+     something the finger already knew. Nothing may depend on one firing: on the
+     web, on a desktop, or with system haptics off this is silence, and silence
+     has to stay a correct outcome.  */
+  function haptic(method, options) {
+    if (nativeShell()) {
+      try { window.Capacitor.toNative('Haptics', method, options || {}); }
+      catch { /* a garnish, never a failure */ }
+      return;
+    }
+    // Android web has the Vibration API; iOS Safari has never shipped it. A
+    // coarse motor buzz is a poor cousin to a real impact generator, so keep it
+    // brief enough to read as punctuation rather than an alarm.
+    if (navigator.vibrate) {
+      try { navigator.vibrate(method === 'notification' ? [10, 40, 10] : 8); } catch { /* ignore */ }
+    }
+  }
+
+  // LIGHT for something that stays on the screen, MEDIUM for something that
+  // lands in the real world — the same split as canSocial vs canJoin.
+  const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
+  const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
+
+  /* ── Outbound links in the native shell ──────────────────────────────────────
+     A WKWebView will not open a second window: `window.open` returns null and a
+     `target="_blank"` anchor does nothing at all — not navigate, not hand off to
+     Safari, nothing. On the web that attribute is exactly right (a Find's link
+     opens beside Tria instead of replacing it), but in the App Store build it
+     silently killed the primary action of three post types: a Find's title and
+     note link, and an activity's map pin. A tap that visibly does nothing is a
+     broken feature, and review reads it as one too.
+
+     So: in the native shell only, intercept those clicks and hand the URL to
+     @capacitor/browser, which presents SFSafariViewController *over* the app —
+     the reader gets Safari's chrome and a Done button that returns them exactly
+     where they were. That's the behaviour iOS users expect from a link inside an
+     app, and it's better than what _blank does on the web. Plain in-app hash
+     links are untouched; they already work.
+
+     Delegated at the document, so it covers every card the feed will ever build
+     without a per-render wiring step. Capture phase, because a card's own click
+     handlers shouldn't get to swallow it first.  */
+  document.addEventListener('click', (e) => {
+    if (!nativeShell()) return;
+    const a = e.target.closest?.('a[target="_blank"]');
+    if (!a) return;
+    const href = a.getAttribute('href') || '';
+    if (!/^https?:\/\//i.test(href)) return;   // in-app routes navigate normally
+    e.preventDefault();
+    try { window.Capacitor.toNative('Browser', 'open', { url: href }); }
+    catch { /* if the sheet can't open, leaving the tap inert is the old behaviour */ }
+  }, true);
 
   // The RSVP's own reward verb (deliberately NOT a fifth sparkle — that motif
   // belongs to likes, comments, polls, and fresh posts): the check draws itself
@@ -2090,6 +2229,7 @@
       const res = await Store.toggleLike(post.id);
       btn.disabled = false;
       if (!res.ok) return;
+      hapticTap('LIGHT');   // both directions: the tap is confirming an async write
       btn.classList.toggle('liked', res.liked);
       btn.setAttribute('aria-pressed', String(res.liked));
       btn.setAttribute('aria-label', res.liked ? 'Unlike' : 'Like');
@@ -2723,6 +2863,16 @@
     scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
     items().forEach(btn => btn.addEventListener('click', () => {
       const key = btn.dataset.filter;
+      // The dial is the single place every filter pick passes through — the home
+      // feed, Discover and a profile's shelf all hand it their own list — so the
+      // tap belongs here rather than copied into three onPick callbacks.
+      //
+      // LIGHT, because a filter lands on screen and nowhere else (the same split
+      // as canSocial vs canJoin). And only when the pick actually CHANGES the
+      // filter: re-choosing the row that already wears the checkmark repaints
+      // nothing, and a buzz for it would be the phone confirming a write that
+      // never happened, which is the one thing the haptic is supposed to mean.
+      if (key !== current) hapticTap('LIGHT');
       close(() => onPick(key));
     }));
     document.addEventListener('keydown', onKey);
@@ -2927,31 +3077,25 @@
   let authMode = 'signup';
 
   // Signed-out brand header — the front-door echo of the signed-in .topbar (same
-  // wordmark), shared by the welcome tutorial and the auth (log in / create)
-  // screens so they read as one app. The slogan rides in the header. The account
-  // disc is pinned top-left, the mirror of the sprout's top-right perch; it opens
-  // the auth form for returning users (and toggles create ⇄ log in from there).
+  // wordmark), shared by the auth (log in / create) screens and the gated About
+  // page so they read as one app. The slogan rides in the header.
+  //
+  // It carried a person disc at the right edge until July 2026, a "returning
+  // user, sign in here" escape hatch left over from when the signed-out front
+  // door was the install-first welcome tutorial. Once that page came out and the
+  // account form became the front door in every shell, the disc was pointing at
+  // the screen it was standing on: on log in it re-rendered the current view, on
+  // create account it duplicated the "Already have an account? Log in" toggle
+  // sitting under the submit button, and on About it was never even wired (that
+  // page has its own "Back to sign in") — a glyph you could press three times and
+  // get nothing twice. Don't re-add one: a door doesn't need a sign saying door.
   function authHeader() {
     return `<header class="auth-topbar">` +
         `<div class="auth-topbar-brand">` +
           `<span class="brand-mark">tria</span>` +
           `<span class="auth-topbar-tag">Social media made local</span>` +
         `</div>` +
-        `<button class="auth-account" type="button" id="auth-account" aria-label="Sign in">` +
-          svgIcon('profile', 'auth-account-ico') +
-        `</button>` +
       `</header>`;
-  }
-  function wireAuthAccount() {
-    const btn = document.getElementById('auth-account');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      authMode = 'login';   // returning-user affordance; the form offers "create one"
-      // Already on the auth screen (e.g. create-account): flip to log in in place,
-      // since the hash wouldn't change and the router wouldn't re-render.
-      if (location.hash.replace(/\?.*$/, '') === '#/signin') renderAuth('login');
-      else go('#/signin');
-    });
   }
 
   function renderAuth(mode) {
@@ -3008,7 +3152,11 @@
           (isSignup
             ? `<label class="auth-agree" for="f-agree">` +
                 `<input id="f-agree" type="checkbox">` +
-                `<span>I agree to Tria's <a href="#/about?open=guidelines" target="_blank" rel="noopener">Community Guidelines</a> and <a href="#/about?open=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>` +
+                // No target="_blank": these are hash routes into Tria's own About
+                // page, so a new tab was only ever a second copy of the app — and
+                // in the native shell WKWebView refuses to open one at all, which
+                // made the Privacy Policy link on the very first screen a dead tap.
+                `<span>I agree to Tria's <a href="#/about?open=guidelines">Community Guidelines</a> and <a href="#/about?open=privacy">Privacy Policy</a>.</span>` +
               `</label>`
             : '') +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
@@ -3023,7 +3171,6 @@
         `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
       `</div></section>`;
 
-    wireAuthAccount();
     const nameInput = document.getElementById('f-name');
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
@@ -3063,37 +3210,6 @@
     // the switch feels like part of the app rather than an instant redraw.
     document.getElementById('auth-toggle').addEventListener('click',
       () => renderPage(() => renderAuth(isSignup ? 'login' : 'signup')));
-  }
-
-  /* ── Install-first welcome (signed-out browser front door) ────────────────────
-     The first impression in a browser: lead with adding Tria to the home screen
-     (iOS steps — Android is a near-identical two-tap, so a single column keeps
-     the page focused), with account actions kept secondary below. The spine is
-     "install first, THEN create your account inside the app", because a session
-     made in Safari does not carry into the installed PWA (separate storage) —
-     which is what was making people sign in twice. Installed visitors never see
-     this: route() sends standalone launches straight to the form. Reuses the
-     .auth card shell + the About page's animated .install-steps / INSTALL_ICONS. */
-  function renderWelcome() {
-    view.innerHTML =
-      `<section class="auth welcome">` +
-        // Shared brand header (wordmark + slogan + the corner account disc). The
-        // page's one job is "add Tria to your home screen"; signing up is meant to
-        // happen in the installed app (the double-login fix), so account stays a
-        // quiet corner escape hatch for returning users.
-        authHeader() +
-        `<div class="auth-card">` +
-        `<h1 class="auth-head welcome-head">Add Tria to your home screen</h1>` +
-        `<p class="welcome-lede">Tria lives on the web, so there's nothing to ` +
-          `download. <strong>Add it to your home screen</strong> and it opens ` +
-          `just like any other app.</p>` +
-        installToggleHtml() +
-        `<ol class="install-steps welcome-steps">${installStepsHtml()}</ol>` +
-        `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
-      `</div></section>`;
-
-    wireAuthAccount();
-    wireInstallToggle(view);
   }
 
   // Login met the confirm-email gate: drop a one-tap "resend" under the error so
@@ -3416,11 +3532,16 @@
   // rides the NAME because it's a property of the account, not of the post.
   // `fenced` is the caller's answer, because both callers already cache it.
   //
-  // NO @handle either. It's the second line of every one of these feet, it's a
-  // database key rather than a way anyone thinks of a person, and on a page
-  // whose whole job is faces it doubles the identity block to say the same
-  // thing twice. Search still matches handles (see scoreName) — you can look
-  // someone up by one, it just isn't printed forty times down the page.
+  // The @handle rides the PORTRAIT tile only, and that split is the whole rule.
+  // On a post tile the name is a byline — it answers "who said this", the face
+  // above it is the content, and a handle there was the second line of every
+  // foot on the page saying the same thing twice. On a portrait tile the person
+  // IS the content: nothing else on that tile distinguishes one Sam from the
+  // other Sam, and a directory that can't tell them apart is a directory you
+  // have to tap through twice. So it prints where it disambiguates and stays
+  // out of the browse grid's bylines. Search matches handles either way (see
+  // scoreName), so the two Sams were always FINDABLE — they just weren't
+  // separable once found.
   //
   // A post tile deep-links to the post ON their profile (?p=<id>, the same
   // link Copy-link mints), so tapping a thing you're curious about takes you
@@ -3429,6 +3550,20 @@
     const u = t.user;
     const fence = fenced
       ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
+    // The lock is glued to the name's LAST WORD, because on a tile this narrow a
+    // two-word name wraps and an inline mark left to itself lands alone on a
+    // line of its own — a whole third row of foot, taller than the tile beside
+    // it, holding one padlock. Gluing costs the last word its soft wrap, which
+    // is why a long one is left loose: `overflow-wrap: anywhere` exists on this
+    // name so a single unbroken word can't shove the arrow off the tile, and
+    // nowrap would switch that rescue off. Under ~14 characters the word fits a
+    // column anyway, so there's nothing to switch off.
+    const name = (u.name || '').trimEnd();
+    const cut = name.lastIndexOf(' ');
+    const tail = name.slice(cut + 1);
+    const nameHTML = !fence ? esc(name)
+      : tail.length > 14 ? esc(name) + fence
+      : esc(name.slice(0, cut + 1)) + `<span class="name-fence">${esc(tail)}${fence}</span>`;
     // The portrait rejoins the foot only when the face is a POST — otherwise
     // the face already is their photo and a second copy is just noise. Same
     // reason the bio only shows on a portrait tile: one thing per tile.
@@ -3444,7 +3579,8 @@
         `<div class="ptile-foot">` +
           `<div class="ptile-who">` + av +
             `<div class="ptile-id">` +
-              `<p class="account-name">${esc(u.name)}${fence}</p>` +
+              `<p class="account-name">${nameHTML}</p>` +
+              (t.post ? '' : `<p class="ptile-handle">@${esc(u.username)}</p>`) +
             `</div>` +
             `<span class="friend-go" aria-hidden="true">→</span>` +
           `</div>` +
@@ -3769,26 +3905,20 @@
 
     paintPosts(true);
 
-    // An Updates row or a Discover tile targeted this post: bring it into view
-    // with a brief wash, so the tap visibly lands on the thing you asked for.
+    // An Updates row or a Discover tile targeted this post: the page arrives
+    // already sitting on it. Synchronous, so the position is set before the new
+    // page's first paint and the router's cross dissolve reveals the card in
+    // place — the fade IS the transition to the post.
+    //
+    // No wash. A highlight pulse answers "which one did I mean?", and nothing
+    // asked: the card is centred on a page you opened by tapping it. Stacking a
+    // tint on top of the dissolve was the third simultaneous move on one tap.
     // The router skips its top-snap while a spotlight is pending (see route), so
-    // this glide is the only motion — one move to the card, not a jump-to-top
-    // then back down. (Delayed a beat so the page transition has settled first.)
-    // glideToCard re-aims as it goes; see the note there for why a plain
-    // scrollIntoView overshot anything deep in the feed.
+    // there's no jump-to-top to undo either.
     if (spotlightPost) {
       const target = feedEl.querySelector(`[data-id="${spotlightPost}"]`);
       spotlightPost = null;
-      if (target) setTimeout(() => {
-        glideToCard(target);
-        target.style.transition = 'background-color 0.5s var(--ease-soft)';
-        target.style.borderRadius = 'var(--radius)';
-        target.style.backgroundColor = 'color-mix(in srgb, var(--accent) 8%, transparent)';
-        setTimeout(() => { target.style.backgroundColor = 'transparent'; }, 1400);
-        setTimeout(() => {
-          target.style.transition = target.style.backgroundColor = target.style.borderRadius = '';
-        }, 2100);
-      }, 120);
+      if (target) parkCard(target);
       else scrollTop(false);   // target filtered out — fall back to the top
     }
 
@@ -4328,6 +4458,11 @@
     scrim.querySelectorAll('.sheet-item').forEach(btn =>
       btn.addEventListener('click', () => {
         const it = items[+btn.dataset.i];
+        // The one haptic that fires on the touch rather than on a confirmed
+        // write, and correctly so: a danger row is a warning ABOUT what's coming,
+        // not a receipt for something done. Blocking, deleting and reporting all
+        // route through here, so this is the single place it belongs.
+        if (it && it.danger) hapticEvent('WARNING');
         close(() => { if (it && it.run) it.run(); });
       }));
     document.addEventListener('keydown', onKey);
@@ -5197,9 +5332,16 @@
 
     // A tile matches on WHO it's by first and WHAT it says second, so typing a
     // name still puts that person's tiles up top even if a stranger mentioned them.
-    const tileScore = (t, q) =>
-      scoreName(t.user, q) ||
-      ((t.post ? postHaystack(t.post) : saidBy(t.user.username)).includes(q) ? 0.5 : 0);
+    // And within a name match the PORTRAIT outranks every post: someone typing a
+    // name is asking for the person, and the profile tile is the person — their
+    // photographs are the second answer, not the first. The bump is bigger than
+    // the whole name scale (2), so any portrait beats any post rather than a
+    // loose match on one sorting under a tight match on the other.
+    const tileScore = (t, q) => {
+      const named = scoreName(t.user, q);
+      if (named) return t.post ? named : named + 3;
+      return (t.post ? postHaystack(t.post) : saidBy(t.user.username)).includes(q) ? 0.5 : 0;
+    };
 
     // Every tile on the page, in ONE grid — see rules 5 and 6. Chronological,
     // newest first, with elbow room.
@@ -5269,7 +5411,15 @@
 
     // The posts first, then whoever had nothing to show, trailing alphabetically
     // with a portrait (see rule 4).
-    const buildTiles = (searching) => {
+    //
+    // A search adds a third group ahead of both: a portrait for every account
+    // whose NAME matches the query. A portrait only ever appeared for someone
+    // with nothing on the page, so looking a person up reached them through
+    // their posts and nowhere else — the more somebody posted the harder they
+    // were to find AS a person, and the answer to their name was a wall of their
+    // photographs with the profile one tap inside any of them. Ranking is
+    // tileScore's job; this is what gives it a profile to rank.
+    const buildTiles = (q) => {
       // Everyone but me (you aren't discovering yourself) and anyone blocked.
       const pool = new Set(Store.users().map(u => u.username)
         .filter(n => !!n && n !== me && notBlocked(n)));
@@ -5277,18 +5427,26 @@
       // tile, so nobody's row depends on whether they posted lately — which is
       // the whole point of asking for people rather than for posts. Alphabetical,
       // because a directory sorted by recency is just the grid again.
+      const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
       if (discoverFilter === 'people') {
-        return [...pool].map(n => Store.user(n)).filter(Boolean)
-          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        return [...pool].map(n => Store.user(n)).filter(Boolean).sort(byName)
           .map(u => ({ user: u, post: null }));
       }
+      // Whoever the query names, portrait first. They keep their post tiles too,
+      // further down — the profile leads, the work follows.
+      const named = q ? [...pool].map(n => Store.user(n))
+        .filter(u => u && scoreName(u, q)).sort(byName) : [];
+      const facing = new Set(named.map(u => u.username));
       const posts = spaced(
-        discoverPool(searching).filter(p => pool.has(p.author)),
-        searching ? Infinity : TILE_CAP, searching ? 0 : FACE_GAP);
+        discoverPool(!!q).filter(p => pool.has(p.author)),
+        q ? Infinity : TILE_CAP, q ? 0 : FACE_GAP);
       const loud = new Set(posts.map(p => p.author));
-      const quiet = [...pool].filter(n => !loud.has(n)).map(n => Store.user(n)).filter(Boolean)
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      return posts.map(p => ({ user: Store.user(p.author), post: p }))
+      // Anyone already holding a portrait above is skipped here, or a quiet
+      // account whose name matched would face you twice.
+      const quiet = [...pool].filter(n => !loud.has(n) && !facing.has(n))
+        .map(n => Store.user(n)).filter(Boolean).sort(byName);
+      return named.map(u => ({ user: u, post: null }))
+        .concat(posts.map(p => ({ user: Store.user(p.author), post: p })))
         .concat(quiet.map(u => ({ user: u, post: null })));
     };
 
@@ -5316,7 +5474,7 @@
       // a type keeps the tiles faced by it.
       const keep = (t) => discoverFilter === 'all' || discoverFilter === 'people'
         || (t.post && t.post.type === discoverFilter);
-      let tiles = buildTiles(!!q).filter(keep);
+      let tiles = buildTiles(q).filter(keep);
       // Score ONCE per tile, then sort the scores. Scoring inside the comparator
       // read every haystack O(n log n) times instead of once, which on a page
       // this size is the difference between a keystroke you feel and one you
@@ -5569,18 +5727,24 @@
       n.kind === 'like'    ? `liked ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
       n.kind === 'vote'    ? `voted in ${label}` :
+      // The only row here about a person rather than a post. 'back' is them
+      // answering an add of yours; plain is them arriving on their own.
+      n.kind === 'follow'  ? (n.back ? 'added you back' : FOLLOW_LINE) :
                              `is going to ${label}`;
     // Mentions live on someone else's post, so the row walks to that profile;
-    // everything else lands on your own column.
-    const href = (n.kind === 'mention' && post)
-      ? `#/u/${esc(encodeURIComponent(post.author))}` : '#/profile';
+    // a follow has no post at all and walks to the person; everything else lands
+    // on your own column.
+    const href =
+      n.kind === 'follow' ? `#/u/${esc(encodeURIComponent(n.user))}` :
+      (n.kind === 'mention' && post) ? `#/u/${esc(encodeURIComponent(post.author))}`
+                                     : '#/profile';
     const fresh = n._ts && n._ts > lastSeen;
     // data-key is the row's stable identity for the reconcile in renderUpdates
     // (kind + which post + who + when) — one event, one row, across refreshes.
-    const key = esc(`${n.kind}:${n.postId}:${n.user}:${n._ts || ''}`);
+    const key = esc(`${n.kind}:${n.postId || ''}:${n.user}:${n._ts || ''}`);
     return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
-          `data-post="${esc(n.postId)}" data-kind="${n.kind}">` +
+          `data-post="${esc(n.postId || '')}" data-kind="${n.kind}">` +
           avatarEl(u || { name: n.user }, { cls: 'comment-avatar' }) +
           `<span class="notif-body">` +
             `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
@@ -5603,13 +5767,22 @@
   // Incoming friend requests — the one actionable thing on an otherwise passive
   // ledger, so it sits up top with Accept / Ignore inline. Shown only under the
   // All filter (a request isn't a mention). Empty string when nobody's asked.
+  //
+  // ONLY requests. Followers used to get a second block here, with an "Add back"
+  // button, and it never emptied: nothing about a follow is pending — on a public
+  // account it never needed your permission in the first place — so a row that
+  // demands an answer to it is asking a question with no wrong answer and no way
+  // to finish. Being followed became a chore list. A follow is an event now and
+  // files itself in the ledger below (notifications(), kind 'follow'), where it
+  // ages down the page like a like does. This block only ever holds things that
+  // genuinely stop until you say something, and every one of them can be ended
+  // for good with Ignore.
   function friendRequestsHtml() {
     if (notifFilter !== 'all') return '';
     const people = (list) => list.map(Store.user).filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
     const reqs = people(Store.requestsReceived());
-    const folls = people(Store.followers());
-    if (!reqs.length && !folls.length) return '';
+    if (!reqs.length) return '';
 
     // A ledger row in the notif voice, with buttons where a passive row's dot
     // would sit. The avatar + text link walks to their profile, like a notif.
@@ -5622,24 +5795,19 @@
         `<span class="request-actions">${actions}</span>` +
       `</li>`;
 
-    // Requests need an answer, so they keep Accept / Ignore.
+    // Accept adds them back. Ignore is a real answer, not a dismissal: it clears
+    // the request and remembers it, so the same person can ask again as often as
+    // they like and this never comes back (Store.declineRequest). That's the
+    // difference between a decision and a snooze, and it's why the label can stay
+    // this quiet.
     const reqRows = reqs.map(u => row(u, 'req', 'wants to be friends',
       `<button class="request-accept" type="button" data-accept="${esc(u.username)}">Accept</button>` +
       `<button class="request-ignore" type="button" data-ignore="${esc(u.username)}" ` +
         `aria-label="Ignore request from ${esc(u.name)}">Ignore</button>`)).join('');
 
-    // Follows DON'T. Nothing is pending — the tie already exists, and on a public
-    // account it never needed your permission. So this row is news, not a
-    // decision: no Ignore (there's nothing to decline), just the open door back.
-    const folRows = folls.map(u => row(u, 'fol', FOLLOW_LINE,
-      `<button class="request-accept" type="button" data-accept="${esc(u.username)}" ` +
-        `aria-label="Add ${esc(u.name)} back">Add back</button>`)).join('');
-
-    const section = (kicker, rows) => rows
-      ? `<p class="requests-kicker">${kicker}</p><ul class="requests-list">${rows}</ul>` : '';
     return `<div class="requests">` +
-        section(`Friend request${reqs.length === 1 ? '' : 's'}`, reqRows) +
-        section(`New ${FOLLOW_NOUN}${folls.length === 1 ? '' : 's'}`, folRows) +
+        `<p class="requests-kicker">Friend request${reqs.length === 1 ? '' : 's'}</p>` +
+        `<ul class="requests-list">${reqRows}</ul>` +
       `</div>`;
   }
 
@@ -5658,9 +5826,43 @@
   function pushAskEligible() {
     if (!Store.pushSupported()) return false;
     if (pushDemo()) return true;
-    return Notification.permission === 'default'
+    // Store.pushPermission(), never `Notification.permission` — there is no
+    // `Notification` object in a WKWebView, so reading it directly throws in the
+    // App Store build, which is exactly where push is newest.
+    return Store.pushPermission() === 'default'
       && localStorage.getItem(pushAskKey()) !== 'off';
   }
+  // One answer for a failed "turn on", shared by the pre-prompt card and the
+  // profile switch so the two can't drift. The interesting failure isn't an error
+  // string, it's a DEAD END: iOS gives `requestAuthorization` one shot per
+  // install, so once it's been answered the system prompt can never appear again
+  // and `enablePush` resolves 'denied' instantly with no UI at all. The switch
+  // then reads as a control that visibly does nothing, which is the same bug as
+  // an inert `target="_blank"` link, and the old copy ("you can turn them on in
+  // your settings") named a place the app could open but wasn't offering to.
+  //
+  // Native only, because it's an iOS-only dead end: a browser's permission is
+  // re-askable from site settings the reader already knows how to reach, so on
+  // the web the words really are the whole answer. `blocked` is the store's flag
+  // for a denied permission specifically, not for any old failure, so a network
+  // or save error still just says what went wrong.
+  function pushBlocked(res) {
+    if (!res.blocked || !nativeShell()) { toast(res.error); return; }
+    openSheet({
+      title: 'Notifications are turned off for Tria in iOS Settings. Turn on Allow Notifications and this switch will work.',
+      items: [{
+        label: 'Open Settings', icon: 'bell',
+        // A rejection here means iOS refused the hand-off, which leaves the
+        // reader exactly where the toast used to leave them, so say the path out
+        // loud rather than closing the sheet on silence.
+        run: async () => {
+          if (!(await Store.openAppSettings()))
+            toast('Open Settings, then Notifications, then Tria.');
+        },
+      }],
+    });
+  }
+
   function pushAskHtml() {
     if (!pushAskEligible()) return '';
     return `<div class="push-ask">` +
@@ -5683,23 +5885,31 @@
       card.classList.add('push-ask--out');
       setTimeout(rerender, 220);
     });
+    // Same `finally` as the profile switch, for the same reason: this button
+    // rewrites its own label to "Turning on…", so a throw would strand the card
+    // mid-sentence with nothing to tap.
     card.querySelector('#push-turn-on').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
       btn.textContent = 'Turning on…';
-      const res = await Store.enablePush();
-      if (res.ok) { localStorage.setItem(pushAskKey(), 'off'); toast('Notifications on.'); }
-      else toast(res.error);
-      rerender();
+      try {
+        const res = await Store.enablePush();
+        if (res.ok) { localStorage.setItem(pushAskKey(), 'off'); toast('Notifications on.'); }
+        else pushBlocked(res);
+      } catch {
+        toast('Couldn’t reach notifications just now. Try again in a moment.');
+      } finally {
+        rerender();
+      }
     });
   }
 
   // The standing on/off control, on your own profile foot. Mirrors the pre-prompt
   // but is always available — the place to turn push back on after "Not now", or
-  // off later. Hidden entirely where the browser can't do push.
+  // off later. Hidden entirely where the shell can't do push.
   function pushToggleHtml() {
     if (!Store.pushSupported()) return '';
-    const on = Notification.permission === 'granted';   // sync guess; refined below
+    const on = Store.pushPermission() === 'granted';   // sync guess; refined below
     return `<div class="push-toggle-row">` +
         `<span class="push-toggle-label">Notifications</span>` +
         `<button type="button" class="push-toggle" role="switch" id="push-toggle" ` +
@@ -5713,19 +5923,31 @@
     if (!btn) return;
     // Reconcile the sync guess with this device's real subscription state.
     Store.pushSubscribed().then(on => btn.setAttribute('aria-checked', String(on)));
+    // `finally`, because the switch disables itself for the round trip and a
+    // THROW would otherwise skip the re-enable and leave it dead for the life of
+    // the modal, with no toast either — a switch that does nothing, forever, from
+    // one unlucky tap. Every documented failure inside `enablePush` comes back as
+    // `{ ok: false }`, but the Supabase write at the end of it is a bare network
+    // call that can reject, and this is the one handler where a rejection is
+    // indistinguishable from the bug being reported.
     btn.addEventListener('click', async () => {
       const on = btn.getAttribute('aria-checked') === 'true';
       btn.disabled = true;
-      if (on) {
-        await Store.disablePush();
-        btn.setAttribute('aria-checked', 'false');
-        toast('Notifications off.');
-      } else {
-        const res = await Store.enablePush();
-        if (res.ok) { btn.setAttribute('aria-checked', 'true'); toast('Notifications on.'); }
-        else toast(res.error);
+      try {
+        if (on) {
+          await Store.disablePush();
+          btn.setAttribute('aria-checked', 'false');
+          toast('Notifications off.');
+        } else {
+          const res = await Store.enablePush();
+          if (res.ok) { btn.setAttribute('aria-checked', 'true'); toast('Notifications on.'); }
+          else pushBlocked(res);
+        }
+      } catch {
+        toast('Couldn’t reach notifications just now. Try again in a moment.');
+      } finally {
+        btn.disabled = false;
       }
-      btn.disabled = false;
     });
   }
 
@@ -5747,10 +5969,12 @@
             ? ''   // requests are up top; don't also say "all quiet" beneath them
             : `<p class="feed-empty">${all.length
                 ? 'No mentions yet.'
-                : 'When a friend likes, comments, or says they’re going, it lands here.'}</p>`);
+                : 'When someone adds you, likes, comments, or says they’re going, it lands here.'}</p>`);
     };
     // Answer a friend request in place. Accept adds them back (→ mutual, they
-    // now show in each other's feeds); Ignore clears the request quietly.
+    // now show in each other's feeds); Ignore declines it for good — the edge
+    // goes AND the answer is remembered, so re-adding you can't put this row
+    // back. Quietly, on both counts: nothing is said to them either way.
     function wireRequests(scope) {
       scope.querySelectorAll('.request-accept').forEach(btn =>
         btn.addEventListener('click', async () => {
@@ -5761,7 +5985,7 @@
       scope.querySelectorAll('.request-ignore').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          await Store.removeFriend(btn.dataset.ignore);
+          await Store.declineRequest(btn.dataset.ignore);
           renderUpdates();
         }));
     }
@@ -5771,6 +5995,9 @@
     function wireNotif(a) {
       a.addEventListener('click', () => {
         const id = a.dataset.post;
+        // A follow is about a person, not a post — the href already walks to
+        // their profile, and there's nothing to spotlight.
+        if (!id) return;
         openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
         if (a.dataset.kind === 'comment' || a.dataset.kind === 'mention') openComments.add(id);
         else if (a.dataset.kind === 'like') openLikers.add(id);
@@ -7383,10 +7610,17 @@
     if (!res.ok) {
       errEl.textContent = res.error;
       clearPostProgress();
+      hapticEvent('ERROR');
       if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
       return;
     }
     clearPostProgress();
+    // Publishing is the one thing in the app that earns the full success
+    // notification rather than an impact: it's the end of a piece of work, not
+    // an acknowledgement of a tap. A photo or clip may have been uploading for
+    // a while with the phone face-down, which is exactly when a buzz carries
+    // information a screen can't.
+    hapticEvent('SUCCESS');
     cropper = null;
     videoCapture = null;
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
@@ -8091,22 +8325,6 @@
       `<p>If you'd like to set up an organization account, reach us through the ` +
         `Feedback form below and we'll help you get started.</p>`);
 
-    // Zoe's letter, rehoused. It used to be its own page (#/support) behind the
-    // header's sprout, which put a page between someone and the share button at
-    // the bottom of it. The tray in the header shares directly now, so the note
-    // keeps only the part a button can't do: saying why this exists. Last fold
-    // before Feedback on purpose — here's why I made it, now tell me what you
-    // think. Keeps its .about-lede voice so it reads warmer than the policy folds.
-    const noteHtml = aboutFold('note', 'A note from the designer',
-      `<p class="about-lede">I built Tria because I believe online community ` +
-        `should be <em>fun, authentic, and free.</em> The internet needs a ` +
-        `place for people you actually know and love.</p>` +
-      `<p class="about-lede">The best way to help Tria grow is the simplest: ` +
-        `<strong>invite your friends to join you here.</strong> Every circle that ` +
-        `starts here is proof that social media can be fun again. The share ` +
-        `button at the top of the screen will hand someone the link.</p>` +
-      `<p class="about-sign">&mdash; <a href="#/u/zoe">Zoe</a></p>`);
-
     const feedbackHtml = aboutFold('feedback', 'Feedback',
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
       `<p>Whether you've found a bug, have an idea, or ` +
@@ -8141,8 +8359,12 @@
             `no ads, and no algorithm deciding for you.</strong> Just a place to ` +
             `share your life, discover things worth caring about, and stay ` +
             `connected.</p>` +
-          aboutFold('install', 'Add Tria to your home screen', installHtml) +
-          guidelinesHtml + privacyHtml + faqHtml + businessHtml + noteHtml + feedbackHtml +
+          // The install fold is browser-only. In the App Store build its whole
+          // premise is false ("nothing to download, no store in between") and
+          // pointing a user at Safari to re-install what they're already holding
+          // is both silly and the sort of thing review reads as a web redirect.
+          (nativeShell() ? '' : aboutFold('install', 'Add Tria to your home screen', installHtml)) +
+          guidelinesHtml + privacyHtml + faqHtml + businessHtml + feedbackHtml +
         `</div>` +
       `</section>`;
 
@@ -8204,20 +8426,31 @@
   }
 
   /* ── Router + page transitions ─────────────────────────────────────────────
-     Every route change is the same CROSS DISSOLVE — the outgoing page fades out
-     while the incoming one fades in. There is no direction and no movement:
-     pages used to slide along a nav line, but Discover's grid is dozens of
-     photos still decoding while the slide ran, so the movement read as the page
-     snapping and glitching rather than loading. A fade lets a tile land whenever
-     it's ready. (See the page-transition block in app.css for the full why.)
+     Every route change is the same ONE FADE — the destination is mounted opaque
+     and the outgoing page dissolves away on top of it. There is no direction and
+     no movement: pages used to slide along a nav line, but Discover's grid is
+     dozens of photos still decoding while the slide ran, so the movement read as
+     the page snapping and glitching rather than loading. A fade lets a tile land
+     whenever it's ready. (See the page-transition block in app.css for why it is
+     one ramp and not two — a true cross dissolve leaves a quarter of the page
+     background showing through the middle of every move, which is the flash.)
      One path, so every view renders the same way and inherits it. */
 
-  // Build the next page, drop it into the stage, and dissolve to it. `renderFn`
-  // fills the fresh `view`. `keepScroll` is the spotlight path: the scroll is NOT
-  // snapped to the top, so the leaving page keeps its natural (top-anchored)
-  // position.
-  function renderPage(renderFn, keepScroll) {
+  // Build the next page, drop it into the stage, and fade the old one off it.
+  // `renderFn` fills the fresh `view`.
+  //
+  // `settleScroll` puts the window where this navigation wants it. It is a
+  // callback rather than a flag because the OUTGOING page's pin depends on where
+  // the scroll ends up, so the travel has to be finished before the pin is
+  // measured — see the anchor note below. Omit it for the default (snap to the
+  // top); pass a no-op when renderFn has already positioned the scroll itself.
+  //
+  // `instant` skips the fade entirely and mounts the destination in the same
+  // task — for the one case where the ENGINE is already animating the move and
+  // ours would be a second one landing on top of it. See `traversed` in route().
+  function renderPage(renderFn, settleScroll, instant) {
     const reduce = prefersReduced();
+    const snap = reduce || !!instant;   // mount in one task, no fade
     const prev = view;
     const token = ++navToken;
 
@@ -8227,47 +8460,92 @@
     const page = document.createElement('div');
     page.className = 'page';
 
-    // First paint / reduced motion: no dissolve. Mount, THEN render — render code
-    // resolves its own nodes via document.getElementById, so the page has to be
-    // in the document before renderFn runs.
-    if (!prev || reduce) {
+    // Where the window sat BEFORE the render. renderFn can move the scroll itself
+    // (parkCard, aiming at the spotlighted card), so reading this afterwards
+    // would measure the destination, not the origin.
+    const fromY = window.scrollY;
+    // Put the window where this navigation wants it. Every path runs this, so no
+    // caller is ever left holding a scroll the router didn't place.
+    const settle = () => {
+      if (settleScroll) settleScroll();
+      else if (fromY > 0) window.scrollTo(0, 0);
+      // …and place the top bar while we're here. Note the spotlight path hands in
+      // an EMPTY callback (parkCard already moved the window during renderFn), so
+      // a branch that only ran "if we scrolled" would skip it; this runs on all
+      // three of renderPage's paths, every navigation, scroll or no scroll.
+      syncTopbar();
+      // Again once the page has finished laying out — the same beat restoreScroll
+      // re-aims over. Discover deals its masonry from JS and a photo swaps its
+      // reserve box for its real shape, either of which can shorten the document
+      // after we've already answered, turning a page that looked scrollable at
+      // settle time into one with no gesture left to recover the bar. Only ever
+      // shows it, so a late fire under a newer navigation is harmless.
+      window.setTimeout(syncTopbar, TRANSITION_MS + 120);
+    };
+
+    // First paint / reduced motion / a traversal: no fade. Mount, THEN render —
+    // render code resolves its own nodes via document.getElementById, so the page
+    // has to be in the document before renderFn runs.
+    if (!prev || snap) {
       view = page;
+      // A traversal owes the same debt the fade does, for a sharper reason: the
+      // engine has just shown the reader a SNAPSHOT of this page, whole, and the
+      // live document has to match it. Every entrance animation is a way of not
+      // matching it — 72 tiles rising and a wave of photos fading up under a page
+      // that was already complete a frame ago is precisely the "it reloaded"
+      // read, arriving after the flash was fixed rather than instead of it. So
+      // freeze the rows exactly as the fade path does (inline, permanent, so they
+      // never replay), and hold `.enter` for the same window the fade would have
+      // owned, which is the class the photo-snap rule in app.css looks for.
+      // Reduced motion needs neither — CSS has already stilled both.
+      if (instant && !reduce) page.classList.add('enter');
       stage.replaceChildren(page);
       renderFn();
+      if (instant && !reduce) {
+        page.querySelectorAll('.card, .notif, .request-row, .ptile')
+          .forEach(c => { c.style.animation = 'none'; });
+        window.setTimeout(() => {
+          if (token === navToken) page.classList.remove('enter');
+        }, TRANSITION_MS);
+      }
+      settle();
       // First paint / deep-link: no page fade, but a docked switcher still gets
-      // its rise (unless reduced motion, which shows it in place). Tuck-commit-
-      // release so it lifts from behind the nav on landing.
-      if (!reduce) {
-        const seg = page.querySelector('.seg-tabs:not(#c-group-tabs)');
-        if (seg) {
-          seg.classList.add('tuck');
-          void seg.offsetWidth;                     // commit the tucked start state
-          requestAnimationFrame(() => seg.classList.remove('tuck'));
+      // its rise (unless reduced motion, which shows it in place, or a traversal,
+      // where the engine's own animation is the move and this would be a second
+      // one arriving after it). Tuck-commit-release so it lifts from behind the
+      // nav on landing.
+      if (!snap) {
+        const first = page.querySelector('.seg-tabs:not(#c-group-tabs)');
+        if (first) {
+          first.classList.add('tuck');
+          void first.offsetWidth;                   // commit the tucked start state
+          requestAnimationFrame(() => first.classList.remove('tuck'));
         }
       }
       return;
     }
 
-    // Mount the entering page transparent, ahead of the outgoing one, so during
-    // the brief overlap its ids (e.g. #feed) win getElementById. The leaving page
-    // is position:absolute, so it still paints on top regardless.
+    // Mount the entering page ahead of the outgoing one, so during the brief
+    // overlap its ids (e.g. #feed) win getElementById. It is fully opaque from
+    // its first frame; the leaving page is position:absolute (and z-indexed), so
+    // it still paints on top and is the only thing that animates.
     page.classList.add('enter');
     stage.insertBefore(page, prev);
     view = page;
     renderFn();                // render into the mounted new page
 
-    // Content mounted during a navigation rides in on the page's own fade — it
-    // does NOT also play its per-row rise. Freezing every fresh row here (not
-    // pausing it in CSS) keeps it VISIBLE for the whole move instead of held at the
-    // rise's transparent first frame: that blank window over the near-white page
-    // was the "white flash" on the card-heavy Circle. Inline, so it survives the
-    // class cleanup and the rows never replay the rise once the page settles; and
-    // with no row animation in flight the move carries the fewest possible layers
-    // (the same iOS-crash win the old CSS pause was after). Covers feed .card AND
-    // the Updates ledger (.notif / .request-row), which carry the same rise and
-    // were otherwise stacking their own translateY layers on top of the swap — the
-    // Updates-page stutter/refresh. Rows that arrive later without a page change
-    // (refreshWorld / the Updates reconcile) are untouched and still rise in.
+    // Content mounted during a navigation rides in on the swap — it does NOT also
+    // play its per-row rise. Freezing every fresh row here (not pausing it in CSS)
+    // keeps it VISIBLE for the whole move instead of held at the rise's transparent
+    // first frame: that blank window over the near-white page was the "white flash"
+    // on the card-heavy Circle. Inline, so it survives the class cleanup and the
+    // rows never replay the rise once the page settles; and with no row animation in
+    // flight the move carries the fewest possible layers (the same iOS-crash win the
+    // old CSS pause was after). Covers feed .card AND the Updates ledger (.notif /
+    // .request-row), which carry the same rise and were otherwise stacking their own
+    // translateY layers on top of the swap — the Updates-page stutter/refresh. Rows
+    // that arrive later without a page change (refreshWorld / the Updates reconcile)
+    // are untouched and still rise in.
     //
     // `.ptile` is in this list for the same reason and is the worst offender of
     // the lot: Discover mounts the entire grid at once, so arriving there was
@@ -8278,54 +8556,73 @@
     // page that hits it every single time you open it.
     page.querySelectorAll('.card, .notif, .request-row, .ptile').forEach(c => { c.style.animation = 'none'; });
 
-    // A docked view switcher (Updates on mobile) starts tucked behind the nav so
-    // it can rise once the page settles (see cleanup) rather than cross-fading
-    // ghosted over the outgoing page's copy. No-op on pages without one.
-    page.querySelector('.seg-tabs:not(#c-group-tabs)')?.classList.add('tuck');
+    // A docked view switcher (Updates on mobile) rises out from behind the nav —
+    // but ONLY when it is genuinely arriving. If the page we're leaving has one
+    // too, the two copies are the same control at the same fixed coordinates, and
+    // the honest reading is that it never moved: sliding the new one up while the
+    // old one dissolves in place would animate a thing that is already there.
+    // Sequencing matters as much as the condition. This used to be released in
+    // cleanup, i.e. AFTER the swap finished, which was fine while the destination
+    // faded in around it — but the destination now arrives complete, so a switcher
+    // still tucked for the length of the fade would read as a page with a hole in
+    // it, then a second move to fill the hole. It goes up on the same frame the
+    // fade starts, so the whole navigation is one gesture.
+    const seg = page.querySelector('.seg-tabs:not(#c-group-tabs)');
+    if (seg && !prev.querySelector('.seg-tabs:not(#c-group-tabs)')) seg.classList.add('tuck');
 
     prev.className = 'page';    // clear any stale transition classes before reuse
     prev.classList.add('leave');
 
-    // Scroll anchor. The leaving page is lifted out of flow TOP-anchored while
-    // route() snaps the window to 0 — so leaving from deep in a feed used to
+    // Scroll anchor. The leaving page is lifted out of flow and TOP-anchored,
+    // while the scroll underneath it moves — so without this it fades out
+    // showing the wrong part of itself: leaving from deep in a feed used to
     // flash the old page's masthead during the swap instead of what you were
-    // reading. Pin the leaving page at exactly the region that was on screen,
-    // reset the scroll underneath it, and the exit now fades from where you
-    // actually were. (keepScroll leaves both alone: the scroll isn't resetting,
-    // so the top-anchored default is already right.)
-    const fromY = window.scrollY;
-    if (!keepScroll && fromY > 0) {
-      prev.style.top = -fromY + 'px';
-      window.scrollTo(0, 0);
-    }
+    // reading.
+    //
+    // THE SCROLL MUST FINISH TRAVELLING FIRST, which is why settleScroll is a
+    // callback the router hands in rather than a boolean. The pin is a function of
+    // the distance travelled, and there are three destinations: the top (an
+    // ordinary navigation), the spotlighted card (parkCard already jumped there
+    // during renderFn — a no-op callback), and a remembered position (restoreScroll,
+    // on a back/forward or an edge-swipe). The third one used to run AFTER
+    // renderPage returned, so the pin was measured against a destination of 0 and
+    // then the window jumped somewhere else entirely — the outgoing page was left
+    // anchored a whole remembered scroll away from the viewport, so a swipe back
+    // dissolved a slab of the old page nobody had been looking at, or off-screen
+    // nothing at all. That is the back-swipe flicker: not a mistimed animation, a
+    // pin measured before the movement it was measuring.
+    //
+    // A page at internal offset c paints at document top + c, and we need the old
+    // on-screen band [fromY, fromY+vh] to stay put, so top = toY - fromY in every
+    // case. Unmoved scroll, no pin.
+    settle();
+    const dy = window.scrollY - fromY;
+    if (dy) prev.style.top = dy + 'px';
 
     void stage.offsetWidth;    // commit the start states before flipping to rest
     requestAnimationFrame(() => {
-      page.classList.add('active');
-      prev.classList.add('active');
+      prev.classList.add('active');   // the one ramp in the move
+      seg?.classList.remove('tuck');  // …and the switcher rises alongside it
     });
 
-    // Clean up the instant the page finishes settling: drop the outgoing page and
-    // clear the transition classes — which also releases the will-change layer AND
-    // hands the in-page glass back its live frost (see the glass rule in app.css),
-    // so the frost returns exactly as motion ends, no flat tail. Driven by the
-    // entering page's own transitionend on opacity (the only property in the
-    // move). A timeout backs it up if the event is ever missed.
+    // Clean up the instant the fade ends: drop the outgoing page and clear its
+    // transition classes, releasing the will-change layer. Driven by the LEAVING
+    // page's transitionend on opacity — it is the only element that animates now,
+    // so listening on the entering one (as this did while both faded) would never
+    // fire and every navigation would fall through to the timeout. A timeout still
+    // backs it up if the event is ever missed.
     let cleaned = false;
     const cleanup = () => {
       if (cleaned || token !== navToken) return;   // a newer navigation owns the stage
       cleaned = true;
-      page.removeEventListener('transitionend', onSettle);
+      prev.removeEventListener('transitionend', onSettle);
       prev.remove();
       page.className = 'page';
-      // The page has settled — drop .tuck and the docked switcher rises straight
-      // up from behind the nav on its own transition.
-      page.querySelector('.seg-tabs:not(#c-group-tabs)')?.classList.remove('tuck');
     };
     const onSettle = (e) => {
-      if (e.target === page && e.propertyName === 'opacity') cleanup();
+      if (e.target === prev && e.propertyName === 'opacity') cleanup();
     };
-    page.addEventListener('transitionend', onSettle);
+    prev.addEventListener('transitionend', onSettle);
     window.setTimeout(cleanup, TRANSITION_MS + 120);
   }
 
@@ -8338,7 +8635,142 @@
     else location.hash = hash;   // hashchange → route()
   }
 
+  /* ── Where you were ─────────────────────────────────────────────────────────
+     Going back should return you to the paragraph you left, not to the top of a
+     page you already read. That matters most on the two pages people go deep
+     into and come straight back from — a long feed and Discover's grid — and it
+     matters more now that the iOS app answers the edge-swipe, because a gesture
+     that costs nothing gets used constantly and a page that resets every time
+     punishes it.
+
+     Position is remembered per HISTORY ENTRY, not per route, which is the whole
+     distinction: tapping the Circle tab is a fresh visit and should land you at
+     the top, while swiping back to the Circle you were reading is a return and
+     should not. Both are '#/'. So each entry gets a key stamped into its own
+     history state on first arrival, and the scroll is filed under that key —
+     `location.hash` could never tell the two apart.
+
+     Keys carry a per-load prefix, so entries stamped before a reload can't
+     collide with this session's; a stale entry simply has nothing on file and
+     lands at the top, which is the honest answer after a reload anyway. */
+  const NAV_LOAD = Math.random().toString(36).slice(2, 8);
+  const SCROLL_KEEP = 40;                 // entries remembered; a long session forgets the far past
+  const scrollMemory = new Map();
+  let navSerial = 0;
+  let navHere = null;                     // the entry currently on screen
+  // The browser's own guess fights ours (and WebKit's is wrong for a hash router
+  // whose DOM is rebuilt after the navigation lands).
+  try { history.scrollRestoration = 'manual'; } catch { /* older engine: ours still runs */ }
+
+  // The key for the entry we're standing on, minted on first arrival.
+  //
+  // Whether it was MINTED or FOUND is the other thing this knows, and it is the
+  // only reliable way to tell a back gesture from a tap (see `traversed` in
+  // route()): an entry we have never stamped is one we have never stood on, so
+  // the navigation that brought us here pushed it — while an entry already
+  // carrying one of this load's keys is one we are returning to. `navFresh` is
+  // set on every call and read immediately after it, which is the whole
+  // contract; there is one caller, and it must stay that way.
+  let navFresh = true;
+  function navStamp() {
+    const st = history.state;
+    if (st && typeof st.tk === 'string' && st.tk.startsWith(NAV_LOAD + ':')) {
+      navFresh = false;
+      return st.tk;
+    }
+    navFresh = true;
+    const tk = NAV_LOAD + ':' + (++navSerial);
+    try { history.replaceState({ ...(st || null), tk }, ''); } catch { return null; }
+    return tk;
+  }
+
+  function rememberScroll() {
+    if (!navHere) return;
+    scrollMemory.delete(navHere);         // re-set to move it to the fresh end
+    scrollMemory.set(navHere, window.scrollY);
+    while (scrollMemory.size > SCROLL_KEEP) scrollMemory.delete(scrollMemory.keys().next().value);
+  }
+
+  // Land where you left off, or at the top if this entry is new. The re-aim is
+  // for the pages that finish laying out a beat after they render — Discover
+  // deals its masonry from JS, a photo swaps its reserve box for its real shape
+  // — either of which can shorten the document under a scroll that already
+  // landed. Any real input and we're gone; nothing here fights the reader.
+  function restoreScroll(key) {
+    const y = key ? scrollMemory.get(key) : 0;
+    if (!y) { scrollTop(false); return; }
+    window.scrollTo(0, y);
+    const moves = ['wheel', 'touchstart', 'keydown'];
+    let frames = 0, stopped = false;
+    const bail = () => { stopped = true; };
+    moves.forEach(ev => window.addEventListener(ev, bail, { passive: true }));
+    const again = () => {
+      if (stopped || ++frames > 4) {
+        moves.forEach(ev => window.removeEventListener(ev, bail));
+        return;
+      }
+      if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+      requestAnimationFrame(again);
+    };
+    requestAnimationFrame(again);
+  }
+
+  /* ── Whose animation is this? ───────────────────────────────────────────────
+     The App Store build turns on WKWebView's edge-swipe (`allowsBackForward
+     NavigationGestures` in TriaViewController.swift), and that gesture is not a
+     passive input: WebKit takes over the screen for it. It slides a SNAPSHOT of
+     the page you're going back to in from the left, and — because Tria's routes
+     are hash changes, i.e. same-document navigations — it drops that snapshot
+     the instant the navigation commits, without waiting for anything to paint.
+
+     What the live document is showing at that moment is still the page you just
+     swiped away. So the sequence a reader actually saw was: the right page
+     sliding in under their thumb, then the WRONG page snapping back to full
+     opacity as the snapshot lifted, then a quarter second of it dissolving to
+     reveal the right one underneath. That is the "flash", and it is not a
+     mistimed fade — it is two transitions for one gesture, the second one
+     starting after the first has already finished and arriving at the same
+     destination. It reads as a reload because the page you left reappears
+     whole before it goes.
+
+     So a traversal renders INSTANTLY: mounted in the same task as the
+     `hashchange`, which is the same task the navigation commits in, so the live
+     document already matches the snapshot by the time WebKit lifts it and there
+     is nothing left to animate. The gesture keeps its own transition and we
+     stop drawing a second one over the top.
+
+     TELLING A BACK FROM A TAP IS THE WHOLE TRICK, and the obvious way to do it
+     is wrong ON THIS ENGINE SPECIFICALLY. `popstate` is documented as firing for
+     history traversals and not for a fragment assignment, so listening for it
+     ought to be the answer — but WebKit fires `popstate` for `location.hash =`
+     as well, in the same `popstate → hashchange` order, so the two are literally
+     indistinguishable by event. Measured on WebKit 26.5, the engine the app
+     ships on: an ordinary tap and a swipe back produce byte-identical traces.
+     Trusting it would have made EVERY navigation in the App Store build instant
+     and quietly deleted the fade app-wide. Don't reach for that listener.
+
+     The history entry itself answers it, and it needs no event at all. navStamp
+     mints a key the first time we stand on an entry, so a key it had to MINT is
+     an entry nobody has been on — the navigation pushed it — while a key it
+     FOUND belongs to somewhere we are coming back to. That is exactly the
+     back/tap distinction, derived from the same stamp the scroll memory already
+     runs on. The `!== navHere` guard covers go()'s same-target branch, which
+     re-runs route() without navigating: the key is found there too, because it
+     is still the one under our own feet.
+
+     Gated on nativeShell() because that is the shell we switched the gesture on
+     in — the shells that don't animate their own back keep the fade. */
+
   function route() {
+    // File the outgoing page's scroll BEFORE anything renders — at this moment
+    // window.scrollY is still where the reader left it, and renderPage is about
+    // to reset it.
+    rememberScroll();
+    const before = navHere;
+    const arriving = navStamp();      // sets navFresh; read it before anything else can
+    const traversed = nativeShell() && !navFresh && !!arriving && arriving !== before;
+    navHere = arriving;
+
     // Navigating away from Publish must stop a live camera/mic stream — the
     // capture surface's own DOM is about to be replaced, which wouldn't
     // otherwise release it (see wireFrameCapture's teardown).
@@ -8350,24 +8782,19 @@
     if (!Store.isAuthed()) {
       document.body.classList.add('gate');
       const gatePath = (location.hash || '#/').split('?')[0];
-      // Installed (home-screen / standalone) visitors are already past the
-      // install step, so they skip the tutorial and land straight on the sign-in
-      // form. navigator.standalone is iOS-only; the media query covers the rest.
-      const installed = navigator.standalone === true
-        || window.matchMedia('(display-mode: standalone)').matches;
-      // The install-first welcome is the browser front door: any signed-out route
-      // that isn't an explicit auth / About / recovery screen lands there. It
-      // leads with "add Tria to your home screen, then sign in there", which is
-      // what keeps people from signing in twice — a session made in Safari does
-      // not carry into the installed app (separate storage).
-      const showWelcome = !installed && !Store.isRecovering()
-        && gatePath !== '#/signin' && gatePath !== '#/about'
-        && gatePath !== '#/forgot' && gatePath !== '#/reset-password'
-        && gatePath !== '#/confirmed';
-      // Welcome + About keep the hue-drift wash; the bare auth form does not
-      // (its pastel now comes from the gradient submit button).
-      document.body.dataset.ambient =
-        (gatePath === '#/about' || showWelcome) ? 'about' : 'none';
+      // The signed-out front door is the ACCOUNT FORM, in every shell. It used to
+      // be an install-first welcome ("add Tria to your home screen, then sign in
+      // there") built to stop people signing in twice, since a Safari session
+      // doesn't carry into a home-screen install. That page cost more than it
+      // saved: it put a tutorial in front of a door, and in the App Store build
+      // it was actively wrong — telling someone holding the download to go
+      // install it from Safari, which is a 4.2/3.1.1 rejection besides. Tria now
+      // opens the way every other social app does, on a form, with a populated
+      // Discover one tap behind it. The install steps still live in the About
+      // fold for anyone who wants the web app on their home screen.
+      // About keeps the hue-drift wash; the bare auth form does not (its pastel
+      // now comes from the gradient submit button).
+      document.body.dataset.ambient = gatePath === '#/about' ? 'about' : 'none';
       renderPage(() => {
         // A live recovery session (from the reset link) always wins: set-new-
         // password, whatever the hash says.
@@ -8377,10 +8804,8 @@
         // expired or been reused, so route them to request a fresh one.
         if (gatePath === '#/forgot' || gatePath === '#/reset-password') return renderRequestReset();
         if (gatePath === '#/confirmed') return renderConfirmed();
-        if (showWelcome) return renderWelcome();
         return renderAuth(authMode);
-      });
-      window.scrollTo(0, 0);
+      }, () => restoreScroll(arriving), traversed);
       return;
     }
     document.body.classList.remove('gate');
@@ -8442,24 +8867,32 @@
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
         case '#/about':   renderAbout(false); break;
-        // #/support is retired — the note from the designer is an About fold now
-        // and the header tray shares directly. Old links land on the letter.
-        case '#/support': go('#/about?open=note'); break;
+        // #/support is retired — the header tray shares directly, and the note
+        // from the designer it used to hold is gone. Old links land on About.
+        case '#/support': go('#/about'); break;
         default:          location.hash = '#/';
       }
-    }, spotlighting);
+      // A spotlight has already parked the window on its card during the render,
+      // so this navigation's scroll is done; anything else lands where you left
+      // this history entry, or at the top if it's a fresh visit. Either way it
+      // happens INSIDE renderPage, before the outgoing page is pinned.
+    }, spotlighting ? () => {} : () => restoreScroll(arriving), traversed);
 
-    if (!spotlighting) scrollTop(false);   // spotlight scrolls itself (see above)
-    nudgeNav();           // iOS standalone: re-composite the nav's frosted layer
+    nudgeNav();           // installed shells: re-composite the nav's frosted layer
     // Deliberately NO background re-pull here: a refresh that lands mid-dissolve
     // can rebuild rows under the transition. Refresh is always an explicit
     // gesture now — re-tapping the tab you're on, or pulling the feed down.
   }
 
-  // iOS Safari (standalone) sometimes drops the fixed, backdrop-filtered nav's
-  // layer after a page's DOM is replaced, leaving it invisible until you scroll.
-  // (navigator.standalone is true only inside an iOS standalone PWA; everywhere
-  // else this is pure cost, so bail.) Rescue it GENTLY: flick the frosted pill's
+  // WebKit sometimes drops the fixed, backdrop-filtered nav's layer after a
+  // page's DOM is replaced, leaving it invisible until you scroll.
+  //
+  // This used to bail on `!navigator.standalone`, which named the shell the bug
+  // was FOUND in rather than the engine that has it — and WKWebView is the same
+  // engine, so the App Store build had the bug with the rescue switched off.
+  // installedShell() covers all three shells; a browser tab still skips it,
+  // which is all the original bail was really protecting. Rescue it GENTLY:
+  // flick the frosted pill's
   // backdrop-filter off and back on, which rebuilds that dropped layer WITHOUT
   // pulling the element out of flow. The old fix toggled the nav's display, which
   // did the same repaint but also (a) cancelled the nav's own slide transitions
@@ -8467,7 +8900,7 @@
   // animation from 0% — so the colour loop visibly jumped to the start on every
   // page change. The backdrop flick leaves the slides and the gradient untouched.
   function nudgeNav() {
-    if (!navigator.standalone) return;
+    if (!installedShell()) return;
     const pill = document.querySelector('.nav-pill');
     if (!pill) return;
     pill.style.webkitBackdropFilter = 'none';
@@ -8499,15 +8932,31 @@
       im.src = url;
       im.decode?.().catch(() => {});   // decode + cache the bitmap; ignore aborts
     };
+    // Avatars are the whole roster, and that's fine — they're small, they're
+    // circular crops, and every one of them is a face you might scroll past in
+    // Discover's People pane. Photos are the opposite and this list used to hold
+    // FORTY of them: uploads are downscaled to a 1400px long edge, so forty is
+    // roughly ten megabytes over the wire and a quarter of a gigabyte of decoded
+    // bitmap, all requested at launch, all competing with the handful of images
+    // actually on the screen. Warming is supposed to make the next page arrive
+    // whole; forty of them made THIS page arrive late. Ten covers what a first
+    // screen of Home and a first screen of Discover can hold between them, which
+    // is the entire job.
+    //
+    // And take them from the FRONT. `posts()` is newest-first, so `slice(-40)`
+    // was reaching past every photo anyone might actually scroll to and warming
+    // the forty OLDEST images on Tria — paying the entire bill above for the one
+    // set of pictures nobody was about to look at.
+    const WARM_PHOTOS = 10;
     const run = () => {
       Store.users().forEach(u => warm(u.avatar, true));
-      Store.posts().filter(p => p.image).slice(-40).forEach(p => warm(p.image, false));
+      Store.posts().filter(p => p.image).slice(0, WARM_PHOTOS).forEach(p => warm(p.image, false));
     };
     ('requestIdleCallback' in window) ? requestIdleCallback(run, { timeout: 2000 }) : setTimeout(run, 400);
   }
 
   /* ── Explicit refresh ───────────────────────────────────────────────────────
-     Re-tapping the tab you're on, or pulling the feed down, quietly re-pulls the
+     Pulling the feed down quietly re-pulls the
      world — the page renders from cache instantly, and only if something
      actually changed does the view re-render, so new cards rise in with the
      usual entrance and an unchanged page never flickers. Plain navigation
@@ -8545,6 +8994,11 @@
 
   let refreshSeq = 0;
   let lastRefresh = Date.now();   // boot just loaded the world — don't re-pull it
+  // Set by the pull-to-refresh module below, which owns the quintet ring. Null
+  // until it initialises, hence the optional calls.
+  let refreshRing = null;
+  const nap = (ms) => new Promise(r => window.setTimeout(r, ms));
+
   // `force` marks a gesture you actually made (a tab re-tap, a pull): it skips the
   // spam guard, because a tap that visibly does nothing reads as a broken tap.
   // `hold` keeps your place across the render — right for a refresh that arrives
@@ -8558,24 +9012,48 @@
     const changed = await Store.refresh();
     if (!changed || seq !== refreshSeq) return;    // stale response — a newer pull won
     warmImages();   // new friends/posts may have brought new avatars + photos
-    if ((location.hash || '#/').split('?')[0] !== path) return;   // navigated away
-    // Never yank the page out from under a half-typed comment.
-    if (document.activeElement?.matches?.('input, textarea')) return;
+    const live = () =>
+      seq === refreshSeq
+      && (location.hash || '#/').split('?')[0] === path   // navigated away
+      && !document.activeElement?.matches?.('input, textarea');  // half-typed comment
+    if (!live()) return;
     const paint = () => {
       if (path === '#/') renderFeed();
       else if (path === '#/discover') { if (!discoverRepaint?.(force)) renderDiscover(); }
       else renderUpdates();
     };
-    hold ? keepPlace(paint) : paint();
+
+    // The quintet is the app's ONE word for "the world is being re-pulled", so a
+    // refresh nobody asked for borrows it rather than inventing a second
+    // vocabulary. Coming back to a foregrounded app used to splice new rows in
+    // with nothing on screen to explain them, and unexplained movement is
+    // indistinguishable from a glitch — the ring is the difference between the
+    // app updating and the app twitching. The pull already holds the ring
+    // (refreshRing.on() declines while it does), so this only ever fires on the
+    // silent path, and only when the pull actually CHANGED something: a resume
+    // that finds nothing new stays completely silent, which is most of them.
+    if (!refreshRing?.on()) { hold ? keepPlace(paint) : paint(); return; }
+    try {
+      await nap(200);                     // let the ring drop in BEFORE the page moves
+      if (live()) { hold ? keepPlace(paint) : paint(); }
+      await nap(500);                     // and stay a beat after, so it reads as one event
+    } finally {
+      refreshRing.off();
+    }
   }
 
   // Tapping the tab (or the brand) for the page you're already on scrolls back
-  // to the top, clears any active filter/tag on Home, and re-pulls the world.
-  // No `hashchange` fires when the target matches the current route, so we catch
-  // it here. This is the familiar bottom-tab-bar gesture on mobile, and on Tria
-  // it's THE refresh: nothing polls on a timer, so this tap (or a pull) is how a
-  // page you're standing on catches up. It forces past the spam guard for that
-  // reason — an explicit tap has to visibly do something every time.
+  // to the top and clears any active filter/tag on Home. No `hashchange` fires
+  // when the target matches the current route, so we catch it here. This is the
+  // familiar bottom-tab-bar gesture on mobile, and that's ALL it is.
+  //
+  // It used to re-pull the world as well, which made it a second refresh sitting
+  // beside the pull — and an invisible one, since nothing on screen says a tab is
+  // also a reload button. The result was an app that seemed to refresh at random
+  // moments the user hadn't connected to anything they did. Pulling down is the
+  // gesture people already know and the one the indicator actually describes, so
+  // it's the only one now. Nothing polls on a timer; the world is otherwise
+  // refreshed at boot and on foreground.
   function reclick(route) {
     const path = (location.hash || '#/').split('?')[0];
     if (route === '#/' && path === '#/' && (activeFilter !== 'all' || activeTag)) {
@@ -8584,7 +9062,6 @@
       renderHome();
     }
     scrollTop(true);
-    refreshWorld(route, { force: true, hold: false });
   }
 
   document.getElementById('nav').addEventListener('click', (e) => {
@@ -8621,22 +9098,39 @@
 
   window.addEventListener('hashchange', route);
 
-  // Mobile: the top bar steps out of the way while you read down the feed and
-  // returns the moment you scroll back up. Pure class-toggling here — the
-  // transform + transition live in CSS and only apply at phone widths, so
-  // desktop (where the bar is the sidebar's sibling brand rail) never moves.
+  // The reading gesture half of the rule above: a thumb going down tucks the bar,
+  // a thumb going up brings it back. Pure class-toggling — the transform and its
+  // transition live in CSS and only apply at phone widths, so desktop (where the
+  // bar is the sidebar's sibling brand rail) never moves. State is shared with
+  // syncTopbar via barLastY, so a scroll the ROUTER placed can't be mistaken for
+  // a direction the reader chose on the next real gesture.
   (() => {
     const topbar = document.querySelector('.topbar');
-    let lastY = window.scrollY, ticking = false;
+    barLastY = window.scrollY;
+    let ticking = false;
     window.addEventListener('scroll', () => {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
         const y = window.scrollY;
-        if (y < 48) topbar.classList.remove('topbar--hidden');       // near the top: always shown
-        else if (y > lastY + 4) topbar.classList.add('topbar--hidden');
-        else if (y < lastY - 4) topbar.classList.remove('topbar--hidden');
-        lastY = y;
+        // The top of a page always wears its bar, however the window got there —
+        // checked BEFORE the teleport guard, or a jump bigger than a viewport
+        // (a long feed back to the top of a short page) takes the early return
+        // and strands you at the top with no header and nothing to scroll up
+        // against. Position beats direction: "hidden" is only ever a statement
+        // about reading DOWN something.
+        if (y < 48) { topbar.classList.remove('topbar--hidden'); barLastY = y; ticking = false; return; }
+        // A teleport is not a reading direction. The router jumps the window in
+        // one frame — to a spotlighted card, to a remembered position — and a jump
+        // of a thousand pixels used to read as "scrolling down fast", so landing
+        // on a post also slid the bar away: a second move stapled onto a
+        // navigation that was meant to be one clean fade. A move bigger than the
+        // viewport can't have come from a thumb, so take the new position and
+        // leave the bar exactly as the reader last set it.
+        if (Math.abs(y - barLastY) > window.innerHeight) { barLastY = y; ticking = false; return; }
+        if (y > barLastY + 4) topbar.classList.add('topbar--hidden');
+        else if (y < barLastY - 4) topbar.classList.remove('topbar--hidden');
+        barLastY = y;
         ticking = false;
       });
     }, { passive: true });
@@ -8648,9 +9142,16 @@
      at the top drives window.scrollY NEGATIVE, and that reading IS the pull —
      no preventDefault, no scroll hijack, and engines without the bounce simply
      never produce a negative scrollY (so this is inert on desktop). The
-     indicator is a little drifting-quintet dot that descends with the pull,
-     pops when armed, then churns while the same quiet re-pull a tab re-tap
-     runs. Reduced motion keeps the feature, drops the theatrics (CSS side). */
+     indicator is the quintet: five dots, one per post type, drawn together at
+     rest and spreading as the pull arms, then running a wave while the re-pull
+     goes out. Reduced motion keeps the feature, drops the theatrics (CSS side).
+
+     This is now the ONLY refresh gesture. Re-tapping the tab you were already on
+     used to refresh too, which was a second, invisible way to do the same thing —
+     nothing on screen said a tab was also a button, so the discoverable gesture
+     was carrying the feature and the hidden one just made the app feel like it
+     reloaded at random. The tab re-tap still scrolls you to the top and clears a
+     filter; it simply no longer re-pulls the world. */
   (() => {
     const THRESHOLD = 72;
     let ptr = null, pulling = false, raf = 0, busy = false;
@@ -8659,7 +9160,15 @@
         ptr = document.createElement('div');
         ptr.className = 'ptr';
         ptr.setAttribute('aria-hidden', 'true');
-        ptr.innerHTML = '<span class="ptr-dot"></span>';
+        // Five dots, one per post type, in FILTERS order — note, find, photo,
+        // activity, poll. The quintet already means "the five things Tria makes",
+        // so a refresh is those five going round rather than a generic spinner
+        // wearing brand colours. Colour and position both come from CSS
+        // (:nth-child sets the hue and the dot's angle on the ring), not here.
+        // The .ptr-ring wrapper exists only to carry the rotation, so the drop
+        // and the turn stay on separate elements — see the CSS.
+        ptr.innerHTML = '<span class="ptr-ring">' +
+          '<span class="ptr-dot"></span>'.repeat(5) + '</span>';
         document.body.appendChild(ptr);
       }
       return ptr;
@@ -8680,7 +9189,6 @@
       box.classList.toggle('ptr--armed', p >= 1);
       box.style.setProperty('--ptr-p', p.toFixed(3));
       box.style.setProperty('--ptr-y', (Math.min(d, 140) * 0.72).toFixed(1) + 'px');
-      box.style.setProperty('--ptr-r', (p * 270).toFixed(0) + 'deg');
     };
     const onScroll = () => { if (pulling && !raf) raf = requestAnimationFrame(draw); };
     window.addEventListener('touchstart', () => {
@@ -8698,6 +9206,13 @@
       if (d >= THRESHOLD && !busy) {
         busy = true;
         box.classList.add('ptr--spin');
+        // Hold the page open under the ring while the re-pull runs (see the CSS).
+        // Gesture only, never the silent path: this continues a movement the
+        // finger already started, and the pull can only begin at the very top so
+        // the space opens where there is nothing above to shove. A background
+        // re-pull moved nothing and may find you anywhere down the feed, where
+        // the same 56px would be the page lurching for no reason you could name.
+        document.body.classList.add('ptr-hold');
         // Hold the churn a beat even when nothing changed, so the gesture
         // always visibly did something.
         try {
@@ -8707,6 +9222,7 @@
           ]);
         } catch { /* offline pull: let go quietly */ }
         box.classList.remove('ptr--spin', 'ptr--show', 'ptr--armed');
+        document.body.classList.remove('ptr-hold');
         busy = false;
       } else {
         box.classList.remove('ptr--show', 'ptr--armed');
@@ -8714,6 +9230,33 @@
     };
     window.addEventListener('touchend', finish, { passive: true });
     window.addEventListener('touchcancel', finish, { passive: true });
+
+    // Lend the ring to the silent refresh path (see refreshWorld). `.ptr--spin`
+    // alone is a complete state — opacity, the drop and the open radius are all
+    // on that one class — so a programmatic show is the same three-frame move the
+    // gesture ends with, easing in from the base rule rather than teleporting.
+    // A real pull always wins: a finger on the glass, or a re-pull already in
+    // flight, and this declines and the caller repaints without it.
+    refreshRing = {
+      on() {
+        if (busy || pulling || !Store.isAuthed()) return false;
+        busy = true;
+        const box = el();
+        // The very first show also CREATES the node, and creating it and classing
+        // it in the same task means the browser only ever resolves style once,
+        // with .ptr--spin already on — so there is no start state to transition
+        // from and the ring snaps into place instead of dropping in. Resolve the
+        // base state first. (The pull never hits this: draw() has been styling a
+        // live element all the way down the rubber band.)
+        void box.offsetHeight;
+        box.classList.add('ptr--spin');
+        return true;
+      },
+      off() {
+        ptr?.classList.remove('ptr--spin', 'ptr--show', 'ptr--armed');
+        busy = false;
+      },
+    };
   })();
 
   // ── Self-update ────────────────────────────────────────────────────────────
@@ -8790,11 +9333,43 @@
   // launch and every foreground so a new worker (e.g. this very freshness fix)
   // propagates within a session or two instead of waiting on the browser's own
   // ~24h cadence — the SW script itself is fetched bypassing the HTTP cache.
-  if ('serviceWorker' in navigator) {
+  // Skipped in the App Store build: that shell has neither of the two jobs a
+  // worker does here. Its assets are bundled, so there is no stale HTML shell to
+  // outrun, and its push arrives over APNs rather than through a `push` event —
+  // a WKWebView can't register a worker from a custom scheme anyway, so this was
+  // only ever a rejected promise being swallowed.
+  if (!nativeShell() && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').then(reg => {
       const poke = () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); };
       document.addEventListener('visibilitychange', poke);
     }).catch(() => { /* push + shell-refresh simply stay off */ });
+  }
+
+  /* ── A tapped notification, in the app ──────────────────────────────────────
+     sw.js's `notificationclick` handler is the web's half of this and can't run
+     in the App Store build (see above), so the bridge answers the same question:
+     a tap lands you on the page the payload names, defaulting to Updates, which
+     is where every notification Tria sends is accounted for.
+
+     Only the hash is honoured. The payload carries a relative URL because the web
+     worker needs one to call `clients.openWindow` with; here the document is
+     already open and the router reads the hash, so anything else in that string
+     is not ours to navigate to.
+
+     Registered at boot, before anything else touches the route, because the
+     plugin RETAINS this event until something consumes it — a cold launch from a
+     notification fires it the moment the listener exists, which is how a tap on a
+     closed app still lands on the right page rather than the home feed. */
+  if (nativeShell()) {
+    try {
+      window.Capacitor.nativeCallback('PushNotifications', 'addListener',
+        { eventName: 'pushNotificationActionPerformed' }, (ev) => {
+          if (ev?.actionId === 'dismiss') return;
+          const url = String(ev?.notification?.data?.url || '');
+          const hash = url.slice(url.indexOf('#'));
+          location.hash = /^#\//.test(hash) ? hash : '#/updates';
+        });
+    } catch { /* no listener; a tap just opens the app where it was */ }
   }
 
   // If the recovery event lands after the first paint (it usually resolves during
@@ -8806,6 +9381,11 @@
   Store.init().then(() => {
     route();
     warmImages();   // decode avatars + recent photos up front so navigation is flash-free
+    // Native push housekeeping, after init because it needs the signed-in user:
+    // read the OS permission into the cache the push UI renders from, and if push
+    // is already on, re-register — APNs tokens rotate, and a stale one fails
+    // silently (Apple just says Unregistered, the phone says nothing at all).
+    Store.pushResume();
   }).catch((err) => {
     console.error('Boot failed:', err);
     route();

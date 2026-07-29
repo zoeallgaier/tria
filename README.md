@@ -28,5 +28,3 @@ storage). Hosted on GitHub Pages.
 ## Note
 
 This is a personal project by [Zoe Allgaier](https://github.com/zoeallgaier).
-It's shared publicly, but it's built for a small group of friends rather than as
-a general-purpose product.

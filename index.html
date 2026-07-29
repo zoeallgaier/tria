@@ -55,9 +55,9 @@
        The maskable additionally sits at 78% to clear Android's 80% safe
        circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=314" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=314" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=314" />
+  <link rel="icon" href="icons/icon-32.png?v=335" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=335" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=335" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -69,15 +69,24 @@
        away, leaving the status area fully clear. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
+  <!-- Fonts are SELF-HOSTED (css/fonts/, declared in tokens.css). They used to
+       come from fonts.googleapis.com, which cost a DNS + TLS handshake to two
+       third-party hosts and then a second, render-blocking stylesheet before a
+       single glyph could be requested — and in the bundled iOS app it meant the
+       app's own typography waited on the network at every cold launch, falling
+       back to system type when there wasn't one. All ten faces together are
+       112KB, less than one post photo. Preload the two that set the first
+       screen (Oxygen 400 body, Instrument Serif titles); the other eight are
+       found in the CSS as usual. crossorigin is REQUIRED on a font preload even
+       same-origin, or the fetch is made twice. -->
+  <link rel="preload" href="css/fonts/oxygen-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="css/fonts/instrument-serif-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=314" />
-  <link rel="stylesheet" href="css/app.css?v=314" />
+  <link rel="stylesheet" href="css/tokens.css?v=335" />
+  <link rel="stylesheet" href="css/app.css?v=335" />
 </head>
 
 <body>
@@ -124,7 +133,9 @@
        the clock/battery to draw WHITE over our content; in light mode the pale
        page behind them washes them out. A soft dark-to-transparent gradient over
        only the safe-area strip (no solid bar) keeps them readable — iOS's own
-       trick. Only rendered in the installed standalone shell; deepens once the
+       trick. Rendered in any INSTALLED shell — the App Store build included,
+       which is the one it used to miss (see installedShell in app.js, which
+       stamps html[data-shell] for the stylesheet to read). Deepens once the
        topbar tucks away and bare content scrolls under the glyphs. -->
   <div class="statusbar-scrim" aria-hidden="true"></div>
 
@@ -143,10 +154,19 @@
     <div id="view"></div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=314"></script>
-  <script src="js/store.js?v=314"></script>
-  <script src="js/app.js?v=314"></script>
+  <!-- supabase-js is VENDORED, not pulled from a CDN. store.js calls
+       createClient at parse time, so nothing in Tria — not the router, not the
+       gate — runs until this file lands. Off jsdelivr that put a third-party
+       DNS + TLS handshake on the critical path of every cold launch, and in the
+       bundled iOS app it meant no network was not a slow launch but a blank
+       screen, which is both a 2.1 rejection and the worst first run possible.
+       Local also PINS the version: the old src said `@2`, so any minor release
+       shipped itself into production without a deploy. Update deliberately —
+       drop a new file in, change this line, bump. -->
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=335"></script>
+  <script src="js/config.js?v=335"></script>
+  <script src="js/store.js?v=335"></script>
+  <script src="js/app.js?v=335"></script>
 </body>
 
 </html>

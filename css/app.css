@@ -22,6 +22,39 @@ html {
   background: var(--bg);
 }
 
+/* The same paper again, as a FIXED layer this time — because the canvas above
+   ends with the document and the glass on top of it does not.
+
+   The topbar is 55% paper over a backdrop blur, which is invisible at rest for
+   the obvious reason: the thing behind it is also paper, so 55% of paper over
+   paper is paper. Pull past the top and the document slides away, and for the
+   length of the rubber band the bar is translucent over NOTHING — the void above
+   the document, which composites nowhere near --bg. The bar stopped being
+   invisible and became a lighter slab with a hard edge along the bottom,
+   strongest in dark mode where three levels on a near-black is a real step
+   (measured #111315 against a #0E1012 page, and #17191B right at the lip). It
+   read as a panel someone forgot to fade out.
+
+   Setting scrollView.backgroundColor in TriaViewController.swift fixed what you
+   see BESIDE the document, and that fix is still right — but a UIKit colour is
+   underneath the whole web view and a backdrop-filter can only sample what the
+   web layer painted, so it could never reach this. The fix has to be inside the
+   document: one viewport-sized fill that no amount of scrolling can move off,
+   sitting under everything, so every piece of glass in the app has paper behind
+   it in every scroll position there is.
+
+   z-index -2, not -1: the ambient wash is a z-index:-1 child of <body> and has
+   to stay ABOVE this, or a profile's glow would be painted over. Flat colour, no
+   blur, no gradient — it's one composited layer that never repaints. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: var(--bg);
+  pointer-events: none;
+}
+
 body {
   color: var(--text);
   font-family: 'Oxygen', system-ui, sans-serif;
@@ -57,25 +90,66 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
    still colour sampled from that person's photo (set via --glow-photo by the
    router). Everywhere else it stays transparent. */
 .ambient {
-  /* Absolute (not fixed) so it scrolls WITH the page: the glow sits behind the
-     top of the view and scrolls away as you read down — depth on arrival without
-     sitting behind every post forever. Viewport-tall, anchored to the page top.
-     Pure CSS, no scroll listener, so it costs nothing. */
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100vh;
+  /* The glow sits behind the top of the view and scrolls away as you read down —
+     depth on arrival without sitting behind every post forever. It still does
+     that, but it is no longer POSITIONED that way, and the difference is the
+     whole reason this comment is long.
+
+     It used to be `position: absolute; top: 0`, so it simply rode the document.
+     That cannot survive the iOS rubber band: body::before (fixed) paints the
+     entire overscroll gap and a scrolled layer is clipped to the document, so
+     pulling down on a profile slid the wash out from under the fixed paper and
+     opened a band of bare page above it — a hard step, #EDEEF0 to #E9D8DA across
+     a single row, the same species of seam as the topbar band and about as loud.
+     Growing this box upward looks like the obvious answer and is completely
+     inert: content above the page origin is never painted at all (a magenta probe
+     on body::before confirmed which layer owns that region).
+
+     So the wash is fixed — it can no longer be dragged off the top by anything —
+     and the scroll-away is driven by a SCROLL TIMELINE instead of by layout. That
+     buys the one property `absolute` couldn't give: a scroll timeline's progress
+     is clamped to the scroll range, so overscrolling past the top holds it at 0
+     and the wash stays exactly where it is, covering the gap, while a normal
+     scroll down moves it 1:1 with the page. 100vh of scroll over 100vh of travel
+     is the same speed the document moves, so this is not parallax and there is
+     nothing for prefers-reduced-motion to object to — it reproduces what
+     `absolute` did, minus the one case where `absolute` broke.
+
+     Scoped to the profile wash (below) rather than living here, because the other
+     three washes are pinned ON PURPOSE and must not scroll away. And gated on
+     @supports, so a webview without scroll timelines degrades to a wash that
+     stays put — the old behaviour's opposite, but never the seam.
+
+     inset:0 rather than a 100vh box for the reason spelled out under the About
+     wash below: on iOS `100vh` is the LARGE viewport while `top: 0` pins to the
+     small one, and this glow is brightest at that very edge. */
+  position: fixed;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
   --glow: transparent;
   background: radial-gradient(ellipse 78% 62% at 50% -14%, var(--glow), transparent 70%);
+  /* Promoted, and the animation below drives this same property — so it has to be
+     a transform here too, or the keyframe would drop the promotion mid-scroll. */
+  transform: translate3d(0, 0, 0);
   /* Fade in/out with the page transition (a gradient can't tween, but opacity
      can) so it eases in alongside the rest of the site rather than snapping. */
   opacity: 0;
   transition: opacity 0.4s ease;
 }
 body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
+/* The scroll-away, on a scroll timeline (see .ambient). One viewport of travel
+   per viewport of scroll — by 100vh the box's bottom edge has reached the top of
+   the screen and there is nothing left to show, so the animation is done exactly
+   when the glow is gone. `both` holds it there for the rest of a long profile. */
+@keyframes wash-away { to { transform: translate3d(0, -100vh, 0); } }
+@supports (animation-timeline: scroll()) {
+  body[data-ambient="photo"] .ambient {
+    animation: wash-away linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 100vh;
+  }
+}
 
 /* About page (signed in OR the signed-out front door) carries the self-lit,
    hue-drifting blue glow: pinned to the viewport top and falling down over the
@@ -332,8 +406,8 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   border-radius: var(--radius-pill);
   color: var(--muted);
   background: var(--glass-bg);
-  border: 1px solid var(--rule);
-  box-shadow: var(--lit-rim), 0 6px 18px rgba(0, 0, 0, 0.12);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), var(--glass-lift);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   pointer-events: auto;
@@ -346,12 +420,24 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 .share-tria:active { transform: translateY(0); }
 @media (prefers-reduced-motion: reduce) { .share-tria { transition: color var(--dur-micro) var(--ease); } }
 
-/* Status-bar legibility scrim — only the installed iOS shell needs it (see the
-   note by the element in index.html). Off everywhere else. On a device with no
-   top inset env(safe-area-inset-top) is 0, so it self-collapses to nothing. */
+/* Status-bar legibility scrim — only an INSTALLED shell needs it (see the note
+   by the element in index.html). Off everywhere else. On a device with no top
+   inset env(safe-area-inset-top) is 0, so it self-collapses to nothing.
+
+   This used to be gated on `@media (display-mode: standalone)`, which is exactly
+   the test that does not work in the App Store build: Capacitor's webview reports
+   display-mode `browser` (it is the documented reason installedShell() exists in
+   app.js), so the scrim was dead in the one shell that most needs it. The native
+   app runs full-bleed under the clock — viewport-fit=cover plus Capacitor's own
+   full-height webview — and .topbar--hidden tucks the only other backing away on
+   scroll-down, so feed content passed under the OS glyphs with nothing behind it.
+
+   The gate is now a single JS predicate stamped onto <html> (data-shell), which
+   answers for all three shells at once instead of each stylesheet re-deriving
+   "am I installed?" from a media feature that only one of them reports. */
 .statusbar-scrim { display: none; }
-@media (display-mode: standalone) and (max-width: 680px) {
-  .statusbar-scrim {
+@media (max-width: 680px) {
+  html[data-shell="installed"] .statusbar-scrim {
     display: block;
     position: fixed;
     top: 0;
@@ -366,7 +452,7 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   }
   /* Topbar gone, bare content under the glyphs — take the scrim to full strength. */
   .topbar--hidden ~ .statusbar-scrim { opacity: 1; }
-  @media (prefers-reduced-motion: reduce) { .statusbar-scrim { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { html[data-shell="installed"] .statusbar-scrim { transition: none; } }
 }
 
 .brand-mark {
@@ -398,15 +484,13 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   /* Top pad clears the brand overlay (topbar sits on the card's head). */
   padding: calc(var(--topbar-h) - 0.25rem) 0.85rem 1.25rem;
   border-radius: var(--radius-nav);
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border: var(--glass-edge);
+  background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  /* Lit top rim + a soft drop, so the rail visibly floats off the page — the
+  /* Specular rim + a soft drop, so the rail visibly floats off the page — the
      same glass language as the mobile nav pill, scaled up to a sidebar. */
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
-    0 10px 34px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--glass-rim), var(--glass-lift);
 }
 
 .nav-link {
@@ -530,10 +614,22 @@ main {
 }
 
 /* ── Page transitions ──────────────────────────────────────────────────────
-   The router (app.js) swaps one `.page` for the next inside #view, and the swap
-   is a plain CROSS DISSOLVE: the outgoing page fades out while the incoming one
-   fades in, same curve, same duration. No direction, no movement, one rule for
-   every route.
+   The router (app.js) swaps one `.page` for the next inside #view. The swap is
+   ONE FADE: the incoming page is mounted fully opaque underneath, and the
+   outgoing page — lifted out of flow, so it overlays — fades out on top of it.
+   No direction, no movement, one rule for every route.
+
+   ONE fade, not two, and that is the whole fix for the flash. This used to be a
+   true cross dissolve: outgoing 1→0 while incoming 0→1, same curve. Two ramps
+   crossing means neither layer is opaque in the middle of the move — at the
+   halfway point each sits near 0.5, so the composite is 0.5·out + 0.25·in +
+   0.25·PAGE BACKGROUND. That quarter of bare --bg punching through both layers
+   is a real luminance spike on every single navigation: a white blink in light
+   mode, a dark dip in dark mode. Nothing was mistimed and nothing was
+   stuttering; the arithmetic of a cross dissolve simply cannot cover the page.
+   Fading only the outgoing layer over an already-opaque incoming one keeps
+   coverage at 100% for the entire move, so the background never shows and the
+   destination is on screen, complete, from the first frame.
 
    MOTION BUDGET (why it's shaped this way): pages used to slide along a nav line
    (forward entered from the right, back from the left, and the outgoing page
@@ -543,77 +639,91 @@ main {
    than a load, and the page looked like it was snapping into place. A fade has
    nothing to be out of step with — tiles paint whenever they're ready,
    underneath an opacity ramp that doesn't care. It's also the cheapest thing the
-   compositor can do: one layer per page, no per-frame geometry.
+   compositor can do, and now it is half of that again: only the outgoing page
+   is promoted, so a navigation carries ONE composited layer instead of two.
    (There was a 6px focus-in blur on the entering page even earlier; `filter:
    blur()` re-rasterizes the whole page every frame, which is what the old iOS
    jitter was. Long gone — don't bring either back.)
 
-   `will-change: opacity` promotes each page for the move and releases when the
-   class clears. Deliberately NOT `will-change: transform`: that makes a page a
-   containing block for its `position: fixed` children (the docked seg-tabs),
-   which is the constraint the slide had to work around. */
+   `will-change: opacity` promotes the leaving page for the move and releases
+   when the class clears. Deliberately NOT `will-change: transform`: that makes a
+   page a containing block for its `position: fixed` children (the docked
+   seg-tabs), which is the constraint the slide had to work around. */
 #view { position: relative; overflow-x: clip; }
 
-.page { transition: opacity 0.3s var(--ease-soft); }
+/* Entering page: no ramp at all. It carries `.enter` only so the two rules below
+   can find it — it is opaque and unpromoted from its first frame. */
 
-/* Entering page — transparent … */
-.page.enter { opacity: 0; will-change: opacity; }
-/* … then settles in (later rule wins at equal specificity). */
-.page.enter.active { opacity: 1; }
-
-/* Leaving page — lifted out of flow so it overlays and the two fades cross
-   instead of the layout collapsing between them. renderPage pins its `top` to
-   the scroll position being read — the scroll-anchor fix. */
-.page.leave { position: absolute; inset: 0 0 auto 0; will-change: opacity; }
+/* Leaving page — lifted out of flow so it overlays the destination instead of
+   the layout collapsing between them, and (being positioned) painting above it.
+   renderPage pins its `top` to the band the reader was actually looking at, AFTER
+   the scroll has reached its destination — the scroll-anchor fix. */
+.page.leave {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 1;                 /* say it out loud rather than leaning on paint order */
+  will-change: opacity;
+  transition: opacity var(--dur-quick) var(--ease-soft);
+}
 .page.leave.active { opacity: 0; }
 
-/* In-page glass goes quiet for the whole move. iOS WebKit (standalone especially)
-   keeps trying to sample backdrop-filter inside a promoted, fading layer and the
-   frost visibly jumps — exactly on the pages that carry in-page glass (Friends:
-   seg-tabs + search; Updates: seg-tabs + soft-ask; Profile: the account-card,
-   a big piece of glass whose large sample area was crashing iOS WebKit outright
-   on the way out to Circle). Turning
-   it off explicitly stops the mis-sampling and drops the per-frame compositing
-   cost; the handover back to live frost lands when the router clears the
-   transition classes (right as the page settles — see renderPage cleanup). The
-   translucent fills stay, so the surfaces keep their tone throughout. The nav
-   pill lives outside #view and keeps its glass live the whole time (it has its
-   own iOS layer pin — see .nav-pill). */
-.page.enter .seg-tabs, .page.leave .seg-tabs,
-.page.enter .masthead-search-field, .page.leave .masthead-search-field,
-.page.enter .push-ask, .page.leave .push-ask,
-.page.enter .daily-card, .page.leave .daily-card,
-.page.enter .account-card, .page.leave .account-card {
+/* The OUTGOING page's glass goes quiet for the move. iOS WebKit (standalone
+   especially) keeps trying to sample backdrop-filter inside a promoted, fading
+   layer and the frost visibly jumps — exactly on the pages that carry in-page
+   glass (Friends: seg-tabs + search; Updates: seg-tabs + soft-ask; Profile: the
+   account-card, a big piece of glass whose large sample area was crashing iOS
+   WebKit outright on the way out to Circle). Turning it off explicitly stops the
+   mis-sampling and drops the per-frame compositing cost. The translucent fills
+   stay, so the surfaces keep their tone throughout. The nav pill lives outside
+   #view and keeps its glass live the whole time (it has its own iOS layer pin —
+   see .nav-pill).
+
+   `.page.enter` used to be in this list and is deliberately NOT any more. The
+   precondition the paragraph above names is "inside a promoted, fading layer",
+   and since the swap became one fade that is no longer true of the destination:
+   it is opaque, unpromoted, and not animating. What the rule bought there was a
+   cost it no longer has, and what it charged was visible — the page you just
+   arrived on wore FLAT glass until the router's cleanup ran, then frosted, so
+   every navigation onto Discover, Updates or a profile ended in a little pop of
+   the material switching on. Arriving glass is now simply glass. */
+.page.leave .seg-tabs,
+.page.leave .masthead-search-field,
+.page.leave .push-ask,
+.page.leave .daily-card,
+.page.leave .account-card {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
-/* The same collision, different cause: on a photo-heavy page, the entering
-   page's will-change layer tears down while a burst of photo-frame reveals is
-   still mid-flight, right as several photo bitmaps are freshly decoded. That
-   pile-up of simultaneous compositor layers + fresh large bitmaps is what was
-   crashing Safari on iOS ("A problem repeatedly occurred") on page switches,
-   not the glass. Letting photos snap in instead of fading during the move (they
-   still reveal the instant they decode, just without an extra opacity layer
-   riding along) cuts the concurrent-layer count during the one window that
-   matters, and stops a photo from double-fading inside an already-fading page;
+/* The same collision, different cause: on a photo-heavy page, a promoted page
+   layer tears down while a burst of photo-frame reveals is still mid-flight,
+   right as several photo bitmaps are freshly decoded. That pile-up of
+   simultaneous compositor layers + fresh large bitmaps is what was crashing
+   Safari on iOS ("A problem repeatedly occurred") on page switches, not the
+   glass. Letting photos snap in instead of fading during the move (they still
+   reveal the instant they decode, just without an extra opacity layer riding
+   along) cuts the concurrent-layer count during the one window that matters;
    fades return to normal the moment renderPage's cleanup clears these classes.
    Card rise itself no longer runs during a navigation at all — renderPage
-   freezes freshly-mounted cards so they ride the page's own dissolve (see the
-   freeze in app.js), which both removes the old white flash and drops the card
-   layers entirely.
+   freezes freshly-mounted cards so they ride the swap (see the freeze in
+   app.js), which both removes the old white flash and drops the card layers
+   entirely.
    Discover's tiles carry the same contract under a different class, and they
-   carry it dozens at a time — a grid landing mid-dissolve is the densest burst
-   of fresh bitmaps anywhere in the app, so it is the last place that wants an
-   extra opacity layer per photo riding along. */
+   carry it dozens at a time — a grid landing mid-swap is the densest burst of
+   fresh bitmaps anywhere in the app, so it is the last place that wants an extra
+   opacity layer per photo riding along.
+   This one keeps `.page.enter` even though the destination is no longer promoted,
+   and now has a second reason to: the destination is on screen COMPLETE from the
+   first frame, so a wave of photos fading up under a page that is dissolving away
+   on top of them is two moves in the same 240ms. Snapping is the calm read. */
 .page.enter .photo-frame img, .page.leave .photo-frame img,
 .page.enter .ptile-face--media img, .page.leave .ptile-face--media img {
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Match .page.enter's specificity so the override actually wins (the router
-     also skips the dissolve entirely under reduced motion — belt and braces). */
+  /* Match .page.leave's specificity so the override actually wins (the router
+     also skips the swap entirely under reduced motion — belt and braces). */
   .page, .page.enter, .page.leave { transition: none; will-change: auto; }
 }
 
@@ -743,10 +853,10 @@ main {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   /* iOS reads a search field as a FILLED capsule, not an outlined one: the fill
-     and a faint top-lit rim carry the shape, so the edge stays a barely-there
+     and the specular rim carry the shape, so the edge stays a barely-there
      hairline (the old --rule border landed as a bright ring on dark paper). */
   border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent);
+  box-shadow: var(--glass-rim);
   border-radius: var(--radius-pill);
   padding: 0.6rem 3rem 0.6rem 1rem;   /* right pad clears the X control */
   opacity: 0;
@@ -961,8 +1071,8 @@ main {
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-lift);
   transition: transform 0.08s var(--ease);
 }
 .filter-dial-ico::before {
@@ -976,9 +1086,7 @@ main {
 .filter-dial-ico svg { position: relative; width: 1.5rem; height: 1.5rem; }
 /* Active chip: a ring in its own hue seals it as the current pick. */
 .filter-dial-item.is-on .filter-dial-ico {
-  box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.14),
-    0 0 0 2px color-mix(in srgb, var(--glow) 55%, transparent);
+  box-shadow: var(--glass-lift), 0 0 0 2px color-mix(in srgb, var(--glow) 55%, transparent);
 }
 .filter-dial-item:active .filter-dial-ico { transform: scale(0.92); }
 
@@ -993,15 +1101,10 @@ main {
    stays legible on the brighter disc — the same treatment the FAB dial takes. */
 @media (prefers-color-scheme: dark) {
   .filter-dial-scrim { background: color-mix(in srgb, var(--bg) 44%, transparent); }
-  .filter-dial-ico {
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-  }
+  .filter-dial-ico { background: color-mix(in srgb, var(--bg) 82%, transparent); }
   .filter-dial-ico::before { opacity: 0.5; }
   .filter-dial-item.is-on .filter-dial-ico {
-    box-shadow:
-      0 6px 18px rgba(0, 0, 0, 0.5),
-      0 0 0 2px color-mix(in srgb, var(--glow) 60%, transparent);
+    box-shadow: var(--glass-lift), 0 0 0 2px color-mix(in srgb, var(--glow) 60%, transparent);
   }
 }
 
@@ -1134,13 +1237,11 @@ main {
   margin: 0 auto 2.4rem;
   padding: 4px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent),
-    0 6px 20px rgba(0, 0, 0, 0.10);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), var(--glass-lift);
 }
 /* The sliding thumb — a lighter pill lifted off the track (the selected segment
    as a raised card). It covers the first segment and translates a full segment
@@ -2142,36 +2243,26 @@ main {
 .mention-list {
   list-style: none;
   margin: 0.4rem 0 0;
-  padding: 0.3rem;
+  padding: var(--pad-panel);
   max-height: 210px;
   overflow-y: auto;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  /* Trimmed from 30 to 24px (matches the rest of the floating-panel tier) —
-     sample-radius is a real compositing cost on iOS, and this popover doesn't
-     need the extra 6px to read as frosted. Part of the July 2026 crash audit;
-     see the page-transition comment above for the fuller context. */
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  /* Panel tier: the composer behind it is not going anywhere while you pick a
+     name, so this samples once and holds — it can carry the deep blur. */
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+  border: var(--glass-edge);
   border-radius: var(--radius-card);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
-    0 12px 30px rgba(0, 0, 0, 0.18);
-}
-@media (prefers-color-scheme: dark) {
-  .mention-list {
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
-      0 12px 30px rgba(0, 0, 0, 0.5);
-  }
+  box-shadow: var(--glass-rim), var(--glass-lift-panel);
 }
 .mention-list [role="option"] {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   padding: 0.35rem 0.5rem;
-  border-radius: var(--radius);
+  /* Concentric with the panel: 14px minus the 0.3rem pad. A 3px row inside a
+     14px menu bent visibly tighter than the corner it sat in. */
+  border-radius: var(--radius-row);
   cursor: pointer;
   font-size: 0.88rem;
 }
@@ -2209,30 +2300,28 @@ main {
 }
 .sheet-scrim.open .sheet { transform: none; }
 .sheet-items, .sheet-cancel {
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  /* 24px matches the rest of the floating-panel tier (nav pill, mention popover)
-     — standardized in the July 2026 crash audit; sample-radius is a real iOS
-     compositing cost and the sheet reads as frosted at 24 just the same. */
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  border-radius: var(--radius-modal, 20px);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
-    0 12px 34px rgba(0, 0, 0, 0.22);
+  /* Panel tier: the page is frozen under the scrim while a sheet is open, so the
+     blur samples once and then sits there. Nothing about this is scroll-hot. */
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+  border: var(--glass-edge);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--glass-rim), var(--glass-lift-panel);
 }
 .sheet-title {
   text-align: center; font-size: 0.8rem; color: var(--muted);
   padding: 0.7rem 1rem 0.1rem; margin: 0;
 }
-.sheet-items { overflow: hidden; padding: 0.3rem; }
+.sheet-items { overflow: hidden; padding: var(--pad-panel); }
 .sheet-item {
   display: flex; align-items: center; gap: 0.7rem; width: 100%;
   padding: 0.85rem 0.9rem; border: none; background: none; cursor: pointer;
   font: inherit; font-size: 0.98rem; color: var(--text); text-align: left;
   /* Nests inside the panel's 20px minus its 0.3rem padding — an 8px row inside a
-     20px sheet read as a different corner language. */
-  border-radius: var(--radius-card, 14px);
+     20px sheet read as a different corner language. Now derived rather than
+     eyeballed, so the pair stays concentric if either value moves. */
+  border-radius: var(--radius-row-lg);
   -webkit-tap-highlight-color: transparent;
 }
 .sheet-item + .sheet-item { position: relative; }
@@ -2263,14 +2352,8 @@ main {
                                       color-mix(in srgb, var(--text) 6%, transparent));
   }
 }
-@media (prefers-color-scheme: dark) {
-  .sheet-items, .sheet-cancel {
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
-      0 12px 34px rgba(0, 0, 0, 0.5);
-  }
-}
+/* No dark-mode block here any more: fill, rim and lift are all tokens now, and
+   the tokens flip themselves. Same for the mention popover and the modal card. */
 @media (prefers-reduced-motion: reduce) {
   .sheet-scrim, .sheet { transition: none; }
   .sheet { transform: none; }
@@ -2406,11 +2489,11 @@ main {
   place-items: center;
   border-radius: 50%;
   color: #fff;
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  border: var(--glass-edge);
+  background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--glass-rim), var(--glass-lift);
 }
 .frame-sound {
   right: 0.7rem;
@@ -2485,59 +2568,133 @@ main {
 .lightbox video { background: #000; }
 
 /* ── Pull-to-refresh indicator ─────────────────────────────────────────────
-   A little drifting-quintet dot (the brand's colour engine, worn small) that
-   rides the iOS rubber band down from under the status bar: JS (the ptr module)
-   drives --ptr-y/--ptr-p/--ptr-r straight from the overscroll, so while the
-   finger is down there's no transition — the bounce IS the easing. The dot pops
-   on the spring when the pull arms, and churns (gradient drift + turn) while
-   the refresh runs. Floats above content, never glass — it's a signal, not a
+   The quintet, worn small: five dots, one per post type, in FILTERS order,
+   arranged on a ring. It rides the iOS rubber band down from under the status
+   bar — JS (the ptr module) drives --ptr-y/--ptr-p straight from the overscroll,
+   so while the finger is down there's no transition and the bounce IS the easing.
+
+   The pull's progress is the RADIUS. At rest the five sit stacked on top of each
+   other, reading as one small object; as you pull, the ring opens out of that
+   point until the five are distinct and evenly spaced, and a fully open ring IS
+   the "let go now" signal — no separate pop needed, the gesture and the colour do
+   the telling. Then the whole ring turns while the re-pull goes out.
+
+   A turning ring rather than the row-of-dots wave it started as: five dots
+   counting left to right is a progress bar's gesture, and this is an indefinite
+   wait, which every platform draws as something going round. The ring reads as an
+   ordinary spinner at a glance and is still unmistakably the quintet up close,
+   which the wave never quite was.
+
+   `linear`, not --ease: a spinner with eased rotation lurches once per turn, and
+   the eye reads the lurch as the app stalling. Flat pastel, NOT the lit dome (the
+   dome is reserved for the two hero commit buttons, and at 7px a specular hotspot
+   is mud anyway). Floats above content but never glass — it's a signal, not a
    surface. */
 .ptr {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  top: calc(env(safe-area-inset-top, 0px) + 18px);
   left: 50%;
   z-index: 60;
-  margin-left: -16px;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
+  margin-left: -22px;
+  width: 44px;
+  height: 44px;
+  /* Stacked at a 2px radius, open at 12px — a 24px ring, 31px across the dots. */
+  --ptr-r: calc(2px + 10px * var(--ptr-p, 0));
   pointer-events: none;
   opacity: 0;
-  transform: translateY(0) scale(0.6);
+  transform: translateY(0);
   transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
 }
 .ptr--show {
   opacity: var(--ptr-p, 0);
-  transform: translateY(var(--ptr-y, 0px)) rotate(var(--ptr-r, 0deg))
-             scale(calc(0.6 + 0.4 * var(--ptr-p, 0)));
+  transform: translateY(var(--ptr-y, 0px));
   transition: none;   /* follow the rubber band raw */
 }
 .ptr--spin {
   opacity: 1;
-  transform: translateY(52px) scale(1);
+  transform: translateY(44px);
+  --ptr-r: 12px;      /* hold it open for the whole wait, whatever the pull ended at */
   transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
 }
+/* The ring turns; .ptr holds the drop. Two elements because they're two
+   different transforms on one object, and an animation on .ptr would win over
+   the transition that settles it into place, snapping the drop instead of
+   easing it. */
+.ptr-ring { position: absolute; inset: 0; }
 .ptr-dot {
-  width: 26px;
-  height: 26px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
   border-radius: 50%;
-  background: linear-gradient(115deg,
-    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-  background-size: 300% 100%;
-  box-shadow: var(--lit-rim), var(--lit-base), var(--lit-drop);
-  transition: scale 0.3s var(--spring);
+  /* A soft contact shadow only — enough to lift the dot off the page without
+     pretending to be a 3D object at this size. */
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+  /* Out to the radius along its own spoke. Five spokes, 72° apart, first at 12
+     o'clock. */
+  transform: rotate(var(--a)) translateY(calc(-1 * var(--ptr-r)));
+  transition: transform var(--dur-quick) var(--ease);
 }
-.ptr--armed .ptr-dot { scale: 1.18; }   /* the "you can let go now" pop */
-.ptr--spin .ptr-dot { animation: ptr-churn 1.1s linear infinite; }
-@keyframes ptr-churn {
-  from { background-position: 0% 50%;   transform: rotate(0deg); }
-  to   { background-position: 300% 50%; transform: rotate(360deg); }
+/* The quintet, in FILTERS order: note, find, photo, activity, poll. */
+.ptr-dot:nth-child(1) { --a:   0deg; background: var(--type-note); }
+.ptr-dot:nth-child(2) { --a:  72deg; background: var(--type-find); }
+.ptr-dot:nth-child(3) { --a: 144deg; background: var(--type-photo); }
+.ptr-dot:nth-child(4) { --a: 216deg; background: var(--type-activity); }
+.ptr-dot:nth-child(5) { --a: 288deg; background: var(--type-poll); }
+/* Under the finger the radius tracks the rubber band with no smoothing, same
+   reason .ptr--show kills its own transition. Release hands it back (the rule
+   below, later in source order, wins on equal specificity) so the ring settles
+   open rather than jumping. */
+.ptr--show .ptr-dot { transition: none; }
+.ptr--spin .ptr-dot { transition: transform var(--dur-quick) var(--ease); }
+
+.ptr--spin .ptr-ring { animation: ptr-turn 0.9s linear infinite; }
+@keyframes ptr-turn {
+  to { transform: rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ptr--show { transform: translateY(var(--ptr-y, 0px)); }
-  .ptr--armed .ptr-dot { scale: 1; }
-  .ptr--spin .ptr-dot { animation: none; }
+  /* Keep the feature and the colour, drop the travel: the ring still opens with
+     the pull (that's information, not decoration) and simply holds, open and
+     still, while the refresh runs. */
+  .ptr--spin .ptr-ring { animation: none; }
+}
+
+/* The page holds open under the ring for as long as the re-pull runs, the way a
+   UIRefreshControl does. Without it the ring lands in the only place the layout
+   has nothing to spare: the rubber band snaps shut the instant you let go, so
+   the ring drops out of the open space it was pulled into and comes to rest
+   ON the masthead, its lower edge overlapping the serif by a few points. It
+   stopped reading as a thing in front of the page and started reading as a
+   sticker stuck to it.
+
+   The space belongs to the gesture, not to the ring — a backing plate behind the
+   dots would give the same clearance, but the ring is a signal and not a
+   surface, and every surface in this app that floats is glass. So the page moves
+   instead.
+
+   Height on main::before rather than padding on main: it isolates the change
+   from main's own box (which the sidebar breakpoints write to) so the two can't
+   fight, and a transform is out of the question — it would make main a
+   containing block for the fixed seg-tabs docked inside it on Updates.
+
+   Transitioned IN as well as out, which is the counter-intuitive half. Instant
+   would be correct if the page were still, but it isn't: the band is snapping
+   back from -72px or further at exactly the same moment. Ramping both means the
+   content barely travels at all (the opening space and the closing band very
+   nearly cancel) and simply settles where the finger left it, where an instant
+   open makes it drop the full band and haul itself back up. */
+main::before {
+  content: "";
+  display: block;
+  height: 0;
+  transition: height var(--dur-move) var(--ease);
+}
+/* The ring's own box plus a gutter. */
+body.ptr-hold main::before { height: 56px; }
+@media (prefers-reduced-motion: reduce) {
+  main::before { transition: none; }
 }
 
 /* ── Auth gate (setup / login) ───────────────────────────────────────────────
@@ -3156,11 +3313,11 @@ button.poll-option:disabled { cursor: default; }
   position: relative;                  /* anchors the corner edit-profile badge */
   padding: 1.5rem 1.4rem;
   border-radius: var(--radius-modal);  /* a larger piece of glass, rounder corners */
-  background: var(--glass-bg);
+  background: var(--glass-bg-panel);
   -webkit-backdrop-filter: blur(var(--glass-blur));
           backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  box-shadow: var(--lit-rim), 0 12px 30px rgba(0, 0, 0, 0.12);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), var(--glass-lift);
 }
 
 /* Photo panel left, the whole identity group (name, handle, stats, bio, actions)
@@ -3434,15 +3591,20 @@ button.poll-option:disabled { cursor: default; }
   overflow: hidden;                    /* the face is full-bleed; the tile clips it */
   border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  box-shadow: var(--lit-rim), 0 6px 18px rgba(0, 0, 0, 0.10);
+  /* The glass-minus-blur surface: it takes the edge, the specular rim and the
+     float from the same tokens as every other floating panel, and drops only the
+     sample-and-blur (see the note above — a scrolling masonry grid is exactly
+     where per-element compositor work bills you). The rim is a box-shadow, so
+     matching the material here costs nothing. */
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), 0 6px 18px rgba(0, 0, 0, 0.10);
   transition: transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick) var(--ease);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
 }
 @media (hover: hover) {
   .ptile:hover {
     transform: translateY(-2px);
-    box-shadow: var(--lit-rim), 0 12px 26px rgba(0, 0, 0, 0.13);
+    box-shadow: var(--glass-rim), 0 12px 26px rgba(0, 0, 0, 0.13);
   }
 }
 
@@ -3532,9 +3694,9 @@ button.poll-option:disabled { cursor: default; }
 
 /* ── The identity foot ───────────────────────────────────────────────────── */
 .ptile-foot { padding: 0.7rem 0.8rem 0.75rem; }
-/* Portrait (only when the face is a post), name, arrow — one line of identity,
-   no @handle under it (see tileEl). With the second line gone the row centres on
-   the name instead of hanging off its top. */
+/* Portrait (only when the face is a post), name, arrow — the row centres on the
+   identity block whether that block is one line or two, so a post tile's bare
+   byline and a portrait tile's name-over-handle both sit against the arrow. */
 .ptile-who {
   display: flex;
   align-items: center;
@@ -3547,6 +3709,20 @@ button.poll-option:disabled { cursor: default; }
   overflow-wrap: anywhere;             /* a long unbroken name must not shove the arrow off */
 }
 .ptile .friend-go { flex-shrink: 0; font-size: 1rem; }
+
+/* Only on a portrait tile (see ptileEl): the one line that tells two people with
+   the same name apart. Small and muted so it reads as a subtitle to the name
+   rather than a second name, and clipped to one line — a handle is a key, and a
+   key that wraps has stopped looking like one. */
+.ptile-handle {
+  margin-top: 0.14rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Only ever on a portrait-faced tile — a person with nothing public to say gets
    to say it in words instead. Two lines, then ellipsis. */
@@ -3565,12 +3741,30 @@ button.poll-option:disabled { cursor: default; }
    the grid a page of scoreboards, and neither number is why anyone taps. The one
    mark left is the lock, and it isn't a statistic: it's a heads-up that the tap
    lands on a wall. It rides the NAME (the handle it used to sit on is gone)
-   because being closed is a property of the ACCOUNT, not of the post above it. */
+   because being closed is a property of the ACCOUNT, not of the post above it.
+
+   Its spacing is measured off the INK, not off the svg. Every icon here is a
+   24-unit box and ICONS.lock only fills x 5→19 of it, so with the 1.8 stroke the
+   drawn shape runs 4.1→19.9 and the element carries 17.1% of its own width as
+   empty space down each side. Setting margin-left: 0.3rem on that box therefore
+   asked for a 0.3rem gap and produced closer to 0.45rem, while the trailing
+   17.1% padded the name out toward the arrow with nothing in it — the gap looked
+   wrong on both sides because it was being set on a box that isn't the glyph.
+   So the insets are named once and subtracted: --lock-gap is the real optical
+   gap, and the trailing inset is pulled straight back off. The same arithmetic
+   is why the box GREW — at 0.82rem the ink was only 0.61rem against a name whose
+   cap height is nearer 0.8rem, so the lock read as a speck rather than a mark. */
+/* The last word of the name plus its lock, kept on one line (see ptileEl). */
+.name-fence { white-space: nowrap; }
 .ptile-lock {
-  width: 0.82rem;
-  height: 0.82rem;
-  margin-left: 0.3rem;
-  vertical-align: -0.09em;
+  --lock-box: 1.02rem;
+  --lock-inset: calc(var(--lock-box) * 0.171);  /* dead space each side of the ink */
+  --lock-gap: 0.28rem;
+  width: var(--lock-box);
+  height: var(--lock-box);
+  margin-left: calc(var(--lock-gap) - var(--lock-inset));
+  margin-right: calc(var(--lock-inset) * -1);
+  vertical-align: -0.13em;
   color: var(--muted);
 }
 
@@ -3631,11 +3825,15 @@ button.poll-option:disabled { cursor: default; }
   margin: 0 auto 2rem;
   padding: 1rem 1.15rem 0.95rem;
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--daily) 26%, var(--glass-bg));
+  /* Panel-grade FILL over chrome-grade BLUR, which looks like a contradiction and
+     isn't: the card carries a serif question and needs the body, but it sits in
+     Discover's normal flow and therefore scrolls with a grid of photographs
+     re-sampling behind it. Cost follows the backdrop, not the component name. */
+  background: color-mix(in srgb, var(--daily) 26%, var(--glass-bg-panel));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--daily-ink) 30%, transparent);
-  box-shadow: var(--lit-rim), 0 8px 22px rgba(0, 0, 0, 0.10);
+  box-shadow: var(--glass-rim), var(--glass-lift);
 }
 /* The one place the type→colour map is written for dailies. Activities are absent
    on purpose: a daily never asks for one (see the note above DAILIES in app.js). */
@@ -4189,25 +4387,6 @@ button.poll-option:disabled { cursor: default; }
 }
 .friends-share-ico { width: 15px; height: 15px; }
 
-/* Zoe's signature, closing the note fold on About. The only handwritten-feeling
-   thing in the app: serif italic at display size, so the letter ends in a voice
-   rather than in another paragraph. (It outlived the #/support page it was drawn
-   for — the note is an About fold now and the share CTA under it is gone, since
-   the header tray does that job in one tap.) */
-.about-body p.about-sign {
-  margin-top: 2rem;
-  font-family: 'Instrument Serif', serif;
-  font-style: italic;
-  font-size: 2rem;
-  line-height: 1;
-  font-weight: 400;
-  color: var(--text);
-}
-.about-sign a { color: var(--text); text-decoration: none; }
-@media (hover: hover) {
-  .about-sign a:hover { text-decoration: underline; text-underline-offset: 3px; }
-}
-
 /* ── Push pre-prompt — the soft ask on Updates. Still editorial (serif title,
    not a system alert), but on the same frosted-glass card material as the
    notifications it sits above, so the head of the Updates list reads as one
@@ -4221,21 +4400,11 @@ button.poll-option:disabled { cursor: default; }
   margin: 0.35rem 0 1.5rem;
   padding: 1rem 1.15rem;
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  background: var(--glass-bg-panel);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
-    0 6px 18px rgba(0, 0, 0, 0.10);
-}
-@media (prefers-color-scheme: dark) {
-  .push-ask {
-    background: color-mix(in srgb, var(--bg) 80%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
-      0 6px 18px rgba(0, 0, 0, 0.4);
-  }
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), var(--glass-lift);
 }
 .push-ask-copy { flex: 1 1 15rem; min-width: 0; }
 .push-ask-title {
@@ -5160,8 +5329,10 @@ button.poll-option:disabled { cursor: default; }
   justify-content: center;
   padding: 1.5rem;
   background: color-mix(in srgb, var(--bg) 55%, transparent);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  /* Panel tier: a full-screen sample, but of a page that cannot scroll while the
+     modal owns it, so the radius is free after the first frame. */
+  backdrop-filter: var(--glass-filter-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
   animation: fade 0.18s ease;
 }
 .modal-card {
@@ -5184,25 +5355,11 @@ button.poll-option:disabled { cursor: default; }
      (well above the 8px --radius-img), so the glass panel reads like a native
      iOS modal rather than a boxy web dialog. */
   border-radius: var(--radius-modal);
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  /* Trimmed from 30 to 24px, same reasoning as .mention-list above. */
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
-    0 24px 60px rgba(0, 0, 0, 0.28);
-}
-/* Dark glass: the lit rim dims to a faint neon line, the panel runs a touch more
-   opaque to keep form fields legible over bright content, and the float shadow
-   deepens — mirroring the nav pill's dark treatment. */
-@media (prefers-color-scheme: dark) {
-  .modal-card--glass {
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
-      0 24px 60px rgba(0, 0, 0, 0.5);
-  }
+  background: var(--glass-bg-panel);
+  backdrop-filter: var(--glass-filter-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), var(--glass-lift-panel);
 }
 .modal-title {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
@@ -5349,10 +5506,23 @@ button.poll-option:disabled { cursor: default; }
     height: calc(var(--topbar-h) + env(safe-area-inset-top));
     padding: env(safe-area-inset-top) 1.15rem 0;   /* left edge aligns with content */
     border-right: none;
-    border-bottom: 1px solid var(--rule);
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
-    /* Chrome-tier frost (18–24px). Kept at the floor since the bar runs more
-       opaque (88%) than the nav pill, so it needs less blur to lift off content. */
+    /* The scroll edge effect, which is what iOS 26 uses instead of a bar with a
+       rule under it. The fill is heaviest at the very top — that band is the
+       safe-area inset, i.e. exactly where the OS clock and battery sit and need
+       something to read against — and thins toward the bottom edge so content
+       dissolves INTO the bar rather than stopping at a wall. The gradient IS the
+       edge, so the hairline goes: a hard 1px rule under a fading bar draws the
+       one line the effect exists to remove.
+
+       It also means the bar does most of the status-bar scrim's job while it's
+       on screen. The scrim still matters, because .topbar--hidden takes all of
+       this away on scroll-down and leaves bare feed under the glyphs. */
+    border-bottom: none;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 84%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 70%, transparent) 58%,
+      color-mix(in srgb, var(--bg) 44%, transparent) 100%);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
     transition: transform var(--dur-move) var(--ease);
@@ -5424,15 +5594,13 @@ button.poll-option:disabled { cursor: default; }
     gap: 0.3rem;
     padding: 0.4rem 0.55rem;
     border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    background: var(--glass-bg);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
-    /* Glass edges: a hairline border, a top inner highlight (the "lit rim"),
-       and a soft drop under it so the pill visibly floats off the page. */
-    border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent),
-      0 10px 30px rgba(0, 0, 0, 0.14);
+    /* Glass edges: a hairline border, the specular rim around the whole
+       perimeter, and a soft drop so the pill visibly floats off the page. */
+    border: var(--glass-edge);
+    box-shadow: var(--glass-rim), var(--glass-lift);
     /* Keep the pill on its own compositing layer. iOS Safari (standalone) will
        otherwise drop a fixed + backdrop-filter element's layer after a big DOM
        swap (a page switch), leaving the nav invisible until a scroll repaints
@@ -5618,10 +5786,14 @@ button.poll-option:disabled { cursor: default; }
     display: grid;
     place-items: center;
     background: color-mix(in srgb, var(--bg) 72%, transparent);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+    /* No backdrop-filter of its own — the veil behind the whole dial already
+       blurs the frozen page, so a second blur per disc is redundant sampling
+       fighting the stagger transform each row animates through. This is the
+       identical fix .filter-dial-ico already carries; the two dials are the same
+       component wearing different anchors and they now agree. It is also the
+       "never glass on glass" rule: one material at a time. */
+    border: var(--glass-edge);
+    box-shadow: var(--glass-lift);
   }
   .nav-dial-ico::before {
     content: '';
@@ -5660,18 +5832,12 @@ button.poll-option:disabled { cursor: default; }
     .nav-publish::before { animation: none; background-position: 0 0, 0 0, 50% 50%; }
   }
 
-  /* Dark glass: the lit rim dims way down (a 40% white line glows like neon on
-     a dark pill), the drop shadow deepens to keep the float legible, and the
-     pill itself runs less transparent — muted icons over a bright photo
-     bleeding through 38% glass would otherwise drop below AA-graphics
-     contrast; at 76% the worst case stays comfortably legible. */
+  /* Dark glass. The pill's own fill, rim and lift are tokens now and flip
+     themselves, so what's left here is the pill's SPECIFIC dark problem: muted
+     icons over a bright photo bleeding through chrome-tier glass drop below
+     AA-graphics contrast, so it runs firmer than the shared chrome fill. */
   @media (prefers-color-scheme: dark) {
-    .nav-pill {
-      background: color-mix(in srgb, var(--bg) 76%, transparent);
-      box-shadow:
-        inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent),
-        0 10px 30px rgba(0, 0, 0, 0.45);
-    }
+    .nav-pill { background: color-mix(in srgb, var(--bg) 72%, transparent); }
     /* The active glow stays chromatic on dark paper: brightening pastels there
        pushes them toward white, which would swallow the (light) --accent glyph
        riding on the hot core. Trade the brightness boost for more saturation so
@@ -5679,12 +5845,9 @@ button.poll-option:disabled { cursor: default; }
        filter dims it a touch further here (the CSS opacity property is off limits
        — JS drives it to fade the glide in/out on route changes). */
     .nav-glide { filter: blur(22px) saturate(1.9) brightness(1) opacity(0.65); }
-    /* Same treatment as the pill: run the icon chip less transparent and drop
-       the shadow deeper so the frosted glass reads over dark content. */
-    .nav-dial-ico {
-      background: color-mix(in srgb, var(--bg) 82%, transparent);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-    }
+    /* Same treatment as the pill: run the icon chip less transparent so it reads
+       over dark content. The shadow is --glass-lift and deepens on its own. */
+    .nav-dial-ico { background: color-mix(in srgb, var(--bg) 82%, transparent); }
     /* The pastel bloom glows far harder on dark paper — pull it right down so
        the (light) glyph reads against the chip, not lost in a bright disc. */
     .nav-dial-ico::before { opacity: 0.42; }
@@ -5710,9 +5873,14 @@ button.poll-option:disabled { cursor: default; }
     z-index: 40;
     width: min(86%, 300px);
     margin: 0 auto;
-    /* Opacity settles fast (quick) while the transform keeps rising (slow), so
-       it reads as sliding UP out of the nav rather than fading in above it. */
-    transition: transform var(--dur-slow) var(--ease),
+    /* Opacity settles fast while the transform keeps rising, so it reads as
+       sliding UP out of the nav rather than fading in above it. The rise used to
+       be --dur-slow (0.5s), which was the right weight when it started AFTER the
+       page had finished changing; it now goes up on the same frame the page does,
+       so at 0.5s it was the last thing still moving by a clear quarter second and
+       the navigation ended on it rather than with it. --dur-move keeps the
+       overhang that makes it read as one object rising, and lands it with the page. */
+    transition: transform var(--dur-move) var(--ease),
                 opacity   var(--dur-quick) var(--ease);
   }
   /* Tucked start: snapped down behind the nav with no transition, so adding the
@@ -5831,7 +5999,8 @@ button.poll-option:disabled { cursor: default; }
   .lightbox video { width: 100%; max-width: 100vw; max-height: 100dvh; border-radius: 0; }
 
   /* Wider, a touch more present gradient on phones (the blob reads smaller on a
-     narrow screen otherwise). */
+     narrow screen otherwise). Note this — not the base rule — is what actually
+     paints on a phone, so it's the one to read when a wash looks wrong there. */
   .ambient { background: radial-gradient(ellipse 140% 52% at 50% -4%, var(--glow), transparent 76%); }
 
   /* Content-list rows break out to the screen edges so their hovers + hairline
@@ -5844,7 +6013,18 @@ button.poll-option:disabled { cursor: default; }
   /* Composer already sits inside the view's padding here. */
   .composer { padding-inline: 0; }
 
-  html, body { overscroll-behavior-y: none; }
+  /* `contain`, NOT `none`. This said `none` from the first commit, long before
+     there was a pull-to-refresh, and `none` doesn't just stop scroll chaining —
+     it cancels the rubber band itself. The ptr module reads the bounce (a
+     negative window.scrollY IS the pull), so this one line was quietly holding
+     the quintet indicator at zero on the only device class it exists for. The
+     cost of `contain` is Chrome Android's own pull-to-refresh, which the
+     viewport still counts as its default overscroll effect, so an Android
+     browser may offer its reload alongside ours. Worth it: iOS is where Tria is
+     installed, and there the bounce is the whole gesture. (The native app needs
+     a second fix on the Swift side — Capacitor hard-sets scrollView.bounces =
+     false, which no stylesheet can reach. See TriaViewController.swift.) */
+  html, body { overscroll-behavior-y: contain; }
 }
 
 /* ── About page (#/about) ─────────────────────────────────────────────────────
@@ -6083,7 +6263,6 @@ button.poll-option:disabled { cursor: default; }
 
 /* Link back to About from the auth gate. */
 .auth-about { margin-top: 0.8rem; font-size: 0.88rem; text-align: center; }
-.welcome .auth-about { margin-top: 1.8rem; }
 .auth-about a {
   color: var(--muted);
   text-decoration: underline;
@@ -6091,19 +6270,6 @@ button.poll-option:disabled { cursor: default; }
 }
 .auth-about a:hover { color: var(--text); }
 
-/* ── Install-first welcome (signed-out browser front door) ────────────────────
-   Reuses the .auth card shell: leads with the home-screen steps, keeps the
-   account actions quiet below the fold of the tutorial. See renderWelcome. */
-.welcome-head { margin-top: 1.9rem; font-size: 2.1rem; }
-.welcome-lede {
-  margin-top: 1rem;
-  color: var(--muted);
-  font-weight: 300;
-  font-size: 0.98rem;
-  line-height: 1.5;
-}
-.welcome-lede strong { color: var(--text); font-weight: 500; }
-.welcome-steps { margin-top: 1.8rem; }
 /* The last step's tile IS the Tria app icon: the create/publish pastel quintet,
    drifting like the Post button, with the dark-ink serif "t" — the tutorial's
    payoff, and where the loud gradient now lives (not on a button). */
@@ -6137,10 +6303,16 @@ button.poll-option:disabled { cursor: default; }
   align-items: center;
   gap: 1rem;
   padding: calc(env(safe-area-inset-top) + 0.75rem) 1.15rem 0.75rem;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  /* Same scroll edge effect as the signed-in topbar, so the gated pages don't
+     hand a first-time visitor a different bar from the one they'll live with. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 84%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 70%, transparent) 58%,
+    color-mix(in srgb, var(--bg) 44%, transparent) 100%);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  border-bottom: 1px solid var(--rule);
+  border-bottom: none;
 }
 .auth-topbar-brand { display: flex; flex-direction: column; }
 .auth-topbar .brand-mark { font-size: 1.6rem; }
@@ -6154,28 +6326,6 @@ button.poll-option:disabled { cursor: default; }
   line-height: 1.1;
   margin-top: 0.12rem;
 }
-/* Account glyph docks at the right edge (the sprout's perch), bare over the
-   frost — the bar is already the chrome, so no glass disc. The returning-user
-   escape hatch; the auth screen it opens toggles create ⇄ log in. */
-.auth-account {
-  margin-left: auto;
-  flex: none;
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: none;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-  transition: color var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease);
-}
-.auth-account-ico { width: 24px; height: 24px; }
-@media (hover: hover) {
-  .auth-account:hover { color: var(--text); transform: translateY(-1px); }
-}
-.auth-account:active { transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) { .auth-account { transition: color var(--dur-micro) var(--ease); } }
 
 @media (max-width: 680px) {
   .about-body, .about-back { padding-inline: 0; }   /* already inset by .view here */

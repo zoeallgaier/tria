@@ -16,6 +16,7 @@
 -- post-audience-public · restore-block-gate.
 
 drop table if exists public.blocks   cascade;
+drop table if exists public.friend_declines cascade;
 drop table if exists public.post_audience cascade;
 drop table if exists public.poll_votes cascade;
 drop table if exists public.headcount cascade;
@@ -121,10 +122,30 @@ create table public.poll_votes (
 -- pending friend request; the friendship is mutual (and only then do the two
 -- appear in each other's feeds) once BOTH directions exist. Accepting a request
 -- is simply adding back the person who added you.
+-- `created_at` is what lets the app file an add as an EVENT rather than a
+-- standing fact: on a public account someone adding you is news, so it lands in
+-- the Updates ledger with the likes and comments and ages down it. Without a
+-- time the only thing a client could draw was a permanent pinned row.
 create table public.friends (
   a uuid not null references public.users(id) on delete cascade,   -- who added
   b uuid not null references public.users(id) on delete cascade,   -- who they added
+  created_at timestamptz not null default now(),
   primary key (a, b)
+);
+
+-- ── Declined requests ───────────────────────────────────────────────────────
+-- One row per (decliner, declined): "I turned this person down." Ignoring a
+-- request deletes the edge, but a deleted edge is not an answer — nothing stops
+-- the same person asking again tomorrow. This row is what makes "no" durable: a
+-- declined person's request is suppressed from Updates and from push, silently.
+-- Quiet by design, like a block — the person turned down learns nothing. Cleared
+-- if you later add them yourself. (See supabase/friend-declines.sql.)
+create table public.friend_declines (
+  decliner   uuid not null references public.users(id) on delete cascade,
+  declined   uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (decliner, declined),
+  check (decliner <> declined)
 );
 
 -- ── Blocks ──────────────────────────────────────────────────────────────────
@@ -261,6 +282,7 @@ alter table public.likes    enable row level security;
 alter table public.headcount enable row level security;
 alter table public.poll_votes enable row level security;
 alter table public.friends  enable row level security;
+alter table public.friend_declines enable row level security;
 alter table public.blocks   enable row level security;
 
 create policy "users read all"    on public.users    for select to authenticated using (true);
@@ -321,6 +343,14 @@ create policy "poll_votes delete own" on public.poll_votes for delete to authent
 create policy "friends read all"    on public.friends for select to authenticated using (true);
 create policy "friends insert own"  on public.friends for insert to authenticated with check (a = auth.uid());
 create policy "friends delete mine" on public.friends for delete to authenticated using (auth.uid() in (a, b));
+
+-- Declines: you see, create and clear only your own. Nobody may read that they
+-- were declined — that's the one thing this table must never allow, since the
+-- whole point is that the answer stays private. (The push Edge Function reads it
+-- with the service key, which bypasses RLS.)
+create policy "declines read own"   on public.friend_declines for select to authenticated using ( decliner = auth.uid() );
+create policy "declines insert own" on public.friend_declines for insert to authenticated with check ( decliner = auth.uid() );
+create policy "declines delete own" on public.friend_declines for delete to authenticated using ( decliner = auth.uid() );
 
 -- The 'list' allowlist: read a row if it's about you, or you authored the post
 -- (so the editor can load an existing audience). Only the author may add/remove.
