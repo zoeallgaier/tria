@@ -8364,7 +8364,19 @@
           // pointing a user at Safari to re-install what they're already holding
           // is both silly and the sort of thing review reads as a web redirect.
           (nativeShell() ? '' : aboutFold('install', 'Add Tria to your home screen', installHtml)) +
-          guidelinesHtml + privacyHtml + faqHtml + businessHtml + feedbackHtml +
+          guidelinesHtml + privacyHtml + faqHtml +
+          // The business fold is browser-only for a different reason than the
+          // install one above, and it is Apple's rather than ours. Guideline
+          // 3.1.1 reads a price plus a way to act on it as a purchasing
+          // mechanism, and an organization account is a thing that exists
+          // INSIDE Tria, so naming $49.99 and pointing at the feedback form is
+          // the exact shape the rule describes — a call to action for an in-app
+          // feature bought anywhere but IAP. The predicate is nativeShell()
+          // rather than installedShell() on purpose: this is a rule about the
+          // App Store build specifically, and a home-screen PWA is not
+          // something Apple reviews. So the web page keeps the fold in full,
+          // which is where the enquiries come from anyway.
+          (nativeShell() ? '' : businessHtml) + feedbackHtml +
         `</div>` +
       `</section>`;
 
