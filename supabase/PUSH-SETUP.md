@@ -5,6 +5,14 @@ APNs registration) ships in the repo. These are the **dashboard steps only the
 project owner can do** (the admin/service key was rotated, so Claude can't run
 these). Do them in order.
 
+> **Status (2026-07-30): step 5 is the one that's still open, and the app is now
+> in App Store review.** The device side is finished and verified — the toggle
+> turns on, APNs hands back a token, the row lands in `push_subscriptions`. What
+> is missing is the `.p8` and its three secrets, so the sender has nothing to
+> sign with and **every iOS notification is silent**. There is no error anywhere
+> in that path: the phone looks like push is on. Do step 5 before anyone outside
+> the circle installs the build.
+
 **Two transports, one table.** A browser stores a Web Push subscription; the iOS
 app stores an APNs device token, because a WKWebView has no Push API at all —
 which is why push was silent in the App Store build. Both are rows in

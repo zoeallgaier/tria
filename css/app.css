@@ -6156,6 +6156,140 @@ button.poll-option:disabled { cursor: default; }
   .about-fold-panel, .about-fold-chev, .about-fold-chev::before { transition: none; }
 }
 
+/* The one link out of a fold, and the link off the bottom of #/business. Reads
+   as a sentence continuing rather than a button, because everything around it
+   is prose. */
+.about-more {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 1px;
+}
+@media (hover: hover) {
+  .about-more:hover { border-bottom-color: currentColor; }
+}
+
+/* ── Tria for business (#/business) ─────────────────────────────────────────
+   A pricing page in an app that has spent every other screen avoiding the look
+   of one. It stays inside the About page's editorial column and its type scale,
+   and the plans are the only thing on it that lifts off the page.
+
+   The three plan cards are the GLASS-MINUS-BLUR surface — the same settlement
+   the masonry tiles took: the fill, the --glass-edge hairline, the --glass-rim
+   perimeter and a float shadow, all from the tokens, dropping only the
+   sample-and-blur. Here the reason isn't scroll cost, it's the backdrop: this
+   page carries the About wash, which DRIFTS, so three backdrop-filters over it
+   would re-rasterize on every frame of an animation that never stops, on a page
+   that is otherwise completely still. */
+.biz-head { margin-top: 2.6rem; margin-bottom: 0.5rem; }
+
+.biz-plans {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1.3rem 0 1.1rem;
+}
+/* The plans row is the one thing on this page allowed out of the reading
+   column, and it has to be, because --feed-width is 660px and 660 thirds into
+   194px columns — the same number the 4-up Discover grid died on. At 194px
+   every feature line wraps to two or three and a comparison you can only read
+   one column at a time is not a comparison.
+
+   So it's a full-bleed figure in a text column: it fills the whole .view and
+   overhangs the prose symmetrically. The measurement is a CONTAINER QUERY and
+   not a media query on purpose — the slack either side of the column is
+   (.view width - 660) / 2, and .view's width depends on the sidebar, which
+   depends on both the viewport AND whether anyone is signed in. 100cqw reads
+   the number instead of predicting it, so the row lands flush to .view at every
+   width and in both states, and can never overhang into an overflow. The
+   container is scoped to this page: .view is used by every view in the app, and
+   layout containment on all of them would make each one a containing block for
+   its position: fixed children (the docked seg-tabs, see the page-transition
+   notes). This page has none. */
+.view.business { container-type: inline-size; }
+@media (min-width: 900px) {
+  .biz-plans {
+    grid-template-columns: repeat(3, 1fr);
+    width: 100cqw;
+    margin-inline: calc((100% - 100cqw) / 2);
+    gap: 1rem;
+  }
+}
+
+.biz-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.15rem 1.15rem 1.25rem;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), 0 6px 18px rgba(0, 0, 0, 0.10);
+}
+.about-body .biz-plan-name {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--text);
+  margin: 0 0 0.15rem;
+}
+.about-body .biz-plan-price {
+  font-size: 1.65rem;
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+.biz-plan-price span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+.biz-plan-feat {
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  /* The hairline used to belong to the self-select line above ("One place. One
+     or two people posting."), which said in a sentence what the list below it
+     says in items. The rule stays, because it separates the price from what
+     the price gets you, which is the one division on the card that earns one. */
+  margin: 0.85rem 0 0;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--rule);
+}
+.biz-plan-feat li {
+  position: relative;
+  padding-left: 1.05rem;
+  font-size: 0.85rem;
+  font-weight: 300;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+}
+.biz-plan-feat li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+/* Activities wear the activity lime, the same way the daily card wears the hue
+   of the type it's asking for: the colour says WHAT YOU CAN MAKE. It is the
+   only chromatic pixel on this page. */
+.biz-plan-feat li.biz-feat--activity { color: var(--text); font-weight: 400; }
+.biz-plan-feat li.biz-feat--activity::before {
+  background: var(--type-activity);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--type-activity) 22%, transparent);
+}
+
 /* Back to the gate (only rendered when signed out). */
 .about-back {
   max-width: var(--feed-width);

@@ -60,9 +60,26 @@ async function areFriends(a: string, b: string) {
   return (data?.length ?? 0) >= 2;
 }
 
+// A note may be stored as the client's small HTML subset (<h1>/<h2>/<p>/<strong>/
+// <em>, see richNote in app.js), so anything that quotes one in an alert has to
+// flatten it first or the reader gets "<p>" in their lock screen. Block ends
+// become a space so two paragraphs don't fuse into one word; the entities the
+// serializer wrote (it escapes & < > ") come back as characters, & last so a
+// literal "&amp;lt;" can't be decoded twice. Titles are stored plain and are not
+// put through this — a title with a literal < in it would lose the rest of itself.
+function plain(t: string): string {
+  return (t || '')
+    .replace(/<\/(p|h1|h2)>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // How the post reads to its author in a notification body.
 function postLabel(post: Row | null): string {
-  const t = ((post?.title || post?.note) ?? '').trim();
+  const t = (post?.title || plain((post?.note as string) ?? '')).trim();
   if (t) { const s = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t; return `“${s}”`; }
   return post?.type === 'photo' ? 'your frame' : 'your post';
 }
@@ -229,7 +246,7 @@ async function handle(table: string, rec: Row) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
-      await sendTo(u.id, { title: `${author.name} mentioned you`, body: snip(rec.note), tag: `post:${rec.id}` });
+      await sendTo(u.id, { title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)), tag: `post:${rec.id}` });
     }
     return;
   }

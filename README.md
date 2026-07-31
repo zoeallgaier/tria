@@ -6,7 +6,8 @@ Tria is a quiet social app for small circles of friends. It's built to be
 low-tech, non-addictive, and anti-bloat: no infinite feed, no ads, no metrics to
 chase. Posts have room to breathe, so context and real writing are the point.
 
-Live at **[triaonline.com](https://triaonline.com)**.
+Live at **[triaonline.com](https://triaonline.com)**, with a native iOS app on
+the way to the App Store.
 
 ## What's inside
 
@@ -24,6 +25,10 @@ Live at **[triaonline.com](https://triaonline.com)**.
 Plain HTML, CSS, and JavaScript with a tiny hash router — no framework and no
 build step — on a [Supabase](https://supabase.com) backend (auth, database, and
 storage). Hosted on GitHub Pages.
+
+The iOS app is the same code in a [Capacitor](https://capacitorjs.com) shell,
+bundled rather than pointed at the live site, so it opens with no network. Push
+goes to APNs there and Web Push in a browser, behind one switch.
 
 ## Note
 

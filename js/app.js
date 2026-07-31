@@ -55,6 +55,13 @@
 
   document.documentElement.dataset.shell = installedShell() ? 'installed' : 'browser';
 
+  // The two pages a signed-out visitor is allowed to read, and the only two that
+  // are written for someone who hasn't got an account. They share a masthead, a
+  // voice, an ambient wash and the gate's permission to exist, so the router
+  // asks this once rather than testing two strings in four places.
+  const frontDoor = (path) =>
+    path === '#/about' || path === '#/business';
+
   // The --spring token (tokens.css) doubles as the WAAPI easing for the press
   // engine and the lightbox flight — WAAPI takes the same easing strings CSS
   // does, so the token stays the single source of truth. Read once, lazily.
@@ -1773,7 +1780,7 @@
     const posterImg = frame.querySelector('img');
     const soundBtn = fig.querySelector('.frame-sound');
     const progressFill = fig.querySelector('.frame-progress-fill');
-    const alt = post.note || 'Frame';
+    const alt = notePlain(post.note) || 'Frame';
     const win = clipWindowFromUrl(post.image);   // a trimmed clip loops just this [start,end]
     if (posterImg) revealCardImage(fig, posterImg);
     else fig.classList.add('is-loaded');   // no stored poster: nothing to fade — the clip paints its own first frame
@@ -5719,9 +5726,13 @@
     const name = esc(u ? u.name : n.user);
     const post = Store.posts().find(p => p.id === n.postId);
     const label = esc(notifPostLabel(post));
-    const quote = (n.kind === 'comment' || n.kind === 'mention')
-      ? esc(n.text.length > 90 ? n.text.slice(0, 90).trimEnd() + '…' : n.text)
-      : '';
+    // A mention can land on a rich note, whose text IS stored HTML, so quoting it
+    // raw printed "<p>" at the reader. notePlain flattens the subset back to its
+    // words (and is a no-op on a comment, which is always plain). The 90-char cut
+    // has to happen AFTER that or the budget is spent on markup and the slice can
+    // land mid-tag.
+    const said = (n.kind === 'comment' || n.kind === 'mention') ? notePlain(n.text) : '';
+    const quote = esc(said.length > 90 ? said.slice(0, 90).trimEnd() + '…' : said);
     const what =
       n.kind === 'comment' ? `commented on ${label}` :
       n.kind === 'like'    ? `liked ${label}` :
@@ -8084,7 +8095,10 @@
     // glow signed-out visitors already see on the gate, so the page reads the
     // same either side of sign-in. Locked to the viewport bottom (see .ambient),
     // rising up under the guidelines and the floating nav.
-    if (path.split('?')[0] === '#/about') { body.dataset.ambient = 'about'; return; }
+    // #/business is About's other half (same front-door voice, same masthead,
+    // and it's the one other page a signed-out visitor can reach), so it takes
+    // the same wash rather than landing on bare --bg beside it.
+    if (frontDoor(path)) { body.dataset.ambient = 'about'; return; }
     // A daily washes the whole page in its post type's hue, so opening the card
     // reads as stepping into it. Same full-screen mechanism the composer uses for
     // the type it's inferring, on its own custom property.
@@ -8312,18 +8326,19 @@
         `question before it gets built: does this help people connect with each ` +
         `other? If the answer is no, it probably doesn't belong here.</p>`);
 
+    // The business fold is now a doorway, not the pitch. A business owner
+    // shouldn't have to expand a panel under the FAQ to find out what Tria
+    // costs, so the plans, the price ladder and the anti-advertising promise
+    // live on their own page at #/business and this stays three lines and a
+    // link. Everything the fold used to say is on that page, said better.
     const businessHtml = aboutFold('business', 'Tria for business',
-      `<p>Tria is available to businesses and nonprofits for ` +
-        `<strong>$49.99 per month</strong>. That's the whole price. No ad ` +
-        `auctions, no hidden fees. <strong>Your social strategy is determined by ` +
-        `you and your audience, not an algorithm.</strong></p>` +
-      `<p>We charge an affordable monthly fee because <strong>Tria doesn't collect ` +
-        `or sell user information.</strong> Organization accounts follow the same ` +
-        `community guidelines as everyone else. No spam, no deceptive ` +
-        `promotion.</p>` +
-      `<h3>Interested?</h3>` +
-      `<p>If you'd like to set up an organization account, reach us through the ` +
-        `Feedback form below and we'll help you get started.</p>`);
+      `<p><strong>A direct line to the people who chose to follow you, for a ` +
+        `flat monthly price and no ad auction.</strong> Everyone following you ` +
+        `sees everything you post, in the order you posted it.</p>` +
+      `<p>Every business on Tria runs on an organization account. Three plans, ` +
+        `starting at $19.99 a month.</p>` +
+      `<p><a class="about-more" href="#/business">See the plans and what they ` +
+        `cost &rarr;</a></p>`);
 
     const feedbackHtml = aboutFold('feedback', 'Feedback',
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
@@ -8435,6 +8450,132 @@
         btn.textContent = 'Send feedback';
       }
     });
+  }
+
+  /* ── Tria for business (#/business) ────────────────────────────────────────
+     The pricing page, and the only page in Tria written for someone who hasn't
+     signed up. It is reachable signed out for exactly that reason (the gate
+     lets #/about and #/business through and nothing else), because a business
+     owner following a link from an email is not going to make an account first
+     to find out what the account costs.
+
+     Three plans, good/better/best, and the FENCES matter more than the prices:
+     every one of them is a fact about the ORGANIZATION (how many places, how
+     many people posting, whether they gather anyone in a room) and not one of
+     them is a fact about the AUDIENCE. That is the whole design constraint.
+     Tiering on reach, ranking, frequency or analytics is the ordinary way to
+     build this page and it is the business model Tria exists to not have: the
+     moment a plan buys you more of someone else's attention, the app has to
+     start deciding whose attention, and it has an algorithm. So the ladder can
+     only ever be priced on the seller's size, never on the buyer's eyeballs.
+
+     The page ARGUES for none of that, and it used to. There was a whole section
+     under the plans headed "four things it doesn't buy" (reach, a ranking, data
+     about people, an ad), which was accurate, well written and the wrong genre:
+     a business owner who has come to look at prices does not want to be told
+     what they can't have, and a page that spends its second half naming things
+     Tria refuses to sell reads as a smaller product rather than a better deal.
+     The constraint above is real and it stays real, it just doesn't need
+     defending in copy. The app is the proof. Keep this page to one paragraph,
+     the plans, and how to start one.
+
+     Activities are the middle fence because they're the one thing here that
+     lands in the real world: a time, a place, and people showing up to it. See
+     the note on `canJoin` in CLAUDE.md — RSVPs are friends-only today, so a
+     business account posting an activity its FOLLOWERS can join is the one
+     promise on this page the app can't keep yet. It's the first thing to build
+     when there's a paying client; nothing else here needs code. */
+  const BIZ_PLANS = [
+    {
+      key: 'local',
+      name: 'Local',
+      price: '$19.99',
+      // The seat count is a feature line rather than a sentence over the list.
+      // Each card used to open with a self-select line ("One place. One or two
+      // people posting.") that said in prose exactly what the items under it
+      // said in items, so it read as the card clearing its throat.
+      feat: [
+        ['', 'A verified organization profile'],
+        ['', 'Notes, finds, photos and polls, with comments and replies'],
+        ['', 'Everything you post, in order, to everyone who follows you'],
+        ['', 'Up to two people posting'],
+      ],
+    },
+    {
+      key: 'team',
+      name: 'Team',
+      price: '$49.99',
+      feat: [
+        ['', 'Everything in Local'],
+        // The one pastel on the page, and it is the activity lime, used the way
+        // the daily card uses the quintet: the colour says WHAT YOU CAN MAKE,
+        // not "this is the upsell". A second hue here would invent a sixth
+        // meaning for the palette.
+        ['activity', 'Activities, with a real time, a real place and an RSVP list'],
+        ['', 'Up to ten people posting'],
+      ],
+    },
+    {
+      key: 'chapters',
+      name: 'Chapters',
+      price: '$99.99',
+      feat: [
+        ['', 'Everything in Team'],
+        ['', 'An account for each location or chapter, billed together'],
+        ['', 'No limit on how many people post'],
+        ['', 'A named person here, and help getting set up'],
+      ],
+    },
+  ];
+
+  function renderBusiness(gated) {
+    const plansHtml = BIZ_PLANS.map(p =>
+      // All three cards are equal. The middle one used to carry a "Most
+      // businesses" label plus a brighter rim and a deeper float to back it up;
+      // the label went, and the emphasis went with it, because a card drawn
+      // heavier than its neighbours with nothing saying why reads as a
+      // rendering fault rather than a recommendation.
+      `<article class="biz-plan">` +
+        `<h3 class="biz-plan-name">${p.name}</h3>` +
+        `<p class="biz-plan-price">${p.price}<span>a month</span></p>` +
+        `<ul class="biz-plan-feat">` +
+          p.feat.map(([type, text]) =>
+            `<li${type ? ` class="biz-feat--${type}"` : ''}>${text}</li>`).join('') +
+        `</ul>` +
+      `</article>`).join('');
+
+    view.innerHTML =
+      `<section class="view about business${gated ? ' about--front' : ''}">` +
+        (gated ? authHeader() : '') +
+        `<p class="about-back"><a href="#/about">&larr; ` +
+          `${gated ? 'Back to About' : 'About Tria'}</a></p>` +
+        mastheadEl('Social media made local', 'Tria for business') +
+        `<div class="about-body">` +
+          // One paragraph, and it sells rather than explains. It leads on the
+          // two things a business owner actually gets (a price that isn't an
+          // auction, and every single person who followed them), because the
+          // page used to open on how Tria is funded, which frames the reader as
+          // the one paying for everybody else's free app instead of the one
+          // getting a better deal than they're getting anywhere else.
+          `<p class="about-lede"><strong>Tria gives your business a direct line ` +
+            `to the people who chose to follow you, for a flat monthly price ` +
+            `that costs less than a week of ads almost anywhere else.</strong> ` +
+            `Everyone following you sees everything you post, in the order you ` +
+            `posted it. No bidding, no boosting, and no algorithm deciding how ` +
+            `much of your own audience you get to reach today.</p>` +
+
+          `<div class="biz-plans">${plansHtml}</div>` +
+
+          `<h2 class="about-head biz-head">Getting started</h2>` +
+          `<p>Every business on Tria runs on an organization account, at any ` +
+            `size, including the one where you're doing all of it yourself. ` +
+            `Send us a note through the feedback form and say which plan looks ` +
+            `right, roughly how many people will be posting, and whether you ` +
+            `need activities. We'll take it from there.</p>` +
+          `<p><a class="about-more" href="#/about?open=feedback">Start an ` +
+            `organization account &rarr;</a></p>` +
+        `</div>` +
+      `</section>`;
   }
 
   /* ── Router + page transitions ─────────────────────────────────────────────
@@ -8806,12 +8947,19 @@
       // fold for anyone who wants the web app on their home screen.
       // About keeps the hue-drift wash; the bare auth form does not (its pastel
       // now comes from the gradient submit button).
-      document.body.dataset.ambient = gatePath === '#/about' ? 'about' : 'none';
+      document.body.dataset.ambient = frontDoor(gatePath) ? 'about' : 'none';
       renderPage(() => {
         // A live recovery session (from the reset link) always wins: set-new-
         // password, whatever the hash says.
         if (Store.isRecovering()) return renderNewPassword();
         if (gatePath === '#/about') return renderAbout(true);
+        // Signed out is the NORMAL way to arrive at the pricing page — it's the
+        // page you send a business owner a link to, and asking them to make an
+        // account to find out what an account costs is the joke that writes
+        // itself. In the App Store build it doesn't exist at all (see the switch
+        // below for why it's Apple's rule and not ours), so a deep link there
+        // lands on About, which is where the fold used to point anyway.
+        if (gatePath === '#/business') return nativeShell() ? renderAbout(true) : renderBusiness(true);
         // #/reset-password is the link's landing; with no recovery session it has
         // expired or been reused, so route them to request a fresh one.
         if (gatePath === '#/forgot' || gatePath === '#/reset-password') return renderRequestReset();
@@ -8879,6 +9027,18 @@
         case '#/profile': renderUser(Store.session()); break;
         case '#/publish': renderPublish(); break;
         case '#/about':   renderAbout(false); break;
+        // #/business is browser-only, and the reason is Apple's rather than
+        // ours: guideline 3.1.1 reads a price plus a way to act on it as a
+        // purchasing mechanism, and an organization account is a thing that
+        // exists INSIDE Tria, so a page naming three prices and pointing at the
+        // feedback form is the exact shape the rule describes. The predicate is
+        // nativeShell() and not installedShell() on purpose — this is a rule
+        // about the App Store build specifically, and a home-screen PWA is not
+        // something Apple reviews. In the app the route simply isn't there and
+        // the link into it isn't drawn, so nothing dead-ends.
+        case '#/business':
+          if (nativeShell()) { go('#/about'); break; }
+          renderBusiness(false); break;
         // #/support is retired — the header tray shares directly, and the note
         // from the designer it used to hold is gone. Old links land on About.
         case '#/support': go('#/about'); break;

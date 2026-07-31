@@ -28,6 +28,23 @@ UI that's otherwise state-gated.
 GitHub Pages serves `main` root; every push to `main` auto-redeploys (~1 min).
 Push straight to main — no PRs or feature branches.
 
+**Except while a build is in review, which is now.** Tria was submitted to the
+App Store on 2026-07-30, and until it is approved **the app is priority one and
+the web ships nothing**. Those two sentences collide in this repo, because there
+is one branch and the app is a bundled copy of the same files: a commit to `main`
+*is* a web deploy, so "keep working on iOS" and "don't ship to the web" cannot
+both be satisfied by the normal cadence. So while a build is in review, work
+lands on a **branch** and merges to `main` after approval. This is the one time
+the no-branches rule is off, and it is off for a reason with a date on it — when
+the app is approved, delete the exception and go back to pushing to main.
+
+Two things that are *not* the exception: this is a freeze on **shipping**, not on
+committing, so nothing should sit uncommitted in a working tree (that has bitten
+this project before — see the iOS-shell tree that went a month without a commit).
+And a change made for the app still ends with `./ios-sync.sh` and still gets its
+`?v=` bump, because the bundle carries the stamp that ships. Bump, sync, commit
+to the branch.
+
 **The one ritual:** any deploy that touches a css/js file MUST bump the `?v=N`
 stamp — the same number on all five asset lines in `index.html`. Use the script:
 
@@ -43,6 +60,16 @@ so it won't fight this. Docs/tooling changes (this file, README, bump.sh) don't
 touch assets, so they don't need a bump.
 
 ## The iOS app
+**This is the product now.** Submitted 2026-07-30, in review. The web was the
+whole app for a year and is now the second shell: it stays live, it stays
+correct, and it stops being where features land first. A change that helps the
+web and not the app is not a priority; a change that can only be *seen* on the
+web (a hover state, a desktop breakpoint) is worth doing only when it's free.
+When the two shells disagree about what's right, the app wins — that inverts the
+rule this file carried until now, and most of the iOS notes below were written
+under the old one, so read them as "here is what the third shell costs" rather
+than "here is the exception to the web."
+
 Same files, third shell. `ios/` is a **Capacitor 8** wrapper whose webview loads a
 **bundled copy** of the site — `ios-sync.sh` mirrors the web assets into `www/`
 (gitignored; Capacitor rejects a `webDir` of `"."`, which is the only reason that
@@ -55,8 +82,11 @@ wrapper around a live URL is the clearest reading of guideline 4.2 "repackaged
 website", and it shows a blank screen on a bad network, which review does test.
 The cost is real and worth naming — **the `?v=` self-updater is a no-op in the
 app** (it refetches the bundled index.html and finds the same stamp), so iOS
-users only get changes through a new App Store build. The web keeps its
-push-to-main cadence; the app lags it by a review.
+users only get changes through a new App Store build. That used to read "the web
+keeps its push-to-main cadence and the app lags it by a review", which is no
+longer the arrangement: **the app sets the pace and the web waits for it.** The
+self-updater is still a no-op in the bundle, so the review queue is the release
+cycle for everything now, not just for iOS-specific work.
 
 **Tria now runs in three shells, and code that asks "am I installed?" has to name
 all three.** There are **two** predicates in app.js and they answer different
@@ -284,6 +314,30 @@ User-facing copy uses commas and periods, **no em dashes** (code comments are
 exempt). Voice is playful but not trying-too-hard.
 
 ## Backend notes
+
+**Two owner-side steps are outstanding, and shipping raised the stakes on both.**
+The backend is code in this repo but *state* in Zoe's dashboard, and the client
+is deliberately tolerant of a database that hasn't caught up — which means a
+missing step has no error, no log and no symptom except a feature quietly not
+being there. That was survivable while the only users were us. It is not
+survivable in a build strangers are installing, because "it doesn't work" is now
+a review, so treat these as release blockers rather than chores:
+
+- **The APNs `.p8` key** (`supabase/PUSH-SETUP.md`) — until the key exists and
+  `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_PRIVATE_KEY` are set as function
+  secrets, **push in the App Store build is silent**. Everything on the device
+  side is built and verified: the toggle turns on, the token registers, the row
+  lands in `push_subscriptions` with its `apns:` endpoint. The fan-out simply has
+  nothing to sign with. Nobody is notified and nothing complains.
+- **`supabase/friend-declines.sql`** — until it runs, follows are never announced
+  on Updates (unstamped edges stay quiet by design) and *Ignore* falls back to a
+  localStorage mirror, so a declined request comes back on another device.
+
+Neither has a client-side fix and Claude cannot run either one; if a report looks
+like "notifications are broken" or "ignore doesn't stick", check these before
+reading code. (The third recurring not-a-bug is the one-shot iOS permission
+prompt — see the push section above.)
+
 - Login is by **email**; username is the public handle. Email confirmation is off.
 - The Supabase service key was rotated/deleted, so **only Zoe has DB admin** —
   Claude can't run SQL or clear accounts. Migrations in `supabase/*.sql` are run
