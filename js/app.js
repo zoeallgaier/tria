@@ -7870,6 +7870,22 @@
   // need those same taps and sideways drags. So a video *arms* the dismiss only
   // once the finger commits to a vertical pull, and never from the bottom control
   // strip: taps and horizontal scrubs fall straight through to the controls.
+  //
+  // A photo ALSO zooms here, and the lightbox is the only place it can: the feed
+  // caps a tall frame at 5:4 and tap-to-open is the promise that nothing was
+  // lost, which a viewer fixed at 92vw only half keeps — the whole photo is on
+  // screen but the small print in it is still out of reach. The zoom is ours to
+  // draw for the same reason the drag is: `touch-action: none` is what hands us
+  // the vertical pull, and it takes the browser's pinch away in the same breath,
+  // so a photo without this code cannot be zoomed by any gesture at all.
+  //
+  // Pinch scales about the midpoint of the two fingers, one finger pans once
+  // you're past fit, a trackpad/wheel does it on a desktop, and a tap while
+  // zoomed returns to fit INSTEAD of closing — the way out must never be behind
+  // a gesture. There is deliberately no double-tap-to-zoom: its first tap is
+  // indistinguishable from the tap that closes, so buying it means delaying
+  // every close by a double-tap window, and pinch is the gesture a phone
+  // already reaches for.
   function wireLightboxDrag(mover, isVideo) {
     // touch-action:none is what actually hands us the vertical drag on a touch
     // device — without it the browser claims the pull as a (dead) page scroll and
@@ -7881,12 +7897,110 @@
     // leaving its surface pannable.
     mover.style.touchAction = 'none';
     const CTRL_STRIP = 56;   // px of native controls along a video's bottom edge, left to the UA
+    const zoomable = !isVideo;   // a video's surface belongs to its own controls
+    const LB_MAX = 5;            // past ~5x a phone photo is bitmap, not detail
     let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, armed = false, raf = 0;
     let lastY = 0, lastT = 0, vy = 0;
+    let sc = 1, tx = 0, ty = 0;      // the viewer's transform while zoomed, ours alone
+    const pts = new Map();           // live pointers, so two fingers can be told from one
+    let pinch = null;                // { d, s } captured when the second finger lands
+    let panning = false, panned = false, tx0 = 0, ty0 = 0;
+    let box = null;                  // the untransformed layout box, held for the gesture
+
+    const vw = () => window.visualViewport?.width || window.innerWidth;
+    const vh = () => window.visualViewport?.height || window.innerHeight;
+    const apply = () => {
+      mover.style.transform = (sc === 1 && !tx && !ty)
+        ? '' : `translate(${tx}px, ${ty}px) scale(${sc})`;
+    };
+    // The untransformed layout box, DERIVED rather than re-measured: a transform
+    // never moves layout, and scaling about the centre leaves the centre wherever
+    // the translate put it, so the live rect minus the translate is that box.
+    // Taken once per gesture — layout can't change mid-pinch, and reading it per
+    // move would force a sync layout against the transform we just wrote.
+    const measure = () => {
+      const r = mover.getBoundingClientRect();
+      return { cx: r.left + r.width / 2 - tx, cy: r.top + r.height / 2 - ty,
+               w: r.width / sc, h: r.height / sc };
+    };
+    // No gap and no drift: an axis larger than the screen may pan only as far as
+    // its own edges, and one smaller than the screen is pinned back to centre.
+    const clampPan = (b) => {
+      const w = b.w * sc, h = b.h * sc;
+      tx = w > vw() ? Math.min(Math.max(tx, vw() - b.cx - w / 2), w / 2 - b.cx) : vw() / 2 - b.cx;
+      ty = h > vh() ? Math.min(Math.max(ty, vh() - b.cy - h / 2), h / 2 - b.cy) : vh() / 2 - b.cy;
+    };
+    // Scale about a point on the screen, keeping whatever sits under it under it.
+    const zoomAt = (next, px, py, b, floor = 1) => {
+      const s = Math.min(Math.max(next, floor), LB_MAX);
+      tx = px - b.cx - (s / sc) * (px - b.cx - tx);
+      ty = py - b.cy - (s / sc) * (py - b.cy - ty);
+      sc = s;
+      clampPan(b);
+      apply();
+    };
+    // Back to the photo as the viewer laid it out, on the shared spring. The
+    // keyframes start from wherever the fingers left it, so nothing snaps first.
+    const toFit = () => {
+      const from = `translate(${tx}px, ${ty}px) scale(${sc})`;
+      sc = 1; tx = ty = 0;
+      apply();
+      try {
+        const a = mover.animate([{ transform: from }, { transform: 'none' }],
+          { duration: 320, easing: springEase() });
+        a.onfinish = () => a.cancel();
+      } catch { /* no WAAPI: it's already at fit */ }
+    };
+    // A gesture that moved must not also land as a click — that would close the
+    // lightbox out from under a pan, or bounce a pinch back to fit.
+    const swallowClick = () => {
+      const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+      lightbox.addEventListener('click', stop, { capture: true, once: true });
+      setTimeout(() => lightbox.removeEventListener('click', stop, { capture: true }), 120);
+    };
+
+    if (zoomable) {
+      // Tap while zoomed goes back to fit rather than closing, so a reader who
+      // pinched in is never one tap from losing the photo. At fit it falls
+      // through to the backdrop's click-to-close, exactly as before.
+      mover.addEventListener('click', (e) => {
+        if (sc > 1.01) { e.stopPropagation(); toFit(); }
+      });
+      // Desktop: a trackpad pinch arrives as ctrl+wheel, a mouse as plain wheel.
+      mover.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        zoomAt(sc * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)),
+          e.clientX, e.clientY, measure());
+      }, { passive: false });
+    }
+
     mover.addEventListener('pointerdown', (e) => {
-      if (!e.isPrimary || lbClosing) return;
-      // A press that lands on the control strip is a scrub or a pause, never a swipe-out.
-      if (isVideo) {
+      if (lbClosing) return;
+      if (zoomable) {
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        try { mover.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+        // A second finger outranks whatever the first was doing: a dismiss drag
+        // in flight becomes a pinch, and the veil it thinned goes back to full.
+        if (pts.size === 2) {
+          const [a, c] = [...pts.values()];
+          dragging = armed = panning = false;
+          if (raf) { cancelAnimationFrame(raf); raf = 0; }
+          lightbox.style.opacity = '';
+          box = measure();
+          pinch = { d: Math.hypot(a.x - c.x, a.y - c.y) || 1, s: sc };
+          return;
+        }
+        if (pts.size > 2) return;
+        // Zoomed in, one finger: this is a pan of the photo, never a dismiss.
+        if (sc > 1) {
+          panning = true; panned = false;
+          sx = e.clientX; sy = e.clientY; tx0 = tx; ty0 = ty;
+          box = measure();
+          return;
+        }
+      } else {
+        if (!e.isPrimary) return;
+        // A press that lands on the control strip is a scrub or a pause, never a swipe-out.
         const r = mover.getBoundingClientRect();
         if (e.clientY > r.bottom - CTRL_STRIP) return;
       }
@@ -7897,6 +8011,23 @@
       if (armed) { try { mover.setPointerCapture(e.pointerId); } catch { /* older engines */ } }
     });
     mover.addEventListener('pointermove', (e) => {
+      if (zoomable && pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch) {
+        if (pts.size < 2) return;
+        const [a, c] = [...pts.values()];
+        const d = Math.hypot(a.x - c.x, a.y - c.y) || 1;
+        // Under fit it goes elastic rather than hard-stopping, and springs back
+        // on release — a pinch that meets a wall reads as a broken gesture.
+        zoomAt(pinch.s * (d / pinch.d), (a.x + c.x) / 2, (a.y + c.y) / 2, box, 0.6);
+        return;
+      }
+      if (panning) {
+        tx = tx0 + (e.clientX - sx); ty = ty0 + (e.clientY - sy);
+        if (Math.hypot(e.clientX - sx, e.clientY - sy) > 8) panned = true;
+        clampPan(box);
+        apply();
+        return;
+      }
       if (!dragging) return;
       dx = e.clientX - sx; dy = e.clientY - sy;
       // Video: commit to the dismiss only once the pull is real and vertical-dominant.
@@ -7930,11 +8061,7 @@
       const d = Math.hypot(dx, dy);
       // A drag was a drag: swallow the click that follows so it can't double-close
       // (or close against the user after a spring-back).
-      if (d > 8) {
-        const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
-        lightbox.addEventListener('click', stop, { capture: true, once: true });
-        setTimeout(() => lightbox.removeEventListener('click', stop, { capture: true }), 120);
-      }
+      if (d > 8) swallowClick();
       if ((Math.abs(vy) > 0.55 || d > 110) && !lbClosing) { closeLightbox(); return; }
       lightbox.style.opacity = '';    // re-thicken the veil
       if (d > 2) {
@@ -7945,8 +8072,33 @@
         } catch { mover.style.transform = ''; }
       } else mover.style.transform = '';
     };
-    mover.addEventListener('pointerup', end);
-    mover.addEventListener('pointercancel', end);
+    // A finger leaving: retire a pinch or a pan first, and only fall through to
+    // the dismiss test if this pointer was actually driving one. Lifting one of
+    // two fingers ends the pinch without promoting the survivor to a drag — it
+    // never went through pointerdown as one, so it has no start to measure from.
+    const lift = (e) => {
+      if (zoomable) {
+        pts.delete(e.pointerId);
+        try { mover.releasePointerCapture(e.pointerId); } catch { /* older engines */ }
+      }
+      if (pinch) {
+        if (pts.size >= 2) return;
+        pinch = null;
+        dragging = armed = false;
+        swallowClick();
+        if (sc <= 1.01) toFit();
+        else { clampPan(box); apply(); }   // the elastic pull settles back inside its edges
+        return;
+      }
+      if (panning) {
+        panning = false;
+        if (panned) swallowClick();
+        return;
+      }
+      end();
+    };
+    mover.addEventListener('pointerup', lift);
+    mover.addEventListener('pointercancel', lift);
   }
 
   /* ── Press grammar ──────────────────────────────────────────────────────────
