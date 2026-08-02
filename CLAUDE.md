@@ -28,22 +28,29 @@ UI that's otherwise state-gated.
 GitHub Pages serves `main` root; every push to `main` auto-redeploys (~1 min).
 Push straight to main — no PRs or feature branches.
 
-**Except while a build is in review, which is now.** Tria was submitted to the
-App Store on 2026-07-30, and until it is approved **the app is priority one and
-the web ships nothing**. Those two sentences collide in this repo, because there
-is one branch and the app is a bundled copy of the same files: a commit to `main`
-*is* a web deploy, so "keep working on iOS" and "don't ship to the web" cannot
-both be satisfied by the normal cadence. So while a build is in review, work
-lands on a **branch** and merges to `main` after approval. This is the one time
-the no-branches rule is off, and it is off for a reason with a date on it — when
-the app is approved, delete the exception and go back to pushing to main.
+**That includes while a build is in review, and the reasoning changed on
+2026-08-01.** There was a freeze here: 1.0 went to the App Store on 2026-07-30,
+and because there is one branch and the app is a bundled copy of the same files,
+a commit to `main` *is* a web deploy — so review-window work was landing on a
+branch to keep the web from shipping. That exception is **retired**. The web
+deploys again on the normal cadence, and everything from the lightbox zoom
+(`v=339`) onward accumulates toward **1.1**.
 
-Two things that are *not* the exception: this is a freeze on **shipping**, not on
-committing, so nothing should sit uncommitted in a working tree (that has bitten
-this project before — see the iOS-shell tree that went a month without a commit).
-And a change made for the app still ends with `./ios-sync.sh` and still gets its
-`?v=` bump, because the bundle carries the stamp that ships. Bump, sync, commit
-to the branch.
+What made the freeze stop earning its keep is the bundle. The App Store build
+carries its own copy of these files, so a web deploy cannot reach a phone that
+has 1.0 installed and cannot change what a reviewer is looking at — the two
+shells were already independent for the length of a review, which is the thing
+the branch was being used to simulate. So the cost was real (a branch to
+remember, a merge to not forget) and the protection was not.
+
+What that leaves: a change still ends with `./ios-sync.sh` and still gets its
+`?v=` bump, because the bundle carries the stamp that ships — bump, sync, commit,
+push. And **the review queue is still the release cycle for iOS**: work merged
+today reaches phones when 1.1 is submitted and approved, not when it lands. Which
+is why nothing should sit uncommitted in a working tree (that has bitten this
+project before — see the iOS-shell tree that went a month without a commit): the
+gap between "done" and "on a phone" is now measured in App Store builds, so the
+repo is the only place the work is real in the meantime.
 
 **The one ritual:** any deploy that touches a css/js file MUST bump the `?v=N`
 stamp — the same number on all five asset lines in `index.html`. Use the script:
@@ -82,11 +89,12 @@ wrapper around a live URL is the clearest reading of guideline 4.2 "repackaged
 website", and it shows a blank screen on a bad network, which review does test.
 The cost is real and worth naming — **the `?v=` self-updater is a no-op in the
 app** (it refetches the bundled index.html and finds the same stamp), so iOS
-users only get changes through a new App Store build. That used to read "the web
-keeps its push-to-main cadence and the app lags it by a review", which is no
-longer the arrangement: **the app sets the pace and the web waits for it.** The
-self-updater is still a no-op in the bundle, so the review queue is the release
-cycle for everything now, not just for iOS-specific work.
+users only get changes through a new App Store build. So **the app sets the pace
+and the web keeps its push-to-main cadence** — the two are decided separately,
+and the priority ordering above is about which shell a change is *for*, not about
+holding the web back. A change lands on `main` and is on the web in a minute; it
+reaches a phone when the next build is approved. Since 2026-08-01 the ones piling
+up are **1.1** (see Deploy).
 
 **Tria now runs in three shells, and code that asks "am I installed?" has to name
 all three.** There are **two** predicates in app.js and they answer different
