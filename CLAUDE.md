@@ -524,8 +524,10 @@ prompt — see the push section above.)
   its 24-hour window), a registered `--glow-daily` interpolating smoothly rather
   than a plain custom property; reduced motion freezes it on the prompt's own
   hue, which is also the frame it opens on before the drift starts. The tag an
-  answer wears is the one surface still holding the prompt's single **nominal**
-  hue, unchanged — that's the question's colour, not a claim about what you made.
+  answer wears matches the card now too — same fixed gradient, not the prompt's
+  nominal hue — so every surface of the feature but two agrees: the composer
+  banner and the detail page's kicker are the plain-grey holdouts, having
+  nothing left to signal once nothing is ever blocked.
   **Activities are excluded from every daily**, open ones included:
   an activity lands in the real world behind `canJoin`'s friends-only gate, and a
   page of answers from the whole room is the wrong doorway to that. **Polls are

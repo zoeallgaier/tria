@@ -3868,16 +3868,6 @@ button.poll-option:disabled { cursor: default; }
   border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
   box-shadow: var(--glass-rim), var(--glass-lift);
 }
-/* The one place the type→colour map is written for the ANSWER TAG — the one
-   surface still tied to one nominal type. (The card carries all three at once,
-   see above; the detail page drifts through all three, see daily-drift below;
-   the composer banner is plain grey, see the note above .daily-banner.)
-   Activities are absent from this list on purpose: a daily never asks for one
-   (see the note above DAILIES in app.js). */
-.tag--daily[data-type="note"]  { --daily: var(--type-note);  --daily-ink: var(--type-note-ink); }
-.tag--daily[data-type="find"]  { --daily: var(--type-find);  --daily-ink: var(--type-find-ink); }
-.tag--daily[data-type="photo"] { --daily: var(--type-photo); --daily-ink: var(--type-photo-ink); }
-.tag--daily[data-type="poll"]  { --daily: var(--type-poll);  --daily-ink: var(--type-poll-ink); }
 
 /* Dark mode: the pastel is a LIGHT colour, so the same 26% wash over a dark glass
    fill lands as a milky panel rather than a tinted one. Less pigment. */
@@ -4060,9 +4050,16 @@ button.poll-option:disabled { cursor: default; }
    What a daily answer wears in the tag row instead of the `daily-<slug>` join
    tag that actually carries it. Tags are words a person chose; a slug sitting
    among them reads as metadata leaking into writing, and every answer on the
-   page ends up wearing a barcode. So the chip says the QUESTION, tinted in the
-   daily's hue, and links to everyone else's answers — which is what the slug
-   was standing in for, and a far better thing to be able to tap.
+   page ends up wearing a barcode. So the chip says the QUESTION, and links to
+   everyone else's answers — which is what the slug was standing in for, and a
+   far better thing to be able to tap.
+
+   Same tri-colour gradient as the card now, not the prompt's single nominal
+   hue: matching the card is the point, since this chip is where the card's
+   invitation reappears once someone's answered it, on the same 115deg band
+   this whole feature draws it at. Plain --text for the ink, same reasoning as
+   the card's kicker — a leftover single tint would contradict a chip claiming
+   all three.
 
    It's a .tag first, so it keeps the row's shape; the prompt truncates rather
    than wrapping a chip to three lines. */
@@ -4072,9 +4069,12 @@ button.poll-option:disabled { cursor: default; }
   gap: 0.4rem;
   min-width: 0;
   max-width: 100%;
-  color: var(--daily-ink);
-  border-color: color-mix(in srgb, var(--daily-ink) 32%, transparent);
-  background: color-mix(in srgb, var(--daily) 18%, transparent);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 26%, transparent);
+  background: linear-gradient(115deg,
+    color-mix(in srgb, var(--type-note)  18%, transparent),
+    color-mix(in srgb, var(--type-find)  18%, transparent),
+    color-mix(in srgb, var(--type-photo) 18%, transparent));
 }
 .tag-daily-cap {
   flex-shrink: 0;
@@ -4091,7 +4091,7 @@ button.poll-option:disabled { cursor: default; }
   white-space: nowrap;
 }
 @media (hover: hover) {
-  .tag--daily:hover { color: var(--daily-ink); border-color: color-mix(in srgb, var(--daily-ink) 60%, transparent); }
+  .tag--daily:hover { border-color: color-mix(in srgb, var(--text) 46%, transparent); }
 }
 
 /* ── The composer, answering ──────────────────────────────────────────────────
