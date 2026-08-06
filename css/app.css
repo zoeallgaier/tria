@@ -210,19 +210,39 @@ body[data-ambient="publish"] .ambient {
   transform: translateZ(0);
 }
 
-/* A daily's page: the same full-screen wash, held at the ONE hue the daily wears
-   (the post type it asks for). Nothing tweens it — a daily doesn't change type
-   under you the way the composer does as you attach things — so it's a plain
-   custom property rather than a registered one, set by applyAmbient. */
+/* A daily's page: the same full-screen wash, now drifting through the three
+   hues dailies use rather than holding the ONE the prompt names — any type
+   answers any prompt (see dailyAccepts in app.js), so the page says "note, link
+   or frame" the same way the card's gradient does, just as a slow cycle instead
+   of three bands at once. --glow-daily is REGISTERED (a real <color>, like
+   --glow-pub) so the browser interpolates smoothly between the three rather than
+   snapping. 24s: a daily's own unit is its 24-hour window, so the wash takes as
+   long to loop as the prompt takes to expire. applyAmbient still sets
+   --glow-daily inline to the prompt's own hue — that value is overridden the
+   instant the animation starts, and becomes the resting frame only when
+   reduced motion turns the animation off below, so a still page shows the same
+   single nominal hue the tag and the detail page's kicker already commit to. */
+@property --glow-daily {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b7a6e8;
+}
 body[data-ambient="daily"] .ambient {
   position: fixed;
   inset: 0;
   height: auto;
   background: radial-gradient(ellipse 120% 84% at 50% -18%,
-    color-mix(in srgb, var(--glow-daily, transparent) 30%, transparent), transparent 74%);
+    color-mix(in srgb, var(--glow-daily) 30%, transparent), transparent 74%);
   filter: saturate(1.4);
   opacity: 1;
+  animation: daily-drift 24s linear infinite;
   transform: translateZ(0);
+}
+@keyframes daily-drift {
+  0%   { --glow-daily: var(--type-note); }
+  33%  { --glow-daily: var(--type-find); }
+  66%  { --glow-daily: var(--type-photo); }
+  100% { --glow-daily: var(--type-note); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -230,6 +250,9 @@ body[data-ambient="daily"] .ambient {
   body[data-ambient="about"] .ambient { animation: none; }
   /* Colour still updates on type change, just without the tween. */
   body[data-ambient="publish"] .ambient { transition: opacity 0.4s ease; }
+  /* Freezes on whatever --glow-daily was set to inline (the prompt's own hue) —
+     the drift is off, not the colour. */
+  body[data-ambient="daily"] .ambient { animation: none; }
 }
 
 /* ── Grain ──────────────────────────────────────────────────────────────────
@@ -3798,11 +3821,15 @@ button.poll-option:disabled { cursor: default; }
    page leaving the measure every other page shares. */
 
 /* ── Dailies — the coloured card, and the page it opens ───────────────────────
-   A daily wears the colour of the post type it asks for, so a prompt that wants a
-   Frame is cyan all the way through: the card on Discover, the chip on an answer,
-   and the wash behind the page that card opens. That's the quintet doing
-   exactly the job it already has (five colours, five post types) rather than a
-   sixth colour meaning "daily" — the colour still tells you what to make.
+   Any type answers any prompt now (see dailyAccepts in app.js), so the card can't
+   wear the one colour it's asking for — it isn't asking for one. It carries all
+   three question types dailies ever use at once, a fixed lavender→coral→cyan
+   gradient (note→find→photo, the quintet's own order), the same on every card:
+   "note, link or frame, your call" rather than naming one. The page that card
+   opens, the tag an answer wears, and the composer banner all keep the PROMPT's
+   single nominal hue — that's the question's colour, not a claim about what you
+   made, and it's exactly how the one `accepts: 'any'` prompt already behaved
+   before every prompt did.
 
    COLOURED GLASS, and real glass this time. The material rule reserves frost for
    what floats above content, which this does. The masonry tiles drop the blur
@@ -3813,8 +3840,6 @@ button.poll-option:disabled { cursor: default; }
    The whole card is the tap (a stretched link over it) with Answer riding on top
    as its own control: read the room, or go say your bit, and nothing in between. */
 .daily-card {
-  --daily: var(--type-note);
-  --daily-ink: var(--type-note-ink);
   position: relative;
   max-width: var(--feed-width);
   /* 2rem below, not 1.2: this is a floating panel and the trending rail under it
@@ -3828,39 +3853,56 @@ button.poll-option:disabled { cursor: default; }
   /* Panel-grade FILL over chrome-grade BLUR, which looks like a contradiction and
      isn't: the card carries a serif question and needs the body, but it sits in
      Discover's normal flow and therefore scrolls with a grid of photographs
-     re-sampling behind it. Cost follows the backdrop, not the component name. */
-  background: color-mix(in srgb, var(--daily) 26%, var(--glass-bg-panel));
+     re-sampling behind it. Cost follows the backdrop, not the component name.
+     115deg to match the splash mark and the Post pill's own drifting quintet —
+     the one gradient angle the quintet already reads at. Static, though: drift is
+     reserved for the two primary-action surfaces (see the lit-dome note), and a
+     content card animating on its own would spend that meaning on a panel that
+     isn't a button. */
+  background: linear-gradient(115deg,
+    color-mix(in srgb, var(--type-note)  26%, var(--glass-bg-panel)),
+    color-mix(in srgb, var(--type-find)  26%, var(--glass-bg-panel)),
+    color-mix(in srgb, var(--type-photo) 26%, var(--glass-bg-panel)));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid color-mix(in srgb, var(--daily-ink) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
   box-shadow: var(--glass-rim), var(--glass-lift);
 }
-/* The one place the type→colour map is written for dailies. Activities are absent
-   on purpose: a daily never asks for one (see the note above DAILIES in app.js). */
-.daily-card[data-type="note"],  .view--daily[data-type="note"],  .tag--daily[data-type="note"],  .daily-banner[data-type="note"]  { --daily: var(--type-note);  --daily-ink: var(--type-note-ink); }
-.daily-card[data-type="find"],  .view--daily[data-type="find"],  .tag--daily[data-type="find"],  .daily-banner[data-type="find"]  { --daily: var(--type-find);  --daily-ink: var(--type-find-ink); }
-.daily-card[data-type="photo"], .view--daily[data-type="photo"], .tag--daily[data-type="photo"], .daily-banner[data-type="photo"] { --daily: var(--type-photo); --daily-ink: var(--type-photo-ink); }
-.daily-card[data-type="poll"],  .view--daily[data-type="poll"],  .tag--daily[data-type="poll"],  .daily-banner[data-type="poll"]  { --daily: var(--type-poll);  --daily-ink: var(--type-poll-ink); }
+/* The one place the type→colour map is written for the ANSWER TAG — the one
+   surface still tied to one nominal type. (The card carries all three at once,
+   see above; the detail page drifts through all three, see daily-drift below;
+   the composer banner is plain grey, see the note above .daily-banner.)
+   Activities are absent from this list on purpose: a daily never asks for one
+   (see the note above DAILIES in app.js). */
+.tag--daily[data-type="note"]  { --daily: var(--type-note);  --daily-ink: var(--type-note-ink); }
+.tag--daily[data-type="find"]  { --daily: var(--type-find);  --daily-ink: var(--type-find-ink); }
+.tag--daily[data-type="photo"] { --daily: var(--type-photo); --daily-ink: var(--type-photo-ink); }
+.tag--daily[data-type="poll"]  { --daily: var(--type-poll);  --daily-ink: var(--type-poll-ink); }
 
 /* Dark mode: the pastel is a LIGHT colour, so the same 26% wash over a dark glass
-   fill lands as a milky panel rather than a tinted one. Less pigment, and the ink
-   twin is the pastel itself down here, so the border carries the hue instead. */
+   fill lands as a milky panel rather than a tinted one. Less pigment. */
 @media (prefers-color-scheme: dark) {
   .daily-card {
-    background: color-mix(in srgb, var(--daily) 15%, var(--glass-bg));
-    border-color: color-mix(in srgb, var(--daily) 34%, transparent);
+    background: linear-gradient(115deg,
+      color-mix(in srgb, var(--type-note)  15%, var(--glass-bg)),
+      color-mix(in srgb, var(--type-find)  15%, var(--glass-bg)),
+      color-mix(in srgb, var(--type-photo) 15%, var(--glass-bg)));
+    border-color: color-mix(in srgb, var(--text) 26%, transparent);
   }
 }
 
 /* No dot before the words. The card is a hue-filled panel; a hue-filled disc sat
-   on top of it said the same thing twice, and the second time is decoration. */
+   on top of it said the same thing twice, and the second time is decoration.
+   Plain --text, not --daily-ink: the card no longer carries one hue for the ink
+   to twin, and a leftover single tint here would quietly contradict the gradient
+   saying "any of these three" right below it. */
 .daily-kicker {
   font-family: 'Oxygen', sans-serif;
   font-weight: 700;
   font-size: var(--kicker);
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--daily-ink);
+  color: var(--text);
   margin-bottom: 0.5rem;
 }
 .daily-sep { opacity: 0.45; margin: 0 0.3rem; }
@@ -3906,7 +3948,7 @@ button.poll-option:disabled { cursor: default; }
   width: 24px;
   height: 24px;
   font-size: 0.85rem;
-  border: 2px solid color-mix(in srgb, var(--daily) 30%, var(--bg));
+  border: 2px solid color-mix(in srgb, var(--text) 30%, var(--bg));
 }
 .daily-face.avatar + .daily-face.avatar { margin-left: -0.5rem; }
 .daily-count { font-size: 0.82rem; color: var(--muted); }
@@ -3930,7 +3972,7 @@ button.poll-option:disabled { cursor: default; }
   font-family: 'Oxygen', sans-serif;
   font-weight: 700;
   font-size: 0.9rem;
-  color: var(--daily-ink);
+  color: var(--text);
   transition: opacity var(--dur-micro) var(--ease);
 }
 .daily-go { font-size: 1rem; transition: transform var(--dur-micro) var(--ease); }
@@ -3982,13 +4024,17 @@ button.poll-option:disabled { cursor: default; }
    the grid, which left the caption floating exactly halfway between the question
    it explains and the answers it doesn't. */
 .view--daily .masthead:has(+ .daily-lede) { margin-bottom: 0; }
-/* The status line is a row: "Daily · 6h left" left, the invitation right. */
+/* The status line is a row: "Daily · 6h left" left, the invitation right. Plain
+   grey, matching the composer banner's subtitle — the page wash now drifts
+   through all three hues (see daily-drift), so a kicker still pinned to the
+   prompt's single nominal ink would be reading a colour the background no
+   longer holds still long enough to agree with. */
 .view--daily .masthead-kicker {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  color: var(--daily-ink);
+  color: var(--muted);
 }
 .masthead-title--daily {
   display: block;
@@ -4050,10 +4096,11 @@ button.poll-option:disabled { cursor: default; }
 
 /* ── The composer, answering ──────────────────────────────────────────────────
    The daily's masthead in miniature, directly under the composer's: the tracked
-   caption over the question in serif, in that daily's ink. Arriving from the card
-   then reads as one continuous surface — the wash is already the right colour,
-   the nameplate names what you're making, and this says what you're answering, in
-   the same voice the page you just left used to ask it.
+   caption over the question in serif. Plain grey, not the daily's ink — the
+   Post/Activity toggle is absent from this flow (an activity is the one type
+   dailies never take, so it's simply not offered here), which means whatever you
+   write always counts. There's nothing left for a colour to signal, so the
+   caption doesn't try to.
 
    It lives OUTSIDE the form and takes the masthead's own inset. The composer's
    fields sit var(--inset) further left on purpose (a box outdented against the
@@ -4061,8 +4108,6 @@ button.poll-option:disabled { cursor: default; }
    under a title has to start where the title starts. Same rule that put
    .daily-lede on the nameplate's axis, and it joins the same two lists. */
 .daily-banner {
-  --daily: var(--type-note);
-  --daily-ink: var(--type-note-ink);
   padding: 0 var(--inset);
   margin-bottom: 2rem;
 }
@@ -4075,7 +4120,7 @@ button.poll-option:disabled { cursor: default; }
   font-size: var(--kicker);
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--daily-ink);
+  color: var(--muted);
   margin-bottom: 0.4rem;
 }
 .daily-banner-prompt {
@@ -4085,21 +4130,6 @@ button.poll-option:disabled { cursor: default; }
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--text);
-}
-/* Not an answer any more: the type on the page stopped matching the type the
-   prompt asked for (see dailyAccepts). The question doesn't vanish — you may
-   still be about to go back to it, and a banner that disappeared would read as
-   the app losing your place — it goes grey and its caption names the way back.
-   Draining the colour is the whole signal: the ink was the only thing tying this
-   line to the coloured page you came from, and without it this is just a note
-   about a question you're no longer answering. The tween matches the ambient
-   wash's own colour shift, so the banner and the page turn together. */
-.daily-banner--off .daily-banner-cap,
-.daily-banner--off .daily-banner-prompt { color: var(--muted); }
-.daily-banner-cap,
-.daily-banner-prompt { transition: color var(--dur-move) var(--ease); }
-@media (prefers-reduced-motion: reduce) {
-  .daily-banner-cap, .daily-banner-prompt { transition: none; }
 }
 
 /* ── A profile's frame wall ─────────────────────────────────────────────

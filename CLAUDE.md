@@ -491,7 +491,7 @@ prompt — see the push section above.)
   column to nothing.)
 - **A daily is a question, and answering it is just posting.** One prompt for the
   whole room, 24h, heading Discover as a coloured glass card and opening a page
-  washed in the same hue. An answer is an **ordinary post carrying a `daily-<slug>`
+  washed in a hue. An answer is an **ordinary post carrying a `daily-<slug>`
   tag**, which is why the feature needed no table, no migration and no new privacy
   rule: answers inherit the audience rules, the edit path, the profile column and
   search for free. **The schedule is an array** (`DAILIES` in `app.js`) rotating
@@ -506,11 +506,27 @@ prompt — see the push section above.)
   the array's *length* immutable, since changing it remapped every past day and
   silently stripped the question off every answer ever posted. Deleting a row
   still retires its label, so retire by moving out of the rotation, not out of the
-  array. **The named type is binding** (`dailyAccepts`, the one home of the rule,
-  read by both the composer banner and the submit gate so they can't disagree):
-  the tag rides along only if what you made is what was asked for, nothing is ever
-  blocked, and the banner just drains to a grey `Daily:`. `accepts: 'any'` waives
-  it per prompt. **Activities are excluded from every daily**, open ones included:
+  array. **The named type is a default, not a requirement** (`dailyAccepts`, the
+  one home of the rule, read by the submit gate to decide whether the tag rides
+  along): any non-activity type answers any prompt. It used to be binding, with
+  `accepts: 'any'` as a per-prompt waiver — every prompt waives it now, so the
+  named `type` is just the colour. The composer no longer pre-aims at it either:
+  answering a daily opens a plain Note like any other compose (it used to raise
+  the photo/link/poll surface the prompt's type implied), and the Post/Activity
+  switcher is dropped from that flow entirely — an activity was the one thing a
+  daily never took, and with it gone the only choice left is what to attach, so
+  a caption ("Answering the daily") sits over the question in plain grey rather
+  than a colour that has nothing left to signal. Since any type answers any
+  prompt, the Discover card can't wear the one colour it's asking for either, so
+  it carries all three question types dailies use at once — a fixed
+  lavender→coral→cyan gradient, same on every card. The page it opens now
+  **drifts** through the same three (`daily-drift`, 24s — a daily's own unit is
+  its 24-hour window), a registered `--glow-daily` interpolating smoothly rather
+  than a plain custom property; reduced motion freezes it on the prompt's own
+  hue, which is also the frame it opens on before the drift starts. The tag an
+  answer wears is the one surface still holding the prompt's single **nominal**
+  hue, unchanged — that's the question's colour, not a claim about what you made.
+  **Activities are excluded from every daily**, open ones included:
   an activity lands in the real world behind `canJoin`'s friends-only gate, and a
   page of answers from the whole room is the wrong doorway to that. **Polls are
   excluded editorially, not structurally** (`type: 'poll'` still works) — every

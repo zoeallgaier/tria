@@ -4640,32 +4640,31 @@
 
   /* ── Dailies — one prompt, twenty-four hours, the whole room ─────────────────
      A daily is a question everybody gets on the same day, and ANSWERING IT IS
-     JUST POSTING. Each daily names the post type it wants ("post the best thing
-     you ate this week" wants a Frame) and an answer is an ordinary post carrying
-     the daily's tag. No new content type, no new privacy rule, no new table —
-     which is why the whole feature is the array below plus one view.
+     JUST POSTING. Each daily names a post type ("post the best thing you ate
+     this week" suggests a Frame) and an answer is an ordinary post carrying the
+     daily's tag. No new content type, no new privacy rule, no new table — which
+     is why the whole feature is the array below plus one view.
 
-     THE TYPE IT NAMES IS BINDING (see dailyAccepts). A prompt that asks for a
-     photo and accepts a paragraph isn't a prompt, it's a suggestion box, and the
-     page it fills stops being a set of answers to one question. So the tag only
-     rides along when what you made is what was asked for: drop the link out of a
-     Find and you've written a note, and a note isn't an answer to "share the tab
-     you never close". A daily can waive this with `accepts: 'any'` when the
-     question genuinely takes either shape — that's a per-prompt decision, made
-     when it's written, not a hole in the rule.
+     THE TYPE IS A DEFAULT, NOT A REQUIREMENT (see dailyAccepts). It aims the
+     composer and picks the colour, but any non-activity type answers any prompt
+     — write a note about the meme instead of posting one, and it still counts.
+     This used to be enforced (a photo prompt that took a paragraph "isn't a
+     prompt, it's a suggestion box"), and the one escape hatch was `accepts:
+     'any'`, spent on exactly one prompt. Opening every prompt is the same move
+     made everywhere at once: the question still tells you what's easy to bring,
+     it just stops policing what you actually bring.
 
-     The constraint is never stated up front. The composer opens pre-aimed on the
-     right type, so the default path can't trip it; it only bites when you change
-     the type on purpose, and that's when the banner says so (see renderPublish).
-     Fine print nobody needs to read is worse than a sentence that arrives exactly
-     when it's true.
-
-     THE TYPE IS THE COLOUR. A daily wearing `photo` is a cyan card on Discover
-     and opens a cyan page, because the quintet already means the five post types
-     and a daily is a request for one of them. ACTIVITIES ARE EXCLUDED on purpose:
-     an activity carries a place and a time and lands in the real world, and the
-     app's second interaction gate (canJoin) keeps that circle-only. A prompt that
-     asks the whole room to show up somewhere is the one thing it's built not to do.
+     THE CARD IS THE COLOUR, THE ANSWER IS THE COLOUR IT WAS ASKED IN. Since any
+     type answers any prompt, the Discover card carries all three at once — a
+     fixed lavender→coral→cyan gradient, the same on every card, saying "note,
+     link or frame, your call" rather than naming one. The detail page it opens,
+     the tag an answer wears, and the composer banner keep the PROMPT's single
+     nominal hue, unchanged: that's the question's colour, not a claim about what
+     you made, and it's exactly how `accepts: 'any'` already behaved before this.
+     ACTIVITIES ARE EXCLUDED on purpose: an activity carries a place and a time
+     and lands in the real world, and the app's second interaction gate
+     (canJoin) keeps that circle-only. A prompt that asks the whole room to show
+     up somewhere is the one thing it's built not to do.
 
      THE SCHEDULE IS THE ARRAY. Day 0 is DAILY_EPOCH, in local time, and the list
      rotates from there — N prompts is an N-day loop that never runs out and never
@@ -4696,11 +4695,10 @@
   // possible. MOVING THIS MOVES EVERY WEEKDAY — see the rotation below.
   const DAILY_EPOCH = '2026-07-28';
 
-  /* The rotation. `type` picks the colour, what the composer opens as, AND what
-     counts as an answer — one of note / find / photo / poll. `accepts: 'any'`
-     opens a prompt to every type (still not activities); it keeps its `type` for
-     the colour and for the surface the composer raises, which becomes a
-     suggestion rather than a requirement.
+  /* The rotation. `type` picks the colour and what the composer opens as — one of
+     note / find / photo / poll. It no longer restricts what counts as an answer
+     (any non-activity type does, see dailyAccepts); it's a suggestion, not a
+     requirement.
 
      NO HINTS, AND THAT'S THE DESIGN. The optional `hint` field still renders
      everywhere it used to (the card's quiet line, the daily page's lede) and a
@@ -4774,12 +4772,10 @@
     { slug: 'must-watch',     type: 'find',  prompt: 'Share a video you’ve made someone watch.' },
     { slug: 'laughed',        type: 'note',  prompt: 'What actually made you laugh this week?' },
     { slug: 'ate',            type: 'photo', prompt: 'Show the best thing you ate this week.' },
-    // The open one, and the only prompt in the 21 that waives its type. "The
-    // smallest good thing" is answered just as well by the photograph of it as by
-    // the sentence, and week one's Sunday is the wrong place to tell someone the
-    // form was wrong. Keep one of these alive: with none, `accepts` is a code path
-    // with no callers.                                               Sun
-    { slug: 'small-good',     type: 'note',  prompt: 'What’s the smallest good thing that happened this week?', accepts: 'any' },
+    // "The smallest good thing" is answered just as well by the photograph of it
+    // as by the sentence — this was the one prompt in the 21 that waived its type
+    // before every prompt did.                                       Sun
+    { slug: 'small-good',     type: 'note',  prompt: 'What’s the smallest good thing that happened this week?' },
     // Cheapest photo in the set, on the cheapest day, closing the cheapest week:
     // you open the camera roll and you're done, no thinking at all.   Mon
     { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.' },
@@ -4927,17 +4923,16 @@
   const myAnswer = (occ, answers) =>
     (answers || dailyAnswers(occ)).find(p => p.author === Store.session()) || null;
 
-  // Does this post type answer that question? The prompt named a type and the type
-  // is binding, unless the prompt waived it with `accepts: 'any'`. ACTIVITIES are
-  // out either way, including of an open prompt: the exclusion isn't about shape,
-  // it's that an activity lands in the real world behind a friends-only gate, and
-  // a page of answers from the whole room is the wrong doorway to that.
+  // Does this post type answer that question? Every daily takes any type now — the
+  // named `type` on an occurrence is a default and a colour, not a requirement.
+  // ACTIVITIES are still out: that exclusion was never about shape, it's that an
+  // activity lands in the real world behind a friends-only gate, and a page of
+  // answers from the whole room is the wrong doorway to that.
   //
   // This is the ONE place the rule lives — the banner reads it to know what to say
   // and submitComposer reads it to know whether to attach the tag, so the sentence
   // on screen and the tag on the post can't disagree.
-  const dailyAccepts = (occ, type) =>
-    !!occ && type !== 'activity' && (occ.accepts === 'any' || type === occ.type);
+  const dailyAccepts = (occ, type) => !!occ && type !== 'activity';
 
   // The invitation, in ONE place so the card and the page can't drift. Not
   // "Answer": a prompt that asks and then commands is a worksheet, and the arrow
@@ -6484,18 +6479,19 @@
   }
 
   function renderPublish() {
-    // Answering a daily is the one thing that opens the composer pre-aimed: the
-    // prompt already said which type it wants, so the form opens with that
-    // attachment's surface up and the daily's tag in the field. Consumed once —
-    // navigate away and come back and you get a plain composer, because the
-    // intent belonged to the tap, not to the page.
+    // Answering a daily no longer pre-aims the form at the prompt's type — any
+    // type answers any prompt (see dailyAccepts), and the composer's natural rest
+    // state (a plain Note) is the lowest-friction way to arrive, so it opens
+    // exactly like any other compose. Consumed once — navigate away and come back
+    // and you get a plain composer, because the intent belonged to the tap, not
+    // to the page.
     const daily = pendingDaily;
     pendingDaily = null;
     answeringDaily = daily;
     // The composer never persists a draft across navigations, so every entry opens
     // fresh on the Post group (a plain Note until something's attached).
     pubGroup = 'post';
-    pubType = daily ? daily.type : 'note';
+    pubType = 'note';
     // The reactive colour lives full-screen now: the page ambient wash adopts the
     // inferred type's hue (see body[data-ambient="publish"] .ambient), keyed off
     // --glow-pub which syncType keeps in step. Set it before the wash fades in so
@@ -6510,29 +6506,19 @@
         // rides in a span the swap animation can hand off between.
         mastheadEl('', `<span class="title-word">${pubTitle()}</span>`, typeIndicatorHtml()) +
         // What you're answering: the daily page's own masthead in miniature, the
-        // caption over the question, tinted with that daily's ink. It sits OUTSIDE
-        // the form and on the nameplate's axis, because it's a lede for the page
-        // rather than a field in the form — inside, it started var(--inset) to the
-        // left of the title it hangs under (the composer's boxes are outdented on
-        // purpose; a line of type isn't a box).
+        // caption over the question. It sits OUTSIDE the form and on the
+        // nameplate's axis, because it's a lede for the page rather than a field
+        // in the form — inside, it started var(--inset) to the left of the title
+        // it hangs under (the composer's boxes are outdented on purpose; a line of
+        // type isn't a box).
         //
-        // It is also the live readout of whether this still counts. The type is
-        // binding (see dailyAccepts), and the type here is INFERRED from what's
-        // attached, so it can stop being an answer while you're mid-compose: drop
-        // the link and you're writing a note. Nothing is blocked — the switcher
-        // and the attach buttons all still work, because someone who came to
-        // answer "post a meme" and writes a note instead has changed their mind,
-        // and that's allowed. The banner just stops claiming otherwise: it drains
-        // to grey and its caption falls back to a bare "Daily:". Re-attach and it
-        // lights up again.
-        //
-        // While it's live, its hue is the DAILY's rather than pubType's: it names
-        // the question, not what you're making. (The two agree whenever it's live
-        // and typed; they part only on an `accepts: 'any'` prompt, where the
-        // question's own colour is the right one to keep.)
+        // A plain grey caption, not the daily's ink: with the Post/Activity
+        // toggle gone from this flow (an activity was the only way to stop
+        // answering, and it's simply not offered here any more), whatever you
+        // write always counts, so there's nothing left for a colour to signal.
         (daily
-          ? `<div class="daily-banner" data-type="${daily.type}" id="daily-banner">` +
-              `<p class="daily-banner-cap" id="daily-banner-cap">Answering the daily</p>` +
+          ? `<div class="daily-banner">` +
+              `<p class="daily-banner-cap">Answering the daily</p>` +
               `<p class="daily-banner-prompt">${esc(daily.prompt)}</p>` +
             `</div>`
           : '') +
@@ -6540,8 +6526,11 @@
           // The Post / Activity switcher sits inline just above the note field (not
           // docked to the nav like the Friends / Updates one — see #c-group-tabs).
           // Neutral (no brand glow): colour is carried by the full-screen wash.
-          segTabsEl('c-group', PUB_GROUPS, pubGroup,
-            { glow: false, label: 'What are you posting', panelId: 'c-fields' }) +
+          // Absent while answering a daily: an activity is excluded from every
+          // prompt (see dailyAccepts), so the one thing this switcher could do here
+          // is offer a dead end. pubGroup stays 'post' for the whole flow.
+          (daily ? '' : segTabsEl('c-group', PUB_GROUPS, pubGroup,
+            { glow: false, label: 'What are you posting', panelId: 'c-fields' })) +
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
           `<div class="post-progress" id="c-progress" aria-live="polite">` +
@@ -6594,24 +6583,6 @@
       fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
-      syncDailyBanner();
-    }
-
-    // The banner tracks the inferred type: lit while this still answers the daily,
-    // drained the moment it doesn't. Off, the caption says NOTHING — it drops to
-    // "Daily:", grey, a colon pointing at the question below it. The drained
-    // colour is the whole signal, and a caption that explained itself ("the daily
-    // wants a Find") was an instruction nobody asked for, on a screen where the
-    // person has just told the app what they want by changing the type. It also
-    // needed a special case for activities, which is how you end up writing a
-    // sentence like "an activity leaves the daily". One label, every case.
-    function syncDailyBanner() {
-      const el = document.getElementById('daily-banner');
-      if (!el) return;
-      const ok = dailyAccepts(daily, pubType);
-      el.classList.toggle('daily-banner--off', !ok);
-      const cap = document.getElementById('daily-banner-cap');
-      if (cap) cap.textContent = ok ? 'Answering the daily' : 'Daily:';
     }
 
     // Drop any attached photo/clip and fold the frame surface away. Also resets the
@@ -6831,19 +6802,10 @@
     });
 
     // Mount the group we arrived on (default Post), then reflect its inferred type.
+    // Nothing pre-aims a daily's surface any more — it opens on the same plain
+    // Note every other compose does, and the tag rides along at submit regardless
+    // of what ends up attached (see submitComposer).
     mountFields();
-    // A daily aims the freshly mounted form: raise the surface its type needs. The
-    // photo surface opens WITHOUT popping the OS picker — the attach button does
-    // that because you asked for it right then, and a file dialog that opens by
-    // itself on arrival is a page grabbing the wheel. Nothing goes in the tag
-    // field: the join tag rides along at submit (see submitComposer), because that
-    // field holds the poster's own words and not the app's bookkeeping.
-    if (daily && family === 'base') {
-      if (daily.type === 'photo') wantPhoto = true;
-      else if (daily.type === 'find') wantLink = true;
-      else if (daily.type === 'poll') wantPoll = true;
-      applyBaseSurface();
-    }
     syncType();
   }
 
@@ -8251,9 +8213,11 @@
     // and it's the one other page a signed-out visitor can reach), so it takes
     // the same wash rather than landing on bare --bg beside it.
     if (frontDoor(path)) { body.dataset.ambient = 'about'; return; }
-    // A daily washes the whole page in its post type's hue, so opening the card
-    // reads as stepping into it. Same full-screen mechanism the composer uses for
-    // the type it's inferring, on its own custom property.
+    // A daily washes the whole page, drifting through the three hues dailies use
+    // (see the daily-drift keyframes) rather than holding the one the prompt
+    // names — any type answers any prompt now. This still sets --glow-daily to
+    // the prompt's own hue: CSS overrides it the instant the drift starts, and
+    // it's only the resting frame reduced motion holds on.
     if (path.startsWith('#/daily/')) {
       const occ = lastDailyFor(decodeURIComponent(path.slice(8).split('?')[0]));
       if (!occ) return;
