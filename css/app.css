@@ -3335,7 +3335,7 @@ button.poll-option:disabled { cursor: default; }
 .account-card {
   position: relative;                  /* anchors the corner edit-profile badge */
   padding: 1.5rem 1.4rem;
-  border-radius: var(--radius-modal);  /* a larger piece of glass, rounder corners */
+  border-radius: 26px;  /* rounder than the shared --radius-modal (20px) — this card earns its own */
   background: var(--glass-bg-panel);
   -webkit-backdrop-filter: blur(var(--glass-blur));
           backdrop-filter: blur(var(--glass-blur));
