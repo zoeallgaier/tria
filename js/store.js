@@ -1407,15 +1407,68 @@ const Store = (() => {
       let done = false;
       const settle = (fn, v) => { if (!done) { done = true; fn(v); } };
       onPush('registration', (d) => settle(resolve, d && d.value));
-      onPush('registrationError', () => settle(reject, new Error('apns')));
-      setTimeout(() => settle(reject, new Error('timeout')), 12000);
+      onPush('registrationError', (d) => {
+        console.warn('[tria push] APNs refused to register:', JSON.stringify(d || {}));
+        settle(reject, new Error('apns'));
+      });
+      setTimeout(() => {
+        if (!done) console.warn('[tria push] no APNs token after 12s');
+        settle(reject, new Error('timeout'));
+      }, 12000);
       capPush('register').catch(() => settle(reject, new Error('register')));
     });
   }
 
+  // Ask the OS for permission, and always come back with an answer.
+  //
+  // `requestPermissions` resolves ONLY when the system alert is answered, so on
+  // its own it is an unbounded await — the same hung promise `apnsToken` is
+  // already guarded against, one step earlier in the same function, and the
+  // guard was never carried back here. There are real states where the answer
+  // never arrives: backgrounding the app while the alert is up leaves the
+  // completion unfired, and every later request made while that first one is
+  // still outstanding goes the same way. That is what strands the switch on
+  // "Turning on…" with no toast, no sheet and no way back, and why the profile
+  // toggle goes dead in the same session — it is issuing a second request behind
+  // the first one's ghost.
+  //
+  // So bound the wait, then don't guess what happened: `checkPermissions` reads
+  // the state the OS actually holds, which answers correctly even when the alert
+  // WAS answered and only its callback went missing. The bound is generous
+  // because while the alert is up the button underneath it is invisible — the
+  // only thing this costs is the width of a dead end.
+  const PERM_WAIT = 60000;
+  async function requestPerm() {
+    let perm = '';
+    try {
+      perm = await Promise.race([
+        capPush('requestPermissions').then((r) => r?.receive || ''),
+        new Promise((res) => setTimeout(() => res(''), PERM_WAIT)),
+      ]);
+    } catch { perm = ''; }
+    if (perm) return perm;
+    console.warn('[tria push] the permission alert was never answered; reading the OS state instead');
+    try { return (await capPush('checkPermissions'))?.receive || ''; }
+    catch { return ''; }
+  }
+
+  // The last place this path can hang. A bare network call has no timeout of its
+  // own, and it is awaited by a button that has already relabelled itself, so
+  // silence here reads exactly like the bug above. A rejection was always
+  // handled; now the wait has an end too.
+  const SAVE_WAIT = 15000;
   async function saveEndpoint(row) {
-    const { error } = await sb.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' });
-    return !error;
+    try {
+      const { error } = await Promise.race([
+        sb.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SAVE_WAIT)),
+      ]);
+      if (error) console.warn('[tria push] the subscription did not save:', error.message || error);
+      return !error;
+    } catch {
+      console.warn('[tria push] saving the subscription timed out');
+      return false;
+    }
   }
 
   // Boot work for the native shell: learn the permission state, and if push is
@@ -1486,12 +1539,21 @@ const Store = (() => {
     if (!pushSupported()) return { ok: false, error: 'This device can’t do notifications.' };
 
     if (nativeShell()) {
-      let perm;
-      try { perm = (await capPush('requestPermissions'))?.receive; }
-      catch { return { ok: false, error: 'Couldn’t reach notification settings.' }; }
-      nativePerm = perm || 'denied';
-      if (perm !== 'granted')
-        return { ok: false, error: 'Notifications are off. You can turn them on in your settings.', blocked: perm === 'denied' };
+      const perm = await requestPerm();
+      // An empty answer means the OS never told us, which is NOT a denial —
+      // writing 'denied' into the cache there would hide the pre-prompt card for
+      // good on a device that has simply not been asked yet.
+      if (perm === 'granted' || perm === 'denied') nativePerm = perm;
+      if (perm !== 'granted') {
+        console.warn('[tria push] permission not granted:', perm || '(no answer)');
+        return {
+          ok: false,
+          blocked: perm === 'denied',
+          error: perm === 'denied'
+            ? 'Notifications are off. You can turn them on in your settings.'
+            : 'Notifications didn’t turn on. Try again in a moment.',
+        };
+      }
 
       let token;
       try { token = await apnsToken(); }
