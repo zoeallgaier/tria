@@ -323,13 +323,13 @@ exempt). Voice is playful but not trying-too-hard.
 
 ## Backend notes
 
-**Two owner-side steps are outstanding, and shipping raised the stakes on both.**
+**One owner-side step is outstanding, and shipping raised the stakes on it.**
 The backend is code in this repo but *state* in Zoe's dashboard, and the client
 is deliberately tolerant of a database that hasn't caught up — which means a
 missing step has no error, no log and no symptom except a feature quietly not
 being there. That was survivable while the only users were us. It is not
 survivable in a build strangers are installing, because "it doesn't work" is now
-a review, so treat these as release blockers rather than chores:
+a review, so treat it as a release blocker rather than a chore:
 
 - **The APNs `.p8` key** (`supabase/PUSH-SETUP.md`) — until the key exists and
   `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_PRIVATE_KEY` are set as function
@@ -337,14 +337,24 @@ a review, so treat these as release blockers rather than chores:
   side is built and verified: the toggle turns on, the token registers, the row
   lands in `push_subscriptions` with its `apns:` endpoint. The fan-out simply has
   nothing to sign with. Nobody is notified and nothing complains.
-- **`supabase/friend-declines.sql`** — until it runs, follows are never announced
-  on Updates (unstamped edges stay quiet by design) and *Ignore* falls back to a
-  localStorage mirror, so a declined request comes back on another device.
 
-Neither has a client-side fix and Claude cannot run either one; if a report looks
-like "notifications are broken" or "ignore doesn't stick", check these before
-reading code. (The third recurring not-a-bug is the one-shot iOS permission
-prompt — see the push section above.)
+It has no client-side fix and Claude cannot do it; if a report looks like
+"notifications are broken", check this before reading code. (The other recurring
+not-a-bug is the one-shot iOS permission prompt — see the push section above.)
+
+**`supabase/friend-declines.sql` HAS been run** (confirmed 2026-08-13), so
+follows are announced on Updates and *Ignore* writes a durable row. It sat in
+the list above long after it was done, and got re-raised as a blocker while
+prepping the 1.1 submission — this file records intent, the dashboard holds the
+truth, so **verify before repeating that something is pending.** Claude has no
+DB admin, but migration state is checkable read-only through PostgREST with the
+publishable key in `js/config.js`, because the select list is validated against
+the schema *before* RLS: a missing table is `404 PGRST205`, a missing column is
+`400 42703`, and a table that exists but filters an anonymous caller is `200 []`.
+An empty array is proof the thing EXISTS. Run a bogus table and column alongside
+as controls. The `.p8` key is the one thing this cannot reach — Edge Function
+secrets aren't readable over REST, so say it's unverified rather than asserting
+it either way.
 
 - Login is by **email**; username is the public handle. Email confirmation is off.
 - The Supabase service key was rotated/deleted, so **only Zoe has DB admin** —
