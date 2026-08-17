@@ -5,13 +5,17 @@ APNs registration) ships in the repo. These are the **dashboard steps only the
 project owner can do** (the admin/service key was rotated, so Claude can't run
 these). Do them in order.
 
-> **Status (2026-07-30): step 5 is the one that's still open, and the app is now
-> in App Store review.** The device side is finished and verified — the toggle
-> turns on, APNs hands back a token, the row lands in `push_subscriptions`. What
-> is missing is the `.p8` and its three secrets, so the sender has nothing to
-> sign with and **every iOS notification is silent**. There is no error anywhere
-> in that path: the phone looks like push is on. Do step 5 before anyone outside
-> the circle installs the build.
+> **Status (2026-08-17): step 5b is still the one that's open, and 1.2 is the
+> first build it can actually matter in.** The device side is finished and
+> verified — the toggle turns on, APNs hands back a token, the row lands in
+> `push_subscriptions` — and as of 1.2 the plugin is genuinely *in the binary*,
+> which it was not in 1.0 or 1.1 (see `verify-plugins.sh`). What is missing is
+> the `.p8` and its three secrets, so the sender has nothing to sign with and
+> **every iOS notification is silent**. There is no error anywhere in that path:
+> the phone looks like push is on, and the function skips each iOS row with one
+> log line. This does not start working when the build goes live — going live
+> changes nothing about it. Do step 5b before anyone outside the circle installs
+> the build.
 
 **Two transports, one table.** A browser stores a Web Push subscription; the iOS
 app stores an APNs device token, because a WKWebView has no Push API at all —
@@ -105,9 +109,12 @@ notification should arrive within a second.
 For the iOS build specifically: it must be a **real device** (the simulator has
 no APNs), and after tapping "Turn on" a row should appear in
 `push_subscriptions` with an `apns:` endpoint. **No row means the token never
-arrived** — check the App ID capability (5a) before anything else. The app is
-deliberately silent while it's in the foreground (no banner over the app you're
-already looking at), so background it before sending the test.
+arrived** — check the App ID capability (5a) before anything else. Since 1.2 the
+app presents a banner and a sound in the foreground too (`presentationOptions`
+in `capacitor.config.json`, deliberately without `badge`), so you no longer have
+to background it to see the test land. It was silent in the foreground through
+1.0 and 1.1, which meant a notification arriving while Tria was open reached
+nobody.
 
 ---
 
