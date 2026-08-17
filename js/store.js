@@ -146,11 +146,20 @@ const Store = (() => {
   // the cache. Called once before the first render. supabase-js persists the
   // session in localStorage, so a returning visitor stays logged in.
   async function init() {
-    const { data: { session } } = await sb.auth.getSession();
-    // A recovery session getSession picked up from the reset link isn't a login —
-    // hold it at the gate (set-new-password) instead of hydrating the world.
-    if (recovering) return;
-    await hydrate(session);
+    // The OS permission read rides ALONGSIDE the world load, and boot waits for
+    // it. It's a local bridge lookup with no network in it, so it costs nothing
+    // next to loadWorld — and the first route paints the push UI synchronously,
+    // which until now happened while the cache still said null. Null reads as
+    // 'default', 'default' means "we have never asked", so a fully subscribed
+    // reader got the "Stay in the loop" pre-prompt on Updates every single cold
+    // launch, and nothing re-rendered when the real answer arrived behind it.
+    const primed = pushPrime();
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      // A recovery session getSession picked up from the reset link isn't a login —
+      // hold it at the gate (set-new-password) instead of hydrating the world.
+      if (!recovering) await hydrate(session);
+    } finally { await primed; }
   }
 
   // Set state.session from an auth session and load (or clear) the world.
@@ -654,7 +663,15 @@ const Store = (() => {
     return { ok: true };
   }
 
+  // Signing out hands this device's push address back FIRST, while the session
+  // is still live enough for RLS to allow the delete. The row is the only thing
+  // the sender consults, so leaving it behind meant the account that had just
+  // signed out went on having its comments and requests read out on the lock
+  // screen of a phone somebody else was now using. The OS permission and the
+  // local "push is on" marker both stay — whoever signs in next inherits a
+  // device that is willing, and pushResume claims it for them.
   async function logout() {
+    await releaseEndpoint();
     await sb.auth.signOut();
     recovering = false;
     clearWorld();
@@ -1349,6 +1366,34 @@ const Store = (() => {
     try { window.Capacitor.nativeCallback('PushNotifications', 'addListener', { eventName }, fn); }
     catch { /* older bridge; the listener just never fires */ }
   };
+  // EVERY await that crosses the bridge gets an end, and that rule is the whole
+  // lesson of the "Turning on…" that never changed back. A native call which
+  // simply never answers is indistinguishable from a slow one, and the push UI
+  // is made of controls that have already relabelled or disabled themselves by
+  // the time they start waiting. Bounding only the FIRST await was not enough —
+  // it fell back to an unbounded read, which then hung in its place.
+  const capPushIn = (method, ms) => Promise.race([
+    capPush(method),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+  ]);
+  // The OS permission read, which every path here starts from. Short bound: it's
+  // a local UNUserNotificationCenter lookup with no network in it, so anything
+  // slower than this is wedged rather than busy.
+  //
+  // Two bounds, and the shorter one is the one that gates the SPLASH. pushPrime
+  // is awaited by init, so on a wedged bridge its timeout is time the reader
+  // spends looking at the boot screen — measured at 4.2s when both used the same
+  // value, which is a hang by any other name. It can also afford to give up
+  // soonest: its fallback ('prompt') is the correct assumption on a first launch
+  // and the only cost of being wrong is one pre-prompt card. The interactive
+  // reads happen behind a control that has already disabled itself, where
+  // waiting is legible, so they keep the longer bound.
+  const PERM_READ_WAIT = 4000;
+  const PERM_PRIME_WAIT = 2000;
+  async function readPerm(ms = PERM_READ_WAIT) {
+    try { return (await capPushIn('checkPermissions', ms))?.receive || ''; }
+    catch { return ''; }
+  }
 
   // Last known OS permission in the native shell, primed at boot. The web reads
   // `Notification.permission` synchronously and the push UI is built
@@ -1363,6 +1408,52 @@ const Store = (() => {
   function pushSupported() {
     if (nativeShell()) return true;
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  // Is push actually ARMED on this device — permitted AND holding an address we
+  // have saved? Synchronous, because both the pre-prompt card and the profile
+  // switch render synchronously and a control that paints the wrong state and
+  // corrects itself a moment later is its own bug report. Permission alone was
+  // the old guess and it is not the same question: turning notifications off
+  // leaves the OS permission granted on purpose (see disablePush), so a switch
+  // reading permission painted itself back ON the moment you reopened the modal.
+  //
+  // The web can't answer the second half synchronously — a live PushManager
+  // subscription is an async read — so it keeps a mirror of the same fact in the
+  // same key, written wherever the subscription is written.
+  function pushArmed() {
+    return pushPermission() === 'granted' && !!localStorage.getItem(APNS_KEY);
+  }
+
+  // Read the OS permission into the cache the push UI renders from. Awaited by
+  // init() BEFORE the first route, because until it lands `nativePerm` is null,
+  // which reads as 'default', which is the one value that means "we have never
+  // asked" — so a fully subscribed user got the "Stay in the loop" pre-prompt on
+  // Updates, and nothing re-rendered when the real answer arrived, so it sat
+  // there for the whole session. Bounded and swallowed: a boot must not wait on
+  // the bridge, and 'prompt' is the right thing to assume if it won't answer.
+  async function pushPrime() {
+    if (!nativeShell()) return;
+    nativePerm = (await readPerm(PERM_PRIME_WAIT)) || 'prompt';
+  }
+
+  // Everything Tria has already delivered, cleared out of Notification Center.
+  // Called when Updates is opened: the ledger on screen is the same news, and a
+  // shade still holding a week of read notifications is the badge this app
+  // deliberately doesn't set, arriving by another route. Native-only and
+  // failure-tolerant — the plugin rejects this until the APNs registration
+  // callback has fired at least once, which is a normal state on a device that
+  // has never turned push on.
+  async function clearDelivered() {
+    // Gated on pushArmed() rather than just the shell, and the gate is exact
+    // rather than tidy: the plugin rejects this call until the APNs registration
+    // callback has fired at least once in this launch, which happens in
+    // pushResume — and pushResume runs on precisely the condition below. So off
+    // that condition the call cannot succeed, and ungated it was one guaranteed
+    // rejection (logged by Capacitor's own bridge, twice) on every single visit
+    // to Updates by everyone who doesn't have push on.
+    if (!nativeShell() || !pushArmed()) return;
+    try { await capPushIn('removeAllDeliveredNotifications', 4000); } catch { /* nothing to clear */ }
   }
 
   // Hand the reader to Tria's own page in iOS Settings, resolving true only if
@@ -1402,15 +1493,43 @@ const Store = (() => {
   // so the listener has to be in place before the call. A device with no network
   // can leave both events unfired, hence the timeout — a hung promise here would
   // hang the "Turning on…" button forever.
+  //
+  // The two events are wired ONCE, at module scope, and handed to whoever is
+  // currently waiting. They used to be registered inside this function, which
+  // meant a fresh pair of permanent bridge callbacks on every launch and every
+  // tap of the switch: Capacitor keeps an `addListener` call alive for the life
+  // of the webview and nothing here ever removed one, so the list only grew.
+  let tokenWaiter = null;
+  let pushWired = false;
+  function wirePushEvents() {
+    if (pushWired || !nativeShell()) return;
+    pushWired = true;
+    onPush('registration', (d) => {
+      const w = tokenWaiter; tokenWaiter = null; w?.resolve(d && d.value);
+    });
+    onPush('registrationError', (d) => {
+      console.warn('[tria push] APNs refused to register:', JSON.stringify(d || {}));
+      const w = tokenWaiter; tokenWaiter = null; w?.reject(new Error('apns'));
+    });
+  }
+
   function apnsToken() {
+    wirePushEvents();
     return new Promise((resolve, reject) => {
       let done = false;
-      const settle = (fn, v) => { if (!done) { done = true; fn(v); } };
-      onPush('registration', (d) => settle(resolve, d && d.value));
-      onPush('registrationError', (d) => {
-        console.warn('[tria push] APNs refused to register:', JSON.stringify(d || {}));
-        settle(reject, new Error('apns'));
-      });
+      // Only ever clear the waiter if it's still OURS — a later call may have
+      // installed its own before this one's timeout fires, and stealing that
+      // slot would strand the request that is actually in flight.
+      const mine = {};
+      const settle = (fn, v) => {
+        if (done) return;
+        done = true;
+        if (tokenWaiter === mine) tokenWaiter = null;
+        fn(v);
+      };
+      mine.resolve = (v) => settle(resolve, v);
+      mine.reject = (e) => settle(reject, e);
+      tokenWaiter = mine;
       setTimeout(() => {
         if (!done) console.warn('[tria push] no APNs token after 12s');
         settle(reject, new Error('timeout'));
@@ -1434,10 +1553,21 @@ const Store = (() => {
   //
   // So bound the wait, then don't guess what happened: `checkPermissions` reads
   // the state the OS actually holds, which answers correctly even when the alert
-  // WAS answered and only its callback went missing. The bound is generous
-  // because while the alert is up the button underneath it is invisible — the
-  // only thing this costs is the width of a dead end.
-  const PERM_WAIT = 60000;
+  // WAS answered and only its callback went missing.
+  //
+  // TWO bounds, and the second one is the fix to the fix. The first version of
+  // this bounded `requestPermissions` and then fell back to a BARE
+  // `checkPermissions` — another unbounded bridge await, on the exact path taken
+  // when the bridge has just proved it can leave a call unanswered. So the dead
+  // end came straight back, 60 seconds later. The recovery read is bounded too
+  // now (`readPerm`), and an empty answer from both is reported as "no answer"
+  // rather than silently becoming a denial.
+  //
+  // 20s, not 60. While the alert is up the button underneath it is invisible, so
+  // the bound only ever costs the width of a dead end — but a minute of a button
+  // reading "Turning on…" is not a bound anyone experiences as one, and nobody
+  // takes twenty seconds to answer an alert they are looking at.
+  const PERM_WAIT = 20000;
   async function requestPerm() {
     let perm = '';
     try {
@@ -1448,8 +1578,7 @@ const Store = (() => {
     } catch { perm = ''; }
     if (perm) return perm;
     console.warn('[tria push] the permission alert was never answered; reading the OS state instead');
-    try { return (await capPush('checkPermissions'))?.receive || ''; }
-    catch { return ''; }
+    return await readPerm();
   }
 
   // The last place this path can hang. A bare network call has no timeout of its
@@ -1457,12 +1586,43 @@ const Store = (() => {
   // silence here reads exactly like the bug above. A rejection was always
   // handled; now the wait has an end too.
   const SAVE_WAIT = 15000;
+  const withWait = (thenable, ms) => Promise.race([
+    thenable,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+  ]);
+
+  // Save this device's address against the signed-in user, THROUGH AN RPC,
+  // because a plain upsert could not move a device between accounts.
+  //
+  // `endpoint` is unique (it's the device's mailbox), so the second account to
+  // sign in on one phone always collides. `upsert(onConflict: 'endpoint')` is an
+  // INSERT ... ON CONFLICT DO UPDATE, and Postgres checks the UPDATE policy's
+  // USING clause against the EXISTING row — which still said `user_id` = the
+  // account that signed out. So the write was rejected, and the DELETE policy is
+  // gated identically, so the new user couldn't clear the row either. The old
+  // account went on receiving notifications on a phone that was no longer theirs
+  // and the new one could never register, from a warning in a console nobody was
+  // reading. `claim_push_endpoint` is SECURITY DEFINER and takes the user from
+  // auth.uid(), so the handover is possible and is still only ever to yourself
+  // (supabase/push-endpoint-handover.sql).
+  //
+  // Falls back to the old upsert if the function isn't there yet (PGRST202) —
+  // same tolerance every other migration in this client gets, and on a database
+  // that hasn't run it the upsert is exactly as good as it ever was: fine until
+  // the day someone switches accounts.
   async function saveEndpoint(row) {
     try {
-      const { error } = await Promise.race([
-        sb.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SAVE_WAIT)),
-      ]);
+      const { error } = await withWait(
+        sb.rpc('claim_push_endpoint', {
+          p_endpoint: row.endpoint, p_p256dh: row.p256dh || '', p_auth: row.auth || '',
+        }), SAVE_WAIT);
+      if (error && error.code === 'PGRST202') {
+        console.warn('[tria push] claim_push_endpoint is missing; falling back to upsert. Run supabase/push-endpoint-handover.sql.');
+        const { error: upErr } = await withWait(
+          sb.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' }), SAVE_WAIT);
+        if (upErr) console.warn('[tria push] the subscription did not save:', upErr.message || upErr);
+        return !upErr;
+      }
       if (error) console.warn('[tria push] the subscription did not save:', error.message || error);
       return !error;
     } catch {
@@ -1471,17 +1631,46 @@ const Store = (() => {
     }
   }
 
+  // Give this device's address back — the row goes, the OS permission and the
+  // local "push is on" marker stay. Signing out has to do this: the row is the
+  // ONLY thing the sender consults, so leaving it behind means the account that
+  // just signed out keeps getting its comments read out on a phone somebody else
+  // is now holding. It runs while still authenticated, so the ordinary DELETE
+  // policy covers it and no RPC is needed.
+  async function releaseEndpoint() {
+    if (!isAuthed()) return;
+    const endpoint = nativeShell()
+      ? (localStorage.getItem(APNS_KEY) ? 'apns:' + localStorage.getItem(APNS_KEY) : '')
+      : await webEndpoint();
+    if (!endpoint) return;
+    try { await withWait(sb.from('push_subscriptions').delete().eq('endpoint', endpoint), SAVE_WAIT); }
+    catch { /* the sender prunes an unreachable address on its next send */ }
+  }
+
+  // This browser's Web Push address, if it still holds a live subscription.
+  async function webEndpoint() {
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      const sub = reg && await reg.pushManager.getSubscription();
+      return sub ? sub.endpoint : '';
+    } catch { return ''; }
+  }
+
   // Boot work for the native shell: learn the permission state, and if push is
   // already on, re-register. APNs tokens ROTATE (a restore from backup, a
   // reinstall, occasionally an OS update), and a rotated token fails silently —
   // the old row stays, Apple returns Unregistered, and notifications just stop
   // with nothing anywhere to say why. So every launch re-reads the token and
   // re-upserts it, dropping the previous row if it changed.
+  //
+  // Called on every launch AND on every sign-in, which is the second half of the
+  // same bug releaseEndpoint fixes. It used to run once, at boot, behind a
+  // `currentUser()` check — so someone who signed in during a session never had
+  // their device registered at all, and the row on that phone went on pointing
+  // at whoever used it last until the next cold launch. Signing out now hands
+  // the address back and signing in claims it, so the pair always names the
+  // person actually holding the phone.
   async function pushResume() {
-    if (!nativeShell()) return;
-    try { nativePerm = (await capPush('checkPermissions'))?.receive || 'prompt'; }
-    catch { nativePerm = 'prompt'; }
-    if (nativePerm !== 'granted') return;
     const u = currentUser();
     if (!u) return;
     // Resume only what was already ON. Turning push off leaves the OS permission
@@ -1490,6 +1679,22 @@ const Store = (() => {
     // whose owner had just switched it off.
     const had = localStorage.getItem(APNS_KEY) || '';
     if (!had) return;
+
+    if (!nativeShell()) {
+      // The web keeps its PushManager subscription across a sign-out; only the
+      // row went. Re-point it at whoever is signed in now.
+      if (pushPermission() !== 'granted') return;
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg && await reg.pushManager.getSubscription();
+        if (!sub) return;
+        const j = sub.toJSON();
+        await saveEndpoint({ user_id: u.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+      } catch { /* the subscription is gone; the switch will say so */ }
+      return;
+    }
+
+    if (nativePerm !== 'granted') return;
     try {
       const token = await apnsToken();
       if (!token) return;
@@ -1520,13 +1725,17 @@ const Store = (() => {
   async function pushSubscribed() {
     if (!pushSupported()) return false;
     if (nativeShell()) {
-      try { nativePerm = (await capPush('checkPermissions'))?.receive || 'prompt'; } catch { /* keep the cache */ }
+      nativePerm = (await readPerm()) || nativePerm || 'prompt';
       return nativePerm === 'granted' && !!localStorage.getItem(APNS_KEY);
     }
     if (Notification.permission !== 'granted') return false;
     try {
       const reg = await navigator.serviceWorker.getRegistration();
-      return !!(reg && await reg.pushManager.getSubscription());
+      const on = !!(reg && await reg.pushManager.getSubscription());
+      // Keep the sync mirror honest — pushArmed() renders off it.
+      if (on) localStorage.setItem(APNS_KEY, 'web');
+      else localStorage.removeItem(APNS_KEY);
+      return on;
     } catch { return false; }
   }
 
@@ -1586,6 +1795,7 @@ const Store = (() => {
     const j = sub.toJSON();
     if (!(await saveEndpoint({ user_id: u.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth })))
       return { ok: false, error: 'Couldn’t save your notification settings.' };
+    localStorage.setItem(APNS_KEY, 'web');   // the sync mirror pushArmed() reads
     return { ok: true };
   }
 
@@ -1604,6 +1814,7 @@ const Store = (() => {
       } catch { /* the sender prunes an unreachable token on its next send */ }
       return { ok: true };
     }
+    localStorage.removeItem(APNS_KEY);
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       const sub = reg && await reg.pushManager.getSubscription();
@@ -1642,8 +1853,8 @@ const Store = (() => {
     // Notifications
     notifications,
     // Push
-    pushSupported, pushPermission, pushSubscribed, pushResume, enablePush, disablePush,
-    openAppSettings,
+    pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
+    clearDelivered, openAppSettings,
     // Profile
     updateAvatar, updateProfile,
   };

@@ -37,7 +37,23 @@ webpush.setVapidDetails(
   Deno.env.get('VAPID_PRIVATE_KEY')!,
 );
 
-const OPEN_URL = './#/updates';   // where a tapped notification lands
+const OPEN_URL = './#/updates';   // the fallback landing, when nothing better is known
+
+// WHERE A TAP LANDS. Every notification used to open Updates, because `sendTo`
+// defaulted `url` and no caller ever passed one — so "Tap to see their profile"
+// didn't, and a comment notification made you find the post yourself. These
+// mirror the routes the app already mints for a copied link (see postLink and
+// the `?p=` branch in route()): a post is its AUTHOR'S profile plus the post id,
+// which the router reads to spotlight-scroll that card into view.
+//
+// `#/profile` is the author's own column, so a notification about your own post
+// — which is nearly all of them: someone commented on YOURS, someone is coming
+// to YOURS — takes the self route. A mention lands on somebody else's post, so
+// it needs their handle.
+const selfPost = (postId: string) => `./#/profile?p=${encodeURIComponent(postId)}`;
+const userPost = (username: string, postId: string) =>
+  `./#/u/${encodeURIComponent(username)}?p=${encodeURIComponent(postId)}`;
+const userPage = (username: string) => `./#/u/${encodeURIComponent(username)}`;
 
 type Row = Record<string, any>;
 
@@ -159,9 +175,17 @@ async function sendApns(token: string, payload: Row): Promise<boolean> {
     'apns-priority': '10',
     'content-type': 'application/json',
   };
-  // Same job as the Web Push `tag`: a second comment on one post replaces the
-  // first rather than stacking. Apple caps this at 64 bytes.
-  if (payload.tag) headers['apns-collapse-id'] = String(payload.tag).slice(0, 64);
+  // GROUPING AND REPLACING ARE NOT THE SAME HEADER, and conflating them ate
+  // notifications. `thread-id` above groups: everything about one post sits
+  // together in the shade, which is what you want. `apns-collapse-id` REPLACES:
+  // a new notification with a matching id silently overwrites the delivered one.
+  // Both were fed the same `post:<id>` tag, so a second person commenting on a
+  // post deleted the first person's notification before it had been read — and
+  // with no badge and no dot on the Updates tab by design, there was no second
+  // channel left to notice it had happened. Collapsing is now opt-in per payload
+  // and keyed per EVENT, so the only things that replace each other are things
+  // that really are the same event. Apple caps this at 64 bytes.
+  if (payload.collapse) headers['apns-collapse-id'] = String(payload.collapse).slice(0, 64);
 
   for (const host of APNS_HOSTS) {
     try {
@@ -224,15 +248,33 @@ async function handle(table: string, rec: Row) {
 
     // The post's owner hears about the comment (unless they commented on their own).
     if (post.author !== rec.author) {
-      await sendTo(post.author, { title: `${author.name} commented`, body: snip(rec.body) || `Commented on ${postLabel(post)}`, tag: `post:${post.id}` });
+      await sendTo(post.author, {
+        title: `${author.name} commented`,
+        body: snip(rec.body) || `Commented on ${postLabel(post)}`,
+        tag: `post:${post.id}`, collapse: `comment:${rec.id}`,
+        url: selfPost(post.id),   // the recipient IS the author, so: their column
+      });
       notified.add(post.author);
     }
     // Anyone @mentioned in the comment who is a mutual friend of the commenter.
+    // A mentioned reader is usually NOT the post's author, so the link needs the
+    // author's handle — fetched lazily, since most comments mention nobody and
+    // this would otherwise be a round trip on every single insert.
+    let owner: Row | null | undefined;
+    const postOwner = async () => (owner ??= await userById(post.author));
     for (const uname of new Set([...(rec.body || '').matchAll(/@(\w+)/g)].map(m => m[1]))) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author || notified.has(u.id)) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
-      await sendTo(u.id, { title: `${author.name} mentioned you`, body: snip(rec.body), tag: `post:${post.id}` });
+      const home = u.id === post.author ? selfPost(post.id) : await (async () => {
+        const o = await postOwner();
+        return o ? userPost(o.username, post.id) : OPEN_URL;
+      })();
+      await sendTo(u.id, {
+        title: `${author.name} mentioned you`, body: snip(rec.body),
+        tag: `post:${post.id}`, collapse: `comment:${rec.id}:${u.id}`,
+        url: home,
+      });
       notified.add(u.id);
     }
     return;
@@ -246,7 +288,11 @@ async function handle(table: string, rec: Row) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
-      await sendTo(u.id, { title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)), tag: `post:${rec.id}` });
+      await sendTo(u.id, {
+        title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)),
+        tag: `post:${rec.id}`, collapse: `post:${rec.id}:${u.id}`,
+        url: userPost(author.username, rec.id),
+      });
     }
     return;
   }
@@ -257,7 +303,13 @@ async function handle(table: string, rec: Row) {
     if (!post || post.author === rec.user_id) return;   // host can't RSVP self
     const who = await userById(rec.user_id);
     if (!who) return;
-    await sendTo(post.author, { title: `${who.name} is in`, body: `Going to ${postLabel(post)}`, tag: `going:${post.id}` });
+    await sendTo(post.author, {
+      title: `${who.name} is in`, body: `Going to ${postLabel(post)}`,
+      // Collapsed PER PERSON, not per activity: two friends saying yes is two
+      // pieces of news. The same person re-RSVPing is one.
+      tag: `going:${post.id}`, collapse: `going:${post.id}:${rec.user_id}`,
+      url: selfPost(post.id),   // the recipient hosts it
+    });
     return;
   }
 
@@ -281,9 +333,13 @@ async function handle(table: string, rec: Row) {
     // do something. Same wording split as Updates.
     const { data: target } = await supabase.from('users').select('private').eq('id', rec.b).single();
     const pending = target?.private !== false;
+    // Both lines end in "tap to do X", and until now neither tap did X — every
+    // notification this function sent landed on Updates. A request belongs there
+    // (that's where the pinned requests block is); a follow is about a person, so
+    // it opens their profile, which is what it has been promising all along.
     await sendTo(rec.b, pending
-      ? { title: `${who.name} wants to be friends`, body: 'Tap to add them back.', tag: `friend:${rec.a}` }
-      : { title: `${who.name} started following you`, body: 'Tap to see their profile.', tag: `friend:${rec.a}` });
+      ? { title: `${who.name} wants to be friends`, body: 'Tap to add them back.', tag: `friend:${rec.a}`, collapse: `friend:${rec.a}`, url: OPEN_URL }
+      : { title: `${who.name} started following you`, body: 'Tap to see their profile.', tag: `friend:${rec.a}`, collapse: `friend:${rec.a}`, url: userPage(who.username) });
     return;
   }
 }

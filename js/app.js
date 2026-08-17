@@ -7,6 +7,51 @@
 (function () {
   'use strict';
 
+  // ── Error breadcrumbs ──────────────────────────────────────────────────────
+  // First thing in the file, because an exception thrown during boot is the one
+  // nobody can reconstruct afterwards.
+  //
+  // Nothing here used to install these at all, so a render that threw left NO
+  // trace: the page stopped half-drawn or blank, the exception unwound into
+  // nothing, and the entire report was "it broke". On the web that's one devtools
+  // tab away. In the App Store build it takes a Mac, a cable and Safari's
+  // inspector already attached BEFORE the thing happens, which is never how it
+  // happens, so a real failure on a real phone was unreadable by construction.
+  //
+  // Which is why these land in localStorage as well as the console, and that half
+  // is the point: storage outlives the document, so the last few are still
+  // readable after a reload, after WebKit kills the WebContent process and
+  // Capacitor reloads the webview under us, and hours later on a device nobody
+  // was watching. Read them back with JSON.parse(localStorage['tria:errors']).
+  //
+  // Capped at ten, one stack frame deep, newest first. This is a breadcrumb
+  // trail and not telemetry: it never leaves the phone, it never reaches the UI,
+  // and a render erroring in a loop can't fill the quota.
+  const ERR_KEY = 'tria:errors';
+  const logError = (what, err) => {
+    const e = err instanceof Error ? err : null;
+    console.error(`[tria] ${what}:`, err);
+    try {
+      const log = JSON.parse(localStorage.getItem(ERR_KEY) || '[]');
+      log.unshift({
+        at: new Date().toISOString(),
+        route: location.hash || '#/',
+        what,
+        msg: String(e?.message ?? err ?? '').slice(0, 300),
+        where: (e?.stack || '').split('\n')[1]?.trim().slice(0, 200) || ''
+      });
+      localStorage.setItem(ERR_KEY, JSON.stringify(log.slice(0, 10)));
+    } catch { /* private mode, or a quota not worth fighting over */ }
+  };
+  window.addEventListener('error', (ev) => {
+    // A photo that fails to load fires `error` too, and a feed is mostly photos.
+    // Resource errors don't bubble, so they only reach window in the capture
+    // phase this listener deliberately isn't in; the target check is the belt.
+    if (ev.target && ev.target !== window) return;
+    logError('uncaught', ev.error || ev.message);
+  });
+  window.addEventListener('unhandledrejection', (ev) => logError('unhandled rejection', ev.reason));
+
   // `stage` is the fixed shell (#view); `view` is the current *page* inside it
   // that every render function fills. The router (see renderPage) dissolves the
   // outgoing page away over the next one, so render code just targets `view` and
@@ -23,6 +68,15 @@
 
   const prefersReduced = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // "Is there a cursor and a real keyboard behind this?" — asked wherever a
+  // behaviour only makes sense with one (autofocusing a field, Enter-to-submit).
+  // A DIFFERENT question from the three shells above: an iOS home-screen PWA and
+  // a browser tab on the same phone both answer false, and a desktop browser tab
+  // answers true. Kept as one predicate because it was inlined as this exact
+  // media string in three places and a fourth was about to make it a habit.
+  const finePointer = () =>
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
   // Tria runs in three shells: a browser tab, a home-screen PWA, and (since the
   // App Store build) a native iOS app wrapping the same files. Capacitor injects
@@ -416,18 +470,18 @@
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
       `</a>`;
-    // Built ONCE and kept — the highlight (.nav-glide) slides between icons on
-    // route changes, which only works if the links persist across renders.
-    // The four destinations ride inside a glass pill; Post floats beside it as
-    // its own round button on phones. On desktop .nav-pill is display:contents,
-    // so the sidebar sees the same flat column of links it always has.
+    // Built ONCE and kept, so the links persist across renders and only their
+    // aria-current flips. The four destinations ride inside a glass pill; Post
+    // floats beside it as its own round button on phones. On desktop .nav-pill is
+    // display:contents, so the sidebar sees the same flat column of links it
+    // always has.
     if (!nav.querySelector('.nav-pill')) {
       // The four-way speed dial is retired: the composer now surfaces link + photo
       // inline and Activity is one seg-tab tap away, so the + routes straight to the
       // Post composer. dialEl/wireDial are kept dormant in case we ever want a
       // lighter Post/Activity fan here.
       nav.innerHTML =
-        `<div class="nav-pill"><span class="nav-glide" aria-hidden="true"></span>` +
+        `<div class="nav-pill">` +
           NAV.filter(n => !n.publish).map(link).join('') +
         `</div>` +
         NAV.filter(n => n.publish).map(link).join('');
@@ -447,31 +501,15 @@
       if (composing) { pub.setAttribute('aria-hidden', 'true'); pub.tabIndex = -1; }
       else { pub.removeAttribute('aria-hidden'); pub.removeAttribute('tabindex'); }
     }
-    glideNav();
   }
 
-  // Slides the pill's soft highlight circle under the active destination.
-  // Measured from the live link (not index math) so it survives any spacing
-  // change; hides when nothing is current (a friend view, compose). Desktop is
-  // a no-op: display:contents gives the pill zero offsetWidth. The first
-  // placement after being hidden snaps without transition, so the highlight
-  // never visibly flies in from the pill's corner.
-  function glideNav() {
-    const pill = document.querySelector('.nav-pill');
-    const glide = pill && pill.querySelector('.nav-glide');
-    if (!glide) return;
-    const cur = pill.querySelector('.nav-link[aria-current="page"]');
-    if (!cur || !pill.offsetWidth) { glide.style.opacity = '0'; return; }
-    const fresh = glide.style.opacity !== '1';
-    if (fresh) glide.style.transition = 'none';
-    glide.style.width = cur.offsetWidth + 'px';
-    glide.style.height = cur.offsetHeight + 'px';
-    // Scaled up 1.5x around its own center (transform-origin stays 50% 50%) so the
-    // heavier blur has room to pool into a full glow instead of shrinking the core.
-    glide.style.transform = `translate(${cur.offsetLeft}px, ${cur.offsetTop}px) scale(1.5)`;
-    glide.style.opacity = '1';
-    if (fresh) { void glide.offsetWidth; glide.style.transition = ''; }
-  }
+  // There used to be a glideNav() here that measured the current link and moved
+  // a blurred gradient lozenge under it on every route change. The marker is now
+  // pure CSS — the pill's non-current links sit at reduced opacity and the
+  // current one comes forward (see .nav-pill .nav-link in the mobile block) — so
+  // the active state costs no layout read, no inline styles, and no per-frame
+  // filter work. Nothing calls into the nav on navigation any more beyond the
+  // aria-current flip above.
 
   /* ── Publish speed dial (phones) ───────────────────────────────────────────
      On a phone the + doesn't jump straight to the composer — it fans open a
@@ -1031,7 +1069,7 @@
     syncEmpty(); syncCount();
     // Desktop autofocuses like the old textarea; touch waits for the tap so the
     // keyboard doesn't lurch the viewport (mirrors the edit-form focus rule).
-    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) editor.focus();
+    if (finePointer()) editor.focus();
   }
 
   // A reliable double-tap detector. The native `dblclick` event doesn't fire
@@ -2087,6 +2125,10 @@
     btn.addEventListener('click', () => {
       if (rsvpable && btn.getAttribute('aria-pressed') === 'false') { flip(); return; }
       setPanel(!openGoing.has(post.id));
+      // The disclosure half of this button now speaks too, matching the comment
+      // thread and the who-liked list. flip() has its own (heavier) buzz and
+      // returns before this — a tap is one event, so it gets one haptic.
+      hapticTap('LIGHT');
     });
 
     el.querySelector('.going-out')?.addEventListener('click', flip);
@@ -2224,6 +2266,13 @@
         if (!open) { collapseComments(el, post.id); collapseGoing(el, post.id); }   // one panel at a time
         btn.setAttribute('aria-expanded', String(!open));
         panel?.classList.toggle('open', !open);
+        // Fires on the confirmed change like every other haptic in the app — the
+        // difference is that this change is synchronous, so there's no round trip
+        // to wait for: the panel state has already flipped by the time we buzz.
+        // LIGHT, because opening a list of names is the definition of something
+        // that stays on the screen. Both directions: opening and closing are each
+        // a real repaint, unlike the filter dial's no-op re-pick.
+        hapticTap('LIGHT');
       });
       return;
     }
@@ -2232,10 +2281,16 @@
     // there's nothing on my card to recompute — just flip the heart in place (no
     // card rebuild, no rise-flash).
     btn.addEventListener('click', async () => {
+      // The re-enable is in a finally for the reason the push toggle's is: this
+      // is the only control for the state it names, and a throw between the two
+      // lines leaves it disabled for the life of the card with no toast either —
+      // a heart that stops answering, forever, from one unlucky tap.
       btn.disabled = true;
-      const res = await Store.toggleLike(post.id);
-      btn.disabled = false;
-      if (!res.ok) return;
+      let res = null;
+      try { res = await Store.toggleLike(post.id); }
+      catch { /* falls through to the !ok return: the heart just doesn't move */ }
+      finally { btn.disabled = false; }
+      if (!res?.ok) return;
       hapticTap('LIGHT');   // both directions: the tap is confirming an async write
       btn.classList.toggle('liked', res.liked);
       btn.setAttribute('aria-pressed', String(res.liked));
@@ -2322,11 +2377,25 @@
     input.addEventListener('input', () => { syncSubmit(); autoGrow(); });
     syncSubmit();
 
-    // Enter posts (keeping the old single-line field's reflex); Shift+Enter drops
-    // a deliberate line break for a multi-paragraph comment.
-    // (defaultPrevented → the mentions picker already claimed this Enter to pick
-    //  a friend; wireMentions runs first, so let it win.)
+    /* Enter posts, and ONLY where there's a keyboard that can also say
+       Shift+Enter. That pairing was written for a desktop browser and it does
+       not survive the trip to a phone: an iOS software keyboard has no way to
+       deliver `shiftKey` on a Return keydown, so on every touch shell the
+       "deliberate line break" half of the rule was unreachable and Return was an
+       unlabelled Publish. Two bad outcomes from the one gap — a comment could not
+       be given a paragraph break from a phone at all, and the key that means
+       "new line" in every other multiline field on iOS silently published
+       instead. The keyboard even says `return` while doing it, so there was
+       nothing on screen to warn anyone.
+
+       On touch, Return is now just a Return and the Post button is the send —
+       which is what the field was already built for: it auto-grows for exactly
+       this, Post carries a 44px target, and it disables itself when empty. The
+       desktop reflex is untouched.
+       (defaultPrevented → the mentions picker already claimed this Enter to pick
+        a friend; wireMentions runs first, so let it win.) */
     input.addEventListener('keydown', (e) => {
+      if (!finePointer()) return;
       if (e.key === 'Enter' && !e.shiftKey && !e.defaultPrevented) {
         e.preventDefault(); panel.querySelector('.comment-form').requestSubmit();
       }
@@ -2340,6 +2409,7 @@
       if (!open) { collapseLikers(el, post.id); collapseGoing(el, post.id); }   // one panel at a time
       toggle.setAttribute('aria-expanded', String(!open));
       panel.classList.toggle('open', !open);
+      hapticTap('LIGHT');   // see the who-liked toggle: synchronous change, stays on screen
     });
 
     // Adding/removing a comment changes the list + the count, so the card is
@@ -2354,7 +2424,12 @@
       // Roll the comment count in its new direction (up on add, down on delete).
       if (dir) odoTick(fresh.querySelector('.card-comment-count'), dir);
       el.replaceWith(fresh);
-      fresh.querySelector('.comment-form textarea')?.focus();
+      // The rebuilt card's textarea is deliberately NOT refocused. On the web that
+      // was a courtesy (the caret stays in the box, you can keep typing); on iOS a
+      // focused textarea IS the keyboard, so posting a comment re-claimed focus and
+      // the keyboard never went away — which read as iOS failing to dismiss it.
+      // It also parked a focused field on screen, and a focused field makes every
+      // background refresh skip its paint (see `showWorld`).
       return fresh;
     };
 
@@ -2364,6 +2439,11 @@
       submitBtn.disabled = true;                    // debounce: no double-post on a fast double-tap
       const res = await Store.addComment(post.id, e.target.elements.text.value);
       if (res.ok) {
+        // The like heart has buzzed on its confirmed write since the haptics
+        // landed; its neighbour on the same row never did, which left the two
+        // halves of the social row speaking different languages. LIGHT: a posted
+        // comment lands on the screen, not in the world.
+        hapticTap('LIGHT');
         const fresh = apply('up');                  // card rebuilt — its fresh button starts disabled
         const mine = [...fresh.querySelectorAll('.comments-list > .comment')].pop();
         celebrateComment(mine, post.type);
@@ -3211,6 +3291,12 @@
       }
       go('#/');
       warmImages();   // world just loaded for this account — warm its images too
+      // Claim this device's push address for whoever just signed in. Signing out
+      // hands it back (Store.logout), and without this half the device stayed
+      // unregistered until the next cold launch — so a session that began with a
+      // login got no notifications at all, and on a phone that had been used by
+      // another account the old row was still the live one.
+      Store.pushResume();
     });
 
     // Toggle signup ⇄ login through the same soft cross-dissolve the pages use, so
@@ -3960,7 +4046,7 @@
         // Don't auto-focus on touch: it yanks up the keyboard and the viewport
         // jumps to center the field, which reads as a jarring lurch. Let the tap
         // that opens the field raise the keyboard instead. Desktop still autofocuses.
-        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches)
+        if (finePointer())
           editForm.querySelector('#e-note')?.focus();
       }
       feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
@@ -4321,7 +4407,7 @@
 
     // Desktop only — on touch this would pop the keyboard and lurch the modal to
     // center the field (see the same guard on the post edit form).
-    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    if (finePointer()) {
       nameEl.focus();
       nameEl.select();
     }
@@ -4680,8 +4766,8 @@
      deletable from their own card, they show up on their author's profile, and
      search already finds them. The 24-hour WINDOW is what keeps the rotation
      honest: an answer counts for the occurrence it was posted inside, so when a
-     prompt comes round again three weeks later it opens empty rather than on last
-     month's replies.
+     prompt comes round again ten weeks later it opens empty rather than on last
+     season's replies.
 
      Daily tags are held out of Discover's trending rail (see topTags): the rail
      indexes what the room brought up on its own, and a tag the app hands out to
@@ -4713,16 +4799,23 @@
      years" — so the question carries the permission instead of a caption under
      it. If a prompt seems to need a hint, rewrite the prompt.
 
-     TWENTY-ONE, AND THAT NUMBER IS LOAD-BEARING: 21 is 3 × 7, so every prompt
-     keeps the same weekday forever. That's the whole scheduling tool. Day 0 is a
-     TUESDAY (see DAILY_EPOCH), so the Mondays are indexes 6, 13 and 20 and the
-     Thursdays are 2, 9 and 16 — count from the epoch's weekday, not from the top
-     of the list. Mondays are always cheap because nobody has the energy; Thursday
-     is always the Find, one link a week on a known day; Friday drifted
-     argumentative (laughed, hot take, pettiest hill) and it stays that way; Sunday
-     is the soft landing. Keep the count a multiple of 7 or the pattern dissolves,
-     and if the epoch ever moves, ROTATE THE ARRAY BY THE SAME NUMBER OF DAYS or
-     every one of those roles slides onto the wrong weekday.
+     SEVENTY, AND THE MULTIPLE OF SEVEN IS THE LOAD-BEARING PART: 70 is 10 × 7,
+     so every prompt keeps the same weekday forever. That's the whole scheduling
+     tool. Day 0 is a TUESDAY (see DAILY_EPOCH), so a row's weekday is its index
+     mod 7 counted from there — 0 Tue, 1 Wed, 2 Thu, 3 Fri, 4 Sat, 5 Sun, 6 Mon —
+     and every Thursday is an index ≡ 2, every Monday an index ≡ 6. Count from the
+     epoch's weekday, not from the top of the list. Mondays are always cheap
+     because nobody has the energy; Thursday is always the Find, one link a week
+     on a known day; Friday drifted argumentative (laughed, hot take, pettiest
+     hill) and it stays that way; Sunday is the soft landing. Keep the count a
+     multiple of 7 or the pattern dissolves, and if the epoch ever moves, ROTATE
+     THE ARRAY BY THE SAME NUMBER OF DAYS or every one of those roles slides onto
+     the wrong weekday.
+
+     It was 21 (3 × 7) until 2026-08-16 and the loop is now ten weeks. Only the
+     number in this heading changed, which is the point of the rule: appending
+     whole weeks costs nothing and reschedules nothing behind it, while appending
+     a partial one would slide every weekday role in the set onto the wrong day.
 
      WEEK ONE IS DELIBERATELY ALL CHEAP, and it opens on a meme: the one photograph
      everybody has already saved, already sent, and doesn't have to make, take or
@@ -4739,7 +4832,7 @@
      `type: 'poll'` still works everywhere if that ever changes; it's simply not
      scheduled, which is why a daily is a three-colour feature.
 
-     WRITE FOR THE LOOP: this comes round every three weeks, so a prompt has to be
+     WRITE FOR THE LOOP: this comes round every ten weeks, so a prompt has to be
      re-answerable. "What song is stuck in your head" survives forever because the
      answer moves; "what's your favourite X" doesn't, because you have one and the
      second time round it's a chore. `meme` is the knowing exception, kept because
@@ -4748,68 +4841,205 @@
      it does thin, the fix is to date it ("the meme you've sent the most this
      week") rather than to move it. Slang dates faster than
      structure, so the humour lives in the specificity, not the vocabulary. */
-  /* THE TYPE ALTERNATES, AND THAT'S A CONSTRAINT, NOT A COINCIDENCE. Read the
-     type column top to bottom: no two neighbouring days ask for the same thing,
-     with exactly one deliberate exception at the very bottom. Four photo prompts
-     once sat at 11–14 and the run read as a wall of frames — a week where the
-     daily stopped being a question and became "post a picture again".
+  /* SCHEDULE ON `kind`, NEVER ON `type`. This is the rule that got re-derived on
+     2026-08-16 against the first three weeks of real answers, and the correction
+     matters more than the prompts it produced.
 
-     ONE REPEAT IS FORCED, so it's spent on purpose. With the Thursday finds and
-     the Friday notes pinned, strict alternation across the free runs needs 8
-     photos and 6 notes; the mix has 7 of each left over. The arithmetic doesn't
-     close, so exactly one neighbouring pair must match. It's flowers → vibe-check
-     at 19/20: two notes read as two questions, where two photos read as a clump,
-     and that pair is the warmest handoff the set has. If the mix ever changes,
-     re-derive this rather than assuming the old positions still work.
+     `type` is what the ANSWER is filed as, and every prompt takes every type, so
+     it cannot describe a prompt at all. The rotation was still being spaced by it
+     ("no two neighbouring days share a type") because in the first 21 the two
+     columns happened to agree: note prompts wanted a sentence, photo prompts
+     wanted the camera roll, find prompts wanted a link. The proxy holds right up
+     until it doesn't — `bookmarked` is a `find` that costs nothing (it's already
+     in your bookmarks) and `ate` is a `photo` you have to have thought about
+     days ago — and those are exactly the rows where spacing by type puts the
+     wrong two days next to each other.
 
-     What that costs: Tuesday used to be camera-roll day (meme → last one →
-     never-delete, shared then random then chosen) and alternation broke it up.
-     The escalation was a nice accident, not a rule, and it isn't worth a wall. */
+     `kind` is what the prompt COSTS THE READER, which is the thing a rotation is
+     actually pacing. Three values, editorial only, read by nobody at runtime:
+
+       retrieval — it already exists, on your phone or in the room. No production.
+       report    — it's in your head; it costs one sentence and nothing else.
+       errand    — you have to leave the app, make something, or go somewhere.
+
+     THE FIRST 21 DAYS PRICED THESE, and the spread is not subtle. Mean answers:
+     retrieval 8.3 (meme 11, on-repeat 10, last-photo 8, never-delete 13, kept 5,
+     desk 3) · report 6.7 (stuck 10, npc 9, hot-take 8, overthink 8, miss 7,
+     small-good 6, petty 5, flowers 4, laughed 3) · errand 4.6 (come-back 8,
+     made 5, must-watch 4, one-song 4, ate 2). An errand costs roughly half the
+     room, every time, and the two weeks carrying two errands each (one and two)
+     hold four of the five worst-performing prompts in the set.
+
+     So: AT MOST ONE ERRAND A WEEK, and never two adjacent. Thursday holds it
+     when there is one — Thursday stays the link day by `type`, which is a
+     separate promise and still kept, but a link is only an errand when you
+     haven't got it yet. `bookmarked` and `last-link` are Thursday finds that are
+     retrievals, and weeks seven and ten are deliberately errand-free.
+
+     AND NEVER THREE OF ONE KIND IN A ROW. Not "never two" — the old type rule
+     banned every repeat and paid for it: with Thursday and Friday both pinned,
+     strict alternation is arithmetically impossible around a loop whose first
+     week opens on a photo, so one repeat was forced and a whole paragraph went
+     on choosing where to spend it. Three is the number that was actually wrong.
+     The complaint that started all this was four photo prompts at 11-14 reading
+     as "post a picture again", and two in a row has never once been the problem.
+     Dropping the impossible constraint is what frees `vibe-check` to sit on the
+     Monday it was written for instead of being exiled to the end of the array.
+
+     A RETRIEVAL STILL HAS TO POINT AT SOMETHING CHOSEN. The winners are not
+     "photograph an object near you", they're "photograph an object that means
+     something": never-delete 13, meme 11, on-repeat 10, kept 5. Ten prompts were
+     cut on 2026-08-16 for being inventory rather than retrieval (the lock screen,
+     the fridge, the closest object to your hand, whatever's on your feet), and
+     `desk` at 3 is the one shipped example of the failure. Every retrieval below
+     names a reason the thing survived: kept for years, never deleted, almost
+     posted, photographed twice, open for weeks. */
   const DAILIES = [
-    // ── Week one, all cheap ──                                     Tue
-    { slug: 'meme',           type: 'photo', prompt: 'Post your favorite meme.' },
-    { slug: 'stuck',          type: 'note',  prompt: 'What song is stuck in your head?' },
-    { slug: 'must-watch',     type: 'find',  prompt: 'Share a video you’ve made someone watch.' },
-    { slug: 'laughed',        type: 'note',  prompt: 'What actually made you laugh this week?' },
-    { slug: 'ate',            type: 'photo', prompt: 'Show the best thing you ate this week.' },
+    /* Week one, all cheap. TWO ERRANDS (must-watch, ate) and it shows: 4 answers
+       and 2, the worst pair in the set. Kept as shipped because these rows have
+       been answered and the slugs are the join key, but `ate` is the first
+       candidate if this week is ever revised.                       Tue */
+    { slug: 'meme',           type: 'photo', kind: 'retrieval', prompt: 'Post your favorite meme.' },
+    { slug: 'stuck',          type: 'note',  kind: 'report',    prompt: 'What song is stuck in your head?' },
+    { slug: 'must-watch',     type: 'find',  kind: 'errand',    prompt: 'Share a video you’ve made someone watch.' },
+    { slug: 'laughed',        type: 'note',  kind: 'report',    prompt: 'What actually made you laugh this week?' },
+    { slug: 'ate',            type: 'photo', kind: 'errand',    prompt: 'Show the best thing you ate this week.' },
     // "The smallest good thing" is answered just as well by the photograph of it
     // as by the sentence — this was the one prompt in the 21 that waived its type
     // before every prompt did.                                       Sun
-    { slug: 'small-good',     type: 'note',  prompt: 'What’s the smallest good thing that happened this week?' },
-    // Cheapest photo in the set, on the cheapest day, closing the cheapest week:
-    // you open the camera roll and you're done, no thinking at all.   Mon
-    { slug: 'last-photo',     type: 'photo', prompt: 'Show the last photo in your camera roll.' },
+    { slug: 'small-good',     type: 'note',  kind: 'report',    prompt: 'What’s the smallest good thing that happened this week?' },
+    // Cheapest retrieval in the set, on the cheapest day, closing the cheapest
+    // week: you open the camera roll and you're done, no thinking at all.  Mon
+    { slug: 'last-photo',     type: 'photo', kind: 'retrieval', prompt: 'Show the last photo in your camera roll.' },
 
-    // ── Week two ──                                                 Tue
-    { slug: 'npc',            type: 'note',  prompt: 'What’s the most NPC thing you did today?' },
-    { slug: 'on-repeat',      type: 'photo', prompt: 'Screenshot what you’ve had on repeat.' },
+    // ── Week two ── also two errands (come-back, made).             Tue
+    { slug: 'npc',            type: 'note',  kind: 'report',    prompt: 'What’s the most NPC thing you did today?' },
+    { slug: 'on-repeat',      type: 'photo', kind: 'retrieval', prompt: 'Screenshot what you’ve had on repeat.' },
     // Thursday's find, on the reason rather than the medium: made-someone-watch,
     // keep-coming-back, room-needs-to-hear are three different questions. Sorted
     // by recommendation type they were one question asked three ways.
-    { slug: 'come-back',      type: 'find',  prompt: 'Share something you keep coming back to.' },
-    { slug: 'hot-take',       type: 'note',  prompt: 'What’s a hot take you’d defend in court?' },
-    { slug: 'made',           type: 'photo', prompt: 'Post something you made this week.' },
+    { slug: 'come-back',      type: 'find',  kind: 'errand',    prompt: 'Share something you keep coming back to.' },
+    { slug: 'hot-take',       type: 'note',  kind: 'report',    prompt: 'What’s a hot take you’d defend in court?' },
+    { slug: 'made',           type: 'photo', kind: 'errand',    prompt: 'Post something you made this week.' },
     // Sunday, and the softest of the three: the first prompt in the rotation that
     // asks you to REMEMBER something rather than report what's in front of you.
-    { slug: 'miss',           type: 'note',  prompt: 'What do you miss that you didn’t expect to?' },
-    { slug: 'desk',           type: 'photo', prompt: 'Show us your desk, no tidying.' },
+    { slug: 'miss',           type: 'note',  kind: 'report',    prompt: 'What do you miss that you didn’t expect to?' },
+    // The one shipped retrieval that points at inventory rather than at something
+    // chosen, and it scored 3. "No tidying" made it worse, not cheaper.
+    { slug: 'desk',           type: 'photo', kind: 'retrieval', prompt: 'Show us your desk, no tidying.' },
 
     // ── Week three ──                                               Tue
-    { slug: 'overthink',      type: 'note',  prompt: 'What are you overthinking right now?' },
+    { slug: 'overthink',      type: 'note',  kind: 'report',    prompt: 'What are you overthinking right now?' },
     // Still cheap — you look around the room, you don't make anything — but the
     // object has a history, which is the difference between retrieval and
-    // inventory, and retrieval is what survives a three-week loop.
-    { slug: 'kept',           type: 'photo', prompt: 'Show us something you’ve kept for years.' },
-    { slug: 'one-song',       type: 'find',  prompt: 'Share one song the room needs to hear.' },
-    { slug: 'petty',          type: 'note',  prompt: 'What’s the pettiest hill you’re dying on?' },
+    // inventory, and retrieval is what survives the loop.
+    { slug: 'kept',           type: 'photo', kind: 'retrieval', prompt: 'Show us something you’ve kept for years.' },
+    { slug: 'one-song',       type: 'find',  kind: 'errand',    prompt: 'Share one song the room needs to hear.' },
+    { slug: 'petty',          type: 'note',  kind: 'report',    prompt: 'What’s the pettiest hill you’re dying on?' },
     // Same shrug of effort as the camera-roll prompts, pointed at a chosen picture
-    // instead of an arbitrary one.
-    { slug: 'never-delete',   type: 'photo', prompt: 'Show us a photo you’d never delete.' },
-    { slug: 'flowers',        type: 'note',  prompt: 'Who deserves their flowers today?' },
-    // Closing Monday, and the one repeated type in the rotation (see above). The
-    // loop turns from "who deserves their flowers" straight into this, which is
-    // the warmest handoff the twenty-one had in them and worth the repeat.
-    { slug: 'vibe-check',     type: 'note',  prompt: 'What’s the vibe today, in five words or fewer?' },
+    // instead of an arbitrary one. Top of the whole set at 13.
+    { slug: 'never-delete',   type: 'photo', kind: 'retrieval', prompt: 'Show us a photo you’d never delete.' },
+    { slug: 'flowers',        type: 'note',  kind: 'report',    prompt: 'Who deserves their flowers today?' },
+    /* MONDAY IS THE ONE-LINE CHECK-IN, three times in the loop (here, 55, 69).
+       The shape is vibe-check's: a question with a hard limit in it, so the whole
+       answer is the first thing you'd say out loud. It's the cheapest report
+       there is, which is what a Monday wants, and the limit is what keeps it from
+       being homework. Three is the ceiling — a fourth and the loop starts feeling
+       like a form. Vary the FRAME, never just the word count. */
+    { slug: 'title',          type: 'note',  kind: 'report',    prompt: 'Give today a title.' },
+
+    /* ── Weeks four to ten, added 2026-08-16 ──
+       The loop is long enough now that a prompt can be specific about the
+       internet without being about one week of it. Perfectly-cut screams and the
+       video that gets you every time are formats, not slang, so they age like the
+       camera-roll prompts do rather than like a catchphrase. The chaos stays
+       spread across the week rather than clumped — one cursed photo is funny, a
+       run of them is a bit. */
+
+    // ── Week four ──                                                Tue
+    { slug: 'cursed',         type: 'photo', kind: 'retrieval', prompt: 'Post a cursed photo.' },
+    { slug: 'search',         type: 'note',  kind: 'report',    prompt: 'What’s the last thing you searched that you’d rather not explain?' },
+    { slug: 'scream',         type: 'find',  kind: 'errand',    prompt: 'Share a perfectly cut scream.' },
+    { slug: 'overrated',      type: 'note',  kind: 'report',    prompt: 'What’s overrated, and you’re tired of pretending otherwise?' },
+    { slug: 'outside',        type: 'photo', kind: 'retrieval', prompt: 'Show us where you ended up today.' },
+    { slug: 'took',           type: 'note',  kind: 'report',    prompt: 'What are you taking with you from this week?' },
+    // A rule picks the photo for you, so there is nothing to choose and nothing
+    // to be embarrassed by. The exception that proves the chosen-object rule: the
+    // arbitrariness IS the hook, the way last-photo's is.
+    { slug: 'ninth',          type: 'photo', kind: 'retrieval', prompt: 'Show us the ninth photo in your camera roll.' },
+
+    // ── Week five ──                                                Tue
+    { slug: 'replay',         type: 'note',  kind: 'report',    prompt: 'What sentence keeps replaying in your head?' },
+    // One line, not the thread: a screenshot of a whole conversation is somebody
+    // else's writing, and out of context is the entire joke anyway.
+    { slug: 'group-chat',     type: 'photo', kind: 'retrieval', prompt: 'Screenshot one line from a group chat, no context.' },
+    { slug: 'cry-laugh',      type: 'find',  kind: 'errand',    prompt: 'Share the video that makes you cry laugh every time.' },
+    { slug: 'wrong-about',    type: 'note',  kind: 'report',    prompt: 'What is everyone wrong about?' },
+    { slug: 'bought',         type: 'photo', kind: 'retrieval', prompt: 'Show us the last thing you bought.' },
+    { slug: 'unnoticed',      type: 'note',  kind: 'report',    prompt: 'What did you do this week that nobody noticed?' },
+    { slug: 'window',         type: 'photo', kind: 'retrieval', prompt: 'Show us the weather out your window.' },
+
+    // ── Week six ──                                                 Tue
+    { slug: 'shower',         type: 'note',  kind: 'report',    prompt: 'What argument did you win in the shower?' },
+    // Retrieval with a reason attached: the photo exists AND something stopped you
+    // posting it, which is the part worth reading.
+    { slug: 'almost-posted',  type: 'photo', kind: 'retrieval', prompt: 'Show us the photo you almost posted and didn’t.' },
+    { slug: 'rabbit-hole',    type: 'find',  kind: 'errand',    prompt: 'Share the rabbit hole you fell down this week.' },
+    { slug: 'food-take',      type: 'note',  kind: 'report',    prompt: 'What food opinion gets you in trouble?' },
+    { slug: 'sign',           type: 'photo', kind: 'retrieval', prompt: 'Show us a sign that made you look twice.' },
+    { slug: 'kind',           type: 'note',  kind: 'report',    prompt: 'What’s the kindest thing someone did for you lately?' },
+    { slug: 'bag',            type: 'photo', kind: 'retrieval', prompt: 'Show us what’s in your bag.' },
+
+    // ── Week seven, errand-free on purpose ──                       Tue
+    { slug: 'excuse',         type: 'note',  kind: 'report',    prompt: 'What’s the best excuse you’ve used this week?' },
+    { slug: 'reaction',       type: 'photo', kind: 'retrieval', prompt: 'Show us the reaction image you use most.' },
+    /* A Thursday find that is a RETRIEVAL: the link is already in your messages,
+       so the link day costs nothing this week. must-watch asks for your best one
+       and takes an errand to answer; this asks for your LAST one and takes a
+       scroll. Cheap and curated are different questions, not the same one twice. */
+    { slug: 'last-link',      type: 'find',  kind: 'retrieval', prompt: 'Share the last link you sent someone.' },
+    { slug: 'ban',            type: 'note',  kind: 'report',    prompt: 'What would you ban if nobody could argue back?' },
+    { slug: 'out-of-place',   type: 'photo', kind: 'retrieval', prompt: 'Show us something that shouldn’t be there.' },
+    { slug: 'again',          type: 'note',  kind: 'report',    prompt: 'What would you happily do again tomorrow?' },
+    { slug: 'screenshot',     type: 'photo', kind: 'retrieval', prompt: 'Show us your most recent screenshot.' },
+
+    // ── Week eight ──                                               Tue
+    { slug: 'convinced',      type: 'note',  kind: 'report',    prompt: 'What are you weirdly convinced of?' },
+    { slug: 'walls',          type: 'photo', kind: 'retrieval', prompt: 'Show us what’s on your walls.' },
+    { slug: 'rewatch',        type: 'find',  kind: 'errand',    prompt: 'Share something you watched twice in a row.' },
+    // The Friday that argues with YOU. Ten weeks of hot takes starts to sound like
+    // a comment section, and this is the one that lets the air out.
+    { slug: 'worst-take',     type: 'note',  kind: 'report',    prompt: 'What’s the worst take you’ve ever had?' },
+    { slug: 'animal',         type: 'photo', kind: 'retrieval', prompt: 'Show us an animal you met.' },
+    { slug: 'forward',        type: 'note',  kind: 'report',    prompt: 'What are you quietly looking forward to?' },
+    // One-line check-in, two of three. A number is the hardest possible limit, and
+    // "no explaining" is the whole joke.
+    { slug: 'rate-week',      type: 'note',  kind: 'report',    prompt: 'Rate the week out of ten, no explaining.' },
+
+    // ── Week nine ──                                                Tue
+    { slug: 'reflex',         type: 'photo', kind: 'retrieval', prompt: 'Show us the app you open without thinking.' },
+    { slug: 'avoiding',       type: 'note',  kind: 'report',    prompt: 'What are you avoiding right now?' },
+    // The undone half of must-watch: not what you made someone watch, what you
+    // never got round to. An errand, and the week's only one.
+    { slug: 'keep-meaning',   type: 'find',  kind: 'errand',    prompt: 'Share something you keep meaning to show someone.' },
+    { slug: 'rule',           type: 'note',  kind: 'report',    prompt: 'What rule do you break on principle?' },
+    { slug: 'mess',           type: 'photo', kind: 'retrieval', prompt: 'Show us the mess you’re not dealing with.' },
+    { slug: 'said',           type: 'note',  kind: 'report',    prompt: 'What did someone say to you that stuck?' },
+    { slug: 'old-tab',        type: 'photo', kind: 'retrieval', prompt: 'Show us the tab you’ve had open for weeks.' },
+
+    // ── Week ten, errand-free ──                                    Tue
+    { slug: 'nemesis',        type: 'note',  kind: 'report',    prompt: 'Who or what is your nemesis this week?' },
+    // What you point a camera at twice is a better answer to "what do you care
+    // about" than asking it directly would be.
+    { slug: 'photographed-twice', type: 'photo', kind: 'retrieval', prompt: 'Show us something you’ve photographed more than once.' },
+    // The other Thursday retrieval: it's a find, and it's already saved.
+    { slug: 'bookmarked',     type: 'find',  kind: 'retrieval', prompt: 'Share the oldest thing in your bookmarks.' },
+    { slug: 'stop',           type: 'note',  kind: 'report',    prompt: 'What should everyone stop doing immediately?' },
+    { slug: 'visiting',       type: 'photo', kind: 'retrieval', prompt: 'Show us where you’d take someone visiting.' },
+    { slug: 'ended-well',     type: 'note',  kind: 'report',    prompt: 'What ended better than you expected?' },
+    // One-line check-in, three of three, and the last row of the loop: it hands
+    // the wheel back to the meme at index 0.
+    { slug: 'vibe-check',     type: 'note',  kind: 'report',    prompt: 'What’s the vibe today, in five words or fewer?' },
   ];
 
   const DAY_MS = 86400000;
@@ -5835,7 +6065,15 @@
     // Store.pushPermission(), never `Notification.permission` — there is no
     // `Notification` object in a WKWebView, so reading it directly throws in the
     // App Store build, which is exactly where push is newest.
+    //
+    // `!pushArmed()` is belt to the permission check's braces. Permission is
+    // primed before the first route now (see init), so 'default' is trustworthy
+    // — but this card is the one piece of push UI that appears unbidden, on the
+    // page you land on, and asking someone to turn on a thing they already have
+    // on is the loudest way to look broken. Two independent reasons to stay
+    // hidden is the right ratio for that.
     return Store.pushPermission() === 'default'
+      && !Store.pushArmed()
       && localStorage.getItem(pushAskKey()) !== 'off';
   }
   // One answer for a failed "turn on", shared by the pre-prompt card and the
@@ -5915,7 +6153,12 @@
   // off later. Hidden entirely where the shell can't do push.
   function pushToggleHtml() {
     if (!Store.pushSupported()) return '';
-    const on = Store.pushPermission() === 'granted';   // sync guess; refined below
+    // Permitted AND holding a saved address — not just permitted. Turning push
+    // off leaves the OS permission granted on purpose (disablePush only drops
+    // the row), so the old permission-only guess painted this switch back ON
+    // every time the modal reopened, and it stayed wrong until the async read
+    // below landed. Store.pushArmed() answers the question the switch is asking.
+    const on = Store.pushArmed();   // sync; reconciled against the server below
     return `<div class="push-toggle-row">` +
         `<span class="push-toggle-label">Notifications</span>` +
         `<button type="button" class="push-toggle" role="switch" id="push-toggle" ` +
@@ -6139,6 +6382,13 @@
     // Everything has now been seen (a visit counts even under a filter) —
     // next visit, the dots move on.
     if (all.length && all[0]._ts) localStorage.setItem(notifSeenKey(), all[0]._ts);
+    // And the same is true of Notification Center: this ledger is that news, so
+    // the delivered copies are spent. Nothing cleared them before, which left
+    // the shade holding every notification Tria had ever sent — the running
+    // count this app deliberately refuses to put on its icon, arriving by
+    // another route. Native-only and fire-and-forget (the web's own
+    // notifications close themselves on tap).
+    Store.clearDelivered();
   }
 
   /* ── Publish (composer) ───────────────────────────────────────────────────
@@ -8076,7 +8326,7 @@
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
     '.seg-tab', '.sheet-item', '.sheet-cancel',
-    '.comment-form button', '.modal-actions button',
+    '.comment-form button', '.comment-delete', '.modal-actions button',
     '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
     '.account-badges > button', '.pf-photo-edit', '.nav-link',
     '.feed-empty-cta', '.composer-post',
@@ -8192,10 +8442,21 @@
     });
   }
 
-  // The ambient wash is a profile special: light it with a colour sampled from
-  // the profile's photo, and leave every other page clean (data-ambient "none").
-  // Sampling is async; a seq guard drops a stale result if you've navigated on,
-  // and we hold "none" until the colour lands so nothing flashes.
+  // A profile's colour: sampled from that person's photo and published as
+  // --glow-photo, which .account-card::before turns into a glow in the card's
+  // bottom-right corner.
+  //
+  // This used to light a full-screen wash behind the page (data-ambient
+  // "photo"), and About and a daily had washes of their own. All three are gone
+  // — a viewport-sized gradient is the biggest surface the compositor can be
+  // handed, and worse, a washed page reads as a different PAPER than the feed
+  // you arrived from. The composer is the one page that still washes, because
+  // there the colour is information (which type you're making) and it is set in
+  // renderPublish, not here.
+  //
+  // Sampling is async; a seq guard drops a stale result if you've navigated on.
+  // The property is cleared up front so profile A's colour can't sit under
+  // profile B's card for the length of a fetch.
   function applyAmbient(path) {
     const body = document.body;
     const seq = ++ambientSeq;
@@ -8204,34 +8465,20 @@
     if (path.startsWith('#/u/')) user = Store.user(decodeURIComponent(path.slice(4)));
     else if (path === '#/profile') user = Store.currentUser();
 
-    body.dataset.ambient = 'none';                 // default: no wash
-    // About is the front door — greet it with the same self-lit, hue-drifting
-    // glow signed-out visitors already see on the gate, so the page reads the
-    // same either side of sign-in. Locked to the viewport bottom (see .ambient),
-    // rising up under the guidelines and the floating nav.
-    // #/business is About's other half (same front-door voice, same masthead,
-    // and it's the one other page a signed-out visitor can reach), so it takes
-    // the same wash rather than landing on bare --bg beside it.
-    if (frontDoor(path)) { body.dataset.ambient = 'about'; return; }
-    // A daily washes the whole page, drifting through the three hues dailies use
-    // (see the daily-drift keyframes) rather than holding the one the prompt
-    // names — any type answers any prompt now. This still sets --glow-daily to
-    // the prompt's own hue: CSS overrides it the instant the drift starts, and
-    // it's only the resting frame reduced motion holds on.
-    if (path.startsWith('#/daily/')) {
-      const occ = lastDailyFor(decodeURIComponent(path.slice(8).split('?')[0]));
-      if (!occ) return;
-      body.style.setProperty('--glow-daily', TYPE_HEX[occ.type] || TYPE_HEX.note);
-      body.dataset.ambient = 'daily';
-      return;
-    }
-    if (!user || !user.avatar) return;             // non-profile, or no photo → clean
+    body.dataset.ambient = 'none';                 // only the composer washes now
+    body.style.removeProperty('--glow-photo');
+    if (!user || !user.avatar) return;             // non-profile, or no photo → plain glass
     sampleColor(user.avatar).then(rgb => {
       if (seq !== ambientSeq) return;
-      if (!rgb) return;                            // sampling failed → stay clean
+      if (!rgb) return;                            // sampling failed → plain glass
       const { r, g, b } = rgb;
-      body.style.setProperty('--glow-photo', `rgba(${r}, ${g}, ${b}, 0.26)`);
-      body.dataset.ambient = 'photo';
+      // Published OPAQUE. The full-screen wash used to bake its alpha in here
+      // (0.26), which quietly made this line the brightness control as well as
+      // the colour one — so tuning how loud the glow reads meant editing JS, and
+      // the two stops the corner needs could only ever have been one. The hue is
+      // the only thing this function knows; how much of it to show belongs with
+      // the surface showing it (--glow-core / --glow-halo on .account-card).
+      body.style.setProperty('--glow-photo', `rgb(${r}, ${g}, ${b})`);
     });
   }
 
@@ -9061,9 +9308,13 @@
       // opens the way every other social app does, on a form, with a populated
       // Discover one tap behind it. The install steps still live in the About
       // fold for anyone who wants the web app on their home screen.
-      // About keeps the hue-drift wash; the bare auth form does not (its pastel
-      // now comes from the gradient submit button).
-      document.body.dataset.ambient = frontDoor(gatePath) ? 'about' : 'none';
+      // No wash on either side of the gate any more. About used to carry a blue
+      // one here so the front door read the same signed-out as signed-in; that
+      // wash is retired along with the profile and daily ones (see
+      // applyAmbient). The auth form's pastel comes from the gradient submit
+      // button, which is now the only colour on the page and reads better for
+      // having the field to itself.
+      document.body.dataset.ambient = 'none';
       renderPage(() => {
         // A live recovery session (from the reset link) always wins: set-new-
         // password, whatever the hash says.
@@ -9287,6 +9538,25 @@
   let refreshRing = null;
   const nap = (ms) => new Promise(r => window.setTimeout(r, ms));
 
+  // The caret is in a text field, so a refresh must not rebuild the card someone
+  // is half-way through typing into.
+  const typing = () => !!document.activeElement?.matches?.('input, textarea');
+
+  // The route we still owe a paint for, and the reason a skipped paint has to be
+  // remembered at all. `Store.refresh()` replaces the cache BEFORE anything gets
+  // to decide whether to paint, so a paint we drop is NOT a paint postponed to the
+  // next pull: the next pull diffs against the world that already moved, reports
+  // nothing changed, and the screen stays behind PERMANENTLY, with nothing left to
+  // trigger it. The debt is carried here instead and settled by the next refresh,
+  // which paints on `changed || we owe one` rather than on `changed` alone.
+  //
+  // Deliberately not spent on blur, though the caret leaving is the obvious cue:
+  // a field loses focus because you tapped something, and that something is
+  // usually Post, so the app would repaint the feed out from under a write that
+  // hasn't landed yet. Catching up on the next pull or foreground is the app's
+  // normal cadence and nothing here polls, so waiting for one costs nothing.
+  let owedPaint = null;
+
   // `force` marks a gesture you actually made (a tab re-tap, a pull): it skips the
   // spam guard, because a tap that visibly does nothing reads as a broken tap.
   // `hold` keeps your place across the render — right for a refresh that arrives
@@ -9298,14 +9568,26 @@
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
     const changed = await Store.refresh();
-    if (!changed || seq !== refreshSeq) return;    // stale response — a newer pull won
+    if (seq !== refreshSeq) return;                // stale response — a newer pull won
+    if (!changed && owedPaint !== path) return;    // nothing new, and nothing owed
     warmImages();   // new friends/posts may have brought new avatars + photos
-    const live = () =>
+    await showWorld(path, { force, hold, seq });
+  }
+
+  // The paint half, split out because it can land later than the pull that earned
+  // it: a paint skipped while a field had focus is held in `owedPaint` and run by
+  // whichever refresh comes next, rather than discarded (see the note there).
+  async function showWorld(path, { force = false, hold = true, seq = refreshSeq } = {}) {
+    // Two of the three bails settle themselves. A newer pull owns the screen and
+    // will paint or owe on its own; navigating away ends with the destination
+    // rendering from the same fresh cache. Only a focused field ends with nothing.
+    const here = () =>
       seq === refreshSeq
-      && (location.hash || '#/').split('?')[0] === path   // navigated away
-      && !document.activeElement?.matches?.('input, textarea');  // half-typed comment
-    if (!live()) return;
+      && (location.hash || '#/').split('?')[0] === path;   // navigated away
+    const live = () => here() && !typing();                // half-typed comment
+    if (!live()) { if (here()) owedPaint = path; return; }
     const paint = () => {
+      owedPaint = null;                                    // screen has caught up
       if (path === '#/') renderFeed();
       else if (path === '#/discover') { if (!discoverRepaint?.(force)) renderDiscover(); }
       else renderUpdates();
@@ -9318,12 +9600,14 @@
     // indistinguishable from a glitch — the ring is the difference between the
     // app updating and the app twitching. The pull already holds the ring
     // (refreshRing.on() declines while it does), so this only ever fires on the
-    // silent path, and only when the pull actually CHANGED something: a resume
-    // that finds nothing new stays completely silent, which is most of them.
+    // silent path, and only when there is actually something to show: a resume
+    // that finds nothing new (and owes nothing) never gets this far, which is
+    // most of them.
     if (!refreshRing?.on()) { hold ? keepPlace(paint) : paint(); return; }
     try {
       await nap(200);                     // let the ring drop in BEFORE the page moves
       if (live()) { hold ? keepPlace(paint) : paint(); }
+      else if (here()) owedPaint = path;  // someone started typing under the ring
       await nap(500);                     // and stay a beat after, so it reads as one event
     } finally {
       refreshRing.off();
@@ -9675,7 +9959,7 @@
     // silently (Apple just says Unregistered, the phone says nothing at all).
     Store.pushResume();
   }).catch((err) => {
-    console.error('Boot failed:', err);
+    logError('boot failed', err);   // caught, so no global handler would see it
     route();
   }).finally(dismissSplash);
 })();

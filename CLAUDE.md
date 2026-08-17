@@ -175,6 +175,40 @@ is `endpoint = 'apns:<hex token>'` with empty keys, which is the whole reason iO
 push needed **no migration**. The sender branches on that prefix; RLS, uniqueness
 and the per-user index all still mean what they meant.
 
+**And the plugin has to actually BE in the binary, which is a different fact from
+being in `package.json`.** Capacitor resolves `packageClassList` through the
+Objective-C runtime when the bridge starts, so a class that was never compiled is
+simply not found, and the whole symptom is one line in the device log at the
+moment somebody taps: `Error loading plugin PushNotifications for call. Check
+that the pluginId is correct`. Nothing fails at build time. That is what was
+wrong for three weeks. `CapacitorPushNotifications` was added to CapApp-SPM's
+`Package.swift` on 2026-07-29; the Swift package graph cached in DerivedData was
+a day older, Xcode never re-planned it, and so the target was never compiled — no
+`PushNotificationsPlugin.o`, no `CapacitorPushNotifications.build` intermediate,
+no class in the app. Browser and Haptics were added before that cache froze and
+linked fine, which is why push was the only casualty and why every layer below it
+read clean under inspection: the AppDelegate forwards, the entitlement, the
+`apns:` row and the JS were all correct the entire time, and none of them were
+ever reached. **1.0 and 1.1 both shipped without the push plugin in them.**
+
+The fix is deleting DerivedData. The reason nobody has to *remember* that is
+`ios/App/verify-plugins.sh`, a build phase on the App target that `nm`s the
+linked binary for every class in `packageClassList` and fails the build naming
+the one that isn't there. It reads the generated
+`ios/App/App/capacitor.config.json`, so it covers every plugin the CLI knows
+about, present and future, and it costs one `nm` per build. If it ever fires, the
+answer is DerivedData, not the Swift. Two notes for anyone editing it: user
+script sandboxing is **on** in both configurations, so anything it reads has to
+be declared in the phase's `inputPaths`, and a Debug build keeps its Swift in
+`App.debug.dylib` rather than in `App`, so both get scanned.
+
+**When you do clear DerivedData, clear only this project's folder.** There are at
+least three Xcode projects called `App` on this machine — this one, one under
+`The Archive`, one under `_Personal/Tria` — so their DerivedData folders differ
+only by hash and `rm -rf DerivedData/App-*` takes all three. Read
+`<folder>/info.plist`'s `WorkspacePath` to tell them apart; the failure message
+prints the right path for you.
+
 Four things about it are load-bearing:
 
 - **`AppDelegate` must forward the two APNs callbacks** to
@@ -232,10 +266,16 @@ dead for the life of the modal with no toast either — a control that does noth
 forever, from one unlucky tap, which is indistinguishable from the denied state
 above.
 
-Deliberately kept: **no badge** (`aps` carries no `badge`, and foreground
-`presentationOptions` is left unset, which the plugin reads as "present nothing").
-Updates has no count on the nav and no dot on the tab — it tells you nothing until
-you choose to look — and a number on the app icon is that badge by another route.
+Deliberately kept: **no badge.** `aps` carries no `badge`, and
+`presentationOptions` is `["banner", "sound"]` — the omission of `"badge"` from
+that list is the load-bearing part, so don't "complete" it. Updates has no count
+on the nav and no dot on the tab — it tells you nothing until you choose to look
+— and a number on the app icon is that badge by another route. What the two
+words that ARE there buy is the foreground case: the list was unset until 1.2,
+which the plugin reads as "present nothing", so a notification arriving while
+Tria was open was delivered silently and only discoverable by going to look for
+it. A banner is not ambient pressure the way a badge is — it says something just
+happened and then it leaves.
 See `supabase/PUSH-SETUP.md` for the .p8 and the secrets, which only Zoe can do.
 
 **The app icon is an Icon Composer file, and the build setting has to name it.**
@@ -506,12 +546,22 @@ it either way.
   rule: answers inherit the audience rules, the edit path, the profile column and
   search for free. **The schedule is an array** (`DAILIES` in `app.js`) rotating
   from `DAILY_EPOCH` in local time, so N prompts is an N-day loop with no server.
-  Twenty-one is **3 × 7 and therefore load-bearing**: every prompt keeps a
-  permanent weekday, which is the whole scheduling tool (cheap Mondays, Thursday
-  is always the Find, Friday is argumentative, Sunday lands soft). Day 0 is a
-  **Tuesday**, so Mondays are indexes 6/13/20 — count from the epoch's weekday,
-  not the top of the list, and if the epoch moves, **rotate the array by the same
-  number of days** or every role slides. A post resolves its prompt **by slug**,
+  Seventy (was 21 until 2026-08-16) is **a multiple of 7 and that is the
+  load-bearing part**: every prompt keeps a permanent weekday, which is the whole
+  scheduling tool (cheap Mondays, Thursday is always the Find, Friday is
+  argumentative, Sunday lands soft). Day 0 is a **Tuesday**, so a row's weekday is
+  its index mod 7 from there (Thursdays ≡ 2, Mondays ≡ 6) — count from the epoch's
+  weekday, not the top of the list; **grow it a whole week at a time**, and if the
+  epoch moves, **rotate the array by the same number of days** or every role
+  slides. **Space the rotation by `kind`, never by `type`** — every prompt accepts
+  every type, so `type` describes the answer's filing, not the ask, and it was
+  only ever a proxy. `kind` is what the prompt costs the reader (`retrieval` it
+  already exists · `report` one sentence from your head · `errand` you have to go
+  get it), and the first 21 days priced them: **retrieval 8.3 answers, report 6.7,
+  errand 4.6**. Hence **at most one errand a week** and **never three of one kind
+  in a row** (two is fine; the original complaint was four photo prompts in a
+  row). A retrieval must point at something *chosen* — never-delete scored 13,
+  desk scored 3. A post resolves its prompt **by slug**,
   never by recomputing `day % length` (`dailyForPost`): the old derivation made
   the array's *length* immutable, since changing it remapped every past day and
   silently stripped the question off every answer ever posted. Deleting a row

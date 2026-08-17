@@ -1,5 +1,10 @@
 {
   "appId": "com.triaonline.tria",
   "appName": "Tria",
-  "webDir": "www"
+  "webDir": "www",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["banner", "sound"]
+    }
+  }
 }

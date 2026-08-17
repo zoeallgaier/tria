@@ -83,114 +83,61 @@ button, a, .nav-link, .brand, .masthead-kicker {
 }
 input, textarea { -webkit-user-select: auto; user-select: auto; }
 
-/* ── Ambient wash (profiles only) ──────────────────────────────────────────
+/* ── Ambient wash (the composer only) ───────────────────────────────────────
    One soft blob centred above the screen, behind the whole app (above the flat
-   page colour, below all content) — symmetric depth from the background itself,
-   not a coloured card. It's a profile special: only a profile lights it up, in a
-   still colour sampled from that person's photo (set via --glow-photo by the
-   router). Everywhere else it stays transparent. */
+   page colour, below all content). It is now a COMPOSER special and nothing
+   else: writing a post washes the page in the type you're making, and that is
+   the only page in Tria that carries a full-screen gradient.
+
+   It used to light four pages. About had a self-lit blue, a daily had the
+   prompt's hue, and a profile had a blob sampled from that person's photo — and
+   between them they meant the app had four different-looking papers. Two things
+   killed them. The cheap one is cost: a full-viewport gradient is the largest
+   single surface the compositor can be asked to hold, and these were the layers
+   the two retired hue animations were animating. The real one is that a wash
+   changes the page's apparent BACKGROUND, so a washed page never quite matched
+   the feed you arrived from — which was invisible while a global grain layer sat
+   over everything evening it out, and became obvious the moment that came off.
+
+   The composer keeps it because there the colour is INFORMATION (it names the
+   post type you're about to make, and it changes as you attach things) rather
+   than decoration, and because the composer is a page you're on briefly and on
+   purpose. A profile's colour moved somewhere better — see the corner glow on
+   .account-card, which says the same thing about the same person in a tenth of
+   the pixels. */
 .ambient {
-  /* The glow sits behind the top of the view and scrolls away as you read down —
-     depth on arrival without sitting behind every post forever. It still does
-     that, but it is no longer POSITIONED that way, and the difference is the
-     whole reason this comment is long.
+  /* Fixed, not absolute, and the reason is the iOS rubber band: body::before
+     (fixed) paints the entire overscroll gap, so a scrolled layer clipped to the
+     document slid out from under the fixed paper and opened a band of bare page
+     above it — a hard step across a single row. Growing the box upward looks
+     like the obvious answer and is completely inert: content above the page
+     origin is never painted at all.
 
-     It used to be `position: absolute; top: 0`, so it simply rode the document.
-     That cannot survive the iOS rubber band: body::before (fixed) paints the
-     entire overscroll gap and a scrolled layer is clipped to the document, so
-     pulling down on a profile slid the wash out from under the fixed paper and
-     opened a band of bare page above it — a hard step, #EDEEF0 to #E9D8DA across
-     a single row, the same species of seam as the topbar band and about as loud.
-     Growing this box upward looks like the obvious answer and is completely
-     inert: content above the page origin is never painted at all (a magenta probe
-     on body::before confirmed which layer owns that region).
-
-     So the wash is fixed — it can no longer be dragged off the top by anything —
-     and the scroll-away is driven by a SCROLL TIMELINE instead of by layout. That
-     buys the one property `absolute` couldn't give: a scroll timeline's progress
-     is clamped to the scroll range, so overscrolling past the top holds it at 0
-     and the wash stays exactly where it is, covering the gap, while a normal
-     scroll down moves it 1:1 with the page. 100vh of scroll over 100vh of travel
-     is the same speed the document moves, so this is not parallax and there is
-     nothing for prefers-reduced-motion to object to — it reproduces what
-     `absolute` did, minus the one case where `absolute` broke.
-
-     Scoped to the profile wash (below) rather than living here, because the other
-     three washes are pinned ON PURPOSE and must not scroll away. And gated on
-     @supports, so a webview without scroll timelines degrades to a wash that
-     stays put — the old behaviour's opposite, but never the seam.
-
-     inset:0 rather than a 100vh box for the reason spelled out under the About
-     wash below: on iOS `100vh` is the LARGE viewport while `top: 0` pins to the
-     small one, and this glow is brightest at that very edge. */
+     inset:0 rather than a 100vh box: on iOS `100vh` is the LARGE
+     (toolbar-hidden) viewport while `top: 0` pins to the small one, so a 100vh
+     box's top edge can land below the true top when the toolbar is collapsed —
+     and this glow is brightest at that very edge. */
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   --glow: transparent;
   background: radial-gradient(ellipse 78% 62% at 50% -14%, var(--glow), transparent 70%);
-  /* Promoted, and the animation below drives this same property — so it has to be
-     a transform here too, or the keyframe would drop the promotion mid-scroll. */
+  /* Its own layer: a fixed, static full-viewport gradient is exactly what you
+     want cached rather than repainted under a scrolling page. */
   transform: translate3d(0, 0, 0);
   /* Fade in/out with the page transition (a gradient can't tween, but opacity
      can) so it eases in alongside the rest of the site rather than snapping. */
   opacity: 0;
   transition: opacity 0.4s ease;
 }
-body[data-ambient="photo"] .ambient { --glow: var(--glow-photo, transparent); opacity: 1; }
-/* The scroll-away, on a scroll timeline (see .ambient). One viewport of travel
-   per viewport of scroll — by 100vh the box's bottom edge has reached the top of
-   the screen and there is nothing left to show, so the animation is done exactly
-   when the glow is gone. `both` holds it there for the rest of a long profile. */
-@keyframes wash-away { to { transform: translate3d(0, -100vh, 0); } }
-@supports (animation-timeline: scroll()) {
-  body[data-ambient="photo"] .ambient {
-    animation: wash-away linear both;
-    animation-timeline: scroll(root block);
-    animation-range: 0 100vh;
-  }
-}
-
-/* About page (signed in OR the signed-out front door) carries the self-lit,
-   hue-drifting blue glow: pinned to the viewport top and falling down over the
-   guidelines and the floating nav — position-locked, no longer a scroll-away
-   wash. The LOGIN screen no longer wears it — its pastel now comes from the
-   gradient Create-account / Log-in button — so the wash is keyed off
-   data-ambient="about" only, not body.gate (the router sets 'about' on the
-   signed-out front door and 'none' on the auth form). */
-
-/* There's no photo to sample here, so the wash lights itself and drifts slowly
-   through the hue wheel. It's anchored to the TOP — the glow falls down over
-   the content. Pinned to the VIEWPORT (fixed) so it never scrolls off or shows
-   a hard cut edge when the page is tall. */
-/* Span BOTH viewport edges (inset: 0) rather than sizing with 100vh: on iOS
-   Safari `100vh` is the large (toolbar-hidden) viewport while `top: 0` pins a
-   fixed box to the small (toolbar-shown) one, so a 100vh box's top edge can
-   land below the true top when the toolbar is collapsed. Since this glow is
-   brightest at that very edge (centre at -18%, above the box), inset:0 lets
-   the box reach the true viewport top, keeping the glow's bright base flush
-   with the screen edge regardless of browser chrome. The GPU promotion keeps
-   the hue-drift filter off the scroll path. */
-body[data-ambient="about"] .ambient {
-  position: fixed;
-  inset: 0;
-  height: auto;
-  --glow: rgba(52, 120, 236, 0.36);
-  background: radial-gradient(ellipse 120% 85% at 50% -18%, var(--glow), transparent 72%);
-  opacity: 1;
-  animation: hue-drift 30s linear infinite;
-  transform: translateZ(0);
-}
-@keyframes hue-drift {
-  to { filter: hue-rotate(360deg); }
-}
 
 /* Publish composer: the whole screen washes the inferred post type's hue —
-   lavender Note, peach Find, cyan Frame, lime Activity, rose Poll. A half-screen radial
-   falling from the top (the About glow's shape) but REACTIVE, not drifting:
-   --glow-pub is a registered <color> so the wash tweens between types as you
-   attach a link/photo or switch to Activity; the gradient takes its alpha via
-   color-mix. Driven on <body> in renderPublish / syncType. */
+   lavender Note, peach Find, cyan Frame, lime Activity, rose Poll. A half-screen
+   radial falling from the top but REACTIVE: --glow-pub is a registered <color>
+   so the wash tweens between types as you attach a link/photo or switch to
+   Activity; the gradient takes its alpha via color-mix. Driven on <body> in
+   renderPublish / syncType. */
 @property --glow-pub {
   syntax: '<color>';
   inherits: true;
@@ -200,8 +147,9 @@ body[data-ambient="publish"] .ambient {
   position: fixed;
   inset: 0;
   height: auto;
-  /* Richer than the profile/About washes: a stronger colour core plus a saturate
-     boost so the pastel reads as real colour rather than a faint tint. */
+  /* Richer than the old page washes: a stronger colour core plus a saturate
+     boost so the pastel reads as real colour rather than a faint tint. Static
+     filter over a static gradient — rasterized once, not per frame. */
   background: radial-gradient(ellipse 120% 84% at 50% -18%,
     color-mix(in srgb, var(--glow-pub) 35%, transparent), transparent 74%);
   filter: saturate(1.5);
@@ -210,76 +158,25 @@ body[data-ambient="publish"] .ambient {
   transform: translateZ(0);
 }
 
-/* A daily's page: the same full-screen wash, now drifting through the three
-   hues dailies use rather than holding the ONE the prompt names — any type
-   answers any prompt (see dailyAccepts in app.js), so the page says "note, link
-   or frame" the same way the card's gradient does, just as a slow cycle instead
-   of three bands at once. --glow-daily is REGISTERED (a real <color>, like
-   --glow-pub) so the browser interpolates smoothly between the three rather than
-   snapping. 24s: a daily's own unit is its 24-hour window, so the wash takes as
-   long to loop as the prompt takes to expire. applyAmbient still sets
-   --glow-daily inline to the prompt's own hue — that value is overridden the
-   instant the animation starts, and becomes the resting frame only when
-   reduced motion turns the animation off below, so a still page shows the same
-   single nominal hue the tag and the detail page's kicker already commit to. */
-@property --glow-daily {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: #b7a6e8;
-}
-body[data-ambient="daily"] .ambient {
-  position: fixed;
-  inset: 0;
-  height: auto;
-  background: radial-gradient(ellipse 120% 84% at 50% -18%,
-    color-mix(in srgb, var(--glow-daily) 30%, transparent), transparent 74%);
-  filter: saturate(1.4);
-  opacity: 1;
-  animation: daily-drift 24s linear infinite;
-  transform: translateZ(0);
-}
-@keyframes daily-drift {
-  0%   { --glow-daily: var(--type-note); }
-  33%  { --glow-daily: var(--type-find); }
-  66%  { --glow-daily: var(--type-photo); }
-  100% { --glow-daily: var(--type-note); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .ambient { transition: none; }
-  body[data-ambient="about"] .ambient { animation: none; }
   /* Colour still updates on type change, just without the tween. */
   body[data-ambient="publish"] .ambient { transition: opacity 0.4s ease; }
-  /* Freezes on whatever --glow-daily was set to inline (the prompt's own hue) —
-     the drift is off, not the colour. */
-  body[data-ambient="daily"] .ambient { animation: none; }
 }
 
-/* ── Grain ──────────────────────────────────────────────────────────────────
-   A static, greyscale film-grain tile laid over the reading surface (bg, ambient
-   wash, and content) — flat pastel fills and gradients pick up a tactile paper
-   texture instead of reading digital-smooth. It's a single fixed, blended layer:
-   no animation (so it's reduced-motion-safe by construction) and no network
-   (the noise is an inline SVG in --grain), so the cost is one GPU-composited
-   layer. Sits below the fixed chrome (100) and modals (250), so the wordmark,
-   nav, and dialogs stay crisp; pointer-events:none keeps it inert. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  pointer-events: none;
-  background-image: var(--grain);
-  background-size: 140px 140px;    /* native tile — reads as fine grain even at 3x DPR */
-  opacity: var(--grain-opacity);
-  mix-blend-mode: overlay;         /* mid-grey noise both lifts and deepens the surface */
-}
-/* On dark paper overlay clips to harsh sparkle; soft-light keeps it as texture. */
-@media (prefers-color-scheme: dark) {
-  body::after { mix-blend-mode: soft-light; }
-}
-/* The boot splash owns the screen before the app fades in — no grain over it. */
-body:has(.splash:not(.splash--out))::after { display: none; }
+/* Grain is gone from the app entirely — there is no --grain token and no layer
+   that references one. It was a fixed, full-viewport `mix-blend-mode` sheet at
+   z-index 90, above everything that scrolls, and a blend cannot be served from a
+   cached texture: the compositor had to re-read the backdrop and re-blend it,
+   full screen, at 3x DPR, on every scroll frame. That was the largest permanent
+   GPU cost in the app.
+
+   Scoping it to just the gradient surfaces was tried first and made things
+   worse, which is the more interesting half. Overlay-blended mid-grey noise does
+   not only add texture, it nudges the mean luminance — so with the rest of the
+   app bare, every grained surface read as a slightly different paper than the
+   page around it. Grain was only ever invisible because it was EVERYWHERE. It is
+   all-or-nothing, and it is now nothing. If banding ever shows on a gradient,
+   the fix is more colour stops, not a noise layer. */
 
 /* Visible keyboard focus on every interactive element. */
 :focus-visible {
@@ -319,31 +216,17 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   line-height: 1;
   padding: 0 0.15em 0.1em;          /* clip-to-text crops at the box — keep air around the glyph */
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-  background-size: 300% 100%;
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo));
   -webkit-background-clip: text;
           background-clip: text;
   color: transparent;
-  animation:
-    splash-in var(--dur-slow) var(--ease) both,
-    publish-shift 2s ease-in-out infinite;  /* faster than the Post button's 5s: splashes are brief, show more of the quintet */
-}
-/* Grain the whole curtain — paper and the gradient glyph together — so the boot
-   screen carries the same tactile surface as the app (the global body::after
-   grain is hidden while the splash is up, so it's re-added here). Static, above
-   the in-flow t so it textures the glyph; blend flips with the theme. */
-.splash::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: var(--grain);
-  background-size: 140px 140px;
-  mix-blend-mode: overlay;
-  opacity: var(--grain-opacity);
-  pointer-events: none;
-}
-@media (prefers-color-scheme: dark) {
-  .splash::after { mix-blend-mode: soft-light; }
+  /* The rise stays; the 2s colour loop that used to run under it does not. A
+     background-position animation through `background-clip: text` is the most
+     expensive form of it — the glyph's mask has to be re-applied to a freshly
+     painted gradient every frame — and it was running during boot, over the top
+     of the first world fetch and the first render. The mark now shows the whole
+     quintet at rest, which is what it settles to anyway. */
+  animation: splash-in var(--dur-slow) var(--ease) both;
 }
 @keyframes splash-in {
   from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
@@ -356,7 +239,7 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .splash { transition: none; }
   .splash--out { visibility: hidden; }
-  .splash-t { animation: none; background-position: 50% 50%; }
+  .splash-t { animation: none; }
 }
 
 .skip-link {
@@ -489,10 +372,8 @@ body:has(.splash:not(.splash--out))::after { display: none; }
 
 /* On desktop the pill wrapper dissolves: its links become direct flex children
    of the sidebar column, exactly the flat list the sidebar always styled. The
-   phone styles (see the mobile block) turn it into the floating glass pill.
-   The glide (the sliding active-icon highlight) is a phone-only ornament. */
+   phone styles (see the mobile block) turn it into the floating glass pill. */
 .nav-pill { display: contents; }
-.nav-glide { display: none; }
 
 .nav {
   position: fixed;
@@ -538,13 +419,25 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   font-weight: 700;
 }
 
-/* Post — the one primary action. At rest a drifting gradient OUTLINE (the four
-   type pastels circling the pill — a quiet arrow pointing at posting); on
-   hover / press / while on the compose page it fills with the same drifting
-   gradient. Text contrast holds AA in every state and both modes: page ink on
-   the page at rest, near-black --on-type on the pastel fill. The ring is drawn
-   by a masked ::before, so it sits cleanly over any backdrop (sidebar surface,
-   frosted topbar, composer paper) and unmasking it IS the fill. */
+/* Post — the one primary action. At rest a gradient OUTLINE (the five type
+   pastels circling the pill — a quiet arrow pointing at posting); on hover /
+   press / while on the compose page it fills with the same gradient. Text
+   contrast holds AA in every state and both modes: page ink on the page at
+   rest, near-black --on-type on the pastel fill. The ring is drawn by a masked
+   ::before, so it sits cleanly over any backdrop (sidebar surface, frosted
+   topbar, composer paper) and unmasking it IS the fill.
+
+   The band no longer DRIFTS, and that is the whole quintet's new rule. It used
+   to slide `background-position` across a 300%-wide gradient on a 14s loop,
+   here and on the FAB and the seg-tabs glow and the splash mark — and
+   background-position is a paint property, not a composited one, so every one
+   of those was invalidating and re-rasterizing its element at display refresh
+   rate for as long as it was on screen. The FAB's copy ran on every page in the
+   app. Now the band is sized 1:1 and simply shows all five colours at once,
+   which is a better statement anyway: the + makes any of the five, so the
+   button wearing all five reads truer than a moving window over two or three.
+   Five stops across a small element is a short interpolation run per hue, so it
+   does not band and needs nothing laid over it to hide that. */
 .publish-fill {
   position: relative;
   isolation: isolate;               /* keeps the z-index:-1 ring inside the button */
@@ -562,66 +455,40 @@ body:has(.splash:not(.splash--out))::after { display: none; }
   border-radius: inherit;
   padding: 2px;                     /* the ring's thickness */
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-  background-size: 300% 100%;
-  animation: publish-shift 14s ease-in-out infinite;
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo));
   /* Ring mode: keep only the 2px band between padding-box and border-box. */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
           mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
 }
-/* Grain on the gradient: a second, static layer over the pastel fill so the
-   hero button reads with the same tactile paper as the rest of the surface.
-   Kept off the animation (no crawling grain) and clipped to the pill; only lit
-   in the filled states, since at rest the gradient is just a 2px ring. */
-.publish-fill::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;                      /* painted after ::before, so grain sits on the gradient */
-  border-radius: inherit;
-  background-image: var(--grain);
-  background-size: 140px 140px;
-  mix-blend-mode: overlay;
-  opacity: 0;                       /* only the filled states light it, below */
-  transition: opacity var(--dur-micro) var(--ease);
-  pointer-events: none;
-}
-@media (prefers-color-scheme: dark) {
-  .publish-fill::after { mix-blend-mode: soft-light; }
-}
-
 /* Filled: drop the mask so the whole pill carries the gradient. Kept a clean,
-   vibrant fill — no inner rim/shade, which only muddied the pastels. */
+   vibrant fill — no inner rim/shade, which only muddied the pastels. (The grain
+   ::after that used to ride these fills went with the rest of the grain — see
+   the note in the ambient section for why it had to be all or nothing.) */
 .publish-fill:active,
 .publish-fill[aria-current="page"],
 .publish-fill:focus-visible { color: var(--on-type); }
 .publish-fill:active::before,
 .publish-fill[aria-current="page"]::before,
 .publish-fill:focus-visible::before { -webkit-mask: none; mask: none; }
-.publish-fill:active::after,
-.publish-fill[aria-current="page"]::after,
-.publish-fill:focus-visible::after { opacity: 0.28; }
 @media (hover: hover) {
   .publish-fill:hover { color: var(--on-type); }
   .publish-fill:hover::before { -webkit-mask: none; mask: none; }
-  .publish-fill:hover::after { opacity: 0.28; }
 }
 /* Solid at rest: Post and Share Tria wear the gradient FILLED from the start
    (the ring is the resting state everywhere else). Same as the filled state
    above, just permanent. */
 .publish-fill.is-solid { color: var(--on-type); }
 .publish-fill.is-solid::before { -webkit-mask: none; mask: none; }
-.publish-fill.is-solid::after { opacity: 0.28; }
 .publish-fill:disabled { opacity: 0.6; }
-@keyframes publish-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50%      { background-position: 100% 50%; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .publish-fill::before { animation: none; background-position: 50% 50%; }
-}
+/* `publish-shift` lived here and is gone, along with the reduced-motion waiver
+   that used to switch it off. Worth knowing why that waiver was load-bearing and
+   still failed: it targeted `.publish-fill::before`, and the FAB's own rule down
+   in the mobile block targets `.nav-publish::before` — equal specificity, later
+   in the file, so it won. A reader who had asked iOS for reduced motion still
+   got the one animation that was on screen on every page. Nothing to override
+   now, which is the sturdier fix than a second waiver would have been. */
 .nav-publish {
   margin-top: auto;
   justify-content: center;
@@ -1190,10 +1057,11 @@ main {
    Apple's guidance is a 44pt hit AREA, not a 44pt drawn control (their own
    filter chips render shorter and extend touch slop the same way), so the visual
    isn't bloated. Vertical only — horizontal is already comfortable and neighbours
-   share the row. Each host sets position:relative to anchor it. NB: not for
-   .publish-fill pills (e.g. the profile Share) — those spend their ::after on the
-   grain layer, so a tap overlay here would fight it; they size the hit area with
-   real padding instead. */
+   share the row. Each host sets position:relative to anchor it. NB: not used on
+   .publish-fill pills (e.g. the profile Share) — they size the hit area with real
+   padding instead. That used to be forced (their ::after carried the grain layer
+   and a tap overlay would have fought it); the grain is gone, so the ::after is
+   free now, but padding is still the better answer on a pill that has one. */
 .filter::after {
   content: '';
   position: absolute;
@@ -1285,15 +1153,19 @@ main {
 }
 .seg-tabs[data-sel="1"] .seg-tabs-thumb { transform: translateX(100%); }
 /* Brand glow inside the thumb — lit only at index 0 (Friends' My circle); it
-   fades out when the second segment is active. The drifting quintet masked to a
-   soft core and blurred into coloured light, exactly the nav glide's engine. */
+   fades out when the second segment is active. The quintet masked to a soft core
+   and blurred into coloured light.
+
+   The blur/saturate/brighten chain stays because it is now STATIC: a filter over
+   a background that never changes rasterizes once and caches, and the whole
+   effect rides along on the thumb's composited transform. It was the band
+   drifting underneath it that made this expensive — a repaint every frame, with
+   a three-stage filter re-run over each one. Kept the look, dropped the loop. */
 .seg-tabs-glow {
   position: absolute;
   inset: 0;
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-  background-size: 300% 100%;
-  animation: publish-shift 14s ease-in-out infinite;
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo));
   -webkit-mask: radial-gradient(circle at 50% 50%, #000 20%, transparent 95%);
           mask: radial-gradient(circle at 50% 50%, #000 20%, transparent 95%);
   filter: blur(9px) saturate(1.4) brightness(1.1);
@@ -1359,14 +1231,25 @@ main {
 }
 .feed-empty-cta:active { opacity: 0.6; }
 
+/* There is deliberately NO `content-visibility: auto` here, and its absence is a
+   fix rather than an oversight. It was added by the July 2026 battery pass
+   (c0ea4c9, last line of the message, bolted onto a change that was really about
+   collapsing 30 backdrop blurs into one knob) to skip painting cards scrolled out
+   of view, and it is the whole reason posts came up BLANK on iOS. A box holding
+   roughly the right height with nothing drawn in it is that property's documented
+   SUCCESS state, seen at the wrong moment: WebKit does not reliably re-run its
+   relevancy check for a freshly inserted node that is already inside the viewport,
+   which is exactly what both broken moments did — commenting swaps a brand-new
+   .card into the live feed (`apply()`), posting rebuilds rows through `syncCards`.
+   The node arrived on screen, was never marked relevant, and painted nothing.
+   Scrolling it out and back fixed it, which was the tell. Chromium's relevancy
+   update is the well-behaved one, so the web never showed any of this.
+   The saving was speculative and never measured, and nothing else virtualises the
+   feed, so we lose only an off-screen paint nobody had counted. If the battery
+   cost ever comes back it comes back measured, and it comes back with a forced
+   relevancy nudge at every insertion site — two of them already forgot. */
 .card {
   animation: rise var(--dur-slow) var(--ease) both;
-  /* Skip layout + paint for cards scrolled out of view, so a long feed doesn't
-     pay to render rows nobody's looking at. `auto` remembers each card's real
-     height once seen, so the 420px estimate only ever applies to a card that's
-     never yet been on screen (keeps the scrollbar honest). */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 420px;
 }
 /* The post body sits in .card-main; the comment thread expands as a sibling
    below it (see .comments-panel). Text entries (post / find): content inset to
@@ -1443,10 +1326,21 @@ main {
    reads a hair above the like heart's line — drop it to match. */
 .card-social .card-comment svg { transform: translateY(2px); }
 
-/* Comment toggle lifts to the accent when open. */
+/* Comment toggle lifts to the accent when open.
+   The hover half is behind (hover: hover) for a reason the rest of this row
+   shares: WebKit leaves :hover stuck on the last thing a finger touched until
+   something else is tapped, so an unguarded hover here made the glyph go on
+   saying "open" after the tap that CLOSED the thread. On a row where the colour
+   IS the state, that's the control lying about itself. Everything below the
+   guard is real state ([aria-expanded], .liked, .going) and stays out of it. */
 .card-comment[aria-expanded="true"],
-.card-comment:hover,
 .card-comment:focus-visible { color: var(--accent); }
+@media (hover: hover) { .card-comment:hover { color: var(--accent); } }
+/* Touch's answer to that hover. The shared press engine already compresses the
+   button under the finger, but it sits out under reduced motion — and it's a
+   scale, not a colour, so nothing on this row lights up on approach any more.
+   The tint restores the "you're on it" beat for both. */
+.card-comment:active { color: var(--accent); }
 
 /* The heart's weight lives in its top lobes — the point at the bottom is almost
    empty — so a mathematically-centred heart reads as floating above the comment
@@ -1457,10 +1351,16 @@ main {
 /* Like heart. A friend sees a fillable heart, no count. The author sees the
    count and (via --owner) opens the "who liked" list; the heart fills to the
    accent when liked / when the author's panel is open. */
-.card-like:hover,
 .card-like:focus-visible,
 .card-like.liked,
 .card-like--owner[aria-expanded="true"] { color: var(--accent); }
+/* Same sticky-hover guard as the comment toggle above. This one was the worse
+   of the two: unliking a post left the heart accent-lit under the finger, so
+   the gesture that took the like back ended on a heart that still looked given.
+   (.liked wins the cascade below either way, so the lie only showed on unlike —
+   which is exactly the tap that needs to be believed.) */
+@media (hover: hover) { .card-like:hover { color: var(--accent); } }
+.card-like:active { color: var(--accent); }
 /* A liked heart settles on its post's own type colour and sits still — no
    perpetual drift (that kept the compositor awake on every liked card). The
    flourish is all in the tap, where the heart TAKES INK (see below). Ink twins:
@@ -1481,8 +1381,12 @@ main {
      3. a tight little cluster of y2k four-point STARS twinkles out of it and
         winks away (JS injects them on LIKE, see burstSparkles) — the burst
         energy spent on a smile, not scattered confetti.
-   Everything stays inside the card's paint-contained box (the heart sits near
-   the card's bottom edge — see content-visibility on .card), so nothing crops. */
+   The burst is drawn to stay inside the card's own box (the heart sits near the
+   card's bottom edge), so nothing crops. It used to have no choice: the
+   content-visibility on .card brought paint containment with it and clipped
+   anything reaching past the edge. That property is gone now (see .card), so an
+   overflowing spark would be visible rather than cut — still not the intent, so
+   keep the burst tight. */
 .card-like {
   position: relative;
   /* Filled-heart silhouette, shared by the ink overlay's mask below. */
@@ -1706,9 +1610,12 @@ main {
    off the check once you've joined. Released in .going, where the check fills the
    zone and needs the room — the card is rebuilt on RSVP, so there's no jump. */
 .card-attendees:not(.going) .card-attendees-count { margin-left: -0.55rem; }
-.card-attendees:hover,
 .card-attendees:focus-visible,
 .card-attendees[aria-expanded="true"] { color: var(--accent); }
+/* Guarded like its two neighbours — this is the third button on the row where a
+   stuck hover reads as an open panel that isn't. */
+@media (hover: hover) { .card-attendees:hover { color: var(--accent); } }
+.card-attendees:active { color: var(--accent); }
 
 /* The check arm ships inside the glyph at every state and is dashed fully out
    until you're in — so joining DRAWS it on (below) instead of swapping icons,
@@ -1724,9 +1631,10 @@ main {
   visibility: hidden;
 }
 .card-attendees.going,
-.card-attendees.going:hover,
+.card-attendees.going:active,
 .card-attendees.going:focus-visible,
 .card-attendees.going[aria-expanded="true"] { color: var(--type-activity-ink); }
+@media (hover: hover) { .card-attendees.going:hover { color: var(--type-activity-ink); } }
 .card-attendees.going .check-arm { stroke-dashoffset: 0; stroke-width: 2.4; visibility: visible; }
 
 /* RSVP reward — the moment you join, the check DRAWS itself onto the person
@@ -2172,6 +2080,7 @@ main {
 /* Delete — the same trash glyph and muted→red treatment as the post delete
    control, right-aligned to the thread edge, aligned to the comment's top line. */
 .comment-delete {
+  position: relative;      /* anchors the 44px hit overlay below */
   flex-shrink: 0;
   margin-left: auto;
   margin-top: 0.05rem;
@@ -2188,8 +2097,38 @@ main {
   transition: color var(--dur-micro), background var(--dur-micro);
 }
 .comment-delete svg { width: 16px; height: 16px; }
+/* The painted box stays 28px — a bigger red-adjacent target beside every comment
+   would shout — but the HIT area doesn't have to match the ink. Same invisible
+   overlay the Post button uses to reach the 44px HIG minimum without bloating
+   its row. This was the one control in the whole comment path still sized for a
+   cursor: the social glyphs are 44px by rule, Post carries this same overlay,
+   and the trash was 28px of true target sitting inside a thread you scroll past
+   with a thumb.
+
+   It grows LEFT and down-from-centre rather than out of all four sides, unlike
+   the Post button's: this one sits hard against the thread's right edge, and
+   `.comments-inner` clips there (it's the overflow:hidden that lets the panel
+   collapse to 0), so a centred overlay would have had 8px of its width clipped
+   away — dead pixels that look like target and aren't. */
+.comment-delete::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+}
+/* …and the one control whose ONLY feedback lived inside (hover: hover), so on a
+   phone it never changed appearance at all — not on approach, which touch hasn't
+   got, and not on the press either. The press half comes out of the guard. */
+.comment-delete:active,
+.comment-delete:focus-visible {
+  color: var(--type-find-ink);
+  background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
+}
 @media (hover: hover) {
-  .comment-delete:hover, .comment-delete:focus-visible {
+  .comment-delete:hover {
     color: var(--type-find-ink);
     background: color-mix(in srgb, var(--type-find) 18%, var(--bg));
   }
@@ -3323,17 +3262,26 @@ button.poll-option:disabled { cursor: default; }
 }
 
 /* ── Profile (own account or a friend's) — identity header + their column ──── */
-/* The identity header: a floating glass CARD on the profile's own colour wash.
-   The wash (.ambient, a soft blob tinted from the photo via --glow-photo, set by
-   applyAmbient) sits behind the page, so the card's backdrop-blur has real colour
-   to refract — every profile reads in its own custom hue. Inside the card: the
-   photo sits LEFT as its own floating glass panel, and the whole identity group
-   (name / handle / stats / bio / actions) stacks beside it. (max-width + centring
-   come from the shared .account rule up top, so it tracks the feed column.) */
+/* The identity header: a floating glass CARD carrying the profile's own colour
+   in its bottom-right corner. Inside: the photo sits LEFT as its own floating
+   glass panel, and the whole identity group (name / handle / stats / bio /
+   actions) stacks beside it. (max-width + centring come from the shared .account
+   rule up top, so it tracks the feed column.)
+
+   That colour used to be a full-screen wash — .ambient, a soft blob behind the
+   entire page, tinted from the avatar via --glow-photo — and the card's blur
+   refracted it. It is the same sampled colour and the same idea, moved from the
+   page onto the object it was describing. Three things got better. It costs a
+   corner instead of a viewport, which is the point. The page underneath goes
+   back to being the app's one paper, so arriving at a profile from the feed no
+   longer changes the colour of the room. And the colour is now attached to the
+   person rather than pooled above them, which is a truer thing to say with it. */
 .account { padding-top: 0.25rem; }
 
 .account-card {
   position: relative;                  /* anchors the corner edit-profile badge */
+  isolation: isolate;                  /* keeps the ::before glow under the content */
+  overflow: hidden;                    /* the glow is clipped to the card's own radius */
   padding: 1.5rem 1.4rem;
   border-radius: 26px;  /* rounder than the shared --radius-modal (20px) — this card earns its own */
   background: var(--glass-bg-panel);
@@ -3341,6 +3289,81 @@ button.poll-option:disabled { cursor: default; }
           backdrop-filter: blur(var(--glass-blur));
   border: var(--glass-edge);
   box-shadow: var(--glass-rim), var(--glass-lift);
+}
+/* The corner glow: TWO ellipses sharing one sampled hue, both anchored off the
+   bottom-right corner so the colour arrives from outside the card rather than
+   sitting in it as a blob with a visible centre.
+
+   Two, because one couldn't be both things at once. A single ellipse strong
+   enough to read as colour stops before it means anything; wide enough to reach
+   has to be faint. So a tight CORE carries the saturation at the corner and a
+   broad HALO at a third of its strength carries the distance.
+
+   Both are FEATHERED over their whole radius rather than cut off partway. The
+   fade runs 0% → 100% through three intermediate stops that drop fast and then
+   trail (0.60 · 0.26 · 0.07 of peak), so the falloff is a curve rather than the
+   straight alpha ramp two stops give you. That matters twice over. A linear ramp
+   has a detectable edge where it lands on nothing, which is the one thing a glow
+   must not have; and a long shallow gradient is exactly where 8-bit colour
+   BANDS — which the grain overlay used to hide across the whole app, and doesn't
+   any more. Extra stops cost nothing here (it rasterizes once, and never
+   repaints), so the ramp is shaped rather than smoothed after the fact.
+
+   The ellipses are sized past the card on purpose: at 112%/178% of its width the
+   geometry reaches the far edges, but the feather has taken the alpha to nothing
+   long before it gets there. Size sets the reach, the curve sets where the
+   colour actually lives.
+
+   --glow-photo is the opaque hue applyAmbient samples from the avatar; the two
+   percentages below are the loudness, and every stop is derived from them, so
+   the whole ramp still moves from two numbers and stays in proportion. Unset (no
+   avatar, or sampling failed) --glow-photo resolves to transparent, every
+   color-mix returns transparent whatever the ratio, and the card is plain glass
+   — the same graceful nothing the full-screen wash used to degrade to.
+
+   Static, clipped, no filter: one rasterized gradient inside a card that already
+   has its own layer for the backdrop blur, so it is close to free. */
+/* Loudness. Kept deliberately low, and the constraint is the ACTION BUTTON
+   rather than the bio: .friend-btn[aria-pressed="true"] ("Requested") is a ghost
+   — background:none, --muted label, a --rule hairline — and it sits in the
+   bottom-right corner, which is precisely where this gradient is strongest. A
+   button with no fill of its own takes whatever is behind it as its background,
+   so the glow IS that state's backdrop, pairing the card's faintest ink with its
+   most saturated ground. Measured in WebKit, the label crossed below 4.5:1 well
+   before anything else on the card looked wrong, so these two numbers are set by
+   that state and everything else clears with room to spare. Re-measure against
+   "Requested", not the bio, if they are ever raised. */
+.account-card {
+  --glow-core: 14%;
+  --glow-halo: 5%;
+}
+.account-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 112% 126% at 104% 112%,
+      color-mix(in srgb, var(--glow-photo, transparent) var(--glow-core), transparent) 0%,
+      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-core) * 0.60), transparent) 30%,
+      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-core) * 0.26), transparent) 56%,
+      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-core) * 0.07), transparent) 79%,
+      transparent 100%),
+    radial-gradient(ellipse 178% 190% at 114% 124%,
+      color-mix(in srgb, var(--glow-photo, transparent) var(--glow-halo), transparent) 0%,
+      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-halo) * 0.54), transparent) 38%,
+      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-halo) * 0.17), transparent) 68%,
+      transparent 100%);
+}
+/* Dark carries colour further than light does — the same hue against a dark
+   glass fill is a bigger contrast step than against a light one, so the light
+   values read as a stain here. Pulled back, not switched off. */
+@media (prefers-color-scheme: dark) {
+  .account-card {
+    --glow-core: 26%;
+    --glow-halo: 9%;
+  }
 }
 
 /* Photo panel left, the whole identity group (name, handle, stats, bio, actions)
@@ -3995,11 +4018,12 @@ button.poll-option:disabled { cursor: default; }
 }
 
 /* ── The daily's own page ─────────────────────────────────────────────────────
-   Discover held to one question: the prompt as the nameplate, the answers dealt
-   into the same masonry grid, and the daily's hue washing the whole page through
-   the ambient (see body[data-ambient="daily"]) so opening the card reads as
-   stepping into it. The prompt is a SENTENCE, so it can't take the display size a
-   one-word nameplate wears — it steps down to roughly a post headline. */
+   Discover held to one question: the prompt as the nameplate and the answers
+   dealt into the same masonry grid. The prompt is a SENTENCE, so it can't take
+   the display size a one-word nameplate wears — it steps down to roughly a post
+   headline. The page used to wash in the daily's hue so opening the card read as
+   stepping into it; the coloured card on Discover now carries that on its own,
+   and the wash is retired with the other full-screen ones (see .ambient). */
 /* The masthead's own clearance, for a prompt with no hint under it. */
 .view--daily .masthead { margin-bottom: 2.4rem; }
 /* More air under the back link than a profile gives it: there, it sits above a
@@ -4015,10 +4039,10 @@ button.poll-option:disabled { cursor: default; }
    it explains and the answers it doesn't. */
 .view--daily .masthead:has(+ .daily-lede) { margin-bottom: 0; }
 /* The status line is a row: "Daily · 6h left" left, the invitation right. Plain
-   grey, matching the composer banner's subtitle — the page wash now drifts
-   through all three hues (see daily-drift), so a kicker still pinned to the
-   prompt's single nominal ink would be reading a colour the background no
-   longer holds still long enough to agree with. */
+   grey, matching the composer banner's subtitle. It stayed grey when the wash
+   stopped drifting: any type answers any prompt, so the prompt's nominal hue is
+   only a colour, not an instruction, and a kicker wearing it would be making a
+   promise about the answer the feature stopped making. */
 .view--daily .masthead-kicker {
   display: flex;
   align-items: baseline;
@@ -4311,9 +4335,10 @@ button.poll-option:disabled { cursor: default; }
    draw at one size, so the button never resizes under your thumb when it flips.
    Sizing lives here and only here; the state rules below change dress (gradient
    vs. outline), never geometry. The 44pt HIG target is drawn rather than bought
-   with the shared ::after overlay, because the publish-fill variant spends
-   ::after on its grain layer (see the .filter::after note). border-box is global,
-   so the outline state's 1px border doesn't make it a pixel taller. */
+   with the shared ::after overlay — originally because the publish-fill variant
+   spent ::after on the grain layer, and kept now that the grain is gone because
+   a real box is the sturdier way to size a control that changes label. border-box
+   is global, so the outline state's 1px border doesn't make it a pixel taller. */
 .friend-btn {
   position: relative;
   display: inline-flex;
@@ -4338,17 +4363,41 @@ button.poll-option:disabled { cursor: default; }
   background: var(--accent);
   border: 1px solid var(--accent);
 }
+/* The accent hover is DORMANT, and the :not() is what makes it safe rather than
+   redundant. app.js gives .publish-fill to exactly the three live-commit states,
+   so `:not(.publish-fill)` and `[aria-pressed="true"]` currently select the same
+   two buttons — which meant this rule, written for the accent dress, was landing
+   squarely on the ghost. At 0,3,0 it outranked the ghost's own 0,2,0 rule, so
+   hovering "Requested" or "Following" painted a solid --accent-press fill and the
+   ghost hover below lifted the label to --text on top of it: measured 1.14:1 in
+   light and 1.13:1 in dark, i.e. the word vanished into its own button. Desktop
+   web only (@media hover), which is why the phone never showed it. Kept, not
+   deleted, because it is the correct hover for the accent dress the moment
+   anything wears it un-pressed again. */
 @media (hover: hover) {
-  .friend-btn:not(.publish-fill):hover { background: var(--accent-press); border-color: var(--accent-press); }
+  .friend-btn:not(.publish-fill):not([aria-pressed="true"]):hover {
+    background: var(--accent-press);
+    border-color: var(--accent-press);
+  }
 }
+/* "Requested" is the one state with no fill of its own, so its outline is drawn in
+   its own label colour (currentColor) rather than --rule or a flat white. Two
+   reasons. It sits in the card's bottom-right corner, which is exactly where the
+   profile's sampled glow is strongest, and a neutral hairline there took a tint
+   from whatever colour that person's avatar happened to be — the one element on
+   the card whose job is to look the same for everybody. And a ghost button is a
+   label with an edge round it, not a label plus a separate line: tying the two
+   together means the outline can never drift off the ink, in either scheme.
+   Hover comes free — the label lifts to --text and the border rides along, which
+   the fixed white it replaced couldn't do. */
 .friend-btn[aria-pressed="true"] {
   color: var(--muted);
   background: none;
-  border-color: var(--rule);
+  border-color: currentColor;
   font-weight: 400;
 }
 @media (hover: hover) {
-  .friend-btn[aria-pressed="true"]:hover { color: var(--text); border-color: var(--text); }
+  .friend-btn[aria-pressed="true"]:hover { color: var(--text); }
 }
 
 /* Slim single-author meta line standing in for the byline on a profile: the date
@@ -4771,18 +4820,20 @@ button.poll-option:disabled { cursor: default; }
 }
 
 /* The hero Post wears the same lit dome as the compose "+" (.nav-publish): a
-   top-left specular gloss and a base cavity shadow layered over the drifting
-   quintet, plus a contact + ambient drop, so it reads as a glossy 3D object,
-   not a flat pill. Only the colour band drifts; the highlight and cavity stay
-   put so the light source never wanders (mirrors publish-dome on the FAB). */
+   top-left specular gloss and a base cavity shadow layered over the quintet,
+   plus a contact + ambient drop, so it reads as a glossy 3D object, not a flat
+   pill. It follows the FAB into stillness for the same reason and, just as
+   importantly, to stay its PAIR — these two are the app's only lit-dome
+   surfaces, and one of them drifting while the other held would read as a bug
+   in whichever you saw second. */
 .composer .composer-post.publish-fill.is-solid,
 .auth-submit.publish-fill.is-solid,
 .friends-share-copy.publish-fill.is-solid {
-  /* The drifting colour band, hoisted into a variable so the composer's Post pill
-     can swap it (Post drops lime, Activity goes lime-forward) without redeclaring
+  /* The colour band, hoisted into a variable so the composer's Post pill can
+     swap it (Post drops lime, Activity goes lime-forward) without redeclaring
      the dome radials. Auth / share keep the full quintet. */
   --pill-band: linear-gradient(115deg,
-    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo));
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.16),
     0 10px 24px rgba(0, 0, 0, 0.18);
@@ -4794,9 +4845,8 @@ button.poll-option:disabled { cursor: default; }
     radial-gradient(75% 130% at 34% -20%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
     radial-gradient(92% 130% at 50% 120%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 55%),
     var(--pill-band);
-  background-size: 100% 100%, 100% 100%, 300% 100%;
-  background-position: 0 0, 0 0, 0% 50%;
-  animation: publish-dome-pill 14s ease-in-out infinite;
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0, 0 0;
 }
 /* Dark mode flattens the button: the black cavity + drop shadows all but vanish
    against a dark surface, so the volume has to come from LIGHT. Brighter hotspot,
@@ -4820,25 +4870,14 @@ button.poll-option:disabled { cursor: default; }
       radial-gradient(95% 130% at 50% 122%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0) 55%),
       var(--pill-band);
     /* The `background` shorthand above resets background-size/position, so restate
-       them: the band stays 300%-wide (2-3 colours in view, drifting) like light. */
-    background-size: 100% 100%, 100% 100%, 300% 100%;
-    background-position: 0 0, 0 0, 0% 50%;
+       them: the band stays 1:1 so all five colours read across the pill, matching
+       light mode exactly. Only the gloss is scheme-tuned. */
+    background-size: 100% 100%, 100% 100%, 100% 100%;
+    background-position: 0 0, 0 0, 0 0;
   }
 }
-/* Only the colour band drifts; the highlight and cavity stay pinned so the light
-   source never wanders. */
-@keyframes publish-dome-pill {
-  0%, 100% { background-position: 0 0, 0 0, 0% 50%; }
-  50%      { background-position: 0 0, 0 0, 100% 50%; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer .composer-post.publish-fill.is-solid::before,
-  .auth-submit.publish-fill.is-solid::before,
-  .friends-share-copy.publish-fill.is-solid::before {
-    animation: none;
-    background-position: 0 0, 0 0, 50% 50%;
-  }
-}
+/* No reduced-motion waiver needed here any more: the dome holds still for
+   everyone, so there is nothing left for the media query to switch off. */
 
 /* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
    "Shared with  Everyone in your circle ›". Reads as a field, opens the picker
@@ -5618,7 +5657,7 @@ button.poll-option:disabled { cursor: default; }
   }
   .nav-pill, .nav-publish { pointer-events: auto; }
   .nav-pill {
-    position: relative;               /* anchors the sliding .nav-glide highlight */
+    position: relative;               /* containing block for anything absolute inside */
     display: flex;
     align-items: center;
     gap: 0.3rem;
@@ -5651,54 +5690,41 @@ button.poll-option:disabled { cursor: default; }
   }
   .nav-link .nav-label { display: none; }
   .nav-link .nav-ico { width: 28px; height: 28px; }
-  /* The active highlight is the glide below, not a per-link background, so it
-     can SLIDE between destinations instead of blinking from one to the next.
-     The icon stays --accent (bright in dark, ink in light) — it's LIT by the
-     glow behind it, not sitting on a chip, so the pill supplies its contrast. */
-  .nav-link[aria-current="page"] { color: var(--accent); }
+
+  /* Where you are is told by INK AND OPACITY, and that is the whole control.
+     There used to be a `.nav-glide` here: a blurred, saturated, brightened
+     lozenge of the drifting quintet that slid between destinations, lighting the
+     current icon from behind. It read beautifully and it was the most expensive
+     permanently-running element in the app — an animating background-position
+     (a paint invalidation every frame, not a composited one) with
+     `blur(20px) saturate(1.7) brightness(1.2)` re-evaluated over the top of it,
+     on screen on every page, at refresh rate, forever. Two full-cost effects
+     stacked to answer a question a dimmed icon answers for free.
+
+     So: the four destinations sit back at 0.4 and the current one comes forward
+     to full strength and --accent. Opacity is the cheapest property there is
+     (composited, no repaint), and dimming the three you are NOT on is a truer
+     statement of the same fact than lighting the one you are — the pill reads as
+     one control with a focus rather than four buttons with a lamp under one.
+     Scoped to `.nav-pill .nav-link` so the FAB, which lives outside the pill,
+     keeps its own full-strength presence. */
+  .nav-pill .nav-link {
+    opacity: 0.4;
+    transition: opacity var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease);
+  }
+  .nav-pill .nav-link[aria-current="page"] {
+    color: var(--accent);
+    opacity: 1;
+  }
   /* Press compression lives in the shared press engine (app.js) — `scale`, so it
-     never fights the FAB's own transforms or the glide. */
-  /* Ambient light, not a chip: the active marker glows like the dial icons.
-     The Post button's drifting quintet (publish-shift, shared keyframes) is the
-     colour engine so it cycles the brand hues; a tight radial mask pulls that
-     into a hot core fading to nothing (the dial's radial bloom), and a blur
-     turns it into coloured light pooling under the icon and spilling into the
-     frosted pill. Saturate + brighten so the pastels actually read as glow.
-     z-index -1 keeps it above the pill glass but under the icons (the pill's
-     translateZ layer is the stacking context that scopes it). */
-  .nav-glide {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: -1;
-    border-radius: var(--radius-pill);
-    background: linear-gradient(115deg,
-      var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-    background-size: 300% 100%;
-    animation: publish-shift 14s ease-in-out infinite;
-    -webkit-mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 58%);
-            mask: radial-gradient(circle at 50% 50%, #000 8%, transparent 58%);
-    filter: blur(20px) saturate(1.7) brightness(1.2) opacity(0.75);
-    opacity: 0;
-    transition: transform var(--dur-move) var(--ease), opacity var(--dur-micro) var(--ease);
-    pointer-events: none;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .nav-glide {
-      animation: none;
-      background-position: 50% 50%;   /* rest on a static mid-quintet blend */
-      transition: opacity var(--dur-micro) ease;
-    }
-  }
+     never fights the FAB's own transforms. */
 
   /* Post breaks out of the pill as a round button. On a screen a gradient
      reads best as LIGHT, so this isn't a flat quintet disc: the five type
-     colours drift UNDERNEATH a fixed lit dome — a specular hotspot up at the
-     top-left and a soft cavity shadow pooling at the base — so it reads as a
-     glossy, lit object with a real light direction. All of it lives in the
-     ::before (the ring mask is dropped here), so there's no layer-order fight
-     with the grain (::after) or the + glyph riding on top. */
+     colours sit UNDER a lit dome — a specular hotspot up at the top-left and a
+     soft cavity shadow pooling at the base — so it reads as a glossy, lit object
+     with a real light direction. All of it lives in the ::before (the ring mask
+     is dropped here), so there's no layer-order fight with the + glyph on top. */
   .nav-publish {
     margin: 0;
     width: var(--fab-size);
@@ -5717,23 +5743,28 @@ button.poll-option:disabled { cursor: default; }
                 transform var(--dur-move) var(--ease);
   }
   .nav-publish .nav-ico { width: 30px; height: 30px; }
-  .nav-publish::after { opacity: 0.28; }
+  /* The + wears the whole quintet at once, lit, and holds still.
+
+     All five type colours now run corner to corner across the disc at 1:1
+     instead of a 300%-wide band parked on a third of itself — so the button
+     says "any of these five" in one glance, which is what the + actually does.
+     The dome is unchanged: a top-left specular hotspot and a base cavity shadow
+     over the colour, so it still reads as a glossy object with one fixed light
+     source rather than a flat pastel disc.
+
+     What's gone is `publish-dome`, the 16s loop that slid the band underneath
+     that dome. It was the single most consequential animation in the app — not
+     because it was heavy on its own, but because the FAB is on screen on every
+     route, so its per-frame paint invalidation was the app's permanent floor. */
   .nav-publish::before {
     -webkit-mask: none;
     mask: none;
     background:
       radial-gradient(72% 62% at 32% 24%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 46%),
       radial-gradient(85% 52% at 50% 112%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0) 52%),
-      linear-gradient(125deg, var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-    background-size: 100% 100%, 100% 100%, 300% 100%;
-    background-position: 0 0, 0 0, 0% 50%;
-    animation: publish-dome 16s ease-in-out infinite;
-  }
-  /* Only the colour band drifts; the highlight and cavity stay put, so the
-     light source never wanders. */
-  @keyframes publish-dome {
-    0%, 100% { background-position: 0 0, 0 0, 0% 50%; }
-    50%      { background-position: 0 0, 0 0, 100% 50%; }
+      linear-gradient(125deg, var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo));
+    background-size: 100% 100%, 100% 100%, 100% 100%;
+    background-position: 0 0, 0 0, 0 0;
   }
   /* On the compose page the destination rule above would repaint the + with
      --accent (white in dark mode); the glyph sits on the pastel fill in every
@@ -5857,9 +5888,10 @@ button.poll-option:disabled { cursor: default; }
     .nav-publish .nav-ico, .dial-veil { transition: none; }
     /* Snap the + away and the pill to center — no slide under reduced motion. */
     .nav-pill, .nav-publish { transition: none; }
-    /* This override sits after (and matches) the global publish-fill reduced
-       rule, so it has to re-still the FAB's dome drift itself. */
-    .nav-publish::before { animation: none; background-position: 0 0, 0 0, 50% 50%; }
+    /* The FAB's dome drift used to need re-stilling here, because this rule
+       matched `.nav-publish::before` while the global waiver matched
+       `.publish-fill::before` and lost on source order. The + holds still in
+       every mode now, so there is nothing left to switch off. */
   }
 
   /* Dark glass. The pill's own fill, rim and lift are tokens now and flip
@@ -5868,13 +5900,10 @@ button.poll-option:disabled { cursor: default; }
      AA-graphics contrast, so it runs firmer than the shared chrome fill. */
   @media (prefers-color-scheme: dark) {
     .nav-pill { background: color-mix(in srgb, var(--bg) 72%, transparent); }
-    /* The active glow stays chromatic on dark paper: brightening pastels there
-       pushes them toward white, which would swallow the (light) --accent glyph
-       riding on the hot core. Trade the brightness boost for more saturation so
-       it reads as rich coloured light, not a white blowout. The opacity() in the
-       filter dims it a touch further here (the CSS opacity property is off limits
-       — JS drives it to fade the glide in/out on route changes). */
-    .nav-glide { filter: blur(22px) saturate(1.9) brightness(1) opacity(0.65); }
+    /* Dark paper needs the inactive icons a touch stronger than 0.4: --muted is
+       already low-contrast against a dark pill, and dimming it by the light-mode
+       amount pushes the three you are not on close to invisible. */
+    .nav-pill .nav-link { opacity: 0.5; }
     /* Same treatment as the pill: run the icon chip less transparent so it reads
        over dark content. The shadow is --glass-lift and deepens on its own. */
     .nav-dial-ico { background: color-mix(in srgb, var(--bg) 82%, transparent); }
@@ -6028,10 +6057,10 @@ button.poll-option:disabled { cursor: default; }
   .lightbox img,
   .lightbox video { width: 100%; max-width: 100vw; max-height: 100dvh; border-radius: 0; }
 
-  /* Wider, a touch more present gradient on phones (the blob reads smaller on a
-     narrow screen otherwise). Note this — not the base rule — is what actually
-     paints on a phone, so it's the one to read when a wash looks wrong there. */
-  .ambient { background: radial-gradient(ellipse 140% 52% at 50% -4%, var(--glow), transparent 76%); }
+  /* The phone-width .ambient override that used to live here is gone with the
+     profile wash it existed for. It only ever painted on that one variant —
+     body[data-ambient="publish"] outranks a bare .ambient on specificity, so the
+     composer never read it — and every other variant is retired. */
 
   /* Content-list rows break out to the screen edges so their hovers + hairline
      dividers run full-bleed while the content keeps its inset (via padding) — the
@@ -6434,24 +6463,22 @@ button.poll-option:disabled { cursor: default; }
 }
 .auth-about a:hover { color: var(--text); }
 
-/* The last step's tile IS the Tria app icon: the create/publish pastel quintet,
-   drifting like the Post button, with the dark-ink serif "t" — the tutorial's
-   payoff, and where the loud gradient now lives (not on a button). */
+/* The last step's tile IS the Tria app icon: the create/publish pastel quintet
+   with the dark-ink serif "t" — the tutorial's payoff, and where the loud
+   gradient now lives (not on a button). The colour holds still like every other
+   quintet surface; it kept the shared install-drift entrance below. */
 .install-appicon {
   background: linear-gradient(115deg,
-    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo), var(--type-note));
-  background-size: 300% 100%;
+    var(--type-note), var(--type-poll), var(--type-find), var(--type-activity), var(--type-photo));
   border: none;
   box-shadow: var(--lit-rim), var(--lit-drop);
-  /* Runs the same install-drift as the other two tiles (it's step 3, so the
-     nth-child 3.6s delay settles it right after them, blur and all), with the
-     Post button's colour drift layered on so the payoff tile stays alive. */
-  animation: install-drift 5.4s var(--ease-soft) infinite backwards,
-             publish-shift 14s ease-in-out infinite;
+  /* The same install-drift as the other two tiles (it's step 3, so the
+     nth-child 3.6s delay settles it right after them, blur and all). */
+  animation: install-drift 5.4s var(--ease-soft) infinite backwards;
 }
 .install-appicon .install-t { color: var(--on-type); }
 @media (prefers-reduced-motion: reduce) {
-  .install-appicon { animation: none; background-position: 50% 50%; }
+  .install-appicon { animation: none; }
 }
 /* Signed-out brand header — the SAME frosted bar as the signed-in feed header
    (edge-to-edge frost, hairline underline, wordmark at the left, a docked glyph

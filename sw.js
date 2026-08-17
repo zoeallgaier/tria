@@ -42,7 +42,12 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: data.icon || 'icons/icon-192.png',
     badge: 'icons/icon-192.png',
-    tag: data.tag || undefined,          // same tag collapses duplicates (e.g. one post)
+    // A matching tag REPLACES the delivered notification, so this has to be the
+    // per-event key, not the per-post one. It used to be `tag` (which the sender
+    // uses for grouping), so a second person commenting on a post silently
+    // overwrote the first person's notification before it was read. Same bug the
+    // app had through apns-collapse-id; same fix, same key.
+    tag: data.collapse || data.tag || undefined,
     data: { url: data.url || './#/updates' },
   };
   event.waitUntil(self.registration.showNotification(title, options));

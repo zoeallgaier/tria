@@ -217,13 +217,15 @@
                        rgba(255, 255, 255, 0.36) 55%,
                        transparent 100%);
 
-  /* Grain — a static, greyscale film-grain tile (inline SVG feTurbulence, so no
-     asset and no network). Laid over the whole viewport via a fixed overlay and
-     blended (see .grain in app.css) so flat fills and gradients read as tactile
-     paper rather than digital-smooth. Intentionally visible, not just anti-band
-     dithering. --grain-opacity tunes intensity per theme. */
-  --grain: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='140'%20height='140'%3E%3Cfilter%20id='g'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.72'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url%28%23g%29'/%3E%3C/svg%3E");
-  --grain-opacity: 0.1;
+  /* --grain / --grain-opacity are RETIRED, deliberately and completely. The
+     grain was a fixed, full-viewport mix-blend-mode sheet over the whole app,
+     and a blend layer cannot be served from a cached texture — the compositor
+     re-read the backdrop and re-blended it, full screen, every scroll frame. It
+     was the app's largest permanent GPU cost. Scoping it to only the gradient
+     surfaces was tried and was worse: overlay noise shifts mean luminance, so a
+     grained surface no longer matched the bare page around it. It works
+     everywhere or nowhere. Don't reintroduce it as a "just on this one
+     surface" layer — that is the version that was measured and rejected. */
 
   /* Lit surfaces — one shared "light from above" cue for every filled control,
      so buttons and active chips read as lit objects rather than flat swatches
@@ -337,9 +339,6 @@
                          rgba(0, 0, 0, 0.50) 0%,
                          rgba(0, 0, 0, 0.20) 55%,
                          transparent 100%);
-
-    /* Grain reads stronger on dark paper (soft-light lifts it), so ease it back. */
-    --grain-opacity: 0.07;
 
     color-scheme: dark;
   }
