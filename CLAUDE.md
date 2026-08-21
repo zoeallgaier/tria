@@ -357,6 +357,23 @@ before adding it, because the first show also creates the node and doing both in
 one task gives the browser nothing to transition from — the ring would appear
 instead of dropping in.
 
+**A row waits for its photo before it is spliced in.** `readyImages` decodes the
+photos belonging to the posts a refresh is about to add, and only then does
+`showWorld` paint — so a post ARRIVES rather than arriving and then developing.
+Under the ring the first 200ms of that wait is free, since the ring needs that
+long to drop in regardless, so the two run together and the paint waits for
+whichever finishes last. Home only: Discover rebuilds its grid whole and guards
+itself with a signature, and an Updates row carries an avatar, which the roster
+warm already covers.
+
+Both bounds on it are safety, not tuning, and neither should be relaxed without a
+reason. `READY_CAP` (700ms) is what stops a slow bucket turning a refresh into
+something that looks stuck — whatever hasn't decoded by then just fades in the old
+way, which is the behaviour that shipped through 1.1. `READY_MAX` (6) is because a
+resume after a week finds hundreds of new posts and only the first screen of them
+is about to be looked at. And the `live()` gate is **re-checked after the wait**,
+because the wait is a real gap the reader can navigate or start typing inside.
+
 ## Copy style
 User-facing copy uses commas and periods, **no em dashes** (code comments are
 exempt). Voice is playful but not trying-too-hard.
@@ -515,11 +532,11 @@ it either way.
   under it still reaches post text via `saidBy`, so hunting by interest works on a
   page of faces.
 - **A profile carries the same dial, and Frames is a wall.** Between the identity
-  card and the posts sits the **profile shelf** (`.profile-shelf`): a tracked
+  header and the posts sits the **profile shelf** (`.profile-shelf`): a tracked
   micro-caps caption naming the pane below, with `filterBtnEl` at its right — the
   masthead's own arrangement borrowed for a page whose masthead is a photograph.
-  Flat editorial, never glass (it captions content; a second frosted bar under
-  the frosted card is two panes with nothing between). Three rules make it a
+  Flat editorial, never glass (it captions content, and the page under it is flat
+  editorial too). Three rules make it a
   profile filter rather than a copy of Home's: its rows are **derived from what
   that person actually posted** (All + only the present types, in `FILTERS`
   order — no dead ends, no People row), the whole shelf is **absent** when
@@ -681,12 +698,84 @@ scrolling masonry grid is exactly where that bill lands, so they keep the fill +
 **The daily card is the one piece of glass that carries a hue.** The colour is the post type the
 prompt asks for, straight from the quintet — a daily wanting a Frame is cyan on
 the card, on the chip an answer wears, and in the page wash behind it, so the
-colour still says *what to make* rather than a sixth hue meaning "daily". On phones the Updates view
-switcher (seg-tabs) is docked chrome, not an inline row: it floats just above
-the bottom nav and *rises up from behind it* when a page becomes active (router
-tucks it while the page fades in, releases it on settle). The composer's
-Post/Activity switcher is the one seg-tabs that stays inline — it's excluded by
-`:not(#c-group-tabs)` wherever the router tucks them. The bottom nav hugs the
+colour still says *what to make* rather than a sixth hue meaning "daily".
+**A profile's identity is FLAT, and its colour is the page.** There is no
+identity card as of 1.2 — no glass panel, no 26px corners, no corner glow clipped
+inside one. The photo is an ordinary circular avatar at profile size (the app
+had exactly one non-circular avatar and it was this page), the name/handle/stats
+sit on the same type axis as the shelf caption and the feed below, and the
+person's colour is the shared `.ambient` wash — the SAME `data-ambient="profile"`
+Edit profile carries, so the page that shows a colour and the page that sets it
+are one gradient with one set of tokens. Don't fork a per-page geometry for it; a
+top-right variant was built and thrown away for being a second thing to keep in
+step.
+
+**The wash is tinted before it is saturated, and that is what lets it be seen.**
+`--wash-tint` mixes the accent toward the scheme's own extreme (`#fff` light,
+`#000` dark) at `--wash-keep`, then `--wash-sat` buys the chroma back — alpha
+moves luminance away from the paper the ink was chosen against and spends
+contrast, `saturate()` is luma-preserving and nearly free. `--wash-sat` is also
+the **pastel** dial: past ~2.5 the mix stops reading as the accent lit up and
+starts reading as a louder colour standing in for it, which is dramatising the
+hue rather than emphasising it. Two inks pay for the rest: `--wash-ink` for a
+lone mark in the hottest band (the back link, a corner disc) and
+`--wash-ink-soft` for the identity's whole secondary line, which would flatten
+the header if inked as hard. Re-measure both against every accent, both schemes,
+if any of those numbers move.
+
+**The wash is the top of the page's BACKGROUND, and must stay ordinary content.**
+`.ambient` is `position: absolute` at the document origin on washed pages, so it
+scrolls away with the header it belongs to and the compositor carries it for
+free. The version to never build again is the clever one: a fixed layer with the
+gradient moved inside it from a scroll handler. It measures perfectly and is
+wrong in the hand — WKWebView scrolls on the compositor and delivers scroll
+events coalesced behind it, so the wash visibly slides against the content it is
+supposed to be part of. Anything that recomputes the wash's position per frame
+has this bug, whatever it is written in.
+
+What being absolute costs is one seam: a document-anchored layer stops at the
+document and iOS does not, so an over-pull past the top opens a band that
+`body::before` fills with flat paper, meeting the wash at its peak. Most of that
+happens behind the top bar, which is always shown below y=48. If it ever needs
+closing the lever is `overscroll-behavior-y: none` scoped to the washed pages —
+they are exactly the routes with no pull-to-refresh — at the price of the top
+bounce there. Note the gate's copy of `.ambient` is still fixed and should stay
+that way; it does not scroll.
+
+**The wash is a shallow band, and only its HEIGHT is adjustable.** The ellipse is
+`112% 43% at 50% 0%`. The 112% overruns the viewport on purpose so the gradient
+never terminates anywhere the reader can see it end — a bloom with a visible left
+and right edge reads as an *object sitting on* the page rather than as light
+falling on it, so halving the size means halving the vertical radius and leaving
+the horizontal one alone. The offset moves with the height: it used to sit at
+`-10%` to push the hot core off-screen, which was an eighth of an 86% radius and
+is nearly a quarter of a 43% one, so at this size the origin is pinned to the top
+edge and `--wash-amt` (68% publish / 56% profile) does the work of keeping it
+gentle instead. Shortening the gradient does not soften it — the peak is
+unchanged and the falloff is twice as steep — which is why the alpha came down in
+the same edit.
+
+**Glyph buttons owe 44pt, and the disc is not the target.** Apple's HIG floor is
+44×44 and Tria draws several controls smaller than that on purpose (the profile's
+corner disc is 32px, because at 44 it stops being a quiet mark in the corner and
+competes with the name beside it). The fix is a transparent `::after` that grows
+the hit area without touching the paint. Two traps: `inset` resolves against the
+**padding box**, so a 1px border means `-7px` and not `-6px` to reach 44 (`-6`
+measures 42 — passes review, fails the device), and overlapping targets are only
+safe where a single control is guaranteed. Verify by hit-testing the live page
+with `elementFromPoint`, not by reading the number off the rule.
+
+**Every seg-tabs is inline, under the masthead, at every width** — Updates' All /
+Mentions and the composer's Post / Activity are the same control in the same
+place. Updates' used to dock on phones (`position: fixed`, floating above the
+bottom nav) on the material argument that a persistent switcher floats above
+content. It came out in 1.2: a control pinned to the bottom is one you have to go
+and find, it sat a long way from the title it filters, and it made Updates the
+one page whose switcher lived somewhere else. Two things fall out of removing it,
+both worth keeping — the composer no longer needs `#c-group-tabs` to opt back out
+of the dock by hand, and **no page has a `position: fixed` child any more**,
+which is what the containment cautions elsewhere in this file are guarding.
+The bottom nav hugs the
 home indicator (small float, iOS Liquid Glass style), not lifted into the screen.
 
 **Bars get the scroll edge effect, not a hairline.** `.topbar` and `.auth-topbar`
@@ -732,127 +821,137 @@ top rim instead. Keep the colour-band scale (`300%`, 2–3 hues in view) identic
 across modes — only the gloss is scheme-tuned; redeclaring the `background`
 shorthand silently resets `background-size`, so always restate it.
 
-**Page changes are ONE fade, and only that.** Every route swap mounts the
-destination fully opaque and dissolves the outgoing page away on top of it, 0.24s
-(`--dur-quick`, mirrored by `TRANSITION_MS`), no direction. **One ramp, not two,
-and that distinction is load-bearing.** It was a true cross dissolve until July
-2026 and the flash people kept reporting was not a mistimed animation, it was
-arithmetic: two ramps crossing means neither layer is opaque in the middle of the
-move, so the composite is `0.5·out + 0.25·in + 0.25·PAGE BACKGROUND`. A `.page` is
-a transparent div, so that quarter of bare `--bg` barely moves the frame's mean
-luminance and instead lands entirely on the ink — measured, the arriving page's
-type sat 31 luminance points lighter at the midpoint than under one fade. The
-destination *arrived washed out* on every single navigation. Fading only the
-outgoing layer holds coverage at 100% throughout, and halves the promoted layers
-while it's there (only `.page.leave` gets `will-change`). Pages used to slide
-along a nav line (forward from the right, back from the left, outgoing page
-receding for depth), but Discover's grid is dozens of photos still decoding while
-the slide ran, so the movement read as the page snapping rather than loading.
-Don't reintroduce a slide, a scale, an entry blur, or a second opacity ramp, and
-keep pages off `will-change: transform` — it makes a page a containing block for
-its `position: fixed` children (the docked seg-tabs).
+**Page changes have NO transition, as of 1.2.** `renderPage` builds the
+destination and mounts it in the same task as the navigation: the new page is
+there on the next frame and the old one is gone. There is no `.page.leave`, no
+outgoing pin, no `instant` flag, no cleanup pass, and nothing to sequence against
+— the whole thing is `replaceChildren` plus a scroll settle.
 
-**The fade is ours to draw only when nobody else is drawing one — so in the App
-Store build a BACK GESTURE renders instantly instead.** `TriaViewController`
-turns on `allowsBackForwardNavigationGestures`, and that gesture is not a passive
-input: WebKit slides a snapshot of the destination in under the reader's thumb,
-and because Tria's routes are same-document hash changes it drops that snapshot
-the moment the navigation commits, waiting for nothing to paint. The live
-document at that instant is still the page you swiped away, so the move ended on
-that page snapping back to full opacity and then dissolving for a quarter second
-— two transitions for one gesture, and it reads as a reload because the page you
-left comes back whole before it goes. Measured in WebKit 26.5: opacity 1.00 for
-three frames, ~200ms of it. A traversal now mounts in the same task as the
-`hashchange`, so the live page already matches the snapshot when WebKit lifts it.
-It owes the same debts the fade does — the row freeze and the `.enter`
-photo-snap window both apply, or 72 tiles rising under an already-complete page
-re-creates the "it reloaded" read by another route. Taps keep their fade in every
-shell; the other two shells keep theirs on back too, since nothing there animates
-a back for us.
+**Every step that got here was a real fix, and the last one was removing the fix.**
+Pages first *slid* along a nav line, which read as snapping on Discover, whose
+grid is dozens of photos still decoding while the slide ran. So it became a cross
+dissolve, which flashed — not a mistimed animation but arithmetic: two ramps
+crossing means neither layer is opaque mid-move, so the composite was `0.5·out +
+0.25·in + 0.25·PAGE BACKGROUND`, and that quarter of bare `--bg` landed on the
+ink (measured: the arriving page's type sat 31 luminance points lighter at the
+midpoint). So it became ONE fade, destination mounted opaque with only the
+outgoing layer dissolving off it, which fixed the flash completely and was still
+240ms of the app withholding a page it had already finished building. Nothing was
+broken by then. The fade itself was the cost, and a route change is not an event
+that needs narrating. **Don't reintroduce a slide, a scale, an entry blur, a
+cross dissolve, or a single fade**, and keep pages off `will-change: transform` —
+it makes a page a containing block for any `position: fixed` child. No page has
+one now that the Updates switcher is inline, and that is worth not undoing by
+accident from either end.
 
-**Do not detect that with `popstate` — on this engine it cannot.** `popstate` is
-specified to fire for traversals and not for a fragment assignment, but WebKit
-fires it for `location.hash =` as well, in the same `popstate → hashchange`
-order, so a tap and a swipe back are byte-identical by event. Trusting it makes
-EVERY navigation in the app instant and quietly deletes the fade app-wide. The
-history entry answers it without an event: `navStamp` mints a key the first time
-we stand on an entry, so a key it had to **mint** is a push and a key it
-**found** is a return (`navFresh`) — the same stamp the scroll memory already
-runs on, plus a `!== navHere` guard for `go()`'s same-target branch.
+**The two things the fade was quietly paying for still have to be paid.** Both
+survive, and without them "instant" just relocates the wait — the page frame
+lands at once and then assembles itself in front of the reader, which is the
+sluggishness this removal was for wearing a different coat:
 
-**The outgoing page is pinned to the band the reader was on, and the pin cannot
-be measured until the scroll has finished moving.** `.page.leave` is lifted out of
-flow, so it has to be re-anchored by hand or it fades out showing the wrong part
-of itself. The invariant is simply `leaveTop === -fromY` in viewport coordinates
-— the page you left freezes exactly where you last saw it — which `renderPage`
-gets by pinning `top = toY - fromY`. **`toY` is why `settleScroll` is a callback
-and not a boolean.** There are three destinations (the top, a spotlighted card
+- **`renderPage` freezes every row it just mounted** (`.card, .notif,
+  .request-row, .ptile`, inline so it can't replay) so a navigation never plays
+  a per-row rise. Discover is why this is strict rather than tidy: it mounts its
+  whole grid at once, so before the freeze covered `.ptile` an arrival there ran
+  87 concurrent animations with a burst of bitmaps decoding under them — the
+  pile-up behind the iOS WebKit crash. **Any new page-level row entrance has to
+  join that list.**
+- **`.page.enter` holds photo fades off for one beat** (`SETTLE_MS`, 240) on
+  `.photo-frame img` + `.ptile-face--media img`. It is now the *only* thing that
+  class does. A page that arrives complete in one frame and then dissolves a wave
+  of photos up through itself is a second move stapled to a change that was
+  already over, and readers read that as loading.
+
+The row entrance itself is not gone, it is scoped: it plays on a **discrete act**
+(landing, a filter, a tag, clearing search) and stays out of **typing** and
+**background re-pulls**, via `paint({ stage })` → `layoutGrid(fresh)` →
+`.pgrid--settled`. A profile's frame wall inherits all of it for free: its tiles
+are `.ptile`, so the freeze already covers them, and `paintPosts(stage)` →
+`dealMasonry(fresh)` is the same contract. Rows that arrive *without* a page
+change still rise — that's a thing happening, which is what the entrance is for.
+
+**The App Store build's BACK GESTURE needed a special case, and no longer does —
+but the trap it sat on is still there.** `TriaViewController` turns on
+`allowsBackForwardNavigationGestures`, and that gesture is not a passive input:
+WebKit slides a snapshot of the destination in under the reader's thumb, and
+because Tria's routes are same-document hash changes it drops that snapshot the
+moment the navigation commits, waiting for nothing to paint. While the router
+still drew a fade, the live document at that instant was the page you'd swiped
+away, so the move ended on *that* page snapping back to full opacity and then
+dissolving for a quarter second — two transitions for one gesture, reading as a
+reload. Instant rendering fixed it, and now everything is instant, so the case
+has dissolved into the general rule. **If a page transition is ever reintroduced,
+this is the bug that comes back with it — and `popstate` is NOT how to dodge it.**
+`popstate` is specified to fire for traversals and not for a fragment assignment,
+but WebKit fires it for `location.hash =` as well, in the same `popstate →
+hashchange` order, so a tap and a swipe back are byte-identical by event (measured
+on WebKit 26.5). The only reliable tell is whether `navStamp` **minted** the
+history key (a push) or **found** it (a return), which is the same stamp the
+scroll memory runs on.
+
+**`settleScroll` stays a callback, and nothing may move the scroll after
+`renderPage` returns.** There are three destinations — the top, a spotlighted card
 `parkCard` already jumped to during `renderFn`, and a remembered position from
-`restoreScroll`), and the third one used to run *after* `renderPage` returned: the
-pin was measured against a destination of 0 and then the window jumped somewhere
-else entirely, leaving the old page anchored a whole remembered scroll off. **That
-was the swipe-back flicker** — measured at 519px of error on a short test page, and
-on a real restored Discover it puts the outgoing page clean off screen, so a back
-swipe dissolves nothing over the new page for a quarter second. Any new caller
-that wants a different landing point passes a callback; nothing may move the
-scroll after `renderPage` returns.
+`restoreScroll` — and only the caller knows which. This mattered doubly under the
+fade, because the outgoing page's pin was measured against wherever the scroll
+finished; the pin is gone but the rule stands, since `syncTopbar` is placed off
+the settled position and a later jump leaves the bar answering the wrong page.
+
+**Scroll is remembered TWICE, and the two memories answer different questions.**
+`scrollMemory` is keyed per history ENTRY (`navStamp`), which is exactly right for
+a back or an edge-swipe and useless for a tab: tapping Circle from Discover mints
+a *new* entry, so there is nothing on file and you land at the top. So `pathScroll`
+is a second memory keyed by PATH, consulted only when the entry key comes up
+empty. `restoreScroll(key, path)` reads them in that order.
+
+**Only Circle and Discover keep the path memory** (`TAB_SCROLL`). Those are the
+two pages you live in and scroll deep. Updates, a profile, About and Publish are
+pages you arrive at to read from the top, and one that opens halfway down for a
+reason you can't remember is worse than one that opens where it starts. The two
+ways to clear a held position are the ones that already existed and already say
+what they do: re-tap the tab you're on, or pull the page down (which only arms at
+the top anyway) — both end at the top, and leaving then files that.
+
+Two guards, because a held scroll outliving its account is the failure here.
+`rememberScroll` **never files from the gate** — the signed-out branch returns
+before it advances `lastPath`, so on a dropped session `lastPath` still names the
+authed page while the scroll on screen belongs to the login form. And logging out
+**clears both maps**, or the next person to sign in opens someone else's feed
+part-way down.
 
 **A jump is not a scroll gesture.** The topbar's hide-on-read handler ignores any
 scroll delta larger than a viewport, because the router teleports the window (to a
 spotlight, to a remembered position, back to the top) and a thousand-pixel jump
 was reading as "scrolling down fast" — so landing on a post also slid the bar
-away, a second move stapled onto a navigation meant to be one clean fade.
+away, a second move stapled onto a navigation meant to have none.
 
 **A spotlight has no travel and no wash.** Tapping a post from Discover, Updates
 or a frame wall sets `spotlightPost`; the render then calls `parkCard`, which
 moves the scroll **synchronously, inside `renderFn`**, so the position is set
-before the new page's first paint and the fade reveals the card already
-in place. The fade *is* the transition to the post. It used to glide 460ms to the
-card and then flash a tint over it, both starting 120ms after the route settled —
-three moves stacked on one tap, and the travel got longer and more obviously
-wrong the older the post was, since a spotlight routinely aims a thousand pixels
-down a feed. Don't reintroduce either: landing already there isn't a cheaper
-animation, it's the right one, and a highlight answers "which one did I mean?"
-when nothing asked. What `parkCard` **keeps** is the silent 900ms re-aim after
-landing — lazy media resolving *above* the card (a legacy photo swapping its 3:2
-reserve box for its real shape) shoves it down, and mid-fade that reads as
-the post sliding away. Because the scroll moves during `renderFn`,
-`renderPage` captures `fromY` **before** calling it (see the pin rule above).
+before the new page's first paint and the post is simply where the page opens. It
+used to glide 460ms to the card and then flash a tint over it, both starting 120ms
+after the route settled — three moves stacked on one tap, and the travel got
+longer and more obviously wrong the older the post was, since a spotlight
+routinely aims a thousand pixels down a feed. Don't reintroduce either: landing
+already there isn't a cheaper animation, it's the right one, and a highlight
+answers "which one did I mean?" when nothing asked. What `parkCard` **keeps** is
+the silent 900ms re-aim after landing — lazy media resolving *above* the card (a
+legacy photo swapping its 3:2 reserve box for its real shape) shoves it down, and
+on a page that has only just landed that reads as the post sliding away.
 
-**Nothing else animates during a page change.** The fade is the whole move:
-`renderPage` freezes every row it just mounted (`.card, .notif, .request-row,
-.ptile`) so they ride the swap instead of stacking a per-row rise on
-top of it, and CSS kills the photo fade on `.photo-frame img` +
-`.ptile-face--media img` for the same window — which the one-fade swap gives a
-second reason for, since the destination is now on screen complete from frame one
-and a wave of photos fading up under a page dissolving away is two moves in the
-same 240ms. **Any new page-level row entrance
-has to join that list.** Discover is why the rule is strict rather than tidy: it
-mounts its whole grid at once, so before the freeze covered `.ptile` an arrival
-there ran 87 concurrent animations over two promoted page layers with a burst of
-bitmaps decoding under them — the exact pile-up behind the iOS WebKit crash. The
-entrance itself is not gone, it is scoped: it plays on a **discrete act**
-(landing, a filter, a tag, clearing search) and stays out of **typing** and
-**background re-pulls**, via `paint({ stage })` → `layoutGrid(fresh)` →
-`.pgrid--settled`. A profile's frame wall inherits all of it for free: its tiles
-are `.ptile`, so the freeze already covers them, and `paintPosts(stage)` →
-`dealMasonry(fresh)` is the same contract (a filter pick stages, a re-deal on
-resize parks).
-
-Two things came *off* that list when the swap became one fade, and both for the
-same reason — the destination is no longer a promoted, fading layer, so rules
-written to protect one no longer apply to it. **The arriving page's glass stays
-live** (`backdrop-filter: none` is now `.page.leave` only): a page used to land
-wearing flat glass and frost up when the router's cleanup ran, so every
-navigation onto Discover, Updates or a profile *ended* on a little pop of the
-material switching on. And **the docked seg-tabs rises with the fade rather than
-after it**, and only when the outgoing page hasn't got one of its own — two copies
-of the same control at the same fixed coordinates never moved, so animating one
-is inventing a move. Released in the same `requestAnimationFrame` that starts the
-fade, at `--dur-move` rather than `--dur-slow`: when the rise ran *after* the page
-change it could afford 0.5s, but alongside a 0.24s fade it was the last thing
-still moving by a clear quarter second and the navigation ended on it instead of
-with it.
+**The seg-tabs rise went with the fade, and then the dock went too.** The Updates
+switcher used to float above the bottom nav, tucked behind the pill on arrival and
+released a frame later. The rise came out first, for the fade's own reason: the
+router only ever played it when the outgoing page had no switcher of its own — two
+copies of the same fixed control at the same coordinates never moved, so animating
+one is inventing a move, and on a page that arrives instantly *nothing* moved. The
+dock itself came out after (see the design-system note above), so the switcher is
+now an ordinary inline control under the masthead and there is nothing left here
+to sequence. (The arriving page's glass has stayed live since the one-fade change, for
+the neighbouring reason: `backdrop-filter: none` applied to a promoted fading
+layer, and the destination is neither, so a page used to land wearing flat glass
+and frost up on cleanup — a little pop of the material switching on at the end of
+every navigation.)
 
 **Share is the tray, and the header tray shares.** `ICONS.send` is the
 arrow-out-of-a-box the OS itself draws for share, not an envelope (an envelope

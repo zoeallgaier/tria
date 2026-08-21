@@ -83,35 +83,45 @@ button, a, .nav-link, .brand, .masthead-kicker {
 }
 input, textarea { -webkit-user-select: auto; user-select: auto; }
 
-/* ── Ambient wash (the composer only) ───────────────────────────────────────
-   One soft blob centred above the screen, behind the whole app (above the flat
-   page colour, below all content). It is now a COMPOSER special and nothing
-   else: writing a post washes the page in the type you're making, and that is
-   the only page in Tria that carries a full-screen gradient.
+/* ── Ambient wash (three pages) ─────────────────────────────────────────────
+   One soft blob above the screen, behind the whole app (above the flat page
+   colour, below all content). Three pages light it and they are all answering
+   the same question — what colour is the thing in front of me: the composer
+   takes the type you're making, Edit profile and a profile take the person's
+   own colour.
 
-   It used to light four pages. About had a self-lit blue, a daily had the
-   prompt's hue, and a profile had a blob sampled from that person's photo — and
-   between them they meant the app had four different-looking papers. Two things
-   killed them. The cheap one is cost: a full-viewport gradient is the largest
-   single surface the compositor can be asked to hold, and these were the layers
-   the two retired hue animations were animating. The real one is that a wash
-   changes the page's apparent BACKGROUND, so a washed page never quite matched
-   the feed you arrived from — which was invisible while a global grain layer sat
-   over everything evening it out, and became obvious the moment that came off.
+   It used to light more, and badly. About had a self-lit blue, a daily had the
+   prompt's hue, and between them they meant the app had several
+   different-looking papers for no reason a reader could name. Two things killed
+   those. The cheap one is cost: a full-viewport gradient is the largest single
+   surface the compositor can be asked to hold, and these were the layers the two
+   retired hue animations were animating. The real one is that a wash changes the
+   page's apparent BACKGROUND, so a washed page never quite matched the feed you
+   arrived from — invisible while a global grain layer sat over everything
+   evening it out, and obvious the moment that came off.
 
-   The composer keeps it because there the colour is INFORMATION (it names the
-   post type you're about to make, and it changes as you attach things) rather
-   than decoration, and because the composer is a page you're on briefly and on
-   purpose. A profile's colour moved somewhere better — see the corner glow on
-   .account-card, which says the same thing about the same person in a tenth of
-   the pixels. */
+   What the three survivors have in common is that the colour is INFORMATION
+   there: it names the post type you're about to make, or it names whose page
+   this is. Where it was decoration, it's gone. A profile's colour spent a while
+   as a glow clipped inside the identity card instead, which was a smaller answer
+   to the same question and is retired with the card (see .account below). */
 .ambient {
-  /* Fixed, not absolute, and the reason is the iOS rubber band: body::before
-     (fixed) paints the entire overscroll gap, so a scrolled layer clipped to the
-     document slid out from under the fixed paper and opened a band of bare page
-     above it — a hard step across a single row. Growing the box upward looks
-     like the obvious answer and is completely inert: content above the page
-     origin is never painted at all.
+  /* This base copy (the signed-out gate) is FIXED, and the reason is the iOS
+     rubber band: body::before (fixed) paints the entire overscroll gap, so a
+     scrolled layer clipped to the document slides out from under the fixed paper
+     and opens a band of bare page above it — a hard step across a single row.
+     Growing the box upward looks like the obvious answer and is completely
+     inert: content above the page origin is never painted at all.
+
+     The washed pages below deliberately take the other side of that trade and
+     are ABSOLUTE, because the gate does not scroll and they do. The step costs a
+     soft edge during an active over-pull, most of which happens behind the top
+     bar (the bar is always shown below y=48, so a pull shallower than its own
+     height never exposes the seam at all). Being fixed costs correct scrolling
+     on every scroll there is, which is worse. If the seam ever does need
+     closing, the lever is `overscroll-behavior-y: none` scoped to washed pages —
+     they are the ones with no pull-to-refresh — and the price is the top bounce
+     on those routes.
 
      inset:0 rather than a 100vh box: on iOS `100vh` is the LARGE
      (toolbar-hidden) viewport while `top: 0` pins to the small one, so a 100vh
@@ -132,35 +142,189 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   transition: opacity 0.4s ease;
 }
 
-/* Publish composer: the whole screen washes the inferred post type's hue —
-   lavender Note, peach Find, cyan Frame, lime Activity, rose Poll. A half-screen
-   radial falling from the top but REACTIVE: --glow-pub is a registered <color>
-   so the wash tweens between types as you attach a link/photo or switch to
-   Activity; the gradient takes its alpha via color-mix. Driven on <body> in
-   renderPublish / syncType. */
-@property --glow-pub {
+/* THREE PAGES WASH, and they are the same wash. The composer takes the inferred
+   post type's hue — lavender Note, peach Find, cyan Frame, lime Activity, rose
+   Poll — and a profile and Edit profile take the person's own colour. A radial
+   falling from above the top edge, REACTIVE in all three: --glow-wash is a
+   registered <color>, so the hue TWEENS when you attach a link or pick a swatch
+   instead of cutting.
+
+   One rule, one property, because all three pages are answering the same
+   question — what colour is the thing in front of me — and a second copy of this
+   block would be two places to keep a gradient in step. Only the loudness
+   differs, via --wash-amt. Driven on <body> in renderPublish / syncType and in
+   paintWash.
+
+   THE PASTEL IS MIXED BEFORE IT IS WASHED, and that mix is the whole reason this
+   can be loud at all. A wash pays for itself in ONE currency: it moves the
+   ground's luminance away from the paper the ink was chosen against, and the
+   quintet is light (~0.78), so on white it darkens and on black it lifts — both
+   of which spend contrast. Alpha was therefore the wrong dial to turn: at the
+   shipped 18%/35% the colour was barely visible and the "← Profile" back button
+   was already down to 4.6:1, so there was nowhere left to go.
+
+   So the accent is first mixed toward the paper's own extreme — --wash-tint,
+   white in light and black in dark — which pulls the ground back TOWARD where
+   the ink already reads, and the chroma that mix throws away is bought back with
+   --wash-sat, because saturate() is a luma-preserving matrix and costs contrast
+   almost nothing. Deep colour on dark, bright colour on light, and the luminance
+   step stays small in both. Measured on the real page, all eight accents, WebKit,
+   at 390 and 1280: the ground under the back button carries chroma 77 in light
+   and 59 in dark where the old wash carried 14 and 15, and every piece of text on
+   both pages still clears AA.
+
+   The one thing that still had to be paid is the back button: it is --muted,
+   small, and sits in the hottest band of the gradient, and grey-on-colour is the
+   pairing this palette cannot guarantee. --wash-ink gives it more ink for as long
+   as it is standing on colour — toward --text, which is the correct direction in
+   BOTH schemes, because the tinted wash keeps the ground dark in dark mode rather
+   than lifting it, so the LIGHT ink wins there too. At the shipped numbers that
+   is the difference between 4.34:1 and 9.79:1 in light, 4.40:1 and 8.13:1 in dark
+   (4.23/9.54 and 3.95/7.29 at 1280) — so the word is more legible on the coloured
+   page than it was on the pale one. Scoped to a washed page, so a friend's
+   profile keeps its ordinary grey.
+
+   The geometry is a bloom over the top third that has resolved to paper by the
+   fields, not a tint of the whole page. The HEIGHT is what has been wrong, twice,
+   and only the height moves. It went out to 165%/128% first, where the colour
+   stopped being a header and became the page's background, which is a different
+   app; it settled at 112%/86% and was still most of the page. It is 112%/43%
+   now — the vertical radius halved, the horizontal one untouched.
+
+   The asymmetry is the whole shape, and the width is not a free parameter to
+   trim alongside it. 112% overruns the viewport on purpose, so the gradient
+   never terminates anywhere the reader can see it end — a bloom with a visible
+   left and right edge stops reading as light falling on the page and starts
+   reading as an object sitting on it, with bare corners either side. Only the
+   reach DOWN the page decides how much of the page is coloured. (Both radii were
+   halved for exactly one edit here; that is what it would have been.) So: a
+   shallow band across the full width, fading out around a third of the way down,
+   which is a header again.
+
+   And the centre is pinned to the TOP EDGE (50% 0%) of the PAGE — not floated
+   above it, and not parked at the top of the screen. It is background: it sits
+   at the document origin and scrolls away with the header it belongs to. The
+   old -10% pushed the origin off-screen to hide the hot core, which cost nothing
+   when the ellipse was 86% tall and the offset was an eighth of its radius. At
+   43% the same 10% is nearly a quarter of it, so the bloom would have been
+   cropped rather than positioned — losing its brightest band off the top of a
+   gradient that had just lost half its reach. Pinning it puts the peak exactly
+   where the page begins and lets --wash-amt do the work of keeping it gentle,
+   which is what that variable is for. The offset is measured in the VERTICAL
+   radius, so it moves with the height: if that number changes again, check this
+   one in the same edit.
+
+   --wash-amt came down with it (80/66 to 68/56, ~15%). A shorter gradient is not
+   a softer one — the peak is exactly as saturated as it was, now spent over half
+   the distance, so the falloff is twice as steep and it reads as a HARDER mark
+   than the tall one did. The alpha step is what keeps the top of the page from
+   gaining a headline the moment the wash lost its reach. Contrast only moves the
+   safe way here: less wash is a ground closer to the paper the ink was picked
+   against, so every measurement below improves rather than degrades. Re-measured
+   anyway.
+
+   --wash-sat is a PASTEL dial as much as a contrast one, and it came back down
+   from 3.4/3 for that half of its job. Saturate is free in luminance, so the
+   only thing stopping it is taste: past about 2.5 the mix stops reading as the
+   accent lit up and starts reading as a different, louder colour standing in
+   for it — lavender goes violet, coral goes orange, and the page is
+   dramatising the hue rather than emphasising it. 2.4 and 2.2 still carry ~4x
+   the chroma the old alpha-only wash managed, which was the point of the trade;
+   they just carry it as the colour the person actually picked.
+
+   THREE PAGES NOW, not two, and the third one added no CSS. A profile joined
+   them when the identity card was retired (see .account below) and it simply
+   takes data-ambient="profile" — the same value Edit profile has always used,
+   which is right rather than convenient: the two pages carry the same person's
+   colour at the same weight, one showing it and one setting it. A corner variant
+   was built first and thrown away. It was a second geometry to keep in step for
+   the sake of one page, and the thing it was avoiding (colour over the face at
+   the top-left) is not a problem a bloom that has resolved to paper by the stats
+   line actually has. */
+@property --glow-wash {
   syntax: '<color>';
   inherits: true;
   initial-value: #b7a6e8;
 }
-body[data-ambient="publish"] .ambient {
-  position: fixed;
-  inset: 0;
-  height: auto;
-  /* Richer than the old page washes: a stronger colour core plus a saturate
-     boost so the pastel reads as real colour rather than a faint tint. Static
-     filter over a static gradient — rasterized once, not per frame. */
-  background: radial-gradient(ellipse 120% 84% at 50% -18%,
-    color-mix(in srgb, var(--glow-pub) 35%, transparent), transparent 74%);
-  filter: saturate(1.5);
+body[data-ambient="publish"],
+body[data-ambient="profile"] {
+  --wash-tint: #fff;                  /* what the accent is mixed toward first */
+  --wash-keep: 60%;                   /* how much of the accent survives that mix */
+  --wash-sat: 2.4;                    /* chroma bought back, luminance-cheap */
+  --wash-ink: color-mix(in srgb, var(--muted) 30%, var(--text));
+  --wash-ink-soft: color-mix(in srgb, var(--muted) 70%, var(--text));
+}
+@media (prefers-color-scheme: dark) {
+  body[data-ambient="publish"],
+  body[data-ambient="profile"] {
+    --wash-tint: #000;
+    --wash-keep: 52%;
+    --wash-sat: 2.2;
+  }
+}
+body[data-ambient="publish"] .ambient,
+body[data-ambient="profile"] .ambient {
+  /* ABSOLUTE, not fixed: this is part of the page's background, sitting at the
+     top of the document and scrolling away with the header it belongs to. Being
+     an ordinary layer inside the scrolled content is the entire point — the
+     compositor carries it with the page at whatever framerate the page is
+     scrolling at, which is the one thing nothing else here can do. A fixed layer
+     driven from a scroll handler was tried and is the version to never build
+     again: WKWebView scrolls on the compositor and delivers scroll events
+     coalesced behind it, so the wash slid against the content it was supposed to
+     be part of. Correct in every measurement, visibly wrong in the hand.
+
+     There is no positioned ancestor (body is static), so top:0 resolves against
+     the initial containing block, i.e. the document origin. Height is an
+     explicit 100vh because the gradient's 43% is a percentage OF THIS BOX: it
+     has to be a stable number or the bloom would resize as it scrolled. vh and
+     not dvh for exactly that reason — dvh changes as iOS collapses its toolbar,
+     which is a resize mid-scroll. */
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 100vh;
+  --wash-col: color-mix(in srgb, var(--glow-wash) var(--wash-keep), var(--wash-tint));
+  background: radial-gradient(ellipse 112% 43% at 50% 0%,
+    color-mix(in srgb, var(--wash-col) var(--wash-amt), transparent), transparent 82%);
+  filter: saturate(var(--wash-sat));
   opacity: 1;
-  transition: --glow-pub var(--dur-move) var(--ease), opacity 0.4s ease;
+  transition: --glow-wash var(--dur-move) var(--ease), opacity 0.4s ease;
   transform: translateZ(0);
 }
+body[data-ambient="publish"] .ambient { --wash-amt: 68%; }
+body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
+
+/* The chrome that stands on the colour rather than under it, in two weights,
+   and the split is about how much of it there is.
+
+   --wash-ink is for a LONE mark high in the bloom: the back link, and the corner
+   disc's glyph. One word or one icon, nothing around it to carry it, sitting
+   where the gradient is hottest — so it goes most of the way to --text and stops
+   being grey at all.
+
+   --wash-ink-soft is for the identity's secondary LINE (handle, stats), which is
+   a whole tier of type and would flatten the header if it were inked that hard:
+   the name would stop leading and the page would read as three things shouting
+   at one volume. It is a small step off --muted, chosen as the least that clears
+   AA against the worst accent at the worst point of the wash. Left grey, that
+   line failed: the stat labels bottomed out at 3.88:1 and the handle at 4.33:1.
+   Inked, the whole line reads 5.89:1 or better across all eight accents in both
+   schemes, and to the eye it is still the quiet row under the name.
+
+   Both are scoped to a washed page, so a profile with no colour set keeps
+   ordinary greys. */
+body[data-ambient="publish"] .profile-back,
+body[data-ambient="profile"] .profile-back { color: var(--wash-ink); }
+body[data-ambient="profile"] .account-badges > button { color: var(--wash-ink); }
+body[data-ambient="profile"] .account-handle,
+body[data-ambient="profile"] .account-stat,
+body[data-ambient="profile"] .account-stat-label,
+body[data-ambient="profile"] .account-stat-dot { color: var(--wash-ink-soft); }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Colour still updates on type change, just without the tween. */
-  body[data-ambient="publish"] .ambient { transition: opacity 0.4s ease; }
+  /* Colour still updates, just without the tween. */
+  body[data-ambient="publish"] .ambient,
+  body[data-ambient="profile"] .ambient { transition: opacity 0.4s ease; }
 }
 
 /* Grain is gone from the app entirely — there is no --grain token and no layer
@@ -503,118 +667,47 @@ main {
   min-height: 100dvh;
 }
 
-/* ── Page transitions ──────────────────────────────────────────────────────
-   The router (app.js) swaps one `.page` for the next inside #view. The swap is
-   ONE FADE: the incoming page is mounted fully opaque underneath, and the
-   outgoing page — lifted out of flow, so it overlays — fades out on top of it.
-   No direction, no movement, one rule for every route.
+/* ── Page changes ──────────────────────────────────────────────────────────
+   The router (app.js) replaces one `.page` with the next inside #view, in the
+   same task as the navigation. THERE IS NO TRANSITION, and nothing in here
+   should grow one back.
 
-   ONE fade, not two, and that is the whole fix for the flash. This used to be a
-   true cross dissolve: outgoing 1→0 while incoming 0→1, same curve. Two ramps
-   crossing means neither layer is opaque in the middle of the move — at the
-   halfway point each sits near 0.5, so the composite is 0.5·out + 0.25·in +
-   0.25·PAGE BACKGROUND. That quarter of bare --bg punching through both layers
-   is a real luminance spike on every single navigation: a white blink in light
-   mode, a dark dip in dark mode. Nothing was mistimed and nothing was
-   stuttering; the arithmetic of a cross dissolve simply cannot cover the page.
-   Fading only the outgoing layer over an already-opaque incoming one keeps
-   coverage at 100% for the entire move, so the background never shows and the
-   destination is on screen, complete, from the first frame.
+   The full history is in the router comment in app.js; the short version is that
+   this was a slide, then a cross dissolve, then one fade, and each fix was real
+   — but the last thing left to fix was the fade itself. A page the app has
+   already finished building was being withheld for 240ms, and a route change
+   isn't an event that needs narrating. (Two things never to bring back either
+   way: the nav-line slide, which turned every late-decoding Discover tile into a
+   glitch, and the 6px focus-in blur that came before it — `filter: blur()`
+   re-rasterizes the whole page every frame, and that was the old iOS jitter.)
 
-   MOTION BUDGET (why it's shaped this way): pages used to slide along a nav line
-   (forward entered from the right, back from the left, and the outgoing page
-   receded a touch for an iOS-style push-parallax). That reads fine on a page of
-   text and badly on Discover, where the grid is dozens of photos still decoding
-   while the slide runs: the movement turned every late tile into a glitch rather
-   than a load, and the page looked like it was snapping into place. A fade has
-   nothing to be out of step with — tiles paint whenever they're ready,
-   underneath an opacity ramp that doesn't care. It's also the cheapest thing the
-   compositor can do, and now it is half of that again: only the outgoing page
-   is promoted, so a navigation carries ONE composited layer instead of two.
-   (There was a 6px focus-in blur on the entering page even earlier; `filter:
-   blur()` re-rasterizes the whole page every frame, which is what the old iOS
-   jitter was. Long gone — don't bring either back.)
+   What a page must NOT do is arrive instantly and then assemble itself. Two
+   rules keep that honest: renderPage freezes the rows it just mounted so they
+   skip their entrance, and `.page.enter` below holds photo fades off for one
+   beat. Any new page-level entrance has to answer to the same pair.
 
-   `will-change: opacity` promotes the leaving page for the move and releases
-   when the class clears. Deliberately NOT `will-change: transform`: that makes a
-   page a containing block for its `position: fixed` children (the docked
-   seg-tabs), which is the constraint the slide had to work around. */
+   #view keeps `position: relative` — the leaving page is gone, but the stage is
+   still the positioning context in-page absolutes expect. */
 #view { position: relative; overflow-x: clip; }
 
-/* Entering page: no ramp at all. It carries `.enter` only so the two rules below
-   can find it — it is opaque and unpromoted from its first frame. */
+/* A freshly mounted page carries `.enter` for one beat (SETTLE_MS in app.js) and
+   it does exactly one job: photos snap in rather than fading.
 
-/* Leaving page — lifted out of flow so it overlays the destination instead of
-   the layout collapsing between them, and (being positioned) painting above it.
-   renderPage pins its `top` to the band the reader was actually looking at, AFTER
-   the scroll has reached its destination — the scroll-anchor fix. */
-.page.leave {
-  position: absolute;
-  inset: 0 0 auto 0;
-  z-index: 1;                 /* say it out loud rather than leaning on paint order */
-  will-change: opacity;
-  transition: opacity var(--dur-quick) var(--ease-soft);
-}
-.page.leave.active { opacity: 0; }
+   They still reveal the instant they decode — this drops only the extra opacity
+   layer per image. It matters because a page now arrives COMPLETE in a single
+   frame, so a wave of photos fading up through it afterwards is a second move
+   stapled onto a change that was already over, and the reader reads that as the
+   page loading rather than as the page being there.
 
-/* The OUTGOING page's glass goes quiet for the move. iOS WebKit (standalone
-   especially) keeps trying to sample backdrop-filter inside a promoted, fading
-   layer and the frost visibly jumps — exactly on the pages that carry in-page
-   glass (Friends: seg-tabs + search; Updates: seg-tabs + soft-ask; Profile: the
-   account-card, a big piece of glass whose large sample area was crashing iOS
-   WebKit outright on the way out to Circle). Turning it off explicitly stops the
-   mis-sampling and drops the per-frame compositing cost. The translucent fills
-   stay, so the surfaces keep their tone throughout. The nav pill lives outside
-   #view and keeps its glass live the whole time (it has its own iOS layer pin —
-   see .nav-pill).
-
-   `.page.enter` used to be in this list and is deliberately NOT any more. The
-   precondition the paragraph above names is "inside a promoted, fading layer",
-   and since the swap became one fade that is no longer true of the destination:
-   it is opaque, unpromoted, and not animating. What the rule bought there was a
-   cost it no longer has, and what it charged was visible — the page you just
-   arrived on wore FLAT glass until the router's cleanup ran, then frosted, so
-   every navigation onto Discover, Updates or a profile ended in a little pop of
-   the material switching on. Arriving glass is now simply glass. */
-.page.leave .seg-tabs,
-.page.leave .masthead-search-field,
-.page.leave .push-ask,
-.page.leave .daily-card,
-.page.leave .account-card {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
-/* The same collision, different cause: on a photo-heavy page, a promoted page
-   layer tears down while a burst of photo-frame reveals is still mid-flight,
-   right as several photo bitmaps are freshly decoded. That pile-up of
-   simultaneous compositor layers + fresh large bitmaps is what was crashing
-   Safari on iOS ("A problem repeatedly occurred") on page switches, not the
-   glass. Letting photos snap in instead of fading during the move (they still
-   reveal the instant they decode, just without an extra opacity layer riding
-   along) cuts the concurrent-layer count during the one window that matters;
-   fades return to normal the moment renderPage's cleanup clears these classes.
-   Card rise itself no longer runs during a navigation at all — renderPage
-   freezes freshly-mounted cards so they ride the swap (see the freeze in
-   app.js), which both removes the old white flash and drops the card layers
-   entirely.
-   Discover's tiles carry the same contract under a different class, and they
-   carry it dozens at a time — a grid landing mid-swap is the densest burst of
-   fresh bitmaps anywhere in the app, so it is the last place that wants an extra
-   opacity layer per photo riding along.
-   This one keeps `.page.enter` even though the destination is no longer promoted,
-   and now has a second reason to: the destination is on screen COMPLETE from the
-   first frame, so a wave of photos fading up under a page that is dissolving away
-   on top of them is two moves in the same 240ms. Snapping is the calm read. */
-.page.enter .photo-frame img, .page.leave .photo-frame img,
-.page.enter .ptile-face--media img, .page.leave .ptile-face--media img {
+   It is also the cheap half of an old crash fix. A burst of freshly decoded
+   bitmaps each riding its own compositor layer is what was crashing Safari on
+   iOS ("A problem repeatedly occurred") on page switches, and Discover's grid is
+   the densest burst of them anywhere in the app — dozens at once, every time you
+   open it. Fades return to normal the moment renderPage drops the class, so
+   anything arriving later still reveals softly. */
+.page.enter .photo-frame img,
+.page.enter .ptile-face--media img {
   transition: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Match .page.leave's specificity so the override actually wins (the router
-     also skips the swap entirely under reduced motion — belt and braces). */
-  .page, .page.enter, .page.leave { transition: none; will-change: auto; }
 }
 
 /* Desktop: one centred column. The sidebar offsets `main` on the left, so we
@@ -1298,7 +1391,15 @@ main {
    activities no longer split the row into two ends, since the headcount and the
    RSVP are one control now and sit in the social cluster with the rest. */
 .card-menu { color: var(--muted); opacity: 0.6; }
-.card-actions > .card-menu { height: 34px; min-width: 34px; }
+/* 34px painted, 44px targeted — the odd one out in a foot where like and comment
+   are already the 44px square this file calls the shared social tap target (see
+   .card-social below). The ••• stays visually smaller than them on purpose: it
+   is the quiet control on the row and a 44px disc of dead space beside two
+   44px glyphs makes the row read as three equal actions. So the target grows
+   without the paint, the same way the profile's corner disc does. Nothing sits
+   within 234px of it, so the 5px of reach on each side collides with nothing. */
+.card-actions > .card-menu { position: relative; height: 34px; min-width: 34px; }
+.card-actions > .card-menu::after { content: ''; position: absolute; inset: -5px; }
 .card-menu svg { width: 18px; height: 18px; }
 .card-menu:active { opacity: 1; color: var(--text); }
 @media (hover: hover) { .card-menu:hover { opacity: 1; color: var(--text); } }
@@ -2314,6 +2415,101 @@ main {
                                       color-mix(in srgb, var(--text) 6%, transparent));
   }
 }
+/* ── Profile colour picker ────────────────────────────────────────────────────
+   A sheet whose whole job is to let you see PAST it: the page behind is washing
+   in the colour you are choosing, so the usual 34% scrim would dim the one thing
+   worth looking at. Thin enough to read the wash through, dark enough that the
+   glass panel still sits on something. The panel's own rim and lift carry the
+   separation the scrim gives up. */
+.sheet-scrim--see-through { background: color-mix(in srgb, #000 13%, transparent); }
+
+/* Two grids, one shape. The source pair (photo · none) sits above the eight
+   named colours with a hairline between, because they answer different
+   questions: where the colour comes from, then which colour. Four columns at
+   every width — five squeezed "Lavender" onto two lines on a phone. */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem 0.1rem;
+  padding: 0.55rem 0.15rem 0.15rem;
+}
+.swatches--source {
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.15rem;
+  border-bottom: 1px solid var(--rule);
+}
+.swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+  padding: 0.25rem 0.1rem;
+  background: none; border: 0; font: inherit; color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-row-lg);
+  -webkit-tap-highlight-color: transparent;
+}
+.swatch-disc {
+  position: relative;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  /* --sw is the NORMALISED colour (accentCss), not the raw hex, so a swatch is
+     worth exactly what the wash will be worth. background-size/position are for
+     the photo source, which carries the avatar as its fill. */
+  background-color: var(--sw, transparent);
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 15%, transparent);
+  transition: transform 0.12s var(--ease), box-shadow var(--dur-micro);
+}
+/* "None" is an empty disc with a rule struck through it — eight filled circles
+   beside it make the empty one legible, and the stroke makes it certain. */
+.swatch[data-accent="none"] .swatch-disc {
+  background-image: linear-gradient(to top right,
+    transparent calc(50% - 0.5px),
+    color-mix(in srgb, var(--text) 26%, transparent) calc(50% - 0.5px),
+    color-mix(in srgb, var(--text) 26%, transparent) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px));
+}
+/* Selected: an ink ring outside, a light ring inside it. Two rings because ONE
+   can't be right on both — an ink ring vanishes on ocean, a light one vanishes
+   on jade, and the photo source can be any of that at once. The inner white
+   holds the gap so the outer --text ring always lands on something pale, in
+   either scheme, over any fill. */
+.swatch.is-on .swatch-disc {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, #fff 72%, transparent),
+              0 0 0 2px var(--text);
+}
+.swatch-tick {
+  width: 20px; height: 20px;
+  /* White with a shadow, the one tick that reads on eight colours AND a
+     photograph. A --on-type near-black would be the house answer for a pastel
+     fill, but these discs are normalised to 0.55 lightness — a quarter-step
+     darker than the quintet it was measured on — and a photo has no fill at all. */
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.55));
+  opacity: 0;
+  transition: opacity var(--dur-micro);
+}
+.swatch-tick svg { width: 100%; height: 100%; }
+.swatch.is-on .swatch-tick { opacity: 1; }
+.swatch-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+.swatch.is-on .swatch-label { color: var(--text); font-weight: 700; }
+.swatch:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
+}
+@media (hover: hover) {
+  .swatch:hover .swatch-disc { transform: scale(1.07); }
+  .swatch:hover .swatch-label { color: var(--text); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .swatch-disc { transition: box-shadow var(--dur-micro); }
+  .swatch:hover .swatch-disc { transform: none; }
+}
+
 /* No dark-mode block here any more: fill, rim and lift are all tokens now, and
    the tokens flip themselves. Same for the mention popover and the modal card. */
 @media (prefers-reduced-motion: reduce) {
@@ -2638,8 +2834,10 @@ main {
 
    Height on main::before rather than padding on main: it isolates the change
    from main's own box (which the sidebar breakpoints write to) so the two can't
-   fight, and a transform is out of the question — it would make main a
-   containing block for the fixed seg-tabs docked inside it on Updates.
+   fight. A transform would have been the other option and is still the wrong
+   one — it makes main a containing block for anything position: fixed inside it,
+   which is a trap this file has already sprung once (the Updates switcher used
+   to dock there) and shouldn't be re-armed for a scroll effect.
 
    Transitioned IN as well as out, which is the counter-intuitive half. Instant
    would be correct if the page were still, but it isn't: the band is snapping
@@ -3262,130 +3460,78 @@ button.poll-option:disabled { cursor: default; }
 }
 
 /* ── Profile (own account or a friend's) — identity header + their column ──── */
-/* The identity header: a floating glass CARD carrying the profile's own colour
-   in its bottom-right corner. Inside: the photo sits LEFT as its own floating
-   glass panel, and the whole identity group (name / handle / stats / bio /
-   actions) stacks beside it. (max-width + centring come from the shared .account
-   rule up top, so it tracks the feed column.)
+/* THE IDENTITY CARD IS GONE, and everything below is what it left behind. It
+   was a floating glass panel with 26px corners, a backdrop blur, a portrait 3:4
+   photo tile stacked on top of it as a second glass layer, and the profile's own
+   colour glowing out of its bottom-right corner. The photo, the name and the
+   colour are all still here; the panel they were mounted on is not.
 
-   That colour used to be a full-screen wash — .ambient, a soft blob behind the
-   entire page, tinted from the avatar via --glow-photo — and the card's blur
-   refracted it. It is the same sampled colour and the same idea, moved from the
-   page onto the object it was describing. Three things got better. It costs a
-   corner instead of a viewport, which is the point. The page underneath goes
-   back to being the app's one paper, so arriving at a profile from the feed no
-   longer changes the colour of the room. And the colour is now attached to the
-   person rather than pooled above them, which is a truer thing to say with it. */
-.account { padding-top: 0.25rem; }
+   Four things it was paying for, and none of them survived the question:
 
-.account-card {
-  position: relative;                  /* anchors the corner edit-profile badge */
-  isolation: isolate;                  /* keeps the ::before glow under the content */
-  overflow: hidden;                    /* the glow is clipped to the card's own radius */
-  padding: 1.5rem 1.4rem;
-  border-radius: 26px;  /* rounder than the shared --radius-modal (20px) — this card earns its own */
-  background: var(--glass-bg-panel);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-          backdrop-filter: blur(var(--glass-blur));
-  border: var(--glass-edge);
-  box-shadow: var(--glass-rim), var(--glass-lift);
-}
-/* The corner glow: TWO ellipses sharing one sampled hue, both anchored off the
-   bottom-right corner so the colour arrives from outside the card rather than
-   sitting in it as a blob with a visible centre.
+   - SPACING. A card has padding, and padding inside a column that already has
+     an inset means the identity sat on its own axis — a name indented further
+     than the shelf caption under it and the posts under that. Off the card, the
+     header lines up with every other line of type on the page.
+   - THE PHOTO. A 3:4 crop existed because a tall tile balanced a wide card. It
+     was also the ONE place in Tria an avatar was not a circle, so the same face
+     was a different shape here than in the feed, on Discover, in the roster and
+     in a comment. A circle is what the app already believes an avatar is.
+   - THE COLOUR. A corner glow clipped inside a card is a gradient with a fence
+     around it — its whole outer half was cropped off by `overflow: hidden`, so
+     the reach that makes a glow read as light had nowhere to go. On the page it
+     is the shared .ambient wash, unchanged and unforked: a profile now carries
+     the exact data-ambient="profile" that Edit profile carries, so the page that
+     shows a person's colour and the page that sets it are the same wash at the
+     same weight.
+   - THE BLUR. One less backdrop-filter, on a page that scrolls.
 
-   Two, because one couldn't be both things at once. A single ellipse strong
-   enough to read as colour stops before it means anything; wide enough to reach
-   has to be faint. So a tight CORE carries the saturation at the corner and a
-   broad HALO at a third of its strength carries the distance.
-
-   Both are FEATHERED over their whole radius rather than cut off partway. The
-   fade runs 0% → 100% through three intermediate stops that drop fast and then
-   trail (0.60 · 0.26 · 0.07 of peak), so the falloff is a curve rather than the
-   straight alpha ramp two stops give you. That matters twice over. A linear ramp
-   has a detectable edge where it lands on nothing, which is the one thing a glow
-   must not have; and a long shallow gradient is exactly where 8-bit colour
-   BANDS — which the grain overlay used to hide across the whole app, and doesn't
-   any more. Extra stops cost nothing here (it rasterizes once, and never
-   repaints), so the ramp is shaped rather than smoothed after the fact.
-
-   The ellipses are sized past the card on purpose: at 112%/178% of its width the
-   geometry reaches the far edges, but the feather has taken the alpha to nothing
-   long before it gets there. Size sets the reach, the curve sets where the
-   colour actually lives.
-
-   --glow-photo is the opaque hue applyAmbient samples from the avatar; the two
-   percentages below are the loudness, and every stop is derived from them, so
-   the whole ramp still moves from two numbers and stays in proportion. Unset (no
-   avatar, or sampling failed) --glow-photo resolves to transparent, every
-   color-mix returns transparent whatever the ratio, and the card is plain glass
-   — the same graceful nothing the full-screen wash used to degrade to.
-
-   Static, clipped, no filter: one rasterized gradient inside a card that already
-   has its own layer for the backdrop blur, so it is close to free. */
-/* Loudness. Kept deliberately low, and the constraint is the ACTION BUTTON
-   rather than the bio: .friend-btn[aria-pressed="true"] ("Requested") is a ghost
-   — background:none, --muted label, a --rule hairline — and it sits in the
-   bottom-right corner, which is precisely where this gradient is strongest. A
-   button with no fill of its own takes whatever is behind it as its background,
-   so the glow IS that state's backdrop, pairing the card's faintest ink with its
-   most saturated ground. Measured in WebKit, the label crossed below 4.5:1 well
-   before anything else on the card looked wrong, so these two numbers are set by
-   that state and everything else clears with room to spare. Re-measure against
-   "Requested", not the bio, if they are ever raised. */
-.account-card {
-  --glow-core: 14%;
-  --glow-halo: 5%;
-}
-.account-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 112% 126% at 104% 112%,
-      color-mix(in srgb, var(--glow-photo, transparent) var(--glow-core), transparent) 0%,
-      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-core) * 0.60), transparent) 30%,
-      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-core) * 0.26), transparent) 56%,
-      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-core) * 0.07), transparent) 79%,
-      transparent 100%),
-    radial-gradient(ellipse 178% 190% at 114% 124%,
-      color-mix(in srgb, var(--glow-photo, transparent) var(--glow-halo), transparent) 0%,
-      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-halo) * 0.54), transparent) 38%,
-      color-mix(in srgb, var(--glow-photo, transparent) calc(var(--glow-halo) * 0.17), transparent) 68%,
-      transparent 100%);
-}
-/* Dark carries colour further than light does — the same hue against a dark
-   glass fill is a bigger contrast step than against a light one, so the light
-   values read as a stain here. Pulled back, not switched off. */
-@media (prefers-color-scheme: dark) {
-  .account-card {
-    --glow-core: 26%;
-    --glow-halo: 9%;
-  }
+   What remains is flat editorial type on the app's own paper, which is what the
+   feed under it always was. */
+.account {
+  position: relative;                  /* anchors the corner badge cluster */
+  /* The identity sits in its own air, top and bottom. Off the card it had 4px
+     above it and leaned on the shelf's 2.2rem below, so the face arrived hard
+     against the chrome above it and the whole block sat low in its own space.
+     One variable rather than two numbers, because the badge cluster is absolute
+     and has to come down by exactly the same amount to stay level with the
+     photo's top edge — top:0 would pin it to the border box and float it above
+     the padding it is supposed to be inside. */
+  --account-pad: 1.7rem;
+  padding-block: var(--account-pad);
+  /* The type axis, shared with the masthead, the shelf and the feed's text. */
+  padding-inline: var(--inset);
 }
 
-/* Photo panel left, the whole identity group (name, handle, stats, bio, actions)
-   beside it. Top-aligned so the name crowns the photo. */
+/* Photo left, the whole identity group (name, handle, stats, bio, actions)
+   beside it, the two centred against each other so a short bio balances the
+   disc instead of hanging off its top. */
 .account-head {
   display: flex;
   align-items: center;
   gap: 1.2rem;
 }
-/* The profile photo is its OWN floating glass panel stacked on the card: a
-   4:3-tall (portrait) tile, framed by a hairline + lit rim + float shadow so it
-   reads as a distinct glass layer sitting on top. Profile-page-only crop — the
-   square-stored avatar is object-fit:cover'd into 3:4, so it needs no separate
-   upload and stays circular everywhere else in the app. */
+/* The profile photo: a CIRCLE, keeping the glass edge it had as a tile — the
+   hairline, the lit rim and the float shadow, so it still reads as its own layer
+   raised off the paper. Only the shape and the mount changed.
+
+   It is the same circle the avatar is everywhere else in the app, at a bigger
+   size, which is the whole argument for it: the square-stored file already
+   object-fit:cover's into a disc in the feed, on Discover, in the roster and in
+   every comment, and the profile page was the single exception. A face you know
+   from six other surfaces should not be a different shape on the page that is
+   about it.
+
+   No negative margins any more. Those existed to pull a tall tile out toward the
+   card's edges; there is no card to hug, so the photo sits in the flow and the
+   row's gap does the spacing. The size is set against the NAME rather than
+   against a panel: a disc reads smaller than a tall tile of the same width, so
+   the clamp went up from a first pass that matched the old width and looked
+   timid beside a 2.1rem serif. */
 .account-photo {
   position: relative;
-  flex: 0 0 clamp(132px, 40%, 196px);
-  aspect-ratio: 3 / 4;
-  /* Pull the panel toward the card's top/left/bottom edges — the text next to it
-     keeps the card's own padding, but the photo hugs the glass layer below. */
-  margin: -0.7rem 0 -0.7rem -0.65rem;
-  border-radius: 17px;                 /* rounder to sit with the card's 20px */
+  flex: 0 0 clamp(120px, 37%, 160px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   overflow: hidden;
   background: var(--surface-2);
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
@@ -3395,7 +3541,7 @@ button.poll-option:disabled { cursor: default; }
 .account-photo--empty { display: grid; place-items: center; }
 .account-photo-initial {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-size: clamp(3rem, 13vw, 4.5rem);
+  font-size: clamp(2.6rem, 11vw, 3.6rem);
   line-height: 1;
   color: color-mix(in srgb, var(--text) 32%, transparent);
   user-select: none;
@@ -3414,10 +3560,10 @@ button.poll-option:disabled { cursor: default; }
 }
 .account-id { min-width: 0; }
 
-/* The identity column always sits vertically centred against the taller photo
-   tile: a short (or missing) bio centres against the photo for a balanced card
-   instead of hugging the top with dead space beneath, and a long bio simply
-   grows the column past the photo. One rule, every content state. */
+/* The identity column always sits vertically centred against the photo: a short
+   (or missing) bio centres against the disc instead of hugging its top with dead
+   space beneath, and a long bio simply grows the column past it. One rule, every
+   content state. */
 .account-name {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
@@ -3883,23 +4029,26 @@ button.poll-option:disabled { cursor: default; }
      content card animating on its own would spend that meaning on a panel that
      isn't a button. */
   background: linear-gradient(115deg,
-    color-mix(in srgb, var(--type-note)  26%, var(--glass-bg-panel)),
-    color-mix(in srgb, var(--type-find)  26%, var(--glass-bg-panel)),
-    color-mix(in srgb, var(--type-photo) 26%, var(--glass-bg-panel)));
+    color-mix(in srgb, var(--type-note)  44%, var(--glass-bg-panel)),
+    color-mix(in srgb, var(--type-find)  44%, var(--glass-bg-panel)),
+    color-mix(in srgb, var(--type-photo) 44%, var(--glass-bg-panel)));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
   box-shadow: var(--glass-rim), var(--glass-lift);
 }
 
-/* Dark mode: the pastel is a LIGHT colour, so the same 26% wash over a dark glass
-   fill lands as a milky panel rather than a tinted one. Less pigment. */
+/* Dark mode: the pastel is a LIGHT colour, so the same 44% wash over a dark glass
+   fill lands as a milky panel rather than a tinted one. Less pigment — the two
+   numbers move together but never to the same value, and dark's ceiling is
+   contrast: past the high twenties the panel climbs toward the light ink sitting
+   on it. */
 @media (prefers-color-scheme: dark) {
   .daily-card {
     background: linear-gradient(115deg,
-      color-mix(in srgb, var(--type-note)  15%, var(--glass-bg)),
-      color-mix(in srgb, var(--type-find)  15%, var(--glass-bg)),
-      color-mix(in srgb, var(--type-photo) 15%, var(--glass-bg)));
+      color-mix(in srgb, var(--type-note)  26%, var(--glass-bg)),
+      color-mix(in srgb, var(--type-find)  26%, var(--glass-bg)),
+      color-mix(in srgb, var(--type-photo) 26%, var(--glass-bg)));
     border-color: color-mix(in srgb, var(--text) 26%, transparent);
   }
 }
@@ -4256,7 +4405,10 @@ button.poll-option:disabled { cursor: default; }
    it IS there it takes over the gap from .account + .feed, which is why the
    margins below are asymmetric: the long breath stays above the shelf, and the
    posts sit close under their own caption. */
-.account + .profile-shelf { margin-top: 2.2rem; }
+/* Trimmed when .account grew its own block padding: the gap below the identity
+   is now 1.7rem of padding plus this, so the pair still lands a shade wider than
+   the 2.2rem it replaced rather than doubling up. */
+.account + .profile-shelf { margin-top: 0.9rem; }
 .profile-shelf {
   display: flex;
   align-items: center;
@@ -4292,18 +4444,38 @@ button.poll-option:disabled { cursor: default; }
   gap: 0.5rem;
 }
 
-/* Corner badge cluster: a top-right row of small glass discs floating on the
-   card. Own card carries Share + Edit; a friend's carries the friends tie. All
-   share one disc treatment (a quiet outline on faint glass); only the colour
-   differs per badge. */
+/* Corner badge cluster: a top-right row of small glass discs. They used to float
+   on the identity card; with the card gone they anchor to .account itself, which
+   puts them in the same corner the colour now arrives from — so they are the one
+   control standing in the hottest part of the wash, and they take --wash-ink for
+   it (see the ambient block up top). Own profile carries the ••• menu (Share +
+   Edit inside it); a friend's carries the friends tie. All share one disc
+   treatment (a quiet outline on faint glass); only the colour differs per badge. */
 .account-badges {
   position: absolute;
-  top: 10px; right: 10px;
+  /* right is the type axis, not the column edge — .account carries the inset and
+     an absolute child would otherwise sit outside it. */
+  top: var(--account-pad); right: var(--inset);
   z-index: 2;
   display: flex;
   gap: 6px;
 }
+/* 32px is the DISC; 44 is the target. Apple's HIG floor is 44pt and a 32px
+   button misses it by six pixels on every side, which on a glyph with no label
+   is the whole hit area. The disc can't just grow to 44 — at that size it stops
+   being a quiet mark in the corner and starts competing with the name beside it,
+   and it is the one control standing in the hottest part of the wash. So the
+   button keeps its 32px painted box and ::after extends the target to 44x44,
+   transparent and pointer-only. Safe because a profile carries exactly ONE disc
+   (see the reserve below), so two overlapping targets can never collide.
+
+   -7px, not -6: `inset` on an absolute child resolves against the PADDING box,
+   and this button has a 1px border, so the box being grown is 30px and not 32.
+   -6 measured 42x42 — a target that looks like it clears the floor in the source
+   and misses it by two pixels on the device, which is the kind of thing nobody
+   re-checks. Verified by hit-testing the live page, not by reading the number. */
 .account-badges > button {
+  position: relative;
   width: 32px; height: 32px;
   display: grid; place-items: center;
   color: var(--muted);
@@ -4316,6 +4488,12 @@ button.poll-option:disabled { cursor: default; }
 @media (hover: hover) {
   .account-badges > button:hover { color: var(--text); border-color: var(--text); }
 }
+.account-badges > button::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
 .account-friend-ico { width: 18px; height: 18px; }
 .account-more-ico { width: 18px; height: 18px; }
 /* The friends tie reads as a settled positive state (text ink + a firmer rim),
@@ -4323,11 +4501,11 @@ button.poll-option:disabled { cursor: default; }
 .account-friend-badge { color: var(--text); border-color: color-mix(in srgb, var(--text) 22%, transparent); }
 
 /* Reserve room on the name's first line so it clears the corner cluster. Every
-   card now carries exactly one disc — the ••• glyph (own card + non-friend
+   profile carries exactly one disc — the ••• glyph (own profile + non-friend
    visitor, its menu holds Share/Edit or Block/Report) or the friend tie — so a
    single-disc reserve fits all of them. */
-.account-card:has(.account-friend-badge) .account-name { padding-right: 2rem; }
-.account-card:has(.account-more-badge) .account-name { padding-right: 2rem; }
+.account:has(.account-friend-badge) .account-name { padding-right: 2rem; }
+.account:has(.account-more-badge) .account-name { padding-right: 2rem; }
 
 /* Friend toggle (pre-friend states only — add / requested / accept; once you're
    friends it collapses to the corner badge). Centred in the action row. */
@@ -5316,23 +5494,60 @@ button.poll-option:disabled { cursor: default; }
   background: var(--surface-2);
   cursor: grab;
   touch-action: none;      /* let us own the drag on touch */
+  overscroll-behavior: contain;
+  /* The unprefixed property alone is NOT enough here: WebKit still computes
+     -webkit-user-select on its own, so this frame was long-press selectable in
+     the one shell that matters, and the callout it raises over an <img> ("Save
+     Image", "Copy") cancelled the pointer stream half way through a pan. Both
+     lines, plus the callout, or the drag dies on iOS and nowhere else. */
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .crop.dragging { cursor: grabbing; }
 .crop img { position: absolute; top: 0; left: 0; max-width: none; }
-.crop-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 0.6rem;
-  transform: translateX(-50%);
-  padding: 0.2rem 0.7rem;
-  font-size: 0.75rem;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: var(--radius-pill);
+/* The avatar frame's image is moved and scaled by transform alone (see
+   initCropper): sized once to its cover fit, then panned and pinched from the
+   top-left origin the arithmetic there assumes. pointer-events:none puts every
+   gesture on the frame itself, so nothing has to hit-test through to the photo.
+   -webkit-user-drag is the second half of the iOS fix above: without it a slow
+   press lifts the image into a native drag instead of panning it. */
+.crop--avatar img {
+  transform-origin: 0 0;
+  will-change: transform;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
   pointer-events: none;
 }
-.crop.dragging .crop-hint { opacity: 0; }
+/* The crop stage is a centred column: the round frame, its caption, its way back
+   out. It sat as a media object for a while — frame at the left, the other two
+   stacked beside it — which was the answer to a real problem, a modal card with
+   no way to scroll and Save pushed off the bottom of it. That problem is gone
+   (this is a page now), and the arrangement was costing the thing the page is
+   about: the frame off to one side, and the resting avatar sliding sideways to
+   meet it the moment you picked a photo. Centred, the two states share an axis,
+   so choosing a picture changes what is in the circle and nothing else.
+   The zoom RAIL is gone either way: pinch and wheel are the gestures people
+   reach for, and a slider is a third control for a job two already do. */
+.crop-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+.crop-stage[hidden] { display: none; }
+.crop-hint {
+  max-width: 260px;         /* a wide form shouldn't stretch two words per line */
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--muted);
+}
+.crop-stage .crop-replace { margin: 0; }
+
 /* Swap-the-frame control: one centred pill (Choose another) that re-opens the OS
    picker, same editorial chip material as the type filters — a content-area
    control, not floating glass. */
@@ -5362,6 +5577,9 @@ button.poll-option:disabled { cursor: default; }
 /* Profile editor's photo: a big centred avatar with a camera badge at its corner.
    Tapping the badge picks a file, which hides this row and reveals the inline crop
    below. */
+/* This circle and the crop frame that replaces it are the SAME SIZE on the same
+   axis (--pf-avatar, below), so picking a photo fills the circle rather than
+   moving it. Any change to one is a change to both. */
 .pf-photo {
   display: flex;
   justify-content: center;
@@ -5369,11 +5587,20 @@ button.poll-option:disabled { cursor: default; }
 }
 .pf-photo[hidden] { display: none; }
 .pf-photo-figure { position: relative; display: inline-block; }
-.pf-photo-avatar { width: 116px; height: 116px; font-size: 3.7rem; }
+.pf-photo-avatar { width: var(--pf-avatar); height: var(--pf-avatar); font-size: clamp(4.7rem, 14vw, 5.7rem); }
 .pf-photo-edit {
   position: absolute;
-  right: -2px; bottom: -2px;
-  width: 34px; height: 34px;
+  /* Percentages, not a fixed -2px, because the circle is now a vw clamp. A badge
+     pinned to the corner of the BOUNDING BOX sits further and further off the
+     arc as the radius grows — at 116px it read as attached, at 172px it floated.
+     5% of the box is roughly where the 45-degree edge is at both ends of the
+     clamp, so it stays tucked into the rim at every width. */
+  right: 5%; bottom: 5%;
+  /* 40, not 34. Both of these are the whole control — there is no label beside
+     them and no row to widen the target — and at 34 the pair read as annotations
+     on the photo rather than as the two things you came here to press. 40 is
+     also where the ring glyph stops being a suggestion of a circle. */
+  width: 40px; height: 40px;
   display: grid; place-items: center;
   color: var(--on-accent);
   background: var(--accent);
@@ -5385,10 +5612,76 @@ button.poll-option:disabled { cursor: default; }
   -webkit-tap-highlight-color: transparent;
   transition: background-color var(--dur-micro), transform 0.12s;
 }
-.pf-photo-ico { width: 16px; height: 16px; }
+.pf-photo-ico { width: 19px; height: 19px; }
 @media (hover: hover) { .pf-photo-edit:hover { background: var(--accent-press); } }
 
-/* ── Modal (avatar editor) — a frosted overlay + a calm card ───────────────── */
+/* The colour badge, mirrored across the circle from the camera: same size, same
+   5% inset, same arc. A pair, because they change the two things this photo says
+   about you — which picture, and what colour the page it lands on is.
+
+   Unfilled where the camera is filled. The camera is the page's one commit-ish
+   action (it opens the file picker, which is how a photo gets here at all); this
+   opens a menu, so it takes the quieter outline treatment and lets the COLOUR do
+   the talking — the glyph is a ring with one half filled, so the badge is a
+   swatch of the thing it sets. --glow-photo is whatever hue the profile is
+   currently wearing, from a swatch or sampled off the photo, and it is live:
+   picking in the sheet repaints the property, so this badge changes under your
+   thumb.
+
+   Mixed half-and-half with --text rather than used raw, and that one line is the
+   light/dark safety on this element. The palette is pastel — around 0.78
+   lightness — which as a bare 1.8px stroke and a small filled half does not clear
+   3:1 against a near-white disc: measured, lime lands at 2.94:1 raw. --text is near-black in
+   light and near-white in dark, so mixing toward it darkens the glyph on paper
+   and lightens it on ink from a single declaration, and the hue survives both.
+   At 52% the light range is 3.80-5.43:1 and dark is 10.97-14.08:1. Falls back to
+   --muted, which is already ink, when no colour is set. */
+.pf-photo-accent {
+  position: absolute;
+  left: 5%; bottom: 5%;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  color: color-mix(in srgb, var(--glow-photo, var(--muted)) 52%, var(--text));
+  background: var(--bg);
+  border: 2px solid var(--bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 52%, transparent);
+  border-radius: 50%;
+  cursor: pointer;             /* role=button div, not <button> — no free cursor */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-micro), box-shadow var(--dur-micro), transform 0.12s;
+}
+.pf-accent-ico { width: 19px; height: 19px; }
+@media (hover: hover) {
+  .pf-photo-accent:hover { box-shadow: inset 0 0 0 1px currentColor; }
+}
+
+/* The profile editor is a PAGE (#/profile/edit), not a modal — see the note over
+   renderEditProfile for the three things that were wrong with the card. What it
+   needs from CSS is a measure: a settings form is a column of short rows, and
+   the page's own --content-max (900px) would stretch every toggle row to the
+   width of a feed. 400px is the modal's old 380 plus the card padding it no
+   longer has, so every row inside keeps the proportions it was tuned at. */
+.pf-form { max-width: 400px; }
+/* The one size the resting avatar and the crop frame both read, so they can't
+   drift apart. A vw term because the crop frame is the working surface for a
+   drag and a pinch on a phone, where the form is the whole screen width. */
+.pf-form, .pf-photo { --pf-avatar: clamp(148px, 44vw, 180px); }
+/* Same "← Back" affordance every pushed page keeps at its top left, but a button
+   rather than a link, because leaving the editor pops the entry instead of
+   pushing a new one. Strip the UA button chrome; .profile-back does the rest. */
+button.profile-back {
+  margin-bottom: 1.6rem;       /* no masthead beneath it here — see renderEditProfile */
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Modal — a frosted overlay + a calm card ───────────────────────────────── */
 .modal {
   position: fixed;
   inset: 0;
@@ -5437,9 +5730,11 @@ button.poll-option:disabled { cursor: default; }
   color: var(--text);
   margin-bottom: 1.1rem;
 }
-/* The avatar crop is a centered circle (what you see is what you get — photos
-   display round), not full-width like the composer's. */
-.crop--avatar { width: 260px; max-width: 100%; margin: 0 auto; border-radius: 50%; }
+/* The avatar crop is a circle (what you see is what you get — photos display
+   round), not full-width like the composer's. It's sized in vw so the frame is as
+   big as the card can spare and no bigger: it shares a row with its caption now,
+   and the whole point of that row is that the photo step fits on a phone. */
+.crop--avatar { width: var(--pf-avatar); border-radius: 50%; }
 
 /* Post photos aren't cropped — the composer preview shows the whole image at its
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
@@ -5466,8 +5761,12 @@ button.poll-option:disabled { cursor: default; }
 .friends-list--modal .friend:first-child { border-top: none; }
 .friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.4rem; }
 
-.modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
-.modal-actions .edit-cancel {
+/* The form commit row: Cancel beside Save. Shared by the modals and by the
+   profile editor page, which is a form with the same two answers even though it
+   has no card around it. */
+.modal-actions, .form-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
+.modal-actions .edit-cancel,
+.form-actions .edit-cancel {
   color: var(--muted);
   background: none;
   border: 1px solid var(--rule);
@@ -5475,7 +5774,8 @@ button.poll-option:disabled { cursor: default; }
   padding: 0.6rem 1.2rem;
   font-size: 0.92rem;
 }
-.modal-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
+.modal-actions .composer-submit,
+.form-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
 
 /* Account actions — Log out + Delete, grouped in their own zone below the form's
    Cancel/Save row and split off by a hairline. Icon + label each. Log out stays
@@ -5534,8 +5834,12 @@ button.poll-option:disabled { cursor: default; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .toast { transition: opacity var(--dur-quick) ease; } }
-.modal-actions .composer-submit:disabled { opacity: 0.5; }
-@media (hover: hover) { .modal-actions .edit-cancel:hover { color: var(--text); border-color: var(--text); } }
+.modal-actions .composer-submit:disabled,
+.form-actions .composer-submit:disabled { opacity: 0.5; }
+@media (hover: hover) {
+  .modal-actions .edit-cancel:hover,
+  .form-actions .edit-cancel:hover { color: var(--text); border-color: var(--text); }
+}
 @keyframes fade { from { opacity: 0; } }
 
 @keyframes rise {
@@ -5738,7 +6042,8 @@ button.poll-option:disabled { cursor: default; }
       0 2px 5px rgba(0, 0, 0, 0.18),
       0 12px 28px rgba(0, 0, 0, 0.20);
     /* Fades fast while it sinks slower, so it reads as dropping behind the nav
-       (matching the seg-tabs rise) rather than blinking out. */
+       rather than blinking out. (It used to be matched to the docked seg-tabs
+       rise; that switcher is inline now and no longer moves.) */
     transition: opacity var(--dur-quick) var(--ease),
                 transform var(--dur-move) var(--ease);
   }
@@ -5913,72 +6218,26 @@ button.poll-option:disabled { cursor: default; }
     .dial-veil { background: color-mix(in srgb, var(--bg) 44%, transparent); }
   }
 
-  /* ── The view switcher docks above the nav and RISES on page-enter ──────────
-     On phones the Friends / Updates seg-tabs isn't an inline row under the
-     masthead — it floats as its own glass control just above the bottom nav
-     (the material rule: glass floats above content, and a persistent switcher
-     is exactly that). z-index sits UNDER the nav pill (101) so at rest it can
-     tuck down behind the pill; the router adds .tuck while a page is entering
-     (snapped hidden, no travel) then removes it once the page settles, so the
-     control lifts straight up out from behind the nav on the signature easeOut.
-     Default (untucked) is the visible docked state, so an in-place re-render
-     — e.g. Updates rebuilding after a push-ask answer — just shows it, no
-     vanish. Desktop has no bottom nav, so none of this reaches that layout. */
-  .seg-tabs {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(env(safe-area-inset-bottom) + 5.1rem);
-    z-index: 40;
-    width: min(86%, 300px);
-    margin: 0 auto;
-    /* Opacity settles fast while the transform keeps rising, so it reads as
-       sliding UP out of the nav rather than fading in above it. The rise used to
-       be --dur-slow (0.5s), which was the right weight when it started AFTER the
-       page had finished changing; it now goes up on the same frame the page does,
-       so at 0.5s it was the last thing still moving by a clear quarter second and
-       the navigation ended on it rather than with it. --dur-move keeps the
-       overhang that makes it read as one object rising, and lands it with the page. */
-    transition: transform var(--dur-move) var(--ease),
-                opacity   var(--dur-quick) var(--ease);
-  }
-  /* Tucked start: snapped down behind the nav with no transition, so adding the
-     class hides it instantly; removing it lets the base transition run the rise. */
-  .seg-tabs.tuck {
-    transform: translateY(92px) scale(0.96);
-    opacity: 0;
-    transition: none;
-  }
-  /* Room to scroll the roster / ledger clear of the docked switcher + nav. */
-  .seg-panel { padding-bottom: 5.5rem; }
-  /* The composer's Post / Activity switcher is the exception: it's a form control
-     that belongs ABOVE the note field, not docked chrome floating over the nav.
-     Pin it back inline (the router already skips it in the tuck logic, so it
-     never gets the rise either). */
-  #c-group-tabs {
-    position: static;
-    width: 100%;
-    max-width: 300px;
-    margin: 0 auto 1.4rem;
-    z-index: auto;
-    transition: none;
-    /* Own containing block for the absolute sliding thumb, WITHOUT position:
-       relative (which yanked the switcher up onto the serif title). The base
-       .seg-tabs is position:relative so its thumb (top/bottom:4px) is bounded by
-       its own little track; the phone rule above flips every .seg-tabs to fixed,
-       and pinning this one back to static stripped that containing block away —
-       the thumb then resolved against whatever positioned ancestor it found and
-       top/bottom:4px stretched it into a giant full-column pill flashing in on
-       the way to Publish. translateZ(0) restores a local containing block (a
-       transform is one) with zero layout shift. */
-    transform: translateZ(0);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    /* No rise — the switcher is simply present. (The router also skips .tuck
-       under reduced motion, so this is belt and braces.) */
-    .seg-tabs, .seg-tabs.tuck { transition: none; }
-  }
+  /* ── The view switcher sits inline, at the top ──────────────────────────────
+     Updates' All / Mentions rides under the masthead like any other control on
+     the page, which is where the composer's Post / Activity switcher has always
+     been. One switcher, one place, on every screen size.
 
+     It used to DOCK on phones: position: fixed, floating as its own glass
+     control just above the bottom nav. The reasoning was the material rule —
+     glass floats above content, and a persistent switcher is exactly that — and
+     it cost more than it bought. A control pinned to the bottom of the screen is
+     a control you have to go and find, it sat a long way from the title it
+     filters, and it made Updates the one page in the app whose switcher was
+     somewhere else. It also made `.page` a containing block hazard for every
+     rule that wanted a transform or containment (see .view.business), and it
+     needed the composer's switcher to opt back OUT of the dock by hand.
+
+     Removing it settles all of that. Nothing on a page is position: fixed now. */
+  #c-group-tabs { margin-bottom: 1.4rem; }
+  /* Tighter than the generic phone masthead gap: the switcher is a light control
+     rather than content, so it wants to sit close to the title it belongs to. */
+  .seg-tabs { margin-bottom: 1.6rem; }
   main {
     padding-left: 0;
     padding-top: calc(var(--topbar-h) + env(safe-area-inset-top));
@@ -6005,6 +6264,10 @@ button.poll-option:disabled { cursor: default; }
      the view's own inset here, and its rule runs the full width of the column
      (the shelf keeps the block padding, so only the inline half is dropped). */
   .profile-shelf { padding-inline: 0; }
+  /* And the identity header above it, which is now type on the same axis. Its
+     badge cluster is positioned off that inset, so it comes back too. */
+  .account { padding-inline: 0; }
+  .account-badges { right: 0; }
   /* The frame wall lives inside #feed, which breaks out by 1.15rem on a phone to
      put post photos screen-edge-to-edge. A masonry grid doesn't want that: it's
      already on Discover's axis and the card above it is on the view's, so the
@@ -6012,11 +6275,10 @@ button.poll-option:disabled { cursor: default; }
   .pgrid--frames { padding-inline: 1.15rem; }
   .view-title { font-size: 2rem; }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 0.5rem; }
-  /* Friends / Updates: the seg-tabs that used to sit under the masthead docks to
-     the bottom nav on phones (position: fixed), so its 1.8rem gap would leave
-     dead space above the first row now there's no divider to anchor against. Pull
-     the list up close — the row's own top padding is enough breathing room. */
-  .masthead:has(+ .seg-tabs) { margin-bottom: 0.35rem; }
+  /* Updates: the switcher sits directly under the masthead, so the generic
+     1.8rem gap would push it down the page. Close the two up — title and the
+     control that filters it read as one block. */
+  .masthead:has(+ .seg-tabs) { margin-bottom: 1.1rem; }
   .masthead-kicker { margin-bottom: 0.7rem; letter-spacing: 0.13em; }
   /* Five chips outgrow a phone row — one swipeable line (edge-to-edge, no
      scrollbar) instead of wrapping an orphan onto a second line. The block
@@ -6263,8 +6525,9 @@ button.poll-option:disabled { cursor: default; }
    width and in both states, and can never overhang into an overflow. The
    container is scoped to this page: .view is used by every view in the app, and
    layout containment on all of them would make each one a containing block for
-   its position: fixed children (the docked seg-tabs, see the page-transition
-   notes). This page has none. */
+   any position: fixed child. No page has one today (the Updates switcher, which
+   used to dock to the nav, is inline now), but scoping it here keeps that true
+   by construction rather than by everyone remembering. */
 .view.business { container-type: inline-size; }
 @media (min-width: 900px) {
   .biz-plans {

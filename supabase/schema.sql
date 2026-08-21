@@ -37,6 +37,7 @@ create table public.users (
   bio        text not null default '',
   avatar     text,                          -- Storage URL later; null = initial tile
   private    boolean not null default true, -- posts fenced to friends (see profile-privacy.sql)
+  accent     text,                          -- profile colour: palette slug, 'none', or null = sample the photo (see profile-accent.sql)
   created_at timestamptz not null default now()
 );
 

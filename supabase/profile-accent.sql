@@ -1,0 +1,27 @@
+-- Profile colour ────────────────────────────────────────────────────────────
+-- A profile carries its own hue: the glow in the bottom-right corner of the
+-- identity card (see .account-card::before). Until now that colour was sampled
+-- from the person's avatar and nothing else, so a profile with no photo had no
+-- colour, and a profile WITH one had no say in it.
+--
+-- This column is that say. Three states, and the third is the absence:
+--
+--   a palette slug  ('lavender' | 'coral' | 'cyan' | 'lime' | 'rose' |
+--                    'amber' | 'jade' | 'ocean')   -- wear this colour
+--   'none'                                          -- deliberately no colour
+--   null (the default)                              -- sample it from my photo
+--
+-- Deliberately plain text with no CHECK: the palette is a client-side list
+-- (ACCENTS in js/app.js) and adding a colour to it should not need a migration.
+-- An unrecognised slug is ignored by the client and falls back to the photo, so
+-- the failure mode of a bad value is the default, not a broken card.
+--
+-- No new policy. "users update self" already scopes writes to your own row, and
+-- "users read all" already hands every column to any signed-in reader, which is
+-- right: your profile colour is as public as your name.
+--
+-- Until this runs, the client keeps a per-device localStorage mirror (see
+-- mapUser / updateAccent in js/store.js), so a pick sticks for the person who
+-- made it and is invisible to everyone else. Nothing errors either way.
+
+alter table public.users add column if not exists accent text;

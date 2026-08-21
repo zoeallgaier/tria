@@ -45,7 +45,7 @@ const Store = (() => {
   const onRecovery = (fn) => { recoveryHandlers.push(fn); };
 
   // In-memory mirror of the shared world, shaped like the old save file:
-  //   users: [{id, username, name, bio, avatar?}]
+  //   users: [{id, username, name, bio, avatar?, accent?}]
   //   posts: [{id, author(username), type, date, tags, title?, url?, note?, image?, _ts}]
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
@@ -112,6 +112,27 @@ const Store = (() => {
   const dateOf = (ts) => (ts ? dayMT(ts) : TODAY);
   const idOf = (username) => (state.users.find(u => u.username === username) || {}).id || null;
 
+  // The profile colour, mirrored per-device so a pick sticks on a DB that hasn't
+  // run profile-accent.sql yet — same belt-and-braces as declines and blocks. It
+  // carries its OWN owner id rather than being keyed by the session, because
+  // mapUser runs inside loadWorld and `state.session` isn't set until that
+  // resolves; an id in the payload needs no ordering to be correct.
+  let accentMirror;                                  // undefined = not read yet
+  function localAccent() {
+    if (accentMirror === undefined) {
+      try { accentMirror = JSON.parse(localStorage.getItem('tria:accent') || 'null'); }
+      catch { accentMirror = null; }
+    }
+    return accentMirror;
+  }
+  function setLocalAccent(id, accent) {
+    accentMirror = accent ? { id, accent } : null;
+    try {
+      if (accentMirror) localStorage.setItem('tria:accent', JSON.stringify(accentMirror));
+      else localStorage.removeItem('tria:accent');
+    } catch { /* private mode */ }
+  }
+
   function mapUser(u) {
     // `private` gates whether outsiders (non-friends) can see this person's posts.
     // Defaults true where the column isn't there yet (pre-migration DB) so a fresh
@@ -119,6 +140,20 @@ const Store = (() => {
     const o = { id: u.id, username: u.username, name: u.name, bio: u.bio || '',
                 private: u.private !== false };
     if (u.avatar) o.avatar = u.avatar;
+    // Accent: the slug of a chosen palette colour, 'none' for deliberately off,
+    // or absent for "sample it from my photo" (the default).
+    //
+    // The test is `in`, not truthiness, and the difference is the whole fallback.
+    // PostgREST returns an existing-but-null column as a null KEY and omits a
+    // column that doesn't exist at all, so `'accent' in u` is exactly "has this
+    // DB run the migration?". Consulting the device mirror on a null would make
+    // "from my photo" unpickable on a migrated DB: clearing the choice writes
+    // null, and the mirror would keep handing the old colour straight back.
+    if ('accent' in u) { if (u.accent) o.accent = u.accent; }
+    else {
+      const mine = localAccent();
+      if (mine && mine.id === u.id) o.accent = mine.accent;
+    }
     return o;
   }
   function mapPost(p, nameById) {
@@ -1309,6 +1344,32 @@ const Store = (() => {
     return { ok: true };
   }
 
+  // The profile's colour: a palette slug, 'none' for deliberately off, or null
+  // for "sample it from my photo". Optimistic and synchronous before the first
+  // await, like updateAvatar, so the card can repaint under the picker while the
+  // save goes out — the whole point of the picker is watching the colour land.
+  //
+  // A missing column is NOT an error here. Until profile-accent.sql is run the
+  // choice lives only in the device mirror, which means you see your own colour
+  // and nobody else does; that is a thinner feature, not a broken one, and it
+  // must not surface as "couldn't save". Every other failure reverts both.
+  async function updateAccent(accent) {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    const id = u.id;
+    const prev = u.accent || null;
+    accent = accent || null;
+    patchUser(id, { accent });                            // optimistic, synchronous
+    setLocalAccent(id, accent);
+
+    const { error } = await sb.from('users').update({ accent }).eq('id', id);
+    if (!error) return { ok: true };
+    if (/accent|column|schema/i.test(error.message || '')) return { ok: true, local: true };
+    patchUser(id, { accent: prev });
+    setLocalAccent(id, prev);
+    return { ok: false, error: 'Couldn\u2019t save your colour.' };
+  }
+
   async function updateProfile({ name, bio, isPrivate } = {}) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
@@ -1856,7 +1917,7 @@ const Store = (() => {
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,
     // Profile
-    updateAvatar, updateProfile,
+    updateAvatar, updateProfile, updateAccent,
   };
 })();
 

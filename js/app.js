@@ -53,15 +53,23 @@
   window.addEventListener('unhandledrejection', (ev) => logError('unhandled rejection', ev.reason));
 
   // `stage` is the fixed shell (#view); `view` is the current *page* inside it
-  // that every render function fills. The router (see renderPage) dissolves the
-  // outgoing page away over the next one, so render code just targets `view` and
-  // never has to know a transition is happening.
+  // that every render function fills. The router (see renderPage) replaces one
+  // with the next in a single task, so render code just targets `view` and never
+  // has to know a navigation happened.
   const stage = document.getElementById('view');
   let view = null;
-  let navToken = 0;           // guards against a stale transition cleaning up a new one
+  let navToken = 0;           // guards a stale settle against a newer navigation
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
-  const TRANSITION_MS = 240;   // page fade-out, must match --dur-quick / .page.leave in app.css
+  // Set by the tap that opens #/profile/edit and consumed by the render, so the
+  // editor knows whether leaving can pop an entry or has to navigate.
+  let editorPushed = false;
+  let stopActiveCrop = null;  // teardown for the profile editor's cropper (rAF + ResizeObserver)
+  // One beat after a page mounts. Not a transition — nothing animates on a route
+  // change any more — but the window in which a freshly mounted page is still
+  // arriving: photo fades stay off (see `.page.enter` in app.css) and the topbar
+  // re-measures once the layout has settled.
+  const SETTLE_MS = 240;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -204,9 +212,9 @@
     });
   }
 
-  // Put a targeted card where it needs to be, with NO travel — the page's own
-  // cross dissolve is the transition, and this just makes sure the right thing is
-  // underneath it when it fades up.
+  // Put a targeted card where it needs to be, with NO travel — this runs inside
+  // renderFn, so the scroll is set before the page's first paint and the post is
+  // simply what's on screen when it arrives.
   //
   // It used to glide: a 460ms eased scroll to the card, then a tinted wash over
   // it, both starting 120ms after the route settled. Three moves stacked on one
@@ -214,17 +222,17 @@
   // and more obviously wrong the older the post was, because a spotlight from
   // Discover or Updates routinely aims a thousand pixels down a feed. Landing
   // already there is not a cheaper version of that animation, it's the correct
-  // one: you asked for a post, the post is what fades in.
+  // one: you asked for a post, and the post is the page.
   //
   // The HOLD survives, and matters more now than it did. Everything between the
   // top of the feed and the target is lazy-loaded, so it resolves over the next
   // few hundred ms: legacy photos swap their 3:2 reserve box for the media's real
   // shape, videos resolve, avatars arrive. Each one that lands ABOVE the card
-  // shoves it down, and mid-dissolve that reads as the post sliding away from
-  // you. So for a beat we keep re-aiming every frame — the content moves, the
-  // card doesn't. That's scroll anchoring, done by hand because WebKit won't do
-  // it for us. Any real input and we're gone; this never fights the user's own
-  // scroll.
+  // shoves it down, and on a page that has only just landed that reads as the
+  // post sliding away from you. So for a beat we keep re-aiming every frame —
+  // the content moves, the card doesn't. That's scroll anchoring, done by hand
+  // because WebKit won't do it for us. Any real input and we're gone; this never
+  // fights the user's own scroll.
   function parkCard(el) {
     const aim = () => {
       const r = el.getBoundingClientRect();
@@ -377,6 +385,20 @@
     play:    '<path d="M7 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
     // A framed picture (sun + hills) — the composer's "add a photo or clip" tool.
     image:   '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M4.5 17.5 9 13l3 2.5L15.5 12l4 5"/>',
+    // A drop of ink — the profile-colour control on your own identity card.
+    // Not a painter's palette: the thumb-hole and the four blobs that make that
+    // glyph legible are ~2px each at the 18px this renders at, which is mud. A
+    // drop is one closed shape, and the disc it sits in takes the colour it
+    // sets, so the icon says "colour" by BEING the colour rather than by
+    // drawing the tool you'd change it with.
+    // Colour, and it draws the thing it sets rather than a container for it: a
+    // ring with one half filled, which is how every OS draws appearance/tint. It
+    // survives the size the palette glyph could not — a palette at 19px is three
+    // blobs and a hole — and the fill takes the current colour, so at a glance
+    // the badge IS the swatch. The half is filled and unstroked on the element
+    // so no stylesheet has to know how this one is built.
+    tint:    '<circle cx="12" cy="12" r="8.6"/>' +
+             '<path d="M12 3.4a8.6 8.6 0 0 0 0 17.2z" fill="currentColor" stroke="none"/>',
     // Three horizontal bars of unequal length — the plain "poll" glyph on the
     // composer's attach toggle (reads clearer at button scale than the type burst).
     poll:    '<path d="M5 7.5h13"/><path d="M5 12h9"/><path d="M5 16.5h11"/>',
@@ -3299,8 +3321,8 @@
       Store.pushResume();
     });
 
-    // Toggle signup ⇄ login through the same soft cross-dissolve the pages use, so
-    // the switch feels like part of the app rather than an instant redraw.
+    // Toggle signup ⇄ login through the router, so the form is rebuilt exactly
+    // the way arriving on it builds it.
     document.getElementById('auth-toggle').addEventListener('click',
       () => renderPage(() => renderAuth(isSignup ? 'login' : 'signup')));
   }
@@ -3877,32 +3899,31 @@
     view.innerHTML =
       `<section class="view">` +
         back +
+        // The identity header, flat on the page. There is no card here any more
+        // — the profile's colour is the full-screen .ambient wash, the same one
+        // Edit profile carries (see applyAmbient), the photo is an ordinary
+        // circular avatar at profile size, and everything else is type on the
+        // page's own axis. Corner discs, then photo left, identity beside it.
         `<div class="account">` +
-          // A floating glass card on the profile's own colour wash (.ambient,
-          // tinted from the photo) — the glass refracts that wash, so each profile
-          // reads in a custom hue. Avatar left, identity beside it, bio below,
-          // actions centred underneath.
-          `<div class="account-card${u.bio ? '' : ' account-card--nobio'}">` +
-            cornerBadges +
-            `<div class="account-head">` +
-              `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
-                (u.avatar
-                  ? `<img src="${esc(u.avatar)}" crossorigin="anonymous" alt="" decoding="async">`
-                  : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
+          cornerBadges +
+          `<div class="account-head">` +
+            `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
+              (u.avatar
+                ? `<img src="${esc(u.avatar)}" crossorigin="anonymous" alt="" decoding="async">`
+                : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
+            `</div>` +
+            // The identity column, all on one left axis: name+handle, an inline
+            // "N posts · N friends" stat line, the bio (wraps in place, any
+            // length), then the action beneath. A short or missing bio simply
+            // centres the column against the photo.
+            `<div class="account-meta">` +
+              `<div class="account-id">` +
+                `<h1 class="account-name">${esc(u.name)}</h1>` +
+                `<p class="account-handle">@${esc(u.username)}</p>` +
               `</div>` +
-              // The identity column, all on one left axis: name+handle, an inline
-              // "N posts · N friends" stat line, the bio (wraps in place, any
-              // length), then the action beneath. No bio → the column vertically
-              // centres against the taller photo (see .account-card--nobio).
-              `<div class="account-meta">` +
-                `<div class="account-id">` +
-                  `<h1 class="account-name">${esc(u.name)}</h1>` +
-                  `<p class="account-handle">@${esc(u.username)}</p>` +
-                `</div>` +
-                statsRow +
-                bio +
-                action +
-              `</div>` +
+              statsRow +
+              bio +
+              action +
             `</div>` +
           `</div>` +
         `</div>` +
@@ -4000,14 +4021,12 @@
 
     // An Updates row or a Discover tile targeted this post: the page arrives
     // already sitting on it. Synchronous, so the position is set before the new
-    // page's first paint and the router's cross dissolve reveals the card in
-    // place — the fade IS the transition to the post.
+    // page's first paint — the post is simply where the page opens.
     //
     // No wash. A highlight pulse answers "which one did I mean?", and nothing
-    // asked: the card is centred on a page you opened by tapping it. Stacking a
-    // tint on top of the dissolve was the third simultaneous move on one tap.
-    // The router skips its top-snap while a spotlight is pending (see route), so
-    // there's no jump-to-top to undo either.
+    // asked: the card is centred on a page you opened by tapping it. The router
+    // skips its top-snap while a spotlight is pending (see route), so there's no
+    // jump-to-top to undo either.
     if (spotlightPost) {
       const target = feedEl.querySelector(`[data-id="${spotlightPost}"]`);
       spotlightPost = null;
@@ -4128,12 +4147,11 @@
               if (result === 'cancelled') return;
               toast(result === 'copied' ? 'Link copied' : 'Shared');
             }) },
-          { label: 'Edit profile', icon: 'pencil', run: () => openProfileEditor(() => renderUser(username)) },
+          { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
         ] });
         return;
       }
       openSheet({
-        title: u.name || '@' + u.username,
         items: [
           { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(u.username, () => renderUser(username)) },
           { label: 'Report', icon: 'flag', danger: true, run: () => reportUser(u.username) },
@@ -4211,16 +4229,38 @@
     });
   }
 
-  /* ── Avatar editor ───────────────────────────────────────────────────────
-     A small frosted modal for setting your profile photo: pick → square crop
-     (reusing initCropper) → save. On save it exports a 512² JPEG data-URI and
-     hands it to Store.updateAvatar, then calls `done` to re-render in place. */
   /* ── Profile editor ──────────────────────────────────────────────────────
      One place for everything about you: your photo, display name, and bio (plus
-     the notifications toggle and Log out). The photo folds in here — pick a file
-     to reveal an inline square cropper; Save commits the words and, if you chose
-     a new photo, the crop too. Saves via Store.updateProfile / updateAvatar, then
-     calls `done` to re-render the profile in place. */
+     the notifications toggle, Log out and Delete). There is no separate avatar
+     editor any more — the photo folds in here: pick a file to reveal an inline
+     square cropper (initCropper, the app's only crop), move and scale it, and
+     Save commits the words plus, if you chose a new photo, a 512² JPEG of the
+     framed region. Saves via Store.updateProfile / updateAvatar and then leaves,
+     which re-renders the profile off the cache the write already updated.
+
+     It is a PAGE (`#/profile/edit`), and it used to be a modal. Three things
+     were wrong with the card, and only the first one is cosmetic. `.modal` is a
+     fixed, centred flex box with no `overflow` and no `max-height` on the card,
+     so a form taller than the screen was clipped at BOTH ends with nothing left
+     to scroll — the body is locked while a modal owns it, and the veil doesn't
+     scroll either. It shipped that way: the title was shorn off the top on a
+     normal phone. Second, a modal is not a history entry and `route()` never
+     swept one away, so the App Store build's edge-swipe rendered the page
+     underneath and left the card floating over a body still stuck at
+     `overflow: hidden`. Third, this is a fixed panel with a keyboard-summoning
+     textarea in it, which is where iOS puts the keyboard over the buttons and
+     leaves nothing to scroll. A page answers all three by being an ordinary
+     page. It also puts the app's two editors in the same shell, since the
+     composer — the bigger one, and the owner of the other cropper — has always
+     been a page.
+
+     Two rules the photo half earns the hard way. Save is DISABLED from the
+     moment a file is picked until the crop has actually decoded, and export()
+     is taken before anything commits — a pick that never decodes used to throw
+     out of the submit handler, leaving the name and bio saved, the photo not,
+     and the modal open with nothing said. And every failure along the way says
+     so in `#pf-error`: a photo that can't be read is the one thing here the
+     reader can fix, and silence made it look like the whole editor was dead. */
   /* The Private account hint, written in the present tense about the profile as
      it stands. Since Stage 2 the account flag no longer gates who can read a
      post (each post carries its own audience), so it describes what it actually
@@ -4234,18 +4274,36 @@
         `Activities are visible to your circle by default.`;
   }
 
-  function openProfileEditor(done) {
+  function renderEditProfile() {
     const u = Store.currentUser();
-    if (!u) return;
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Edit profile');
-    modal.innerHTML =
-      `<div class="modal-card modal-card--glass">` +
-        `<h2 class="modal-title">Edit profile</h2>` +
-        `<form id="pf-form" novalidate>` +
+    if (!u) { go('#/'); return; }
+    // Consumed on arrival, the way renderPublish consumes pendingDaily: the flag
+    // belonged to the tap that came here, not to the page.
+    const canPop = editorPushed;
+    editorPushed = false;
+
+    view.innerHTML =
+      `<section class="view">` +
+        // The way out, in the spot every other pushed page keeps it. A button
+        // and not an <a href="#/profile">, because leaving here should POP the
+        // entry rather than push a third one (see leave()).
+        // No masthead. The back button already names where you are relative to,
+        // the ••• row you came from was labelled "Edit profile", and every field
+        // below says what it is — a kicker and a serif title over a settings form
+        // is the page introducing itself to someone who just asked for it.
+        `<button type="button" class="profile-back" id="pf-back">← Profile</button>` +
+        `<form id="pf-form" class="pf-form" novalidate>` +
+          // The photo sits in its own colour: the profile gradient, the same
+          // --glow-photo the identity card wears, washed out from behind the
+          // circle. It is here rather than only on the card because this is the
+          // page where you SET it, and a colour is the one setting you cannot
+          // read off a control — you have to watch it land on something.
+          //
+          // Two badges on the rim, and they are a pair on purpose: the camera at
+          // bottom-right changes the picture, the half-filled ring at bottom-left
+          // changes the colour, both tucked into the same arc at the same size.
+          // The ring's fill takes the current colour, so the control displays the
+          // setting rather than describing it.
           `<div class="pf-photo" id="pf-photo">` +
             `<div class="pf-photo-figure">` +
               avatarEl(u, { cls: 'pf-photo-avatar' }) +
@@ -4254,12 +4312,24 @@
               `<div class="pf-photo-edit" id="pf-photo-pick" role="button" tabindex="0" ` +
                 `aria-label="Change your photo" title="Change your photo">` +
                 svgIcon('camera', 'pf-photo-ico') + `</div>` +
+              `<div class="pf-photo-accent" id="pf-accent" role="button" tabindex="0" ` +
+                `aria-label="Profile colour" title="Profile colour">` +
+                svgIcon('tint', 'pf-accent-ico') + `</div>` +
             `</div>` +
           `</div>` +
           `<input id="pf-file" type="file" accept="image/*" hidden>` +
-          `<div class="crop crop--avatar" id="pf-crop" hidden>` +
-            `<img id="pf-cropimg" alt="" draggable="false">` +
-            `<span class="crop-hint">Drag to reposition</span>` +
+          // The crop surface: the round frame, its caption, its way back out, in
+          // a centred column on the same axis as the resting avatar it replaces
+          // and at the same size, so picking a photo fills the circle instead of
+          // moving it. Nothing floats INSIDE the circle (`overflow: hidden` plus a
+          // 50% radius clips a pill to the chord, which sliced the ends off the
+          // hint this arrangement replaced).
+          `<div class="crop-stage" id="pf-cropstage" hidden>` +
+            `<div class="crop crop--avatar" id="pf-crop">` +
+              `<img id="pf-cropimg" alt="" draggable="false">` +
+            `</div>` +
+            `<p class="crop-hint" id="pf-crophint"></p>` +
+            `<div class="crop-replace" id="pf-replace" role="button" tabindex="0">Choose another</div>` +
           `</div>` +
           // Identity as one combo box — display name as the serif headline, bio as
           // the note beneath it — mirroring the composer's title+note and signup.
@@ -4292,7 +4362,7 @@
           // Cancel + Save are the form's commit row. Account actions (Log out,
           // Delete) live in their own zone below, split off by a hairline — they
           // act on the session, not this form, so they read as a separate group.
-          `<div class="modal-actions">` +
+          `<div class="form-actions">` +
             `<button type="button" class="edit-cancel" id="pf-cancel">Cancel</button>` +
             `<button type="submit" class="composer-submit" id="pf-save">Save</button>` +
           `</div>` +
@@ -4307,30 +4377,49 @@
               svgIcon('signout') + `Log out</button>` +
           `</div>` +
         `</form>` +
-      `</div>`;
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
+      `</section>`;
 
-    const nameEl = modal.querySelector('#pf-name');
-    const bioEl = modal.querySelector('#pf-bio');
-    const countEl = modal.querySelector('#pf-count');
-    const errEl = modal.querySelector('#pf-error');
-    const privacyBtn = modal.querySelector('#privacy-toggle');
+    const nameEl = view.querySelector('#pf-name');
+    const bioEl = view.querySelector('#pf-bio');
+    const countEl = view.querySelector('#pf-count');
+    const errEl = view.querySelector('#pf-error');
+    const privacyBtn = view.querySelector('#privacy-toggle');
 
     // A plain UI switch — it holds its state until Save commits it alongside the
     // words (Cancel discards it, same as name/bio).
-    const privacyHintEl = modal.querySelector('#privacy-hint');
+    const privacyHintEl = view.querySelector('#privacy-hint');
     privacyBtn.addEventListener('click', () => {
       const on = privacyBtn.getAttribute('aria-checked') === 'true';
       privacyBtn.setAttribute('aria-checked', String(!on));
       privacyHintEl.textContent = privacyHint(!on);
     });
 
-    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
-    const onEsc = (e) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', onEsc);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    modal.querySelector('#pf-cancel').addEventListener('click', close);
+    // Leaving POPS where it can. go() always pushes (see its note), so a Save
+    // that navigated forward would leave the editor sitting one edge-swipe
+    // behind the profile you just saved, ready to reopen itself — the modal's
+    // one genuine advantage, given away for nothing. A cold arrival (a bookmark,
+    // a reload on this hash) has no entry to pop, so it navigates instead.
+    const leave = () => {
+      if (canPop) history.back();
+      else go('#/profile');
+    };
+    view.querySelector('#pf-back').addEventListener('click', leave);
+    view.querySelector('#pf-cancel').addEventListener('click', leave);
+
+    // The avatar write is optimistic and the store rolls the cache back if the
+    // upload fails — but by then the reader has left this page, so the repaint
+    // has to find them. Only on a page their own face is actually on: a blind
+    // route() from here would rebuild the whole of Discover to correct an avatar
+    // that isn't in it.
+    const revertedAvatar = () => {
+      const here = (location.hash || '#/').split('?')[0];
+      if (here === '#/profile' || here === '#/u/' + encodeURIComponent(Store.session())) route();
+    };
+
+    // A page's DOM is replaced by the next navigation, which drops the nodes but
+    // not the cropper's ResizeObserver or a frame it has already queued. Same
+    // contract as the composer's camera teardown, and route() calls both.
+    stopActiveCrop = () => { if (pfCropper) pfCropper.destroy(); };
 
     // A quiet live count so the 160-char bio ceiling never feels like a surprise.
     const updateCount = () => {
@@ -4341,54 +4430,125 @@
 
     // Photo: pick a file → an inline square crop replaces the thumbnail. Save
     // commits it alongside the words; no file chosen leaves the photo untouched.
-    const pfFile = modal.querySelector('#pf-file');
-    const pfCropEl = modal.querySelector('#pf-crop');
-    const pfCropImg = modal.querySelector('#pf-cropimg');
-    const pfPhotoRow = modal.querySelector('#pf-photo');
+    const pfFile = view.querySelector('#pf-file');
+    const pfStage = view.querySelector('#pf-cropstage');
+    const pfCropEl = view.querySelector('#pf-crop');
+    const pfCropImg = view.querySelector('#pf-cropimg');
+    const pfPhotoRow = view.querySelector('#pf-photo');
+    const pfHint = view.querySelector('#pf-crophint');
+    const pfSave = view.querySelector('#pf-save');
     let pfCropper = null;
-    const pfPick = modal.querySelector('#pf-photo-pick');   // role=button div, not <button>
-    pfPick.addEventListener('click', () => pfFile.click());
-    pfPick.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pfFile.click(); } });
+    // Two gestures, one of which doesn't exist on the device you're holding, so
+    // name the one that does.
+    pfHint.textContent = finePointer()
+      ? 'Drag to move, scroll to zoom.'
+      : 'Drag to move, pinch to zoom.';
+
+    const pfPick = view.querySelector('#pf-photo-pick');   // role=button div, not <button>
+    const pfReplace = view.querySelector('#pf-replace');
+    // Clearing the input first is what makes re-picking the SAME file fire
+    // `change` again — otherwise choosing the photo you just chose does nothing,
+    // which reads as the picker being broken rather than as a no-op.
+    const openPicker = () => { pfFile.value = ''; pfFile.click(); };
+    const pickKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } };
+    pfPick.addEventListener('click', openPicker);
+    pfPick.addEventListener('keydown', pickKey);
+
+    // The colour ring on the opposite rim. Same role=button div as the camera, for
+    // the same reason (iOS standalone flashes a native pressed fill on a filled
+    // <button>), so it needs the same keyboard pair the camera gets.
+    const pfAccent = view.querySelector('#pf-accent');
+    const openAccent = () => openAccentSheet();
+    pfAccent.addEventListener('click', openAccent);
+    pfAccent.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccent(); }
+    });
+    pfReplace.addEventListener('click', openPicker);
+    pfReplace.addEventListener('keydown', pickKey);
+
+    // Save waits for the crop to decode: export() reads the image, so committing
+    // early is how a pick that never landed used to take the whole submit down
+    // with it. Cheap here (a data URL decodes in a frame or two) and the one
+    // thing standing between a bad file and a form that does nothing.
+    const cropBusy = (busy) => { pfSave.disabled = busy; };
+
     pfFile.addEventListener('change', () => {
       const f = pfFile.files && pfFile.files[0];
       if (!f) return;
+      errEl.textContent = '';
+      cropBusy(true);
       const reader = new FileReader();
+      reader.onerror = () => {
+        cropBusy(false);
+        errEl.textContent = 'Couldn’t read that file, try another photo.';
+      };
       reader.onload = () => {
         pfPhotoRow.hidden = true;
-        pfCropEl.hidden = false;
-        pfCropper = initCropper(pfCropEl, pfCropImg, reader.result);
+        pfStage.hidden = false;
+        if (pfCropper) pfCropper.destroy();
+        pfCropper = initCropper(pfCropEl, pfCropImg, reader.result, {
+          onReady: () => { cropBusy(false); },
+          onError: () => {
+            cropBusy(false);
+            pfCropper = null;
+            pfStage.hidden = true;
+            pfPhotoRow.hidden = false;
+            errEl.textContent = 'Couldn’t open that photo, try another one.';
+          },
+        });
       };
       reader.readAsDataURL(f);
     });
 
-    modal.querySelector('#pf-form').addEventListener('submit', async (e) => {
+    view.querySelector('#pf-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await Store.updateProfile({
-        name: nameEl.value, bio: bioEl.value,
-        isPrivate: privacyBtn.getAttribute('aria-checked') === 'true',
-      });
-      if (!res.ok) { errEl.textContent = res.error; return; }
-      // A freshly cropped photo commits alongside — optimistic (cache updates
-      // synchronously), upload in the background; on failure the store reverts.
-      const pendingAvatar = pfCropper ? Store.updateAvatar(pfCropper.export(512)) : null;
-      close();
-      done();
-      if (pendingAvatar) pendingAvatar.then(r => { if (!r.ok) { done(); toast(r.error); } });
+      // Take the crop BEFORE anything commits. Save is already held until the
+      // image decodes, so this is the belt to that pair of braces — but the
+      // failure it catches was silent and expensive: export() used to throw
+      // InvalidStateError straight out of this handler on an image that never
+      // loaded, which left the name and bio saved, the photo not, and the page
+      // sitting there with nothing said either way.
+      let shot = null;
+      if (pfCropper) {
+        try { shot = pfCropper.export(512); } catch { shot = null; }
+        if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
+      }
+      // A network round trip with a live button in front of it is two saves from
+      // one impatient tap; finally, so a throw can't leave Save dead either.
+      pfSave.disabled = true;
+      try {
+        const res = await Store.updateProfile({
+          name: nameEl.value, bio: bioEl.value,
+          isPrivate: privacyBtn.getAttribute('aria-checked') === 'true',
+        });
+        if (!res.ok) { errEl.textContent = res.error; return; }
+        // A freshly cropped photo commits alongside — optimistic (cache updates
+        // synchronously), upload in the background; on failure the store reverts.
+        const pendingAvatar = shot ? Store.updateAvatar(shot) : null;
+        leave();
+        if (pendingAvatar) pendingAvatar.then(r => { if (!r.ok) { revertedAvatar(); toast(r.error); } });
+      } finally {
+        pfSave.disabled = false;
+      }
     });
 
     // Account controls: the notifications toggle and Log out, now homed here.
     wirePushToggle();
-    modal.querySelector('#pf-logout').addEventListener('click', async () => {
+    view.querySelector('#pf-logout').addEventListener('click', async () => {
       await Store.logout();
+      // Where you had scrolled to is part of the world that just got thrown
+      // away. Both memories, because both would otherwise be read by whoever
+      // signs in next: the path memory on a tab tap, the entry memory on a back.
+      pathScroll.clear();
+      scrollMemory.clear();
       authMode = 'login';        // returning user — offer login first
-      close();
       go('#/signin');
     });
 
     // Delete account: one sheet standing in for "are you sure", so an accidental
     // tap next to Log out can't fall through to something unrecoverable. The
     // sheet's own Cancel (always rendered) is the escape hatch.
-    modal.querySelector('#pf-delete').addEventListener('click', () => {
+    view.querySelector('#pf-delete').addEventListener('click', () => {
       openSheet({
         title: 'Delete your account? This can’t be undone.',
         items: [{
@@ -4397,7 +4557,6 @@
             const res = await Store.deleteAccount();
             if (!res.ok) { toast(res.error); return; }
             authMode = 'signup';   // no account left to log back into
-            close();
             go('#/');
             toast('Account deleted.');
           },
@@ -4405,8 +4564,9 @@
       });
     });
 
-    // Desktop only — on touch this would pop the keyboard and lurch the modal to
-    // center the field (see the same guard on the post edit form).
+    // Desktop only — on touch, opening the keyboard the moment the page lands
+    // covers half of it before anyone has decided to type (see the same guard on
+    // the post edit form).
     if (finePointer()) {
       nameEl.focus();
       nameEl.select();
@@ -4497,11 +4657,19 @@
      rule (a menu floats above content). items: {label, icon?, danger?, run?}; run
      may be async and fires after the sheet closes. Reduced-motion aware. */
   let sheetOpen = false;
-  function openSheet({ title, items }) {
+  // Two shapes, one sheet. `items` is the ordinary list of labelled rows; `head`
+  // is arbitrary markup mounted ABOVE them inside the same panel, wired by the
+  // caller's `wire(scrim, close)`. The accent picker is the one caller that uses
+  // it — a grid of swatches is not a list of rows, but it is the same scrim, the
+  // same panel, the same focus trap and the same way out, and a second copy of
+  // all of that to hold one grid would be the expensive way to be inconsistent.
+  // `scrimClass` exists for that caller too (see .sheet-scrim--see-through).
+  function openSheet({ title, items, head, wire, scrimClass }) {
     if (sheetOpen) return;
     sheetOpen = true;
+    items = items || [];
     const scrim = document.createElement('div');
-    scrim.className = 'sheet-scrim';
+    scrim.className = 'sheet-scrim' + (scrimClass ? ' ' + scrimClass : '');
     const rows = items.map((it, i) =>
       `<button class="sheet-item${it.danger ? ' sheet-item--danger' : ''}" type="button" data-i="${i}">` +
         (it.icon ? svgIcon(it.icon, 'sheet-ico') : '') +
@@ -4510,7 +4678,7 @@
     scrim.innerHTML =
       `<div class="sheet" role="dialog" aria-modal="true"${title ? ` aria-label="${esc(title)}"` : ''}>` +
         (title ? `<p class="sheet-title">${esc(title)}</p>` : '') +
-        `<div class="sheet-items">${rows}</div>` +
+        `<div class="sheet-items">${head || ''}${rows}</div>` +
         `<button class="sheet-cancel" type="button">Cancel</button>` +
       `</div>`;
     document.body.appendChild(scrim);
@@ -4519,7 +4687,7 @@
     // WAI-ARIA dialog: focus moves in on open, is trapped while open, returns on
     // close). Move focus to the first action once it's painted.
     const opener = document.activeElement;
-    const focusables = () => [...scrim.querySelectorAll('.sheet-item, .sheet-cancel')];
+    const focusables = () => [...scrim.querySelectorAll('.sheet-item, .swatch, .sheet-cancel')];
     requestAnimationFrame(() => {
       scrim.classList.add('open');
       focusables()[0]?.focus();
@@ -4558,7 +4726,84 @@
         if (it && it.danger) hapticEvent('WARNING');
         close(() => { if (it && it.run) it.run(); });
       }));
+    if (wire) wire(scrim, close);
     document.addEventListener('keydown', onKey);
+  }
+
+  /* ── Profile colour ─────────────────────────────────────────────────────────
+     The picker behind the colour ring on Edit profile. Ten choices in two
+     groups, and the grouping is the argument: a SOURCE row (sample it from my
+     photo · no colour at all) over the eight colours you can name. The photo
+     option wears the photo, cropped into the same disc as every swatch beside
+     it, so the two sources are comparable objects rather than a picture-shaped
+     thing sitting next to a colour-shaped thing.
+
+     It reads Store.currentUser() rather than taking the `u` renderEditProfile
+     captured: a pick replaces that object in the cache, so a captured one goes
+     stale the first time you use this and the checkmark would sit on the
+     previous colour.
+
+     A sheet rather than a row of swatches in the form, because a colour is the
+     one setting whose value you cannot read off a control — you have to see it
+     land. So the scrim is deliberately thin (.sheet-scrim--see-through), the
+     page's wash stays lit above it, the pick paints SYNCHRONOUSLY, and the
+     ring you opened it from wears the current colour the whole time. */
+  function openAccentSheet() {
+    const me = Store.currentUser();
+    if (!me) return;
+    // No photo, no photo option. Falling back to 'none' for the checkmark is
+    // exact rather than a shrug: with nothing to sample, "from my photo" and
+    // "no colour" are the same card, and the mark belongs on the one you can see.
+    const current = me.accent || (me.avatar ? 'auto' : 'none');
+
+    // The fill goes on the DISC, not the button: --sw and the photo's
+    // background-image are both painted by .swatch-disc, and a url() on the
+    // button would sit behind the label with no background-size to size it.
+    const swatch = (key, label, fill) =>
+      `<button class="swatch${key === current ? ' is-on' : ''}" type="button" ` +
+        `role="menuitemradio" aria-checked="${key === current}" data-accent="${key}" ` +
+        `title="${esc(label)}">` +
+        `<span class="swatch-disc"${fill ? ` style="${fill}"` : ''}>` +
+          `<span class="swatch-tick" aria-hidden="true">${svgIcon('check')}</span>` +
+        `</span>` +
+        `<span class="swatch-label">${esc(label)}</span>` +
+      `</button>`;
+
+    const head =
+      `<div class="swatches swatches--source" role="group" aria-label="Colour source">` +
+        (me.avatar ? swatch('auto', 'Photo', `background-image:url(${esc(me.avatar)})`) : '') +
+        swatch('none', 'None') +
+      `</div>` +
+      `<div class="swatches" role="group" aria-label="Colours">` +
+        ACCENTS.map(a => swatch(a.key, a.label, `--sw:${accentCss(a.key)}`)).join('') +
+      `</div>`;
+
+    openSheet({
+      scrimClass: 'sheet-scrim--see-through',
+      head,
+      wire: (scrim, close) => {
+        scrim.querySelectorAll('.swatch').forEach(btn =>
+          btn.addEventListener('click', () => {
+            const key = btn.dataset.accent;
+            // Re-picking the colour you already wear repaints nothing, so it gets
+            // no buzz and no write — the same rule the filter dial keeps, and for
+            // the same reason: a haptic means a change landed.
+            if (key === current) { close(); return; }
+            hapticTap('LIGHT');
+            const val = key === 'auto' ? null : key;
+            // updateAccent patches the cache before its first await, so the world
+            // this reads is already the new one and the card changes under the
+            // sheet in the same frame as the tap.
+            const saving = Store.updateAccent(val);
+            paintWash(Store.currentUser(), 'profile');
+            saving.then(r => {
+              if (!r.ok) toast(r.error);
+              paintWash(Store.currentUser(), 'profile');  // confirmed, or store reverted it
+            });
+            close();
+          }));
+      },
+    });
   }
 
   // A deep link to a single post: the author's profile plus ?p=<id>, which the
@@ -4604,7 +4849,6 @@
 
   function reportPost(post) {
     openSheet({
-      title: 'Report this post',
       items: REPORT_REASONS.map(reason => ({ label: reason, run: async () =>
         reportToast(await sendReport({
           kind: 'post', reason,
@@ -4618,7 +4862,6 @@
   function reportUser(username) {
     const u = Store.user(username);
     openSheet({
-      title: 'Report @' + username,
       items: REPORT_REASONS.map(reason => ({ label: reason, run: async () =>
         reportToast(await sendReport({ kind: 'user', reason, reported: '@' + username, name: u ? u.name : '' })) })),
     });
@@ -4689,7 +4932,6 @@
   function openFriendMenu(username, after) {
     const u = Store.user(username);
     openSheet({
-      title: u ? u.name : '@' + username,
       items: [
         { label: 'Remove friend', icon: 'friends', run: async () => { await Store.removeFriend(username); if (after) after(); } },
         { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(username, after) },
@@ -6744,10 +6986,10 @@
     pubType = 'note';
     // The reactive colour lives full-screen now: the page ambient wash adopts the
     // inferred type's hue (see body[data-ambient="publish"] .ambient), keyed off
-    // --glow-pub which syncType keeps in step. Set it before the wash fades in so
+    // --glow-wash which syncType keeps in step. Set it before the wash fades in so
     // it opens on the right colour rather than tweening up from the default.
     document.body.dataset.ambient = 'publish';
-    document.body.style.setProperty('--glow-pub', TYPE_HEX[pubType]);
+    document.body.style.setProperty('--glow-wash', TYPE_HEX[pubType]);
     view.innerHTML =
       `<section class="view">` +
         // No kicker: the audience row below now says who this reaches, so
@@ -6827,9 +7069,9 @@
         void ind.offsetWidth;                // restart the pop
         ind.classList.add('is-changing');
       }
-      // Full-screen ambient wash adopts the inferred hue; registered --glow-pub
+      // Full-screen ambient wash adopts the inferred hue; registered --glow-wash
       // tweens the colour (see the publish .ambient rule).
-      document.body.style.setProperty('--glow-pub', TYPE_HEX[pubType] || TYPE_HEX.note);
+      document.body.style.setProperty('--glow-wash', TYPE_HEX[pubType] || TYPE_HEX.note);
       fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
@@ -7639,67 +7881,234 @@
     return api;
   }
 
-  // Square cropper over an already-loaded <img> (the avatar editor only — post
-  // photos use initPhotoPreview and keep their aspect). Cover-fits the image and
-  // lets the user pan it within the frame; export() draws the framed region to a
-  // canvas. Pan is clamped so the square stays fully covered. State lives on the
-  // element (cropEl._crop) so "Replace photo" can re-init without re-wiring the
-  // drag handlers (those are attached once, guarded by data-wired).
-  function applyPan(cropEl) {
-    const s = cropEl._crop;
-    s.tx = Math.min(0, Math.max(s.square - s.dispW, s.tx));
-    s.ty = Math.min(0, Math.max(s.square - s.dispH, s.ty));
-    s.img.style.transform = `translate(${s.tx}px, ${s.ty}px)`;
+  /* ── Square cropper (the avatar editor only) ───────────────────────────────
+     Post photos go through initPhotoPreview and keep their aspect; this is the
+     one place in the app that crops, because avatars are the one thing that
+     displays round. Cover-fits the image in the square frame, then lets you MOVE
+     and SCALE it: drag (one finger) to pan, pinch or scroll to zoom, or drive
+     the zoom from the slider under the frame. export() draws the framed region
+     to a canvas.
+
+     Geometry, all of it. The <img> is sized ONCE to its cover fit (baseW ×
+     baseH) and everything after that is `translate(tx, ty) scale(zoom)` against
+     a `transform-origin: 0 0`. That origin is what makes the arithmetic one
+     line each way — the displayed box is simply [tx, tx + baseW·zoom] — and the
+     transform is what makes a pinch smooth: rewriting width/height per frame
+     would relayout the whole modal sixty times a second, where a transform is
+     compositor work. `zoom` is 1 at the cover fit and never less, which is what
+     guarantees the square stays covered, and `base · zoom` is the one number
+     converting natural pixels to displayed ones — export() runs it backwards.
+
+     State lives on the element (cropEl._crop) so a re-pick re-inits without
+     re-wiring the gesture handlers (attached once, guarded by data-wired). */
+  const CROP_ZOOM_MAX = 4;     // times the cover fit
+  const CROP_MIN_SRC = 160;    // never frame fewer source px than this: past that
+                               // point zoom is just enlarging JPEG mush, so the
+                               // ceiling comes down to meet a small photo instead.
+
+  function cropClamp(s) {
+    s.tx = Math.min(0, Math.max(s.square - s.baseW * s.zoom, s.tx));
+    s.ty = Math.min(0, Math.max(s.square - s.baseH * s.zoom, s.ty));
   }
 
-  function initCropper(cropEl, imgEl, src) {
-    const s = { tx: 0, ty: 0, square: 0, scale: 1, dispW: 0, dispH: 0, img: imgEl };
+  // Clamp, then write the transform on the next frame. Batched because a pinch
+  // on a ProMotion phone delivers pointermove faster than the display can paint,
+  // and two style writes per frame is one wasted. `now` skips the wait for the
+  // first paint after a pick, where a frame of un-positioned image would show.
+  function cropApply(cropEl, now) {
+    const s = cropEl._crop;
+    cropClamp(s);
+    const write = () => {
+      s.frame = 0;
+      s.img.style.transform = `translate(${s.tx}px, ${s.ty}px) scale(${s.zoom})`;
+    };
+    if (now) { if (s.frame) cancelAnimationFrame(s.frame); write(); return; }
+    if (!s.frame) s.frame = requestAnimationFrame(write);
+  }
+
+  // Zoom about a focal point (in frame coordinates), so the pixel under the
+  // pinch midpoint or the cursor stays put. Both gestures come through here.
+  function cropZoom(cropEl, z, fx, fy) {
+    const s = cropEl._crop;
+    z = Math.min(s.zoomMax, Math.max(1, z));
+    if (z === s.zoom) { cropApply(cropEl); return; }   // held spread is still a pan
+    const k = z / s.zoom;
+    s.tx = fx - (fx - s.tx) * k;
+    s.ty = fy - (fy - s.ty) * k;
+    s.zoom = z;
+    cropApply(cropEl);
+  }
+
+  // Centroid + spread of the live pointers. One pointer is a pan (spread 0), two
+  // are a pinch; the centroid carries the pan either way, so lifting one finger
+  // of two hands the drag over without a jump rather than ending it.
+  function cropGesture(s) {
+    const list = [...s.pts.values()];
+    if (!list.length) return null;
+    const cx = list.reduce((a, p) => a + p.x, 0) / list.length;
+    const cy = list.reduce((a, p) => a + p.y, 0) / list.length;
+    const d = list.length > 1 ? Math.hypot(list[0].x - list[1].x, list[0].y - list[1].y) : 0;
+    return { cx, cy, d };
+  }
+
+  // Measure the frame and fit the image to it. Runs on load AND on any resize of
+  // the frame (rotation, the keyboard closing under the modal) — the old cropper
+  // measured once, so a frame that grew afterwards was left with an image too
+  // small to cover it and exported a transparent wedge. The visual centre is
+  // held across the re-fit, in natural pixels, so nothing jumps.
+  function cropMeasure(cropEl) {
+    const s = cropEl._crop;
+    const img = s.img;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    // The frame's width is a vw clamp, so it is routinely fractional (132.6px on
+    // a 390pt phone). clientWidth rounds, and rounding DOWN is a cover fit that
+    // doesn't quite cover — a hairline of the empty frame at one edge, and an
+    // export framing a sliver more than the circle showed. Measure the real box.
+    const square = cropEl.getBoundingClientRect().width || s.square || 1;
+    const px = s.base * s.zoom;                       // displayed px per natural px
+    const held = s.square
+      ? { x: (s.square / 2 - s.tx) / px, y: (s.square / 2 - s.ty) / px }
+      : null;
+
+    s.square = square;
+    s.natW = img.naturalWidth;
+    s.natH = img.naturalHeight;
+    s.base = square / Math.min(s.natW, s.natH);        // cover fit
+    s.baseW = s.natW * s.base;
+    s.baseH = s.natH * s.base;
+    s.zoomMax = Math.max(1, Math.min(CROP_ZOOM_MAX,
+      Math.min(s.natW, s.natH) / CROP_MIN_SRC));
+    s.zoom = Math.min(s.zoomMax, Math.max(1, s.zoom));
+    img.style.width = s.baseW + 'px';
+    img.style.height = s.baseH + 'px';
+
+    const npx = s.base * s.zoom;
+    if (held) { s.tx = s.square / 2 - held.x * npx; s.ty = s.square / 2 - held.y * npx; }
+    else { s.tx = (s.square - s.baseW * s.zoom) / 2; s.ty = (s.square - s.baseH * s.zoom) / 2; }
+    cropApply(cropEl, true);
+  }
+
+  // opts: { onReady, onError } — the caller holds Save until the image has
+  // actually decoded, because a pick that never decodes (a stray HEIC, a file
+  // the OS handed over half-exported) used to reach export() and throw
+  // InvalidStateError out of the submit handler: name and bio saved, the photo
+  // silently didn't, and the modal just sat there with nothing said.
+  function initCropper(cropEl, imgEl, src, opts = {}) {
+    const prev = cropEl._crop;
+    if (prev && prev.frame) cancelAnimationFrame(prev.frame);
+    const s = {
+      img: imgEl, ready: false, frame: 0, pts: new Map(), g: null, rect: null,
+      square: 0, natW: 0, natH: 0, base: 1, baseW: 0, baseH: 0,
+      zoom: 1, zoomMax: CROP_ZOOM_MAX, tx: 0, ty: 0,
+    };
     cropEl._crop = s;
+    imgEl.style.transform = 'translate(0px, 0px) scale(1)';
 
     imgEl.onload = () => {
-      s.square = cropEl.clientWidth || 1;
-      s.scale = s.square / Math.min(imgEl.naturalWidth, imgEl.naturalHeight);
-      s.dispW = imgEl.naturalWidth * s.scale;
-      s.dispH = imgEl.naturalHeight * s.scale;
-      imgEl.style.width = s.dispW + 'px';
-      imgEl.style.height = s.dispH + 'px';
-      s.tx = (s.square - s.dispW) / 2;   // center to start
-      s.ty = (s.square - s.dispH) / 2;
-      applyPan(cropEl);
+      if (cropEl._crop !== s) return;      // a newer pick landed first
+      s.ready = true;
+      cropMeasure(cropEl);
+      if (opts.onReady) opts.onReady();
+    };
+    imgEl.onerror = () => {
+      if (cropEl._crop !== s) return;
+      s.ready = false;
+      if (opts.onError) opts.onError();
     };
     imgEl.src = src;
 
     if (!cropEl.dataset.wired) {
       cropEl.dataset.wired = '1';
-      let drag = null;
+      const at = (c, e) => ({ x: e.clientX - c.rect.left, y: e.clientY - c.rect.top });
+
       cropEl.addEventListener('pointerdown', (e) => {
         const c = cropEl._crop;
-        drag = { x: e.clientX, y: e.clientY, tx: c.tx, ty: c.ty };
-        cropEl.setPointerCapture(e.pointerId);
+        if (!c.ready) return;
+        // Stops WebKit lifting the <img> into a native drag (and, with the
+        // callout killed in CSS, that is the whole of the long-press hijack
+        // that used to eat the pan on iOS mid-gesture).
+        e.preventDefault();
+        if (!c.pts.size) c.rect = cropEl.getBoundingClientRect();
+        c.pts.set(e.pointerId, at(c, e));
+        c.g = cropGesture(c);
+        try { cropEl.setPointerCapture(e.pointerId); } catch {}
         cropEl.classList.add('dragging');
       });
+
       cropEl.addEventListener('pointermove', (e) => {
-        if (!drag) return;
         const c = cropEl._crop;
-        c.tx = drag.tx + (e.clientX - drag.x);
-        c.ty = drag.ty + (e.clientY - drag.y);
-        applyPan(cropEl);
+        if (!c.pts.has(e.pointerId)) return;
+        c.pts.set(e.pointerId, at(c, e));
+        const g = cropGesture(c), was = c.g;
+        c.g = g;
+        if (!was) return;
+        c.tx += g.cx - was.cx;                       // pan rides the centroid…
+        c.ty += g.cy - was.cy;
+        cropClamp(c);
+        // …and a second finger scales, about the midpoint the pan just followed.
+        if (was.d > 8 && g.d > 8) cropZoom(cropEl, c.zoom * (g.d / was.d), g.cx, g.cy);
+        else cropApply(cropEl);
       });
-      const end = () => { drag = null; cropEl.classList.remove('dragging'); };
-      cropEl.addEventListener('pointerup', end);
-      cropEl.addEventListener('pointercancel', end);
+
+      const lift = (e) => {
+        const c = cropEl._crop;
+        if (!c.pts.delete(e.pointerId)) return;
+        try { cropEl.releasePointerCapture(e.pointerId); } catch {}
+        c.g = cropGesture(c);                        // re-baseline, don't jump
+        if (!c.pts.size) cropEl.classList.remove('dragging');
+      };
+      cropEl.addEventListener('pointerup', lift);
+      cropEl.addEventListener('pointercancel', lift);
+
+      // Trackpad/wheel zoom, focused on the cursor. Non-passive because it has
+      // to beat the page scroll; the frame is touch-action:none anyway, so this
+      // only ever fires from a real pointing device.
+      cropEl.addEventListener('wheel', (e) => {
+        const c = cropEl._crop;
+        if (!c.ready) return;
+        e.preventDefault();
+        const r = cropEl.getBoundingClientRect();
+        cropZoom(cropEl, c.zoom * Math.exp(-e.deltaY * 0.0022),
+          e.clientX - r.left, e.clientY - r.top);
+      }, { passive: false });
+
+      // The other half of cropMeasure's reason for existing: the frame is
+      // `max-width: 100%` inside a modal, so a rotation resizes it after the fit.
+      if (typeof ResizeObserver === 'function') {
+        cropEl._cropRO = new ResizeObserver((entries) => {
+          const c = cropEl._crop;
+          const w = entries[0] && entries[0].contentRect.width;
+          if (c && c.ready && w && Math.abs(w - c.square) > 0.5) cropMeasure(cropEl);
+        });
+        cropEl._cropRO.observe(cropEl);
+      }
     }
 
     return {
+      get ready() { return cropEl._crop === s && s.ready; },
+      // Returns null rather than throwing when there is nothing to export, so a
+      // Save with a broken pick behind it is a message, not a dead modal.
       export(out = 1000) {
-        const c = cropEl._crop;
+        if (cropEl._crop !== s || !s.ready || !s.img.naturalWidth) return null;
+        const px = s.base * s.zoom;                  // displayed px per natural px
+        const srcSize = s.square / px;               // source px framed by the square
+        // Never enlarge: a tightly zoomed crop of a small photo exports at its
+        // own size instead of being blown up to a rounder number.
+        const edge = Math.max(256, Math.min(out, Math.round(srcSize)));
         const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = out;
+        canvas.width = canvas.height = edge;
         const ctx = canvas.getContext('2d');
-        const srcSize = c.square / c.scale;        // source px framed by the square
-        ctx.drawImage(c.img, -c.tx / c.scale, -c.ty / c.scale, srcSize, srcSize,
-          0, 0, out, out);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';          // a 12MP source lands on 512
+        ctx.drawImage(s.img, -s.tx / px, -s.ty / px, srcSize, srcSize, 0, 0, edge, edge);
         return canvas.toDataURL('image/jpeg', 0.82);
+      },
+      destroy() {
+        if (s.frame) cancelAnimationFrame(s.frame);
+        s.frame = 0;
+        s.pts.clear();
+        imgEl.onload = imgEl.onerror = null;
+        if (cropEl._cropRO) { cropEl._cropRO.disconnect(); cropEl._cropRO = null; }
       },
     };
   }
@@ -8368,6 +8777,52 @@
   const sampleCache = new Map();
   let ambientSeq = 0;
 
+  /* THE PALETTE. Eight colours a profile can wear, and the first five are the
+     post quintet itself — lavender, coral, cyan, lime, rose — because those are
+     Tria's colours and a ninth family of hues invented for one control would be
+     the design system saying two different things about the same app.
+
+     Spending them here doesn't blunt what they mean on a post, and the reason is
+     that this surface never carried a promise to blunt: the profile glow has
+     been an ARBITRARY sampled colour since the day it shipped, free to land on
+     exactly lime or exactly rose depending on someone's jumper. The quintet's
+     meaning lives where a hue names a TYPE (a filter chip, the Publish button, a
+     daily's card), and nothing on a profile card does that.
+
+     Three added, chosen to fill the gaps the quintet leaves on the hue wheel
+     rather than to be new brand colours — amber at ~40 degrees, jade at ~158,
+     ocean at ~218, which are the three widest holes between the five. They are
+     drawn at the quintet's own weight (~0.75 lightness, saturation in its range)
+     so a row of eight reads as one family and not as five Tria colours with
+     three guests. */
+  const ACCENTS = [
+    { key: 'lavender', label: 'Lavender', hex: '#b7a6e8' },   // = --type-note
+    { key: 'coral',    label: 'Coral',    hex: '#f2a58c' },   // = --type-find
+    { key: 'cyan',     label: 'Cyan',     hex: '#9fd6e8' },   // = --type-photo
+    { key: 'lime',     label: 'Lime',     hex: '#b9df7d' },   // = --type-activity
+    { key: 'rose',     label: 'Rose',     hex: '#ea86ae' },   // = --type-poll
+    { key: 'amber',    label: 'Amber',    hex: '#e8c07d' },
+    { key: 'jade',     label: 'Jade',     hex: '#8fdcc0' },
+    { key: 'ocean',    label: 'Ocean',    hex: '#8fb4ea' },
+  ];
+
+  /* WHY ONE SOURCE IS NORMALISED AND THE OTHER IS NOT.
+
+     A photo colour is an AVERAGE, and an average of a photograph comes out limp
+     and at whatever lightness the room happened to be — a night shot and a
+     snowfield would otherwise glow at wildly different weights. So sampleColor
+     pins it: hue kept, saturation lifted and clamped, lightness forced to 0.55.
+
+     A palette hex is not an average, it is a decision, and putting it through
+     the same gate was tried and was plainly wrong. The quintet lives at ~0.78
+     lightness and that IS the pastel — dragging it to 0.55 turned lavender into
+     a strong purple and rose into magenta, eight sweets in a row on the one
+     surface in the app that is meant to be austere. The palette therefore goes
+     in raw, and what that costs is checked on the surface it lands on rather than
+     assumed (see the .ambient wash in app.css, measured against every accent in
+     both schemes). It errs light, which is the safe direction on paper and the
+     expensive one on ink — which is why the wash mixes toward the scheme's own
+     extreme before it saturates, rather than trusting the source. */
   function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
@@ -8401,6 +8856,18 @@
     };
   }
 
+  const glowNorm = (r, g, b, boost) => {
+    const hsl = rgbToHsl(r, g, b);
+    return hslToRgb(hsl.h, Math.max(0.5, Math.min(0.85, hsl.s * (boost || 1))), 0.55);
+  };
+
+  // A palette slug -> the colour it paints. Unknown slug (an older client meeting
+  // a newer row, or a value typed into the DB by hand) returns null, which every
+  // caller reads as "not a palette pick" and falls back to the photo: the
+  // default, not a broken card. Swatches paint from this too, so the picker is
+  // showing the colour you will actually get.
+  const accentCss = (key) => (ACCENTS.find(x => x.key === key) || {}).hex || null;
+
   // Sample a single representative colour from an image (data-URI). Draws it tiny
   // and takes a saturation-weighted average — so a photo's signature colour leads
   // over flat greys — then normalises it to an even, gentle glow (steady hue,
@@ -8431,8 +8898,10 @@
             const w = sat * sat + 0.05;      // saturated pixels lead the average
             R += r * w; G += g * w; B += b * w; W += w;
           }
-          const hsl = rgbToHsl(R / W, G / W, B / W);
-          out = hslToRgb(hsl.h, Math.max(0.5, Math.min(0.85, hsl.s * 1.5)), 0.55);
+          // 1.5x: a saturation-weighted AVERAGE is still an average, and comes
+          // out limper than any pixel that fed it. A chosen hex needs no such
+          // rescue, which is the only difference between the two sources.
+          out = glowNorm(R / W, G / W, B / W, 1.5);
         } catch { out = null; }
         sampleCache.set(src, out);
         resolve(out);
@@ -8442,44 +8911,76 @@
     });
   }
 
-  // A profile's colour: sampled from that person's photo and published as
-  // --glow-photo, which .account-card::before turns into a glow in the card's
-  // bottom-right corner.
+  // A person's colour: a palette pick if they made one, otherwise sampled from
+  // their photo. It lights the full-screen .ambient wash on their profile and on
+  // Edit profile, and rides along as --glow-photo because the colour ring badge
+  // on the edit form wears it — so the control that sets the colour is showing
+  // it.
   //
-  // This used to light a full-screen wash behind the page (data-ambient
-  // "photo"), and About and a daily had washes of their own. All three are gone
-  // — a viewport-sized gradient is the biggest surface the compositor can be
-  // handed, and worse, a washed page reads as a different PAPER than the feed
-  // you arrived from. The composer is the one page that still washes, because
-  // there the colour is information (which type you're making) and it is set in
-  // renderPublish, not here.
+  // It spent a while as a glow clipped into the bottom-right corner of the
+  // identity card, which was a smaller answer to the same question and is
+  // retired with that card. The wash it went back to is not the old one: the
+  // page-wide blob that used to live here (data-ambient "photo") was untinted,
+  // unsaturated and paid for entirely in alpha, and About and a daily had copies
+  // of it. What a profile lights now is the composer's wash, whole — same
+  // tokens, same tinted mix, same ink rule — with the origin moved to the
+  // top-right corner. Colour where it is information; nowhere it is decoration.
   //
   // Sampling is async; a seq guard drops a stale result if you've navigated on.
-  // The property is cleared up front so profile A's colour can't sit under
-  // profile B's card for the length of a fetch.
+  //
+  // Two functions, one question. withAccent RESOLVES a person's colour —
+  // synchronously for a palette pick, after a decode for a photo — and paintWash
+  // spends it. Split that way so a colour PICK can repaint without a navigation,
+  // which is the whole reason the picker can sit on the page it sets.
+  //
+  // The seq guard is shared and that is deliberate: only one of these is ever
+  // the live answer, so a later call cancelling an earlier sample is correct.
+  function withAccent(user, apply) {
+    const seq = ++ambientSeq;
+    const done = (css) => { if (seq === ambientSeq) apply(css); };
+    if (!user || user.accent === 'none') return done(null);   // no one, or colour off
+    // A chosen colour is SYNCHRONOUS, and that is worth more than it looks: the
+    // photo path has a decode in it, so a pick lands in the same frame as the tap.
+    const picked = accentCss(user.accent);
+    if (picked) return done(picked);
+    if (!user.avatar) return done(null);                      // nothing to sample
+    sampleColor(user.avatar).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
+  }
+
+  // Light the wash. Both callers pass "profile" — a profile page and the form
+  // that edits it are the same colour on the same gradient, and there is
+  // deliberately no third geometry for them to drift apart on. The parameter
+  // stays because the composer's "publish" is the same switch, set in
+  // renderPublish where the hue is a post type rather than a person.
+  //
+  // Turning the wash OFF leaves --glow-wash where it was on purpose: the fade is
+  // an opacity ramp, and clearing the colour under it would swap the hue to the
+  // initial lavender halfway out.
+  function paintWash(user, mode) {
+    const body = document.body;
+    withAccent(user, (css) => {
+      if (!css) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = 'none'; return; }
+      body.style.setProperty('--glow-photo', css);
+      body.style.setProperty('--glow-wash', css);
+      body.dataset.ambient = mode;
+    });
+  }
+
   function applyAmbient(path) {
     const body = document.body;
-    const seq = ++ambientSeq;
-
+    if (path === '#/profile/edit') { paintWash(Store.currentUser(), 'profile'); return; }
     let user = null;
     if (path.startsWith('#/u/')) user = Store.user(decodeURIComponent(path.slice(4)));
     else if (path === '#/profile') user = Store.currentUser();
-
-    body.dataset.ambient = 'none';                 // only the composer washes now
-    body.style.removeProperty('--glow-photo');
-    if (!user || !user.avatar) return;             // non-profile, or no photo → plain glass
-    sampleColor(user.avatar).then(rgb => {
-      if (seq !== ambientSeq) return;
-      if (!rgb) return;                            // sampling failed → plain glass
-      const { r, g, b } = rgb;
-      // Published OPAQUE. The full-screen wash used to bake its alpha in here
-      // (0.26), which quietly made this line the brightness control as well as
-      // the colour one — so tuning how loud the glow reads meant editing JS, and
-      // the two stops the corner needs could only ever have been one. The hue is
-      // the only thing this function knows; how much of it to show belongs with
-      // the surface showing it (--glow-core / --glow-halo on .account-card).
-      body.style.setProperty('--glow-photo', `rgb(${r}, ${g}, ${b})`);
-    });
+    if (!user) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = 'none'; return; }
+    // A page that IS going to wash keeps the current colour lit while the next
+    // one resolves, so profile to profile TWEENS rather than blinking out and
+    // back — the sample is a decode, and a hard reset would spend it as a gap.
+    // The composer is the one wash that can't be inherited that way: its hue
+    // names a post type, and leaving it up over someone's profile would be the
+    // page saying something false for the length of a fetch.
+    if (body.dataset.ambient === 'publish') body.dataset.ambient = 'none';
+    paintWash(user, 'profile');
   }
 
   /* ── About (#/about) ────────────────────────────────────────────────────────
@@ -8941,44 +9442,53 @@
       `</section>`;
   }
 
-  /* ── Router + page transitions ─────────────────────────────────────────────
-     Every route change is the same ONE FADE — the destination is mounted opaque
-     and the outgoing page dissolves away on top of it. There is no direction and
-     no movement: pages used to slide along a nav line, but Discover's grid is
-     dozens of photos still decoding while the slide ran, so the movement read as
-     the page snapping and glitching rather than loading. A fade lets a tile land
-     whenever it's ready. (See the page-transition block in app.css for why it is
-     one ramp and not two — a true cross dissolve leaves a quarter of the page
-     background showing through the middle of every move, which is the flash.)
+  /* ── Router ────────────────────────────────────────────────────────────────
+     A route change has NO transition. The destination is built and mounted in
+     the same task as the navigation, so the new page is simply there on the next
+     frame and the old one is simply gone.
+
+     That is a deliberate reversal, and the history is worth keeping because each
+     step was an improvement that still left the app feeling slow. Pages used to
+     slide along a nav line; the slide read as snapping on Discover, whose grid is
+     dozens of photos still decoding while it ran, so it became a cross dissolve.
+     The cross dissolve flashed — two ramps crossing means neither layer is opaque
+     mid-move, so a quarter of the bare page background punched through every
+     navigation — so it became ONE fade, the destination mounted opaque with only
+     the outgoing page dissolving off the top of it. That fixed the flash and it
+     was still 240ms of the app withholding a page it had already finished
+     building. Nothing was mistimed by then; the fade itself was the cost. Tapping
+     a tab is not an event that needs narrating, and the app has plenty of motion
+     left in the places where something actually happened — a card landing, the
+     pull-to-refresh ring, the publish sparkles.
+
+     Two things the fade paid for have to be paid some other way, and they are
+     both still here: rows mounted by a navigation do NOT play their entrance
+     (the freeze below), and photos do not fade in for one beat afterwards (the
+     `.page.enter` rule in app.css). Without those, "instant" means the page frame
+     arrives instantly and then 87 tiles rise and a wave of bitmaps fades up under
+     it, which is the sluggishness this removal is for, wearing a different coat.
+
      One path, so every view renders the same way and inherits it. */
 
-  // Build the next page, drop it into the stage, and fade the old one off it.
-  // `renderFn` fills the fresh `view`.
+  // Build the next page and put it on screen. `renderFn` fills the fresh `view`.
   //
-  // `settleScroll` puts the window where this navigation wants it. It is a
-  // callback rather than a flag because the OUTGOING page's pin depends on where
-  // the scroll ends up, so the travel has to be finished before the pin is
-  // measured — see the anchor note below. Omit it for the default (snap to the
-  // top); pass a no-op when renderFn has already positioned the scroll itself.
-  //
-  // `instant` skips the fade entirely and mounts the destination in the same
-  // task — for the one case where the ENGINE is already animating the move and
-  // ours would be a second one landing on top of it. See `traversed` in route().
-  function renderPage(renderFn, settleScroll, instant) {
+  // `settleScroll` puts the window where this navigation wants it. It stays a
+  // callback rather than a flag because there are three destinations and only
+  // the caller knows which: the top (an ordinary navigation), the spotlighted
+  // card (parkCard, which renderFn has already jumped to — pass a no-op), and a
+  // remembered position (restoreScroll, on a back or an edge-swipe). Omit it for
+  // the default. Nothing may move the scroll after renderPage returns.
+  function renderPage(renderFn, settleScroll) {
     const reduce = prefersReduced();
-    const snap = reduce || !!instant;   // mount in one task, no fade
-    const prev = view;
     const token = ++navToken;
-
-    // Snap away anything a previous (possibly interrupted) transition left behind.
-    Array.from(stage.children).forEach(el => { if (el !== prev) el.remove(); });
 
     const page = document.createElement('div');
     page.className = 'page';
 
-    // Where the window sat BEFORE the render. renderFn can move the scroll itself
-    // (parkCard, aiming at the spotlighted card), so reading this afterwards
-    // would measure the destination, not the origin.
+    // Where the window sat BEFORE the render, so the default settle can tell
+    // "already at the top" from "needs to go there". renderFn can move the scroll
+    // itself (parkCard, aiming at the spotlighted card), so reading this
+    // afterwards would measure the destination, not the origin.
     const fromY = window.scrollY;
     // Put the window where this navigation wants it. Every path runs this, so no
     // caller is ever left holding a scroll the router didn't place.
@@ -8987,8 +9497,7 @@
       else if (fromY > 0) window.scrollTo(0, 0);
       // …and place the top bar while we're here. Note the spotlight path hands in
       // an EMPTY callback (parkCard already moved the window during renderFn), so
-      // a branch that only ran "if we scrolled" would skip it; this runs on all
-      // three of renderPage's paths, every navigation, scroll or no scroll.
+      // a branch that only ran "if we scrolled" would skip it.
       syncTopbar();
       // Again once the page has finished laying out — the same beat restoreScroll
       // re-aims over. Discover deals its masonry from JS and a photo swaps its
@@ -8996,150 +9505,55 @@
       // after we've already answered, turning a page that looked scrollable at
       // settle time into one with no gesture left to recover the bar. Only ever
       // shows it, so a late fire under a newer navigation is harmless.
-      window.setTimeout(syncTopbar, TRANSITION_MS + 120);
+      window.setTimeout(syncTopbar, SETTLE_MS + 120);
     };
 
-    // First paint / reduced motion / a traversal: no fade. Mount, THEN render —
-    // render code resolves its own nodes via document.getElementById, so the page
-    // has to be in the document before renderFn runs.
-    if (!prev || snap) {
-      view = page;
-      // A traversal owes the same debt the fade does, for a sharper reason: the
-      // engine has just shown the reader a SNAPSHOT of this page, whole, and the
-      // live document has to match it. Every entrance animation is a way of not
-      // matching it — 72 tiles rising and a wave of photos fading up under a page
-      // that was already complete a frame ago is precisely the "it reloaded"
-      // read, arriving after the flash was fixed rather than instead of it. So
-      // freeze the rows exactly as the fade path does (inline, permanent, so they
-      // never replay), and hold `.enter` for the same window the fade would have
-      // owned, which is the class the photo-snap rule in app.css looks for.
-      // Reduced motion needs neither — CSS has already stilled both.
-      if (instant && !reduce) page.classList.add('enter');
-      stage.replaceChildren(page);
-      renderFn();
-      if (instant && !reduce) {
-        page.querySelectorAll('.card, .notif, .request-row, .ptile')
-          .forEach(c => { c.style.animation = 'none'; });
-        window.setTimeout(() => {
-          if (token === navToken) page.classList.remove('enter');
-        }, TRANSITION_MS);
-      }
-      settle();
-      // First paint / deep-link: no page fade, but a docked switcher still gets
-      // its rise (unless reduced motion, which shows it in place, or a traversal,
-      // where the engine's own animation is the move and this would be a second
-      // one arriving after it). Tuck-commit-release so it lifts from behind the
-      // nav on landing.
-      if (!snap) {
-        const first = page.querySelector('.seg-tabs:not(#c-group-tabs)');
-        if (first) {
-          first.classList.add('tuck');
-          void first.offsetWidth;                   // commit the tucked start state
-          requestAnimationFrame(() => first.classList.remove('tuck'));
-        }
-      }
-      return;
+    // Mount, THEN render — render code resolves its own nodes via
+    // document.getElementById, so the page has to be in the document before
+    // renderFn runs. replaceChildren also sweeps away anything an earlier
+    // navigation left in the stage.
+    view = page;
+    // `.enter` is the only class that outlives the mount, and it does one job:
+    // it is what the photo-snap rule in app.css looks for. A page arriving
+    // complete in a single frame and then dissolving a wave of photos up
+    // through itself is a move nobody asked for, and on a fresh grid it is the
+    // densest burst of decoding bitmaps in the app. Held for one beat, then
+    // dropped, so photos fade normally again for everything that arrives later.
+    // Reduced motion needs neither this nor the freeze — CSS has stilled both.
+    if (!reduce) page.classList.add('enter');
+    stage.replaceChildren(page);
+    renderFn();
+
+    // Rows mounted BY a navigation do not play their entrance. This is the other
+    // half of what the old fade was covering for, and without it "instant" just
+    // relocates the wait: the page frame lands at once and then every card,
+    // ledger row and tile on it rises for half a second afterwards, which reads
+    // as the page assembling itself in front of you.
+    //
+    // Frozen inline rather than paused in CSS, so it survives the class drop and
+    // the rows never replay the rise once the page settles — a CSS pause held
+    // them at the rise's transparent first frame, and that blank window over the
+    // near-white page was the old "white flash" on the card-heavy Circle.
+    //
+    // `.ptile` is the worst offender of the lot: Discover mounts its entire grid
+    // at once, so arriving there once ran one rise per tile — measured at 87
+    // concurrent animations on a 72-tile grid, on top of a burst of photo bitmaps
+    // decoding, which is the pile-up behind the iOS WebKit crash. Discover is the
+    // one page that hits it every single time you open it.
+    //
+    // Rows that arrive LATER without a page change (refreshWorld, the Updates
+    // reconcile, a fresh post) are untouched and still rise in — that is a thing
+    // happening, which is exactly what the entrance is for. Any new page-level row
+    // entrance has to join this list.
+    if (!reduce) {
+      page.querySelectorAll('.card, .notif, .request-row, .ptile')
+        .forEach(c => { c.style.animation = 'none'; });
+      window.setTimeout(() => {
+        if (token === navToken) page.classList.remove('enter');
+      }, SETTLE_MS);
     }
 
-    // Mount the entering page ahead of the outgoing one, so during the brief
-    // overlap its ids (e.g. #feed) win getElementById. It is fully opaque from
-    // its first frame; the leaving page is position:absolute (and z-indexed), so
-    // it still paints on top and is the only thing that animates.
-    page.classList.add('enter');
-    stage.insertBefore(page, prev);
-    view = page;
-    renderFn();                // render into the mounted new page
-
-    // Content mounted during a navigation rides in on the swap — it does NOT also
-    // play its per-row rise. Freezing every fresh row here (not pausing it in CSS)
-    // keeps it VISIBLE for the whole move instead of held at the rise's transparent
-    // first frame: that blank window over the near-white page was the "white flash"
-    // on the card-heavy Circle. Inline, so it survives the class cleanup and the
-    // rows never replay the rise once the page settles; and with no row animation in
-    // flight the move carries the fewest possible layers (the same iOS-crash win the
-    // old CSS pause was after). Covers feed .card AND the Updates ledger (.notif /
-    // .request-row), which carry the same rise and were otherwise stacking their own
-    // translateY layers on top of the swap — the Updates-page stutter/refresh. Rows
-    // that arrive later without a page change (refreshWorld / the Updates reconcile)
-    // are untouched and still rise in.
-    //
-    // `.ptile` is in this list for the same reason and is the worst offender of
-    // the lot: Discover mounts the entire grid at once, so arriving there was
-    // running the page's opacity ramp plus one rise per tile — measured at 87
-    // concurrent animations on a 72-tile grid, on top of two promoted page
-    // layers and a burst of photo bitmaps decoding. That is the exact pile-up
-    // the note above blames for the iOS WebKit crash, and Discover is the one
-    // page that hits it every single time you open it.
-    page.querySelectorAll('.card, .notif, .request-row, .ptile').forEach(c => { c.style.animation = 'none'; });
-
-    // A docked view switcher (Updates on mobile) rises out from behind the nav —
-    // but ONLY when it is genuinely arriving. If the page we're leaving has one
-    // too, the two copies are the same control at the same fixed coordinates, and
-    // the honest reading is that it never moved: sliding the new one up while the
-    // old one dissolves in place would animate a thing that is already there.
-    // Sequencing matters as much as the condition. This used to be released in
-    // cleanup, i.e. AFTER the swap finished, which was fine while the destination
-    // faded in around it — but the destination now arrives complete, so a switcher
-    // still tucked for the length of the fade would read as a page with a hole in
-    // it, then a second move to fill the hole. It goes up on the same frame the
-    // fade starts, so the whole navigation is one gesture.
-    const seg = page.querySelector('.seg-tabs:not(#c-group-tabs)');
-    if (seg && !prev.querySelector('.seg-tabs:not(#c-group-tabs)')) seg.classList.add('tuck');
-
-    prev.className = 'page';    // clear any stale transition classes before reuse
-    prev.classList.add('leave');
-
-    // Scroll anchor. The leaving page is lifted out of flow and TOP-anchored,
-    // while the scroll underneath it moves — so without this it fades out
-    // showing the wrong part of itself: leaving from deep in a feed used to
-    // flash the old page's masthead during the swap instead of what you were
-    // reading.
-    //
-    // THE SCROLL MUST FINISH TRAVELLING FIRST, which is why settleScroll is a
-    // callback the router hands in rather than a boolean. The pin is a function of
-    // the distance travelled, and there are three destinations: the top (an
-    // ordinary navigation), the spotlighted card (parkCard already jumped there
-    // during renderFn — a no-op callback), and a remembered position (restoreScroll,
-    // on a back/forward or an edge-swipe). The third one used to run AFTER
-    // renderPage returned, so the pin was measured against a destination of 0 and
-    // then the window jumped somewhere else entirely — the outgoing page was left
-    // anchored a whole remembered scroll away from the viewport, so a swipe back
-    // dissolved a slab of the old page nobody had been looking at, or off-screen
-    // nothing at all. That is the back-swipe flicker: not a mistimed animation, a
-    // pin measured before the movement it was measuring.
-    //
-    // A page at internal offset c paints at document top + c, and we need the old
-    // on-screen band [fromY, fromY+vh] to stay put, so top = toY - fromY in every
-    // case. Unmoved scroll, no pin.
     settle();
-    const dy = window.scrollY - fromY;
-    if (dy) prev.style.top = dy + 'px';
-
-    void stage.offsetWidth;    // commit the start states before flipping to rest
-    requestAnimationFrame(() => {
-      prev.classList.add('active');   // the one ramp in the move
-      seg?.classList.remove('tuck');  // …and the switcher rises alongside it
-    });
-
-    // Clean up the instant the fade ends: drop the outgoing page and clear its
-    // transition classes, releasing the will-change layer. Driven by the LEAVING
-    // page's transitionend on opacity — it is the only element that animates now,
-    // so listening on the entering one (as this did while both faded) would never
-    // fire and every navigation would fall through to the timeout. A timeout still
-    // backs it up if the event is ever missed.
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned || token !== navToken) return;   // a newer navigation owns the stage
-      cleaned = true;
-      prev.removeEventListener('transitionend', onSettle);
-      prev.remove();
-      page.className = 'page';
-    };
-    const onSettle = (e) => {
-      if (e.target === prev && e.propertyName === 'opacity') cleanup();
-    };
-    prev.addEventListener('transitionend', onSettle);
-    window.setTimeout(cleanup, TRANSITION_MS + 120);
   }
 
   // Programmatic navigation. Setting location.hash to a NEW value fires a
@@ -9174,46 +9588,68 @@
   const scrollMemory = new Map();
   let navSerial = 0;
   let navHere = null;                     // the entry currently on screen
+  // Circle and Discover hold their place across a TAB TAP, not just a back. The
+  // key above is per history ENTRY, which is exactly right for a traversal and
+  // useless for a tab: tapping Circle from Discover mints a NEW entry, so there
+  // is nothing on file and you land at the top. These two are the pages you live
+  // in and scroll deep, so they get a second memory keyed by PATH, consulted
+  // only when the entry key has nothing.
+  //
+  // Deliberately just these two. You arrive at Updates and at a profile to read
+  // them from the top, and a page that opens halfway down for a reason you can't
+  // remember is worse than one that opens where it starts. The two ways out are
+  // the ones that already existed and already say what they do: re-tap the tab
+  // you're on, or pull the page down (which only arms at the top anyway).
+  const TAB_SCROLL = new Set(['#/', '#/discover']);
+  const pathScroll = new Map();
   // The browser's own guess fights ours (and WebKit's is wrong for a hash router
   // whose DOM is rebuilt after the navigation lands).
   try { history.scrollRestoration = 'manual'; } catch { /* older engine: ours still runs */ }
 
-  // The key for the entry we're standing on, minted on first arrival.
-  //
-  // Whether it was MINTED or FOUND is the other thing this knows, and it is the
-  // only reliable way to tell a back gesture from a tap (see `traversed` in
-  // route()): an entry we have never stamped is one we have never stood on, so
-  // the navigation that brought us here pushed it — while an entry already
-  // carrying one of this load's keys is one we are returning to. `navFresh` is
-  // set on every call and read immediately after it, which is the whole
-  // contract; there is one caller, and it must stay that way.
-  let navFresh = true;
+  // The key for the entry we're standing on, minted on first arrival. Whether it
+  // was FOUND or MINTED is the whole back-vs-tap distinction: a key already
+  // carrying one of this load's prefixes belongs to an entry we have stood on
+  // before, so it has a scroll on file, while a key we have to mint is an entry
+  // nobody has been on and lands at the top.
   function navStamp() {
     const st = history.state;
-    if (st && typeof st.tk === 'string' && st.tk.startsWith(NAV_LOAD + ':')) {
-      navFresh = false;
-      return st.tk;
-    }
-    navFresh = true;
+    if (st && typeof st.tk === 'string' && st.tk.startsWith(NAV_LOAD + ':')) return st.tk;
     const tk = NAV_LOAD + ':' + (++navSerial);
     try { history.replaceState({ ...(st || null), tk }, ''); } catch { return null; }
     return tk;
   }
 
   function rememberScroll() {
+    // File the PATH we're leaving too. `lastPath` is still the outgoing route at
+    // this point in route() — it isn't advanced until well below.
+    //
+    // Never from the gate, though: the signed-out branch returns before it
+    // advances lastPath, so on a dropped session lastPath still names the authed
+    // page the reader was on while the scroll on screen belongs to the login
+    // form. Filing that would open the next person's feed part-way down.
+    if (lastPath && TAB_SCROLL.has(lastPath) && !document.body.classList.contains('gate')) {
+      pathScroll.set(lastPath, window.scrollY);
+    }
     if (!navHere) return;
     scrollMemory.delete(navHere);         // re-set to move it to the fresh end
     scrollMemory.set(navHere, window.scrollY);
     while (scrollMemory.size > SCROLL_KEEP) scrollMemory.delete(scrollMemory.keys().next().value);
   }
 
-  // Land where you left off, or at the top if this entry is new. The re-aim is
-  // for the pages that finish laying out a beat after they render — Discover
-  // deals its masonry from JS, a photo swaps its reserve box for its real shape
-  // — either of which can shorten the document under a scroll that already
-  // landed. Any real input and we're gone; nothing here fights the reader.
-  function restoreScroll(key) {
-    const y = key ? scrollMemory.get(key) : 0;
+  // Land where you left off, or at the top if this page is new to you. Two
+  // memories, consulted in that order: this history ENTRY (a back or an
+  // edge-swipe — exact, and it knows one '#/' from another), then the PATH (a
+  // tab tap, which mints a fresh entry and so has no key on file). Only Circle
+  // and Discover keep the second one; see TAB_SCROLL.
+  //
+  // The re-aim is for the pages that finish laying out a beat after they render
+  // — Discover deals its masonry from JS, a photo swaps its reserve box for its
+  // real shape — either of which can shorten the document under a scroll that
+  // already landed. Any real input and we're gone; nothing here fights the
+  // reader.
+  function restoreScroll(key, path) {
+    const filed = key ? scrollMemory.get(key) : undefined;
+    const y = filed ?? (TAB_SCROLL.has(path) ? pathScroll.get(path) : undefined) ?? 0;
     if (!y) { scrollTop(false); return; }
     window.scrollTo(0, y);
     const moves = ['wheel', 'touchstart', 'keydown'];
@@ -9231,66 +9667,45 @@
     requestAnimationFrame(again);
   }
 
-  /* ── Whose animation is this? ───────────────────────────────────────────────
+  /* ── The back gesture, and why it needs nothing from us now ─────────────────
      The App Store build turns on WKWebView's edge-swipe (`allowsBackForward
      NavigationGestures` in TriaViewController.swift), and that gesture is not a
-     passive input: WebKit takes over the screen for it. It slides a SNAPSHOT of
-     the page you're going back to in from the left, and — because Tria's routes
-     are hash changes, i.e. same-document navigations — it drops that snapshot
-     the instant the navigation commits, without waiting for anything to paint.
+     passive input: WebKit takes over the screen for it, sliding a SNAPSHOT of the
+     page you're going back to in from the left. Because Tria's routes are hash
+     changes — same-document navigations — it drops that snapshot the instant the
+     navigation commits, without waiting for anything to paint.
 
-     What the live document is showing at that moment is still the page you just
-     swiped away. So the sequence a reader actually saw was: the right page
-     sliding in under their thumb, then the WRONG page snapping back to full
-     opacity as the snapshot lifted, then a quarter second of it dissolving to
-     reveal the right one underneath. That is the "flash", and it is not a
-     mistimed fade — it is two transitions for one gesture, the second one
-     starting after the first has already finished and arriving at the same
-     destination. It reads as a reload because the page you left reappears
-     whole before it goes.
+     While the router still drew a fade, that was a real bug and it needed a real
+     special case: the live document at the moment the snapshot lifted was still
+     the page you'd swiped away, so the move ended on the WRONG page snapping back
+     to full opacity and then dissolving for a quarter second. Two transitions for
+     one gesture, which reads as a reload. The fix was to render a traversal
+     instantly, and telling a back from a tap to do it — which is the awkward part,
+     because on this engine `popstate` fires for `location.hash =` as well, in the
+     same `popstate → hashchange` order, so the two are byte-identical by event
+     (measured, WebKit 26.5). It had to be derived from whether navStamp minted or
+     found the history key instead.
 
-     So a traversal renders INSTANTLY: mounted in the same task as the
-     `hashchange`, which is the same task the navigation commits in, so the live
-     document already matches the snapshot by the time WebKit lifts it and there
-     is nothing left to animate. The gesture keeps its own transition and we
-     stop drawing a second one over the top.
-
-     TELLING A BACK FROM A TAP IS THE WHOLE TRICK, and the obvious way to do it
-     is wrong ON THIS ENGINE SPECIFICALLY. `popstate` is documented as firing for
-     history traversals and not for a fragment assignment, so listening for it
-     ought to be the answer — but WebKit fires `popstate` for `location.hash =`
-     as well, in the same `popstate → hashchange` order, so the two are literally
-     indistinguishable by event. Measured on WebKit 26.5, the engine the app
-     ships on: an ordinary tap and a swipe back produce byte-identical traces.
-     Trusting it would have made EVERY navigation in the App Store build instant
-     and quietly deleted the fade app-wide. Don't reach for that listener.
-
-     The history entry itself answers it, and it needs no event at all. navStamp
-     mints a key the first time we stand on an entry, so a key it had to MINT is
-     an entry nobody has been on — the navigation pushed it — while a key it
-     FOUND belongs to somewhere we are coming back to. That is exactly the
-     back/tap distinction, derived from the same stamp the scroll memory already
-     runs on. The `!== navHere` guard covers go()'s same-target branch, which
-     re-runs route() without navigating: the key is found there too, because it
-     is still the one under our own feet.
-
-     Gated on nativeShell() because that is the shell we switched the gesture on
-     in — the shells that don't animate their own back keep the fade. */
+     Every navigation renders instantly now, so the special case has dissolved
+     into the general rule and both the detection and the fade are gone. Kept as a
+     warning rather than as code: if a page transition is ever reintroduced, this
+     is the bug it brings back with it, and `popstate` is NOT how to dodge it. */
 
   function route() {
     // File the outgoing page's scroll BEFORE anything renders — at this moment
     // window.scrollY is still where the reader left it, and renderPage is about
     // to reset it.
     rememberScroll();
-    const before = navHere;
-    const arriving = navStamp();      // sets navFresh; read it before anything else can
-    const traversed = nativeShell() && !navFresh && !!arriving && arriving !== before;
+    const arriving = navStamp();
     navHere = arriving;
 
     // Navigating away from Publish must stop a live camera/mic stream — the
     // capture surface's own DOM is about to be replaced, which wouldn't
-    // otherwise release it (see wireFrameCapture's teardown).
+    // otherwise release it (see wireFrameCapture's teardown). Same story for the
+    // profile editor's cropper: its ResizeObserver and any frame it has queued
+    // outlive the nodes the next render replaces.
     if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
+    if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
 
     // Gate: no session → the setup / login screen, whatever the hash says.
     // The one exception is About, the public front door — reachable from a
@@ -9332,7 +9747,7 @@
         if (gatePath === '#/forgot' || gatePath === '#/reset-password') return renderRequestReset();
         if (gatePath === '#/confirmed') return renderConfirmed();
         return renderAuth(authMode);
-      }, () => restoreScroll(arriving), traversed);
+      }, () => restoreScroll(arriving));
       return;
     }
     document.body.classList.remove('gate');
@@ -9347,7 +9762,11 @@
       const p = new URLSearchParams(hash.split('?')[1] || '').get('p');
       if (p) spotlightPost = p;
     }
-    renderNav(path);   // a friend view (#/u/…) matches nothing → nothing highlighted
+    // A friend view (#/u/…) matches nothing → nothing highlighted. The editor is
+    // the one route that borrows another's highlight: it is somewhere you went,
+    // but it is somewhere INSIDE your profile, so that tab stays lit rather than
+    // the nav going blank while you edit.
+    renderNav(path === '#/profile/edit' ? '#/profile' : path);
 
     // Remember where a friend profile's "← Back" should return to: the page you
     // came from. Chained profile→profile hops keep the original origin, so Back
@@ -9392,6 +9811,7 @@
         case '#/friends':  go('#/discover'); break;   // Friends folded into Discover; keep old links alive
         case '#/updates':  renderUpdates(); break;
         case '#/profile': renderUser(Store.session()); break;
+        case '#/profile/edit': renderEditProfile(); break;
         case '#/publish': renderPublish(); break;
         case '#/about':   renderAbout(false); break;
         // #/business is browser-only, and the reason is Apple's rather than
@@ -9413,13 +9833,14 @@
       }
       // A spotlight has already parked the window on its card during the render,
       // so this navigation's scroll is done; anything else lands where you left
-      // this history entry, or at the top if it's a fresh visit. Either way it
-      // happens INSIDE renderPage, before the outgoing page is pinned.
-    }, spotlighting ? () => {} : () => restoreScroll(arriving), traversed);
+      // this history entry, or where you left this PAGE if it's Circle or
+      // Discover reached by a tab tap, or at the top.
+    }, spotlighting ? () => {} : () => restoreScroll(arriving, path));
 
     nudgeNav();           // installed shells: re-composite the nav's frosted layer
-    // Deliberately NO background re-pull here: a refresh that lands mid-dissolve
-    // can rebuild rows under the transition. Refresh is always an explicit
+    // Deliberately NO background re-pull here: a refresh landing on the heels of
+    // a navigation rebuilds rows under a page the reader has only just been
+    // handed, which is unexplained movement. Refresh is always an explicit
     // gesture now — re-tapping the tab you're on, or pulling the feed down.
   }
 
@@ -9538,6 +9959,31 @@
   let refreshRing = null;
   const nap = (ms) => new Promise(r => window.setTimeout(r, ms));
 
+  // Decode a batch of photos BEFORE painting the rows that carry them, so a post
+  // arrives whole rather than arriving and then developing. The browser holds the
+  // decoded bitmap, so the <img> the card mints a moment later paints on its
+  // first frame — the same mechanism warmImages leans on, aimed at the handful of
+  // rows a refresh is actually about to splice in.
+  //
+  // Both bounds are the safety, not tuning. The CAP: these are 1400px photos off
+  // a remote bucket, and a wait long enough to be worse than the pop is a refresh
+  // that looks stuck — whatever hasn't decoded by then simply fades in the old
+  // way, which is the behaviour we already shipped. The COUNT: a resume after a
+  // week finds hundreds of new posts and only the first screen of them is about
+  // to be looked at.
+  const READY_CAP = 700;
+  const READY_MAX = 6;
+  function readyImages(urls) {
+    const jobs = urls.slice(0, READY_MAX).map(url => {
+      const im = new Image();
+      im.decoding = 'async';
+      im.src = url;
+      return im.decode?.().catch(() => {}) ?? Promise.resolve();
+    });
+    if (!jobs.length) return Promise.resolve();
+    return Promise.race([Promise.all(jobs), nap(READY_CAP)]);
+  }
+
   // The caret is in a text field, so a refresh must not rebuild the card someone
   // is half-way through typing into.
   const typing = () => !!document.activeElement?.matches?.('input, textarea');
@@ -9603,12 +10049,34 @@
     // silent path, and only when there is actually something to show: a resume
     // that finds nothing new (and owes nothing) never gets this far, which is
     // most of them.
-    if (!refreshRing?.on()) { hold ? keepPlace(paint) : paint(); return; }
+    const ringOn = !!refreshRing?.on();
+
+    // Photos on the rows this paint is about to splice in. Home only: Discover
+    // rebuilds its grid whole and guards itself with a signature, and an Updates
+    // row carries an avatar, which the roster warm already covers. The cache is
+    // fresh by now and the DOM is not, so the difference between the two is
+    // exactly what is about to appear.
+    const onScreen = new Set(
+      [...document.querySelectorAll('#feed > .card')].map(c => c.dataset.id));
+    const incoming = path !== '#/' ? []
+      : Store.feed().filter(p => p.image && !onScreen.has(String(p.id))).map(p => p.image);
+
+    // Wait for those to decode before anything moves. Under the ring the first
+    // 200ms of it is free — the ring needs that long to drop in regardless — so
+    // the two run together and the paint waits for whichever finishes last.
+    await Promise.all([readyImages(incoming), ringOn ? nap(200) : Promise.resolve()]);
+
+    // Re-checked after the wait, because it is a real gap: the reader can have
+    // navigated away or started typing a comment inside it.
+    if (!live()) {
+      if (here()) owedPaint = path;
+      if (ringOn) refreshRing.off();
+      return;
+    }
+    if (!ringOn) { hold ? keepPlace(paint) : paint(); return; }
     try {
-      await nap(200);                     // let the ring drop in BEFORE the page moves
-      if (live()) { hold ? keepPlace(paint) : paint(); }
-      else if (here()) owedPaint = path;  // someone started typing under the ring
-      await nap(500);                     // and stay a beat after, so it reads as one event
+      hold ? keepPlace(paint) : paint();
+      await nap(500);                     // stay a beat after, so it reads as one event
     } finally {
       refreshRing.off();
     }
@@ -9857,7 +10325,7 @@
         if (!latest || latest === booted) return;
         const busy = location.hash.split('?')[0] === '#/publish' ||
           document.querySelector('.modal-card') ||
-          document.querySelector('.page.enter, .page.leave');
+          document.querySelector('.page.enter');
         // location.reload() re-reads the CACHED index.html on iOS standalone (same
         // max-age=600), which reloads the very build we're trying to leave — an
         // update that never lands. Navigate to a fresh document URL instead: a new
