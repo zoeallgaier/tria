@@ -111,14 +111,155 @@
   --type-poll-ink:     #b23a68;
   --on-type:           #14171a;
 
+  /* Tria's brand ramp — lavender, blue, green, orange. FOUR of the five type
+     pastels, borrowed rather than reinvented, and pointed at the type tokens so
+     there is exactly one copy of each hex in this file. Dark mode comes free for
+     the same reason: the type fills already answer it a few rules down.
+
+     Borrowed, but no longer MEANING the quintet, and that distinction is what
+     this band is for. It used to be the quintet, under a rule that all five had
+     to appear on every primary button — a band carrying four was read as quietly
+     saying the fifth type wasn't on offer. That was right while the band named
+     types. It doesn't any more: on a primary button it is the app signing its
+     own name on the one act that is Tria's (commit, or go and commit), and it
+     says nothing about what you are about to make. So dropping a stop is not a
+     type being deleted from a set of five. Nothing about the quintet changed
+     anywhere a hue actually names a TYPE — a filter row, a heart, a tag, the
+     pull-to-refresh dots, a daily's card. Those five are untouched.
+
+     Which is also what finally lets ROSE come out. It sits at hue 336, between
+     lavender at 255 and coral at 15, and the three of them smear on a 122px
+     pill; that complaint is old and was correctly refused twice, because back
+     then paying for legibility with a type's meaning was a bad trade. There is
+     no meaning left to spend here, so it is simply a legibility fix now.
+
+     ORDER is by hue — 255 → 195 → 83 → 15, monotonically descending — so the
+     band reads as one continuous sweep instead of a climb and a fall. That rule
+     carries over from the quintet's version unchanged, and it is still NOT
+     `FILTERS` order: the pull-to-refresh dots are five discrete marks where
+     filing order is the only order that means anything, and this is one ramp,
+     where it is the only order that doesn't.
+
+     DEPTH is --band-deepen, and it is the one knob here. Each stop is mixed a
+     short way toward its own -ink twin, which is the same move the liked heart
+     already makes (--heart-*, a few rules down) — the band was reading pale
+     beside it, since a heart is the accent at 70% ink and this was the accent
+     at none. A touch, not a match: 70 would take lavender to 3.83 against
+     --on-type and fail AA outright, so the hearts are simply too deep to carry
+     ink and this stops well short of them.
+
+     It mixes toward -ink rather than toward black on purpose, so each stop
+     darkens along its own hue instead of drifting grey.
+
+     AND THAT MAKES THE BAND BRIGHT ON DARK PAPER, which is a decision, not an
+     accident of the arithmetic. The dark block sets each --type-*-ink equal to
+     its pastel, so the mix resolves to the pastel and the ramp is undeepened
+     there. A deepened dark band was built and reverted: it evened the four
+     stops to a common lightness and measured beautifully, and it was wrong.
+     This gradient is the app signing its own name on the primary act, and the
+     brand reads BRIGHT — muting it on dark paper made the one permanent object
+     on the screen recede exactly where it should carry. Deepening belongs on a
+     READER'S accent, which is a colour standing in for the brand rather than
+     the brand itself (see BAND_LSTAR in app.js). Don't re-derive the even
+     version; it has been measured and turned down.
+
+     --on-type (#14171a) is the ink that rides on these: measured 6.73 / 9.17 /
+     9.59 / 7.47 on the opaque FAB (7.73 / 9.96 / 10.33 / 8.36 thinned to
+     --pill-alpha over paper), all still well clear of AA. */
+  --band-deepen: 20%;
+  /* The four stops are named separately from the ramp they make, because the
+     boot splash rotates them through its glyph one position at a time (see
+     splash-cycle in app.css) and needs to say each one by itself. Same rule as
+     everywhere else in this block: one copy of each mix, so a stop cannot drift
+     between the button that paints it and the mark that turns it. */
+  --band-note:     color-mix(in srgb, var(--type-note-ink)     var(--band-deepen), var(--type-note));      /* lavender 255 */
+  --band-photo:    color-mix(in srgb, var(--type-photo-ink)    var(--band-deepen), var(--type-photo));     /* blue     195 */
+  --band-activity: color-mix(in srgb, var(--type-activity-ink) var(--band-deepen), var(--type-activity));  /* green     83 */
+  --band-find:     color-mix(in srgb, var(--type-find-ink)     var(--band-deepen), var(--type-find));      /* orange    15 */
+  --brand-band: linear-gradient(115deg,
+    var(--band-note), var(--band-photo), var(--band-activity), var(--band-find));
+
+  /* What every primary-act button actually paints — the ring, the fill, the FAB.
+     --user-band is stamped on <html> from the SIGNED-IN reader's accent
+     (paintBrandBand in app.js) and is simply absent for "no colour", on the gate,
+     and in the frames before auth resolves. So the fallback IS the default and
+     there is no second code path to keep in step with this one.
+
+     Declared once, here, because the ring and the fill are the same band in two
+     modes (the ring is the fill with a mask over it) and they used to be two
+     hand-written copies of the same five stops. A stop dropped from one and not
+     the other makes hovering a button reshuffle its colours — now there is
+     nothing to drop out of step. */
+  --pill-band: var(--user-band, var(--brand-band));
+
+  /* The ink that rides it, and the reason it is a token rather than --on-type
+     written out six times: it is the same var(user, default) shape as the band
+     above, so the two travel together. Every accent and the brand ramp are
+     light fills and take the near-black --on-type; only the monochrome band
+     flips, and it stamps --user-ink alongside --user-band so the fill and its
+     glyph can never be applied a frame apart. */
+  --pill-ink: var(--user-ink, var(--on-type));
+
+  /* NO COLOUR, DRAWN rather than defaulted — what the picker's "None" paints.
+
+     It used to leave --user-band unstamped, which fell straight through to the
+     line above and made the option named "no colour" the most colourful one in
+     the sheet: pick None, get the full brand ramp. It stamps this instead, so
+     None means what it says and Default is the row that means the ramp.
+
+     A NEUTRAL HAS TO OPPOSE THE PAPER, which is the one way it differs from
+     every chromatic fill here. A pastel separates from the page by hue and can
+     be light in both schemes; grey has only lightness to separate it, so a
+     light grey button on light paper is not a quiet button, it is an absent
+     one. It shipped that way for an afternoon: #f5f6f8 on #edeef0 measures
+     1.10, which is a FAB you cannot see. So the ramp is ink-side on paper and
+     paper-side on ink, and --mono-ink is the glyph that rides it — the two flip
+     together, one scheme apart, and the button reads at 15+ either way.
+
+     A ramp and not a flat fill, because .publish-fill::before's resting ring is
+     this same band with a mask over it and a flat one has nothing to show. */
+  --mono-band: linear-gradient(115deg, #3b4147, #2b3036, #1b1f24);
+  --mono-ink:  #f5f6f8;
+  --mono-heart: color-mix(in srgb, var(--muted) 30%, var(--text));
+
+  /* How solid that band sits on a primary button. This is a CONTRAST FLOOR
+     wearing the clothes of a style knob, so read the note beside the CTA rule
+     in app.css before moving it: --on-type rides this fill, translucency
+     composites it against the page, and dark paper is the hard case. Measured
+     across the four brand stops and the six palette accents pinned to
+     BAND_LSTAR, the worst pair is 6.04 here, 5.45 at 0.80, 4.91 at 0.75. Ruby
+     and ocean declare deeper bands (both L* 65) and still ride THIS ink, so
+     they are what actually sets the floor now: 4.65 and 4.68 thin-on-dark. No
+     accent goes below them and none carries an ink of its own — L* 65 is where
+     --on-type gives out, which is the whole reason both stopped there. That
+     worst pair is a READER'S
+     ACCENT rather than a brand stop — the brand ramp is bright and measures
+     8.38 at its own worst, while an accent is the deepest thing this fill
+     ever carries.
+
+     THE MARGIN HERE IS WIDER THAN IT USED TO BE, and the reason is worth
+     recording: the old worst pair was a rose accent at 5.51/4.98/4.50, where
+     0.75 was a flat fail. Accents are normalised to one perceptual weight now,
+     so the palest and the deepest of them measure the same and the cliff moved
+     out of reach. 0.85 stays — it is also how SOLID a primary button reads, not
+     only how legible — but it is no longer one step from failing. What would
+     bring the cliff back is deepening BAND_LSTAR: that number and this one draw
+     on the same account. */
+  --pill-alpha: 0.85;
+
   /* Liked-heart quintet — the ink twins nudged toward their pastels so the
      filled heart reads brighter on paper (it's an icon, not text, so it can
      sit lighter than AA). Dark mode resets these to the inks (= pastels). */
-  --heart-note:     color-mix(in srgb, var(--type-note-ink)     70%, var(--type-note));
-  --heart-find:     color-mix(in srgb, var(--type-find-ink)     70%, var(--type-find));
-  --heart-photo:    color-mix(in srgb, var(--type-photo-ink)    70%, var(--type-photo));
-  --heart-activity: color-mix(in srgb, var(--type-activity-ink) 70%, var(--type-activity));
-  --heart-poll:     color-mix(in srgb, var(--type-poll-ink)     70%, var(--type-poll));
+  /* A reader who picked a colour gets it on every heart, and the per-type
+     quintet is what "no colour" means — hence --user-heart-lt as a fallback
+     wrapper rather than a separate code path. paintBrandBand stamps it, and
+     stamps a SEPARATE dark value (--user-heart-dk, below) so no JS has to know
+     the scheme or listen for it changing: each block picks up its own. */
+  --heart-note:     var(--user-heart-lt, color-mix(in srgb, var(--type-note-ink)     70%, var(--type-note)));
+  --heart-find:     var(--user-heart-lt, color-mix(in srgb, var(--type-find-ink)     70%, var(--type-find)));
+  --heart-photo:    var(--user-heart-lt, color-mix(in srgb, var(--type-photo-ink)    70%, var(--type-photo)));
+  --heart-activity: var(--user-heart-lt, color-mix(in srgb, var(--type-activity-ink) 70%, var(--type-activity)));
+  --heart-poll:     var(--user-heart-lt, color-mix(in srgb, var(--type-poll-ink)     70%, var(--type-poll)));
 
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
@@ -145,13 +286,24 @@
   --feed-width: 660px;
   --content-max: 900px;   /* masthead + rule width (wider than the feed measure) */
   --inset:     1.6rem;    /* text inset past the left type-rule */
+  /* Air above the profile photo, on both pages that show one: the profile's
+     .account and the editor's .pf-form. Neither page has a masthead, so this is
+     what stands in for one, and the two have to agree or the photo jumps when
+     you walk from one to the other. */
+  --identity-air: 1.7rem;
 
   /* Type scale — Instrument Serif carries the display sizes (mastheads, headlines,
      names); Oxygen carries the functional layer. Bigger, bolder, editorial. */
   --display:  clamp(2.6rem, 4.6vw, 4.6rem);   /* page nameplates */
   --headline: clamp(1.7rem, 2.6vw, 2.05rem);  /* post titles */
   --body:     1rem;                            /* captions / notes */
-  --kicker:   0.78rem;                         /* the uppercase date/section label */
+  /* The small label above a section — Trending, Today's daily, Friend requests.
+     It is the SAME size as a form field's label, because it is the same thing:
+     small print naming the thing under it. It used to be 0.78rem of tracked
+     uppercase, which read as a magazine standfirst and made every section shout
+     its own name; the app has one label voice now and the composer's `Tags` is
+     it. Nothing in Tria sets text-transform: uppercase any more. */
+  --kicker:   0.82rem;
 
   /* ── Liquid glass — the material for the layer that floats above content ────
      The WHOLE recipe lives here now: fill, blur, edge, rim, lift. It used to be
@@ -273,6 +425,31 @@
   }
 }
 
+/* SMOOTHER, in a space where "halfway between two colours" means what it looks
+   like it means. sRGB interpolates down the straight line between two hex
+   values, and between two pastels that line sags — the midpoint comes out
+   duller and a shade darker than either end, so a four-stop ramp reads as four
+   bands with three grey seams rather than as one sweep. It is worst exactly
+   where this band is smallest: on the 60px FAB the whole gradient is the
+   button.
+
+   Oklab is perceptually uniform, so the same four stops blend evenly and the
+   seams go. Same stops, same 115deg, same order — this changes how the ramp
+   travels between them and nothing about what they are.
+
+   Behind @supports because the deployment target is iOS 15 and gradient
+   interpolation hints landed in Safari 16.2. It has to be a feature query
+   rather than two declarations: an unregistered custom property accepts ANY
+   token stream, so a second --brand-band would win on an engine that cannot
+   parse it and take the fill down to nothing at the point of use. Same shape as
+   the --spring block above, and the same reason. */
+@supports (background: linear-gradient(in oklab, #000, #fff)) {
+  :root {
+    --brand-band: linear-gradient(115deg in oklab,
+      var(--band-note), var(--band-photo), var(--band-activity), var(--band-find));
+  }
+}
+
 /* ── Dark mode — deep cool black, cool off-white ink; RYB lifted to stay vivid. */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -289,23 +466,37 @@
 
     /* Pastel fills read light against the dark paper, so the -ink twins can
        simply BE the pastels — vivid text without a second ramp. --on-type stays
-       near-black: the fills themselves don't change. */
-    --type-note:         #b7a6e8;
-    --type-note-ink:     #b7a6e8;
-    --type-find:         #f2a58c;
-    --type-find-ink:     #f2a58c;
-    --type-photo:        #9fd6e8;
-    --type-photo-ink:    #9fd6e8;
-    --type-activity:     #b9df7d;
-    --type-activity-ink: #b9df7d;
-    --type-poll:         #ea86ae;
-    --type-poll-ink:     #ea86ae;
+       near-black: the fills themselves don't change. Written as var() rather
+       than as the hex again, so the pastels have one home.
 
-    --heart-note:     var(--type-note-ink);
-    --heart-find:     var(--type-find-ink);
-    --heart-photo:    var(--type-photo-ink);
-    --heart-activity: var(--type-activity-ink);
-    --heart-poll:     var(--type-poll-ink);
+       This is also what keeps --brand-band BRIGHT here: it mixes each stop
+       toward its -ink twin, and on this paper that twin IS the stop, so the
+       ramp arrives undeepened. Deliberate — see the note beside --band-deepen. */
+    --type-note:         #b7a6e8;
+    --type-note-ink:     var(--type-note);
+    --type-find:         #f2a58c;
+    --type-find-ink:     var(--type-find);
+    --type-photo:        #9fd6e8;
+    --type-photo-ink:    var(--type-photo);
+    --type-activity:     #b9df7d;
+    --type-activity-ink: var(--type-activity);
+    --type-poll:         #ea86ae;
+    --type-poll-ink:     var(--type-poll);
+
+    /* Monochrome flips: paper-side band on ink paper, near-black glyph on it.
+       The chromatic fills do not flip and do not need to — see the note beside
+       --mono-band for why a neutral is the exception. */
+    --mono-band: linear-gradient(115deg, #f5f6f8, #e6e8ec, #d5d8dd);
+    --mono-ink:  var(--on-type);
+
+    /* Dark takes --user-heart-dk, the accent at its own pastel weight: on dark
+       paper the -ink twins simply ARE the pastels (above), so an accent heart
+       follows the same rule rather than carrying light mode's darkened copy. */
+    --heart-note:     var(--user-heart-dk, var(--type-note-ink));
+    --heart-find:     var(--user-heart-dk, var(--type-find-ink));
+    --heart-photo:    var(--user-heart-dk, var(--type-photo-ink));
+    --heart-activity: var(--user-heart-dk, var(--type-activity-ink));
+    --heart-poll:     var(--user-heart-dk, var(--type-poll-ink));
 
     /* Lit surfaces on dark paper: the top-white sheen barely reads on the
        near-white fills, so lean on a deeper base shade and a stronger lift. */

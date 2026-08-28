@@ -140,8 +140,14 @@ const Store = (() => {
     const o = { id: u.id, username: u.username, name: u.name, bio: u.bio || '',
                 private: u.private !== false };
     if (u.avatar) o.avatar = u.avatar;
-    // Accent: the slug of a chosen palette colour, 'none' for deliberately off,
-    // or absent for "sample it from my photo" (the default).
+    // Accent: the slug of a chosen palette colour, 'default' for Tria's own
+    // brand ramp, 'none' for deliberately off (monochrome), or absent for
+    // "sample it from my photo", which is still what a new account gets.
+    //
+    // The column is plain text with no check constraint, which is why adding
+    // 'default' needed no migration — a value the DB has never seen writes and
+    // reads like any other, and an older client meeting one falls through to
+    // the photo, i.e. to the same brand ramp 'default' asks for.
     //
     // The test is `in`, not truthiness, and the difference is the whole fallback.
     // PostgREST returns an existing-but-null column as a null KEY and omits a
@@ -171,6 +177,10 @@ const Store = (() => {
     if (p.poll)     o.poll = p.poll;   // { q, options[] } for poll posts
     if (p.event_date) o.eventDate = p.event_date;
     if (p.event_time) o.eventTime = p.event_time;
+    // A repost points at the post it passes along. Absent on every other row, and
+    // absent on ALL rows until reposts.sql has run — the client tolerates that the
+    // same way it tolerates every other pending migration.
+    if (p.repost_of) o.repostOf = p.repost_of;
     o.audience = p.audience || 'circle';   // 'circle' (all) or 'list' (hand-picked)
     return o;
   }
@@ -575,13 +585,80 @@ const Store = (() => {
   // narrow: only their public posts ride along. Their circle posts stay circle
   // business until you're actually mutual (the DB agrees — can_view_post's
   // circle branch needs both edges, so those rows never reach this cache).
+  //
+  // A repost enters this filter with no special case, because it IS a post row
+  // authored by the person who passed it along. What it does need is the second
+  // half of its gate: `visibleRepost` drops any repost whose original isn't in
+  // the cache. RLS already refuses to hand over a repost you can't see through
+  // (can_view_original), so a missing original means the row shouldn't be drawn —
+  // and it's also the honest answer for the window between a delete landing and
+  // the next pull, when the cascade has taken the original but not yet this.
   function feed() {
     const circle = new Set([state.session, ...friends()]);
     const followed = new Set(following());
     return posts().filter(p =>
-      circle.has(p.author) ||
-      (followed.has(p.author) && p.audience === 'public'));
+      visibleRepost(p) && (
+        circle.has(p.author) ||
+        (followed.has(p.author) && p.audience === 'public')));
   }
+
+  // ── Reposts ─────────────────────────────────────────────────────────────────
+  // A repost is a post row carrying `repostOf` and, if it's a quote, a note. It
+  // is NOT a sixth member of the pastel quintet — no hue, no heart, no ring dot;
+  // in the cache it's just a sixth `type`.
+  //
+  // The original always resolves to the FIRST original: reposting a repost points
+  // at what that one points at, so a chain collapses instead of nesting. The DB
+  // agrees (the insert policy refuses an original whose type is 'repost'), which
+  // is what makes this a fact rather than a convention.
+  // Two indexes, same WeakMap-on-the-array rule as byPost above: keyed on the
+  // posts ARRAY, so replacing state.posts (which every write does) drops them
+  // and they cannot go stale. They exist because cardActionsHtml runs these two
+  // lookups for every card in a paint — a plain .find() per card is O(n²) over
+  // the whole table, on the feed's hot path.
+  const postIndex = new WeakMap();
+  function byId(rows) {
+    let m = postIndex.get(rows);
+    if (!m) { m = new Map(rows.map(p => [p.id, p])); postIndex.set(rows, m); }
+    return m;
+  }
+  // My BARE reposts, keyed by what they point at. A quote carries a note and is
+  // a separate post you delete from its own menu, so it is deliberately not here.
+  // Safe to bake state.session into the index because the two can't part: signing
+  // in or out goes through loadWorld / clearWorld, and both replace state.posts.
+  const bareIndex = new WeakMap();
+  function myBare(rows) {
+    let m = bareIndex.get(rows);
+    if (!m) {
+      m = new Map();
+      // Bare means NO WORDS OF YOUR OWN — neither a note nor a title. A quote
+      // that carries only a headline is still a quote, and must not be mistaken
+      // for the toggle's row or "Undo repost" would offer to delete it.
+      for (const p of rows)
+        if (p.repostOf && !p.note && !p.title && p.author === state.session) m.set(p.repostOf, p);
+      bareIndex.set(rows, m);
+    }
+    return m;
+  }
+
+  const originalOf = (post) =>
+    (post && post.repostOf) ? (byId(state.posts).get(post.repostOf) || null) : null;
+  // A repost with no original in the cache is a repost we can't see through.
+  const visibleRepost = (p) => !p.repostOf || !!originalOf(p);
+
+  // Can I pass this along? Not my own (the same no-self rule toggleLike has), not
+  // hand-addressed (that allowlist belongs to its author and isn't mine to
+  // reproduce), and there has to be something there to point at.
+  function repostable(post) {
+    if (!post || !state.session) return false;
+    const target = originalOf(post) || post;
+    return target.author !== state.session && (target.audience || 'circle') !== 'list';
+  }
+  function myRepostOf(postId) {
+    const seed = byId(state.posts).get(postId);
+    return myBare(state.posts).get((seed && seed.repostOf) || postId) || null;
+  }
+  const repostedByMe = (postId) => !!myRepostOf(postId);
 
   // Discover: everything on Tria you're allowed to see that isn't yours, newest
   // first. This used to mean "public posts only", which was the right shape
@@ -609,10 +686,16 @@ const Store = (() => {
   // everything it happens to be holding is one stale row away from showing it to
   // the wrong person, and the client already knows enough to check. Missing
   // audience reads as 'circle', which is the column's default.
+  //
+  // Reposts are out entirely, and that's editorial rather than technical.
+  // Discover is the room's own work, chronological and capped per person; a wall
+  // of passed-along posts is the infinite feed this app is built against. A
+  // masonry tile also has nowhere to carry a byline that isn't the tile's.
   function discover({ addressed = false } = {}) {
     const circle = new Set(friends());
     return posts().filter(p => {
       if (p.author === state.session) return false;
+      if (p.repostOf) return false;
       const aud = p.audience || 'circle';
       if (aud === 'public') return true;
       if (aud === 'list') return addressed;
@@ -1058,6 +1141,65 @@ const Store = (() => {
     return { ok: true, post };
   }
 
+  // Pass a post along. `note` empty is a bare repost, `note` set is a quote.
+  //
+  // The audience is COPIED from the original and never chosen: that is the whole
+  // "inherit, never widen" rule, and the insert policy enforces the same equality
+  // server-side, so a hand-rolled request can't do better. One consequence worth
+  // understanding before reading a bug report about it: reposting a 'circle' post
+  // reaches only the INTERSECTION of your circle and theirs, because the reader
+  // still has to pass can_view_original on the original. That can be nobody. It
+  // is the correct answer rather than something to route around.
+  async function createRepost(postId, { note, title } = {}) {
+    const me = state.session;
+    if (!me) return { ok: false, error: 'Sign in first.' };
+    const seed = byId(state.posts).get(postId);
+    const target = originalOf(seed) || seed;      // a chain collapses to its first
+    if (!target) return { ok: false, error: 'That post isn’t here any more.' };
+    if (!repostable(target)) return { ok: false, error: 'That post can’t be reposted.' };
+
+    const body = String(note || '').trim();
+    const head = String(title || '').trim();
+    const row = {
+      author: idOf(me),
+      type: 'repost',
+      repost_of: target.id,
+      audience: target.audience || 'circle',
+      tags: [],
+    };
+    if (body) row.note = body;
+    if (head) row.title = head;
+
+    const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
+    if (error) {
+      // The unique index on (author, repost_of) for bare rows: a double tap, or
+      // two devices. Not a failure — the repost they wanted already exists.
+      if (!body && !head && /duplicate|unique/i.test(error.message || ''))
+        return { ok: true, post: null };
+      // The toast can only say "try again", which is the right words for a reader
+      // and useless for anyone debugging. The real Postgres message is the whole
+      // diagnosis — 42703 means reposts.sql hasn't run, a policy violation means
+      // it has but the audience or the target is wrong — so log it, the same way
+      // core() logs a failed read rather than swallowing it.
+      console.warn('[tria] repost failed:', error.code || '', error.message || error);
+      return { ok: false, error: 'Couldn’t repost, try again.' };
+    }
+    const post = mapPost(inserted, nameMap());
+    write('posts', ps => upsert(ps, post, x => x.id === post.id));
+    return { ok: true, post };
+  }
+
+  // Take back a BARE repost. A quote is an ordinary post of yours and comes out
+  // through deletePost, from its own ••• menu, like anything else you wrote.
+  async function undoRepost(postId) {
+    const mine = myRepostOf(postId);
+    if (!mine) return { ok: true };
+    const { error } = await sb.from('posts').delete().eq('id', mine.id);
+    if (error) return { ok: false, error: 'Couldn’t undo that, try again.' };
+    write('posts', ps => ps.filter(p => p.id !== mine.id));
+    return { ok: true };
+  }
+
   async function deletePost(id) {
     const me = state.session;
     const i = state.posts.findIndex(p => p.id === id);
@@ -1065,6 +1207,11 @@ const Store = (() => {
       return { ok: false, error: 'That post isn’t yours to delete.' };
     const { error } = await sb.from('posts').delete().eq('id', id);
     if (error) return { ok: false, error: 'Couldn’t delete, try again.' };
+    // The reposts of this post go too. The DB does this itself (repost_of
+    // cascades), so this is the cache catching up rather than a second policy —
+    // but without it the world holds reposts pointing at nothing until the next
+    // pull, and `visibleRepost` would be the only thing hiding them.
+    write('posts', ps => ps.filter(p => p.repostOf !== id));
     write('posts', ps => ps.filter(p => p.id !== id));
     write('comments', cs => cs.filter(c => c.postId !== id));
     write('likes', xs => xs.filter(x => x.postId !== id));
@@ -1277,6 +1424,14 @@ const Store = (() => {
     for (const v of state.pollVotes)
       if (mine.has(v.postId) && v.user !== me)
         evts.push({ kind: 'vote', postId: v.postId, user: v.user, _ts: v._ts || '' });
+    // Someone passed one of my posts along. The event is filed against the
+    // ORIGINAL, not against their repost row, so tapping it spotlights my own
+    // post on my own profile the way a like or a comment does. A quote reads the
+    // same in the ledger and carries its sentence, the way a comment does.
+    for (const p of state.posts)
+      if (p.repostOf && mine.has(p.repostOf) && p.author !== me)
+        evts.push({ kind: 'repost', postId: p.repostOf, user: p.author,
+                    text: p.note || '', _ts: p._ts || '' });
     // Someone adding you is news, and news belongs in the ledger — dated, ageing
     // down the list like everything else here. It used to be drawn as a standing
     // row pinned above this list with an "Add back" button on it, which never
@@ -1344,8 +1499,8 @@ const Store = (() => {
     return { ok: true };
   }
 
-  // The profile's colour: a palette slug, 'none' for deliberately off, or null
-  // for "sample it from my photo". Optimistic and synchronous before the first
+  // The profile's colour: a palette slug, 'default' for the brand ramp, 'none'
+  // for deliberately off, or null for "sample it from my photo". Optimistic and synchronous before the first
   // await, like updateAvatar, so the card can repaint under the picker while the
   // save goes out — the whole point of the picker is watching the colour land.
   //
@@ -1903,6 +2058,8 @@ const Store = (() => {
     isBlocked, block, unblock,
     // Compose
     createPost, deletePost, updatePost,
+    // Reposts
+    createRepost, undoRepost, originalOf, repostable, repostedByMe, myRepostOf,
     // Comments
     commentsFor, addComment, deleteComment,
     // Likes

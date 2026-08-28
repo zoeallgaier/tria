@@ -4,34 +4,20 @@ import Capacitor
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
-    var window: UIWindow?
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-    }
-
-    func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
-    }
+    /* The six empty lifecycle stubs Xcode's template ships (willResignActive,
+       didEnterBackground, willEnterForeground, didBecomeActive, willTerminate)
+       are gone. They did nothing: Capacitor listens for the equivalent
+       UIApplication notifications on NotificationCenter rather than through this
+       delegate, and Tria's own foreground re-pull runs off the webview's
+       visibilitychange. They are also the exact methods UIScene stops calling,
+       so deleting them removes the only part of this file that would have
+       quietly become dead on adoption. What stays here is what genuinely belongs
+       to the APP rather than to a scene: the two APNs forwards below. */
 
     // APNs hands its answer to the app delegate and nowhere else. The Capacitor
     // push plugin listens on NotificationCenter for these two names, so without
@@ -61,4 +47,40 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+/* ── UIScene ─────────────────────────────────────────────────────────────────
+   Adopted because the newer SDKs require it: an app still built on the
+   "the app IS its one window" model gets a console warning today and, per that
+   warning, will FAIL TO LAUNCH once Apple enforces it. Nothing to do with what
+   Tria shows — it is about the app being able to be asked for a second window
+   (iPad side-by-side, Stage Manager, the folding phones), even though Tria says
+   no to that: UIApplicationSupportsMultipleScenes is false.
+
+   This class is EMPTY ON PURPOSE and that is the safe version, not a stub to
+   fill in later. Info.plist's scene configuration names `Main` as the scene's
+   storyboard, so UIKit builds the window, instantiates the storyboard's initial
+   view controller (TriaViewController) and assigns it to `window` itself. The
+   classic way to get a black screen here is to implement
+   `scene(_:willConnectTo:)` and not do the window setup UIKit was already doing.
+   So: don't add one unless something actually needs it.
+
+   It also lives in AppDelegate.swift rather than in a SceneDelegate.swift of its
+   own. The Xcode project lists its source files individually (objectVersion 60,
+   no filesystem-synchronized group), so a NEW file has to be registered in
+   project.pbxproj by hand — and a Swift file that exists on disk but is missing
+   from the target compiles to nothing, which would surface as
+   `UISceneDelegateClassName` naming a class that isn't there, i.e. a launch
+   failure with no build error. A class in a file already in the target cannot
+   fail that way. Swift class names are module-scoped, so
+   `$(PRODUCT_MODULE_NAME).SceneDelegate` resolves to App.SceneDelegate wherever
+   it is declared.
+
+   What did NOT move: the two APNs forwards above. A device token belongs to the
+   APP, not to a window, and UIApplicationDelegate is still where APNs delivers
+   it. Both `open url` and `continue userActivity` are dead code either way —
+   Tria registers no CFBundleURLTypes and holds no associated-domains
+   entitlement, so nothing has ever called them. */
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
 }

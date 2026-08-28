@@ -61,6 +61,7 @@
   let navToken = 0;           // guards a stale settle against a newer navigation
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
+  let postOrigin = '#/';             // and where a post page's does
   // Set by the tap that opens #/profile/edit and consumed by the render, so the
   // editor knows whether leaving can pop an entry or has to navigate.
   let editorPushed = false;
@@ -117,13 +118,6 @@
 
   document.documentElement.dataset.shell = installedShell() ? 'installed' : 'browser';
 
-  // The two pages a signed-out visitor is allowed to read, and the only two that
-  // are written for someone who hasn't got an account. They share a masthead, a
-  // voice, an ambient wash and the gate's permission to exist, so the router
-  // asks this once rather than testing two strings in four places.
-  const frontDoor = (path) =>
-    path === '#/about' || path === '#/business';
-
   // The --spring token (tokens.css) doubles as the WAAPI easing for the press
   // engine and the lightbox flight — WAAPI takes the same easing strings CSS
   // does, so the token stays the single source of truth. Read once, lazily.
@@ -170,47 +164,18 @@
     const canScroll = document.documentElement.scrollHeight - window.innerHeight > 48;
     if (y < 48 || !canScroll) bar.classList.remove('topbar--hidden');
     barLastY = y;    // a placed scroll is not a gesture — don't let the next one measure from it
+    syncToolbarTitle(true);
+    syncToolbarEdge(true);
   }
 
-  // Collapsing a long post (a folded note or a dropdown) can drop the timeline out
-  // from under you — you were deep inside an essay, and now everything below it
-  // jumps up. If the card's top has scrolled up off-screen, glide back to it so the
-  // read lands on the post you tapped, not wherever the collapse left the scroll.
-  function scrollCardIntoView(el) {
-    const bar = document.querySelector('.topbar');
-    const offset = (bar ? bar.getBoundingClientRect().height : 0) + 8;
-    const top = el.getBoundingClientRect().top;
-    if (top >= offset) return;   // its top is already in view — leave the scroll be
-    window.scrollTo({ top: top + window.scrollY - offset,
-      behavior: prefersReduced() ? 'auto' : 'smooth' });
-  }
-
-  // Like scrollCardIntoView, but resolves once the glide has settled (or at once
-  // if the card is already up top / motion is reduced). Lets a caller rise to the
-  // post first and THEN collapse it, so the fold doesn't race the scroll — a much
-  // cleaner read than folding while the page is still gliding. scrollend isn't on
-  // every engine yet, so a timeout backstops the resolve.
-  function scrollCardToTop(el) {
-    const bar = document.querySelector('.topbar');
-    const offset = (bar ? bar.getBoundingClientRect().height : 0) + 8;
-    const top = el.getBoundingClientRect().top;
-    if (top >= offset) return Promise.resolve();          // already up top — nothing to glide
-    const targetY = top + window.scrollY - offset;
-    if (prefersReduced()) { window.scrollTo({ top: targetY, behavior: 'auto' }); return Promise.resolve(); }
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(t);
-        window.removeEventListener('scrollend', finish);
-        resolve();
-      };
-      const t = setTimeout(finish, 600);                  // backstop if scrollend never fires
-      window.addEventListener('scrollend', finish);
-      window.scrollTo({ top: targetY, behavior: 'smooth' });
-    });
-  }
+  /* scrollCardIntoView and scrollCardToTop are GONE with the two gestures that
+     called them — the double-tap-to-fold and the Read more collapse. Both existed
+     for the same problem: folding something long dropped the timeline out from
+     under the reader, so the page had to glide back to the card first. Nothing
+     in the app collapses in place any more (the note's full text is a page now),
+     so there is no fold to rescue a scroll from. parkCard below is a different
+     thing and stays: it PLACES a scroll before the first paint rather than
+     animating one afterwards. */
 
   // Put a targeted card where it needs to be, with NO travel — this runs inside
   // renderFn, so the scroll is set before the page's first paint and the post is
@@ -297,6 +262,37 @@
     return h.toString(36);
   };
 
+  /* A card's signature describes its CONTENT. It must NOT describe which
+     disclosure the reader happens to have open, and it did until 2026-08-27.
+
+     The three panels write their open state into the markup they return (the
+     `open` class, plus `aria-expanded` on the button that toggles them), and the
+     signature was a hash of the raw innerHTML. But opening a panel toggles that
+     class on the LIVE NODE and never restamps `sig` — so from the moment a
+     reader tapped Comments, the node's recorded signature said "closed" while
+     the node said "open". The next `syncCards` pass built a fresh card, found
+     the two signatures different, and REPLACED a card nobody had changed.
+
+     What that costs is not a repaint. `makeCard` re-runs `richText()` over every
+     comment in the thread and rebuilds all three panels, then re-runs six wiring
+     functions — synchronously, for every card with a panel open. The in-flight
+     tween dies mid-transition and the fresh node arrives already open with no
+     animation, which reads as a snap. And the app re-pulls on EVERY foreground,
+     so the trigger is "read some comments, switch apps, come back".
+
+     Normalising the state out is the fix rather than restamping on toggle: the
+     hash then answers the question syncCards is actually asking, and no future
+     view-state class has to remember to restamp. Deliberately narrow — the three
+     panel classes by name and the aria-expanded that pairs with them, not a
+     blanket strip of the word "open", which would collide with any comment that
+     happens to contain it. `.readmore` is left alone: its rebuild is documented
+     and accepted (openReadMore survives it on purpose), it holds no form and no
+     focus, and its toggle's LABEL changes too, so it is not the same bug. */
+  const cardSig = (el) => hashStr(
+    (el.className + '|' + el.innerHTML)
+      .replace(/(class="(?:comments|likers|going)-panel) open"/g, '$1"')
+      .replace(/ aria-expanded="(?:true|false)"/g, ''));
+
   /* ── Nav ─────────────────────────────────────────────────────────────────
      One list drives the desktop top-right links and the mobile bottom tab bar.
      The publish "+" is the primary action (filled pill on desktop). */
@@ -342,19 +338,42 @@
     extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
     bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
     // The tray — an arrow lifting out of an open box. Worn by every share
-    // affordance. It replaced an envelope, which promised a message you compose
-    // and send; what these buttons actually do is hand a link to the OS. iOS and
-    // Android both draw share this way, so the gesture arrives already learned.
-    // The header's one-tap Share Tria inlines this same path data in index.html
-    // (it has to paint before JS runs) — keep the two in step.
+    // affordance (a post's copy-link, a profile's Share). It replaced an
+    // envelope, which promised a message you compose and send; what these
+    // buttons actually do is hand a link to the OS. iOS and Android both draw
+    // share this way, so the gesture arrives already learned.
     send:    '<path d="M12 15V3"/><path d="M8 6.5 12 3l4 3.5"/><path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9"/>',
+    // Repost — a full circle broken at two opposite points, each open end
+    // carrying a chevron arrowhead pointing the way round, so the mark reads as
+    // circulation. Two things about the drawing are deliberate. It is a CIRCLE
+    // rather than the squared-off two-arrow shape other apps use, because Tria's
+    // corner scale has nothing that shape belongs to. And the ends are true
+    // chevrons rotated onto the tangent, NOT the axis-aligned corner brackets a
+    // refresh glyph uses: pull-to-refresh is this app's other circular idea, it
+    // is the only way to reload the world, and a mark on a card that read as
+    // "reload this post" would be worse than no mark at all.
+    repost:  '<path d="M20 12a8 8 0 0 1-8 8 8 8 0 0 1-6.93-4"/>' +
+             '<path d="M4 12a8 8 0 0 1 8-8 8 8 0 0 1 6.93 4"/>' +
+             '<path d="M15.65 7.12 18.93 8 19.81 4.72"/>' +
+             '<path d="M8.35 16.88 5.07 16 4.19 19.28"/>',
     // Magnifier for the Friends search field, and the X it morphs into when open.
     search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
-    // Two sliders — the feed's type filter, worn by the masthead button that
-    // fans open the filter dial. Each row's knob sits at a different stop so it
+    // Plain left chevron — the toolbar's one leading control, replacing every
+    // ad hoc "← Back" text link with a single icon-only affordance.
+    chevron: '<path d="M15 5.5 8 12l7 6.5"/>',
+    // The at-sign, for Updates' Mentions row in the filter dial. It's the one
+    // dial row whose subject is a piece of punctuation rather than a thing, and
+    // drawing the punctuation is more direct than any metaphor for it — you
+    // type this character to make the notification the row is filtering to.
+    // Scaled in off a 2..22 span so it sits at the same weight as the rest of
+    // the set rather than filling more of the box than its neighbours.
+    at: '<circle cx="12" cy="12" r="3.4"/>' +
+        '<path d="M15.4 8.6v4.25a2.55 2.55 0 0 0 5.1 0v-.85a8.5 8.5 0 1 0-3.33 6.75"/>',
+    // Two sliders — the feed's type filter, worn by the toolbar button that
+    // opens the filter dial. Each row's knob sits at a different stop so it
     // reads as "tune what you see," not a plain list. Two rows, not three, keeps
-    // it cleaner at the small masthead scale.
+    // it cleaner at the toolbar's glyph size.
     sliders: '<path d="M4 9h9"/><path d="M17 9h3"/><circle cx="15" cy="9" r="2"/><path d="M4 15h4"/><path d="M12 15h8"/><circle cx="10" cy="15" r="2"/>',
     // Padlock — marks an activity shared with a hand-picked few, not the whole circle.
     lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
@@ -372,6 +391,10 @@
     block:   '<circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/>',
     // A doorway with an arrow stepping out — Log out.
     signout: '<path d="M13.5 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7.5"/><path d="M10 12h9.5"/><path d="m16 8 4 4-4 4"/>',
+    // Circled i — About Tria, in the profile sheet. The dot is filled rather
+    // than a 0.5-radius stroke, which at 20px renders as a smudge on the stem.
+    info:    '<circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v5.4"/>' +
+      '<circle cx="12" cy="7.9" r="0.95" fill="currentColor" stroke="none"/>',
     // Speaker + waves / speaker + X — the Frame video sound toggle.
     sound:   '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/>',
     mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
@@ -402,6 +425,19 @@
     // Three horizontal bars of unequal length — the plain "poll" glyph on the
     // composer's attach toggle (reads clearer at button scale than the type burst).
     poll:    '<path d="M5 7.5h13"/><path d="M5 12h9"/><path d="M5 16.5h11"/>',
+    // Discover's two formats. Four rounded squares for the masonry wall, three
+    // lines for the reading column — the pair every OS uses for exactly this
+    // switch, so it needs no label to be read.
+    //
+    // The lines are EQUAL length, which is the one thing separating this from
+    // `poll` two lines up: that glyph is three bars of DIFFERENT lengths because
+    // it's a bar chart, and at 22px in the same toolbar a ragged right edge and
+    // a flush one are the only thing telling the two apart. Keep them flush.
+    grid:    '<rect x="4" y="4" width="7" height="7" rx="2"/>' +
+             '<rect x="13" y="4" width="7" height="7" rx="2"/>' +
+             '<rect x="4" y="13" width="7" height="7" rx="2"/>' +
+             '<rect x="13" y="13" width="7" height="7" rx="2"/>',
+    list:    '<path d="M5 7.5h14"/><path d="M5 12h14"/><path d="M5 16.5h14"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -498,10 +534,10 @@
     // display:contents, so the sidebar sees the same flat column of links it
     // always has.
     if (!nav.querySelector('.nav-pill')) {
-      // The four-way speed dial is retired: the composer now surfaces link + photo
-      // inline and Activity is one seg-tab tap away, so the + routes straight to the
-      // Post composer. dialEl/wireDial are kept dormant in case we ever want a
-      // lighter Post/Activity fan here.
+      // The four-way speed dial is retired: the composer surfaces every type on one
+      // form now — link, photo, poll and place-and-time are all toggles at the note
+      // field's foot — so the + routes straight to it. dialEl/wireDial are kept
+      // dormant in case we ever want a lighter fan here.
       nav.innerHTML =
         `<div class="nav-pill">` +
           NAV.filter(n => !n.publish).map(link).join('') +
@@ -525,12 +561,9 @@
     }
   }
 
-  // There used to be a glideNav() here that measured the current link and moved
-  // a blurred gradient lozenge under it on every route change. The marker is now
-  // pure CSS — the pill's non-current links sit at reduced opacity and the
-  // current one comes forward (see .nav-pill .nav-link in the mobile block) — so
-  // the active state costs no layout read, no inline styles, and no per-frame
-  // filter work. Nothing calls into the nav on navigation any more beyond the
+  // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
+  // block), so navigation costs no layout read and no per-frame filter work.
+  // Nothing calls into the nav on navigation any more beyond the
   // aria-current flip above.
 
   /* ── Publish speed dial (phones) ───────────────────────────────────────────
@@ -548,8 +581,11 @@
         `<a class="nav-dial-item" role="menuitem" href="#/publish" ` +
           `data-type="${t.key}" style="--i:${i}">` +
           `<span class="nav-dial-label">${t.label}</span>` +
+          // TYPE_GLYPH, not the ornate set: this dial is the phone's version of
+          // the composer's attach buttons — a place you PICK what to make — so
+          // it speaks the same vocabulary as the mark it's about to produce.
           `<span class="nav-dial-ico type-icon--${t.key}" ` +
-            `style="--glow:var(--type-${t.key})">${TYPE_ICON[t.key]}</span>` +
+            `style="--glow:var(--type-${t.key})">${svgIcon(TYPE_GLYPH[t.key])}</span>` +
         `</a>`).join('') +
     `</div>`;
   }
@@ -674,28 +710,51 @@
   const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll' };
   // The same five, pluralised — for prose that has to name a type in the plural
   // ("No frames out here yet" when a filter empties Discover's grid).
-  const TYPE_PLURAL = { note: 'notes', find: 'finds', photo: 'frames', activity: 'activities', poll: 'polls' };
+  // The same five, pluralised, PLUS reposts — which is a filter row on a profile
+  // and so needs a plural for the empty state, without being a sixth type in any
+  // other sense. It is deliberately absent from TYPE_LABEL, TYPE_GLYPH, ICON_ALL
+  // and FILTERS: those are the quintet, and a repost has no hue, no heart and no
+  // dot on the pull ring.
+  const TYPE_PLURAL = { note: 'notes', find: 'finds', photo: 'frames', activity: 'activities', poll: 'polls',
+    repost: 'reposts' };
   // Zoe's poll mark — a hand-drawn pink burst/asterisk (icons/poll.svg). This is
   // the TYPE identity glyph (masthead + filter); the composer's attach toggle uses
   // the plainer line glyph in ICONS ('poll') for legibility at button scale, the
   // same way link/image do. fill: currentColor lets it inherit the type's pink.
-  const POLL_ICON_PATH = 'M8.86.75c1.85,0,3.71,2.63.67,7.9,1.89-3.27,3.84-4.4,5.27-4.4,3.18,0,3.78,5.55-4.6,5.55,8.38,0,7.78,5.55,4.6,5.55-1.43,0-3.38-1.13-5.27-4.4,3.04,5.27,1.19,7.9-.67,7.9s-3.71-2.63-.67-7.9c-1.89,3.27-3.84,4.4-5.27,4.4-3.18,0-3.78-5.55,4.6-5.55C-.86,9.8-.26,4.25,2.92,4.25c1.43,0,3.38,1.13,5.27,4.4-3.04-5.27-1.19-7.9.67-7.9M8.86,0c-1.01,0-1.94.56-2.49,1.51-.34.59-.69,1.61-.48,3.15-1.23-.96-2.29-1.16-2.97-1.16-1.09,0-2.04.52-2.55,1.4-.51.88-.48,1.97.06,2.91.34.59,1.05,1.4,2.49,1.99-.38.15-.73.33-1.05.54-1.19.76-1.87,1.85-1.87,2.99,0,1.58,1.25,2.78,2.92,2.78.68,0,1.74-.2,2.97-1.16-.21,1.55.14,2.57.48,3.15.55.94,1.48,1.51,2.49,1.51s1.94-.56,2.49-1.51c.34-.59.69-1.61.48-3.15,1.23.96,2.29,1.16,2.97,1.16,1.66,0,2.92-1.19,2.92-2.78,0-1.14-.68-2.23-1.87-2.99-.32-.2-.67-.38-1.05-.54.38-.15.73-.33,1.05-.54,1.19-.76,1.87-1.85,1.87-2.99,0-1.58-1.25-2.78-2.92-2.78-.68,0-1.74.2-2.97,1.16.21-1.55-.14-2.57-.48-3.15-.55-.94-1.48-1.51-2.49-1.51h0Z';
-  const pollGlyph = (cls) =>
-    `<svg${cls ? ` class="${cls}"` : ''} viewBox="0 0 17.71 19.61" fill="currentColor" aria-hidden="true"><path d="${POLL_ICON_PATH}"/></svg>`;
-  // Single-colour glyphs, one per type, inlined so they inherit the type's own
-  // colour via `fill: currentColor` (set on the CSS class) — and grey out for
-  // a past activity with no extra markup. viewBoxes are the artboard sizes.
-  const TYPE_ICON = {
-    note: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99,3.91c.13.16.37.57.62,1.51l.4,1.46.92-1.2c.6-.78.98-1.07,1.16-1.17.06.2.12.66,0,1.63l-.19,1.5,1.31-.75c.81-.47,1.27-.59,1.51-.62-.03.21-.15.66-.62,1.49l-.75,1.31,1.5-.19c.37-.05.7-.07.98-.07.34,0,.55.04.66.07-.1.18-.39.56-1.18,1.17l-1.2.92,1.46.39c.95.26,1.36.5,1.53.63-.16.13-.57.36-1.5.62l-1.45.4,1.19.92c.77.59,1.05.97,1.15,1.15-.12.03-.32.07-.67.07-.28,0-.61-.02-.97-.07l-1.5-.19.75,1.31c.48.85.6,1.3.63,1.51-.2-.03-.66-.14-1.5-.62l-1.31-.75.19,1.49c.12.96.06,1.42,0,1.62-.18-.1-.57-.39-1.17-1.18l-.93-1.21-.39,1.47c-.26.98-.5,1.39-.64,1.56-.13-.17-.37-.57-.62-1.52l-.39-1.46-.92,1.19c-.6.77-.97,1.05-1.15,1.15-.06-.2-.12-.67,0-1.65l.19-1.5-1.31.75c-.82.47-1.27.59-1.51.62.03-.21.15-.67.63-1.51l.75-1.31-1.5.19c-.36.05-.69.07-.96.07-.34,0-.55-.04-.67-.07.1-.18.38-.55,1.14-1.14l1.19-.92-1.45-.4c-.93-.25-1.33-.49-1.5-.62.17-.13.58-.37,1.53-.63l1.46-.39-1.2-.92c-.78-.6-1.06-.98-1.17-1.16.12-.03.32-.07.67-.07.28,0,.61.02.97.07l1.5.19-.75-1.31c-.48-.85-.6-1.3-.63-1.51.2.03.67.14,1.52.64l1.31.75-.19-1.5c-.13-.98-.06-1.45,0-1.65.18.1.55.38,1.14,1.13l.92,1.18.4-1.44c.25-.91.48-1.3.61-1.46M11.99,3.08c-.51,0-.97.79-1.33,2.09-.73-.94-1.38-1.48-1.84-1.48-.07,0-.14.01-.2.04-.48.2-.6,1.13-.42,2.51-.83-.48-1.52-.74-1.99-.74-.21,0-.38.05-.49.17-.36.36-.12,1.27.57,2.47-.39-.05-.75-.08-1.07-.08-.78,0-1.29.16-1.43.5-.2.48.38,1.22,1.48,2.07-1.35.36-2.16.83-2.16,1.35s.8.98,2.13,1.34c-1.08.84-1.64,1.58-1.45,2.05.14.34.65.5,1.43.5.31,0,.67-.03,1.06-.08-.69,1.21-.94,2.12-.57,2.48.11.11.28.17.49.17.47,0,1.15-.26,1.98-.74-.18,1.38-.06,2.31.42,2.51.06.03.13.04.2.04.47,0,1.13-.55,1.86-1.5.36,1.34.83,2.15,1.35,2.15s1-.83,1.36-2.2c.74.97,1.41,1.53,1.89,1.53.07,0,.14-.01.2-.04.47-.2.6-1.12.42-2.49.82.47,1.5.73,1.96.73.21,0,.38-.05.49-.17.36-.36.12-1.27-.57-2.47.39.05.75.08,1.07.08.78,0,1.29-.16,1.43-.5.2-.47-.37-1.22-1.46-2.06,1.33-.36,2.13-.83,2.13-1.34s-.82-.99-2.17-1.35c1.11-.85,1.69-1.6,1.49-2.08-.14-.34-.65-.5-1.43-.5-.32,0-.68.03-1.07.08.68-1.2.92-2.1.56-2.46-.11-.11-.28-.17-.49-.17-.47,0-1.15.26-1.97.73.17-1.37.05-2.29-.42-2.49-.06-.03-.13-.04-.2-.04-.47,0-1.13.56-1.87,1.52-.36-1.33-.83-2.14-1.35-2.14h0Z"/></svg>`,
-    find: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,2.76c1.11,0,2.58.43,3.08,1.65.37.9.46,2.94-3.08,6.53-3.54-3.59-3.45-5.63-3.08-6.53.5-1.22,1.97-1.65,3.08-1.65M18.67,8.74c1.77,0,2.58,1.69,2.58,3.26,0,1.57-.81,3.26-2.58,3.26-1.06,0-2.88-.57-5.6-3.26,2.72-2.69,4.55-3.26,5.6-3.26M5.34,8.74c1.06,0,2.88.57,5.6,3.26-2.72,2.69-4.55,3.26-5.6,3.26-1.77,0-2.58-1.69-2.58-3.26s.81-3.26,2.58-3.26M12,13.06c3.54,3.59,3.45,5.63,3.08,6.53-.5,1.22-1.97,1.65-3.08,1.65s-2.58-.43-3.08-1.65c-.37-.9-.46-2.94,3.08-6.53M12,2.01c-3.4,0-6.8,3.2-.41,9.58-2.62-2.62-4.71-3.6-6.26-3.6-4.44,0-4.44,8.01,0,8.01,1.55,0,3.63-.97,6.26-3.6-6.39,6.39-2.99,9.58.41,9.58s6.8-3.2.41-9.58c2.62,2.62,4.71,3.6,6.26,3.6,4.44,0,4.44-8.01,0-8.01-1.55,0-3.63.97-6.26,3.6,6.39-6.39,2.99-9.58-.41-9.58h0Z"/></svg>`,
-    photo: `<svg viewBox="2.5 2.5 19 19" fill="currentColor" aria-hidden="true"><path d="M12,4.92c3.91,0,7.08,3.18,7.08,7.08s-3.18,7.08-7.08,7.08-7.08-3.18-7.08-7.08,3.18-7.08,7.08-7.08M12,16.87c2.69,0,4.88-2.19,4.88-4.88s-2.19-4.88-4.88-4.88-4.88,2.19-4.88,4.88,2.19,4.88,4.88,4.88M12,4.17c-4.33,0-7.83,3.51-7.83,7.83s3.51,7.83,7.83,7.83,7.83-3.51,7.83-7.83-3.51-7.83-7.83-7.83h0ZM12,16.12c-2.28,0-4.13-1.85-4.13-4.13s1.85-4.13,4.13-4.13,4.13,1.85,4.13,4.13-1.85,4.13-4.13,4.13h0Z"/></svg>`,
-    activity: `<svg viewBox="0 0 18.88 19.82" fill="currentColor" aria-hidden="true"><path d="M9.44,2.85l.33,1.66c.14.72.78,1.25,1.52,1.25.39,0,.76-.15,1.05-.41l1.24-1.15-.71,1.54c-.22.48-.19,1.04.1,1.48.29.45.77.72,1.3.72.06,0,.12,0,.19-.01l1.68-.2-1.48.83c-.49.27-.79.79-.79,1.35s.3,1.08.79,1.35l1.48.83-1.68-.2c-.06,0-.13-.01-.19-.01-.53,0-1.02.27-1.3.72-.29.45-.32,1-.1,1.48l.71,1.54-1.24-1.15c-.29-.27-.66-.41-1.05-.41-.74,0-1.38.53-1.52,1.25l-.33,1.66-.33-1.66c-.14-.72-.78-1.25-1.52-1.25-.39,0-.76.15-1.05.41l-1.24,1.15.71-1.54c.22-.48.19-1.04-.1-1.48-.29-.45-.77-.72-1.3-.72-.06,0-.12,0-.19.01l-1.68.2,1.48-.83c.49-.27.79-.79.79-1.35s-.3-1.08-.79-1.35l-1.48-.83,1.68.2c.06,0,.13.01.19.01.53,0,1.02-.27,1.3-.72.29-.45.32-1,.1-1.48l-.71-1.54,1.24,1.15c.29.27.66.41,1.05.41.74,0,1.38-.53,1.52-1.25l.33-1.66M9.44,0c-.11,0-.21.07-.24.2l-.83,4.18c-.08.4-.43.65-.79.65-.19,0-.38-.07-.54-.21L3.92,1.91c-.05-.05-.11-.07-.16-.07-.16,0-.3.17-.22.35l1.79,3.87c.25.54-.15,1.14-.72,1.14-.03,0-.07,0-.1,0L.27,6.68s-.02,0-.03,0c-.24,0-.34.33-.11.45l3.72,2.08c.55.31.55,1.09,0,1.4L.12,12.69c-.22.12-.13.45.11.45.01,0,.02,0,.03,0l4.23-.5s.07,0,.1,0c.57,0,.97.6.72,1.14l-1.79,3.87c-.08.18.06.35.22.35.06,0,.11-.02.16-.07l3.12-2.89c.16-.15.35-.21.54-.21.36,0,.71.24.79.65l.83,4.18c.03.13.13.2.24.2s.21-.07.24-.2l.83-4.18c.08-.4.43-.65.79-.65.19,0,.38.07.54.21l3.12,2.89c.05.05.11.07.16.07.16,0,.3-.17.22-.35l-1.79-3.87c-.25-.54.15-1.14.72-1.14.03,0,.07,0,.1,0l4.23.5s.02,0,.03,0c.24,0,.34-.33.11-.45l-3.72-2.08c-.55-.31-.55-1.09,0-1.4l3.72-2.08c.22-.12.13-.45-.11-.45-.01,0-.02,0-.03,0l-4.23.5s-.07,0-.1,0c-.57,0-.97-.6-.72-1.14l1.79-3.87c.08-.18-.06-.35-.22-.35-.06,0-.11.02-.16.07l-3.12,2.89c-.16.15-.35.21-.54.21-.36,0-.71-.24-.79-.65L9.68.2c-.03-.13-.13-.2-.24-.2h0Z"/></svg>`,
-    poll: pollGlyph(),
+  /* THE ONE TYPE ICON SET, and it is the composer's input buttons.
+
+     No type mark rides a card or a Discover tile: any reader arriving at Tria
+     already knows what a post is, and a mark announcing "this one is a Find"
+     beside a headline that is visibly a link is the same fact told twice.
+
+     A type glyph appears in exactly two places, both of them a CHOICE rather
+     than a label — the composer's inferred-type indicator and a profile's
+     filter dial — and both speak the composer's own vocabulary: the plain line
+     glyphs its attach buttons wear. That is the point. A reader learns "link
+     means Find" by pressing the link button and watching the nameplate change,
+     so the dial that later narrows a profile to Finds shows them the mark they
+     already pressed, not a second drawing of the same idea. One vocabulary,
+     learned in one place.
+
+     note is the one type with no attach button — it is what you get with nothing
+     attached — so it takes the nearest line glyph from the same family rather than
+     a bespoke drawing. activity had the same excuse until 1.3, when it stopped
+     being the composer's other GROUP and became the calendar toggle in that bar. */
+  const TYPE_GLYPH = {
+    note:     'pencil',
+    find:     'link',
+    photo:    'image',
+    poll:     'poll',
+    activity: 'cal',
   };
   // The "All" filter's own mark — a pentad, one dot per post type in its own
   // hue, gathered into a ring. Says "all five" literally instead of a generic
   // four-dot grid, and it's the one place the quintet earns colour outside the
   // chips themselves — ties the fold-out button to the rows it opens.
+  // It does NOT read --type-mark, and neither do the five rows underneath it —
+  // see the ink line in openFilterDial for why the dial as a whole opted out.
+  // Short version: this ring is the legend for the hue dot on the button that
+  // opened it, and that dot has never folded.
   const ICON_ALL = `<svg viewBox="0 0 24 24" aria-hidden="true">` +
     `<circle cx="12" cy="4.6" r="2.5" fill="var(--type-note)"/>` +
     `<circle cx="19.1" cy="9.8" r="2.5" fill="var(--type-find)"/>` +
@@ -703,24 +762,14 @@
     `<circle cx="7.6" cy="18.2" r="2.5" fill="var(--type-activity)"/>` +
     `<circle cx="4.9" cy="9.8" r="2.5" fill="var(--type-poll)"/>` +
   `</svg>`;
-  // Literal hues (identical in light + dark, per tokens.css) so the composer's
-  // bottom colour-wash can interpolate smoothly via @property --type — a var()
-  // reference wouldn't tween. One per emergent post type.
-  const TYPE_HEX = { note: '#b7a6e8', find: '#f2a58c', photo: '#9fd6e8', activity: '#b9df7d', poll: '#ea86ae' };
-  // The composer's two top-level groups. Post is the unified expression form (its
-  // real type — note / find / frame — is inferred from what you attach); Activity
-  // is the structured plan form. Replaces the old four-way type picker.
-  const PUB_GROUPS = [
-    { key: 'post',     label: 'Post' },
-    { key: 'activity', label: 'Activity' },
-  ];
-  function typeTagEl(post) {
-    const past = isPastActivity(post);
-    const label = past ? 'Happened' : (TYPE_LABEL[post.type] || post.type);
-    const cls = past ? 'past' : post.type;
-    return `<span class="type-icon type-icon--${cls}" role="img" aria-label="${esc(label)}">` +
-      `${TYPE_ICON[post.type] || ''}</span>`;
-  }
+  // TYPE_HEX is gone. It held the five quintet hues as literals so the composer's
+  // wash could tween between them through @property --glow-wash, and the composer
+  // no longer washes in a post type: it washes in the READER'S accent, like every
+  // other washed page (see renderPublish). Nothing else ever read it — the type
+  // fills come from tokens.css by var() — so it went with the behaviour.
+  /* No post-type mark rides a card — see TYPE_GLYPH. A card is already visibly
+     the thing it is. A past activity says so through its own event date and
+     isPastActivity's past state, not through a greyed glyph. */
 
   // The quiet ••• overflow — it rides the bottom-left corner of the action row,
   // out of the way, a tool rather than an invitation. Opens the per-post sheet
@@ -750,7 +799,6 @@
             `<span class="byline-meta">${meta}</span>` +
           `</span>` +
         `</a>` +
-        typeTagEl(post) +
       `</header>`;
   }
 
@@ -761,8 +809,7 @@
     const domain = post.type === 'find' && post.url ? esc(domainOf(post.url)) : '';
     const meta = esc(niceDate(post.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
-    return `<p class="card-solometa"><span>${meta}</span>` +
-      typeTagEl(post) + `</p>`;
+    return `<p class="card-solometa"><span>${meta}</span></p>`;
   }
 
   // ── Long notes → "Read more" ───────────────────────────────────────────────
@@ -915,8 +962,31 @@
 
   // The note block for a text entry. Paragraphs always render intact; a long note
   // additionally wraps them in a height-clamped clip + a "Read more" toggle. Open
-  // state lives in `openReadMore` so it survives a card rebuild (like openComments).
-  function cardNoteHtml(post) {
+  /* A post's own page. Every deep link in the app resolves here as of 1.3 — a
+     copied link, a frame-wall tile, a quote's nested tile, an Updates row — and
+     before that they all pointed at the AUTHOR'S PROFILE with `?p=<id>`, which
+     the router turned into a scroll. That was the only "single post" Tria had:
+     a position in somebody's column.
+
+     A link may also name the SECTION it wants open (`?pane=likers`). Only the
+     three panes exist, only a link that means one passes it, and a link that
+     names one this reader has no panel for falls back to the conversation
+     (see renderPost) — so a copied URL is never a page opening on nothing. */
+  const postRoute = (post, pane) =>
+    `#/p/${encodeURIComponent(post.id ?? post)}` + (pane ? `?pane=${pane}` : '');
+
+  /* The note, clamped in a feed and whole on the post's page.
+
+     `full` is the post page, where a note is the thing you came for and a clamp
+     would be the page withholding its own subject. In a feed the clamp stays and
+     READ MORE IS A LINK, not a toggle: expanding in place was the one control in
+     the app that made a card taller than the screen it sits in, and the reader
+     who wants the whole note wants the whole post — the comments under it, the
+     room to sit with it — which is the page. So the teaser stays a teaser and
+     the affordance became a door. `wireReadMore`, `openReadMore` and the
+     max-height tween all retire with it; an anchor needs no wiring and no state
+     to survive a rebuild. */
+  function cardNoteHtml(post, full) {
     if (!post.note) return '';
     const rich = isRichNote(post.note);
     const body = rich
@@ -929,13 +999,12 @@
     // how many paragraph/heading blocks it renders as — whichever trips first.
     const plainLen = rich ? post.note.replace(/<[^>]+>/g, '').length : post.note.length;
     const blockCount = rich ? (body.match(/<(?:h1|h2|p)[ >]/g) || []).length : noteParas(post.note).length;
+    if (full) return body;                                   // the page never clamps
     if (plainLen <= READMORE_MIN && blockCount < READMORE_MIN_BLOCKS) return body;
 
-    const open = openReadMore.has(post.id);
-    return `<div class="readmore${open ? ' open' : ''}">` +
+    return `<div class="readmore">` +
         `<div class="readmore-clip">${body}</div>` +
-        `<button class="readmore-toggle" type="button" aria-expanded="${open}">` +
-          `${open ? 'Read less' : 'Read more'}</button>` +
+        `<a class="readmore-toggle" href="${postRoute(post)}">Read more</a>` +
       `</div>`;
   }
 
@@ -964,6 +1033,10 @@
   // the toolbar, so it stays visible even while the panel is collapsed.
   function richNoteField(idp, titleVal, noteHtml, notePh, opts = {}) {
     const tools = opts.tools !== false;   // attach toggles: composer only (see the foot bar below)
+    // …and the calendar toggle within that, which the daily flow drops on its own:
+    // an activity answers no prompt (dailyAccepts), so a button offering one there
+    // is offering a dead end.
+    const event = opts.event !== false;
     return `<div class="field field--combo field--rich">` +
         `<div class="rich-title-row">` +
           `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
@@ -978,13 +1051,14 @@
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
-        // Foot bar. Right (opts.tools): link + photo + poll toggles — each a live toggle
-        // that flips the post's inferred type (link → Find, photo → Frame, poll → Poll)
-        // and pops the masthead mark. Left (opts.lock): the audience lock, so who sees it
-        // and what it is share one row. Both are composer-only — wired in renderPublish
-        // (wireAttachBar + wireAudienceLock). An edit card reuses this field with NEITHER:
-        // you can't swap a post's media or its type after the fact, so offering the
-        // buttons there would only promise something the editor can't do.
+        // Foot bar. Right (opts.tools): link + photo + poll + calendar toggles — each a
+        // live toggle that flips the post's inferred type (link → Find, photo → Frame,
+        // poll → Poll, calendar → Activity) and pops the masthead mark. Left (opts.lock):
+        // the audience lock, so who sees it and what it is share one row. Both are
+        // composer-only — wired in renderPublish (wireAttachBar + wireAudienceLock). An
+        // edit card reuses this field with NEITHER: you can't swap a post's media or its
+        // type after the fact, so offering the buttons there would only promise
+        // something the editor can't do.
         (tools || opts.lock
           ? `<div class="rich-attach${opts.lock ? ' rich-attach--withlock' : ''}" role="group" aria-label="Post options">` +
               (opts.lock ? audienceLockHtml() : '') +
@@ -996,6 +1070,11 @@
                       `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
                     `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                       `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+                    (event
+                      ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
+                          `aria-label="Add a place and time" aria-pressed="false">` +
+                          `${svgIcon('cal', 'rt-attach-ico')}</button>`
+                      : '') +
                   `</div>`
                 : '') +
             `</div>`
@@ -1094,69 +1173,20 @@
     if (finePointer()) editor.focus();
   }
 
-  // A reliable double-tap detector. The native `dblclick` event doesn't fire
-  // dependably on phones (a double-tap there is the browser's zoom gesture), so
-  // we count two quick taps ourselves off `click` (which every tap raises) —
-  // two within DOUBLE_TAP_MS, landing near the same spot, count as a double-tap.
-  const DOUBLE_TAP_MS = 400;
-  function onDoubleTap(el, handler) {
-    let last = 0, lx = 0, ly = 0;
-    el.addEventListener('click', (e) => {
-      const now = Date.now();
-      if (now - last < DOUBLE_TAP_MS &&
-          Math.abs(e.clientX - lx) < 32 && Math.abs(e.clientY - ly) < 32) {
-        last = 0;
-        handler(e);
-      } else {
-        last = now; lx = e.clientX; ly = e.clientY;
-      }
-    });
-  }
+  /* onDoubleTap is GONE. Its two callers were the note collapse and the card's
+     fold-away-an-open-panel gesture, and both are retired — a card in the feed
+     has one disclosure left and it is a box you type in, which nothing should be
+     folding out from under a half-written sentence. Worth keeping the reason it
+     was hand-rolled if a double-tap is ever wanted again: `dblclick` does not
+     fire dependably on phones, because a double-tap there is the browser's own
+     zoom gesture, so it counted two quick `click`s near the same spot instead. */
 
-  // Wire the "Read more" toggle. Opening animates the clip's max-height out to the
-  // content's real height, then releases it (so a later reflow can't re-clip);
-  // closing pins the current height first so it eases back to the clamp. The set
-  // records the state so a card rebuild reopens it.
-  function wireReadMore(el, post) {
-    const wrap = el.querySelector('.readmore');
-    if (!wrap) return;
-    const clip = wrap.querySelector('.readmore-clip');
-    const toggle = wrap.querySelector('.readmore-toggle');
-
-    clip.addEventListener('transitionend', (e) => {
-      if (e.propertyName === 'max-height' && wrap.classList.contains('open'))
-        clip.style.maxHeight = 'none';        // fully open → let it grow freely
-    });
-
-    function setOpen(open) {
-      if (open) {
-        clip.style.maxHeight = clip.scrollHeight + 'px';   // clamp → full
-        wrap.classList.add('open');
-      } else {
-        clip.style.maxHeight = clip.scrollHeight + 'px';   // pin current height…
-        void clip.offsetHeight;                            // …commit it, then
-        wrap.classList.remove('open');
-        clip.style.maxHeight = '';                         // …ease back to clamp
-      }
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.textContent = open ? 'Read less' : 'Read more';
-      if (open) openReadMore.add(post.id); else openReadMore.delete(post.id);
-    }
-
-    toggle.addEventListener('click', () => setOpen(!wrap.classList.contains('open')));
-
-    // Double-tap anywhere on the card (the same whole-card hitbox an Updates
-    // spotlight lands on) collapses an opened note back to the teaser — a quick
-    // way out without reaching for the toggle. Only when open, and never on a
-    // link/button/field (mentions, actions, the comment box) so their taps fire.
-    onDoubleTap(el, (e) => {
-      if (!wrap.classList.contains('open') || e.target.closest('a, button, input, textarea')) return;
-      // Rise to the top of the post first, then fold it away. Collapsing while the
-      // page is still gliding looks busy and can land the post short of the top;
-      // scrolling first lets the fold play out with the post already settled.
-      scrollCardToTop(el).then(() => setOpen(false));
-    });
-  }
+  /* wireReadMore is GONE, and so are `openReadMore` and the max-height tween it
+     drove. Read more is an anchor to the post's page now (see cardNoteHtml), so
+     there is no open state to hold, nothing to survive a card rebuild, and no
+     `transitionend` waiting to release a pinned height. The double-tap-to-fold
+     gesture went with it — it existed to undo an expansion that no longer
+     happens. */
 
   // ── @mention composer: a small friend-picker under the field ─────────────
   // Typing "@" in a note/comment field opens a listbox of your mutual friends,
@@ -1301,6 +1331,7 @@
       (occ ? `<a class="tag tag--daily" data-type="${occ.type}" ` +
           `href="#/daily/${encodeURIComponent(occ.slug)}">` +
           `<span class="tag-daily-cap">Daily</span>` +
+          `<span class="daily-sep" aria-hidden="true">·</span>` +
           `<span class="tag-daily-q">${esc(occ.prompt)}</span>` +
         `</a>` : '') +
       tags.map(t => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('') +
@@ -1348,17 +1379,33 @@
   // fill — no count, because a like is a private nod to the author, not a public
   // tally. The author can't like their own post; for them the heart carries the
   // count and opens the list of who liked (see likersPanelHtml / wireLikes).
-  function likeButtonHtml(post) {
+  function likeButtonHtml(post, full) {
     if (!canSocial(post)) return '';
     const owns = post.author === Store.session();
     if (owns) {
       const n = Store.likeCountFor(post.id);
-      const open = openLikers.has(post.id);
-      return `<button class="card-like card-like--owner" type="button" aria-expanded="${open}" ` +
+      const inner = svgIcon('heart') + (n ? `<span class="card-like-count">${n}</span>` : '');
+      // On the post's own page the list is already under this, so the heart is
+      // just the count: a <span>, not a control that goes nowhere. In a feed it
+      // is a LINK to that page — an anchor rather than a scripted navigation, so
+      // it gets the long-press preview, the middle-click and the keyboard for
+      // free, and wireLikes can tell the two hearts apart by tag name.
+      // On the page it is a SWITCH again: it swaps the section under the card to
+      // the list of who liked, and swaps back. In a feed it is a link to that
+      // page. Same glyph, same count, two different jobs one route apart.
+      if (full) {
+        return `<button class="card-like card-like--owner" type="button" ` +
+            `aria-expanded="${postPane === 'likers'}" ` +
+            `aria-label="${n ? n + ' like' + (n === 1 ? '' : 's') + ', see who' : 'Likes'}" ` +
+            `title="Who liked this">${inner}</button>`;
+      }
+      // ...and it asks that page to open on the LIST, because that is what this
+      // heart says it does. Landing on the comments would answer a different
+      // question from the one the count was tapped to ask.
+      return `<a class="card-like card-like--owner" href="${postRoute(post, 'likers')}" ` +
           `aria-label="${n ? n + ' like' + (n === 1 ? '' : 's') + ', see who' : 'Likes'}" title="Who liked this">` +
-          svgIcon('heart') +
-          (n ? `<span class="card-like-count">${n}</span>` : '') +
-        `</button>`;
+          inner +
+        `</a>`;
     }
     const liked = Store.likedByMe(post.id);
     // data-type sets the post's own colour (--burst) for the tap's ink flood and
@@ -1388,15 +1435,19 @@
   // aria-expanded rides every state (the button always controls the panel);
   // aria-pressed appears only where it's actually a toggle, which is also how
   // wireGoing tells the two apart.
-  function goingControlHtml(post) {
+  function goingControlHtml(post, full) {
     if (post.type !== 'activity') return '';
     if (!canJoin(post)) return '';
     const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
-    const open = openGoing.has(post.id);
     const rsvpable = post.author !== Store.session() && !isPastActivity(post);
     const going = rsvpable && Store.goingByMe(post.id);
+    // aria-expanded only where there IS a section to expand — the post page. In
+    // a feed this button either raises your hand or walks to that page, and
+    // controls no panel either way. aria-pressed still marks the toggle case,
+    // and wireGoing still reads its presence to tell the two apart.
     return `<button class="card-attendees${going ? ' going' : ''}" type="button" ` +
-        `aria-expanded="${open}"${rsvpable ? ` aria-pressed="${going}"` : ''} ` +
+        `${full ? `aria-expanded="${postPane === 'going'}" ` : ''}` +
+        `${rsvpable ? `aria-pressed="${going}" ` : ''}` +
         `aria-label="${n} going${going ? ', including you' : ''}. ` +
           `${rsvpable && !going ? 'Count me in' : 'See who'}" ` +
         `title="${rsvpable && !going ? 'Count me in' : 'Who’s going'}">` +
@@ -1416,11 +1467,14 @@
     return post.type === 'activity' && post.eventDate && !isPastActivity(post) && canJoin(post);
   }
 
-  function goingPanelHtml(post) {
+  // Page only, like likersPanelHtml. `.going-out` lives down here rather than on
+  // the headcount button for the reason below (a deliberate second tap), and the
+  // page is where it now sits waiting rather than behind a disclosure.
+  function goingPanelHtml(post, full) {
+    if (!full) return '';
     if (post.type !== 'activity') return '';
     if (!canJoin(post)) return '';
     const list = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user));
-    const open = openGoing.has(post.id);
     // The way back out sits under the list, the mirror of joining and one level
     // down from it — the host planned around this headcount, so changing your
     // mind should cost a deliberate second tap rather than ride the same button
@@ -1428,9 +1482,10 @@
     const out = post.author !== Store.session() && !isPastActivity(post) && Store.goingByMe(post.id)
       ? `<button class="going-out" type="button">${svgIcon('notgoing')}<span>Can’t make it</span></button>`
       : '';
-    return `<div class="going-panel${open ? ' open' : ''}">` +
+    return `<div class="going-panel going-panel--full post-pane${paneOpen('going')}" data-pane="going">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
+            `<p class="panel-label">Going</p>` +      // see the note in likersPanelHtml
             (list.length
               ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
               : `<p class="likers-empty">No one’s going yet.</p>`) +
@@ -1535,25 +1590,70 @@
       `</div>`;
   }
 
+  // Pass it along. Sits in the social cluster between comment and like, which is
+  // where every app that has one puts it, so the gesture arrives already learned.
+  // Inside .card-social it inherits the 44px box / 28px glyph invitation scale
+  // from the heart beside it and needs no geometry of its own.
+  //
+  // No count, deliberately, and for two reasons that agree. RLS only hands you
+  // the rows you're allowed to see, so a repost count would be honest on your own
+  // posts and quietly short on everyone else's — the same trap likeCountFor
+  // documents. And a number on a card is the ambient pressure the missing badge
+  // and the missing Updates dot already refuse.
+  //
+  // data-type is the ORIGINAL's type, not 'repost'. It sets --burst for the tap's
+  // sparkle, and what you passed along is a Note or a Frame or a Find — the
+  // quintet naming a type is exactly the quintet's job. 'repost' isn't one, so it
+  // has no colour to lend here.
+  function repostBtnHtml(post) {
+    if (!Store.repostable(post)) return '';
+    const target = Store.originalOf(post) || post;
+    const on = Store.repostedByMe(target.id);
+    return `<button class="card-repost${on ? ' reposted' : ''}" type="button" ` +
+        `data-repost="${esc(target.id)}" data-type="${esc(target.type)}" ` +
+        `aria-pressed="${on}" ` +
+        `aria-label="${on ? 'Reposted, undo or quote' : 'Repost'}" ` +
+        `title="${on ? 'Reposted' : 'Repost'}">` +
+        svgIcon('repost', 'repost-mark') +
+      `</button>`;
+  }
+
   function cardActionsHtml(post, opts) {
-    const going = goingControlHtml(post);
-    const like = likeButtonHtml(post);
+    const full = !!(opts && opts.full);
+    const going = goingControlHtml(post, full);
+    const like = likeButtonHtml(post, full);
+    const repost = repostBtnHtml(post);
     const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
-    const expanded = openComments.has(post.id);
-    const comment = canSocial(post)
-      ? `<button class="card-comment" type="button" aria-expanded="${expanded}" ` +
-          `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}" title="Comments">` +
-          svgIcon('comment') +
-          (n ? `<span class="card-comment-count">${n}</span>` : '') +
-        `</button>`
-      : '';
+    const label = `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}"`;
+    const inner = svgIcon('comment') + (n ? `<span class="card-comment-count">${n}</span>` : '');
+    /* THE GLYPH OPENS THE POST, and the feed has no comment box left at all.
+       The disclosure survived one round of this redesign holding just the form,
+       on the argument that starting a sentence shouldn't cost a navigation. What
+       that actually bought was a box you could type into while the conversation
+       it belonged to was somewhere else — and then a submit that walked you there
+       anyway, so the navigation happened regardless, just after the typing
+       instead of before it. One door is simpler than a box plus a door to the
+       same place, and the composer belongs at the top of the thread it joins.
+
+       So: a link in a feed, a static count on the page (where the thread is
+       already underneath it). Same class either way, so the row's geometry
+       doesn't fork. */
+    const comment = !canSocial(post) ? ''
+      : full ? `<button class="card-comment" type="button" ` +
+                 `aria-expanded="${postPane === 'comments'}" ${label} title="Comments">${inner}</button>`
+      : `<a class="card-comment" href="${postRoute(post)}" ${label} title="Comments">${inner}</a>`;
     // The ••• overflow carries every owner tool now (Edit, Delete) plus Copy link
     // and Add to calendar — the same menu whether the card is on your profile or
     // in the feed. It sits leftmost of the left cluster, bottom-left corner of the
     // card, out of the way.
-    const menu = menuBtnHtml(post);
+    //
+    // opts.menuPost splits the row for a QUOTE, and the split is the point rather
+    // than a shortcut: the heart and the comment thread react to the CONTENT, so
+    // they belong to the original, while ••• manages the ROW in your feed, which
+    // is the quote — the thing you wrote and the only thing you can delete.
+    const menu = menuBtnHtml((opts && opts.menuPost) || post);
 
-    if (!going && !like && !comment && !menu) return '';
+    if (!going && !like && !comment && !repost && !menu) return '';
 
     // One row for every card type now that the headcount and the RSVP are a
     // single control: social cluster on the right, the ••• menu tucked left
@@ -1561,13 +1661,103 @@
     // row into two ends to keep the plan away from the gestures — with one fewer
     // control they sit flush with notes and photos instead, which is most of what
     // made them read busy in the feed. The headcount leads the cluster, so
-    // comment + like stay the two rightmost glyphs on every card.
-    return `<div class="card-actions"><div class="card-social">${going}${comment}${like}</div>${menu}</div>`;
+    // comment, repost and like stay the three rightmost glyphs on every card.
+    return `<div class="card-actions"><div class="card-social">${going}${comment}${repost}${like}</div>${menu}</div>`;
+  }
+
+  // ── Reposts ────────────────────────────────────────────────────────────────
+  // The two forms are drawn differently ON PURPOSE, because they are doing
+  // different jobs and the cheapest honest drawing of each is not the same shape.
+  //
+  //   · a BARE repost is passed along. There is nothing of yours on the card, so
+  //     the card is simply the original's, with one quiet line above the byline
+  //     saying who handed it over. Every post type, every photo, every poll and
+  //     read-more works because it IS the original's card — makeCard calls itself.
+  //
+  //   · a QUOTE has your sentence at the top, so it needs somewhere for the
+  //     original to live UNDER your words, and a nested tile is the only drawing
+  //     where whose-words-are-whose is never in question.
+  //
+  // The nested tile borrows .ptile's material rather than inventing one: fill,
+  // hairline edge, specular rim and float, with the backdrop sample dropped. The
+  // bill for a blur is area × radius × moving frames and this one scrolls.
+  // What a post is ABOUT. Itself, unless it's a repost, in which case it's the
+  // post it points at. Returns null for a repost whose original isn't here, which
+  // is the one case a view must drop rather than draw.
+  const subjectOf = (p) => (p && p.repostOf ? Store.originalOf(p) : p);
+
+  const repostLineHtml = (post) => {
+    const u = Store.user(post.author);
+    const name = esc(u ? u.name : post.author);
+    return `<a class="card-passed" href="#/u/${esc(encodeURIComponent(post.author))}">` +
+        svgIcon('repost') +
+        `<span><b>${name}</b> reposted</span>` +
+        `<span class="dot">·</span>` +
+        `<span>${esc(niceDate(post.date))}</span>` +
+      `</a>`;
+  };
+
+  // The original, as an excerpt inside a quote. Deliberately NOT a second live
+  // card: no tag chips, no daily chip, no actions, no panels. Those all belong to
+  // the original's own card, which is one tap away — the whole tile is a stretched
+  // link to it (the .daily-open trick), so there is nothing to reach past.
+  function quotedCardEl(orig) {
+    const u = Store.user(orig.author);
+    const name = esc(u ? u.name : orig.author);
+    const domain = orig.type === 'find' && orig.url ? esc(domainOf(orig.url)) : '';
+    const meta = esc(niceDate(orig.date)) +
+      (domain ? ` <span class="dot">·</span> ${domain}` : '');
+    // A quoted Frame runs full bleed to the tile's own corner, which is why the
+    // tile clips rather than padding the image: a photo inset inside a 14px box
+    // would need a concentric inner radius, and at this size that curve is mud.
+    const media = orig.image
+      ? `<span class="quoted-media">` +
+          `<img src="${esc(orig.poster || orig.image)}" alt="" loading="lazy" decoding="async"` +
+          (orig.tint ? ` style="background:${esc(orig.tint)}"` : '') + `>` +
+        `</span>`
+      : '';
+    // A poll's question stands in for a title, or the tile would be an avatar over
+    // nothing: the options live on the original's card and this is an excerpt.
+    const head = orig.title || (orig.poll && orig.poll.q) || '';
+    const title = head ? `<p class="quoted-title">${esc(head)}</p>` : '';
+    const say = notePlain(orig.note || '');
+    const body = say ? `<p class="quoted-note">${esc(say)}</p>` : '';
+    return `<div class="card-quoted">` +
+        media +
+        `<div class="quoted-pad">` +
+          `<span class="quoted-who">` +
+            avatarEl(u || { name: orig.author }, { cls: 'quoted-av' }) +
+            `<span class="byline-text">` +
+              `<span class="quoted-name">${name}</span>` +
+              `<span class="quoted-meta">${meta}</span>` +
+            `</span>` +
+          `</span>` +
+          title + body +
+        `</div>` +
+        // The whole tile is one target. An INTERNAL route, so no target="_blank" —
+        // in a WKWebView that attribute is completely inert, and a new tab was
+        // only ever a second copy of the app anyway.
+        `<a class="quoted-open" href="${postRoute(orig)}" ` +
+          `aria-label="Open the original post"></a>` +
+      `</div>`;
   }
 
   // opts.solo → this card sits on a profile (single author): show the slim
   // date line instead of the full avatar + name byline.
   function makeCard(post, opts = {}) {
+    // `full` is the post's own page: no clamp on the note, and the three lists
+    // (comments, who liked, who's going) drawn open in place of the disclosures
+    // a feed card wears. Everything else about the card is identical, which is
+    // the point — a post reads the same in both places.
+    const full = !!opts.full;
+    // A repost draws its subject, not itself. Callers only ever hand us a repost
+    // whose original is present (Store.feed drops the rest, and the views drop a
+    // blocked one), but a missing original still falls through to the ordinary
+    // path rather than throwing — an empty note card is a better failure than a
+    // dead feed.
+    const orig = post.repostOf ? Store.originalOf(post) : null;
+    if (orig) return post.note ? quoteCard(post, orig, opts) : passedCard(post, orig, opts);
+
     const head = opts.solo ? soloMetaEl(post) : bylineEl(post);
     const actions = cardActionsHtml(post, opts);
     const el = document.createElement('article');
@@ -1612,7 +1802,7 @@
       // tags. cardNoteHtml renders the same rich subset the composer offers, so a
       // formatted Frame caption no longer arrives as raw markup.
       const photoTitleHtml = post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '';
-      const foot = photoTitleHtml + cardNoteHtml(post) + tagChips(post);
+      const foot = photoTitleHtml + cardNoteHtml(post, full) + tagChips(post);
       const mediaHtml =
         (img.src ? `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` : '') +
         (isVideo
@@ -1633,15 +1823,13 @@
           `</figure>` +
           actions +
         `</div>` +
-        likersPanelHtml(post) +
-        commentsPanelHtml(post);
-      el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
+        likersPanelHtml(post, full) +
+        commentsPanelHtml(post, full);
+      el.dataset.sig = cardSig(el);
       if (isVideo) wireFrameVideo(el, post);
       else wirePhoto(el, img);
-      wireReadMore(el, post);
       wireLikes(el, post, opts);
       wireComments(el, post, opts);
-      wireCardCollapse(el, post);
       return el;
     }
 
@@ -1671,7 +1859,7 @@
                 `<p class="card-note">${richText(p, post.author, { link: false })}${i === arr.length - 1 && external
                   ? extIcon : ''}</p>`).join('')) +
         `</a>`
-      : cardNoteHtml(post);
+      : cardNoteHtml(post, full);
 
     // Activities carry a where-line and a when-line under the caption — a quiet
     // pin + place, then calendar + day (and time). Same voice, stacked.
@@ -1708,16 +1896,80 @@
         tagChips(post) +
         actions +
       `</div>` +
-      goingPanelHtml(post) +
-      likersPanelHtml(post) +
-      commentsPanelHtml(post);
-    el.dataset.sig = hashStr(el.className + '|' + el.innerHTML);
-    wireReadMore(el, post);
+      goingPanelHtml(post, full) +
+      likersPanelHtml(post, full) +
+      commentsPanelHtml(post, full);
+    el.dataset.sig = cardSig(el);
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
     wireComments(el, post, opts);
-    wireCardCollapse(el, post);
+    return el;
+  }
+
+  // A BARE repost: the original's card with a line on top. makeCard calls itself,
+  // which is the whole reason this form is nearly free — every type, the photo
+  // branch, the poll widget, read-more, the panels and all their wiring are the
+  // original's, already correct, already tested.
+  //
+  // Three things get re-stamped afterwards, and each is load-bearing:
+  //   · data-id becomes the REPOST's id, because that is what the feed list holds
+  //     and what syncCards reconciles on. Everything inside the card still points
+  //     at the original, which is exactly right: the heart, the comment thread and
+  //     the ••• all belong to the post, not to the act of passing it along.
+  //   · data-burst carries the original's type, so celebratePost can tint the
+  //     sparkle. The card's own data-type is 'repost', which names no colour.
+  //   · the signature is recomputed, because the line was inserted after makeCard
+  //     hashed the card and two people passing the same post along must not
+  //     produce two rows the reconciler thinks are identical.
+  function passedCard(post, orig, opts) {
+    // NEVER solo, even in a profile column. `solo` swaps the byline for a bare
+    // date line on the argument that the page header already says whose posts
+    // these are — which is exactly the thing a repost makes untrue. Without this
+    // a passed-along note on your own profile is somebody else's words under your
+    // name with nothing to say so, which is the worst failure this feature has.
+    const el = makeCard(orig, { ...opts, solo: false });
+    el.dataset.id = post.id;
+    el.dataset.type = 'repost';
+    el.dataset.burst = orig.type;
+    const main = el.querySelector('.card-main');
+    if (main) main.insertAdjacentHTML('afterbegin', repostLineHtml(post));
+    el.dataset.sig = cardSig(el);
+    return el;
+  }
+
+  // A QUOTE: your byline, your sentence, then the original as a nested tile.
+  // The social controls act on the ORIGINAL, not on the quote, which is the one
+  // decision here worth arguing with. Two reasons it lands this way. Tria's likes
+  // are private, so a like credited to the quote splits a count the original's
+  // author can never see. And a reader who wants to react to what they are
+  // already reading shouldn't have to tap through to do it.
+  function quoteCard(post, orig, opts) {
+    const full = !!(opts && opts.full);
+    const el = document.createElement('article');
+    el.className = 'card card--quote';
+    el.dataset.id = post.id;
+    el.dataset.type = 'repost';
+    el.dataset.burst = orig.type;
+    el.dataset.tags = '';
+    el.innerHTML =
+      `<div class="card-main">` +
+        (opts.solo ? soloMetaEl(post) : bylineEl(post)) +
+        // A quote takes a headline like any other post. Plain, never a link: the
+        // destination a reader wants from here is the quoted post, and the tile
+        // below is already a target for the whole of it.
+        (post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '') +
+        cardNoteHtml(post, full) +
+        quotedCardEl(orig) +
+        cardActionsHtml(orig, { ...opts, menuPost: post }) +
+      `</div>` +
+      goingPanelHtml(orig, full) +
+      likersPanelHtml(orig, full) +
+      commentsPanelHtml(orig, full);
+    el.dataset.sig = cardSig(el);
+    wireGoing(el, orig, opts);
+    wireLikes(el, orig, opts);
+    wireComments(el, orig, opts);
     return el;
   }
 
@@ -1887,6 +2139,30 @@
           frame.classList.remove('photo-frame--reserve');
         }
       }, { once: true });
+      // The badge's visibility is driven off the element's own 'playing'/'pause'
+      // events, never off the play() promise — that promise only tells you the
+      // call was accepted, and iOS WebKit has been seen to leave it pending
+      // indefinitely even once frames are visibly rendering, which left the badge
+      // stranded over a playing clip. 'playing' is the spec-guaranteed "frames are
+      // now rendering" signal and fires whether or not the promise ever settles.
+      // `thisClip` (not the outer `clip`, which detach() nulls) is what each
+      // listener checks itself against, so a stale/replaced clip's late events
+      // can't touch a figure that has already moved on.
+      const thisClip = clip;
+      thisClip.addEventListener('playing', () => {
+        if (clip !== thisClip) return;
+        if (activeFrameVideo && activeFrameVideo !== thisClip) activeFrameVideo.pause();
+        activeFrameVideo = thisClip;
+        fig.classList.add('frame-video--playing');
+      });
+      thisClip.addEventListener('pause', () => {
+        if (clip !== thisClip) return;
+        // Also fires when another clip taking over calls .pause() on this one
+        // (only one clip plays at a time) — that clip is now a frozen frame, so
+        // its own badge belongs back on top rather than staying hidden.
+        fig.classList.remove('frame-video--playing');
+        if (activeFrameVideo === thisClip) activeFrameVideo = null;
+      });
       // The #t= media fragment makes the clip self-paint its first frame on iOS even
       // before playback starts — the universal poster fallback for a Frame with no
       // stored `poster` still. For a trimmed clip that frame is the window's start;
@@ -1905,16 +2181,15 @@
       frame.appendChild(clip);
       // iOS Low Power Mode (and some embedded contexts) refuse even muted
       // autoplay — never assume play() resolves; on rejection just detach and
-      // leave the poster + play badge up, same fallback as reduced-motion.
+      // leave the poster + play badge up, same fallback as reduced-motion. The
+      // sound icon still rides the promise: flipping it is only worth doing once
+      // playback is confirmed accepted, and it's a lower-stakes miss than the badge.
       const played = clip.play();
       Promise.resolve(played).then(() => {
-        if (activeFrameVideo && activeFrameVideo !== clip) activeFrameVideo.pause();
-        activeFrameVideo = clip;
-        fig.classList.add('frame-video--playing');
-        if (withSound && soundBtn) {
+        if (withSound && soundBtn && clip === thisClip) {
           // Only one frame carries sound at a time — hush any other unmuted clip.
-          if (soundedFrameVideo && soundedFrameVideo !== clip) soundedFrameVideo.muted = true;
-          soundedFrameVideo = clip;
+          if (soundedFrameVideo && soundedFrameVideo !== thisClip) soundedFrameVideo.muted = true;
+          soundedFrameVideo = thisClip;
           soundBtn.setAttribute('aria-pressed', 'true');
           soundBtn.innerHTML = svgIcon('sound', 'frame-sound-ico');
         }
@@ -1975,56 +2250,41 @@
       `</li>`;
   }
 
-  function likersPanelHtml(post) {
+  // Page only. A private count belongs to its author and always has; what moved
+  // in 1.3 is only WHERE they read it — the heart in the feed walks them here
+  // instead of unfolding a list under a card.
+  function likersPanelHtml(post, full) {
+    if (!full) return '';
     if (post.author !== Store.session()) return '';    // only the author sees who liked
     const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
-    const open = openLikers.has(post.id);
-    return `<div class="likers-panel${open ? ' open' : ''}">` +
+    /* THE LABEL IS NOT DECORATION HERE, and its absence was a real bug for a
+       day. Under a disclosure the BUTTON was the label: you tapped a heart with
+       a count on it, so the names that unfolded could only be the people who
+       liked it. On a page nothing has been tapped, and the list arrives as a
+       bare name sitting between the action row and the composer — a reader
+       cannot tell a liker from an attendee from a comment with no text. Caught
+       by looking at it; every functional check passed. Sentence case at
+       --kicker, the app's one label voice. */
+    return `<div class="likers-panel likers-panel--full post-pane${paneOpen('likers')}" data-pane="likers">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
             (list.length
-              ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
+              ? `<p class="panel-label">Liked by</p>` +
+                `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
               : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
           `</div>` +
         `</div>` +
       `</div>`;
   }
 
-  // A card's panels (who's going, who liked, and the comment thread) are
-  // mutually exclusive — opening one collapses the others, so the card never
-  // grows two threads at once. Each just clears the others' open-state +
-  // reverts its toggle button.
-  function collapseLikers(el, id) {
-    openLikers.delete(id);
-    el.querySelector('.card-like--owner')?.setAttribute('aria-expanded', 'false');
-    el.querySelector('.likers-panel')?.classList.remove('open');
-  }
-  function collapseComments(el, id) {
-    openComments.delete(id);
-    el.querySelector('.card-comment')?.setAttribute('aria-expanded', 'false');
-    el.querySelector('.comments-panel')?.classList.remove('open');
-  }
-  function collapseGoing(el, id) {
-    openGoing.delete(id);
-    el.querySelector('.card-attendees')?.setAttribute('aria-expanded', 'false');
-    el.querySelector('.going-panel')?.classList.remove('open');
-  }
+  /* The three-panel mutual exclusion is GONE — `collapsePanel`, its three
+     wrappers, and `wireCardCollapse`'s double-tap-to-fold. A feed card has ONE
+     disclosure left (the comment box), so there is no second panel for it to
+     close and nothing for a card-wide gesture to fold. Who-liked and who's-going
+     are drawn open on the post's own page, where being open is the point.
 
-  // Double-tap the card (same whole-card hitbox as an Updates spotlight) to fold
-  // away an open dropdown — the comment thread, who liked, or who's going. Skips
-  // taps on links/buttons/fields so their own gestures still fire. Pairs with the
-  // note collapse in wireReadMore, which listens on the same card element.
-  function wireCardCollapse(el, post) {
-    onDoubleTap(el, (e) => {
-      if (e.target.closest('a, button, input, textarea')) return;
-      const open = el.querySelector('.comments-panel.open, .likers-panel.open, .going-panel.open');
-      if (!open) return;
-      collapseComments(el, post.id);
-      collapseLikers(el, post.id);
-      collapseGoing(el, post.id);
-      scrollCardIntoView(el);
-    });
-  }
+     Worth keeping the reason the exclusion existed: a card must never grow two
+     threads at once. That constraint is now structural rather than enforced. */
 
   // Build a one-event .ics and hand it to the browser as a download — the OS
   // routes it to the default calendar app, so this works the same on iOS,
@@ -2084,8 +2344,13 @@
         const choice = Number(btn.dataset.choice);
         if (Store.myPollVote(post.id) === choice) return;   // re-tapping your pick does nothing
         buttons.forEach(b => b.disabled = true);
-        const res = await Store.votePoll(post.id, choice);
-        if (!res.ok) { buttons.forEach(b => b.disabled = false); return; }
+        // Unconditional re-enable, and `.catch` so a rejected write lands on the
+        // same line as a refused one. The options used to come back only when the
+        // store said no — a dropped connection threw straight past that and left
+        // every choice on the poll dead for the life of the card.
+        const res = await Store.votePoll(post.id, choice).catch(() => null);
+        buttons.forEach(b => b.disabled = false);
+        if (!res || !res.ok) return;
         hapticTap('LIGHT');
         const wrap = document.createElement('div');
         wrap.innerHTML = pollWidgetHtml(post, choice);
@@ -2102,26 +2367,20 @@
 
   function wireGoing(el, post, opts) {
     const btn = el.querySelector('.card-attendees');
-    const panel = el.querySelector('.going-panel');
-    if (!btn || !panel) return;
-
-    // The who's-going panel — pure CSS reveal, same grid-rows ease as the
-    // comment thread.
-    const setPanel = (open) => {
-      if (open) openGoing.add(post.id); else openGoing.delete(post.id);
-      if (open) { collapseComments(el, post.id); collapseLikers(el, post.id); }
-      btn.setAttribute('aria-expanded', String(open));
-      panel.classList.toggle('open', open);
-    };
+    if (!btn) return;
+    // On the post's own page the list is already drawn under this button, so the
+    // second tap has nowhere left to go — the way back out is `.going-out` in
+    // that list, which is where it has always been.
+    const full = !!(opts && opts.full);
 
     // Joining changes the count, the glyph, the who's-going list AND whether the
     // way back out exists, so the card is rebuilt in place — no rise flash, same
     // pattern as adding a comment.
     const flip = async () => {
       btn.disabled = true;
-      const res = await Store.toggleGoing(post.id);
-      btn.disabled = false;
-      if (!res.ok) return;
+      const res = await Store.toggleGoing(post.id).catch(() => null);
+      btn.disabled = false;                  // on every path, a throw included
+      if (!res || !res.ok) return;
       // Joining is the one gesture here that commits you to a place and a time,
       // so it's the one that gets the heavier knock. Bowing out is just a screen
       // changing its mind.
@@ -2129,7 +2388,6 @@
       // Joining lands you on the list: you see who you just joined, and the way
       // back out is right there under them. Bowing out leaves it open too — you
       // were already reading it.
-      if (res.going) openGoing.add(post.id);
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';
       // Roll the count in its new direction — up when you join, down when you
@@ -2145,12 +2403,13 @@
     // purely the disclosure.
     const rsvpable = btn.hasAttribute('aria-pressed');
     btn.addEventListener('click', () => {
+      // RAISING YOUR HAND STAYS IN THE FEED. That is the one act on this card
+      // that lands in the real world, it is one tap today, and making it cost a
+      // navigation would be the redesign charging for the thing it was supposed
+      // to make easier. Everything else the button used to do — see who, change
+      // your mind — is reading, and reading is the page.
       if (rsvpable && btn.getAttribute('aria-pressed') === 'false') { flip(); return; }
-      setPanel(!openGoing.has(post.id));
-      // The disclosure half of this button now speaks too, matching the comment
-      // thread and the who-liked list. flip() has its own (heavier) buzz and
-      // returns before this — a tap is one event, so it gets one haptic.
-      hapticTap('LIGHT');
+      if (full) setPostPane('going', el); else go(postRoute(post, 'going'));
     });
 
     el.querySelector('.going-out')?.addEventListener('click', flip);
@@ -2194,8 +2453,32 @@
     }
   }
 
-  // LIGHT for something that stays on the screen, MEDIUM for something that
-  // lands in the real world — the same split as canSocial vs canJoin.
+  /* WHO GETS A BUZZ: only an act that changed the SHARED WORLD — a like, a vote,
+     an RSVP, a comment, a repost, a published post. Never an act that only
+     changed what you are LOOKING at.
+
+     That replaced a broader line ("anything that lands on screen"), which had put
+     a haptic on every disclosure and on the filter dial, and the reason it moved
+     is iOS rather than taste. On the web `haptic()` is `navigator.vibrate` or
+     nothing at all. In the App Store build every call is a trip through the
+     Capacitor bridge, and the bridge has NO short-circuit for a fire-and-forget
+     call: `HapticsPlugin.impact` resolves unconditionally, which reaches
+     `CapacitorBridge.toJs`, which schedules `webView.evaluateJavaScript(...)` on
+     the MAIN THREAD to deliver a result that `callbackId: '-1'` means nobody is
+     listening for. So every buzz enters the JS context on the same thread running
+     the scroll and the CSS animation. A panel opening is exactly a stretch of
+     moving frames, and it was paying that toll to say "yes, the thing you tapped
+     opened" — which the thing opening had already said.
+
+     A reinstatement was tried on 2026-08-27, on the argument that the tween's
+     first beat gives the finger nothing and the tap therefore reads as dropped,
+     and it came straight back out: it was put in while chasing a FREEZE on that
+     exact interaction, which made three new bridge calls on the suspect gesture
+     the worst possible thing to be holding. If it is ever re-argued, re-argue it
+     against a fixed panel, not a broken one.
+
+     LIGHT for something that stays on the screen, MEDIUM for something that lands
+     in the real world — the same split as canSocial vs canJoin. */
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
 
@@ -2276,48 +2559,49 @@
   function wireLikes(el, post, opts) {
     const btn = el.querySelector('.card-like');
     if (!btn) return;
-
-    // Author: the heart is a toggle for the "who liked" panel — pure CSS reveal,
-    // no rebuild, so it eases like the comment thread. (opts is unused here but
-    // kept for symmetry with wireComments.)
+    // The AUTHOR'S heart is never a like — you cannot like your own post — so it
+    // branches before the like path rather than after it. On the post page it
+    // switches the section under the card to who liked; in a feed it is a plain
+    // anchor to that page and needs no listener at all.
     if (post.author === Store.session()) {
-      const panel = el.querySelector('.likers-panel');
-      btn.addEventListener('click', () => {
-        const open = openLikers.has(post.id);
-        if (open) openLikers.delete(post.id); else openLikers.add(post.id);
-        if (!open) { collapseComments(el, post.id); collapseGoing(el, post.id); }   // one panel at a time
-        btn.setAttribute('aria-expanded', String(!open));
-        panel?.classList.toggle('open', !open);
-        // Fires on the confirmed change like every other haptic in the app — the
-        // difference is that this change is synchronous, so there's no round trip
-        // to wait for: the panel state has already flipped by the time we buzz.
-        // LIGHT, because opening a list of names is the definition of something
-        // that stays on the screen. Both directions: opening and closing are each
-        // a real repaint, unlike the filter dial's no-op re-pick.
-        hapticTap('LIGHT');
-      });
+      if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => setPostPane('likers', el));
       return;
     }
 
     // Friend: toggle my own like. The count belongs to the author, not to me, so
     // there's nothing on my card to recompute — just flip the heart in place (no
     // card rebuild, no rise-flash).
+    const paint = (liked) => {
+      btn.classList.toggle('liked', liked);
+      btn.setAttribute('aria-pressed', String(liked));
+      btn.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
+      btn.setAttribute('title', liked ? 'Liked' : 'Like');
+    };
+
+    /* THE HEART MOVES FIRST AND ASKS AFTERWARDS, and it is the only control on
+       this card that can. A like is private, so the count belongs to the post's
+       author and there is nothing of MINE to recompute — the entire visible
+       change is one class on one button, which needs no cache and no rebuild.
+       (The RSVP and the poll below both redraw from the cache, so neither can do
+       this without the store moving first. Don't copy the pattern to them.)
+
+       So the snap, the ink and the sparkles start on the frame after the finger
+       lifts rather than after Supabase answers. It is also no longer `disabled`
+       while it waits: a heart that stops answering because the network is
+       thinking is the whole complaint. `busy` only drops a second tap that lands
+       mid-flight, so two fast taps can't race two writes into the wrong order.
+
+       The buzz rides the optimistic flip rather than the server's reply. That is
+       a deliberate softening of the rule at hapticTap: the write is one row and
+       all but certain, and a receipt that arrives 300ms after the heart already
+       moved is worse than no receipt. A refusal silently puts the heart back. */
+    let busy = false;
     btn.addEventListener('click', async () => {
-      // The re-enable is in a finally for the reason the push toggle's is: this
-      // is the only control for the state it names, and a throw between the two
-      // lines leaves it disabled for the life of the card with no toast either —
-      // a heart that stops answering, forever, from one unlucky tap.
-      btn.disabled = true;
-      let res = null;
-      try { res = await Store.toggleLike(post.id); }
-      catch { /* falls through to the !ok return: the heart just doesn't move */ }
-      finally { btn.disabled = false; }
-      if (!res?.ok) return;
-      hapticTap('LIGHT');   // both directions: the tap is confirming an async write
-      btn.classList.toggle('liked', res.liked);
-      btn.setAttribute('aria-pressed', String(res.liked));
-      btn.setAttribute('aria-label', res.liked ? 'Unlike' : 'Like');
-      btn.setAttribute('title', res.liked ? 'Liked' : 'Like');
+      if (busy) return;
+      busy = true;
+      const liked = !btn.classList.contains('liked');
+      paint(liked);
+      hapticTap('LIGHT');
       // One-shot ink stamp on LIKE: the heart snaps, the type colour floods up
       // through it, and a little cluster of y2k sparkle stars twinkles out — all
       // transform/clip/mask, so it stays smooth on iOS. Re-add after a reflow so
@@ -2328,9 +2612,14 @@
       clearTimeout(btn._pop);
       btn.classList.remove('is-liking', 'is-unliking');
       void btn.offsetWidth;
-      btn.classList.add(res.liked ? 'is-liking' : 'is-unliking');
-      if (res.liked) burstSparkles(btn);
+      btn.classList.add(liked ? 'is-liking' : 'is-unliking');
+      if (liked) burstSparkles(btn);
       btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
+      // The answer, whenever it comes. `.catch` rather than try/finally because a
+      // rejected write and a refused one mean the same thing here: put it back.
+      const res = await Store.toggleLike(post.id).catch(() => null);
+      busy = false;
+      if (!res || !res.ok) paint(!liked);
     });
   }
 
@@ -2357,34 +2646,81 @@
       `</li>`;
   }
 
-  // The collapsible thread itself. Open state lives in `openComments` so it
-  // survives a card rebuild; the .open class (not [hidden]) drives the animation.
-  function commentsPanelHtml(post) {
+  /* WHICH SECTION THE POST PAGE IS SHOWING: 'comments' | 'likers' | 'going'.
+
+     The disclosure came back, and it came back where it belongs. On a card these
+     three were mutually exclusive because a card must never grow two threads at
+     once — a constraint about SPACE. On the page they are mutually exclusive
+     because they are three answers to different questions about one post, and
+     showing all three at once makes the reader do the sorting. Comments is the
+     resting state and the floor: tapping the live one comes back here rather
+     than leaving the page with nothing under the card.
+
+     Module state, not per-render, and that is load-bearing: posting or deleting
+     a comment rebuilds the card in place (`apply`), and the pane has to survive
+     that. `renderPost` resets it, so arriving at any post always opens on the
+     conversation. */
+  let postPane = 'comments';
+  const paneOpen = (name) => (postPane === name ? ' open' : '');
+
+  function setPostPane(next, el) {
+    postPane = (postPane === next) ? 'comments' : next;
+    el.querySelectorAll('.post-pane').forEach(p =>
+      p.classList.toggle('open', p.dataset.pane === postPane));
+    // The button that opened a pane wears the live ink, so the row says which of
+    // the three you are looking at. Set here rather than left to the rebuild,
+    // because switching panes deliberately does NOT rebuild the card — that is
+    // the whole reason this is a class toggle and not a re-render.
+    el.querySelector('.card-comment')?.setAttribute('aria-expanded', String(postPane === 'comments'));
+    el.querySelector('.card-like--owner')?.setAttribute('aria-expanded', String(postPane === 'likers'));
+    el.querySelector('.card-attendees')?.setAttribute('aria-expanded', String(postPane === 'going'));
+  }
+
+  /* The thread, on the post's own page and nowhere else.
+
+     ORDER: the composer sits at the TOP, above the comments. That is the reverse
+     of a chat log and deliberate — this is a page you navigated to in order to
+     say something, so the thing you came to do should not be at the bottom of
+     however many replies are already there. It also means the box is in the same
+     place whether a post has two comments or two hundred, and the empty state
+     sits under it rather than where the box would otherwise have been.
+
+     `full` is the only mode. A feed card carries no comments panel at all now —
+     the glyph on the card is a link here (see cardActionsHtml), so there is no
+     collapsed state, no toggle, no `openComments`, and nothing about a thread's
+     length reaches a card in the feed. */
+  function commentsPanelHtml(post, full) {
+    if (!full) return '';
     if (!canSocial(post)) return '';   // friends-only: no thread on a non-friend's post
     // Blocked authors' comments never render, on any post (closes the block gap
     // for threads on mutual friends' posts). The count above filters to match.
     const list = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author));
-    const open = openComments.has(post.id);
-    // .comments-inner is the collapsing grid child — it holds NO padding/border
-    // (that would keep it from reaching 0 height); all spacing + the left rule
-    // live on .comments-content inside it.
-    return `<div class="comments-panel${open ? ' open' : ''}">` +
+    return `<div class="comments-panel comments-panel--full post-pane${paneOpen('comments')}" data-pane="comments">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
-            (list.length ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>` : '') +
             `<form class="comment-form">` +
               `<textarea name="text" rows="1" maxlength="300" placeholder="Add a comment…"></textarea>` +
               `<button type="submit" disabled>Post</button>` +
             `</form>` +
+            (list.length
+              ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>`
+              : `<p class="comments-empty">No comments yet.</p>`) +
           `</div>` +
         `</div>` +
       `</div>`;
   }
 
   function wireComments(el, post, opts) {
-    const toggle = el.querySelector('.card-comment');
     const panel = el.querySelector('.comments-panel');
-    if (!toggle || !panel) return;
+    if (!panel) return;
+    // This panel only ever exists on the post's page — a feed card has none, so
+    // the guard above is the whole gate. The glyph beside it comes back to the
+    // thread from whichever section is showing; tapping it while the thread is
+    // already up is deliberately a no-op, because comments is the floor and
+    // there is nothing under it to fall to.
+    el.querySelector('.card-comment')?.addEventListener('click', () => {
+      if (postPane !== 'comments') setPostPane('comments', el);
+    });
     const input = panel.querySelector('.comment-form textarea');
     const submitBtn = panel.querySelector('.comment-form button[type="submit"]');
     wireMentions(input);
@@ -2423,24 +2759,12 @@
       }
     });
 
-    // Expand/collapse is pure CSS (grid-rows + opacity) — no rebuild, so it
-    // eases like the rest of the site.
-    toggle.addEventListener('click', () => {
-      const open = openComments.has(post.id);
-      if (open) openComments.delete(post.id); else openComments.add(post.id);
-      if (!open) { collapseLikers(el, post.id); collapseGoing(el, post.id); }   // one panel at a time
-      toggle.setAttribute('aria-expanded', String(!open));
-      panel.classList.toggle('open', !open);
-      hapticTap('LIGHT');   // see the who-liked toggle: synchronous change, stays on screen
-    });
-
     // Adding/removing a comment changes the list + the count, so the card is
     // rebuilt. We swap just this card in place so the surrounding feed/column
     // never re-animates — rather than re-rendering the whole column (which would
     // replay every card's rise), we rebuild this one card. Its ••• menu keeps
     // working through the delegated click listener, so there's nothing to re-wire.
     const apply = (dir) => {
-      openComments.add(post.id);
       const fresh = makeCard(post, opts);
       fresh.style.animation = 'none';               // no rise flash on an in-place swap
       // Roll the comment count in its new direction (up on add, down on delete).
@@ -2459,8 +2783,8 @@
       e.preventDefault();
       if (submitBtn.disabled) return;               // empty, or a submit already in flight
       submitBtn.disabled = true;                    // debounce: no double-post on a fast double-tap
-      const res = await Store.addComment(post.id, e.target.elements.text.value);
-      if (res.ok) {
+      const res = await Store.addComment(post.id, e.target.elements.text.value).catch(() => null);
+      if (res && res.ok) {
         // The like heart has buzzed on its confirmed write since the haptics
         // landed; its neighbour on the same row never did, which left the two
         // halves of the social row speaking different languages. LIGHT: a posted
@@ -2497,22 +2821,24 @@
   // Which posts' comment panels are expanded. A card rebuilds on every add/
   // delete (same full-refresh pattern as edit/delete elsewhere), so this is
   // what keeps a panel open across that refresh.
-  const openComments = new Set();
+  // openComments is retired with the last disclosure. A thread's open state was
+  // only ever a thing because the thread lived on a card that got rebuilt under
+  // it; on a page it is simply what the page is.
 
-  // Which authors' "who liked" panels are expanded — the like-side twin of
-  // openComments, surviving the same in-place card rebuilds.
-  const openLikers = new Set();
+  // openLikers / openReadMore / openGoing are retired: who-liked and who's-going
+  // are the post page's furniture, and Read more is a link to it. openComments
+  // above is the last of the four, because writing a comment is still something
+  // you do without leaving the feed.
 
-  // Which posts have their long-note "Read more" tail expanded — same role as
-  // openComments, keeping a panel open across an in-place card rebuild.
-  const openReadMore = new Set();
+  /* The profile column parks on this post when it renders. ONE caller left, and
+     it is the edit flow: `startPostEdit` from a feed card hands the id across to
+     the profile, which owns the editor, and the column has to open at the post
+     being edited rather than at the top.
 
-  // Which activities' "who's going" panels are expanded — the headcount's twin
-  // of openLikers, surviving the same in-place card rebuilds.
-  const openGoing = new Set();
-
-  // Set when an Updates row is tapped: the profile render scrolls this post
-  // into view and gives it a brief wash, so the update visibly lands somewhere.
+     It used to have three more — a copied ?p= link, an Updates row and a
+     frame-wall tile — and all three now go to the post's own page instead, which
+     is a destination rather than a position. What is left is the one case that
+     genuinely IS a position in a column, because the editor lives there. */
   let spotlightPost = null;
 
   // The editable fields for a post, prefilled from its current values. Mirrors
@@ -2523,7 +2849,7 @@
         `<label for="e-tags">Tags</label>` +
         `<input id="e-tags" type="text" autocapitalize="none" ` +
           // shownTags, not post.tags: a daily answer's join tag is invisible here
-          // too, and saveEdit puts it back (otherwise editing a typo in the
+          // too, and submitEdit puts it back (otherwise editing a typo in the
           // caption would quietly drop the post off the daily page).
           `value="${esc(shownTags(post).join(', '))}" placeholder="garden, clay">` +
         `<p class="field-hint">Optional · separate with commas.</p>` +
@@ -2745,7 +3071,7 @@
   }
 
   /* ── Masthead ──────────────────────────────────────────────────────────────
-     The editorial nameplate that crowns each page: a small uppercase kicker
+     The editorial nameplate that crowns each page: a small sentence-case kicker
      (the issue date, or a section eyebrow) over a big Instrument Serif title,
      above a full-width hairline. Callers pass already-safe strings. */
   // `actions` (optional) is markup that rides the title's own line, at the right —
@@ -2764,52 +3090,189 @@
       `</header>`;
   }
 
-  /* ── Segmented tab control (.seg-tabs) — the reusable iOS view switcher shared
-     by Friends (My circle / Find friends) and Updates (All / Mentions). Two
-     equal segments over a sliding thumb; markup here, behaviour in wireSegTabs.
-     `id` namespaces the tab + panel ids, `tabs` = [{key,label}], `sel` = the
-     selected key, `panelId` is the tabpanel it drives. `glow: true` lights the
-     brand gradient under the thumb at index 0 (Friends' My circle identity);
-     neutral switches leave it off. The thumb slides via data-sel (the selected
-     index), so the control stays generic regardless of the tab keys. */
-  function segTabsEl(id, tabs, sel, { glow = false, label = 'Show', panelId = '' } = {}) {
-    const selIndex = Math.max(0, tabs.findIndex(t => t.key === sel));
-    return `<div class="seg-tabs" role="tablist" aria-label="${label}" id="${id}-tabs" data-sel="${selIndex}">` +
-        `<span class="seg-tabs-thumb" aria-hidden="true">${glow ? '<span class="seg-tabs-glow"></span>' : ''}</span>` +
-        tabs.map(t => {
-          const on = t.key === sel;
-          return `<button class="seg-tab" role="tab" id="${id}-tab-${t.key}" type="button" data-tab="${t.key}" ` +
-            `aria-controls="${panelId}" aria-selected="${on}" tabindex="${on ? 0 : -1}">${t.label}</button>`;
-        }).join('') +
-      `</div>`;
+  /* ── Toolbar (1.3) ─────────────────────────────────────────────────────────
+     .topbar is the page's own nav bar: LEADING (usually nothing — the tab bar
+     already answers "where am I"; a back chevron on a pushed page), a CENTERED
+     small title, and TRAILING actions (glass buttons) — the standard HIG
+     collapsing-title bar. The page's own name still lives where it always did
+     too: large serif, in-flow, scrolling away with content (mastheadEl, or a
+     profile's own name). The two never show at once — the small one stays
+     invisible until the big one has scrolled out from behind the bar, then
+     crossfades in (syncToolbarTitle) — so the bar only ever wears a title once
+     there's no other one on screen to duplicate.
+
+     It used to hold a wordmark, and hiding that was the first thing
+     mountToolbar did. The wordmark is gone as of the end of 1.3 (see
+     index.html): every signed-in page mounts a bar of its own, and the one
+     place a wordmark still earns its space is the signed-out front door, which
+     draws its own header (.auth-topbar) because body.gate doesn't draw this bar
+     at all.
+
+     renderPage calls resetToolbar() before every renderFn, which is what stops
+     a page inheriting the last one's controls for the length of a render. It
+     also drops body.toolbar-live, and that class is no longer the migration
+     flag it started as: it now means "this bar is a page's own", which is false
+     in exactly two places — under the gate, and in the frames between boot and
+     the first route landing. Both want a bar that isn't there yet rather than
+     an empty one with a material on it, which is what the class buys (see
+     body.toolbar-live in app.css). */
+  function resetToolbar() {
+    document.body.classList.remove('toolbar-live');
+    const page = document.getElementById('toolbar-page');
+    const titleEl = document.getElementById('toolbar-title');
+    const actions = document.getElementById('toolbar-actions');
+    if (page) { page.hidden = true; page.innerHTML = ''; }
+    if (titleEl) titleEl.textContent = '';
+    if (actions) actions.innerHTML = '';
+    setToolbarSides(0);
+    document.querySelector('.topbar')?.classList.remove('topbar--title-visible', 'topbar--searching');
   }
-  // Wire a seg-tabs control: click and Arrow Left/Right select (WAI-ARIA tab
-  // pattern, wrapping, focus follows). This drives the control's own visuals —
-  // the thumb slide (data-sel), aria-selected, and roving tabindex — then calls
-  // onSelect(key) so the caller swaps its panel. getSel reads the live selection.
-  function wireSegTabs(tablist, tabs, getSel, onSelect) {
-    const select = (key) => {
-      if (getSel() === key) return;
-      tablist.dataset.sel = Math.max(0, tabs.findIndex(t => t.key === key));
-      tablist.querySelectorAll('.seg-tab').forEach(b => {
-        const on = b.dataset.tab === key;
-        b.setAttribute('aria-selected', String(on));
-        b.tabIndex = on ? 0 : -1;
-      });
-      onSelect(key);
-    };
-    tablist.querySelectorAll('.seg-tab').forEach(btn =>
-      btn.addEventListener('click', () => select(btn.dataset.tab)));
-    tablist.addEventListener('keydown', (e) => {
-      const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-      if (!dir) return;
-      e.preventDefault();
-      const i = tabs.findIndex(t => t.key === getSel());
-      const next = tabs[(i + dir + tabs.length) % tabs.length];
-      select(next.key);
-      tablist.querySelector(`.seg-tab[data-tab="${next.key}"]`)?.focus();
-    });
+  // `leading`/`actions` are markup (already-safe, same contract as mastheadEl's
+  // own `actions` param) — `title` is plain text (textContent, not innerHTML),
+  // since it's read back by AT-adjacent tooling less carefully than markup and
+  // a page name is never anything but text anyway.
+  function mountToolbar({ leading = '', title = '', actions = '' } = {}) {
+    document.body.classList.add('toolbar-live');
+    const page = document.getElementById('toolbar-page');
+    const titleEl = document.getElementById('toolbar-title');
+    const actionsEl = document.getElementById('toolbar-actions');
+    page.hidden = !leading;
+    page.innerHTML = leading;
+    setToolbarTitle(title);
+    actionsEl.innerHTML = actions;
+    // How far the centered title has to stop short on EACH side, expressed as a
+    // count of controls rather than a width, so the arithmetic stays in CSS
+    // beside the tokens it's made of (see .toolbar-title's max-width). The
+    // busier side sets it, because the title is centered on the bar and has to
+    // clear both sides by the same amount to still be centered.
+    //
+    // Children, not buttons: Discover's search group is one child holding a
+    // button and a glass shell, and the shell is absolutely placed over the bar,
+    // so the group occupies exactly one control's worth of row.
+    //
+    // A control that carries WORDS is wider than a disc and says so with
+    // data-slots — the daily's "Add yours" pill, the one of these that isn't a
+    // glyph. Approximate on purpose: an exact reserve would have to measure the
+    // pill, and its width isn't final until the webfont lands, so a measurement
+    // taken at mount is a number that changes underneath the rule that read it.
+    setToolbarSides(Math.max(page.hidden ? 0 : slotsIn(page), slotsIn(actionsEl)));
+    // NOT synced here: view.innerHTML (and the in-flow masthead it carries)
+    // hasn't been set yet at this point in renderFn — syncTopbar() does the
+    // first sync once the page it's measuring against actually exists.
   }
+  function slotsIn(el) {
+    return [...el.children].reduce((n, c) => n + (Number(c.dataset.slots) || 1), 0);
+  }
+  function setToolbarSides(n) {
+    document.querySelector('.topbar')?.style.setProperty('--toolbar-side', n);
+  }
+  // Separate from mountToolbar because one page's title is not fixed for the
+  // life of its render: the composer's nameplate names the type it has inferred
+  // from what you've attached, and changes as you attach it. The bar's small
+  // copy is a stand-in for that nameplate, so it has to say the same word —
+  // otherwise scrolling a long form far enough to collapse the title reveals a
+  // bar still announcing whatever you opened the composer as.
+  function setToolbarTitle(text) {
+    const el = document.getElementById('toolbar-title');
+    if (el) el.textContent = text;
+  }
+  // The page's own large in-flow heading, whatever that page calls it: the
+  // editorial nameplate on the four feed pages, the person's name on a profile
+  // (which has no masthead at all — its nameplate is a photograph). The bar's
+  // small title is a stand-in for THIS element and hides behind it, so a page
+  // whose <h1> isn't named here reads as having no big title and shows the
+  // small one at once — which is right for a pushed page with none, and wrong
+  // and invisible for one that has a big title under another class. Any new
+  // page-level <h1> has to join this list.
+  const BIG_TITLE_SEL = '.masthead-title, .account-name';
+  // The HIG "collapsing large title": .toolbar-title stays invisible until the
+  // page's own big one has scrolled bodily out from under the bar, then
+  // crossfades in — so scrolling never shows both at once.
+  // `instant` (mount, a navigation, the delayed re-check below) skips the
+  // transition, because the crossfade is for a scroll gesture, not a page
+  // arriving already scrolled (a remembered position, a spotlighted card) —
+  // see .topbar--title-instant in app.css.
+  function syncToolbarTitle(instant) {
+    if (!document.body.classList.contains('toolbar-live')) return;
+    const bar = document.querySelector('.topbar');
+    const titleEl = document.getElementById('toolbar-title');
+    if (!bar || !titleEl || !titleEl.textContent) return;
+    const big = document.querySelector(BIG_TITLE_SEL);
+    const past = !big || big.getBoundingClientRect().bottom <= bar.getBoundingClientRect().height;
+    if (instant) {
+      bar.classList.add('topbar--title-instant');
+      bar.classList.toggle('topbar--title-visible', past);
+      void bar.offsetHeight;   // flush — gives the browser nothing to transition from
+      bar.classList.remove('topbar--title-instant');
+    } else {
+      bar.classList.toggle('topbar--title-visible', past);
+    }
+  }
+  // The bar's MATERIAL, on the same terms as its title: a fill and a blur are
+  // for separating the bar from something, and at the top of a page there is
+  // nothing under it yet to separate it from — so the bar is bare there, the
+  // page runs clean to the top edge, and its controls sit on it as the glass
+  // objects they already are. The material fades in as content starts sliding
+  // underneath (see .topbar::before in app.css).
+  //
+  // Not gated on toolbar-live, unlike the title: the class is dropped for the
+  // frames between boot and the first route landing, and a bar that hasn't been
+  // filled yet still has the top of a page behind it. CSS is where that case is
+  // actually answered (.topbar::before is `content: none` until a page owns the
+  // bar), so this only has to keep the class in step with the scroll.
+  //
+  // 2px of deadband rather than 0 because iOS rubber-bands past the top and
+  // hands back fractional offsets on the way home. A material that flickers at
+  // rest is worse than one that never leaves. `instant` is the navigation case,
+  // same as the title's: a route change must not play the material out.
+  function syncToolbarEdge(instant) {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    const bare = window.scrollY <= 2;
+    if (bare === bar.classList.contains('topbar--bare')) return;
+    if (instant) {
+      bar.classList.add('topbar--edge-instant');
+      bar.classList.toggle('topbar--bare', bare);
+      void bar.offsetHeight;   // flush — gives the browser nothing to transition from
+      bar.classList.remove('topbar--edge-instant');
+    } else {
+      bar.classList.toggle('topbar--bare', bare);
+    }
+  }
+  // The toolbar's one leading control: a bare chevron, replacing every ad hoc
+  // "← Back" text link with a single icon-only affordance at the standard
+  // 44pt glass-button treatment (see .toolbar-back in app.css).
+  //
+  // Pass NO href to get a <button> instead, wired by the caller. That's for a
+  // page whose exit has to POP rather than push — the profile editor, where a
+  // Save that navigated forward would leave the editor sitting one edge-swipe
+  // behind the profile you just saved, ready to reopen itself. Same disc, same
+  // glyph, same label: the difference is in the history, not on the screen,
+  // which is exactly why it shouldn't have been a differently-styled control.
+  function toolbarBackEl(href, label, id = '') {
+    const attrs = `class="toolbar-btn toolbar-back"${id ? ` id="${id}"` : ''} ` +
+      `aria-label="Back to ${esc(label)}"`;
+    const ico = svgIcon('chevron', 'toolbar-back-ico');
+    return href
+      ? `<a ${attrs} href="${href}">${ico}</a>`
+      : `<button type="button" ${attrs}>${ico}</button>`;
+  }
+
+  /* ── Segmented tab control — REMOVED, and this is the tombstone. .seg-tabs was
+     the iOS view switcher: two equal segments over a thumb that slid between
+     them. It lost its callers one at a time and for the same reason each time —
+     Friends' "My circle / Everyone" went with the Friends page, Updates' All /
+     Mentions became a toolbar filter in 1.3 so that all four root pages narrow
+     through one control, and the composer's Post / Activity became the calendar
+     button in the attach bar (see renderPublish). The last of those is the one
+     that settles it: it was kept through the other two on the argument that its
+     segments weren't narrowing anything, they picked what you were about to
+     make — and that turned out to be the argument for a switcher nobody needed,
+     since what you're making is legible from what you've attached. So there is
+     no surface left where a reader chooses between two whole pages of the same
+     thing, and segTabsEl + wireSegTabs went with the last caller rather than
+     sitting in the bundle waiting for a fourth. The CSS went too — see the
+     matching tombstone in app.css. */
 
   /* ── Home view ───────────────────────────────────────────────────────────── */
   const FILTERS = [
@@ -2822,25 +3285,51 @@
   ];
   // Discover's dial carries one row the home feed has no use for: People, which
   // drops the posts and faces every account with its portrait, turning the grid
-  // into a directory. It sits directly under All because those two are the whole
-  // room seen two ways (everything, or everyone) and the five type rows narrow
-  // beneath both. It takes no pastel: the quintet is reserved for post types, and
-  // People isn't one.
-  const DISCOVER_FILTERS = [FILTERS[0], { key: 'people', label: 'People' }, ...FILTERS.slice(1)];
+  // into a directory. It leads the list, directly under the View switch, because
+  // those are the two rows that change what the page is MADE OF rather than how
+  // much of it you're shown — one swaps posts for faces, the other swaps the wall
+  // for a column. Leaving them together keeps All → the five types an unbroken
+  // ladder from widest to narrowest, which is what a radio list reads as; People
+  // sat inside that ladder before and stopped it halfway to say something about a
+  // different axis. It takes no pastel: the quintet is reserved for post types,
+  // and People isn't one.
+  const DISCOVER_FILTERS = [{ key: 'people', label: 'People', ico: 'friends' }, ...FILTERS];
+
+  /* Discover's FORMAT, which is a separate axis from its filter and therefore a
+     separate control. The dial answers "what am I looking at" and this answers
+     "how is it drawn": the masonry wall it has always been, or Circle's reading
+     column — the same cards, the same width, the same rhythm.
+
+     It rides in the dial without joining it. The two axes are independent — a
+     reader wanting only Frames, as a list, is asking two questions and a radio
+     list can only answer one — so this is an ACTION row rather than a filter
+     row: role="menuitem", no checkmark, tap and the dial closes behind it. Two
+     controls' worth of state in one panel, and the row type is what keeps them
+     from being confused for each other (see openFilterDial). It was briefly a
+     second toolbar button, which is the honest reading of "separate axis" and
+     the wrong reading of a bar that had just been cleared of everything generic.
+
+     It doesn't apply under People. That row is a directory of portraits rather
+     than a grid of posts, so there is no column form of it to switch to, and
+     the row is absent rather than sitting there inert. */
+  const DISCOVER_VIEWS = { gallery: 'grid', list: 'list' };
   let activeFilter = 'all';
   let activeTag = null;
 
-  // The masthead's filter control: the sliders glyph plus a hue dot that lights
-  // (in the active type's colour) only when a filter is on, so a folded menu
-  // still tells you the feed is narrowed. Tapping it fans the filter dial open.
+  // The toolbar's filter control: the sliders glyph plus a hue dot that lights
+  // (in the active type's colour) only when a filter is on, so a closed menu
+  // still tells you the feed is narrowed. Tapping it opens the filter dial.
   // `id` namespaces the button so Home and Discover can each carry their own
   // filter (they hold separate state — narrowing one never touches the other).
   // `label` names what's being narrowed, because Discover isn't a feed and its
   // dial can now pick People — "Filter the feed" would be announcing the wrong
   // thing twice over.
+  //
+  // Always .toolbar-btn: every caller mounts it in the bar. One control, one
+  // treatment, one place on the page.
   function filterBtnEl(id, filterVal, label = 'Filter the feed') {
     const on = filterVal !== 'all';
-    return `<button class="masthead-filter" type="button" id="${id}" ` +
+    return `<button class="masthead-filter toolbar-btn" type="button" id="${id}" ` +
         `aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}"` +
         `${on ? ` data-active="${filterVal}"` : ''}>` +
         svgIcon('sliders', 'masthead-filter-ico') +
@@ -2849,8 +3338,10 @@
   }
   // Reflect the current filter onto the masthead button without a full re-render
   // (so picking one doesn't flash the whole page): light/clear the dot + hue.
+  // document-wide, not view-scoped: a toolbar-mounted filter button lives in
+  // #toolbar-actions, outside #view entirely.
   function syncFilterBtn(id, filterVal) {
-    const btn = view.querySelector('#' + id);
+    const btn = document.getElementById(id);
     if (!btn) return;
     const on = filterVal !== 'all';
     if (on) btn.setAttribute('data-active', filterVal);
@@ -2860,13 +3351,14 @@
   }
 
   function renderHome() {
+    mountToolbar({ title: 'My Circle', actions: filterBtnEl('home-filter-btn', activeFilter) });
     view.innerHTML =
       `<section class="view">` +
-        mastheadEl('', 'My Circle', filterBtnEl('home-filter-btn', activeFilter)) +
+        mastheadEl('', 'My Circle') +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
-    view.querySelector('#home-filter-btn')
+    document.getElementById('home-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: activeFilter,
         onPick: (key) => { activeFilter = key; activeTag = null; syncFilterBtn('home-filter-btn', activeFilter); renderFeed(); },
@@ -2875,74 +3367,63 @@
     renderFeed();
   }
 
-  /* ── Filter dial ──────────────────────────────────────────────────────────────
-     The feed's type filter, fanned from the masthead sliders button as a floating
-     glass menu — the same speed-dial idiom as the + FAB (labelled rows, each with
-     its type colour glowing behind the glyph), just dropping DOWN from the top
-     control instead of rising from the nav. Data-driven off FILTERS, so a new post
-     type is one array entry, not a layout change. Glass per the material rule (a
-     menu floats above content); reduced-motion aware; WAI-ARIA menu semantics. */
-  let filterDialOpen = false;
-  function openFilterDial(anchor, opts = {}) {
-    if (filterDialOpen) return;
-    filterDialOpen = true;
+  /* ── Bar menu ─────────────────────────────────────────────────────────────────
+     THE CARD A TOOLBAR GLYPH DROPS, and the one answer for every menu one of them
+     opens. A glass panel of listed rows, pinned under the button that opened it,
+     over a scrim that dims the page and catches the tap-out. Glass per the
+     material rule (a menu floats above content); reduced-motion aware; WAI-ARIA
+     menu semantics.
+
+     It began as the filter dial's card and is general as of 1.3, because the
+     profile's other two menus — the ••• and the friends tie — were still action
+     sheets rising from the bottom of the screen. Same bar, two buttons apart, and
+     the app answered one tap by dropping a card under your finger and the next by
+     throwing a panel up from the far edge. A menu belongs to the control that
+     opened it. What still rises from the bottom is everything with no control to
+     belong to: a confirmation, a list of report reasons, a picker opened from the
+     page rather than the bar, and the post card's own ••• (see the .sheet block
+     in app.css, which carries the full split).
+
+     This half owns the panel and nothing about what a row MEANS: the scrim, the
+     glass, the position, the focus trap and the one way out. Callers build their
+     own rows, because the two kinds that live in here disagree about what a row
+     is — see openFilterDial (radios) and openGlyphMenu (actions). `onRow(btn,
+     close)` runs on a tap and is handed the close it should sequence against. */
+  let barMenuOpen = false;
+  function openBarMenu(anchor, { label, rows, onRow }) {
+    if (barMenuOpen) return;
+    barMenuOpen = true;
     anchor.setAttribute('aria-expanded', 'true');
-    // Caller supplies the current selection (for the checkmark) and what to do on
-    // a pick, so the one dial drives either the home feed or Discover.
-    const current = opts.current || 'all';
-    const onPick = opts.onPick || (() => {});
-    // Which rows to fan. Home takes the five types; Discover adds People (see
-    // DISCOVER_FILTERS), so the dial itself stays a dumb renderer of a list.
-    const filters = opts.filters || FILTERS;
 
     const scrim = document.createElement('div');
-    scrim.className = 'filter-dial-scrim';
-    const rows = filters.map((f, i) => {
-      const on = f.key === current;
-      const glyph = f.key === 'all' ? ICON_ALL
-        : f.key === 'people' ? svgIcon('friends')
-        : (TYPE_ICON[f.key] || '');
-      // --glow = the pastel that blooms behind the glyph; the glyph itself takes
-      // the type's deep -ink via `color` (fill:currentColor). All's pentad paints
-      // its own five hues directly (no currentColor), so it skips the glow wash
-      // entirely — the grey radial bloom read muddy on a white ground, and the
-      // dots already carry plenty of colour on their own. People skips it for the
-      // other reason: it isn't a post type, and spending one of the five hues on
-      // it would blunt what the quintet means. Set inline rather than via
-      // .type-icon--x, whose own sizing rules would fight the 46px disc.
-      const plain = f.key === 'all' || f.key === 'people';
-      const glow = plain ? 'transparent' : `var(--type-${f.key})`;
-      const ink  = plain ? 'var(--muted)' : `var(--type-${f.key}-ink)`;
-      return `<button class="filter-dial-item${on ? ' is-on' : ''}" type="button" ` +
-          `role="menuitemradio" aria-checked="${on}" data-filter="${f.key}" style="--i:${i}">` +
-          `<span class="filter-dial-label">${f.label}</span>` +
-          `<span class="filter-dial-ico" style="--glow:${glow}; color:${ink}">${glyph}</span>` +
-        `</button>`;
-    }).join('');
-    scrim.innerHTML = `<div class="filter-dial" role="menu" ` +
-      `aria-label="${esc(opts.label || 'Filter the feed')}">${rows}</div>`;
+    scrim.className = 'bar-menu-scrim';
+    scrim.innerHTML =
+      `<div class="bar-menu" role="menu" aria-label="${esc(label || 'Menu')}">${rows}</div>`;
     document.body.appendChild(scrim);
     document.body.style.overflow = 'hidden';
 
-    // Pin the dial's right edge under the button so the icon chips stack straight
-    // down from it (label floating to the left — the speed-dial reading, mirrored).
-    // A small extra gutter (past the button's own overhang past --inset) keeps the
-    // chips from hugging the screen edge.
-    const dial = scrim.querySelector('.filter-dial');
+    // Pin the card's right edge under the button so it reads as having dropped
+    // out of it. A small extra gutter (past the button's own overhang past
+    // --inset) keeps it from hugging the screen edge.
+    const card = scrim.querySelector('.bar-menu');
     const r = anchor.getBoundingClientRect();
-    dial.style.top = (r.bottom + 10) + 'px';
-    dial.style.right = Math.max(8, window.innerWidth - r.right + 8) + 'px';
+    card.style.top = (r.bottom + 10) + 'px';
+    card.style.right = Math.max(8, window.innerWidth - r.right + 8) + 'px';
+    // One card of N rows can outgrow the screen where a column of chips just ran
+    // off it unnoticed — Discover's filter is eight rows deep now. Cap it to
+    // what's actually below the button and let it scroll inside its own glass.
+    card.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 24) + 'px';
 
     const opener = anchor;
-    const items = () => [...scrim.querySelectorAll('.filter-dial-item')];
+    const items = () => [...scrim.querySelectorAll('.bar-menu-item')];
     requestAnimationFrame(() => {
       scrim.classList.add('open');
       (items().find(b => b.classList.contains('is-on')) || items()[0])?.focus();
     });
 
     const close = (then) => {
-      if (!filterDialOpen) return;
-      filterDialOpen = false;
+      if (!barMenuOpen) return;
+      barMenuOpen = false;
       document.removeEventListener('keydown', onKey);
       scrim.classList.remove('open');
       document.body.style.overflow = '';
@@ -2970,21 +3451,144 @@
     }
 
     scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
-    items().forEach(btn => btn.addEventListener('click', () => {
-      const key = btn.dataset.filter;
-      // The dial is the single place every filter pick passes through — the home
-      // feed, Discover and a profile's shelf all hand it their own list — so the
-      // tap belongs here rather than copied into three onPick callbacks.
-      //
-      // LIGHT, because a filter lands on screen and nowhere else (the same split
-      // as canSocial vs canJoin). And only when the pick actually CHANGES the
-      // filter: re-choosing the row that already wears the checkmark repaints
-      // nothing, and a buzz for it would be the phone confirming a write that
-      // never happened, which is the one thing the haptic is supposed to mean.
-      if (key !== current) hapticTap('LIGHT');
-      close(() => onPick(key));
-    }));
+    items().forEach(btn => btn.addEventListener('click', () => onRow(btn, close)));
     document.addEventListener('keydown', onKey);
+  }
+
+  /* The filter dial: a bar menu whose rows are a RADIO SET. Data-driven off
+     FILTERS, so a new post type is one array entry and not a layout change. */
+  function openFilterDial(anchor, opts = {}) {
+    // Caller supplies the current selection (for the checkmark) and what to do on
+    // a pick, so the one dial drives either the home feed or Discover.
+    const current = opts.current || 'all';
+    const onPick = opts.onPick || (() => {});
+    // Which rows to fan. Home takes the five types; Discover adds People (see
+    // DISCOVER_FILTERS), so the dial itself stays a dumb renderer of a list.
+    const filters = opts.filters || FILTERS;
+    /* Two kinds of row can appear in here and they are not the same object.
+
+       A FILTER row is a RADIO: picking one un-picks another, and the checkmark
+       says which one is live. An ACTION row (`opts.extras`) is a SWITCH that
+       does a thing and comes back — Discover's gallery/list toggle is the only
+       one today. It takes `role="menuitem"` rather than `menuitemradio` and
+       never wears the checkmark, because it isn't a member of the set the
+       checkmark is choosing between: marking it would say "you are currently
+       looking at View", which isn't a thing you can be looking at.
+
+       It also always buzzes, and gets that for free — the haptic fires when the
+       tapped key differs from `current`, and an action key never equals it. That
+       is the right answer rather than a lucky one: a toggle always changes
+       something, so there is no silent case to protect. */
+    const extras = (opts.extras || []).filter(Boolean).map(x => ({ ...x, action: true }));
+
+    // Extras LEAD. An action row isn't a member of the radio set below it, so
+    // putting it at the top reads as "here is a switch, and here is the list" —
+    // trailing it read as a seventh filter that had lost its checkmark.
+    const rows = [...extras, ...filters].map((f) => {
+      // Three ways a row gets its mark, in order: All's own pentad, an `ico`
+      // the caller named (Discover's People, Updates' Mentions — rows that
+      // stand for something other than a post type), or the post type's glyph.
+      const glyph = f.key === 'all' ? ICON_ALL
+        : f.ico ? svgIcon(f.ico)
+        : (TYPE_GLYPH[f.key] ? svgIcon(TYPE_GLYPH[f.key]) : '');
+      const on = !f.action && f.key === current;
+      // The glyph takes the type's deep -ink via `color` (fill: currentColor).
+      // The pastel BLOOM behind it is gone with the disc it bloomed on — this is
+      // a menu row now, and a radial gradient under every glyph was the loudest
+      // thing on a card whose whole job is to be quiet. What survives is the
+      // ink, because that is the quintet doing the one thing it is for: a hue
+      // naming a TYPE. People, Mentions and the View row aren't types and take
+      // --muted, same as before, so no hue is spent on a row that doesn't name
+      // one. Set inline rather than via a .type-icon-- class, whose own sizing
+      // rules would fight the row's glyph box.
+      // It does NOT read --type-mark, so a picked accent leaves these alone
+      // where it still folds the + dial's glyphs to --text. Two reasons, and
+      // the second is the one that settles it.
+      //
+      // This is one of the two places a type is a CHOICE rather than a label —
+      // the composer's inferred-type mark is the other, and it opted out of
+      // --type-mark first, for the same reason: the hue is the ANSWER the row
+      // is offering, not ornament on a row that has already said its name.
+      //
+      // And the receipt was already colourful. .masthead-filter's hue dot
+      // lights in the raw pastel and never folded, so under a picked accent the
+      // row you tapped was ink and the dot it lit was lavender: the legend
+      // disagreeing with the thing it labels, in the one control where the two
+      // are meant to teach each other. Fold both or fold neither, and a dial
+      // whose whole job is to name the five is the wrong place to fold.
+      //
+      // Non-type rows (People, Mentions, the View switch) keep --muted, which
+      // is unchanged — no hue is spent on a row that doesn't name a type.
+      const ink = TYPE_GLYPH[f.key] ? `var(--type-${f.key}-ink)` : 'var(--muted)';
+      return `<button class="bar-menu-item${on ? ' is-on' : ''}" type="button" ` +
+          (f.action
+            ? `role="menuitem" `
+            : `role="menuitemradio" aria-checked="${on}" `) +
+          `data-filter="${f.key}">` +
+          `<span class="bar-menu-ico" style="color:${ink}">${glyph}</span>` +
+          `<span class="bar-menu-label">${f.label}</span>` +
+          // The checkmark is the whole active state now (the label's pill
+          // outline and the glyph's hue ring both went with the chips). Always
+          // in the DOM on a radio row so every row is the same width and the
+          // column of labels can't shift when the pick moves; an action row has
+          // no checked state to show, so it gets nothing.
+          (f.action ? '' : `<span class="bar-menu-check" aria-hidden="true">${svgIcon('check')}</span>`) +
+        `</button>`;
+    }).join('');
+
+    openBarMenu(anchor, {
+      label: opts.label || 'Filter the feed',
+      rows,
+      onRow: (btn, close) => {
+        const key = btn.dataset.filter;
+        // The dial is the single place every filter pick passes through — the
+        // home feed, Discover and a profile all hand it their own list — so the
+        // tap belongs here rather than copied into three onPick callbacks.
+        //
+        // No buzz. A filter changes what you are LOOKING at, not the world (see
+        // the rule at hapticTap) — and it fires straight into the app's heaviest
+        // repaint, which is the worst possible moment to enter the JS context.
+        close(() => onPick(key));
+      },
+    });
+  }
+
+  /* The other kind of bar menu: a list of THINGS TO DO rather than a set to
+     choose from. The profile's ••• (Share · Edit profile · About, or Share ·
+     Block · Report for a visitor) and the friends tie's own menu, which are every
+     such menu in the app — the four root pages carry nothing up there but a
+     filter.
+
+     Every row is a `menuitem` and none of them wears a checkmark, for the same
+     reason the View row doesn't: there is no set here for a mark to be choosing
+     between, and a tick beside "Share profile" would claim you are currently
+     sharing. `danger` is the sheet's flag, unchanged and doing the same two jobs
+     — the coral ink, and the one haptic in the app that fires on the TOUCH rather
+     than on a confirmed write, because a danger row is a warning about what is
+     coming rather than a receipt for something done. Both of those follow the
+     row wherever it is drawn, which is the point of moving the menu and not the
+     meaning.
+
+     `items`: {label, icon?, danger?, run?} — the same shape openSheet takes, so a
+     menu can move between the two without being rewritten, and a caller that
+     grows a confirmation step hands the identical array to a sheet. */
+  function openGlyphMenu(anchor, { label, items }) {
+    const rows = items.map((it, i) =>
+      `<button class="bar-menu-item${it.danger ? ' bar-menu-item--danger' : ''}" ` +
+        `type="button" role="menuitem" data-i="${i}">` +
+        `<span class="bar-menu-ico" aria-hidden="true">${it.icon ? svgIcon(it.icon) : ''}</span>` +
+        `<span class="bar-menu-label">${esc(it.label)}</span>` +
+      `</button>`).join('');
+
+    openBarMenu(anchor, {
+      label,
+      rows,
+      onRow: (btn, close) => {
+        const it = items[+btn.dataset.i];
+        if (it && it.danger) hapticEvent('WARNING');
+        close(() => { if (it && it.run) it.run(); });
+      },
+    });
   }
 
   /* Reconcile a list of cards against what's already on screen rather than wiping
@@ -3041,8 +3645,15 @@
     if (!feedEl) return;
     const list = Store.feed().filter(p => {
       if (Blocks.has(p.author)) return false;   // blocked authors never surface
-      const typeOk = activeFilter === 'all' || p.type === activeFilter;
-      const tagOk = !activeTag || (p.tags || []).includes(activeTag);
+      const s = subjectOf(p);
+      if (!s || Blocks.has(s.author)) return false;
+      // A repost filters by WHAT IT POINTS AT, not by the row's own type. A bare
+      // repost literally draws the original's card, so hiding a Frame under the
+      // Frames filter because the row says 'repost' would hide a Frame that is
+      // visibly sitting in the feed. Same for its tags: the chips on that card are
+      // the original's, so tapping one has to match it back.
+      const typeOk = activeFilter === 'all' || s.type === activeFilter;
+      const tagOk = !activeTag || (s.tags || []).includes(activeTag);
       return typeOk && tagOk;
     });
 
@@ -3126,7 +3737,11 @@
       if (!r.width) return;
       const layer = document.createElement('div');
       layer.className = 'post-sparkles';
-      layer.dataset.type = cardEl.dataset.type;
+      // data-burst is a repost's override: the card's own type is 'repost', which
+      // names no colour, so the sparkle takes the type of the post being passed
+      // along. What you shared IS a Note or a Frame, and a hue naming a type is
+      // exactly what the quintet is for.
+      layer.dataset.type = cardEl.dataset.burst || cardEl.dataset.type;
       layer.style.left = r.left + 'px';
       layer.style.top = r.top + 'px';
       layer.style.width = r.width + 'px';
@@ -3185,19 +3800,15 @@
      we drop the gate and route home. */
   let authMode = 'signup';
 
-  // Signed-out brand header — the front-door echo of the signed-in .topbar (same
-  // wordmark), shared by the auth (log in / create) screens and the gated About
-  // page so they read as one app. The slogan rides in the header.
+  // The signed-out front door's header, shared by the auth (log in / create)
+  // screens and the gated About page so they read as one app. The slogan rides
+  // in it. This is the ONE place the wordmark still earns its space — a signed-in
+  // page shows its own name in the toolbar instead.
   //
-  // It carried a person disc at the right edge until July 2026, a "returning
-  // user, sign in here" escape hatch left over from when the signed-out front
-  // door was the install-first welcome tutorial. Once that page came out and the
-  // account form became the front door in every shell, the disc was pointing at
-  // the screen it was standing on: on log in it re-rendered the current view, on
-  // create account it duplicated the "Already have an account? Log in" toggle
-  // sitting under the submit button, and on About it was never even wired (that
-  // page has its own "Back to sign in") — a glyph you could press three times and
-  // get nothing twice. Don't re-add one: a door doesn't need a sign saying door.
+  // It carries no action disc, deliberately. Every screen it mounts on already
+  // offers its own way across (the log in / create toggle under the submit
+  // button, About's "Back to sign in"), so a disc here points at the screen it
+  // is standing on. A door doesn't need a sign saying door.
   function authHeader() {
     return `<header class="auth-topbar">` +
         `<div class="auth-topbar-brand">` +
@@ -3295,18 +3906,21 @@
       }
       submitBtn.disabled = true;
       submitBtn.textContent = isSignup ? 'Creating…' : 'Logging in…';
-      const res = isSignup
-        ? await Store.signup({ name: nameInput.value, username: document.getElementById('f-user').value, email, password })
-        : await Store.login(email, password);
-      if (!res.ok) {
+      // Every gate submit is one await behind a disabled button, so each needs
+      // the same `.catch`: a dropped connection used to leave the form stuck on
+      // "Logging in…" with no way back except a reload.
+      const res = await (isSignup
+        ? Store.signup({ name: nameInput.value, username: document.getElementById('f-user').value, email, password })
+        : Store.login(email, password)).catch(() => null);
+      if (!res || !res.ok) {
         // Signup with confirm-email on: the account exists, they just need to
         // click the link. That's a success in disguise, not an error — swap to a
         // calm "check your inbox" screen rather than flashing red.
-        if (res.pending) { renderCheckInbox(res.email || email); return; }
-        errEl.textContent = res.error;
+        if (res && res.pending) { renderCheckInbox(res.email || email); return; }
+        errEl.textContent = (res && res.error) || 'Couldn’t reach Tria, try again.';
         // Unconfirmed email on login: valid credentials, unclicked link. Offer a
         // one-tap resend inline instead of leaving them stuck.
-        if (res.needsConfirm) showResend(email, errEl);
+        if (res && res.needsConfirm) showResend(email, errEl);
         submitBtn.disabled = false;
         submitBtn.textContent = isSignup ? 'Create account' : 'Log in';
         return;
@@ -3342,9 +3956,10 @@
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = 'Sending…';
-      const res = await Store.resendConfirmation(email);
-      btn.textContent = res.ok ? 'Sent. Check your inbox.' : 'Could not send, try again';
-      if (!res.ok) btn.disabled = false;
+      const res = await Store.resendConfirmation(email).catch(() => null);
+      const sent = !!(res && res.ok);
+      btn.textContent = sent ? 'Sent. Check your inbox.' : 'Could not send, try again';
+      if (!sent) btn.disabled = false;
     });
   }
 
@@ -3378,9 +3993,9 @@
       const email = document.getElementById('f-email').value;
       submitBtn.disabled = true;
       submitBtn.textContent = 'Sending…';
-      const res = await Store.requestPasswordReset(email);
-      if (!res.ok) {
-        errEl.textContent = res.error;
+      const res = await Store.requestPasswordReset(email).catch(() => null);
+      if (!res || !res.ok) {
+        errEl.textContent = (res && res.error) || 'Couldn’t reach Tria, try again.';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Send reset link';
         return;
@@ -3457,9 +4072,9 @@
       const password = document.getElementById('f-pass').value;
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving…';
-      const res = await Store.updatePassword(password);
-      if (!res.ok) {
-        errEl.textContent = res.error;
+      const res = await Store.updatePassword(password).catch(() => null);
+      if (!res || !res.ok) {
+        errEl.textContent = (res && res.error) || 'Couldn’t reach Tria, try again.';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Save password';
         return;
@@ -3610,13 +4225,12 @@
     find:     (p) => domainOf(p.url || ''),
     activity: (p) => p.location || '',
   };
-  const tileTypeGlyph = (p) =>
-    `<span class="type-icon type-icon--${p.type}" role="img" ` +
-      `aria-label="${esc(TYPE_LABEL[p.type] || p.type)}">${TYPE_ICON[p.type] || ''}</span>`;
+  // A say tile leads with the WORDS — no type glyph above them competing for the
+  // top of a small box. The sub line below adds what's worth adding (a Find's
+  // domain, an activity's place), in words.
   function sayFaceEl(p) {
     const sub = TILE_SUB[p.type] ? TILE_SUB[p.type](p) : '';
     return `<div class="ptile-face ptile-face--say">` +
-        `<span class="ptile-type">${tileTypeGlyph(p)}</span>` +
         `<p class="ptile-say">${esc(saidOf(p) || TYPE_LABEL[p.type] || '')}</p>` +
         (sub ? `<p class="ptile-sub">${esc(sub)}</p>` : '') +
       `</div>`;
@@ -3658,7 +4272,7 @@
   // scoreName), so the two Sams were always FINDABLE — they just weren't
   // separable once found.
   //
-  // A post tile deep-links to the post ON their profile (?p=<id>, the same
+  // A post tile deep-links to the post's own page (the same
   // link Copy-link mints), so tapping a thing you're curious about takes you
   // to that thing rather than dumping you at the top of a stranger's page.
   function ptileEl(t, fenced) {
@@ -3683,8 +4297,9 @@
     // the face already is their photo and a second copy is just noise. Same
     // reason the bio only shows on a portrait tile: one thing per tile.
     const av = t.post ? avatarEl(u, { cls: 'ptile-av' }) : '';
-    const href = `#/u/${encodeURIComponent(u.username)}` +
-      (t.post ? `?p=${encodeURIComponent(t.post.id)}` : '');
+    // A POST tile opens the post; a PORTRAIT tile opens the person. It used to be
+    // the profile either way, with `?p=` deciding where in the column you landed.
+    const href = t.post ? postRoute(t.post) : `#/u/${encodeURIComponent(u.username)}`;
     return `<a class="ptile" href="${href}">` +
         (t.post
           ? (t.post.type === 'photo' && t.post.image
@@ -3712,9 +4327,13 @@
   // posts are already gone from your feed; this closes the last door (their page).
   function renderBlockedWall(u) {
     const b = backTarget();
+    // A pushed page with no large title of its own, so the bar carries the name
+    // from the moment it lands (syncToolbarTitle finds no BIG_TITLE_SEL and says
+    // so) — the blocked person's name is already the <h1> in the middle of the
+    // wall, and the two are far enough apart to never read as a repeat.
+    mountToolbar({ leading: toolbarBackEl(b.href, b.label), title: u.name });
     view.innerHTML =
       `<section class="view">` +
-        `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>` +
         `<div class="blocked-wall">` +
           `<div class="blocked-mark">${svgIcon('block')}</div>` +
           `<h1 class="blocked-name">${esc(u.name)}</h1>` +
@@ -3763,9 +4382,15 @@
     // public posts RLS actually hands over, plus a softened nudge that the rest is
     // friends-only. Activities stay circle business unless explicitly made public.
     const locked = Store.isPrivate(u.username) && !isSelf && !isFriend;
-    const list = Store.postsBy(u.username).filter(p =>
-      (p.type !== 'activity' || isSelf || isFriend || p.audience === 'public') &&
-      (!locked || p.audience === 'public'));
+    // A repost is judged on the post it points at: an undrawable one (original
+    // gone, or its author blocked) is dropped, and a reposted activity meets the
+    // same friends-only courtesy the activity itself would.
+    const list = Store.postsBy(u.username).filter(p => {
+      const s = subjectOf(p);
+      if (!s || Blocks.has(s.author)) return false;
+      return (s.type !== 'activity' || isSelf || isFriend || s.audience === 'public') &&
+        (!locked || p.audience === 'public');
+    });
     const friendStatus = isSelf ? null : Store.friendStatus(u.username);
     const areFriends = friendStatus === 'friends';
 
@@ -3777,6 +4402,17 @@
     // own, because Frames isn't a narrowing, it's the wall.
     const types = new Set(list.map(p => p.type));
     const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))];
+    // Reposts get a row of their own, APPENDED rather than slotted into the
+    // ladder. All → the five types reads as one run from widest to narrowest, and
+    // a repost is a different axis (not what they made, but what they passed on),
+    // so putting it inside that run would stop it halfway to answer a different
+    // question — which is exactly the mistake People made on Discover until 1.3.
+    // It takes no pastel for the same reason People doesn't: the quintet is
+    // reserved for post types, and this isn't one. Note the profile filters on the
+    // ROW's own type, unlike the home feed, which filters on the subject: here the
+    // two rows would otherwise overlap and the dial's checkmark would be lying.
+    if (types.has('repost'))
+      filters.push({ key: 'repost', label: 'Reposts', ico: 'repost' });
     const canFilter = filters.length > 2 || types.has('photo');
     if (profileFilterFor !== u.username) { profileFilter = 'all'; profileFilterFor = u.username; }
     // A spotlight is aimed at one CARD — a copied link, an Updates row, an Edit
@@ -3810,15 +4446,11 @@
       ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
     const statsRow = `<div class="account-stats">${postStat}${statSep}${friendStat}</div>`;
 
-    // The in-flow action row (foot of the identity grid): Share on your own card,
-    // the add / requested / accept tie on a visitor's. Once you're mutually
-    // friends the tie leaves this row entirely and becomes a quiet corner badge
-    // (see friendBadge) — freeing the card for the bio and, by design, making
-    // "un-tie" a deliberate act rather than a standing button.
-    // In-flow action row (foot of the identity grid). Your own card has none —
-    // Share and Edit both live as corner icons now. A visitor's carries the
-    // add / requested / accept tie, unless you're already friends (that's the
-    // corner badge too).
+    // The in-flow action row, at the foot of the identity block. Your own
+    // profile has none — Share and Edit are rows in the ••• menu. A visitor's
+    // carries the add / requested / accept tie, unless you are already friends:
+    // then the tie is the toolbar's own button (see friendBadge), which keeps
+    // "un-tie" a deliberate act rather than a standing button on the page.
     const action = (isSelf || areFriends) ? ''
       : (() => {
           // Five pre-friend states. Two are already-done and undo on tap
@@ -3847,28 +4479,48 @@
     // monogram, same card. The photo's colour still spills into the page wash
     // below the hero via applyAmbient. The top-corner control is change-photo for
     // the owner, back-to-directory for a visitor.
-    // Corner badge cluster (top-right of the card): a row of small glass discs.
-    // Your own card carries a single ••• glyph (far corner, where Edit always
-    // lived); its menu holds Share profile + Edit profile. A visitor's carries the
-    // tie ONCE you're friends — the same slot, the two never coexist — where a tap
-    // still removes; parking it here rather than as a standing button nudges people
-    // to stay friends and frees the card for the bio.
+    // The identity's two controls. They were a cluster of small glass discs
+    // floating in the page's own top-right corner, standing in the hottest part
+    // of the wash and needing a name-width reserve so the serif wouldn't run
+    // under them. They are toolbar buttons now (1.3 §5), which is the whole
+    // argument for the toolbar: a profile is the one page in the app that was
+    // hand-building the bar a nav bar gives you — a back link above the content,
+    // actions floating over the corner, and no name anywhere once you'd scrolled
+    // past the photograph.
+    //
+    // Exactly one of them shows at a time, which is why a single trailing slot
+    // fits all four cases. Your own profile carries ••• (Share + Edit profile
+    // inside it). A visitor's carries the friends tie once you're mutual — a tap
+    // opens its menu (Share / Remove friend / Block / Report), and parking it as
+    // a quiet glyph rather than a standing button keeps un-tying a deliberate act. A visitor who ISN'T your friend
+    // carries ••• too, holding Block + Report (App Store 1.2 — you must be able
+    // to block an abusive person you never added); friends reach those inside
+    // the tie's own menu instead.
+    //
+    // That last clause is why Share profile lives in BOTH menus rather than
+    // getting a disc of its own: because only one control is mounted here, the
+    // menu behind whichever one it is has to hold everything you can do to that
+    // person. Share was in your own ••• and nowhere else, so the app could hand
+    // out your profile and no one else's — on a friend's page there was simply
+    // no surface for it, and adding a second trailing button to carry it would
+    // have re-created the corner cluster 1.3 dissolved into this slot.
+    //
+    // Both declare aria-haspopup + aria-expanded, because both open a bar menu
+    // now rather than a sheet from the bottom of the screen (see openGlyphMenu):
+    // the panel is anchored to the button, so the button has to say it owns one
+    // and openBarMenu flips the state on the way in and out. The tie's label
+    // says OPTIONS rather than "tap to remove" — it has opened a menu since the
+    // stray-tap fix and the words were still describing what it did before that.
     const friendBadge = areFriends
-      ? `<button class="account-friend-badge" type="button" id="friend" data-status="friends" ` +
-          `aria-label="Friends, tap to remove" title="Friends · tap to remove">` +
-          svgIcon('friends', 'account-friend-ico') + `</button>`
+      ? `<button class="toolbar-btn account-friend-badge" type="button" id="friend" data-status="friends" ` +
+          `aria-haspopup="menu" aria-expanded="false" ` +
+          `aria-label="Friends, tap for options" title="Friends · tap for options">` +
+          svgIcon('friends') + `</button>`
       : '';
-    // The ••• glyph: on your own card it carries Share profile + Edit profile; on a
-    // visitor who ISN'T your friend it carries Block + Report (App Store 1.2 — you
-    // must be able to block an abusive person you haven't added). Friends get those
-    // inside the friend badge's menu instead, so the glyph sits out when areFriends.
     const moreBadge = (isSelf || !areFriends)
-      ? `<button class="account-more-badge" type="button" id="account-more" ` +
+      ? `<button class="toolbar-btn" type="button" id="account-more" aria-haspopup="menu" aria-expanded="false" ` +
           `aria-label="${isSelf ? 'Profile options' : 'More'}" title="${isSelf ? 'Options' : 'More'}">` +
-          svgIcon('dots', 'account-more-ico') + `</button>`
-      : '';
-    const cornerBadges = (friendBadge || moreBadge)
-      ? `<div class="account-badges">${friendBadge}${moreBadge}</div>`
+          svgIcon('dots') + `</button>`
       : '';
 
     // Bio always rides in the identity column beside the photo, on the same left
@@ -3876,36 +4528,49 @@
     // character-count threshold, no jump to a separate full-width slot).
     const bio = u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '';
 
-    const back = isSelf ? '' : (() => { const b = backTarget();
-      return `<a class="profile-back" href="${b.href}">← ${esc(b.label)}</a>`; })();
-
-    // The seam between the identity and the posts: a quiet caption naming what
-    // the pane below is, with the same sliders dial at its right. It's the
-    // masthead's own arrangement (nameplate left, filter right) borrowed for a
-    // page whose masthead is a photograph — set as flat editorial type, not
-    // chrome, because it captions content rather than floating above it. Absent
-    // entirely when there's nothing to narrow, so a quiet profile reads exactly
-    // as it always did.
-    const shelfLabel = () => profileFilter === 'all' ? 'All posts'
-      : (FILTERS.find(f => f.key === profileFilter) || {}).label || 'All posts';
-    const shelf = canFilter
-      ? `<div class="profile-shelf">` +
-          `<p class="profile-shelf-cap">${esc(shelfLabel())}</p>` +
-          filterBtnEl('profile-filter-btn', profileFilter,
-            isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`) +
-        `</div>`
+    // Your own profile is a tab, so it has no back: the nav pill below already
+    // says where you are and there is nothing to return to. A visitor's was
+    // pushed from somewhere, so it takes the toolbar's leading chevron, aimed
+    // by backTarget().
+    const b = isSelf ? null : backTarget();
+    // The dial rides in the bar with everything else, rightmost, the same slot
+    // it holds on Circle, Discover and Updates — so the control that narrows a
+    // page is in one place in this app and not two.
+    //
+    // It spent 1.3 up to here on a "profile shelf" instead: a micro-caps caption
+    // naming the active pane ("ALL POSTS", "FRAMES") with a bare glyph at its
+    // right, sitting in flow between the identity and the posts. Two arguments
+    // held it there and neither survives. The caption was a third telling of
+    // something the button's hue dot and the dial's own checkmark already say.
+    // And "the bar carries identity, the shelf narrows the pane it captions" is
+    // a distinction the reader has no way to know they are supposed to be
+    // making — what they see is the one glyph they have already learned three
+    // times, in a different place, drawn a different way, on the fourth page.
+    // Absent when there is nothing to narrow, exactly as before.
+    const filterBtn = canFilter
+      ? filterBtnEl('profile-filter-btn', profileFilter,
+          isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`)
       : '';
+    mountToolbar({
+      leading: b ? toolbarBackEl(b.href, b.label) : '',
+      // The person's name, which the bar has never carried before — it hid
+      // behind the photograph and then behind nothing at all. It stays
+      // invisible until .account-name has scrolled under the bar (see
+      // BIG_TITLE_SEL, which the profile is the reason for) and crossfades in
+      // there, so a long column of someone's posts finally says whose.
+      title: u.name,
+      actions: friendBadge + moreBadge + filterBtn,
+    });
 
     view.innerHTML =
       `<section class="view">` +
-        back +
         // The identity header, flat on the page. There is no card here any more
         // — the profile's colour is the full-screen .ambient wash, the same one
         // Edit profile carries (see applyAmbient), the photo is an ordinary
         // circular avatar at profile size, and everything else is type on the
-        // page's own axis. Corner discs, then photo left, identity beside it.
+        // page's own axis. Photo left, identity beside it; the controls that
+        // used to float in this block's corner are in the toolbar above it.
         `<div class="account">` +
-          cornerBadges +
           `<div class="account-head">` +
             `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
               (u.avatar
@@ -3913,9 +4578,9 @@
                 : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
             `</div>` +
             // The identity column, all on one left axis: name+handle, an inline
-            // "N posts · N friends" stat line, the bio (wraps in place, any
-            // length), then the action beneath. A short or missing bio simply
-            // centres the column against the photo.
+            // "N posts · N friends" stat line, then the bio (wraps in place, any
+            // length). A short or missing bio simply centres the column against
+            // the photo.
             `<div class="account-meta">` +
               `<div class="account-id">` +
                 `<h1 class="account-name">${esc(u.name)}</h1>` +
@@ -3923,11 +4588,16 @@
               `</div>` +
               statsRow +
               bio +
-              action +
             `</div>` +
           `</div>` +
+          // The tie is OUT of the identity column and under the whole block, at
+          // the full width of the page's type axis. Beside the photo it was a
+          // 122px pill sharing a column with the bio, so the one live decision a
+          // visitor's profile asks for was the narrowest thing on it and moved
+          // down the page as the bio grew. Below, it spans the identity it acts
+          // on and always lands in the same place.
+          action +
         `</div>` +
-        shelf +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
@@ -3962,14 +4632,15 @@
        times down the page would be forty labels saying what the card at the top
        already said.
 
-       Tapping one is the real deep link (?p=<id>, the same one Copy-link mints),
-       so it drops back into the post column with that card spotlighted — the
-       wall is an INDEX into a long profile, not a dead-end lightbox, and you
-       land on the thing with its caption, likes and comments attached. */
-    const postRoute = isSelf ? '#/profile' : `#/u/${encodeURIComponent(u.username)}`;
+       Tapping one opens that post's own page — the same link Copy-link mints —
+       so the wall is an INDEX into a long profile rather than a dead-end
+       lightbox, and you land on the thing with its caption, likes and comments
+       attached. It used to drop back into the profile COLUMN with the card
+       spotlighted, which meant teleporting the window down somebody's archive to
+       show you one post. */
     const frameTile = (p) => {
       const cap = notePlain(p.note) || p.title || '';
-      return `<a class="ptile ptile--frame" href="${postRoute}?p=${encodeURIComponent(p.id)}" ` +
+      return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
           `aria-label="${esc(cap || 'Frame')}">` +
           mediaFaceEl(p, cap) +
         `</a>`;
@@ -4076,13 +4747,18 @@
         }));
     }
 
-    // The dial. Picking a row repaints only the pane below the card and relabels
-    // the shelf in place — no page re-render, so the identity, its wash and your
-    // scroll position all stay exactly where they were. An open inline editor is
-    // dropped the same way navigating away drops it: the row you just picked is
-    // the newer intent.
-    const shelfCap = view.querySelector('.profile-shelf-cap');
-    view.querySelector('#profile-filter-btn')
+    // The dial. Picking a row repaints only the pane below the identity and
+    // relights the button's dot in place — no page re-render, so the identity,
+    // its wash and your scroll position all stay exactly where they were. An
+    // open inline editor is dropped the same way navigating away drops it: the
+    // row you just picked is the newer intent.
+    //
+    // document-wide, not view-scoped: the button lives in #toolbar-actions now,
+    // which is outside #view entirely. Same reason syncFilterBtn has always
+    // looked it up that way, and the same contract Circle, Discover and Updates
+    // are already on — resetToolbar clears that node on every navigation, so the
+    // listener dies with it rather than accumulating.
+    document.getElementById('profile-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: profileFilter,
         filters,
@@ -4093,7 +4769,6 @@
           profileFilterFor = u.username;
           editingId = null;
           syncFilterBtn('profile-filter-btn', profileFilter);
-          if (shelfCap) shelfCap.textContent = shelfLabel();
           paintPosts(true);
         },
       }));
@@ -4122,37 +4797,40 @@
 
     const friendBtn = document.getElementById('friend');
     if (friendBtn) friendBtn.addEventListener('click', async () => {
-      // Already friends → open the menu (Remove / Block / Report) rather than
-      // dropping the edge on one stray tap. sent → cancel the request; add /
+      // Already friends → open the menu (Share / Remove / Block / Report) rather
+      // than dropping the edge on one stray tap. sent → cancel the request; add /
       // accept both create my edge.
       const status = friendBtn.dataset.status;
-      if (status === 'friends') { openFriendMenu(u.username, () => renderUser(username)); return; }
+      if (status === 'friends') { openFriendMenu(friendBtn, u.username, () => renderUser(username)); return; }
       // sent → cancel the request · following → unfollow. Both drop my edge.
       if (status === 'sent' || status === 'following') await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
       renderUser(username);      // reflect the new state in place
     });
 
-    // The ••• glyph on the profile header: your own opens Edit profile; a
-    // non-friend visitor's carries Block + Report.
+    // The ••• glyph on the profile header: your own carries Share, Edit profile
+    // and About; a non-friend visitor's carries Share, Block and Report.
     const moreBtn = document.getElementById('account-more');
     if (moreBtn) moreBtn.addEventListener('click', () => {
       if (isSelf) {
-        openSheet({ items: [
-          { label: 'Share profile', icon: 'send', run: () => shareOrCopy({
-              title: `@${u.username} on Tria`,
-              text: `Join me on Tria`,
-              url: profileLink(u.username),
-            }).then(result => {
-              if (result === 'cancelled') return;
-              toast(result === 'copied' ? 'Link copied' : 'Shared');
-            }) },
+        openGlyphMenu(moreBtn, { label: 'Profile options', items: [
+          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
           { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
+          // The only way into About once 1.3 has hidden the wordmark that used
+          // to be it (see the About section). Bottom of the menu: it's the rare
+          // one of the three, and it's where the feedback form lives, so it also
+          // has to be findable by someone looking for a way to report something.
+          { label: 'About Tria', icon: 'info', run: () => go('#/about') },
         ] });
         return;
       }
-      openSheet({
+      openGlyphMenu(moreBtn, {
+        label: 'More',
         items: [
+          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username) },
+          // Block and Report each open a sheet of their own after this menu has
+          // closed — a confirmation and a list of reasons, both with no control
+          // left on screen to drop from. That is the split, not an oversight.
           { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(u.username, () => renderUser(username)) },
           { label: 'Report', icon: 'flag', danger: true, run: () => reportUser(u.username) },
         ],
@@ -4282,16 +4960,66 @@
     const canPop = editorPushed;
     editorPushed = false;
 
+    // Still no masthead, for the reason it never had one: a kicker and a serif
+    // title over a settings form is the page introducing itself to someone who
+    // just asked for it by name. What 1.3 changes is that the restraint no
+    // longer costs the page its orientation — the bar names it in the small
+    // 1.05rem it names every other page in, and since there's no big title for
+    // that copy to hide behind (BIG_TITLE_SEL finds nothing here) it's simply
+    // shown from the moment the page lands, which is right for a pushed page
+    // with none.
+    //
+    // The bar also carries the form's two ANSWERS, which is where an editor's
+    // commit row belongs and is not where this one used to be: Cancel and Save
+    // were a pair of pills at the foot of the form, below the toggles and above
+    // the account zone, so committing meant scrolling back down past everything
+    // you had just decided not to change. In the bar they hold still while the
+    // form scrolls under them, and they're the page's controls, which is what
+    // the trailing slot has been for since 1.3.
+    //
+    // BOTH answers read one predicate (syncAnswers, below), and on a form you
+    // have only just opened neither of them is offered. The check is simply not
+    // there until there is something to commit. The leading control is the same
+    // back chevron every other pushed page wears, and becomes an X once a word
+    // has been typed: same <button>, same leave(), same pop — the ACT never
+    // changes, only what leaving costs. That is the one thing a chevron can't
+    // say. With nothing to discard it is just true, this is the way back; over
+    // unsaved words it would be a door pretending not to be a bin, which is the
+    // same distinction the check makes from the other side of the bar.
+    //
+    // toolbarBackEl with no href, which is what that branch was built for: the
+    // editor's exit pops rather than pushes, and the <button> that buys is also
+    // the element whose glyph gets swapped in place.
+    mountToolbar({
+      leading: toolbarBackEl('', 'Profile', 'pf-cancel'),
+      title: 'Edit profile',
+      // `form=` is the whole reason a submit button can live out here: the bar
+      // mounts into #toolbar-actions, which is not inside #view and so not
+      // inside <form id="pf-form"> at all. The reference resolves at activation,
+      // not at parse, so mounting the bar before view.innerHTML builds the form
+      // is fine — which is the order renderFn already runs in.
+      //
+      // Mounted idle rather than left out: it has to be here to FADE in on the
+      // keystroke that earns it (a control appearing out of nothing in the
+      // corner of the eye is the pop this app spends its transitions avoiding),
+      // and having it here settles the bar's slot count once, at mount, instead
+      // of moving it as you type.
+      actions: `<button type="submit" form="pf-form" id="pf-save" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `aria-label="Save changes">${svgIcon('check')}</button>`,
+    });
+
     view.innerHTML =
       `<section class="view">` +
-        // The way out, in the spot every other pushed page keeps it. A button
-        // and not an <a href="#/profile">, because leaving here should POP the
-        // entry rather than push a third one (see leave()).
-        // No masthead. The back button already names where you are relative to,
-        // the ••• row you came from was labelled "Edit profile", and every field
-        // below says what it is — a kicker and a serif title over a settings form
-        // is the page introducing itself to someone who just asked for it.
-        `<button type="button" class="profile-back" id="pf-back">← Profile</button>` +
+        // The page's heading, present but not drawn. The bar names this page in
+        // the small copy every other page is named in, and that copy is
+        // aria-hidden because everywhere else it is a decorative echo of an
+        // in-flow <h1>. Here there is no <h1> to echo, so without this one the
+        // editor is the only page in Tria that reaches a screen reader with no
+        // heading at all and no way to say what it is. It must NOT match
+        // BIG_TITLE_SEL: there is still nothing for the bar's copy to hide
+        // behind, and it goes on showing from the moment the page lands.
+        `<h1 class="visually-hidden">Edit profile</h1>` +
         `<form id="pf-form" class="pf-form" novalidate>` +
           // The photo sits in its own colour: the profile gradient, the same
           // --glow-photo the identity card wears, washed out from behind the
@@ -4359,17 +5087,14 @@
           // would do — one less translation step between the control and reality.
           `<p class="field-hint" id="privacy-hint">${privacyHint(u.private !== false)}</p>` +
           `<p class="composer-error" id="pf-error" role="alert"></p>` +
-          // Cancel + Save are the form's commit row. Account actions (Log out,
-          // Delete) live in their own zone below, split off by a hairline — they
-          // act on the session, not this form, so they read as a separate group.
-          `<div class="form-actions">` +
-            `<button type="button" class="edit-cancel" id="pf-cancel">Cancel</button>` +
-            `<button type="submit" class="composer-submit" id="pf-save">Save</button>` +
-          `</div>` +
-          // Two quiet icon buttons. Delete sits left (coral danger tint, App
-          // Store 5.1.1(v) requires the option — still guarded by the confirm
-          // sheet); Log out sits right, in the more reachable spot, mirroring
-          // Save's position in the row above since it's the one tapped often.
+          // The commit row is in the bar now (see mountToolbar above), so the
+          // error line is followed by the account zone and nothing else.
+          //
+          // Two quiet icon buttons, split off by a hairline — they act on the
+          // session, not on this form, so they read as a separate group. Delete
+          // sits left (coral danger tint, App Store 5.1.1(v) requires the
+          // option — still guarded by the confirm sheet); Log out sits right, in
+          // the more reachable spot, since it's the one tapped often.
           `<div class="pf-account">` +
             `<button type="button" class="pf-account-btn pf-delete" id="pf-delete">` +
               svgIcon('trash') + `Delete account</button>` +
@@ -4392,6 +5117,7 @@
       const on = privacyBtn.getAttribute('aria-checked') === 'true';
       privacyBtn.setAttribute('aria-checked', String(!on));
       privacyHintEl.textContent = privacyHint(!on);
+      syncAnswers();
     });
 
     // Leaving POPS where it can. go() always pushes (see its note), so a Save
@@ -4403,8 +5129,49 @@
       if (canPop) history.back();
       else go('#/profile');
     };
-    view.querySelector('#pf-back').addEventListener('click', leave);
-    view.querySelector('#pf-cancel').addEventListener('click', leave);
+    // getElementById, not view.querySelector: the leading control lives in
+    // #toolbar-page, which is outside #view.
+    const pfLeaveBtn = document.getElementById('pf-cancel');
+    const pfSaveBtn = document.getElementById('pf-save');
+    pfLeaveBtn.addEventListener('click', leave);
+
+    // What "unsaved" means on this page, and it is narrower than "you touched
+    // something". The three fields the form HOLDS — name, bio, privacy — plus a
+    // photo, which counts from the moment a crop is on screen rather than from
+    // the file input, because a pick that failed to decode resets the cropper
+    // and leaves nothing to lose (see the onError branch, which resyncs).
+    //
+    // The notifications switch is deliberately NOT in here. It commits on the
+    // tap, not on Save (wirePushToggle awaits enablePush and toasts), so
+    // leaving costs it nothing and calling that dirty would put an X on a form
+    // whose only change is already saved.
+    //
+    // Declarations, not consts: pfCropper is declared further down with the
+    // rest of the crop machinery, and the listeners wired above this line call
+    // these on a tap that can only happen after the whole render has run.
+    function pfDirty() {
+      return !!pfCropper
+        || nameEl.value !== (u.name || '')
+        || bioEl.value !== (u.bio || '')
+        || (privacyBtn.getAttribute('aria-checked') === 'true') !== (u.private !== false);
+    }
+    // One predicate, both answers, so the bar can never offer a Save with
+    // nothing to save or a chevron over unsaved words. Idle hides the check
+    // with `visibility` rather than dropping it from the DOM: it stays a
+    // transition target, it keeps its slot, and hidden visibility is already
+    // out of the tab order and the a11y tree, so "not there" is true for a
+    // keyboard and a screen reader too.
+    function syncAnswers() {
+      const dirty = pfDirty();
+      pfLeaveBtn.innerHTML = dirty ? svgIcon('close') : svgIcon('chevron', 'toolbar-back-ico');
+      pfLeaveBtn.setAttribute('aria-label', dirty ? 'Discard changes' : 'Back to Profile');
+      pfSaveBtn.classList.toggle('toolbar-commit--idle', !dirty);
+    }
+    // `input` carries the two text fields; `change` is the belt on the file
+    // input and on anything a UA fires late. The privacy switch is a <button>
+    // and fires neither, so it resyncs from its own handler.
+    view.querySelector('#pf-form').addEventListener('input', syncAnswers);
+    view.querySelector('#pf-form').addEventListener('change', syncAnswers);
 
     // The avatar write is optimistic and the store rolls the cache back if the
     // upload fails — but by then the reader has left this page, so the repaint
@@ -4436,7 +5203,7 @@
     const pfCropImg = view.querySelector('#pf-cropimg');
     const pfPhotoRow = view.querySelector('#pf-photo');
     const pfHint = view.querySelector('#pf-crophint');
-    const pfSave = view.querySelector('#pf-save');
+    const pfSave = pfSaveBtn;   // in the bar, not in #view
     let pfCropper = null;
     // Two gestures, one of which doesn't exist on the device you're holding, so
     // name the one that does.
@@ -4494,14 +5261,22 @@
             pfStage.hidden = true;
             pfPhotoRow.hidden = false;
             errEl.textContent = 'Couldn’t open that photo, try another one.';
+            // Back to nothing-to-lose: the pick never became a photo.
+            syncAnswers();
           },
         });
+        syncAnswers();
       };
       reader.readAsDataURL(f);
     });
 
     view.querySelector('#pf-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      // The check is hidden while the form is pristine, but implicit submission
+      // isn't: Enter in the name field still lands here. Nothing to write, so
+      // don't — a no-op round trip that ends in leave() would read as the app
+      // having saved something.
+      if (!pfDirty()) return;
       // Take the crop BEFORE anything commits. Save is already held until the
       // image decodes, so this is the belt to that pair of braces — but the
       // failure it catches was silent and expensive: export() used to throw
@@ -4573,9 +5348,149 @@
     }
   }
 
-  // The "← Back" link atop a friend's profile points wherever you came from
-  // (home, Discover, your own profile…), not always one place. `profileOrigin` is
-  // set by the router when you enter a profile from a non-profile page.
+  /* ── A post's own page ──────────────────────────────────────────────────────
+     The place a single post is the whole subject: the card drawn `full` (no
+     clamp on the note, the comment thread open, who liked and who's going drawn
+     in place of the disclosures a feed card wears), and nothing else on the page.
+
+     Why this exists is worth stating once, because it replaced four separate
+     answers to the same question. A single post used to be a POSITION IN A
+     COLUMN — a copied link opened the author's profile with `?p=<id>` and the
+     router scrolled to the card; an Updates row did the same and force-opened
+     whichever panel matched the notification; a frame-wall tile did the same
+     again; and "the whole note" was a max-height tween inside the feed. Four
+     mechanisms, one of which (the spotlight) had to teleport the window a
+     thousand pixels down somebody's archive to land you on one card.
+
+     The card itself is unchanged. `makeCard(post, { full: true })` is the same
+     function the feed calls, so every type, every repost form, the poll, the
+     photo branch, `canSocial` and `canJoin` all mean exactly what they already
+     meant. That is the whole design: a post reads the same in both places, and
+     the page is only the place where it is allowed to be complete. */
+  function renderPost(id, pane) {
+    // The cache is the permission. Every row in it came back through
+    // `can_view_post`, so a post you may not read is simply not here — there is
+    // no client-side gate to re-derive, and inventing one would be a second
+    // opinion about a question the database has already answered.
+    const post = Store.posts().find(p => String(p.id) === String(id));
+    const subj = subjectOf(post);
+    const gone = !post || !subj || Blocks.has(post.author) || Blocks.has(subj.author);
+
+    const back = postBackTarget();
+    mountToolbar({
+      leading: toolbarBackEl(back.href, back.label),
+      /* WHOSE, and WHAT: "Sam's post", "Sam's activity". The bar answers "where
+         am I", and a bare name answers "whose page is this" — the wrong question
+         on a route that is one post rather than a profile, and the one a reader
+         arriving from a notification is least likely to be asking.
+
+         Only activity gets its own word. The other four types are all things you
+         wrote, and "Sam's frame" or "Sam's find" names Tria's own filing system
+         at a reader who may only ever have met it on a filter dial.
+
+         There is no masthead here (the card carries its own byline, and a serif
+         nameplate over somebody's note would be the page introducing a post that
+         introduces itself), so BIG_TITLE_SEL finds nothing and the small title
+         is simply always up — the same arrangement Edit profile has.
+
+         NOT esc()'d: setToolbarTitle assigns textContent, so escaping here would
+         print the entities. Every other mountToolbar caller passes a bare
+         string. */
+      title: gone ? 'Post' : postPageTitle(post, subj),
+    });
+
+    if (gone) {
+      view.innerHTML =
+        `<section class="view view--post">` +
+          `<p class="feed-empty">This post isn’t here any more.</p>` +
+        `</section>`;
+      return;
+    }
+
+    /* THE CARD SITS IN A `.feed`, and that is the fix rather than a shortcut.
+       A post has to measure exactly as it does at home, and the feed's width is
+       not one number — it is `max-width: var(--feed-width)` on desktop AND a
+       `margin-inline: -1.15rem` on phones, which is how a card bleeds to the
+       screen edge past `.view`'s own padding. Written out here it was neither:
+       the card took the view's 1.15rem inset (so its text column measured 316px
+       against the feed's 353 — squished, by exactly twice that padding) and on a
+       wide screen it took no cap at all (836px against the feed's 660). Same
+       class, same measurements, nothing left to drift. */
+    /* Every arrival opens on the conversation, whatever the last post you looked
+       at was showing — unless the LINK named a section, which is how the
+       author's heart and the headcount hand over the question they were tapped
+       to ask. Set before the card is built, so the pane is simply open on the
+       first paint rather than opened a frame later. */
+    postPane = (pane === 'likers' || pane === 'going') ? pane : 'comments';
+    view.innerHTML =
+      `<section class="view view--post" id="post-page">` +
+        `<div class="feed"></div>` +
+      `</section>`;
+    const section = view.querySelector('#post-page');
+    const card = makeCard(post, { full: true, solo: false });
+    card.style.animation = 'none';   // you navigated TO this post; it doesn't arrive
+    section.querySelector('.feed').appendChild(card);
+    /* A named pane is a REQUEST, not a promise: who-liked is drawn for the
+       author alone and who's-going needs `canJoin`, so a link forwarded to
+       anyone else names a panel this card doesn't carry. Ask the card rather
+       than re-deriving those two rules here, and fall back to the floor. */
+    if (postPane !== 'comments' && !card.querySelector(`.post-pane[data-pane="${postPane}"]`))
+      setPostPane('comments', card);
+    /* Tag chips belong to the home feed's filter, same as any card built outside
+       renderFeed — tapping one goes home with that tag live.
+
+       DELEGATED from the section rather than bound per chip, because this card
+       gets REPLACED in place: adding or deleting a comment runs wireComments'
+       `apply`, which swaps in a fresh makeCard. makeCard re-runs its own wiring,
+       but it knows nothing about a tag chip's destination — that is the caller's
+       decision, and a caller that bound the chips directly would hand its
+       listeners to a node that no longer exists. */
+    section.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tag[data-tag]');
+      if (!btn || !section.contains(btn)) return;
+      activeTag = btn.dataset.tag;
+      go('#/');
+    });
+
+  }
+
+  // "Sam’s post" / "Sam’s activity" — see the note at the mountToolbar call.
+  // A typographic apostrophe, matching every other possessive in the app's copy.
+  function postPageTitle(post, subj) {
+    const bylineAuthor = (post.repostOf && !post.note) ? subj.author : post.author;
+    const what = subj.type === 'activity' ? 'activity' : 'post';
+    return `${displayNameOf(bylineAuthor)}’s ${what}`;
+  }
+
+  // Where a post page's back chevron points. Same shape as backTarget() below and
+  // the same reasoning: you can reach a post from anywhere, so the chevron has to
+  // name where you actually came from rather than one fixed place.
+  function postBackTarget() {
+    const labels = {
+      '#/': 'My Circle',
+      '#/discover': 'Discover',
+      '#/updates': 'Updates',
+      '#/profile': 'Profile',
+    };
+    if (postOrigin.startsWith('#/u/')) {
+      const who = decodeURIComponent(postOrigin.slice(4));
+      return { href: postOrigin, label: displayNameOf(who) };
+    }
+    if (postOrigin.startsWith('#/daily/')) return { href: postOrigin, label: 'Daily' };
+    const href = labels[postOrigin] ? postOrigin : '#/';
+    return { href, label: labels[href] || 'Back' };
+  }
+
+  // A username's display name, falling back to the handle for someone the cache
+  // hasn't got. Used by the two back chevrons and the post page's title.
+  const displayNameOf = (username) => {
+    const u = Store.user(username);
+    return u ? u.name : username;
+  };
+
+  // Where a friend profile's back chevron points: wherever you came from (home,
+  // Discover, your own profile…), not always one place. `profileOrigin` is set
+  // by the router when you enter a profile from a non-profile page.
   function backTarget() {
     const labels = {
       '#/': 'My Circle',
@@ -4597,6 +5512,26 @@
       ? location.origin + location.pathname
       : '';
     return base ? `${base}#/u/${encodeURIComponent(username)}` : `@${username}`;
+  }
+
+  /* Handing someone a profile, from all three places that offer it: your own
+     ••• sheet, a friend's tie menu, and a non-friend's •••. One helper because
+     the three were never going to be three different acts, and because the
+     sentence is the only thing that differs between them: your own profile is
+     an invitation, someone else's is a recommendation, and "Join me on Tria"
+     under a stranger's handle would be the app speaking in your voice about a
+     person you don't share an account with. */
+  function shareProfile(username, { self = false } = {}) {
+    const u = Store.user(username);
+    const who = u ? u.name : '@' + username;
+    shareOrCopy({
+      title: `@${username} on Tria`,
+      text: self ? 'Join me on Tria' : `${who} on Tria`,
+      url: profileLink(username),
+    }).then(result => {
+      if (result === 'cancelled') return;
+      toast(result === 'copied' ? 'Link copied' : 'Shared');
+    });
   }
 
   // Copy text to the clipboard, resolving true/false. Prefers the async
@@ -4653,7 +5588,7 @@
   /* ── Action sheet ─────────────────────────────────────────────────────────────
      A floating glass panel that rises from the bottom over a scrim — the iOS
      action-sheet pattern. Home to the per-post overflow (••• → Copy link, Report)
-     and the friend menu (Remove friend, Block, Report). Glass per the material
+     and the friend menu (Share profile, Remove friend, Block, Report). Glass per the material
      rule (a menu floats above content). items: {label, icon?, danger?, run?}; run
      may be async and fires after the sheet closes. Reduced-motion aware. */
   let sheetOpen = false;
@@ -4731,9 +5666,11 @@
   }
 
   /* ── Profile colour ─────────────────────────────────────────────────────────
-     The picker behind the colour ring on Edit profile. Ten choices in two
-     groups, and the grouping is the argument: a SOURCE row (sample it from my
-     photo · no colour at all) over the eight colours you can name. The photo
+     The picker behind the colour ring on Edit profile. Twelve choices in two
+     groups, and the grouping is the argument: a SOURCE row (Tria's own ramp ·
+     sample it from my photo · no colour at all) over the nine colours you can
+     name — three across and three down, which is also why the source row is
+     three: the two grids line up. The photo
      option wears the photo, cropped into the same disc as every swatch beside
      it, so the two sources are comparable objects rather than a picture-shaped
      thing sitting next to a colour-shaped thing.
@@ -4751,14 +5688,15 @@
   function openAccentSheet() {
     const me = Store.currentUser();
     if (!me) return;
-    // No photo, no photo option. Falling back to 'none' for the checkmark is
-    // exact rather than a shrug: with nothing to sample, "from my photo" and
-    // "no colour" are the same card, and the mark belongs on the one you can see.
-    const current = me.accent || (me.avatar ? 'auto' : 'none');
+    // No photo, no photo option — and the fallback is DEFAULT, not 'none'. With
+    // nothing to sample the buttons paint the brand ramp, so that is the row the
+    // checkmark belongs on; 'none' would put the mark on a monochrome card while
+    // the FAB behind the sheet was plainly still the quintet.
+    const current = me.accent || (me.avatar ? 'auto' : 'default');
 
-    // The fill goes on the DISC, not the button: --sw and the photo's
-    // background-image are both painted by .swatch-disc, and a url() on the
-    // button would sit behind the label with no background-size to size it.
+    // The fill goes on the DISC, not the button: every source paints
+    // .swatch-disc's background-image, and a url() on the button would sit
+    // behind the label with no background-size to size it.
     const swatch = (key, label, fill) =>
       `<button class="swatch${key === current ? ' is-on' : ''}" type="button" ` +
         `role="menuitemradio" aria-checked="${key === current}" data-accent="${key}" ` +
@@ -4769,13 +5707,39 @@
         `<span class="swatch-label">${esc(label)}</span>` +
       `</button>`;
 
+    /* THREE SOURCES, widest to narrowest: Tria's colours, your photograph's,
+       none at all. The first is new — it was the unnamed state you got by
+       picking 'none', which is how the sheet ended up with a "no colour" row
+       that painted the full brand ramp. Naming it costs one swatch and makes
+       every state in the sheet a state you can see and choose.
+
+       It is labelled TRIA rather than "Default", because that is what the disc
+       actually shows: --brand-band, the app's own ramp, which is a colour with
+       a name and not merely the absence of a choice. "Default" also quietly
+       ranked it above the other two, when all three are just answers to where
+       the colour comes from. The stored value is still 'default' — the label
+       moved, the key did not, the same split rose keeps below.
+
+       Its disc shows --brand-band itself, so the row is a preview of the button
+       rather than a word for it — the same courtesy the photo source and the
+       nine palette discs already extend. */
     const head =
       `<div class="swatches swatches--source" role="group" aria-label="Colour source">` +
+        swatch('default', 'Tria', 'background-image:var(--brand-band)') +
         (me.avatar ? swatch('auto', 'Photo', `background-image:url(${esc(me.avatar)})`) : '') +
         swatch('none', 'None') +
       `</div>` +
       `<div class="swatches" role="group" aria-label="Colours">` +
-        ACCENTS.map(a => swatch(a.key, a.label, `--sw:${accentCss(a.key)}`)).join('') +
+        /* Each disc wears the BAND it will paint, not the palette hex it is
+           filed under. Those two parted when accents were pinned to L* 74:
+           "Lime" is filed as #b9df7d and paints #8cc731, so a raw-hex disc was
+           a pale swatch promising a button it no longer produced. They have
+           parted completely now that three accents declare their own band, so
+           this goes through accentBand rather than rebuilding the recipe here.
+           The wash needs no preview — it repaints live on the page behind the
+           see-through scrim, which is the whole reason this is a sheet. */
+        ACCENTS.map(a => swatch(a.key, a.label,
+          `background-image:${accentBand(a.key)}`)).join('') +
       `</div>`;
 
     openSheet({
@@ -4796,9 +5760,14 @@
             // sheet in the same frame as the tap.
             const saving = Store.updateAccent(val);
             paintWash(Store.currentUser(), 'profile');
+            // Same tap, second surface: the wash is this page, the band is every
+            // primary button in the app. Both repaint here rather than waiting
+            // for a navigation, which is the point of a picker you can watch.
+            paintBrandBand();
             saving.then(r => {
               if (!r.ok) toast(r.error);
               paintWash(Store.currentUser(), 'profile');  // confirmed, or store reverted it
+              paintBrandBand();
             });
             close();
           }));
@@ -4806,13 +5775,17 @@
     });
   }
 
-  // A deep link to a single post: the author's profile plus ?p=<id>, which the
-  // router reads to spotlight-scroll the card into view (same mechanism an Updates
-  // row uses). Only resolves for someone who can already see that author's posts —
-  // correct, since posts are friends-only. Falls back to the bare @handle off-web.
+  // A shareable link to a single post: the post's own page. It used to be the
+  // author's profile plus ?p=<id>, which the router turned into a scroll — so a
+  // link you sent someone opened an archive and then jumped. Old links still
+  // work (the router redirects the query, see route). Only resolves for someone
+  // who can already see that author's posts, which the DB decides, not this.
+  // Falls back to the bare @handle off-web.
   function postLink(post) {
-    const base = profileLink(post.author);
-    return /^https?:/.test(base) ? `${base}?p=${encodeURIComponent(post.id)}` : base;
+    const base = /^https?:/.test(location.origin)
+      ? location.origin + location.pathname
+      : '';
+    return base ? base + postRoute(post) : `@${post.author}`;
   }
 
   function copyPostLink(post) {
@@ -4884,7 +5857,117 @@
     } else {
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
     }
+    if (Store.repostable(post))
+      items.splice(1, 0, { label: 'Repost', icon: 'repost', run: () => openRepostMenu(post) });
     openSheet({ items });
+  }
+
+  // Tapping the circle. A rising SHEET rather than a menu dropped from the glyph,
+  // which is the same call the card's ••• already makes and for the same reason:
+  // this control rides a card at an arbitrary scroll position, so a menu hung off
+  // it would land anywhere between mid-screen and the gutter above the nav, and
+  // the same tap would produce a different-shaped thing every time.
+  //
+  // Two rows, and the first one changes. A bare repost is a toggle you can take
+  // back; a quote is a post of yours and comes out through its own ••• like
+  // anything else you wrote, so it is never listed here as something to undo.
+  function openRepostMenu(post) {
+    const orig = Store.originalOf(post) || post;
+    const on = Store.repostedByMe(orig.id);
+    openSheet({
+      items: [
+        on
+          ? { label: 'Undo repost', icon: 'repost', run: async () => {
+              const res = await Store.undoRepost(orig.id);
+              if (res && res.ok === false) { toast(res.error || 'Couldn’t undo that, try again.'); return; }
+              hapticTap('LIGHT');
+              refreshPostViews();
+            } }
+          : { label: 'Repost', icon: 'repost', run: async () => {
+              const res = await Store.createRepost(orig.id);
+              if (!res || res.ok === false) { toast((res && res.error) || 'Couldn’t repost, try again.'); return; }
+              // LIGHT, on the confirmed write, like every other haptic here.
+              hapticTap('LIGHT');
+              // REPAINT FIRST, THEN SPARKLE. These two ran the other way round
+              // and the burst was never once visible — not dim, not brief,
+              // absent. refreshPostViews rebuilds the original's card (its button
+              // has just flipped to .reposted, so the innerHTML signature
+              // syncCards compares has changed) and burstSparkles appends its
+              // layer INSIDE that button, so the stars were added and destroyed
+              // in the same millisecond with no frame between them. Measured, not
+              // reasoned: a MutationObserver caught the add and the remove on the
+              // same timestamp. Anything that decorates a node a re-render can
+              // replace has to run after the re-render, and the re-render here is
+              // synchronous, so there is no window to sneak into.
+              refreshPostViews();
+              celebrateRepost(orig.id);
+            } },
+        { label: 'Quote', icon: 'pencil', run: () => { pendingQuote = orig; go('#/publish'); } },
+      ],
+    });
+  }
+
+  // The tap target for the circle, delegated at the document like the ••• beside
+  // it — one listener, so every card everywhere works with no per-render wiring.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.card-repost');
+    if (!btn) return;
+    e.preventDefault();
+    const post = Store.posts().find(p => p.id === btn.dataset.repost);
+    if (post) openRepostMenu(post);
+  });
+
+  // Reuse the like tap's y2k burst on whichever repost button is on screen for
+  // this post. Tinted by the button's own data-type, which carries the ORIGINAL's
+  // type — what you passed along is a Note or a Frame, and the quintet naming a
+  // type is exactly what the quintet is for.
+  // NOT CSS.escape: that escapes for use as an IDENTIFIER, so a uuid beginning
+  // with a digit comes back as "\30 abc…" and matches nothing inside quotes. The
+  // value is a server-minted uuid, so there is nothing to escape anyway.
+  function sparkleRepostBtn(postId) {
+    document.querySelectorAll(`.card-repost[data-repost="${String(postId)}"]`)
+      .forEach(btn => burstSparkles(btn));
+  }
+
+  // A repost IS a post, so it gets the same welcome as anything else you publish:
+  // celebratePost, the nine-star cascade, tinted off data-burst (the ORIGINAL's
+  // type, since 'repost' names no colour). A QUOTE gets that for free — it goes
+  // out through the composer, lands on #/ at the top, and justPostedId sparkles
+  // it in on arrival, exactly like a note or a Find.
+  //
+  // A bare repost can't use justPostedId, because you don't MOVE when you tap it.
+  // The new row lands at the top of the home feed while you stay where you were,
+  // and you are essentially never at the top: closing a sheet restores focus to
+  // the button that opened it, and .focus() scrolls that button into view, so by
+  // the time this runs the reader is parked on the card they tapped. Measured —
+  // scrollY went 0 → 461 between the tap and the write, and the new row came in
+  // 759px above the fold. A celebration up there is a sparkle nobody sees.
+  // (Setting the flag anyway would be worse than useless: renderFeed alone
+  // consumes it, so a bare repost from a profile would leave it armed and fire
+  // the cascade minutes later on a card the reader had forgotten about.)
+  //
+  // So the sparkle goes on the card the post was passed along FROM, which is on
+  // screen by construction and is the post the act was actually about. For a bare
+  // repost that is not a substitute for celebrating the new row — it is a
+  // pixel-identical redraw of it, since passedCard draws the original's own card.
+  // Picking by "first one visible" means it lands on the new row instead when the
+  // new row is what you can see, and either way it is one sparkle, in one place,
+  // on the drawing the reader is looking at.
+  //
+  // The button burst is the fallback for having no card on screen at all (a
+  // filter that hides it, a surface a .card never reaches). It is also the only
+  // reason the ordering at the call site matters: burstSparkles appends INSIDE
+  // the button, so it has to run after the repaint that rebuilds it.
+  // (uuid interpolated raw, for sparkleRepostBtn's reason just above.)
+  function celebrateRepost(origId) {
+    const btns = [...document.querySelectorAll(`.card-repost[data-repost="${String(origId)}"]`)];
+    const seen = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight;
+    };
+    const card = btns.map(b => b.closest('.card')).find(c => c && seen(c));
+    if (card) celebratePost(card);
+    else btns.forEach(b => burstSparkles(b));
   }
 
   // Delete confirm for one of your own posts. A nested sheet (its own Cancel is
@@ -4929,10 +6012,17 @@
 
   // The friend badge/menu: Remove friend, Block, Report. Replaces the old
   // tap-to-unfriend so an accidental tap can't silently drop a friendship.
-  function openFriendMenu(username, after) {
-    const u = Store.user(username);
-    openSheet({
+  // Takes the tie itself, because the menu drops from it (see openGlyphMenu).
+  function openFriendMenu(anchor, username, after) {
+    openGlyphMenu(anchor, {
+      label: 'Friend options',
       items: [
+        // Share leads, and it is the reason this menu is reachable at all for a
+        // reader who came here to pass someone's profile on. A friend's page has
+        // no ••• beside the tie (see friendBadge), so anything a visitor can do
+        // to a friend has to live in here or it doesn't exist. Sharing was the
+        // thing that didn't.
+        { label: 'Share profile', icon: 'send', run: () => shareProfile(username) },
         { label: 'Remove friend', icon: 'friends', run: async () => { await Store.removeFriend(username); if (after) after(); } },
         { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(username, after) },
         { label: 'Report', icon: 'flag', danger: true, run: () => reportUser(username) },
@@ -5417,30 +6507,46 @@
   // question it answered instead of on the home feed.
   let pendingDaily = null;
   let answeringDaily = null;
+
+  // A quote rides into the composer the same way a daily does, and for the same
+  // reason: it is extra state the composer needs but the route can't carry.
+  // `pendingQuote` is consumed once by the next renderPublish; `quotingPost`
+  // outlives that render because submitComposer is what reads it.
+  let pendingQuote = null;
+  let quotingPost = null;
+
   function answerDaily(occ) {
     if (!occ || myAnswer(occ)) return;   // one each — the UI shouldn't have offered
     pendingDaily = occ;
     go('#/publish');
   }
 
-  /* The card on Discover: coloured glass, the one piece of the page that carries a
-     hue. It floats above the grid, so the material rule says glass — and unlike the
-     tiles it's a single element that doesn't scroll a hundred copies of itself, so
-     it can afford the real sample-and-blur.
+  /* The card on Discover: ordinary glass since 1.3, where it used to be the one
+     piece of the page carrying a hue. It floats above the grid, so the material
+     rule says glass — and unlike the tiles it's a single element that doesn't
+     scroll a hundred copies of itself, so it can afford the real sample-and-blur.
 
-     The whole card is the tap (a stretched link over it), with Answer sitting on
-     top as its own control — read the room, or go say your bit, and nothing in
-     between. The faces are who has answered; the count beside them is the one
-     number Discover allows besides the trending rail's, and it's here because
-     "12 answers" is the difference between a party and an empty room. */
+     The colour moved DOWN, into the button. A filled coloured panel is the same
+     object the app draws for "press this to make something", so the card read as
+     an enormous button that wasn't one, and the real button in its foot had to be
+     bare type to keep out of its way — which left the one control on Discover
+     whose whole job is to invite you to post looking like a caption. Now the card
+     is a headline and "Add yours" is a button (see .daily-card in app.css).
+
+     The whole card is still the tap (a stretched link over it), with the pill
+     sitting on top as its own control — read the room, or go say your bit, and
+     nothing in between. The faces are who has answered; the count beside them is
+     the one number Discover allows besides the trending rail's, and it's here
+     because "12 answers" is the difference between a party and an empty room. */
   function dailyCardEl(occ, answers) {
     const faces = answers.slice(0, 4).map(p => Store.user(p.author)).filter(Boolean);
     const n = answers.length;
     const mine = myAnswer(occ, answers);
     return `<section class="daily-card" data-type="${occ.type}">` +
-        // No coloured dot here. The card IS the colour — a hue-filled panel with a
-        // hue-filled disc on it is the same fact said twice, and the second time
-        // reads as decoration.
+        // Still no coloured dot, and now for the simpler reason: there is no one
+        // colour to put in it. Any type answers any prompt, so a type dot here
+        // would name a requirement that stopped existing. (It came out when the
+        // card itself was hue-filled, where it was the same fact said twice.)
         `<p class="daily-kicker">` +
           `Today’s daily<span class="daily-sep" aria-hidden="true">·</span>` +
           `<span class="daily-left">${esc(dailyLeft(occ))}</span>` +
@@ -5464,7 +6570,9 @@
           // waiting one tap away. A card that reports your own action back to you
           // is talking about the app instead of the room.
           (mine ? ''
-            : `<button type="button" class="daily-answer">${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span></button>`) +
+            : `<button type="button" class="daily-answer publish-fill is-solid">` +
+                `${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span>` +
+              `</button>`) +
         `</div>` +
       `</section>`;
   }
@@ -5498,26 +6606,42 @@
     // better than a disabled button ever could.
     const canAnswer = open && !myAnswer(occ, answers);
 
-    /* The kicker carries the whole status line: what this is, how long it has
-       left, and the way in. All three are the same KIND of fact — small print
-       about the occasion rather than the occasion itself — so they share one
-       tracked micro-caps line, caption left and control right. That's the
-       masthead's own arrangement (nameplate left, filter right) moved up a line,
-       and it spares the row an action parked beside a two-line serif question
-       that never had a baseline to sit on. The standing half is dimmed so the
-       live half reads as the live half. */
-    const kicker =
-      `<span class="daily-when">Daily` +
-        `<span class="daily-sep" aria-hidden="true">·</span>` +
-        `${open ? esc(dailyLeft(occ)) : 'closed'}</span>` +
-      (canAnswer
-        ? `<button type="button" class="daily-answer daily-answer--inline" ` +
-          `id="daily-answer">${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span></button>`
-        : '');
+    /* The kicker is the status line and nothing else now: what this is and how
+       long it has left, one quiet line of small print about the occasion rather
+       than the occasion itself. The invitation used to ride its
+       right end, and it has gone up into the bar with every other page's action
+       (see mountToolbar below) — which also retires the dimming that half of this
+       line carried. It was there so the live half read as the live half, and
+       with the control gone there is no live half here to contrast with. */
+    const kicker = `Daily<span class="daily-sep" aria-hidden="true">·</span>` +
+      `${open ? esc(dailyLeft(occ)) : 'closed'}`;
+
+    // The daily's bar. "Daily" and not the prompt for the small title: the
+    // collapsed copy is a stand-in for the nameplate, and this nameplate is a
+    // SENTENCE — a question truncated to 220px with an ellipsis is a worse
+    // answer to "where am I" than the word the page is called.
+    //
+    // Trailing is the invitation, and it is the one toolbar control that carries
+    // words rather than a glyph. "Add yours" can't be drawn: the words ARE the
+    // invitation, and every glyph that means "write something" (a pencil, a
+    // plus) means it as a command, which is the exact tone this feature spends a
+    // paragraph avoiding. So it's a pill at the same 44px height as the discs
+    // beside it, and it is the SAME BUTTON as the one in the card's foot on
+    // Discover — same geometry, same publish-fill dome, declared once for both
+    // selectors in app.css. It used to wear a tri-colour glass of its own while
+    // the card's copy was bare type, so one invitation was drawn two ways.
+    mountToolbar({
+      leading: toolbarBackEl('#/discover', 'Discover'),
+      title: 'Daily',
+      actions: canAnswer
+        ? `<button type="button" class="toolbar-cta publish-fill is-solid" id="daily-answer" data-slots="2">` +
+            `${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span>` +
+          `</button>`
+        : '',
+    });
 
     view.innerHTML =
       `<section class="view view--daily" data-type="${occ.type}">` +
-        `<a class="profile-back" href="#/discover">← Discover</a>` +
         mastheadEl(kicker, `<span class="masthead-title--daily">${esc(occ.prompt)}</span>`, '') +
         (occ.hint ? `<p class="daily-lede">${esc(occ.hint)}</p>` : '') +
         `<div class="daily-body" id="daily-body"></div>` +
@@ -5533,7 +6657,9 @@
     const layout = (fresh) => dealMasonry(bodyEl.querySelector('.pgrid'), fresh);
     layout(true);
     wireFrameFades(bodyEl);
-    view.querySelector('#daily-answer')?.addEventListener('click', () => answerDaily(occ));
+    // In the bar, so outside #view — same as the profile's dial and the editor's
+    // chevron.
+    document.getElementById('daily-answer')?.addEventListener('click', () => answerDaily(occ));
 
     // Same contract as Discover's grid: a WIDTH change re-deals the columns (the
     // count flips at the breakpoint), a height change — the iOS keyboard, the URL
@@ -5628,6 +6754,7 @@
      so nothing here is orphaned. */
   let discoverQuery = '';     // live search over people + the text of every post here
   let discoverFilter = 'all'; // 'all' · 'people' (a directory of portraits) · one post type
+  let discoverView = 'gallery'; // 'gallery' (the masonry wall) · 'list' (Circle's card column)
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   let discoverResizeOff = null; // drops the grid's resize listener when the view goes
   function renderDiscover() {
@@ -5748,38 +6875,45 @@
         `</button>` +
       `</div>`;
 
+    // Search + filter live in the toolbar's trailing slot (1.3 §4). The three
+    // elements here are ONE control, and none of them is complete alone: the
+    // wrapper holds the 44px slot in the actions row, .toolbar-search-shell is
+    // the glass that grows from that footprint into the bar, and the button on
+    // top of it is glyph and tap target only. Order matters — shell first,
+    // button second, the button riding at z-index 2 over it. Why the input
+    // can't be the shell is in app.css; it comes down to an input never being
+    // able to measure narrower than its own padding.
     const searchAction =
-      `<div class="masthead-search">` +
-        `<input type="search" id="discover-search" class="masthead-search-field" ` +
-          `autocapitalize="none" autocomplete="off" spellcheck="false" tabindex="-1" ` +
-          `placeholder="Search people, tags, anything" aria-label="Search Tria">` +
-        `<button type="button" class="masthead-search-btn" id="discover-search-toggle" ` +
+      `<div class="toolbar-search">` +
+        `<div class="toolbar-search-shell">` +
+          `<input type="search" id="discover-search" class="toolbar-search-field" ` +
+            `autocapitalize="none" autocomplete="off" spellcheck="false" tabindex="-1" ` +
+            `placeholder="Search people, tags, anything" aria-label="Search Tria">` +
+        `</div>` +
+        `<button type="button" class="toolbar-btn toolbar-search-btn" id="discover-search-toggle" ` +
           `aria-label="Search Tria" aria-expanded="false">` +
           `<span class="msb-ico msb-ico--search">${svgIcon('search')}</span>` +
           `<span class="msb-ico msb-ico--close">${svgIcon('close')}</span>` +
         `</button>` +
       `</div>`;
 
-    // Search then filter, grouped at the right of the nameplate. Opening search
-    // wipes its field left across the title, but it's inset to STOP short of the
-    // filter (see .view--discover .masthead-search-field) so the filter stays put
-    // and tappable on the far right.
-    const actions =
-      `<div class="masthead-actions">` +
-        searchAction +
-        filterBtnEl('discover-filter-btn', discoverFilter, 'Filter Discover') +
-      `</div>`;
+    mountToolbar({
+      title: 'Discover',
+      actions: searchAction + filterBtnEl('discover-filter-btn', discoverFilter, 'Filter Discover'),
+    });
 
     view.innerHTML =
       `<section class="view view--discover">` +
-        mastheadEl('', 'Discover', actions) +
+        mastheadEl('', 'Discover') +
         `<div class="discover-body" id="discover-body"></div>` +
       `</section>`;
 
     const bodyEl = view.querySelector('#discover-body');
-    const masthead = view.querySelector('.masthead');
-    const searchEl = view.querySelector('#discover-search');
-    const toggleBtn = view.querySelector('#discover-search-toggle');
+    // Document-scoped, not view-scoped: both now live in #toolbar-actions,
+    // outside #view entirely (same reasoning as syncFilterBtn above).
+    const bar = document.querySelector('.topbar');
+    const searchEl = document.getElementById('discover-search');
+    const toggleBtn = document.getElementById('discover-search-toggle');
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with it,
     // 1 = appears somewhere, 0 = no match.
@@ -5967,7 +7101,10 @@
       // it would be narrowing.
       const occ = q ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
-      const sig = JSON.stringify([q, discoverFilter, tags,
+      // discoverView is IN the signature, and has to be: the tiles are identical
+      // either way, so without it a format switch would sign the same and this
+      // early return would swallow the repaint the tap asked for.
+      const sig = JSON.stringify([q, discoverFilter, discoverView, tags,
         occ && [occ.slug, answers.length], tiles.map(t =>
           [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
             t.post && t.post.id, isLocked(t.user.username)])]);
@@ -5978,9 +7115,23 @@
         : TYPE_PLURAL[discoverFilter]
           ? `No ${TYPE_PLURAL[discoverFilter]} out here yet.`
           : 'Nobody here yet.';
-      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') + tagRail(tags, q) + (tiles.length
-        ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
-        : `<p class="feed-empty">${empty}</p>`);
+      // LIST is Circle's column, not a second design of one: the same makeCard,
+      // so a stranger's post reads here exactly as a friend's does at home, and
+      // the two gates (canSocial, canJoin) keep meaning what they already mean
+      // because it is literally the same card.
+      //
+      // Portrait tiles are dropped rather than drawn as cards — a tile with no
+      // post has nothing for a card to be, and People hides the toggle anyway,
+      // so this only bites a name search under All, where the person you matched
+      // is one tap away in the grid you can switch back to.
+      const asList = discoverView === 'list' && discoverFilter !== 'people';
+      const listPosts = asList ? tiles.filter(t => t.post).map(t => t.post) : [];
+      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') + tagRail(tags, q) +
+        (asList
+          ? (listPosts.length ? `<div class="feed" id="discover-feed"></div>` : `<p class="feed-empty">${empty}</p>`)
+          : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
+            : `<p class="feed-empty">${empty}</p>`));
+      if (asList && listPosts.length) syncCards(bodyEl.querySelector('#discover-feed'), listPosts, wireFeedCard);
       bodyEl.querySelector('.daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
       // The share ask ends the page, so it follows the two views that ARE the
@@ -5991,6 +7142,8 @@
         bodyEl.insertAdjacentHTML('beforeend', shareAsk);
         wireShare();
       }
+      // Both are no-ops in list mode (there is no .pgrid to deal and no tile
+      // faces to fade), so they're left unguarded rather than branched around.
       layoutGrid(stage);
       wireFaces();
       wireTags();
@@ -6009,11 +7162,11 @@
       });
     }
 
-    // Open/close the search field. The icon fans it out over the nameplate and
+    // Open/close the search field. The icon fans it out over the toolbar and
     // focuses it; tapping again (or Escape) folds it back and clears the query so
     // the full grid returns.
     const foldSearch = () => {
-      masthead.classList.remove('searching');
+      bar.classList.remove('topbar--searching');
       toggleBtn.setAttribute('aria-expanded', 'false');
       toggleBtn.setAttribute('aria-label', 'Search Tria');
       searchEl.tabIndex = -1;
@@ -6022,16 +7175,34 @@
     // Focus is opt-OUT for the tag rail: tapping a tag should show you the query
     // it just ran, not raise a keyboard over the results you asked for.
     const openSearch = (focus = true) => {
-      masthead.classList.add('searching');
+      bar.classList.add('topbar--searching');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('aria-label', 'Close search');
       searchEl.tabIndex = 0;
       if (focus) searchEl.focus();
     };
-    const closeSearch = () => {
+    // Closing has to say where focus goes, and the two answers are not the same
+    // control. A keyboard close (Escape, or Enter/Space on the icon) must leave
+    // focus somewhere reachable or the next Tab starts again from the top of the
+    // document, so it lands on the button. A TAP must not, and this is the one
+    // line here with a real trap under it: focus() is a script move, the element
+    // it takes focus from is a text input, and an input always matches
+    // :focus-visible — which the spec's heuristic then passes through to whatever
+    // script focuses next. So an unconditional focus() draws the keyboard ring
+    // on a finger tap: 2px of --accent, which is var(--text), which is #e9ebed on
+    // dark paper. A white ring around the X, from touching it. (Measured on
+    // WebKit and Blink, both schemes.) It only ever showed on an open field
+    // because that is the only state where focus was in the input to begin with.
+    //
+    // The tap blurs instead of parking focus anywhere, which the field wants for
+    // its own reason: mousedown's preventDefault above keeps focus in the input
+    // through the press, and on iOS focus in a folded field is a keyboard still
+    // standing over a search that has closed. The blur handler re-folds, which is
+    // idempotent by then.
+    const closeSearch = (refocus) => {
       if (discoverQuery) { discoverQuery = searchEl.value = ''; paintNow(); }
       foldSearch();
-      toggleBtn.focus();
+      if (refocus) toggleBtn.focus(); else searchEl.blur();
     };
 
     // A tag is a shortcut into search, and tapping the live one again undoes it —
@@ -6049,10 +7220,14 @@
     // Keep focus on the field while the icon is pressed so its blur-to-fold can't
     // race the toggle (mousedown default would move focus off the field first).
     toggleBtn.addEventListener('mousedown', (e) => e.preventDefault());
-    toggleBtn.addEventListener('click', () =>
-      masthead.classList.contains('searching') ? closeSearch() : openSearch());
+    // event.detail is the click's press count, and a button activated from the
+    // keyboard reports 0 where a pointer reports 1 — the only tell available here,
+    // since WebKit fires an ordinary click either way. That is what decides
+    // whether closing hands focus back to the icon or drops it (see closeSearch).
+    toggleBtn.addEventListener('click', (e) =>
+      bar.classList.contains('topbar--searching') ? closeSearch(e.detail === 0) : openSearch());
     searchEl.addEventListener('blur', foldIfEmpty);
-    searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); });
+    searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(true); });
     // Typing repaints on a short trailing beat rather than per letter. A paint
     // here is a full rebuild — search lifts the per-person cap and folds the
     // hand-addressed posts back in, so the grid it builds is roughly double the
@@ -6079,11 +7254,38 @@
     // picking Frame gives you a wall of photos and the people behind them, and
     // accounts with nothing to show drop out: they have no face to match. People
     // is the opposite move — it drops every post and faces everyone alike.
-    view.querySelector('#discover-filter-btn')?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
+    document.getElementById('discover-filter-btn')?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
       current: discoverFilter,
       filters: DISCOVER_FILTERS,
       label: 'Filter Discover',
-      onPick: (key) => { discoverFilter = key; syncFilterBtn('discover-filter-btn', discoverFilter); paintNow(); },
+      // The format switch heads the dial, above People and the ladder. It names
+      // the form it would switch TO rather than the one you're in — the same
+      // reading as every OS toggle, and the only one that works on a row you tap
+      // once.
+      //
+      // Absent under People, not disabled: that row is a directory of portraits,
+      // so there is no column form of it to switch to, and a row that does
+      // nothing is worse than a row that isn't there. The dial is rebuilt on
+      // every open, so this is simply re-evaluated each time rather than needing
+      // to be hidden and unhidden.
+      extras: discoverFilter === 'people' ? [] : [{
+        key: 'view',
+        label: discoverView === 'gallery' ? 'List' : 'Gallery',
+        ico: DISCOVER_VIEWS[discoverView === 'gallery' ? 'list' : 'gallery'],
+      }],
+      onPick: (key) => {
+        // Format, the other axis. It repaints the body and touches nothing
+        // else: the filter, the query and the scroll all belong to WHAT you're
+        // looking at, and this only changes how it's drawn.
+        if (key === 'view') {
+          discoverView = discoverView === 'gallery' ? 'list' : 'gallery';
+          paintNow();
+          return;
+        }
+        discoverFilter = key;
+        syncFilterBtn('discover-filter-btn', discoverFilter);
+        paintNow();
+      },
     }));
 
     // A re-pull while you're standing on Discover repaints the body in place
@@ -6127,13 +7329,13 @@
     };
 
     // Restore an in-flight query if a background refresh re-rendered the page.
+    // Symmetric on purpose: the old in-flow field was minted fresh with the
+    // masthead every render and so began clean, but .topbar OUTLIVES a render
+    // (renderDiscover can be called straight from the refresh path, without
+    // renderPage's resetToolbar), so an empty query has to actively fold a
+    // stale open state rather than merely decline to set one.
     searchEl.value = discoverQuery;
-    if (discoverQuery.trim()) {
-      masthead.classList.add('searching');
-      toggleBtn.setAttribute('aria-expanded', 'true');
-      toggleBtn.setAttribute('aria-label', 'Close search');
-      searchEl.tabIndex = 0;
-    }
+    if (discoverQuery.trim()) openSearch(false); else foldSearch();
     paint();
   }
 
@@ -6198,24 +7400,35 @@
     // words (and is a no-op on a comment, which is always plain). The 90-char cut
     // has to happen AFTER that or the budget is spent on markup and the slice can
     // land mid-tag.
-    const said = (n.kind === 'comment' || n.kind === 'mention') ? notePlain(n.text) : '';
+    // A repost joins the two kinds that quote their text, because a QUOTE carries
+    // a sentence and reading it in the ledger is most of the news. A bare repost's
+    // text is empty, so the line simply doesn't appear.
+    const said = (n.kind === 'comment' || n.kind === 'mention' || n.kind === 'repost')
+      ? notePlain(n.text) : '';
     const quote = esc(said.length > 90 ? said.slice(0, 90).trimEnd() + '…' : said);
+    // NOTE the fallthrough here is `going`, not an error — a kind added in
+    // store.js without an arm in this chain renders "is going to" and nothing
+    // complains. Any new kind has to land above this line.
     const what =
       n.kind === 'comment' ? `commented on ${label}` :
       n.kind === 'like'    ? `liked ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
       n.kind === 'vote'    ? `voted in ${label}` :
+      n.kind === 'repost'  ? `reposted ${label}` :
       // The only row here about a person rather than a post. 'back' is them
       // answering an add of yours; plain is them arriving on their own.
       n.kind === 'follow'  ? (n.back ? 'added you back' : FOLLOW_LINE) :
                              `is going to ${label}`;
-    // Mentions live on someone else's post, so the row walks to that profile;
-    // a follow has no post at all and walks to the person; everything else lands
-    // on your own column.
+    // EVERY row about a post now walks to that POST, which is the whole reason
+    // the page exists. It used to walk to a profile COLUMN — yours, or the
+    // mentioning post's author's — and then scroll to the card and force the
+    // matching panel open, which meant an update about one comment landed you in
+    // somebody's whole archive with a disclosure pre-opened under your thumb.
+    // A follow is the one row about a person rather than a post, so it still
+    // walks to them.
     const href =
       n.kind === 'follow' ? `#/u/${esc(encodeURIComponent(n.user))}` :
-      (n.kind === 'mention' && post) ? `#/u/${esc(encodeURIComponent(post.author))}`
-                                     : '#/profile';
+      post ? postRoute(post) : '#/profile';
     const fresh = n._ts && n._ts > lastSeen;
     // data-key is the row's stable identity for the reconcile in renderUpdates
     // (kind + which post + who + when) — one event, one row, across refreshes.
@@ -6234,11 +7447,20 @@
       `</li>`;
   }
 
-  // The ledger's view switcher (shared seg-tabs control). Only mentions get their
-  // own segment; every other kind just shows under All.
+  // The ledger's view filter, in the shape every other page's is in: rows for
+  // the dial the toolbar's sliders button opens. Only mentions get their own
+  // row; every other kind just shows under All.
+  //
+  // It was a seg-tabs pair sitting inline under the nameplate until 1.3, and the
+  // switch is not a re-skin — it is the whole point of the toolbar. Updates was
+  // the only root page answering "narrow this" with a different control in a
+  // different place, so learning the sliders disc on Circle taught you nothing
+  // here, and the two segments spent a full-width band of the page saying what a
+  // 40px disc in the bar says. Now all four root pages narrow the same way, from
+  // the same corner, through the same dial.
   const NOTIF_FILTERS = [
     { key: 'all',     label: 'All'      },
-    { key: 'mention', label: 'Mentions' },
+    { key: 'mention', label: 'Mentions', ico: 'at' },
   ];
   let notifFilter = 'all';
 
@@ -6470,38 +7692,29 @@
       scope.querySelectorAll('.request-accept').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          await Store.addFriend(btn.dataset.accept);
+          await Store.addFriend(btn.dataset.accept).catch(() => {});
+          btn.disabled = false;              // or a dropped write leaves the row dead
           renderUpdates();
         }));
       scope.querySelectorAll('.request-ignore').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          await Store.declineRequest(btn.dataset.ignore);
+          await Store.declineRequest(btn.dataset.ignore).catch(() => {});
+          btn.disabled = false;
           renderUpdates();
         }));
     }
-    // A row walks you to the post itself (your profile column) with the right
-    // panel already open — the comment thread, who liked, or who's going — and
-    // the profile render scrolls that card into view (see spotlightPost).
-    function wireNotif(a) {
-      a.addEventListener('click', () => {
-        const id = a.dataset.post;
-        // A follow is about a person, not a post — the href already walks to
-        // their profile, and there's nothing to spotlight.
-        if (!id) return;
-        openComments.delete(id); openLikers.delete(id); openGoing.delete(id);
-        if (a.dataset.kind === 'comment' || a.dataset.kind === 'mention') openComments.add(id);
-        else if (a.dataset.kind === 'like') openLikers.add(id);
-        else if (a.dataset.kind === 'going') openGoing.add(id);
-        // 'vote' opens no panel (a poll has none) — just spotlights the post.
-        spotlightPost = id;
-      });
-    }
+    /* wireNotif is GONE. The row's href IS the navigation now — it names the
+       post's page, which draws the thread, the likers and the headcount without
+       being told which one this update was about. What it replaced was a click
+       handler that cleared three sets, added the id back to whichever one matched
+       `data-kind`, and armed a spotlight, so that a profile render could scroll
+       to the card and unfold the right panel. Four pieces of state to say "look
+       at this post", none of which survive a page that simply IS the post. */
     // Wire a freshly mounted panel and stagger its rows — request rows lead, the
     // ledger follows. Runs on first mount and after every filter-switch swap.
     function wirePanelFull(panel) {
       wireRequests(panel);
-      panel.querySelectorAll('.notif').forEach(wireNotif);
       panel.querySelectorAll('.request-row, .notif').forEach((el, i) => {
         el.style.animationDelay = staggerDelay(i);
       });
@@ -6509,15 +7722,15 @@
 
     // First mount (or a page navigation into Updates): build the whole view.
     function mount() {
-      // All / Mentions is the shared segmented control, neutral (no brand glow) —
-      // colour stays reserved for post types.
+      mountToolbar({
+        title: 'Updates',
+        actions: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
+      });
       view.innerHTML =
         `<section class="view view--updates">` +
           mastheadEl('', 'Updates') +
           pushAskHtml() +
-          segTabsEl('updates', NOTIF_FILTERS, notifFilter, { label: 'Filter updates', panelId: 'updates-panel' }) +
-          `<div class="seg-panel" id="updates-panel" role="tabpanel" ` +
-            `aria-labelledby="updates-tab-${notifFilter}" tabindex="0">` +
+          `<div class="notif-pane" id="updates-panel">` +
             panelHtml() +
           `</div>` +
         `</section>`;
@@ -6525,15 +7738,25 @@
       wirePushAsk(renderUpdates);
 
       const panel = view.querySelector('#updates-panel');
-      const tablist = view.querySelector('#updates-tabs');
       wirePanelFull(panel);
 
-      wireSegTabs(tablist, NOTIF_FILTERS, () => notifFilter, (key) => {
-        notifFilter = key;
-        panel.setAttribute('aria-labelledby', 'updates-tab-' + key);
-        panel.innerHTML = panelHtml();
-        wirePanelFull(panel);
-      });
+      // Same contract as Circle's and Discover's: repaint only the pane, relabel
+      // the button's hue dot in place, leave the nameplate and the scroll alone.
+      // The dial itself declines to buzz for a pick that changes nothing, so the
+      // early return here is only about not rebuilding the ledger for it.
+      document.getElementById('updates-filter-btn')
+        ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
+          current: notifFilter,
+          filters: NOTIF_FILTERS,
+          label: 'Filter updates',
+          onPick: (key) => {
+            if (key === notifFilter) return;
+            notifFilter = key;
+            syncFilterBtn('updates-filter-btn', notifFilter);
+            panel.innerHTML = panelHtml();
+            wirePanelFull(panel);
+          },
+        }));
     }
 
     // Already on Updates: reconcile the panel in place instead of tearing the
@@ -6579,7 +7802,6 @@
       if (!wantList) { liveList?.remove(); return; }
       if (!liveList) {
         panel.appendChild(wantList);
-        wantList.querySelectorAll('.notif').forEach(wireNotif);
         wantList.querySelectorAll('.notif').forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
         return;
       }
@@ -6594,7 +7816,7 @@
           if (norm(node.innerHTML) !== norm(want.innerHTML)) {
             // content genuinely changed (an edited post's label) — swap, no rise
             const a = want.querySelector('.notif');
-            if (a) { wireNotif(a); a.style.animation = 'none'; }
+            if (a) a.style.animation = 'none';
             node.replaceWith(want);
             node = want;
           } else {
@@ -6605,7 +7827,7 @@
           }
         } else {
           const a = want.querySelector('.notif');   // brand-new — rise it in
-          if (a) { wireNotif(a); a.style.animationDelay = staggerDelay(i); }
+          if (a) a.style.animationDelay = staggerDelay(i);
           node = want;
         }
         const ref = liveList.children[i] || null;
@@ -6617,7 +7839,7 @@
     // isn't appearing/vanishing (its dismiss + turn-on lean on a full rebuild to
     // drop the card); otherwise mount fresh.
     const livePanel = view.querySelector('#updates-panel');
-    const canReconcile = livePanel && view.querySelector('#updates-tabs')
+    const canReconcile = livePanel
       && (!!view.querySelector('.push-ask') === !!pushAskHtml());
     if (canReconcile) reconcile(livePanel); else mount();
 
@@ -6634,22 +7856,31 @@
   }
 
   /* ── Publish (composer) ───────────────────────────────────────────────────
-     One form, three types. The type picker reuses the home filter chips (same
-     colored language); the fields below swap per type. Photos get a real upload,
-     shown and posted at their native aspect ratio (no crop). On publish we route
-     home so the new entry animates in at the top of the feed. */
+     ONE form and one field set. Nothing here asks what you are making: the four
+     attach toggles at the note's foot open a link row, a photo picker, a poll's
+     choices or a place and a time, and the type follows from whichever is open.
+     Photos get a real upload, shown and posted at their native aspect ratio (no
+     crop). On publish we route home so the new entry animates in at the top of
+     the feed. */
   const PUB_TYPES = [
     { key: 'note',     label: 'Note'     },
     { key: 'find',     label: 'Find'     },
     { key: 'photo',    label: 'Frame'    },
     { key: 'activity', label: 'Activity' },
   ];
-  // The composer has two groups (see PUB_GROUPS): Post and Activity, chosen by a
-  // seg-tab switcher. Within Post, the real type is INFERRED, not picked — attach a
-  // link and it's a Find, a photo and it's a Frame, otherwise a Note. `pubGroup` is
-  // the switcher's value; `pubType` is the inferred/active type the data layer + the
-  // masthead mark + the bottom colour-wash read. Activity fixes pubType='activity'.
-  let pubGroup = 'post';
+  // The type is INFERRED, never picked: attach a link and it's a Find, a photo and
+  // it's a Frame, a poll and it's a Poll, a place and a time and it's an Activity,
+  // nothing at all and it's a Note. `pubType` is that inference, and it's what the
+  // data layer and the masthead mark read.
+  //
+  // Activity was the composer's other GROUP until 1.3 — a seg-tab switcher above the
+  // field set that swapped one whole form for another. It's the fourth attach button
+  // now, for the same reason the other three are buttons: what separates these five
+  // is what the post CARRIES, and a switcher sitting above the form made the reader
+  // answer that before they had written anything. It also meant two field sets to
+  // keep in step, and the plan form was the one falling behind — no rich body, no
+  // optional headline, its own copy of the audience lock. A plan is a note with a
+  // place and a time attached, so that is what it is made of now.
   let pubType = 'note';
   let cropper = null;        // set once a still is captured/picked; .export() → data-URI
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
@@ -6661,6 +7892,11 @@
   // (default, unchanged behaviour); 'list' = only the chosen usernames, enforced
   // server-side by RLS (posts.audience + the post_audience allowlist).
   let pubAudience = { mode: 'circle', users: [] };
+  // Latched the moment the reader answers the audience sheet. Until then what the
+  // lock shows is only a default, and the composer may move it when the post changes
+  // type (see defaultAudience in renderPublish); after, it is an answer and nothing
+  // moves it but them.
+  let pubAudienceTouched = false;
   const audienceCountLabel = (n) =>
     n === 0 ? 'Choose people' : n === 1 ? '1 person' : `${n} people`;
 
@@ -6756,7 +7992,8 @@
       `</div>`;
   }
 
-  function fieldsFor(type) {
+  function fieldsFor(type, opts = {}) {
+    const event = opts.event !== false;
     const tags =
       `<div class="field">` +
         `<label for="c-tags">Tags</label>` +
@@ -6765,42 +8002,30 @@
         `<p class="field-hint">Optional · separate with commas.</p>` +
       `</div>`;
 
-    if (type === 'activity') {
-      // Headline + details ride in one bordered box, split by a divider — same
-      // combo pattern as find and note, so all four types read the same up top.
-      return `<div class="field field--combo">` +
-          `<input id="c-title" class="combo-title" type="text" maxlength="120" ` +
-            `placeholder="Picnic at the park" aria-label="What's the plan?" autofocus>` +
-          `<div class="combo-divider" aria-hidden="true"></div>` +
-          `<textarea id="c-note" class="combo-note" rows="2" maxlength="180" ` +
-            `placeholder="When to show up, what to bring." aria-label="Details"></textarea>` +
-          // The audience lock rides the box's foot, same as the Post note's attach
-          // bar — one consistent place for "who sees this" across every composer.
-          `<div class="rich-attach rich-attach--withlock" role="group" aria-label="Post options">` +
-            audienceLockHtml() +
-          `</div>` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-location">Where</label>` +
-          `<input id="c-location" type="text" maxlength="120" ` +
-            `placeholder="Liberty Park, by the pond">` +
-        `</div>` +
-        `<div class="field">` +
-          `<label for="c-date">When</label>` +
-          `<div class="when-row">` +
-            `<input id="c-date" type="date" placeholder="mm/dd/yyyy">` +
-            `<input id="c-time" type="time" aria-label="Time" placeholder="--:-- --">` +
-          `</div>` +
-          `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
-        `</div>` + tags;
+    // A QUOTE is the ordinary note field — headline and all, like any other post —
+    // followed by the thing it is about. What it does NOT get is the attach bar,
+    // the link row, the poll, the frame or tags: those make a post of your own,
+    // and this one is about somebody else's. The audience isn't offered either,
+    // because it is copied from the original and cannot be widened (see
+    // Store.createRepost and reposts.sql), so a picker would either lie or do
+    // nothing.
+    //
+    // The quoted post sits BELOW the field rather than above it. Above, it read as
+    // a header the form hung off; below, the page is what it actually is — you
+    // write, and the thing you are writing about is underneath, in the same order
+    // the published card puts them.
+    if (type === 'quote') {
+      return richNoteField('c', '', '', 'Say something about it.', { tools: false }) +
+        (quotingPost ? `<div class="quote-banner">${quotedCardEl(quotingPost)}</div>` : '');
     }
 
-    // The unified Post field set, shared by note / find / photo. The Note rich
-    // editor is the base (headline + a contenteditable body + the H1/H2/B/I toolbar,
-    // 15k). The link row and the frame surface ship hidden; the type filter reveals
-    // the one its type needs — Find shows the link row, Frame opens the picker — so
-    // the body carries over as you switch among the three (see renderPublish).
-    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true }) +
+    // The one field set, shared by all five types. The Note rich editor is the base
+    // (headline + a contenteditable body + the H1/H2/B/I toolbar, 15k). The link row,
+    // the poll's choices, the frame surface and the plan's place-and-time all ship
+    // hidden below it; an attach toggle reveals the one it names and folds the rest,
+    // so the words you have already written carry across every one of those changes
+    // (see applyBaseSurface in renderPublish).
+    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true, event }) +
       `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
         `<button type="button" id="c-make-find">Make it a Find</button></p>` +
       `<div class="field" id="c-link-row" hidden>` +
@@ -6809,7 +8034,8 @@
           `spellcheck="false" placeholder="https://…">` +
       `</div>` +
       pollFieldHtml() +
-      frameFieldHtml() + tags;
+      frameFieldHtml() +
+      (event ? eventFieldHtml() : '') + tags;
   }
 
   // The poll surface, shipped hidden in the Post field set — revealed when the
@@ -6835,6 +8061,34 @@
         `</div>` +
         `<button type="button" class="poll-add-opt" id="c-poll-add">Add option</button>` +
         `<p class="field-hint">2 to 4 choices. Closes a day after you post it.</p>` +
+      `</div>`;
+  }
+
+  // The place-and-time surface, shipped hidden like the poll's and the frame's and
+  // revealed by the calendar toggle — which is also what makes the post an Activity.
+  // Where and When are the whole of it, because the rest of a plan is what every
+  // other type already writes: the headline names it and the note above says when to
+  // show up and what to bring. That's the point of folding the old Activity form
+  // back into this one — a plan stopped being a different KIND of thing to write and
+  // went back to being a post that carries a place and a time.
+  //
+  // A plain wrapper, not a .field: the two children are ordinary fields and want
+  // their own margins. It exists only so applyBaseSurface has one thing to hide.
+  function eventFieldHtml() {
+    return `<div class="event-field" id="c-event-row" hidden>` +
+        `<div class="field">` +
+          `<label for="c-location">Where</label>` +
+          `<input id="c-location" type="text" maxlength="120" ` +
+            `placeholder="Liberty Park, by the pond">` +
+        `</div>` +
+        `<div class="field">` +
+          `<label for="c-date">When</label>` +
+          `<div class="when-row">` +
+            `<input id="c-date" type="date" placeholder="mm/dd/yyyy">` +
+            `<input id="c-time" type="time" aria-label="Time" placeholder="--:-- --">` +
+          `</div>` +
+          `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
+        `</div>` +
       `</div>`;
   }
 
@@ -6952,22 +8206,37 @@
       if (mode === 'public') pubAudience = { mode: 'public', users: [] };
       else if (mode === 'list' && users.length) pubAudience = { mode: 'list', users };
       else pubAudience = { mode: 'circle', users: [] };
+      pubAudienceTouched = true;      // an answer now, not a default
       syncAudienceLock(root);
       close();
     });
   }
 
-  // The reactive type mark that rides the "New post" masthead (same slot the
-  // Friends search uses). It mirrors the active type filter — note / find → Find /
-  // photo → Frame / activity — and pops when it flips (see paintIndicator).
   // The composer nameplate names what you're actually making: New note until an
   // attachment reshapes it (New find / New frame / New poll), or New activity.
+  // The type mark beside it mirrors the same inference and pops when it flips
+  // (see syncType).
   function pubTitle() {
+    // "Quote" rather than "New quote": the noun is the act, and the thing being
+    // made already exists — you are adding to it, not starting one.
+    if (quotingPost) return 'Quote';
     return `New ${(TYPE_LABEL[pubType] || 'post').toLowerCase()}`;
   }
+  // The mark beside the composer's nameplate, and it is now the SAME glyph as
+  // the attach button that caused it. Press the link button, watch this become
+  // the link mark and the nameplate say Find: the button and the mark it
+  // produces are one drawing, so the composer teaches its own vocabulary in the
+  // one place a reader is looking at both at once. Don't give this its own
+  // drawing: two pictures for one fact makes a reader learn it twice.
   function typeIndicatorHtml() {
+    // Nothing for a quote. This mark is the composer's one surviving type
+    // indicator, and it exists because a type is a CHOICE here — a reader learns
+    // "link means Find" by pressing the link button and watching it change. A
+    // quote makes no such choice: there is nothing to attach and the mark would
+    // sit there naming a type the post isn't.
+    if (quotingPost) return '';
     return `<span class="type-indicator type-icon type-icon--${pubType}" id="c-type-ind" ` +
-      `role="img" aria-label="${TYPE_LABEL[pubType]}">${TYPE_ICON[pubType]}</span>`;
+      `role="img" aria-label="${TYPE_LABEL[pubType]}">${svgIcon(TYPE_GLYPH[pubType])}</span>`;
   }
 
   function renderPublish() {
@@ -6980,16 +8249,48 @@
     const daily = pendingDaily;
     pendingDaily = null;
     answeringDaily = daily;
+    // A quote arrives the same way, consumed once. If the post it points at has
+    // gone (deleted while you were walking here), the flag is dropped and you get
+    // a plain composer rather than a form aimed at nothing.
+    const quote = pendingQuote && Store.posts().some(p => p.id === pendingQuote.id)
+      ? pendingQuote : null;
+    pendingQuote = null;
+    quotingPost = quote;
     // The composer never persists a draft across navigations, so every entry opens
-    // fresh on the Post group (a plain Note until something's attached).
-    pubGroup = 'post';
+    // fresh: a plain Note until something's attached.
     pubType = 'note';
-    // The reactive colour lives full-screen now: the page ambient wash adopts the
-    // inferred type's hue (see body[data-ambient="publish"] .ambient), keyed off
-    // --glow-wash which syncType keeps in step. Set it before the wash fades in so
-    // it opens on the right colour rather than tweening up from the default.
-    document.body.dataset.ambient = 'publish';
-    document.body.style.setProperty('--glow-wash', TYPE_HEX[pubType]);
+    // THE COMPOSER DOES NOT WASH, and getting here took two removals.
+    //
+    // It first carried the inferred TYPE's hue, re-tweened on every attach, which
+    // made it the last page whose ambient meant a thing rather than a person —
+    // a reader had to learn that the same bloom named a filing category on one
+    // route and an identity on two others. So in 1.3 it became the reader's own
+    // accent, like a profile and like the editor that sets it.
+    //
+    // That was the right colour and still one page-sized gradient too many. The
+    // wash answers "whose page is this", and the composer is the one route where
+    // nobody needs telling: you are looking at an empty form you opened, with
+    // your own Post button under it already wearing your accent. On a profile the
+    // wash is doing work — it is how the page introduces someone. Here it lit a
+    // sheet of paper the reader was about to write on, which is the one surface
+    // in the app that should be as quiet as it can be, and it competed with the
+    // only colour on the page that carries information: the type mark up beside
+    // the nameplate (see typeIndicatorHtml, which is back on the quintet now that
+    // nothing else here is coloured).
+    //
+    // Nothing replaces the call — applyAmbient already lands every non-profile
+    // route on `data-ambient="none"`, so the composer simply keeps what the router
+    // gave it. `paintWash` is down to its two profile callers and one mode.
+    // The composer's own bar. Nothing leading and nothing trailing: the form is
+    // one column of fields with a Share button at its foot, the type indicator
+    // stays beside the nameplate it modifies (a mark for a word, split across
+    // two surfaces is a mark for nothing), and the way out of here has always
+    // been the tab bar sitting right there with the + tucked away. So at the
+    // top of the page the bar is completely invisible, which is the whole
+    // intent — a composer should open as a sheet of paper and not as chrome.
+    // What it buys is the scroll: a long Find with a note under it collapses
+    // the serif nameplate away, and the bar quietly picks the word up.
+    mountToolbar({ title: pubTitle() });
     view.innerHTML =
       `<section class="view">` +
         // No kicker: the audience row below now says who this reaches, so
@@ -7004,9 +8305,9 @@
         // it hangs under (the composer's boxes are outdented on purpose; a line of
         // type isn't a box).
         //
-        // A plain grey caption, not the daily's ink: with the Post/Activity
-        // toggle gone from this flow (an activity was the only way to stop
-        // answering, and it's simply not offered here any more), whatever you
+        // A plain grey caption, not the daily's ink: with the calendar toggle
+        // dropped from this flow (an activity was the only thing that could stop
+        // an answer counting, and it simply isn't offered here), whatever you
         // write always counts, so there's nothing left for a colour to signal.
         (daily
           ? `<div class="daily-banner">` +
@@ -7014,15 +8315,19 @@
               `<p class="daily-banner-prompt">${esc(daily.prompt)}</p>` +
             `</div>`
           : '') +
+        // The quoted post is NOT here: it rides inside the field set, under the
+        // note box (see fieldsFor). It also carries no caption — the tile is a
+        // whole post with a byline on it, sitting under a form titled "Quote",
+        // and a word over it saying "Quoting" is the third telling of a fact the
+        // page has already made twice.
         `<form class="composer" id="composer" novalidate>` +
-          // The Post / Activity switcher sits inline just above the note field (not
-          // docked to the nav like the Friends / Updates one — see #c-group-tabs).
-          // Neutral (no brand glow): colour is carried by the full-screen wash.
-          // Absent while answering a daily: an activity is excluded from every
-          // prompt (see dailyAccepts), so the one thing this switcher could do here
-          // is offer a dead end. pubGroup stays 'post' for the whole flow.
-          (daily ? '' : segTabsEl('c-group', PUB_GROUPS, pubGroup,
-            { glow: false, label: 'What are you posting', panelId: 'c-fields' })) +
+          // Nothing between the nameplate and the fields any more. The Post /
+          // Activity seg-tabs sat here and asked what you were making before you
+          // had made anything; the calendar toggle at the note's foot asks the
+          // same question at the moment there's an answer, beside the three
+          // buttons of exactly its shape. So the form is one column of fields on
+          // every route in — a plain compose, a daily answer and a quote differ
+          // only in which of them get mounted.
           `<div class="fields" id="c-fields"></div>` +
           `<p class="composer-error" id="c-error" role="alert"></p>` +
           `<div class="post-progress" id="c-progress" aria-live="polite">` +
@@ -7036,17 +8341,21 @@
     const fieldsEl = view.querySelector('#c-fields');
     const titleEl = view.querySelector('.masthead-title');
     titleEl?.classList.add('masthead-title--swap');   // hosts the outgoing ghost word
-    let family = null;              // 'base' (the unified Post form) | 'activity'
+    let family = null;              // 'base' (the one post form) | 'quote'
     let lastIndType = null;         // last type the mark showed, so it only pops on a real change
-    let wantLink = false;           // link row open → this Post is a Find
-    let wantPhoto = false;          // frame surface open → this Post is a Frame
-    let wantPoll = false;           // poll surface open → this Post is a Poll
+    let wantLink = false;           // link row open → this post is a Find
+    let wantPhoto = false;          // frame surface open → this post is a Frame
+    let wantPoll = false;           // poll surface open → this post is a Poll
+    let wantEvent = false;          // place + time open → this post is an Activity
 
-    // Within the Post group the type is INFERRED from what's attached: a photo wins
-    // (strongest visual), then a poll, then a link, else a plain Note. The three
-    // attachments are mutually exclusive (opening one folds the others), so at most
-    // one is ever active. Activity fixes itself.
+    // The type is INFERRED from what's attached: a place and a time first (an
+    // activity is the one thing here that lands in the real world, so it outranks
+    // anything decorating it), then a photo, then a poll, then a link, else a plain
+    // Note. The four attachments are mutually exclusive — opening one folds the
+    // others — so at most one is ever live and this order is a tiebreak that should
+    // never be reached rather than a policy.
     function derivePostType() {
+      if (wantEvent) return 'activity';
       if (wantPhoto || cropper || videoCapture) return 'photo';
       if (wantPoll) return 'poll';
       const url = fieldsEl.querySelector('#c-url');
@@ -7055,26 +8364,41 @@
     }
 
     // Re-infer the active type, then reflect it: swap the nameplate, pop the masthead
-    // mark, shift the bottom colour-wash to the type's hue, light the attach button.
+    // mark, light the attach button. The page's wash is no longer part of this — it
+    // carries the reader, not the type (see renderPublish).
     function syncType() {
-      pubType = pubGroup === 'activity' ? 'activity' : derivePostType();
+      // A quote has no type to infer and no indicator to pop: what it makes is a
+      // repost row, and the mark beside the nameplate names the five things you can
+      // MAKE. pubType stays 'note' so nothing downstream has to special-case it,
+      // and submitComposer branches on quotingPost rather than on the type.
+      if (family === 'quote') { syncTitle(); return; }
+      pubType = derivePostType();
       const ind = document.getElementById('c-type-ind');
       if (ind && pubType !== lastIndType) {
         lastIndType = pubType;
         syncTitle();                         // nameplate and mark flip together
         ind.className = `type-indicator type-icon type-icon--${pubType}`;
         ind.setAttribute('aria-label', TYPE_LABEL[pubType] || pubType);
-        ind.innerHTML = TYPE_ICON[pubType] || '';
+        ind.innerHTML = TYPE_GLYPH[pubType] ? svgIcon(TYPE_GLYPH[pubType]) : '';
         ind.classList.remove('is-changing');
         void ind.offsetWidth;                // restart the pop
         ind.classList.add('is-changing');
       }
-      // Full-screen ambient wash adopts the inferred hue; registered --glow-wash
-      // tweens the colour (see the publish .ambient rule).
-      document.body.style.setProperty('--glow-wash', TYPE_HEX[pubType] || TYPE_HEX.note);
+      // No wash repaint here any more: the page's colour is the reader's, set once
+      // in renderPublish, and attaching a photo doesn't change whose app this is.
       fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
+      fieldsEl.querySelector('#c-add-event')?.setAttribute('aria-pressed', String(pubType === 'activity'));
+      // The headline stops being optional on an activity — it is the plan's name and
+      // submitComposer refuses one without it — so the box says so up front instead
+      // of letting the reader find out at the foot of the form. Same field either
+      // way, so anything already typed carries across the flip.
+      const titleInput = fieldsEl.querySelector('#c-title');
+      if (titleInput) {
+        titleInput.placeholder = pubType === 'activity' ? 'Picnic at the park' : 'Title (optional)';
+      }
+      syncDefaultAudience();
     }
 
     // Drop any attached photo/clip and fold the frame surface away. Also resets the
@@ -7091,8 +8415,9 @@
       const b = view.querySelector('.composer-submit'); if (b) b.disabled = false;
     }
 
-    // Show the surfaces the attach toggles asked for: the link row when wantLink,
-    // the frame field when wantPhoto. Both ship hidden; the body carries throughout.
+    // Show the surface the live attach toggle asked for and fold the other three.
+    // All four ship hidden; the note body and the headline carry throughout, which
+    // is why a mis-tap costs nothing.
     function applyBaseSurface() {
       if (family !== 'base') return;
       const linkRow = fieldsEl.querySelector('#c-link-row');
@@ -7101,6 +8426,30 @@
       if (frameField) frameField.hidden = !wantPhoto;
       const pollRow = fieldsEl.querySelector('#c-poll-row');
       if (pollRow) pollRow.hidden = !wantPoll;
+      const eventRow = fieldsEl.querySelector('#c-event-row');
+      if (eventRow) eventRow.hidden = !wantEvent;
+    }
+
+    // A public account's posts default to Anyone (continuity: their notes, finds and
+    // frames were world-readable before this lock existed). An ACTIVITY stays
+    // circle-first regardless, the way it always has — canJoin is friends-only, so a
+    // plan the whole room can read is still one only your circle can turn up to.
+    //
+    // Under the group switcher that was settled once, at mount. The type can now
+    // flip under the reader's hand, so it's recomputed on the toggle — but only
+    // while it IS a default. pubAudienceTouched latches the moment the sheet writes
+    // an answer, and after that nothing here moves it: silently widening or
+    // narrowing a choice somebody made is the one thing this app doesn't do.
+    function defaultAudience() {
+      const me = Store.currentUser();
+      return !wantEvent && !!(me && me.private === false) ? 'public' : 'circle';
+    }
+    function syncDefaultAudience() {
+      if (pubAudienceTouched) return;
+      const mode = defaultAudience();
+      if (mode === pubAudience.mode) return;
+      pubAudience = { mode, users: [] };
+      syncAudienceLock(fieldsEl);
     }
 
     function mountFields() {
@@ -7114,25 +8463,26 @@
       wantLink = false;
       wantPhoto = false;
       wantPoll = false;
-      // A public account's posts default to Anyone (continuity: their notes/finds/
-      // photos were world-readable before). Activities stay circle-first regardless,
-      // matching how they've always been friends-only until you opt them public.
-      const me = Store.currentUser();
-      const defaultPublic = pubGroup !== 'activity' && !!(me && me.private === false);
-      pubAudience = { mode: defaultPublic ? 'public' : 'circle', users: [] };
+      wantEvent = false;
+      pubAudience = { mode: defaultAudience(), users: [] };
+      pubAudienceTouched = false;
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
-      family = pubGroup === 'activity' ? 'activity' : 'base';
-      fieldsEl.innerHTML = fieldsFor(family === 'activity' ? 'activity' : 'post');
+      // A quote is the one family left: one note field, no attach bar, no audience
+      // lock (the audience is the original's and can't be changed), no type
+      // inference. Everything else is the single form — the activity family went
+      // with the group switcher, and its two fields now ship hidden in this field
+      // set exactly as the poll's and the frame's do. The daily flow mounts the same
+      // form minus the calendar (see fieldsFor).
+      family = quote ? 'quote' : 'base';
+      fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily });
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
-      if (family === 'activity') {
-        wireWhenHints(fieldsEl);
+      wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
+      if (family !== 'quote') {
+        wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the field set
+        wireWhenHints(fieldsEl);           // …and so do the date and time inputs
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
-        wireAudienceLock(fieldsEl);
-      } else {
-        wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
-        wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the Post field set
         wireFindNudge();
         wireAttachBar();
         wireAudienceLock(fieldsEl);        // the lock rides the attach bar's bottom-left
@@ -7150,6 +8500,11 @@
       const word = titleEl?.querySelector('.title-word:not(.title-word--out)');
       const next = pubTitle();
       if (!word || word.textContent === next) return;
+      // The bar's collapsed copy of this nameplate, straight across with no
+      // swap of its own: it is either invisible (you are at the top, where the
+      // serif line is doing the talking) or you are scrolled deep in a form,
+      // where a word animating in fixed chrome is a movement nobody caused.
+      setToolbarTitle(next);
       titleEl.querySelectorAll('.title-word--out').forEach(g => g.remove());
       const ghost = word.cloneNode(true);
       ghost.classList.add('title-word--out');
@@ -7162,34 +8517,28 @@
       ghost.addEventListener('animationend', () => ghost.remove(), { once: true });
     }
 
-    // Switch top-level group (Post ⇄ Activity). Each crossing re-mounts the field
-    // set (they share nothing structurally) and resets to a fresh, plain form.
-    function selectGroup(key) {
-      if (key === pubGroup) return;
-      pubGroup = key;
-      document.getElementById('c-error').textContent = '';
-      mountFields();
-      syncType();                            // carries the nameplate swap with it
-    }
-
-    // The two attach toggles at the note field's foot. Link opens the link row (and
-    // makes it a Find); Photo opens the frame field and pops the OS picker (a Frame).
-    // Both are live toggles: tap again to fold the surface and revert the type.
+    // The four attach toggles at the note field's foot. Link opens the link row (a
+    // Find); Photo opens the frame field and pops the OS picker (a Frame); Poll opens
+    // the choices (a Poll); the calendar opens Where and When (an Activity). All four
+    // are live toggles: tap again to fold the surface and revert the type.
     function wireAttachBar() {
       const linkBtn  = fieldsEl.querySelector('#c-add-link');
       const photoBtn = fieldsEl.querySelector('#c-add-photo');
       const pollBtn  = fieldsEl.querySelector('#c-add-poll');
-      // The three attachments are one-at-a-time: turning one on folds the others so
+      const eventBtn = fieldsEl.querySelector('#c-add-event');
+      // The four attachments are one-at-a-time: turning one on folds the others so
       // the inferred type is never ambiguous. Photo owns a live picker/capture, so
-      // clearing it routes through clearFrame (stops any stream); link + poll just
-      // fold their rows (leaving typed content, so a mis-tap doesn't wipe it).
+      // clearing it routes through clearFrame (stops any stream); the other three
+      // just fold their rows, leaving what's typed in them, so a mis-tap costs
+      // nothing but the tap back.
       const foldPhoto = () => { if (wantPhoto) { wantPhoto = false; clearFrame(); } };
       const foldLink  = () => { wantLink = false; };
       const foldPoll  = () => { wantPoll = false; };
+      const foldEvent = () => { wantEvent = false; };
       linkBtn?.addEventListener('click', () => {
         wantLink = !wantLink;
         document.getElementById('c-error').textContent = '';
-        if (wantLink) { foldPhoto(); foldPoll(); }
+        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); }
         else { const u = fieldsEl.querySelector('#c-url'); if (u) u.value = ''; }
         applyBaseSurface();
         syncType();
@@ -7199,7 +8548,7 @@
         wantPhoto = opening;
         document.getElementById('c-error').textContent = '';
         if (opening) {
-          foldLink(); foldPoll();
+          foldLink(); foldPoll(); foldEvent();
           applyBaseSurface();                          // reveal the frame field first
           fieldsEl.querySelector('#c-file')?.click();  // then pop the picker
         } else {
@@ -7210,7 +8559,17 @@
       pollBtn?.addEventListener('click', () => {
         wantPoll = !wantPoll;
         document.getElementById('c-error').textContent = '';
-        if (wantPoll) { foldPhoto(); foldLink(); }
+        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); }
+        applyBaseSurface();
+        syncType();
+      });
+      // The plan toggle. Unlike the other three it can move the audience lock
+      // beside it (see syncDefaultAudience, reached through syncType), because an
+      // activity has always defaulted to your circle whatever your account does.
+      eventBtn?.addEventListener('click', () => {
+        wantEvent = !wantEvent;
+        document.getElementById('c-error').textContent = '';
+        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); }
         applyBaseSurface();
         syncType();
       });
@@ -7285,18 +8644,15 @@
       });
     }
 
-    const groupTabs = view.querySelector('#c-group-tabs');
-    if (groupTabs) wireSegTabs(groupTabs, PUB_GROUPS, () => pubGroup, selectGroup);
-
     document.getElementById('composer').addEventListener('submit', (e) => {
       e.preventDefault();
       submitComposer();
     });
 
-    // Mount the group we arrived on (default Post), then reflect its inferred type.
-    // Nothing pre-aims a daily's surface any more — it opens on the same plain
-    // Note every other compose does, and the tag rides along at submit regardless
-    // of what ends up attached (see submitComposer).
+    // Mount the form, then reflect the type it infers — a plain Note, since nothing
+    // is attached yet. Nothing pre-aims a daily's surface any more either: it opens
+    // as the same plain Note every other compose does, and the tag rides along at
+    // submit regardless of what ends up attached (see submitComposer).
     mountFields();
     syncType();
   }
@@ -7422,7 +8778,9 @@
         submitBtn.disabled = true;
         const ready = () => { submitBtn.disabled = false; };
         if (imgEl.complete && imgEl.naturalWidth) ready();
-        else imgEl.addEventListener('load', ready, { once: true });
+        // 'error' as well as 'load': a picture that never decodes used to leave
+        // Post disabled forever, which reads as the composer refusing to publish.
+        else ['load', 'error'].forEach(ev => imgEl.addEventListener(ev, ready, { once: true }));
       }
     }
 
@@ -8124,6 +9482,13 @@
   async function submitComposer() {
     const errEl = document.getElementById('c-error');
     const val = (id) => (document.getElementById(id)?.value || '').trim();
+
+    // A quote leaves here early: it writes a repost row, not a post, so none of
+    // the type inference, audience picking or media upload below applies to it.
+    // What it keeps is the shape of the ending — the same blocklist gate, the same
+    // SUCCESS haptic, the same justPostedId so the card sparkles in on arrival.
+    if (quotingPost) return submitQuote(errEl);
+
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
     // A daily answer carries its join tag invisibly — it's the app's bookkeeping,
     // not one of the poster's words, so it never sat in the field they can see.
@@ -8236,11 +9601,15 @@
     // A video shows a real, byte-level upload bar (it's the big transfer). Photos
     // and text posts are small enough that a spinner-word says enough; the bar
     // stays hidden for them.
+    // `.catch` is the difference between a failed share and a LOST one: a rejected
+    // write threw straight past the restore below, leaving Share dead and still
+    // reading "Sharing…" with the whole post sitting in the form and no way to
+    // send it. The worst freeze in the app, and the least visible.
     const res = await Store.createPost(data, {
       onProgress: data.video ? (p) => setPostProgress('Uploading', p) : undefined,
-    });
-    if (!res.ok) {
-      errEl.textContent = res.error;
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      errEl.textContent = (res && res.error) || 'Couldn’t share that, try again.';
       clearPostProgress();
       hapticEvent('ERROR');
       if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
@@ -8256,8 +9625,7 @@
     cropper = null;
     videoCapture = null;
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
-    pubGroup = 'post';          // next compose opens on the Post group…
-    pubType = 'note';           // …as a plain Note until something's attached
+    pubType = 'note';           // next compose opens as a plain Note until something's attached
     // An answer goes home to its question: the point of answering is seeing what
     // everyone else said, and the home feed is not where that is. Only if the tag
     // actually survived — someone who deleted it out of the field posted a normal
@@ -8268,6 +9636,43 @@
       go(`#/daily/${encodeURIComponent(answered.slug)}`);
       return;
     }
+    go('#/');
+  }
+
+  // Publish a quote. Short because there is so little to decide: the audience is
+  // the original's, the type is 'repost', there is no media and there are no tags.
+  // What is left is the sentence, the same guidelines gate every other post goes
+  // through, and the same ending.
+  async function submitQuote(errEl) {
+    const orig = quotingPost;
+    const note = readNoteField('c-note');
+    const title = (document.getElementById('c-title')?.value || '').trim();
+    // Same bar as an ordinary post: a title or a note, either will do. An empty
+    // quote is a bare repost the reader took the long way round to, and the sheet
+    // already had a one-tap row for that.
+    if (!title && !note) { errEl.textContent = 'Write a title or a note first.'; return; }
+    if (BLOCKLIST.hits(note, title)) {
+      errEl.textContent = 'That looks like it breaks our community guidelines. Please revise before posting.';
+      return;
+    }
+    const btn = document.querySelector('.composer-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
+    errEl.textContent = '';
+
+    const res = await Store.createRepost(orig.id, { note, title }).catch(() => null);
+    if (!res || res.ok === false) {
+      errEl.textContent = (res && res.error) || 'Couldn’t repost, try again.';
+      hapticEvent('ERROR');
+      if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
+      return;
+    }
+    hapticEvent('SUCCESS');
+    quotingPost = null;
+    // The quote lands at the top of the home feed and sparkles in like any other
+    // post — which is the whole reason this ends the same way createPost's path
+    // does rather than just navigating.
+    if (res.post) justPostedId = String(res.post.id);
+    pubType = 'note';
     go('#/');
   }
 
@@ -8737,7 +10142,9 @@
     '.seg-tab', '.sheet-item', '.sheet-cancel',
     '.comment-form button', '.comment-delete', '.modal-actions button',
     '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
-    '.account-badges > button', '.pf-photo-edit', '.nav-link',
+    // One entry covers every toolbar control (back chevron, search, •••, the
+    // friends tie) — they're one component.
+    '.toolbar-btn', '.pf-photo-edit', '.nav-link',
     '.feed-empty-cta', '.composer-post',
   ].join(', ');
   let pressing = null;   // { el, scale, down } while a finger is down
@@ -8777,8 +10184,8 @@
   const sampleCache = new Map();
   let ambientSeq = 0;
 
-  /* THE PALETTE. Eight colours a profile can wear, and the first five are the
-     post quintet itself — lavender, coral, cyan, lime, rose — because those are
+  /* THE PALETTE. Nine colours a profile can wear, five of which began as the
+     post quintet — lavender, coral, cyan, lime, rose — because those are
      Tria's colours and a ninth family of hues invented for one control would be
      the design system saying two different things about the same app.
 
@@ -8793,18 +10200,159 @@
      rather than to be new brand colours — amber at ~40 degrees, jade at ~158,
      ocean at ~218, which are the three widest holes between the five. They are
      drawn at the quintet's own weight (~0.75 lightness, saturation in its range)
-     so a row of eight reads as one family and not as five Tria colours with
-     three guests. */
+     so the set reads as one family and not as five Tria colours with guests.
+
+     THREE OF THEM HAVE SINCE MOVED OFF THE QUINTET, and that decoupling is the
+     point rather than a drift. A palette's job is nine choices a reader can
+     tell apart; the quintet's job is five type identities. Those are different
+     jobs, and where they disagreed the palette lost: cyan sat 20.8 degrees from
+     ocean and rose's red end came within 6.7 of coral's pink end, so two pairs
+     of swatches were painting each other's colours.
+       - cyan  #9fd6e8 -> #88e4f2   hue 194.8 -> 188, brighter and truer
+       - ocean #8fb4ea -> #5f95f2   hue 215.6 -> 218, deeper, and still BLUE
+       - rose  #ea86ae -> #ea8696   hue 336.0 -> 350, leaning red off coral
+     OCEAN'S HUE IS 218 AND NOT 228, and that took two goes. It first
+     moved to hue 228 to buy clearance from cyan, and 228 plus the arc puts the
+     last stop at 239 — where R catches G and the band turns violet, sitting on
+     lavender's doorstep. The read is that simple to check: while G leads R the
+     eye calls it blue, and it holds at every depth ocean has been drawn at:
+     the +11 stop was #9baaef with G ahead by 15 at the old L* 74 and is
+     #7990f4 with G ahead by 23 at today's L* 65. Clearance from cyan
+     is 8 degrees, which is enough because the two bands read from their
+     centres, and those are a turquoise and a blue — now a turquoise and a
+     deeper blue, which is more clearance than the number says.
+
+     WHAT USED TO BE WRITTEN HERE was that ocean's depth came from SATURATION,
+     and that was making the best of a lever that doesn't reach. Under the
+     inherited recipe a hex's lightness is discarded and its saturation is
+     clamped at 0.72, so ocean's l 0.66 bought a deeper profile WASH and a
+     button identical to everyone else's — a swatch that says deep blue over a
+     #89c0ec fill. It declares its own band now, exactly as ruby does, and the
+     depth is the lightness it always wanted. See the depth note below.
+
+     Saturation on cyan is deliberately past the band's 0.72 clamp so it takes
+     the ceiling: at a pinned L* the only chroma left is what the clamp allows,
+     and blue needs all of it (see BAND_LSTAR). The raw hex is NOT
+     wasted on the way — the .ambient wash paints a palette pick STRAIGHT, so
+     ocean's lower lightness is what makes its profile page deeper too, and it
+     is also the only thing a hex's lightness still decides. That is what caps
+     cyan: at l 0.80 it was a lovely swatch and it took --wash-ink-soft on a
+     dark profile to 4.40, under AA. 0.74 measures 4.58, in line with lime's
+     4.65, and the BUTTON is identical either way because the band re-pins it.
+     --type-photo and --type-poll are untouched: a Photo card is still cyan and
+     a poll still rose, because a hue naming a TYPE is a different promise.
+
+     THREE ACCENTS DECLARE THEIR OWN BAND rather than inherit it, and rose and
+     ruby were the first two — one hue at two depths. The other six are pinned
+     to BAND_LSTAR, and that levelling is still what makes the set a set —
+     but it is also what made "ruby" impossible, because at L* 74 every red is a
+     pink. That is not a hue fact and it is not a saturation one: at L* 74,
+     taking saturation from 0.72 to 1.0 moves OKLCH chroma 0.096 -> 0.125 and
+     still paints #ff98aa. Pink is a LIGHTNESS fact, so depth is the only lever
+     that reaches it, and a `band` recipe is how an accent asks for one.
+
+       - ruby  L* 65. THE FLOOR, and that is the whole spec: the darkest a red
+               goes while the + stays the same near-black every other accent's
+               is. One point lighter is a redundant rose, one point darker is
+               an illegible glyph.
+       - rose  L* 72. Lightened off ruby's number, because the two hexes are
+               1.1 degrees apart and a band re-pins lightness AND chroma — at
+               a shared L* 65 they came out #f47ba5 and #f47ba6, the same
+               colour twice. See the separation note below.
+       - ocean L* 65, the same floor read in blue: the deepest a blue goes
+               while the + stays near-black.
+
+     EVERY ACCENT CARRIES THE SAME INK, and that is a decision rather than a
+     coincidence — ruby was a white-inked gemstone at L* 44 for a day. Measured
+     against --on-type on the thinned surface: 6.06 at L* 74, 5.08 at 68, 4.76
+     at 66, 4.50 at 64, 4.23 at 62. So the near-black runs out at about L* 64,
+     which is why 65 is where the two deep accents sit and why nothing in this
+     palette goes below it. Final: ruby 4.65 / 6.90 / 6.06, rose 5.69 / 8.39 /
+     7.55, ocean 4.68 / 7.08 / 6.09 (thin-on-dark, thin-on-light, opaque FAB).
+
+     GOING DEEPER MEANS LEAVING THE SET, and the gap is why. Below 65 the fill
+     has to carry a light glyph instead, and the WHITE zone does not open until
+     L* 44 — bounded from above by the OPAQUE FAB, which has no scheme to vary
+     with and so must clear against whichever ink it is handed (white does not
+     clear it until 48, nor the light thinned fill until 44). So a declared
+     band has exactly two landing zones — a deepened pastel at ~65 or a gem at
+     ~44 — and the 20 points between them cannot carry a legible glyph at all.
+     Nothing lives in the lower zone today. --user-ink is still wired end to
+     end (ACCENTS `ink` -> paintBrandBand -> --pill-ink) because it is the only
+     thing that makes that zone reachable, but no accent sets it, and the ONE
+     colour on the whole palette is what "everything is consistent" bought.
+
+     AND THERE IS NO PER-SCHEME INK TO BRIDGE THE GAP EITHER. The natural
+     per-scheme answer in it would be near-black on light paper and white on
+     dark, but the FAB is opaque and identical in both — at L* 52 it measures
+     3.85 against the near-black and 3.96 against the white, so a fill that
+     flips its glyph by scheme fails on that button in BOTH of them. One ink
+     per accent is not a simplification, it is the only thing the FAB permits.
+
+     RUBY AND ROSE ARE SEPARATED BY DEPTH ALONE, which is the corner a band
+     recipe paints you into: it re-pins lightness and clamps chroma, so two
+     accents 1.1 degrees apart have nothing else left to differ in. Seven
+     points is what that costs — #f47ba5 against #f799ba, a red-leaning pink
+     under a lighter one, adjacent in the swatch grid so they are read side by
+     side. Rose does NOT simply go to BAND_LSTAR and drop its recipe: its hex
+     is duller than the 0.85 clamp, so an inherited band paints #f0a4bf and the
+     declaration is buying chroma, not just lightness.
+
+     Ocean lands at 65, which is ruby's number and ruby's argument read in a
+     different hue: the deepest a blue goes while the + stays the near-black
+     every other accent's is. Its HEX does not move — it is doing the two jobs a declared band leaves it (the
+     .ambient wash paints it straight, heartsFrom re-pins it), it was already
+     tuned for the first, and its wash figures are the ones measured for 1.1. So
+     the button deepens and the profile page stays the blue it has been, which
+     is the hex/band parting below arriving for a third accent. Final: ocean
+     4.68 / 7.08 / 6.09 (thin-on-dark, thin-on-light, opaque FAB).
+
+     THE HEX AND THE BAND HAVE FULLY PARTED HERE, which the disc note below
+     already half-said. A declared band takes its lightness and chroma from the
+     recipe, so the hex is left doing only the two jobs the band never did: the
+     .ambient wash paints it STRAIGHT, and heartsFrom re-pins it. All three
+     hexes are therefore tuned for the WASH, not for the button — which is why
+     they look duller than the band they produce, and why none of them is 0.85
+     saturated even though all three bands are. Wash --wash-ink-soft, the ink
+     this palette is capped by: rose 5.50 / 5.38 light+dark profile, ruby 4.36
+     / 6.10. Ruby's weakest of the four wash figures is 3.90 (light publish),
+     above the 3.55 cyan has shipped since 1.1, so it is the palette's floor
+     rather than a new low. Ocean's hex is unchanged, so its wash figures are
+     the ones this palette already shipped with.
+
+     TWO THINGS THE DEPTH COSTS, both accepted. A deep band no longer matches
+     its own heart on dark paper — HEART_LSTAR_DK is BAND_LSTAR by reference
+     and stays there, and a heart re-pinned to 74 is nine points off a band at
+     65. It stays there anyway: the heart is a small mark on ink and following
+     a band down is the lime-heart bug with the colours swapped, which is a
+     worse failure than a mark a shade brighter than the button. And ruby's
+     key is NEW, so it is the one accent
+     an older client cannot read; it falls through to the photo/brand default,
+     which is a colour rather than a break. Rose keeps the key 'rose' precisely
+     because `users.accent` already holds it for everyone who picked the old
+     one, and they land on the rose above rather than on nothing — and
+     ocean keeps its key for the same reason, so an older client meeting a
+     deepened ocean simply paints the light one it already knows. */
+  /* ORDER IS THE SPECTRUM, and the grid is 3x3, so each row is a temperature.
+     Sorted by hue starting at the red end and running up the wheel — 350, 15,
+     40, 83, 158, 188, 218, 255 — which deals warm / green / cool as the three
+     rows and is the same monotonic-hue argument --brand-band's four stops
+     already answer to. Ruby and rose are 1.1 degrees apart, which is nothing,
+     so DEPTH breaks that tie and the true red leads the pink. Nothing reads
+     this array by index (the picker maps it, everything else goes through
+     accentOf on the stored KEY), so the order is presentation only. */
   const ACCENTS = [
-    { key: 'lavender', label: 'Lavender', hex: '#b7a6e8' },   // = --type-note
+    { key: 'ruby',     label: 'Ruby',     hex: '#c32842', band: { lstar: 65, sat: 0.85 } },
+    { key: 'rose',     label: 'Rose',     hex: '#ea7b8e', band: { lstar: 72, sat: 0.85 } },
     { key: 'coral',    label: 'Coral',    hex: '#f2a58c' },   // = --type-find
-    { key: 'cyan',     label: 'Cyan',     hex: '#9fd6e8' },   // = --type-photo
-    { key: 'lime',     label: 'Lime',     hex: '#b9df7d' },   // = --type-activity
-    { key: 'rose',     label: 'Rose',     hex: '#ea86ae' },   // = --type-poll
     { key: 'amber',    label: 'Amber',    hex: '#e8c07d' },
+    { key: 'lime',     label: 'Lime',     hex: '#b9df7d' },   // = --type-activity
     { key: 'jade',     label: 'Jade',     hex: '#8fdcc0' },
-    { key: 'ocean',    label: 'Ocean',    hex: '#8fb4ea' },
+    { key: 'cyan',     label: 'Cyan',     hex: '#88e4f2' },   // truer, brighter cyan, hue 188
+    { key: 'ocean',    label: 'Ocean',    hex: '#5f95f2', band: { lstar: 65, sat: 0.85 } },
+    { key: 'lavender', label: 'Lavender', hex: '#b7a6e8' },   // = --type-note
   ];
+  const accentOf = (key) => ACCENTS.find(x => x.key === key) || null;
 
   /* WHY ONE SOURCE IS NORMALISED AND THE OTHER IS NOT.
 
@@ -8866,7 +10414,7 @@
   // caller reads as "not a palette pick" and falls back to the photo: the
   // default, not a broken card. Swatches paint from this too, so the picker is
   // showing the colour you will actually get.
-  const accentCss = (key) => (ACCENTS.find(x => x.key === key) || {}).hex || null;
+  const accentCss = (key) => (accentOf(key) || {}).hex || null;
 
   // Sample a single representative colour from an image (data-URI). Draws it tiny
   // and takes a saturation-weighted average — so a photo's signature colour leads
@@ -8911,6 +10459,315 @@
     });
   }
 
+  /* ── Your colour on the buttons ──────────────────────────────────────────────
+     The band every primary-act button paints (--pill-band, tokens.css) follows
+     YOUR accent. Not the accent of whoever's profile is on screen — and that
+     distinction is the whole reason this doesn't just call paintWash.
+
+     Two different scopes wear the same palette. The .ambient wash is the person
+     you are LOOKING at, so it changes as you browse, which is right: it is their
+     page introducing itself. The buttons are your app chrome. They are the same
+     buttons on every route, they belong to the reader rather than the subject,
+     and repainting your Post button in a stranger's colour as you scrolled their
+     profile would be the app telling you something false about whose app it is.
+     So this reads Store.currentUser() and applyAmbient reads the route.
+
+     It is also why the two must not share the ambientSeq guard: a stale-sample
+     cancel is correct within one question and wrong across two, and letting a
+     wash repaint cancel a pending band sample would leave the buttons on the
+     previous reader's colour with nothing to retry it. */
+
+  // Accept either form the accent pipeline produces — a palette hex, or the
+  // `rgb(r, g, b)` string a photo sample resolves to.
+  function cssToRgb(css) {
+    if (!css) return null;
+    let m = /^#([0-9a-f]{6})$/i.exec(css.trim());
+    if (m) { const n = parseInt(m[1], 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+    m = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(css.trim());
+    return m ? { r: +m[1], g: +m[2], b: +m[3] } : null;
+  }
+
+  /* An accent becomes a BAND, and it is renormalised on the way. That second
+     part is a contrast requirement, not a taste one.
+
+     --on-type (#14171a) is the ink sitting on this fill, and the two accent
+     sources arrive at completely different weights. A palette pick is a pastel.
+     A photo sample is not — glowNorm pins it to HSL 0.55, which is right for a
+     wash sitting behind nothing and wrong under text, where a saturated blue at
+     that weight measures 2.30 against the ink, well under AA. So neither source
+     is trusted: both are pinned to one weight here, which is also the only
+     reason the photo option can touch a button at all.
+
+     Three stops a little either side of the chosen hue rather than one flat
+     colour, so the fill reads as an object and not as a swatch. Sixteen degrees
+     is enough to see and not enough to look like a second colour joined in. */
+  /* DEEP, and normalised PERCEPTUALLY — which is one change, because the second
+     half is what makes the first half possible.
+
+     The band used to be pinned to HSL lightness 0.78, "the quintet's pastel
+     weight". HSL lightness is not perceptual: the same 0.78 lands lavender at
+     L* 71.7 and lime at L* 89.0, nearly white, because the eye reads green as
+     far brighter than blue at equal HSL L. So the eight accents were spread
+     over 17 points of real lightness, and the palest of them had no room to be
+     deepened at all — anything that moved lime somewhere reasonable pushed
+     lavender through the contrast floor.
+
+     Pinning L* instead lands every accent at the same visible weight, and once
+     they are level the whole set can come down together. 80.5 average to a flat
+     74 — lime moves 15 points, jade 12, cyan 9 — so a reader who picks Ocean
+     gets a blue button rather than a blue wash, which is the entire point of
+     choosing a colour.
+
+     74 IS A SETTLEMENT between two versions that both shipped for an afternoon:
+     the old pale 80.5 and a deep 68. 68 was the floor rather than the answer —
+     it read as a different app's button rather than as Tria's in a colour.
+
+     THE FLOOR IS REAL THOUGH, so here is where it is. --on-type (#14171a) rides
+     this fill and the binding surface is the thinned one on dark paper (Share,
+     Post, Save at --pill-alpha over #0e1012; the FAB is opaque and never the
+     hard case). Measured across every hue on the wheel: 6.01 at L* 74, 5.05 at
+     68, 4.62 at 65, and 4.33 — a fail — at 63. Deeper than 68 needs a lighter
+     ink, which is a second ink rule and a bigger change than it looks.
+
+     THIS NUMBER GOVERNS SIX ACCENTS RATHER THAN NINE, because ruby, rose and
+     ocean declare their own band (see ACCENTS) and a declared lstar REPLACES
+     this one. They are not exceptions to the ink rule, though — all three sit
+     at or above 65, i.e. just above where --on-type gives out, which is the
+     same cliff this paragraph measures rather than a second one. The floor
+     still binds everything that does NOT declare a band, which is the other
+     six accents and every sampled photo colour, so moving 74 is still moving
+     most of the palette.
+
+     The brand ramp deliberately does NOT follow this down (see --band-deepen in
+     tokens.css). An accent is a colour standing in FOR the brand and can be as
+     deep as it likes; the brand gradient is the app signing its own name, and
+     it reads bright. */
+  const BAND_LSTAR = 74;
+
+  // Relative luminance, then CIE L* from it — the same two steps every contrast
+  // measurement in this file's comments takes, so the number this solves for is
+  // the number those were measured in.
+  const relLum = (c) => {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  };
+  const lStar = (c) => {
+    const y = relLum(c);
+    return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
+  };
+  /* Solve for the HSL lightness that lands this hue at a given L*. There is no
+     closed form — L* runs through a gamma curve and three weighted channels —
+     but the function is monotonic in l, so a bisection converges to well under
+     a quantisation step in 20 rounds. It costs nothing: this runs three times
+     per colour change, not per frame. */
+  function atLStar(h, s, target) {
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (lStar(hslToRgb(h, s, mid)) < target) lo = mid; else hi = mid;
+    }
+    return hslToRgb(h, s, (lo + hi) / 2);
+  }
+
+  /* How far either side of the chosen hue the band travels — and it is 11 rather
+     than the 16 it was because 32 degrees of sweep is wider than this palette's
+     own spacing. Measured: cyan and ocean sat 20.8 degrees apart, so their bands
+     OVERLAPPED and each ended partway through the other; rose's red end and
+     coral's pink end came within 6.7. Two accents that share colours are two
+     accents a reader cannot choose between, which is the whole job of a palette.
+     The hues moved too (see ACCENTS), and at 22 degrees of span every neighbour
+     now clears: the tightest pairs are coral to amber at 22.9 and rose to coral
+     at 24.7. Widening this again re-opens both. */
+  const BAND_ARC = 11;
+  /* `recipe` is an accent's optional {lstar, sat} — see ACCENTS, where ruby,
+     rose and ocean declare one. A declared value REPLACES the derivation rather than
+     capping it: the clamp is a ceiling, so `Math.min(0.85, hex's own 0.66)`
+     would quietly hand back 0.66 and paint a duller band than the one asked
+     for. Absent, which is the case for the other six and for every sampled
+     photo colour, is the behaviour that has always been here. */
+  function bandFrom(rgb, recipe) {
+    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    const lstar = recipe && recipe.lstar != null ? recipe.lstar : BAND_LSTAR;
+    const sat = recipe && recipe.sat != null
+      ? recipe.sat
+      : Math.max(0.42, Math.min(0.72, hsl.s));
+    // The offsets are in L* now too, so the sweep is as even as the weight is:
+    // a point and a half up one side, three down the other, which is the same
+    // gentle curve the HSL version was reaching for.
+    const stop = (dh, dl) => {
+      const c = atLStar((hsl.h + dh / 360 + 1) % 1, sat, lstar + dl);
+      return `rgb(${c.r}, ${c.g}, ${c.b})`;
+    };
+    return `linear-gradient(115deg, ${stop(-BAND_ARC, 1.5)}, ${stop(0, 0)}, ${stop(BAND_ARC, -3)})`;
+  }
+  /* The band a palette KEY paints, recipe and all. One home for it, because the
+     picker draws these discs and paintBrandBand stamps them, and a disc that
+     previewed the underived band would be the "pale swatch promising a button
+     it no longer produces" bug the disc note below is already about. */
+  const accentBand = (key) => {
+    const a = accentOf(key);
+    return a ? bandFrom(cssToRgb(a.hex), a.band) : null;
+  };
+
+  /* The same accent as a LIKED HEART, which needs two answers rather than one.
+     A heart is a filled mark on the page, not a fill with ink on top, so it is
+     the opposite problem to the band: it has to be dark enough to read ON paper
+     in light mode and light enough to read on dark paper in dark mode. The type
+     hearts already answer it that way — an ink twin nudged toward its pastel in
+     light, the bare pastel in dark — so an accent heart follows the same rule
+     instead of inventing a third.
+
+     AND IT IS PINNED IN L* FOR THE SAME REASON THE BAND IS, which is the half
+     that was actually broken. These were HSL 0.52 and 0.78, and HSL lightness
+     is not perceptual, so the eight accents landed 43 points apart on paper: a
+     lavender heart at L* 37.0 and a LIME HEART AT L* 80.2, which measures 1.3
+     against #edeef0 and is effectively invisible. Picking Lime turned your
+     likes off. Pinned instead, every accent measures 3.46-3.50 on paper and
+     9.37-9.43 on ink — inside the per-type hearts' own range either way (3.02
+     to 4.04, and 7.73 to 12.63), so an accent heart sits where a type heart
+     sits rather than somewhere the palette happened to put it.
+
+     53 in light is the per-type hearts' mean; 74 in dark is THE BAND'S OWN
+     WEIGHT, which is the cohesion worth having: on dark paper your heart and
+     your Post button are the same colour at the same weight, because they are
+     the same fact about you. Light can't join them — a mark at 74 vanishes into
+     paper, which is the bug above — so it drops to where the marks live.
+
+     Both are computed here and stamped as two properties, so tokens.css can
+     pick one per scheme and nothing in JS has to know which scheme is on or
+     listen for it changing. */
+  const HEART_LSTAR_LT = 53;
+  const HEART_LSTAR_DK = BAND_LSTAR;
+  function heartsFrom(rgb) {
+    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    const sat = Math.max(0.5, Math.min(0.9, hsl.s * 1.15));
+    const css = (t) => { const c = atLStar(hsl.h, sat, t); return `rgb(${c.r}, ${c.g}, ${c.b})`; };
+    return { lt: css(HEART_LSTAR_LT), dk: css(HEART_LSTAR_DK) };
+  }
+
+  /* Stamp it on <html>. Absent is the meaningful state: --pill-band falls back
+     to the brand ramp on its own, so "no colour", the gate, and the frames
+     before auth resolves all take the default without a branch here.
+
+     Memoised on the identity that decides the answer, so the router can call it
+     on every route for free — and so it self-corrects, since a sign-in, a colour
+     pick and a new avatar all change that key. */
+  let bandKey = null;
+  let bandSeq = 0;
+  function paintBrandBand() {
+    const me = Store.isAuthed() ? Store.currentUser() : null;
+    const key = me ? `${me.id}:${me.accent || (me.avatar ? 'auto' : 'default')}:${me.avatar || ''}` : 'none';
+    if (key === bandKey) return;
+    bandKey = key;
+    const seq = ++bandSeq;
+    // One accent, three stamped properties: the button band and the two heart
+    // weights. Set and cleared together — a half-applied accent (glass in your
+    // colour, hearts still per-type) would read as a bug rather than a theme.
+    // Removing all three is how the DEFAULT source is expressed: --pill-band
+    // falls back to the brand ramp on its own, so there is no branch for it in
+    // CSS and nothing to keep in step with tokens.css.
+    const stamp = (band, heartLt, heartDk, ink, mark) => {
+      if (seq !== bandSeq) return;
+      const el = document.documentElement;
+      if (!band) {
+        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink', '--type-mark']
+          .forEach(p => el.style.removeProperty(p));
+        return;
+      }
+      el.style.setProperty('--user-band', band);
+      el.style.setProperty('--user-heart-lt', heartLt);
+      el.style.setProperty('--user-heart-dk', heartDk);
+      // The glyph riding the fill. Absent for every chromatic band today,
+      // which is not an omission: every accent and the brand ramp are light
+      // fills and --pill-ink's own fallback is the near-black they want.
+      //
+      // The only source that sets it is --mono-band. An ACCENTS entry MAY
+      // carry an `ink` (ruby shipped a white one for a day, at L* 44), and the
+      // path is kept live because it is the only thing that makes a band below
+      // L* 65 legible at all — see the two-zone note in ACCENTS. If one ever
+      // comes back it has to be stamped from HERE, in the same call that sets
+      // the fill, for exactly the reason the monochrome band does: a glyph
+      // arriving a frame after its band is a + you cannot see, on every route.
+      if (ink) el.style.setProperty('--user-ink', ink);
+      else el.style.removeProperty('--user-ink');
+
+      /* THE POST-TYPE MARKS GO MONOCHROME UNDER A CHOSEN COLOUR, and the split
+         is not which sources are colourful — it is which ones the QUINTET is
+         already inside.
+
+         Default is Tria's own ramp, which is four of the five type pastels; a
+         Photo accent is sampled from the reader's face and carries no claim
+         about the palette at all. Under either, five pastel type glyphs are
+         either literally the same colours the chrome is wearing or a neutral
+         party beside it, and they read as part of the app. Under a PICKED
+         accent they stop doing that: the app is one colour end to end and the
+         + dial is five other ones, so the quintet reads as five stray hues
+         rather than as a vocabulary. 'none' is the same case from the other
+         side — a reader who asked for no colour should not be handed the
+         loudest five in the app the moment they open the + .
+
+         So this is stamped for a palette pick and for 'none', and removed for
+         default and photo. Absent is the meaningful state again: every reader
+         of --type-mark writes it as a fallback around the type's own -ink, so
+         the standard colours need no branch anywhere and tokens.css never
+         learns the token exists.
+
+         It is var(--text), stamped as a var() so it resolves at the point of
+         USE and flips with the scheme on its own — near-black on paper,
+         near-white on ink, which is what "white/black" means here.
+
+         ONE READER SURVIVES: .type-icon--*, which is now only the phone's +
+         speed dial (the composer's mark opts out at the element with
+         --type-mark: initial). The FILTER DIAL opted out too — its rows and
+         ICON_ALL's pentad both take the quintet outright now, because that dial
+         is the legend for a hue dot that never folded; see the ink line in
+         openFilterDial. So the rule the token still enforces is narrow and
+         deliberate: what you are about to MAKE goes mono under a chosen colour,
+         what you are choosing to LOOK AT keeps its hue. The + dial's --glow
+         BLOOM is still not a reader: it is the disc's material rather than a
+         mark, and a mono glyph reads better on it than the tinted one did. */
+      if (mark) el.style.setProperty('--type-mark', 'var(--text)');
+      else el.style.removeProperty('--type-mark');
+    };
+    const set = (rgb, accent) => {
+      if (!rgb) return stamp(null);
+      const h = heartsFrom(rgb);
+      // The heart is deliberately NOT given the accent's band recipe: it has
+      // its own two weights, and following a band down would take the
+      // dark-mode mark toward the invisible-lime bug wearing red.
+      //
+      // `accent` is present for a palette pick and absent for a photo sample,
+      // which is exactly the line --type-mark wants, so it doubles as the flag.
+      stamp(bandFrom(rgb, accent && accent.band), h.lt, h.dk,
+            accent && accent.ink, !!accent);
+    };
+
+    /* THREE SOURCES, and they are three because two of them were sharing an
+       answer. 'none' used to land here as set(null) — the same line 'default'
+       takes — so the option named "no colour" painted the full brand ramp,
+       which is the most colourful the button ever gets. They part here.
+
+       The stamped value is `var(--mono-band)` rather than a literal, so dark
+       mode stays answered once in tokens.css. A custom property holding a
+       var() is substituted at the point of USE, so it resolves against
+       whichever scheme is live when a button paints, and no JS has to know
+       which that is or listen for it changing — the same trick the two heart
+       weights already lean on. */
+    if (!me || me.accent === 'default') return set(null);
+    if (me.accent === 'none') {
+      return stamp('var(--mono-band)', 'var(--mono-heart)', 'var(--mono-heart)',
+                   'var(--mono-ink)', true);
+    }
+    const picked = accentOf(me.accent);
+    if (picked) return set(cssToRgb(picked.hex), picked); // synchronous, lands with the tap
+    // Photo, which is what a null accent still means. Nothing to sample falls
+    // through to the brand ramp rather than to mono: the reader asked for a
+    // colour off a photograph and there isn't one, which is not the same as
+    // asking for no colour at all.
+    if (!me.avatar) return set(null);
+    sampleColor(me.avatar).then(rgb => set(rgb || null));
+  }
+
   // A person's colour: a palette pick if they made one, otherwise sampled from
   // their photo. It lights the full-screen .ambient wash on their profile and on
   // Edit profile, and rides along as --glow-photo because the colour ring badge
@@ -8938,7 +10795,11 @@
   function withAccent(user, apply) {
     const seq = ++ambientSeq;
     const done = (css) => { if (seq === ambientSeq) apply(css); };
-    if (!user || user.accent === 'none') return done(null);   // no one, or colour off
+    // 'default' joins 'none' here rather than falling through to the photo: a
+    // wash is ONE hue lighting a page, and neither "Tria's own ramp" nor "no
+    // colour" names one. The buttons are where those two differ (see
+    // paintBrandBand); a profile page shows neither a gradient nor a grey.
+    if (!user || user.accent === 'none' || user.accent === 'default') return done(null);
     // A chosen colour is SYNCHRONOUS, and that is worth more than it looks: the
     // photo path has a decode in it, so a pick lands in the same frame as the tap.
     const picked = accentCss(user.accent);
@@ -8947,11 +10808,12 @@
     sampleColor(user.avatar).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
   }
 
-  // Light the wash. Both callers pass "profile" — a profile page and the form
-  // that edits it are the same colour on the same gradient, and there is
-  // deliberately no third geometry for them to drift apart on. The parameter
-  // stays because the composer's "publish" is the same switch, set in
-  // renderPublish where the hue is a post type rather than a person.
+  // Light the wash. Three callers, two modes, ONE resolved colour: a profile page,
+  // the form that edits it and the composer are all the same person on the same
+  // gradient, with deliberately no second geometry for them to drift apart on.
+  // The mode is only how HEAVY the bloom is (--wash-amt: 68% publish, 56%
+  // profile) — the composer has no face and no name under it to keep clear of,
+  // so it can carry more. It is not a second colour rule.
   //
   // Turning the wash OFF leaves --glow-wash where it was on purpose: the fade is
   // an opacity ramp, and clearing the colour under it would swap the hue to the
@@ -8976,18 +10838,31 @@
     // A page that IS going to wash keeps the current colour lit while the next
     // one resolves, so profile to profile TWEENS rather than blinking out and
     // back — the sample is a decode, and a hard reset would spend it as a gap.
-    // The composer is the one wash that can't be inherited that way: its hue
-    // names a post type, and leaving it up over someone's profile would be the
-    // page saying something false for the length of a fetch.
-    if (body.dataset.ambient === 'publish') body.dataset.ambient = 'none';
+    // The composer used to be excluded from that — it had to blink out on the way
+    // to a profile, because its hue named a POST TYPE and holding it over
+    // someone's page would have been the page saying something false for the
+    // length of a fetch. It names a person now (yours), so it inherits like any
+    // other wash and publish → profile tweens instead of dropping to paper and
+    // coming back.
     paintWash(user, 'profile');
   }
 
   /* ── About (#/about) ────────────────────────────────────────────────────────
      The public front door: what Tria is, how to install it, the community
-     guidelines, an FAQ, and a feedback form. Reachable from the wordmark when
-     signed in AND from a link on the auth gate (route() special-cases it), so
-     it renders with or without a session — `gated` adds a way back to sign-in.
+     guidelines, an FAQ, and a feedback form. It renders with or without a
+     session — signed out it's reached from a link on the auth gate (route()
+     special-cases it) and `gated` gives it that page's own header and a way back
+     to sign-in; signed in it's a pushed page like any other, with the bar
+     carrying the chevron.
+
+     Signed in it used to be reached from the WORDMARK, which is the entry point
+     1.3 spends itself removing — and by the end of it the wordmark isn't drawn
+     on a signed-in page at all. So the way in is the ••• sheet on your own
+     profile, beside Edit profile — the menu that already collects the
+     account-level destinations. It matters more than a colophon would: the
+     feedback form is here, and it is the only place in the app that reports a
+     bug.
+
      Feedback goes through FormSubmit's AJAX endpoint straight to Zoe's inbox
      (first-ever submission triggers a one-time activation email to her). */
   const FEEDBACK_ENDPOINT = 'https://formsubmit.co/ajax/zoeallgaier@gmail.com';
@@ -9222,10 +11097,15 @@
         `<button class="auth-submit fb-submit" type="submit">Send feedback</button>` +
       `</form>`);
 
+    // Signed in this is a pushed page and takes the bar; the chevron goes to
+    // Profile because that is where the ••• sheet that opens this lives, so the
+    // way out is the way in reversed. Signed out there is no bar to mount into
+    // (body.gate hides .topbar outright), so the front door keeps its own brand
+    // header and its own text link back to the form — both below, gated.
+    if (!gated) mountToolbar({ leading: toolbarBackEl('#/profile', 'Profile'), title: 'About Tria' });
+
     view.innerHTML =
       `<section class="view about${gated ? ' about--front' : ''}">` +
-        // Signed out, the signed-in .topbar is hidden, so carry the same front-door
-        // brand header here too. Signed in, the real topbar is already up top.
         (gated ? authHeader() : '') +
         (gated ? `<p class="about-back"><a href="#/">&larr; Back to sign in</a></p>` : '') +
         mastheadEl('Social media made local', 'About Tria') +
@@ -9318,8 +11198,9 @@
 
   /* ── Tria for business (#/business) ────────────────────────────────────────
      The pricing page, and the only page in Tria written for someone who hasn't
-     signed up. It is reachable signed out for exactly that reason (the gate
-     lets #/about and #/business through and nothing else), because a business
+     signed up. It is reachable signed out for exactly that reason (besides the
+     password-recovery paths, the gate lets only #/about and #/business through),
+     because a business
      owner following a link from an email is not going to make an account first
      to find out what the account costs.
 
@@ -9408,11 +11289,14 @@
         `</ul>` +
       `</article>`).join('');
 
+    // Pushed from About's business fold, so the chevron goes back to it. Same
+    // split as About itself: signed out there is no bar, and the text link stays.
+    if (!gated) mountToolbar({ leading: toolbarBackEl('#/about', 'About Tria'), title: 'Tria for business' });
+
     view.innerHTML =
       `<section class="view about business${gated ? ' about--front' : ''}">` +
         (gated ? authHeader() : '') +
-        `<p class="about-back"><a href="#/about">&larr; ` +
-          `${gated ? 'Back to About' : 'About Tria'}</a></p>` +
+        (gated ? `<p class="about-back"><a href="#/about">&larr; Back to About</a></p>` : '') +
         mastheadEl('Social media made local', 'Tria for business') +
         `<div class="about-body">` +
           // One paragraph, and it sells rather than explains. It leads on the
@@ -9522,6 +11406,12 @@
     // Reduced motion needs neither this nor the freeze — CSS has stilled both.
     if (!reduce) page.classList.add('enter');
     stage.replaceChildren(page);
+    // Empty the bar before the page fills it, so no page can inherit the last
+    // one's title or controls for the length of a render. Every renderFn calls
+    // mountToolbar() (see the Toolbar section above mastheadEl); until one does,
+    // the bar is a page's own bar with nothing in it, which is what body's
+    // toolbar-live class is dropped here to say.
+    resetToolbar();
     renderFn();
 
     // Rows mounted BY a navigation do not play their entrance. This is the other
@@ -9707,6 +11597,12 @@
     if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
     if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
 
+    // Your colour on the primary buttons. Above the gate check on purpose: it is
+    // what CLEARS the band on the way out, so signing out doesn't leave the next
+    // reader looking at the last one's Post button. Memoised, so the common case
+    // (same person, same colour) is a string compare.
+    paintBrandBand();
+
     // Gate: no session → the setup / login screen, whatever the hash says.
     // The one exception is About, the public front door — reachable from a
     // link on the gate itself (it renders chromeless, with a way back).
@@ -9755,12 +11651,13 @@
 
     const hash = location.hash || '#/';
     const path = hash.split('?')[0];
-    // A copied post link carries ?p=<id> onto the author's profile. Set the
-    // spotlight so renderUser scrolls that card into view (same path an Updates
-    // row uses). Only honoured on a profile route.
+    // A copied post link USED to carry ?p=<id> onto the author's profile, and
+    // links minted before 1.3 are still out there in messages and inboxes — so
+    // the query is now a redirect to the post's own page rather than a spotlight.
+    // Old links keep working and land somewhere better than they used to.
     if (path.startsWith('#/u/') || path === '#/profile') {
       const p = new URLSearchParams(hash.split('?')[1] || '').get('p');
-      if (p) spotlightPost = p;
+      if (p) { location.replace(postRoute(p)); return; }
     }
     // A friend view (#/u/…) matches nothing → nothing highlighted. The editor is
     // the one route that borrows another's highlight: it is somewhere you went,
@@ -9768,11 +11665,17 @@
     // the nav going blank while you edit.
     renderNav(path === '#/profile/edit' ? '#/profile' : path);
 
-    // Remember where a friend profile's "← Back" should return to: the page you
-    // came from. Chained profile→profile hops keep the original origin, so Back
-    // always lands you back on the feed/directory you started browsing from.
+    // Remember where a friend profile's back chevron should return to: the page
+    // you came from. Chained profile→profile hops keep the original origin, so
+    // back always lands you on the feed/directory you started browsing from.
     if (path.startsWith('#/u/')) {
       if (lastPath && !lastPath.startsWith('#/u/')) profileOrigin = lastPath;
+    }
+    // Same for a post page. Post→post hops (a quote's tile into its original)
+    // keep the original origin, so back always lands on the surface you were
+    // browsing rather than walking you back down the chain one card at a time.
+    if (path.startsWith('#/p/')) {
+      if (lastPath && !lastPath.startsWith('#/p/')) postOrigin = lastPath;
     }
     lastPath = path;
 
@@ -9797,6 +11700,13 @@
     renderPage(() => {
       if (path.startsWith('#/u/')) {
         renderUser(decodeURIComponent(path.slice(4)));
+        return;
+      }
+      // A single post lives at #/p/<id>. Like a profile and a daily it highlights
+      // no nav tab: it is somewhere you went, not one of the four places you live.
+      if (path.startsWith('#/p/')) {
+        renderPost(decodeURIComponent(path.slice(4)),
+                   new URLSearchParams(hash.split('?')[1] || '').get('pane'));
         return;
       }
       // A daily lives at #/daily/<slug> — like a profile it highlights no nav tab,
@@ -9826,8 +11736,8 @@
         case '#/business':
           if (nativeShell()) { go('#/about'); break; }
           renderBusiness(false); break;
-        // #/support is retired — the header tray shares directly, and the note
-        // from the designer it used to hold is gone. Old links land on About.
+        // #/support is retired. Sharing lives in a profile's ••• sheet, a post's
+        // own ••• menu and Discover's invite banner. Old links land on About.
         case '#/support': go('#/about'); break;
         default:          location.hash = '#/';
       }
@@ -10114,45 +12024,42 @@
     }
   });
 
-  // The wordmark is the front door to About (My Circle in the nav is home);
-  // tapping it while already there just scrolls back to the top.
-  document.querySelector('.brand').addEventListener('click', (e) => {
-    if ((location.hash || '#/').split('?')[0] === '#/about') {
-      e.preventDefault();
-      reclick('#/about');
-    }
-  });
-
-  // The header tray IS the share, not a door to a page holding one. Native sheet
-  // on mobile, clipboard copy on desktop — and the copy path gets a toast,
-  // because a bare glyph has no label to flip to "Link copied" and a silent tap
-  // reads as a dead button. A shared/cancelled result stays quiet: the OS sheet
-  // already said its piece. Always the canonical URL, never location.href, so an
-  // invite sent from a dev server or a deep route still points at Tria's door.
-  document.querySelector('.share-tria').addEventListener('click', async () => {
-    const result = await shareOrCopy({
-      title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com',
-    });
-    if (result === 'copied') toast('Link copied. Send it to someone good.');
-  });
-
   window.addEventListener('hashchange', route);
 
   // The reading gesture half of the rule above: a thumb going down tucks the bar,
   // a thumb going up brings it back. Pure class-toggling — the transform and its
-  // transition live in CSS and only apply at phone widths, so desktop (where the
-  // bar is the sidebar's sibling brand rail) never moves. State is shared with
-  // syncTopbar via barLastY, so a scroll the ROUTER placed can't be mistaken for
-  // a direction the reader chose on the next real gesture.
+  // transition live in CSS, at BOTH widths as of 1.3. They used to be phone-only,
+  // because on desktop the bar wasn't a bar: it was a transparent box resting a
+  // wordmark on the nav card, and there was nothing there worth getting out of the
+  // way of. It carries the page's own controls now, so it reads down the same way
+  // the phone's does. State is shared with syncTopbar via barLastY, so a scroll
+  // the ROUTER placed can't be mistaken for a direction the reader chose on the
+  // next real gesture.
   (() => {
     const topbar = document.querySelector('.topbar');
     barLastY = window.scrollY;
+    // State the material once at boot, before any render settles. The bar ships
+    // in index.html without the class, so a page that opens at the top would
+    // otherwise wear a fill for the length of the first paint.
+    syncToolbarEdge(true);
     let ticking = false;
     window.addEventListener('scroll', () => {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
         const y = window.scrollY;
+        // A boolean threshold crossing, not a per-frame reposition — same
+        // tolerance .topbar--hidden already accepts from a coalesced scroll
+        // event: a crossfade starting a beat late is invisible, unlike a
+        // layer whose position is recomputed from scroll every frame.
+        syncToolbarTitle();
+        // Same, and deliberately ABOVE the teleport guard and the y<48 return
+        // below: both of those are statements about the bar's POSITION, and
+        // the material is a statement about what is behind it. A jump to the
+        // top of a page has to take the material off even though it wasn't a
+        // gesture, or the one arrangement this effect exists for — a page
+        // sitting at its top — is the one that keeps a fill it hasn't earned.
+        syncToolbarEdge();
         // The top of a page always wears its bar, however the window got there —
         // checked BEFORE the teleport guard, or a jump bigger than a viewport
         // (a long feed back to the top of a short page) takes the early return

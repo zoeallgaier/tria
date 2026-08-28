@@ -125,10 +125,11 @@ a browser" branch has to consult it.
 `hapticEvent`). `@capacitor/haptics`' tidy `registerPlugin` wrapper is an ES
 module and Tria has no build step, so app.js calls
 `Capacitor.toNative('Haptics', …)` instead — identical wire format, fire and
-forget, no promise per tap. Three rules: they fire on the **confirmed change**,
-never the touch (the buzz means "that landed", which is worth feeling; "you
-touched glass" the finger already knew), the **one exception** being a danger row
-in `openSheet`, which is a warning *about* what's coming; LIGHT is for something
+forget, no promise per tap. Three rules: **only an act that changed the SHARED
+WORLD** gets one — a like, a vote, an RSVP, a comment, a repost, a published
+post — never an act that only changed what you are LOOKING at, the **one
+exception** being a danger row in `openSheet`, which is a warning *about* what's
+coming; LIGHT is for something
 that stays on screen and MEDIUM for something that lands in the real world, the
 same split as `canSocial` vs `canJoin`; and they are **not** gated on
 prefers-reduced-motion, unlike the sparkles — a haptic isn't motion, iOS has its
@@ -137,13 +138,40 @@ someone who turned the animations down has lost their tap confirmation, so the
 buzz is worth more to them. Silence must stay a correct outcome: on web, on
 desktop, with haptics off, nothing may depend on one firing.
 
-"Confirmed change" is why the **filter dial** taps from inside `openFilterDial`
-and not from its three `onPick` callbacks: the dial is the one place a pick from
-the home feed, Discover and a profile shelf all pass through, and it is also the
-only place that still knows what the filter *was*. Picking the row that already
-wears the checkmark repaints nothing, so it stays silent — a buzz there would be
-the phone confirming a write that never happened, which is the whole thing the
-haptic is supposed to mean.
+**That rule narrowed in 1.3, and the reason is the bridge rather than taste.**
+It used to be "anything that lands on the screen", which put a buzz on all three
+disclosure panels (comments, who-liked, who's-going) and on the filter dial. All
+four are gone. On the web `haptic()` is `navigator.vibrate` or nothing at all, so
+the cost was invisible for a year; in the App Store build every call is a round
+trip through the Capacitor bridge, and **the bridge has no short-circuit for a
+fire-and-forget call.** `cap.toNative` correctly sends `callbackId: '-1'` when no
+callback is passed, but `HapticsPlugin.impact` calls `call.resolve()`
+unconditionally, which reaches `CapacitorBridge.toJs`, which schedules
+`webView.evaluateJavaScript(…)` **on the main thread** to deliver a result that
+`-1` means nobody is listening for. Every buzz therefore enters the JS context on
+the same thread running the scroll and the CSS animation. A panel opening is
+exactly a stretch of moving frames, and it was paying that toll to say "yes, the
+thing you tapped opened" — which the thing opening had already said. The device
+log is the tell: `To Native -> Haptics impact -1` followed by `TO JS undefined`.
+
+**Putting them back was tried on 2026-08-27 and reverted the same day.** The
+argument was that the tween's first beat gives the finger nothing, so the tap
+reads as dropped — plausible, and not what was actually wrong. It went in while
+chasing a report of the app FREEZING on that exact interaction, which makes
+three fresh bridge calls on the suspect gesture the worst thing to be holding
+while bisecting. The real cause was the card signature (see **A disclosure is
+not content** below). If the buzz is ever re-argued, re-argue it against a panel
+that opens cleanly.
+
+Two related facts worth having. The `⚡️` log spam itself is **debug-only** —
+`CAPInstanceDescriptor.m` defaults `loggingBehavior` to `Debug` and
+`capacitor.config.json` doesn't override it — so an Xcode build is measurably
+slower than what ships, and in that build the bridge *also* replaces
+`window.console`, making every `console.log` its own message to native. **Compare
+against a Release build before chasing a performance report.** And
+`Haptics.swift` allocates a fresh `UIImpactFeedbackGenerator` per call with no
+`prepare()`, so the Taptic Engine spins up on demand — which is why a buzz can
+feel late against the finger. That one is the plugin's code, not ours.
 
 **Outbound links need a plugin, because a WKWebView will not open a window.**
 `window.open` returns null and a `target="_blank"` anchor is completely inert —
@@ -278,6 +306,48 @@ it. A banner is not ambient pressure the way a badge is — it says something ju
 happened and then it leaves.
 See `supabase/PUSH-SETUP.md` for the .p8 and the secrets, which only Zoe can do.
 
+**Tria adopts UIScene, as of 2026-08-27, and it had to.** Building against the
+iOS 26 SDK logs *"UIScene life cycle is now required when building with the
+latest SDKs. Apps that don't adopt will fail to launch."* Tria was on the old
+`@UIApplicationMain` + `UIMainStoryboardFile` model, which is exactly what that
+warning is aimed at — and Capacitor 8 does not help here, there is no
+`UIWindowScene` or `UISceneDelegate` anywhere in its Swift, so adoption is
+entirely on our side.
+
+What it cost was small, because both of the delegate methods UIScene takes away
+were **already dead**: `application(_:open:)` needs a `CFBundleURLTypes` (Tria
+registers none) and `application(_:continue:)` needs an associated-domains
+entitlement (Tria has only `aps-environment`). So nothing that ever ran stopped
+running. `Info.plist` gains a `UIApplicationSceneManifest` naming
+`$(PRODUCT_MODULE_NAME).SceneDelegate` and `Main`, and loses
+`UIMainStoryboardFile`; the six empty lifecycle stubs Xcode's template shipped
+are deleted, since those are precisely the methods a scene app stops calling.
+
+Three things about it are load-bearing:
+
+- **`SceneDelegate` is EMPTY, and that is the correct version.** The manifest
+  names `Main` as the scene's storyboard, so UIKit builds the window,
+  instantiates the initial view controller (`TriaViewController`) and assigns it
+  to `window` on its own. The classic way to get a black screen is to implement
+  `scene(_:willConnectTo:)` and not redo the setup UIKit was already doing. Don't
+  add one speculatively.
+- **It lives in `AppDelegate.swift`, not a file of its own.** The project lists
+  its sources individually (`objectVersion = 60`, no filesystem-synchronized
+  group), so a new file must be registered in `project.pbxproj` by hand — and a
+  Swift file present on disk but absent from the target compiles to nothing,
+  which surfaces as `UISceneDelegateClassName` naming a class that isn't there:
+  a launch failure with no build error, the same shape as the missing push
+  plugin. A class in a file already in the target cannot fail that way. Swift
+  class names are module-scoped, so the manifest resolves it wherever it sits.
+- **The APNs forwards did NOT move.** A device token belongs to the app, not to
+  a window, and `UIApplicationDelegate` is still where APNs delivers it.
+
+Verified end to end rather than reasoned: `BUILD SUCCEEDED` against
+iPhoneSimulator26.5, `nm` finds `_$s3App13SceneDelegateC…` in the binary, the
+built Info.plist reads `App.SceneDelegate` (variable expanded, matching the
+symbol), and the app launches on an iPhone 17 Pro simulator through the splash
+to a rendered feed.
+
 **The app icon is an Icon Composer file, and the build setting has to name it.**
 `ASSETCATALOG_COMPILER_APPICON_NAME = TriaAppIcon`, not `AppIcon` — the
 `AppIcon.appiconset` still holds Xcode's default blue placeholder, and while that
@@ -292,6 +362,33 @@ what it can't — the install-tutorial bug was a clean Chromium boot and a clean
 haptic hardware, so a bridge call can only be verified as *resolving*, not as
 felt; do that by probing from the gitignored `www/` copy (never the source), and
 regenerate with `ios-sync.sh` after.
+
+**No button may be left dead by a dropped connection.** Every control that waits
+on the network disables itself so a second tap can't double-submit, and every one
+of them has to hand the control BACK on *every* path — including a rejected
+promise, which is the common case on a phone (a dropped connection, an app sent
+to the background mid-upload). Half of them had a `try/finally` and half returned
+the button only on a *refusal*, so a **throw** sailed past the restore and left
+the control disabled for the life of the view, with nothing on screen to say why.
+Fifteen sites; the worst was the composer, stuck reading "Sharing…" with the
+whole post still in the form. The fix is deliberately the small one — a
+`.catch(() => null)` on the await and an unconditional re-enable, not a wrapper
+every caller has to be bent to fit — because a rejected write and a refused one
+mean the same thing to the person tapping. The audit is a grep: every
+`disabled = true` that has an `await` under it needs a `.catch` or a `finally`
+AND a hand-back.
+
+**The heart is the ONE reaction that paints before it asks**, and the reason is
+worth knowing before copying it. A like is private, so the count belongs to the
+post's author and there is nothing of *yours* to recompute — the whole visible
+change is one class on one button, needing no cache and no rebuild. So it flips,
+buzzes and sparkles on the frame after the finger lifts, and puts itself back if
+the write is refused. It is also deliberately **not** `disabled` while it waits.
+The RSVP, the poll and the repost all redraw from the cache, so none of them can
+do this without the store moving first — and making the store move first is the
+optimistic-write layer that was built, measured, and **reverted** for being more
+machinery than the problem was worth. Don't rebuild it without a measurement from
+a real device.
 
 ## Before you call an app.js/store.js change done
 Run a headless boot pass — `node --check` alone once shipped a runtime
@@ -395,6 +492,30 @@ a review, so treat it as a release blocker rather than a chore:
   lands in `push_subscriptions` with its `apns:` endpoint. The fan-out simply has
   nothing to sign with. Nobody is notified and nothing complains.
 
+**`supabase/reposts.sql` HAS been run** (confirmed 2026-08-27), and it was on
+this list as a release blocker after it had already landed — the same drift
+`friend-declines.sql` had, so read the paragraph below about verifying before
+repeating. Probed read-only: `posts.repost_of` selects `200`, and both
+`can_view_original` and `repost_insert_ok` answer `200 true` over RPC. Those two
+functions sit at the END of that file and the `type` check widens near the top,
+so the functions existing is proof the whole script ran. The repost glyph is
+live, not a button that toasts `42703`.
+
+**`supabase/activity-reminders.sql`'s table has been run too** — `activity_reminders`
+selects `200 []`, where a table that was never created answers `404 PGRST205`.
+The `pg_cron` job in the same file is the one half of it REST cannot see (cron
+lives outside PostgREST's schema), so treat the schedule as unverified rather
+than asserting it either way — same standing as the `.p8` key.
+
+**Sweep result, 2026-08-27: every `.sql` file in `supabase/` probes as run.**
+`friend_declines` (column `decliner`), `blocks`, `poll_votes`, `post_audience`,
+`headcount`, `push_subscriptions`, `users.accent`, `posts.audience` /
+`posts.poster` / `posts.tint`, and `claim_push_endpoint` (which answers `401
+42501` — permission denied for anon, i.e. it EXISTS; a missing function answers
+`404 PGRST202`, which is what the bogus control returned). Controls were run
+alongside every probe. So there is no pending migration left: the `.p8` key
+above is the whole outstanding list, and it is the one thing REST cannot reach.
+
 It has no client-side fix and Claude cannot do it; if a report looks like
 "notifications are broken", check this before reading code. (The other recurring
 not-a-bug is the one-shot iOS permission prompt — see the push section above.)
@@ -443,6 +564,177 @@ it either way.
   replay. `worldGen` is the other half: signing out throws the world away, and a
   load still in the air must be dropped rather than repopulate the app of someone
   who just left.
+- **A disclosure is not content, and the card SIGNATURE has to agree.** `makeCard`
+  stamps `dataset.sig` and `syncCards` replaces any card whose fresh signature
+  differs — that is the whole mechanism keeping a quiet refresh from rebuilding
+  the feed. But the three panels write their open state into the markup they
+  return (an `open` class, plus `aria-expanded` on the toggle), and the signature
+  was a hash of the raw `innerHTML`. Opening a panel toggles that class on the
+  LIVE node and never restamps `sig`, so from the tap onward the node's recorded
+  signature said "closed" while the node said "open", and **the next refresh
+  replaced a card nobody had changed.**
+
+  The cost is not a repaint: `makeCard` re-runs `richText()` over every comment
+  in the thread, rebuilds all three panels and re-runs six wiring functions,
+  synchronously, for every card with a panel open. The tween dies mid-flight and
+  the fresh node arrives already open with no animation, which reads as a snap —
+  and since the app re-pulls on **every foreground**, the trigger is "read some
+  comments, switch apps, come back". It was reported as the app freezing when
+  you open or close comments.
+
+  `cardSig()` normalises the state out rather than restamping on toggle, so the
+  hash answers the question `syncCards` is actually asking and no future
+  view-state class has to remember to restamp. It is deliberately narrow — the
+  three panel classes **by name** and the `aria-expanded` beside them, never a
+  blanket strip of the word "open", which would collide with any comment
+  containing it. `.readmore` is deliberately left in the signature: its rebuild
+  is documented and accepted, it holds no form and no focus, and its toggle's
+  label changes too, so it is not the same bug.
+
+  **The tween was the first suspect and it measured clean.** `grid-template-rows:
+  0fr → 1fr` looks like the expensive thing — a layout animation over a document
+  where every card carries all three panels fully built — and it is not: 200
+  cards x 8 comments under a blurred fixed bar holds ~9ms frames, and `contain:
+  layout` on `.card` makes it marginally **worse**. Don't add containment here,
+  and don't reach for the tween the next time this interaction is slow.
+
+- **A POST HAS ITS OWN PAGE, `#/p/<id>`, and it replaced four separate answers
+  to the same question.** Before 1.3 a single post was a POSITION IN A COLUMN: a
+  copied link opened the author's profile with `?p=<id>` and the router scrolled
+  to the card, an Updates row did the same *and* force-opened whichever panel
+  matched the notification, a frame-wall tile did it a third time, and "the whole
+  note" was a max-height tween inside the feed. Four mechanisms, one of which had
+  to teleport the window a thousand pixels down somebody's archive to land you on
+  one card.
+
+  `renderPost` draws `makeCard(post, { full: true })` and nothing else. **It is
+  the same function the feed calls** — every type, both repost forms, the poll,
+  the photo branch, `canSocial` and `canJoin` all keep meaning exactly what they
+  meant, and that is the design rather than an economy: a post has to read the
+  same in both places, so the page is only where it is allowed to be COMPLETE.
+  `full` does three things and no more — no clamp on the note, the comment thread
+  drawn open, and who-liked / who's-going drawn in place of the disclosures a
+  feed card wears.
+
+  **A FEED CARD CARRIES NO PANEL AT ALL, and all three glyphs are links.** The
+  comment glyph, and the author's heart, both open the post's page; the headcount
+  still raises your hand in place and only walks to the page for the list. The
+  writing box survived one round of this holding just the form, on the argument
+  that starting a sentence shouldn't cost a navigation. What it actually bought
+  was a box you could type into while the conversation it belonged to was
+  somewhere else, and a submit that walked you there anyway — so the navigation
+  happened regardless, after the typing instead of before it. One door beats a
+  box plus a door to the same place. Retired with it: `openComments` (the last of
+  the four open-sets), the toggle handler, and `justCommentedId`.
+
+  **THE CARD SITS IN A `.feed`, and that is the fix rather than a shortcut.** A
+  post has to measure exactly as it does at home, and the feed's width is not one
+  number: it is `max-width: var(--feed-width)` on desktop AND `margin-inline:
+  -1.15rem` on phones, which is how a card bleeds to the screen edge past
+  `.view`'s own padding. Written out by hand the page had neither — the card took
+  the view's 1.15rem inset, so its text column measured **316px against the
+  feed's 353** (squished by exactly twice that padding), and on a wide screen it
+  took no cap at all, **836px against the feed's 660**. Same class, same
+  measurements, nothing left to drift. Verified at 390 / 900 / 1280: identical
+  text bounds on both surfaces.
+
+  **THE THREE SECTIONS ARE MUTUALLY EXCLUSIVE AGAIN, and the action row is the
+  switcher.** Comments is the resting state and the floor; the author's heart
+  swaps in who liked, the headcount swaps in who's going, and tapping the live
+  one comes back to comments rather than leaving bare space under the card. On a
+  CARD these three excluded each other because a card must never grow two threads
+  at once, which is an argument about space; on the PAGE they exclude each other
+  because they are three answers to different questions about one post, and
+  drawing all three at once makes the reader do the sorting.
+
+  Three things about it: `postPane` is **module state, not per-render**, because
+  posting or deleting a comment rebuilds the card in place and the pane has to
+  survive that (`renderPost` resets it, so every arrival opens on the
+  conversation). Switching panes is a **class toggle and never a re-render** —
+  `setPostPane` writes `aria-expanded` on all three buttons itself for exactly
+  that reason. And it is `display: none`, **not a height tween**: this is a swap
+  between two things of unrelated length, not a disclosure opening out of
+  nothing. The lit glyph is the section showing, which is what
+  `[aria-expanded="true"]` already meant on all three.
+
+  **The composer sits at the TOP of the thread**, above the comments rather than
+  under them. This is a page you navigated to in order to say something, so the
+  thing you came to do should not be below however many replies are already
+  there — and the box then sits in the same place whether a post has two comments
+  or two hundred. The empty state ("No comments yet.") goes UNDER it, never over:
+  above an empty composer it would be the page saying the same thing twice before
+  you had a chance to answer it.
+
+  **RAISING YOUR HAND STAYS IN THE FEED.** `canJoin` is the one act on a card
+  that lands in the real world, it is one tap, and charging a navigation for it
+  would be the redesign taxing the thing it was meant to make easier. The
+  headcount button joins when there is a hand to raise and walks to the page
+  otherwise, where the list and `.going-out` live. The heart is the same story
+  from the other side: a friend's heart is still an optimistic one-tap like in
+  the feed, and only the AUTHOR'S — which was never a like, always a disclosure —
+  became a link.
+
+  **THE PANELS ARE PAGE SECTIONS, so the collapse machinery is gone from the CSS
+  too.** `.comments-panel` / `.likers-panel` / `.going-panel` were a grid-rows
+  0fr→1fr tween under an opacity lift, with a 0.7rem left gutter for the reply
+  rule, a right pad of `--inset`, and a compensating left pad on
+  `.comments-content` to drag the text back onto the post's type axis — three
+  paddings cancelling to one alignment. Right while the thing was nested under a
+  card, pure overhead once it IS the page. They take `padding-inline: var(--inset)`
+  and stop. Note the phone override at the bottom of app.css was the same
+  arithmetic and had to be flattened with them: it is `.comments-panel` at (0,1,0)
+  in a later media query, so it would have beaten any `--full` modifier at equal
+  specificity.
+
+  **Each name list needs a LABEL, and its absence was a real bug for a day.**
+  Under a disclosure the button was the label — you tapped a heart carrying a
+  count, so the names that unfolded could only be who liked it. On a page nothing
+  has been tapped, and the list arrives as a bare name between the action row and
+  the composer, where a reader cannot tell a liker from an attendee. `.panel-label`
+  ("Liked by", "Going"), sentence case at `--kicker`, the app's one label voice.
+  **Every functional check passed while this was broken** — it was caught by
+  screenshotting the page and looking at it.
+
+  **The bar says "Sam's post" / "Sam's activity"**, not a bare name. A name alone
+  answers "whose page is this", which is the wrong question on a route that is one
+  post, and the one a reader arriving from a notification is least likely to be
+  asking. Only activity earns its own word: the other four types are all things
+  you wrote, and "Sam's frame" or "Sam's find" names Tria's filing system at
+  someone who may only have met it on a filter dial. The name is the one on the
+  card's own BYLINE, so `postPageTitle` takes makeCard's branch (`repostOf &&
+  note` is a quote, `repostOf && !note` is a pass-along) and the bar can't
+  disagree with the byline under it.
+
+  Five more that are easy to undo by accident:
+
+  - **`Read more` is an `<a>`, not a button.** No `.open` state, no inline
+    max-height, no 0.42s tween, no `transitionend`. It was the one control in
+    Tria that could make a single card taller than the screen it sits in, and the
+    reader who wants the whole note wants the comments under it too.
+  - **The action row is no longer all `<button>`s**, so `.card-actions button`
+    alone no longer describes it. `.card-social > a` (the author's heart in a
+    feed) and `.card-social > span` (both counts on the page) carry the same
+    geometry, named by class in the same rules — a second set of measurements
+    would drift the first time one of them moved.
+  - **`wireComments` guards on the PANEL, never on a toggle.** There is no toggle
+    anywhere any more (the count beside the thread is a span), and the form is
+    the thing that has to be wired. A `if (!toggle) return;` leaves the page's
+    composer inert, which is the one control the page exists for.
+  - **The post page delegates its tag chips from the section**, not per chip:
+    posting a comment runs `apply`, which swaps in a fresh `makeCard`, and
+    `makeCard` cannot wire a chip's destination because that is the caller's
+    decision. Bound directly, the chips die on the first comment.
+  - **`mountToolbar`'s title is assigned with `textContent`.** Don't `esc()` it —
+    an apostrophe in a name prints the entity. `toolbarBackEl` escapes its own
+    label, which is the opposite convention two lines away.
+
+  Retired with it: `openLikers`, `openGoing`, `openReadMore`, `collapsePanel` and
+  its three wrappers, `wireCardCollapse`, `wireReadMore`, `onDoubleTap`,
+  `scrollCardIntoView`, `scrollCardToTop`, and `wireNotif`. `spotlightPost` and
+  `parkCard` **stay**, with exactly one caller left: the edit flow, which is the
+  one case that genuinely IS a position in a column, because the editor lives on
+  the profile.
+
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. A read that errors keeps its **last good copy** (`core()` in
@@ -492,6 +784,148 @@ it either way.
   list → the `post_audience` allowlist · circle → mutual friends only. `circle`
   means friends-only for EVERY account, public ones included. Any post type can
   be made public, activities included.
+- **A repost IS a post row, and its audience is checked TWICE.** One column
+  (`posts.repost_of`) and a sixth value in the `type` check is the whole schema
+  change (`supabase/reposts.sql`) — no table, so it inherits the feed, the
+  profile column, the boot read, `refresh()`'s change detection and the existing
+  `posts` push trigger for free. `readAll` selects `*`, so the column simply
+  arrives.
+
+  **The double gate is the feature.** The read policy is
+  `can_view_post(...) and can_view_original(repost_of)`: you see a repost only
+  if you could already see what it points at. `can_view_post` is deliberately
+  **not** rewritten to hold that clause — it is this schema's worst regression
+  site (`restore-block-gate.sql` exists because a `create or replace` dropped
+  one of its clauses), so the new condition lives in its own `security definer`
+  function and the POLICY is what gets replaced. Blocking then falls out for
+  free, since `can_view_original` calls `can_view_post` against the original's
+  author. The insert policy copies the rule the other way: a repost must wear
+  the original's audience exactly, the original may not be `list` (its allowlist
+  isn't yours to reproduce) and may not itself be a repost (a chain collapses to
+  its first original). Every reference to the inserted row is written
+  `posts.<col>`, because the subquery aliases the original as `o` and `o` has a
+  `repost_of` and an `audience` of its own — a bare column name there binds to
+  the ORIGINAL and the check compares a row against itself.
+
+  **The consequence to understand before reading a bug report about it:**
+  reposting a `circle` post reaches only the **intersection** of your circle and
+  theirs, which can be nobody. That is correct, not a bug, and the sheet says so
+  (`Only the friends you share will see it.`).
+
+  **Two forms, drawn differently on purpose.** A **bare** repost is the
+  original's card with one quiet line above the byline (`passedCard` → `makeCard`
+  calls itself, so every type, the photo branch, the note clamp and all the wiring
+  are the original's, already correct). A **quote** is your byline, your words, then
+  the original as a nested tile (`quoteCard` + `quotedCardEl`) — the feed's one
+  framed object, which is the point: the feed is boxless, so a box reads
+  instantly as "not mine". The tile takes `.ptile`'s glass-minus-blur, because
+  the bill for a blur is area × radius × moving frames and this one scrolls.
+
+  A quote takes a **headline and a note like any other post**, and no payload of
+  its own — the shape check forbids media, a poll, a place and a time, because
+  those are things you MAKE and this row is about something somebody else made.
+  Its composer is the ordinary one with the attach bar, the tags and the audience
+  lock removed, and the quoted post drawn UNDER the note field in the order the
+  published card puts them. `passedCard` also forces `solo: false`: a profile
+  column drops the byline on the argument that the page header already names the
+  author, which is the one thing a repost makes untrue — without it a passed-along
+  note on your own profile is somebody else's words under your name.
+
+  Four rules that aren't guessable from the code:
+  - **The heart and the comment act on the ORIGINAL, the ••• acts on the ROW.**
+    Likes are private, so a like credited to a quote splits a count the original's
+    author can never see; but ••• manages the thing in your feed, which is the
+    quote and the only part you can delete. `cardActionsHtml`'s `opts.menuPost`
+    is that split.
+  - **`data-burst` overrides `data-type` for sparkles.** A repost's type names no
+    colour, so `celebratePost` and the button's `--burst` take the ORIGINAL's
+    type. A hue naming a type is the one thing the quintet is for. That is also
+    what the reposted glyph itself wears — `.card-repost.reposted` is
+    `var(--burst)`, the same ink `.card-like.liked` takes, and it sits AFTER the
+    hover/active rules for `.liked`'s reason: at equal specificity the later rule
+    wins, so the mark keeps its colour under the finger that earned it. It said
+    `var(--accent)` until 1.3, and `--accent` is `var(--text)`, so the button's
+    one state read as plain ink.
+  - **A repost celebrates like a post, and the ORDER of the two calls is the
+    whole reason it does.** `celebrateRepost` runs AFTER `refreshPostViews()`,
+    never before. The tap flips the button to `.reposted`, which changes the
+    innerHTML signature `syncCards` compares, so the repaint rebuilds that card —
+    and `burstSparkles` appends its layer *inside* the button. Written the other
+    way round the stars were added and destroyed in the same millisecond, with no
+    frame in between: measured on a MutationObserver, add and remove on one
+    timestamp. The bare repost sparkle was therefore not dim or brief, it was
+    **absent**, from the day it shipped. Anything that decorates a node a
+    re-render can replace inherits this.
+
+    Where it lands is the second half. A quote uses `justPostedId` like any other
+    post — composer, `#/`, cascade on arrival. A bare repost can't: closing a
+    sheet restores focus to its opener and `.focus()` scrolls that button into
+    view, so the reader is parked on the card they tapped while the new row lands
+    at the top of a feed they are no longer looking at (measured: scrollY 0 → 461,
+    new row 759px above the fold). So it sparkles the first card on screen
+    carrying a button aimed at that original — which for a bare repost is a
+    pixel-identical redraw of the new row anyway, since `passedCard` draws the
+    original's own card. Setting `justPostedId` from here would be worse than
+    useless: only `renderFeed` consumes it, so a repost from a profile would leave
+    it armed and fire the cascade minutes later on a forgotten card.
+  - **The home feed filters on the SUBJECT, a profile on the ROW.** `subjectOf`
+    is why: a bare repost draws a Frame, so hiding it under Frames would hide a
+    Frame that is visibly there. A profile has a Reposts row instead, so filtering
+    on the subject there would make two rows overlap and the checkmark lie.
+  - **`repost` is not a sixth quintet member.** No `--type-repost`, no heart, no
+    pull-ring dot, no `TYPE_GLYPH` / `FILTERS` / `ICON_ALL` entry. It is in
+    `TYPE_PLURAL` only because the profile's empty state needs a plural. The
+    Reposts row is APPENDED after the five, for People's reason: `All` → the five
+    types is one ladder from widest to narrowest and a repost is a different axis.
+- **An activity reminds its AUDIENCE, three times, and never its headcount.**
+  A week out, two days out, and the morning of (`supabase/activity-reminders.sql`
+  + the `activity-reminders` branch in the push function). Keying it on
+  `headcount` is the obvious version and it is wrong: the week-out reminder
+  exists precisely to reach somebody who has NOT answered, so the RSVP list is
+  the one set that excludes the people it was written for. Invited therefore
+  means the post's own audience — the allowlist for `list`, the host's mutual
+  friends for `circle` **and for `public`**. Public is the case worth
+  understanding: its audience is technically every account on Tria, but `canJoin`
+  is friends-only, so anybody outside the circle would be asked a question the
+  app will not let them answer. Same friends-only line, one more place.
+
+  **The copy splits on whether they have answered, not on the stage.** Someone
+  who is going gets logistics (`Zoe’s activity, a week away, Saturday at 7:00 PM.
+  My place.`); someone who hasn't gets the question, in the app's own word for it
+  (`Are you in?` — the RSVP button reads *Count me in* and the host's push reads
+  *<name> is in*). On the DAY both get logistics: by then the address is the
+  useful half and a third ask is pestering. The host is not in their own
+  audience, so they get one line on the day and it carries the only thing a host
+  needs, the count.
+
+  Three things that aren't guessable:
+  - **The host's NAME has to lead the body**, and the reason is in the data. A
+    location is written by its host in the first person, so a real activity says
+    `My place` — which, stripped of the card it sits on, has no antecedent. It's
+    `name` and not the handle, like every other notification this function sends
+    and like a Discover tile's byline; `@zoe’s activity` reads as a mention,
+    which means something else here.
+  - **The sweep runs HOURLY and the journal is what makes that safe.** One row
+    per (post, user, stage) means the extra passes are a *retry* rather than a
+    repeat — if the 9am run dies on a cold start, 10am finishes it and nobody
+    hears twice. Hourly rather than one daily run because `pg_cron` schedules in
+    UTC, so a fixed hour drifts twice a year across DST, and because one shot a
+    day means one failure costs a whole day with nothing to catch it. The only
+    clock guard is a 09:00–21:00 US Mountain window, on the app's own `dayMT`
+    clock, so a reminder is never what wakes somebody up. **Journal before
+    sending, not after** — a crash between the two costs a missed reminder, and
+    the other order costs a duplicate, which for a notification is the worse
+    failure.
+  - **`apns-collapse-id` is capped at 64 bytes and `sendApns` SLICES to fit**, so
+    a key built from two full uuids truncates mid-user-id and two people's
+    reminders collapse into each other, i.e. into one. `collapseKey` takes eight
+    hex characters of each instead.
+
+  Reminders are **push-only and deliberately not in the Updates ledger**:
+  `notifications()` is a record of what *people* did, and this is the app
+  talking. A moved date does not re-arm a stage that already sent, and an
+  activity that has already started gets no day-of line.
+
 - **Discover is the whole room, not the public square.** Its grid shows every
   post you're allowed to see that isn't yours: strangers' public posts *and*
   your circle's circle posts, in ONE grid (no bands). `Store.discover()` mirrors
@@ -524,22 +958,58 @@ it either way.
   there the person is the content and nothing else on the tile tells one Sam
   from the other. Search matches handles either way. A tile speaks the post's
   **caption**, falling back to its title only when there is no caption. Its filter dial carries one row Home's can't
-  (`DISCOVER_FILTERS`): **People**, directly under All, which drops every post and
+  (`DISCOVER_FILTERS`): **People**, which drops every post and
   gives each account the portrait tile, alphabetically — the directory answer to
   "I know roughly who I'm after", since the browse grid is chronological and
   capped so a quiet account sits a long way down it. People takes **no pastel**
   (the quintet is reserved for post types) and its masthead dot is ink. Search
   under it still reaches post text via `saidBy`, so hunting by interest works on a
-  page of faces.
-- **A profile carries the same dial, and Frames is a wall.** Between the identity
-  header and the posts sits the **profile shelf** (`.profile-shelf`): a tracked
-  micro-caps caption naming the pane below, with `filterBtnEl` at its right — the
-  masthead's own arrangement borrowed for a page whose masthead is a photograph.
-  Flat editorial, never glass (it captions content, and the page under it is flat
-  editorial too). Three rules make it a
+  page of faces. It **leads** the list, under the View row and above All — the
+  two rows that change what the page is MADE OF, kept together so All → the five
+  types stays an unbroken ladder from widest to narrowest. People sat inside that
+  ladder until 1.3 and stopped it halfway to answer a different question.
+
+  **Format is a second axis, and it rides the dial's HEAD as an ACTION row.** As
+  of 1.3 Discover draws either the masonry wall or Circle's reading column
+  (`discoverView`, `DISCOVER_VIEWS`) — four rounded squares for the wall, three
+  flush lines for the column — switched from a row at the top of the dial rather
+  than from a second toolbar button. That makes `openFilterDial` hold two kinds
+  of row, which is the thing to understand before editing it:
+
+  - a **filter** row is a RADIO (`menuitemradio`) — picking one un-picks another
+    and the checkmark says which is live;
+  - an **action** row (`opts.extras`) is a SWITCH (`menuitem`) that does a thing
+    and comes back. It never wears the checkmark, because it isn't a member of
+    the set the checkmark chooses between — marking it would say "you are
+    currently looking at View". It also always buzzes, and gets that for free:
+    the haptic fires when the tapped key differs from `current`, and an action
+    key never equals it. Correct rather than lucky — a toggle always changes
+    something, so there is no silent case to protect.
+
+  It names the form it would switch **to**, the only reading that works on a row
+  you tap once. It is **absent under People** rather than disabled (a directory
+  of portraits has no column form, and a dead row is worse than no row); the dial
+  is rebuilt per open, so that's re-evaluated each time rather than hidden and
+  unhidden. Three more: **`discoverView` is in the paint signature** and has to
+  be — the tiles are identical either way, so without it the early return would
+  swallow the repaint the tap asked for. **List reuses `makeCard`**, not a second
+  design of one, so a stranger's post reads exactly as a friend's does at home and
+  `canSocial` / `canJoin` keep meaning what they already mean. **Portrait tiles
+  are dropped in list mode** — a tile with no post has nothing for a card to be,
+  which only bites a name search under All.
+- **A profile carries the same dial, and Frames is a wall.** The dial is in the
+  **toolbar** with the page's other controls, rightmost, after the identity
+  button — one control, one treatment, one place, the same as every other page.
+  It used to live in a `.profile-shelf` between the identity header and the
+  posts: a tracked micro-caps caption naming the pane, with the dial at its
+  right. Both halves came out in 1.3. The caption was a third telling of
+  something the button's hue dot and the dial's own checkmark already say, and
+  once it went there was nothing holding the row up; "the bar carries identity,
+  the shelf narrows the pane it captions" is a distinction no reader has any way
+  to know they were supposed to be making. Three rules make it a
   profile filter rather than a copy of Home's: its rows are **derived from what
   that person actually posted** (All + only the present types, in `FILTERS`
-  order — no dead ends, no People row), the whole shelf is **absent** when
+  order — no dead ends, no People row), the dial is **absent** when
   there's nothing to narrow (one type and one layout isn't a choice; a single
   photo still earns it), and **Frames swaps the layout** — that person's
   photographs dealt into the same masonry grid Discover uses, at their real
@@ -547,8 +1017,10 @@ it either way.
   a portrait and a landscape into one brick, and Tria stores photos uncropped so
   it doesn't have to. A wall tile is the **face and nothing else** (no foot, no
   byline, no counts — every tile is the same person), and it carries the real
-  `?p=<id>` deep link, so the wall is an *index into* a long profile: a tap drops
-  back into the post column with that card spotlighted. `profileFilter` resets
+  deep link (`#/p/<id>`), so the wall is an *index into* a long profile: a tap
+  opens that post's own page. It used to drop back into the post COLUMN with the
+  card spotlighted, which meant teleporting the window down the archive to show
+  you one post. `profileFilter` resets
   whenever you land on a different person, and a pending spotlight or open editor
   always forces the column. Both grids share `dealMasonry`, `mediaFaceEl` and
   `wireFrameFades` at module scope — one grid, two callers, no second set of
@@ -589,22 +1061,31 @@ it either way.
   `accepts: 'any'` as a per-prompt waiver — every prompt waives it now, so the
   named `type` is just the colour. The composer no longer pre-aims at it either:
   answering a daily opens a plain Note like any other compose (it used to raise
-  the photo/link/poll surface the prompt's type implied), and the Post/Activity
-  switcher is dropped from that flow entirely — an activity was the one thing a
-  daily never took, and with it gone the only choice left is what to attach, so
+  the photo/link/poll surface the prompt's type implied), and the calendar
+  toggle is dropped from that flow entirely (it was the Post/Activity switcher
+  until 1.3) — an activity is the one thing a daily never took, and with it gone
+  the only choice left is what to attach, so
   a caption ("Answering the daily") sits over the question in plain grey rather
   than a colour that has nothing left to signal. Since any type answers any
-  prompt, the Discover card can't wear the one colour it's asking for either, so
-  it carries all three question types dailies use at once — a fixed
-  lavender→coral→cyan gradient, same on every card. The page it opens now
+  prompt, the Discover card can't wear the one colour it's asking for either. It
+  wore all three for a while (a fixed lavender→coral→cyan band) and now wears
+  **none**: the card is plain glass and the colour went to the button in its foot
+  (see the glass note below). The page it opens now
   **drifts** through the same three (`daily-drift`, 24s — a daily's own unit is
   its 24-hour window), a registered `--glow-daily` interpolating smoothly rather
   than a plain custom property; reduced motion freezes it on the prompt's own
   hue, which is also the frame it opens on before the drift starts. The tag an
-  answer wears matches the card now too — same fixed gradient, not the prompt's
-  nominal hue — so every surface of the feature but two agrees: the composer
-  banner and the detail page's kicker are the plain-grey holdouts, having
-  nothing left to signal once nothing is ever blocked.
+  answer wears keeps a band — not the prompt's nominal hue, and no longer
+  matching the card, because a chip in a row of chips has nothing but colour to
+  tell it from the words beside it — but as of 1.3 that band is **`--pill-band`,
+  the reader's own**, not a hand-rolled tri-colour of note/find/photo at 18%.
+  Three of the five type pastels chosen to mean "not any one type" is the
+  quintet spent on its own negation; `--pill-band` is the ramp that already
+  means Tria-rather-than-a-type. It rides a `::before` at `opacity: 0.17` under
+  `isolation: isolate` rather than a `background`, because a gradient cannot be
+  `color-mix`ed to a tint. The composer banner and the detail
+  page's kicker stay plain grey, having nothing left to signal once nothing is
+  ever blocked.
   **Activities are excluded from every daily**, open ones included:
   an activity lands in the real world behind `canJoin`'s friends-only gate, and a
   page of answers from the whole room is the wrong doorway to that. **Polls are
@@ -635,9 +1116,78 @@ it either way.
   real slug is `swift-processor`, not `push`.
 
 ## Design system (short version)
-Austere, editorial, cool greyscale base. The only chromatic color is a pastel
+**Post-type icons are OFF every card and every tile, as of 1.3.** The ornate
+identity set — the hand-drawn burst, the aperture, the asterisk — is **deleted**,
+not merely unused: `TYPE_ICON`, `POLL_ICON_PATH` and `pollGlyph` were 6.8KB of
+inline SVG that nothing referenced but every shell still downloaded and the App
+Store binary still carried. `typeTagEl` is gone with them, and a Discover tile's
+`sayFaceEl` leads with the words. A mark announcing "this one is a Find" beside a
+headline that is visibly a link is the same fact told twice, and any reader
+arriving at Tria already knows what a post is. A past activity used to grey its
+mark and relabel it "Happened"; that signal lives where it was always legible, in
+the card's own event date and past state.
+
+What survives is the two places a type is a **choice** rather than a label — the
+composer's inferred-type indicator and a profile's filter dial — and both now
+speak `TYPE_GLYPH`, the plain line glyphs the composer's own attach buttons wear
+(`pencil` / `link` / `image` / `poll` / `cal`), as does the phone's + speed dial.
+That is the point of the swap: a reader learns "link means Find" by pressing the
+link button and watching the nameplate change, so every later appearance should
+be the mark they already pressed rather than a second drawing of the same idea.
+One vocabulary, learned in one place — and as of 1.3 that is nearly literal:
+`cal` joined the attach bar with the Activity toggle, so four of the five glyphs
+ARE buttons the reader has pressed and only `pencil` (a Note, i.e. nothing
+attached) is a mark with no control behind it. Note `list` and `poll` in `ICONS` are both
+three horizontal lines and are told apart *only* by `poll` being ragged (it's a
+bar chart) and `list` being flush — keep them that way.
+
+**And the surviving marks go MONOCHROME under a chosen accent.** `--type-mark`
+is stamped on `<html>` by `paintBrandBand` as `var(--text)` — near-black on
+paper, near-white on ink, resolved at the point of use so no JS learns the
+scheme. It is stamped for a **palette pick** and for **"none"**, and removed for
+**Default** and **Photo**. The line is not "which sources are colourful", it is
+which ones the quintet is already inside: Default *is* four of the five type
+pastels, and a Photo accent is sampled off a face and makes no claim about the
+palette, so under either the five glyphs read as part of the app. Under a picked
+accent the chrome is one colour end to end and the + dial is five others, and
+the quintet stops reading as a vocabulary and starts reading as stray hues.
+It is written as a **fallback** around the type's own ink so Default and Photo
+need no branch and `tokens.css` never learns the token exists.
+
+**It is down to ONE reader, and the line it draws is what you are about to MAKE
+versus what you are choosing to LOOK AT.** That reader is `.type-icon--*`, which
+after 1.3 is the phone's **+** speed dial and nothing else. Two things left, for
+two different reasons, and the difference is the rule:
+
+- **The composer's masthead mark** opted out in the edit that took the wash off
+  that page (see the two-pages-wash note below). It is `.type-icon--*` too, so
+  it opts out **at the element** with `--type-mark: initial` rather than by
+  being excluded from the list — that page has no accent on it any more, so
+  there is nothing for the quintet to be stray against, and the mark is the only
+  colour on a sheet of white paper.
+- **The filter dial** — `openFilterDial`'s inline row ink and `ICON_ALL`'s five
+  dots — left by **not reading the token at all**, and it left because the
+  receipt never folded. `.masthead-filter`'s hue dot lights in the raw pastel
+  whenever a filter is on, so under a picked accent the row you tapped was ink
+  and the dot it lit was lavender: the legend disagreeing with the thing it
+  labels, in the one control where the two exist to teach each other. Fold both
+  or fold neither, and a dial whose whole job is to name the five is the wrong
+  place to fold. The two are now the same fact in two places, so **keep them in
+  step** — a hue change to one is a hue change to both. This covers every dial
+  that carries type rows (Circle, Discover, a profile); the non-type rows
+  (People, Mentions, the View switch) still take `--muted`, unchanged.
+
+The **+ dial's `--glow` bloom is still not a reader** — it is the disc's
+material rather than a mark, it is the one surface where the quintet means
+"things you can make", and the mono glyph reads better on it than the tinted one
+did. `.type-icon--past` still wins its grey on source order.
+
+Austere, editorial, cool greyscale base. The chromatic colour is a pastel
 quintet reserved for the five post types: note = lavender, find = coral,
-photo = cyan, activity = lime, poll = rose. Instrument Serif on titles only; Oxygen everywhere
+photo = cyan, activity = lime, poll = rose. Four of those five are also borrowed
+as `--brand-band`, the gradient on the primary-act buttons — where they name
+Tria rather than a type, and where a reader's own accent may replace them
+outright (see Lit dome). Instrument Serif on titles only; Oxygen everywhere
 else. Circular avatars. Don't touch the hue-drift gate wash — Zoe loves it. All
 motion is reduced-motion aware.
 
@@ -658,8 +1208,11 @@ its own dark-mode copy.
 area × radius × moving-frames:
 
 - **chrome** (`--glass-blur`, 15px, no `saturate`) — fixed over a feed that
-  scrolls under it: top bar, nav pill, seg-tabs, search, share disc, daily card.
-  Re-samples every frame of every scroll, so it stays lean.
+  scrolls under it: the toolbar, nav pill, daily card. Re-samples
+  every frame of every scroll, so it stays lean. The toolbar's own BUTTONS are
+  the exception, and it's the "never glass on glass" rule: they sit on a bar
+  that already blurs, so they keep the fill, rim and edge and drop the sample —
+  and Discover's search field is one of them, not a chrome surface of its own.
 - **panel** (`--glass-filter-panel`, 30px + `saturate(1.7)`) — over a page that's
   frozen behind it: modals, sheets, the mention popover, the lightbox. Samples
   once and holds, so it can afford the depth that actually reads as glass.
@@ -695,20 +1248,84 @@ Contacts rows are not). **The masonry grid is the one glass-minus-blur surface**
 material is right, but a `backdrop-filter` is per-element compositor work and a
 scrolling masonry grid is exactly where that bill lands, so they keep the fill +
 `--glass-edge` + `--glass-rim` + float shadow and drop only the sample-and-blur.
-**The daily card is the one piece of glass that carries a hue.** The colour is the post type the
-prompt asks for, straight from the quintet — a daily wanting a Frame is cyan on
-the card, on the chip an answer wears, and in the page wash behind it, so the
-colour still says *what to make* rather than a sixth hue meaning "daily".
+**No glass carries a hue, and the daily card is why that rule is worth having.**
+It was the one exception through 1.2 — first the prompt's own type colour, then
+a fixed three-colour band once every prompt stopped naming a type. Both failed
+the same way. A filled coloured panel is the app's *button* vocabulary (the
+brand band under a lit dome means "press this to make something"), so the card
+read as an enormous button that wasn't one, and the real button in its foot had
+to be drawn as bare type to avoid competing with it — which left "Add yours", the
+one control on Discover whose whole job is to invite you to post, as a 24px scrap
+of text below the HIG floor. The card is ordinary glass now and the colour moved
+down into the pill, where the band already means what the pill does. **A hue
+belongs on the control, not on the surface it sits on.**
+
+**"Add yours" is ONE button drawn in two places**, and it is the newest member of
+the `.publish-fill.is-solid` lit-dome set. It appears in the foot of Discover's
+card and in the bar on the daily's own page, and both were separate objects until
+1.3 — the bar's wore a tri-colour glass of its own, the card's was bare type with
+an arrow — so the same invitation looked like a button in one place and a link in
+the other. The geometry and material are declared once for both selectors, up in
+the toolbar block of `app.css`; each keeps only what its context needs (the bar's
+exact disc height; the card's z-index over the stretched link, and a foot allowed
+to wrap, since at 320px the faces, the count and a 122px pill want more room than
+the card has). It qualifies for the dome on the rule that has always governed it:
+this is the app's primary act — commit, or go and commit — and "Add yours" opens
+the composer. It is still not decoration for any button that would look nice with
+a gradient on it.
+**The profile and its editor open the same photo at the same height.**
+`--identity-air` (1.7rem) is `.account`'s `padding-block` and `.pf-form`'s
+`padding-top`. The editor had neither: it draws no masthead (deliberately — a
+serif nameplate over a settings form is the page introducing itself to someone
+who asked for it by name), so the form was the section's first child and the
+avatar started at `.view`'s padding-top, ~27px above where the *same*
+photograph sits on the profile you just came from. Walking into the editor
+jumped it up the screen. One token, read by both, because the two pages with no
+masthead are exactly the two that have to agree.
+
 **A profile's identity is FLAT, and its colour is the page.** There is no
 identity card as of 1.2 — no glass panel, no 26px corners, no corner glow clipped
 inside one. The photo is an ordinary circular avatar at profile size (the app
 had exactly one non-circular avatar and it was this page), the name/handle/stats
-sit on the same type axis as the shelf caption and the feed below, and the
+sit on the same type axis as the feed below, and the
 person's colour is the shared `.ambient` wash — the SAME `data-ambient="profile"`
 Edit profile carries, so the page that shows a colour and the page that sets it
 are one gradient with one set of tokens. Don't fork a per-page geometry for it; a
 top-right variant was built and thrown away for being a second thing to keep in
 step.
+
+**TWO pages wash, and both name a PERSON: a profile and Edit profile.** One
+gradient, one question — whose is the thing in front of me — asked by the page
+that shows someone's colour and the page that sets it. `paintWash(user,
+'profile')` is the only call and `--wash-amt` has one value (56%).
+
+**The COMPOSER was the third and took two removals to stop being one, which is
+the note to read before adding a wash anywhere.** It first carried the inferred
+post **type**'s hue, re-tweened on every attach off a `TYPE_HEX` table of the
+five quintet literals — so the app's largest gradient meant "whose page is this"
+on two routes and "what am I filing this as" on a third, a vocabulary a reader
+has to be told about rather than pick up. In 1.3 it became the reader's own
+accent, which fixed the meaning and left one page-sized gradient too many: an
+empty form you just opened is the single route where nobody is asking whose page
+it is, and the bloom was lighting the surface somebody was about to write on.
+The composer is paper now. `TYPE_HEX` went with the first removal (type fills
+come from `tokens.css` by `var()`), `body[data-ambient="publish"]` and the 68%
+`--wash-amt` with the second. Nothing replaces the call — `applyAmbient` already
+lands every non-profile route on `none`, so the composer keeps what the router
+gave it.
+
+**And the composer's type mark went BACK to the quintet in the same edit**, as
+the one opt-out from `--type-mark` written *at an element* (the filter dial has
+since left too, by not reading the token at all — see the monochrome note
+above).
+`.type-indicator` sets `--type-mark: initial`, which is the guaranteed-invalid
+value at that element, so `.type-icon--*`'s `var(--type-mark, …)` falls through
+to the type's own ink — one line, all five, no colour restated. The reason the
+mono rule stopped applying here is the removal above: it exists because a picked
+accent makes the chrome one colour and five stray hues beside it stop reading as
+a vocabulary, and this page now has no accent on it at all. The mark is the only
+colour on a sheet of white paper, saying the one thing a hue is *for* here —
+what you are about to make, at the moment that is a live choice.
 
 **The wash is tinted before it is saturated, and that is what lets it be seen.**
 `--wash-tint` mixes the accent toward the scheme's own extreme (`#fff` light,
@@ -718,7 +1335,8 @@ contrast, `saturate()` is luma-preserving and nearly free. `--wash-sat` is also
 the **pastel** dial: past ~2.5 the mix stops reading as the accent lit up and
 starts reading as a louder colour standing in for it, which is dramatising the
 hue rather than emphasising it. Two inks pay for the rest: `--wash-ink` for a
-lone mark in the hottest band (the back link, a corner disc) and
+lone mark in the hottest band (a toolbar glyph — the back chevron, •••, the
+friends tie — which is what a washed page has up there) and
 `--wash-ink-soft` for the identity's whole secondary line, which would flatten
 the header if inked as hard. Re-measure both against every accent, both schemes,
 if any of those numbers move.
@@ -733,50 +1351,274 @@ events coalesced behind it, so the wash visibly slides against the content it is
 supposed to be part of. Anything that recomputes the wash's position per frame
 has this bug, whatever it is written in.
 
-What being absolute costs is one seam: a document-anchored layer stops at the
-document and iOS does not, so an over-pull past the top opens a band that
-`body::before` fills with flat paper, meeting the wash at its peak. Most of that
-happens behind the top bar, which is always shown below y=48. If it ever needs
-closing the lever is `overscroll-behavior-y: none` scoped to the washed pages —
-they are exactly the routes with no pull-to-refresh — at the price of the top
-bounce there. Note the gate's copy of `.ambient` is still fixed and should stay
+**Being absolute used to cost one seam, and the fix is that the layer now starts
+ABOVE the document origin.** A document-anchored layer stops at the document and
+iOS does not, so an over-pull past the top opened a band that `body::before`
+fills with flat paper, meeting the wash at its peak — a hard divide across a
+single row on any pull-up. This file used to name `overscroll-behavior-y: none`
+as the lever and it is no longer needed: `--wash-rise` (26vh) pulls the box's top
+edge above y=0 and the gradient simply continues into the gap. The old note
+saying an upward-grown box is inert is about the **fixed** gate copy, where a
+negative top parks the gradient above the *screen*; in document space it is a
+real position. **Don't add the overscroll lever** — it costs the top bounce on
+those routes for a seam that is closed.
+
+The rise has to clear the gradient's own reach or the seam just moves up: the
+colour resolves to transparent at 82% of the vertical radius, so `0.82 × 43vh −
+15vh = 20.3vh` above the origin, inside a 26vh rise. **Those three numbers move
+together.** Note the gate's copy of `.ambient` is still fixed and should stay
 that way; it does not scroll.
 
-**The wash is a shallow band, and only its HEIGHT is adjustable.** The ellipse is
-`112% 43% at 50% 0%`. The 112% overruns the viewport on purpose so the gradient
-never terminates anywhere the reader can see it end — a bloom with a visible left
-and right edge reads as an *object sitting on* the page rather than as light
-falling on it, so halving the size means halving the vertical radius and leaving
-the horizontal one alone. The offset moves with the height: it used to sit at
-`-10%` to push the hot core off-screen, which was an eighth of an 86% radius and
-is nearly a quarter of a 43% one, so at this size the origin is pinned to the top
-edge and `--wash-amt` (68% publish / 56% profile) does the work of keeping it
-gentle instead. Shortening the gradient does not soften it — the peak is
-unchanged and the falloff is twice as steep — which is why the alpha came down in
-the same edit.
+**The wash is a shallow band, and the WIDTH is the one thing that isn't a
+knob.** The ellipse is `112% 43vh at 50% calc(--wash-rise + --wash-drop)`. The
+112% overruns the viewport on purpose so the gradient never terminates anywhere
+the reader can see it end — a bloom with a visible left and right edge reads as
+an *object sitting on* the page rather than as light falling on it, so resizing
+means moving the vertical radius and leaving the horizontal one alone. The
+vertical radius is stated in **vh and not %** since the rise: it was a percentage
+of a box that was exactly 100vh tall and the box is 126 now, so `43%` would
+quietly have grown the bloom by a quarter.
 
-**Glyph buttons owe 44pt, and the disc is not the target.** Apple's HIG floor is
-44×44 and Tria draws several controls smaller than that on purpose (the profile's
-corner disc is 32px, because at 44 it stops being a quiet mark in the corner and
-competes with the name beside it). The fix is a transparent `::after` that grows
-the hit area without touching the paint. Two traps: `inset` resolves against the
-**padding box**, so a 1px border means `-7px` and not `-6px` to reach 44 (`-6`
-measures 42 — passes review, fails the device), and overlapping targets are only
-safe where a single control is guaranteed. Verify by hit-testing the live page
-with `elementFromPoint`, not by reading the number off the rule.
+**The peak is `--wash-drop` (15vh) DOWN the page, not pinned to the top edge**,
+and that is the third position it has had. `-10%` pushed the hot core off-screen
+to keep it gentle — an eighth of an 86% radius, nearly a quarter of a 43% one, so
+it cropped the bloom rather than positioning it. Then `0%`, with `--wash-amt`
+(56%) doing the softening, which is what that variable is for. What 0% still had
+wrong is that half an ellipse centred on the document origin is half an ellipse
+nobody sees: the top half is off the page and the first 48px of the rest is
+behind the top bar, so the brightest band of the app's largest gradient was spent
+in the two places it cannot be looked at. 15vh lands the peak on the avatar and
+the name. Nothing else changed — same radii, same alpha, same falloff, translated
+— so the reach down the page grew by exactly that 15vh, to ~50. Shortening the
+gradient does not soften it either: the peak is exactly as saturated and the
+falloff just gets steeper, which is why the alpha came down when the height did.
 
-**Every seg-tabs is inline, under the masthead, at every width** — Updates' All /
-Mentions and the composer's Post / Activity are the same control in the same
-place. Updates' used to dock on phones (`position: fixed`, floating above the
-bottom nav) on the material argument that a persistent switcher floats above
-content. It came out in 1.2: a control pinned to the bottom is one you have to go
-and find, it sat a long way from the title it filters, and it made Updates the
-one page whose switcher lived somewhere else. Two things fall out of removing it,
-both worth keeping — the composer no longer needs `#c-group-tabs` to opt back out
-of the dock by hand, and **no page has a `position: fixed` child any more**,
-which is what the containment cautions elsewhere in this file are guarding.
-The bottom nav hugs the
-home indicator (small float, iOS Liquid Glass style), not lifted into the screen.
+**Glyph buttons owe 44pt, and the disc is not always the target.** Apple's HIG
+floor is 44×44 and the pattern for a control drawn smaller is a transparent
+`::after` that grows the hit area without touching the paint. Two traps: `inset`
+resolves against the **padding box**, so a 1px border means `-7px` and not `-6px`
+to reach 44 (`-6` measures 42 — passes review, fails the device), and overlapping
+targets are only safe where a single control is guaranteed. Verify by
+hit-testing the live page with `elementFromPoint`, not by reading the number off
+the rule.
+
+**And know which controls actually take that fix, because several don't.**
+`.comment-delete` does (28px box, 44×44 live). `.tag` **does not** — a chip is
+one line of type and hit-tests **52×26**. The `::after` this note used to point
+at belonged to `.filter`, the old chip row, which stopped being rendered when the
+dial replaced it in 1.3 and whose 17 rules were deleted with it. Measured live at
+390px, the controls under the floor are `.tag` (52×26), the composer's
+`.rt-attach` (40×40) and `.aud-lock` (81×34), `.pf-photo-edit` / `.pf-photo-accent`
+(40×40), `.push-toggle` (40×24), and Updates' `.request-accept` (78×36) /
+`.request-ignore` (58×34). All predate 1.3 and all shipped through two approved
+builds, so this is a backlog and not a release blocker — but don't read the rule
+above as a claim that it is already applied everywhere.
+
+**Toolbar buttons are the counter-example and they are drawn at 44.**
+`--toolbar-btn` has been 44px since 1.3 and the disc IS the target: no invisible
+box, nothing to keep in step. The `::after` that was there overshot to 50 because
+it had been written against a 40px disc, which put two invisible boxes 0.4px
+apart. A quiet corner mark stays small and buys its target; a bar full of the
+page's own controls is drawn at the size it is touched. Measured rather than
+asserted: every bar the app mounts, both engines, phone and desktop, paints
+44×44 and hit-tests 44×44 through the middle of the disc.
+
+**When the bar "looks small", it is the GLYPH and not the disc — check that
+first.** The disc is a hairline rim over a thin fill, so what a reader reads as
+the button is the mark, and the mark spent 1.3 at 22px in a 44px box. Two
+measurements moved it to **24**: the phone's bottom nav draws a 28px glyph in a
+50px target (56%) and is on screen at the same moment as the bar, which made 22
+in 44 (50%) the smaller of the app's two glyph sets by 21% with nothing saying
+why; and `ICON_ATTRS` authors every one of these on a `viewBox="0 0 24 24"` at
+`stroke-width="1.8"`, so 22px was the icon's own grid scaled to 0.917 with its
+strokes landing at 1.65px, off-pixel and soft. At 24 the glyph is 1:1 with the
+grid it was drawn on. **Keep the two numbers separate if either moves** — 44 is
+the HIG floor and is not a style knob; the glyph is. And it takes THREE rules,
+because two marks in the bar carry classes of their own: `.toolbar-btn svg`,
+`.msb-ico svg` (the search magnifier/X, which live in a span) and
+`.masthead-filter-ico`. That is exactly how one mark drifts a size away from
+every other one up there.
+
+**The toolbar is the page's nav bar, and it is the only chrome above content.**
+One fixed bar per page (`.topbar`): a **leading** slot (nothing on the four root
+tabs — the tab bar already says where you are; a back chevron on a pushed page),
+a **centered small title**, and **trailing** actions as glass buttons. `renderPage`
+calls `resetToolbar()` before every `renderFn` and each page fills the three slots
+from `mountToolbar({ leading, title, actions })`. That's 1.3's whole subject: what
+used to sit up there was the app's NAME, generic on every page, while the thing
+that answered "where am I" was a flat in-flow masthead that scrolled away.
+
+Six things about it are load-bearing:
+
+- **The small title hides behind the page's own big one.** The nameplate still
+  lives in flow, large serif, scrolling away with content (`mastheadEl`, or a
+  profile's `.account-name`) — the bar's copy crossfades in once that has
+  scrolled bodily under the bar, so the two never show at once. `BIG_TITLE_SEL`
+  names the elements this measures against, and **a new page-level `<h1>` has to
+  join that list** or its page shows the small title from the moment it lands.
+  Which is right for a page with no big title (Edit profile) and silently wrong
+  for one whose heading is under another class.
+- **`toolbarBackEl(href, label)` is the one leading control**, and passing NO href
+  makes it a `<button>` for a page whose exit has to POP rather than push (the
+  profile editor). Same disc, same glyph, same label: the difference is in the
+  history, not on the screen. No page has an ad hoc "← Back" text link any more.
+- **The profile editor's bar carries the form's two answers, and neither is
+  unconditional.** Cancel and Save used to be a pill row at the foot of the
+  form, under the toggles and above the account zone, so committing meant
+  scrolling back past everything you had just decided *not* to change. They're
+  bar controls now: an X leading, a check trailing, both fed by one predicate
+  (`syncAnswers` → `pfDirty`, which counts name, bio, privacy and a live crop —
+  **not** the notifications switch, which commits on the tap and so costs
+  nothing to leave). A pristine form shows neither. The check is `--idle`:
+  present in the DOM but hidden by `visibility`, so it's out of the tab order
+  and the a11y tree while staying a transition target — it fades in on the
+  keystroke that earns it rather than popping into the corner of the eye, and
+  the bar's slot count is settled once at mount. The leading control is a plain
+  back chevron until then, because the act is the same either way and only the
+  *cost* of leaving changes; over unsaved words a chevron is a door pretending
+  not to be a bin. Implicit submission still reaches the submit handler with the
+  check hidden (Enter in the name field), so the handler bails on a pristine
+  form rather than making a no-op round trip that ends in `leave()`.
+- **`.toolbar-commit` is the check, and it is the fourth tinted-glass surface.**
+  Geometry is `.toolbar-btn`'s entirely — the 44px disc that is its own tap
+  target — and only the material differs: `.publish-fill.is-solid`, the same
+  tinted glass the compose **+** and the composer's Post pill
+  wear, declared in the same rule as those two so the set can't drift. It needs
+  no overrides (`.publish-fill` is later in app.css than `.toolbar-btn`, so its
+  `background: none` / `border: none` already win, and `--on-type` beats
+  `--toolbar-ink` on specificity in either scheme) — but its `transition` is
+  written as `.toolbar-btn.toolbar-commit`, because at one class it would lose
+  the ramp to `.publish-fill`'s own `transition` further down the file.
+- **`--toolbar-side` is a count of SLOTS**, stamped by `mountToolbar`, from which
+  CSS derives how far the centered title has to stop short on each side. A
+  percentage can't see how many controls are mounted, and a profile carrying both
+  the friends tie and the filter put a long name under the glyph. A control that
+  carries words declares `data-slots="2"`; approximate on purpose, since a pill's
+  width isn't final until the webfont lands.
+- **`--toolbar-mid` is not 50%.** An absolute child resolves against the padding
+  box and on phones the bar's top padding IS `env(safe-area-inset-top)`, so 50%
+  centres on the notch too and lands everything high. Headless Chromium reports
+  a zero inset, so this is the one measurement no boot pass can check; verified
+  on the simulator instead (iPhone 17 Pro, inset 62pt: bar 0–122, controls and
+  title both centred at 92, which is past the inset then half the 60pt bar).
+- **`body.toolbar-live` means "this bar is a page's own"** — it started as the
+  migration flag and every page is converted now. It's false in exactly two
+  places, both of which want a bar that isn't there rather than an empty one:
+  under the gate (which hides `.topbar` and draws `.auth-topbar` instead) and in
+  the frames between boot and the first route landing. Geometry is unconditional;
+  what the class still gates is the material, hide-on-scroll, and the reserves.
+- **A page under a bar opens with a hairline, not an editorial margin.** `main`
+  clears the bar and then `.view` used to open with the 4rem/1.5rem it had when
+  the thing above it was a wordmark resting on the nav card. Two reserves for one
+  piece of chrome measured as a 38.7px hole on Circle and 70.5px on a profile
+  (which pays a third time in `.account`'s own padding). The bar is the air now.
+  Same argument retired the 84px head on the desktop nav card, which was
+  clearing a wordmark that is no longer drawn.
+- **Discover's search button BECOMES the field, and that costs a third node.**
+  One glass surface (`.toolbar-search-shell`) pinned by its right edge — exactly
+  where the disc's right edge already sat — growing its **width** into the bar,
+  with the button on top reduced to glyph and tap target (no fill, no rim, no
+  lift). It was two materials until 1.3: a full-glass `.toolbar-btn` at z-index 2
+  over a separate field that wiped open from a `clip-path`, which ends every open
+  looking like a button sitting ON a bar, with the disc's rim drawing a hard
+  circle a third of the way along the pill. The clip was there to hide a seam it
+  created — a clipped edge carries no border and no inset rim, so a clip stopping
+  at the disc's width leaves three-quarters of a ring, which is why the disc had
+  to cover it. **The glass cannot live on the `<input>`**: a border-box width
+  smaller than the element's own padding floors the content at zero and grows the
+  BORDER box instead, so an input needing 3rem of right clearance for the glyph
+  measured **66px** shut where 44 was wanted. Hence shell + input, the shell's
+  `overflow: hidden` clipping the input's overhang while it's narrow. Width, not
+  `clip-path`: one out-of-flow box laying out for the length of a tap is not the
+  area × radius × **moving-frames** bill this file refuses elsewhere.
+
+- **A script `focus()` inherits the keyboard ring from the element it took focus
+  FROM, and a text input always has one.** Closing the search has to say where
+  focus goes and the two answers differ: a keyboard close (Escape, or Enter on
+  the icon) must hand it back to the button or the next Tab restarts at the top
+  of the document, while a **tap** must not park it anywhere. `closeSearch` did
+  the first unconditionally, so tapping the X on an open field drew 2px of
+  `--accent` around the disc — and `--accent` is `var(--text)`, i.e. **a white
+  ring on dark paper**. The cause isn't the button: `:focus-visible`'s heuristic
+  passes through a scripted focus when the previously focused element matched,
+  and an input matches *always*. So the ring only ever appeared on an open field,
+  which is the only state where focus was in the input to begin with. The tell is
+  **`event.detail`** — 0 from the keyboard, 1 from a pointer, on both engines,
+  since WebKit fires an ordinary click either way. The tap branch **blurs**
+  rather than leaving focus in a folded field, which iOS would answer with a
+  keyboard standing over a closed search. Any future control that closes itself
+  and restores focus inherits this; a menu whose opener and rows are both buttons
+  does not, because a pointer-focused button never matched in the first place.
+
+**The wordmark is signed-out only.** `.brand` is gone from `index.html`; the one
+place a wordmark still earns its space is `.auth-topbar` on the front door, where
+there is no page identity to show instead. It was also the only signed-in link to
+About, so **About is a row in the ••• sheet on your own profile** — which matters
+more than a colophon would, because the feedback form is there and it is the only
+way to report a bug.
+
+**There is no seg-tabs any more, and the composer is why.** `.seg-tabs` was the
+iOS segmented control — two equal segments over a sliding thumb — and it lost its
+callers one at a time: Friends' pair went with the Friends page, Updates' All /
+Mentions became a toolbar filter in 1.3 so all four root pages narrow through one
+control in one place, and the composer's **Post / Activity** became the calendar
+button in the attach bar (see the composer note below). The last one is what
+settles it, because it retires the argument that kept the control alive through
+the other two — that the composer's segments weren't *narrowing* anything, they
+picked what you were about to make. That turned out to be the case against it: a
+form can read what you attached, so asking first was asking for an answer the
+reader didn't have yet. `segTabsEl`, `wireSegTabs` and the whole stylesheet block
+are **deleted**, with tombstones at both sites; nothing left in the app puts two
+whole versions of one page side by side, and a new one should be sure it isn't a
+filter (toolbar dial) or an attachment (a button in the bar) before it rebuilds
+this. Two things that fell out of Updates' dock coming out in 1.2 still hold:
+**no page has a `position: fixed` child**, which is what the containment cautions
+elsewhere in this file are guarding, and the bottom nav hugs the home indicator
+(small float, iOS Liquid Glass style) rather than being lifted into the screen.
+
+**The composer is ONE form and the type is inferred, never picked.** Four toggles
+ride the foot of the note box — `link` → Find, `image` → Frame, `poll` → Poll,
+`cal` → Activity — each opening its own surface (the link row, the picker, the
+choices, Where and When) and folding the other three, with `derivePostType`
+reading whichever is live. Nothing else is a type control: no chips, no groups,
+no switcher. Five things about it:
+
+- **Activity stopped being a GROUP in 1.3.** It had its own field set behind the
+  seg-tabs, which meant two forms to keep in step, and the plan form was the one
+  falling behind — flat 180-char details box, no rich body, an optional headline
+  it didn't offer, its own copy of the audience lock. A plan is a note with a
+  place and a time attached, so that is what it is made of now: the same rich
+  editor every other type writes into, plus `eventFieldHtml`'s two fields
+  shipped hidden beside the poll's and the frame's.
+- **The words survive every flip.** Folding a surface leaves what's typed in it,
+  and the headline and body belong to the form rather than to a type, so a
+  mis-tap costs the tap back and nothing else. That is the whole reason this is
+  cheaper than a switcher, which re-mounted a field set and threw the draft away.
+- **The audience default follows the type, but only while it IS a default.** An
+  activity stays circle-first for a public account, the way it always has
+  (`canJoin` is friends-only, so a plan the whole room can read is still one only
+  your circle can turn up to). Under the switcher that was settled once at mount;
+  the type can now change under the reader's hand, so `syncDefaultAudience`
+  recomputes it on the toggle — gated on `pubAudienceTouched`, which latches the
+  moment the sheet writes an answer. After that nothing moves it but them.
+- **The headline's placeholder carries the requirement.** It reads *Title
+  (optional)* everywhere except an activity, where `submitComposer` refuses a
+  post without one, so the box says *Picnic at the park* rather than letting the
+  reader find out at the foot of the form.
+- **The daily flow drops the calendar toggle and its surface** (`fieldsFor`'s
+  `event` option), because an activity answers no prompt (`dailyAccepts`) and a
+  button offering one there is offering a dead end. A quote has no attach bar at
+  all, for the stronger reason that it isn't a type.
+- **A live toggle is INK, never a fill.** Each of the four carried a disc of its
+  own type pastel at ~24%, and the `Aa` styles button and the H1/H2/B/I row
+  carried a grey one — all removed. This bar lives *inside* the note box, which
+  is the quietest surface in the app, and a filled pill was the fill doing the
+  shouting rather than the mark: four grey line glyphs and one pastel button
+  reads as a chip left switched on. The colour alone is unambiguous, nothing
+  else in the bar is coloured, and it is the same hue the nameplate and the
+  masthead mark are already wearing — one type, one hue, three places, no extra
+  geometry. `:hover` keeps its neutral fill on purpose: that is a pointer
+  finding a target, not the form saying what it's making.
 
 **Bars get the scroll edge effect, not a hairline.** `.topbar` and `.auth-topbar`
 are a vertical gradient — heaviest at the very top (that band is the safe-area
@@ -784,9 +1626,37 @@ inset, i.e. exactly where the OS clock and battery need something to read
 against) and thinning toward the bottom edge, so content dissolves *into* the bar
 instead of hitting a wall. The gradient **is** the edge, so `border-bottom` is
 gone: a hard 1px rule under a fading bar draws the one line the effect exists to
-remove. This is also why the bar does most of the status-bar scrim's work while
-it's on screen — the scrim still matters because `.topbar--hidden` takes all of
-it away on scroll-down.
+remove.
+
+**And as of 1.3 it is an EFFECT, not a permanent fill.** At the top of a page
+nothing has passed under the bar, so there is nothing to separate it from: the
+material is simply absent, the page runs clean to the top edge, and the controls
+sit on it as the glass objects they already are. It fades in the moment content
+starts sliding underneath — `.topbar--bare`, driven by `syncToolbarEdge`, the
+same shape as the collapsing title (a boolean crossing with a 2px deadband for
+iOS's rubber band, instant on navigation, never a per-frame value read off the
+scroll). It lives on `.topbar::before` because it has to FADE and neither half
+can do that in place: `background-image` doesn't interpolate between gradients at
+all, and dropping the fill while the blur ramps is two events for one change. One
+`opacity` transition on a layer carrying both does all of it. The status-bar
+scrim goes to full strength while the bar is bare, the same answer it already
+gives for `.topbar--hidden` — which is now two reasons the scrim matters rather
+than one.
+
+**And the two rules that take it there must restate the shell gate, or they
+lose.** `.statusbar-scrim`'s baseline is `html[data-shell="installed"]
+.statusbar-scrim` — an attribute plus a class, (0,2,1). A bare `.topbar--hidden
+~ .statusbar-scrim` is two classes, (0,2,0), so the baseline outranks it and
+0.8 is what the glyphs get in every state. That is not a hypothetical: the
+deepen rule was written when the gate was `@media (display-mode: standalone)`,
+which carries no specificity at all and let it win on source order, and the gate
+became an attribute on `<html>` in the App Store commit. **The scrim was stuck
+at 0.8 in the installed shell from that day until 1.3** — no error, no log, and
+no visual tell short of noticing the clock over a scrolled feed, and invisible
+in every other shell because the scrim isn't drawn there at all. Restating
+`html[data-shell="installed"]` on the overrides reads as redundant and is
+load-bearing. Measured on the simulator: 1 while bare, 1 while tucked, 0.8 under
+a painted bar, at exactly the 62pt inset's height.
 
 **Corner scale:** 3px incidental (`--radius`) · 8px small containers
 (`--radius-img`) · 12px composer inputs (`--radius-field`) · 14px photos + glass
@@ -802,24 +1672,395 @@ it and keeps its own radius. The pastel `publish-fill`
 gradient stays reserved for the primary publish/share action — don't spread it
 to every button, or it stops meaning anything.
 
-**Never glass on glass.** One material at a time: both dial discs
-(`.filter-dial-ico`, `.nav-dial-ico`) sit on a veil that already blurs the frozen
-page, so neither carries a `backdrop-filter` of its own — a second sample per disc
-is redundant work fighting the stagger transform each row animates through. The
-modal *veil* + card is the one deliberate exception (iOS does the same with a
-dimmed backdrop under a sheet).
+**Never glass on glass.** One material at a time: the FAB speed dial's discs
+(`.nav-dial-ico`) sit on a veil that already blurs the frozen page, so they carry
+no `backdrop-filter` of their own — a second sample per disc is redundant work
+fighting the stagger transform each row animates through. The modal *veil* +
+card is the one deliberate exception (iOS does the same with a dimmed backdrop
+under a sheet).
 
-**Lit dome — the primary-action material.** The two hero commit buttons — the
-compose **+ FAB** (`.nav-publish`) and the composer's **Post** pill
-(`.composer-post`) — aren't flat pastel discs: the drifting quintet sits under a
-fixed lit dome (top-left specular hotspot + base cavity shadow + contact/ambient
-float) so they read as glossy 3D objects with a real, non-wandering light source
-(only the colour band drifts; the highlight/cavity stay pinned). **Dark mode
-carries the volume with light, not shadow:** the black cavity + drop shadows all
-but vanish on a dark surface, so dark brightens the hotspot and adds a crisp lit
-top rim instead. Keep the colour-band scale (`300%`, 2–3 hues in view) identical
-across modes — only the gloss is scheme-tuned; redeclaring the `background`
-shorthand silently resets `background-size`, so always restate it.
+**The two dials stopped being the same component in 1.3, on purpose.** They were
+one recipe on two anchors — a fan of frosted 46px discs, each with its type
+colour blooming behind the glyph, staggering in a row at a time. The **FAB's**
+dial keeps all of it, because that vocabulary is exactly right for a set of
+things you can *make*: objects you reach for. The **filter** dial is now a plain
+panel-glass card of listed rows — glyph rail on the left, label, checkmark on
+the live one — because "what am I looking at" is a list you *read*. A fan of
+floating discs made the eye assemble a list out of scattered pills before it
+could choose from one, and put a radial gradient under every row of the surface
+whose whole job is to get out of the way. **Don't re-converge them**, and note
+the filter dial's chrome is now all glass tokens, so it needs no dark-mode block
+beyond the scrim.
+
+**Every menu a toolbar glyph opens is that same card, and the card is no longer
+the filter's.** `.bar-menu` (renamed from `.filter-dial` when it stopped being
+one control's) is the panel: glass card, rows pinned under the button that
+opened it, scrim over a frozen page. `openBarMenu` owns the panel and nothing
+about what a row *means* — the scrim, the glass, the position, the focus trap
+and the one way out — while `openFilterDial` fills it with radios and
+`openGlyphMenu` with actions. The profile's **•••** and the **friends tie** were
+still rising from the bottom as action sheets until 1.3: same bar, two buttons
+apart, and the app answered one tap by dropping a card under your finger and the
+next by throwing a panel up from the opposite edge. A menu belongs to the
+control that opened it.
+
+**What stays a sheet is everything with no control to belong to**, and the line
+isn't fussy: a **confirmation** (delete a post, block someone, delete your
+account), which comes second after the menu that offered it has already closed;
+a **list of report reasons**, opened from a row rather than a button; a panel
+opened from the **page** rather than the bar (the accent picker's colour ring,
+the notifications switch's route into iOS Settings). And **the post card's own
+•••**, which is the deliberate one — it is not a toolbar glyph, it rides a card
+at an arbitrary scroll position, so a menu dropped from it would land anywhere
+between mid-screen and the 40px gutter above the nav and the same tap would
+produce a different-shaped thing every time.
+
+Three things about the move. `openGlyphMenu`'s items are `{label, icon?,
+danger?, run?}` — **deliberately `openSheet`'s own shape**, so a menu can move
+between the two without being rewritten and a caller that grows a confirmation
+step hands the identical array to a sheet. A **`danger` row carries its meaning
+across rather than being restyled**: the same coral (`--type-find-ink`) and the
+same haptic, which is the one in the app that fires on the *touch* rather than
+on a confirmed write, because it warns about what's coming instead of receipting
+what's done. And **`.bar-menu-item` states `min-height: 44px`** — the card's
+padding alone measured **41.3**, which it got away with while it held nothing but
+a filter and stopped getting away with the moment Block and Report moved in from
+a sheet whose rows have always measured 46. A destructive row must not shrink
+because its menu changed shape. It's the `--toolbar-btn` settlement again: a
+full-width row has no need of an invisible `::after` to buy its 44, so the floor
+is stated where the paint is.
+
+**Tinted glass — the primary-action material, and what the lit dome became.**
+The primary-act buttons — the compose **+ FAB** (`.nav-publish`), the composer's
+**Post** pill (`.composer-post`), the gate's submit, Share Tria, the editor's
+**Save** check, and the daily's **Add yours** in both places it is drawn — are
+the brand band behind the app's ordinary glass: `--glass-edge`, `--glass-rim`,
+`--glass-lift`, with the band thinned to `--pill-alpha`. Same three parts every
+other glass surface in Tria is built from, so a CTA is recognisably made of the
+same stuff as the toolbar and the sheets rather than out of a vocabulary it
+alone spoke.
+
+It replaced a **lit dome** in 1.3 — a top-left specular hotspot over a base
+cavity shadow, so the button read as a glossy 3D bubble. Three things fell out
+of retiring it, all worth keeping:
+
+- **Dark mode needs no second recipe.** The dome's black cavity and drop shadows
+  all but vanished on dark paper, so the volume had to be rebuilt out of light,
+  which meant two hand-tuned copies of every button. The glass tokens answer the
+  scheme once, in `tokens.css`. There is nothing left here to restate — and in
+  particular no `background` shorthand to accidentally reset `background-size`
+  with, which was the old trap.
+- **`--pill-alpha` (0.85) is a CONTRAST FLOOR, not a style knob.** `--on-type`
+  rides this fill and translucency composites the button against the page, so
+  dark paper is the hard case. Measured across the four brand stops and all
+  eight palette accents: worst pair is **6.04** at 0.85, **5.45** at 0.80,
+  **4.91** at 0.75. That worst pair is a **reader's accent**, not a brand stop —
+  the brand ramp is bright and measures 8.38 at its own worst, while an accent
+  is pinned to L* 74 and is the deepest thing this fill ever carries. The margin
+  is **wider** than the 5.51/4.98/4.50 this note used to record, because accents
+  are normalised to one weight now and the palest and deepest measure the same;
+  0.85 stays for how solid a primary button reads, not because 0.75 fails.
+  Deepening `BAND_LSTAR` is what would bring the cliff back — that number and
+  this one draw on the same account.
+- **The FAB is the one OPAQUE member, deliberately.** It takes the same edge,
+  rim and float but not `--pill-alpha`. It floats over the feed itself rather
+  than over a form, so thinning it would show live content sliding through the
+  app's most permanent object, and the **+** sits on that fill at every moment
+  of the app's life — an opaque band is the only version whose contrast doesn't
+  depend on what happens to be scrolling underneath.
+
+**No `backdrop-filter` on any of them, FAB included**, and that is the same
+glass-minus-blur settlement the masonry tiles already take. The bill is area ×
+radius × moving-frames and the FAB is on screen on *every route* over a scrolling
+feed — the exact cost this file refuses everywhere else. Fill, edge, rim and
+float carry the read; the sample is the one part that would only be visible while
+it was also being expensive.
+
+The band also doesn't drift, and that predates the material change: the loop that
+slid `background-position` across a 300%-wide gradient was a paint invalidation
+at refresh rate, and the FAB's copy ran on every route. It is 1:1 now, which is
+the truer statement anyway.
+
+**The band is BRAND now, not the quintet, and that swap is what retired the
+all-five rule.** Until 1.3 the gradient on these buttons *was* the five type
+pastels, under a rule that all five had to appear on every one of them: the
+gradient is the quintet, the quintet is the five things you can make, so a
+button showing four says the fifth isn't on offer. Rose was dropped twice for
+legibility (it sits at hue 336, between lavender at 255 and coral at 15, and on
+a 122px pill those three smear) and put back both times, correctly — that was a
+legibility complaint being paid for out of meaning.
+
+What changed is what the band *says*. It is `--brand-band` (`css/tokens.css`):
+**lavender → blue → green → orange**, four stops, pointed at `--type-note` /
+`--type-photo` / `--type-activity` / `--type-find` so there is one copy of each
+hex and dark mode is answered where the type fills already answer it. Borrowed
+on purpose — these are the colours people already read as Tria — but it no
+longer *names* types. On a primary button it is the app signing its own name on
+the one act that is Tria's, and it says nothing about what you're about to make.
+So four stops is not a type deleted from a set of five, and rose finally comes
+out as the plain legibility fix it always was. **Nothing about the quintet
+changed anywhere a hue actually names a type** — a filter row, a heart, a tag,
+the pull-to-refresh dots, a daily's card. Those five are untouched, and a hue
+naming a type is still the only thing the quintet is for.
+
+The **order** survives intact and is still not negotiable: sorted by hue, 255 →
+195 → 83 → 15, monotonically descending, so the band is one continuous ramp
+rather than a climb and a fall. It is still NOT `FILTERS` order — the
+pull-to-refresh quintet is the opposite case and correctly uses filing order,
+five discrete dots where the sweep argument has nothing to say.
+
+**The colour source has THREE rows, and the third one is why.** The picker's
+"Colour source" group is **Default** (Tria's brand ramp) · **Photo** (sampled
+from your avatar, still what a null `accent` means) · **None** (monochrome).
+Until 1.3 it had two, and `'none'` and "no accent set" both landed on the same
+line in `paintBrandBand` — `set(null)`, which removes the properties and lets
+`--pill-band` fall through to `--brand-band`. So the row named *no colour*
+painted the most colourful button in the app. They part now: `'default'` takes
+the removal, `'none'` stamps `--mono-band`. Three things about it:
+
+- **No migration.** `users.accent` is plain `text` with no check constraint, so
+  a value the DB has never seen writes and reads like any other, and an older
+  client meeting a `'default'` row falls through to the photo path — i.e. to the
+  same brand ramp the row is asking for.
+- **The mono band is stamped as `var(--mono-band)`, not as a literal.** A custom
+  property holding a `var()` is substituted at the point of USE, so it resolves
+  against whichever scheme is live when a button paints and no JS has to know
+  which that is. Dark mode stays answered once, in the tokens. Same trick the
+  two heart weights already lean on.
+- **`'default'` gets no `.ambient` wash**, joining `'none'` in `withAccent`. A
+  wash is one hue lighting a page and neither "Tria's ramp" nor "no colour"
+  names one. The buttons are where those two differ.
+
+**The brand ramp is BRIGHT on dark paper, and that is a decision that was
+tested.** `--band-deepen` mixes each pastel toward its `-ink` twin, and the dark
+block sets every `-ink` twin equal to its pastel, so the mix resolves to the
+pastel and the ramp arrives undeepened in dark mode. A deepened version was
+built and reverted: it evened the four stops to a common L\* 65 and measured
+beautifully. It was still wrong. This gradient is the app signing its own name
+on the primary act and the brand reads bright — muting it on dark paper made the
+one permanent object on the screen recede exactly where it should carry. **Don't
+re-derive the even version**; it has been measured and turned down. Deepening
+belongs on a reader's accent instead, which is the next note.
+
+**The band travels through OKLAB.** sRGB interpolates down the straight line
+between two hex values, and between two pastels that line sags — the midpoint
+comes out duller and a shade darker than either end, so four stops read as four
+bands with three grey seams. Worst exactly where the band is smallest: on the
+60px FAB the gradient is the whole button. Same four stops, same 115deg, same
+order; only the travel between them changed. It sits behind
+`@supports (background: linear-gradient(in oklab, …))` because the deployment
+target is **iOS 15** and this landed in Safari 16.2, and it has to be a feature
+query rather than a second declaration — an unregistered custom property accepts
+**any** token stream, so a `--brand-band` an engine cannot parse would still win
+the cascade and take the fill to nothing at the point of use. The `--spring`
+block above it is the same shape for the same reason.
+
+**`--pill-band` is declared exactly once**, in `tokens.css`, as
+`var(--user-band, var(--brand-band))` — and both halves of that matter. It used
+to be written out by hand in two places, the `.is-solid` fill and
+`.publish-fill::before`'s resting ring, which are the same band in two modes
+(the ring IS the fill with a mask over it), so a stop dropped from one and not
+the other made *hovering a button reshuffle its colours*. One declaration, five
+readers, nothing left to drift. The `.splash-t` boot mark is the deliberate
+exception and reads `--brand-band` directly: it paints before auth resolves, so
+there is no reader whose colour it could be wearing (see the splash below).
+
+**A reader's accent rides the same buttons, and it is YOUR accent, not the one
+you're looking at.** `--user-band` is stamped on `<html>` by `paintBrandBand()`
+from `Store.currentUser()`, and absent is the meaningful state — "no colour",
+the gate, and the frames before auth resolves all fall through to the brand ramp
+with no branch for it. Two things about it:
+
+- **It must not be confused with the `.ambient` wash.** They wear the same
+  palette and answer different questions: the wash is the person whose *page is
+  on screen* and changes as you browse; the buttons are your app chrome, the
+  same on every route. (The composer is where the two coincide — its wash is
+  yours, because the page is — and that is a coincidence of subject, not a
+  merge.) Repainting your Post button in a stranger's colour while
+  you scrolled their profile would be the app telling you something false about
+  whose app it is. Hence `paintBrandBand` reads the current user and
+  `applyAmbient` reads the route, and they deliberately do **not** share
+  `ambientSeq` — a stale-sample cancel is right within one question and wrong
+  across two.
+- **"None" is the one fill that FLIPS with the scheme, because a neutral has
+  nothing but lightness to separate it from the page.** Every chromatic fill
+  here is light in both schemes and separates by hue; grey cannot, so a light
+  grey button on light paper is not a quiet button, it is an absent one —
+  `#f5f6f8` on `#edeef0` measures **1.10**, and it shipped that way for an
+  afternoon. `--mono-band` is ink-side on paper and paper-side on ink, and
+  `--mono-ink` is the glyph that rides it. Measured: **8.90** fill-against-paper
+  and 9.55 glyph-on-fill in light, 17.63 / 16.64 in dark.
+  - **`--pill-ink` is the other half and is declared once**, as
+    `var(--user-ink, var(--on-type))` — the same shape as `--pill-band` right
+    above it, so the fill and its glyph travel together. Six rules read it
+    (`.publish-fill` solid/hover/focus, `.auth-submit`, `.nav-publish` and its
+    current-page state); none of them know which band is live.
+  - **`--user-ink` is stamped in the same call as `--user-band`** and is absent
+    for every chromatic band, which is not an omission — an accent and the brand
+    ramp both want the near-black `--pill-ink` already falls back to. A light
+    glyph arriving a frame after a light band is a **+** you cannot see, on
+    every route.
+
+- **Three palette accents have moved OFF the quintet, and that decoupling is
+  the point.** A palette's job is nine choices a reader can tell apart; the
+  quintet's job is five type identities. Where those disagreed the palette lost:
+  measured, cyan sat **20.8°** from ocean — closer than the band's own **32°**
+  sweep, so their gradients overlapped and each ended partway through the other
+  — and rose's red end came within **6.7°** of coral's pink end. Cyan
+  `#9fd6e8`→`#88e4f2` (hue 194.8→188), ocean `#8fb4ea`→`#5f95f2` (215.6→218),
+  rose `#ea86ae`→`#ea8696` (336→350; rose has since moved again, to `#ea7b8e`,
+  and split off Ruby — see the declared-band note below). **`--type-photo` and
+  `--type-poll` are untouched**: a Photo card is still cyan and a poll still
+  rose.
+  - **Ocean's hue is 218 and not 228, and that took two goes.** It first went to
+    228 to buy clearance from cyan, and 228 plus the arc lands the last stop at
+    **239** — where R catches G and the band turns violet, on lavender's
+    doorstep. That check is that cheap: while **G leads R** the eye calls it
+    blue, and it holds at every depth ocean has been drawn at (the +11 stop was
+    `#9baaef`, G ahead by 15, at the old L\* 74; it is `#7990f4`, G ahead by 23,
+    at today's L\* 65 — lavender correctly runs negative throughout). 8° of
+    clearance from cyan is enough because two bands read from their centres, and
+    those are a turquoise and a blue. **What this
+    note used to say is that ocean's depth came from *saturation*,** which was
+    making the best of a lever that doesn't reach: under the inherited recipe a
+    hex's lightness is discarded and its saturation clamped, so ocean's deep hex
+    bought a deeper profile *wash* and a button identical to everyone else's.
+    It declares its own band now.
+  - **`BAND_ARC` is 11°, down from 16.** Hue moves alone were not enough — the
+    blue-green quarter holds four accents in 97°, and at ±16 they need 128. At
+    a 22° span every neighbour clears, the tightest being coral→amber at 22.9
+    and rose→coral at 24.7. Widening it re-opens both.
+  - **A hex's LIGHTNESS now only decides the wash.** The band re-pins L\* and
+    clamps saturation, so a brighter hex buys a brighter *profile page* and an
+    identical button. That is what caps cyan: at HSL l 0.80 it was a lovely
+    swatch and took `--wash-ink-soft` on a dark profile to **4.40**, under AA.
+    0.74 measures 4.58, beside lime's 4.65. Re-measure that ink, both schemes,
+    if a palette hex ever moves again.
+
+- **A reader's accent is pinned to a perceptual weight, and that one change
+  fixes the band AND the heart.** `BAND_LSTAR` = **74** (`bandFrom` in app.js).
+  Both were pinned in **HSL lightness** before — 0.78 for the band, 0.52/0.78
+  for the heart — and HSL lightness is not perceptual: the same 0.78 lands
+  lavender at L\* 71.7 and lime at **L\* 89.0**, nearly white, because the eye
+  reads green as far brighter than blue at equal HSL L. So the eight accents
+  were spread over 17 points of real lightness on the buttons and **43** on the
+  hearts. Pinning L\* levels them, and level is what lets the set move at all.
+  - **74 is a settlement.** Two versions shipped for an afternoon each: the old
+    pale 80.5 and a deep 68. 68 read as a different app's button rather than as
+    Tria's in a colour. The floor is real but lower: measured across all eight
+    accents and every hue on the wheel, `--on-type` gets **6.01** at L\* 74,
+    **5.05** at 68, **4.62** at 65, **4.33 — a fail** at 63, with the binding
+    surface the **thinned** one on dark paper (the FAB is opaque and never the
+    hard case). Deeper than 68 needs a lighter ink, which is a second ink rule.
+  - **The lime heart was invisible, and that is what "cohesive" was about.** At
+    HSL 0.52 the accent hearts ran L\* 37.0 (lavender) to **80.2 (lime)**, and
+    lime measured **1.3** against `#edeef0` — picking Lime turned your likes
+    off. Pinned, every accent measures **3.46–3.50** on paper and **9.37–9.43**
+    on ink, both inside the per-type hearts' own ranges (3.02–4.04 and
+    7.73–12.63), so an accent heart sits where a type heart sits.
+  - **In dark mode the heart IS the band's weight.** `HEART_LSTAR_DK` is
+    `BAND_LSTAR` by reference, not by a copied number — measured, the dark heart
+    and the band's mid stop land within **0.1 L\*** for every accent. Light
+    can't join them (a mark at 74 vanishes into paper, which is the bug above),
+    so it drops to `HEART_LSTAR_LT` = **53**, the per-type hearts' mean.
+  - **THREE ACCENTS DECLARE THEIR OWN BAND, and 74 governs the other six.**
+    The palette is **nine**, because rose split into **Ruby** (L\* 65) and
+    **Rose** (L\* 72); **Ocean** joined them on 2026-08-24 at L\* 65. All three
+    wear the **same near-black `+` as every other accent** — 65 is the floor
+    where `--on-type` gives out, and both deep ones stop exactly there. Ruby
+    spent a day at L\* 42/44 with a white `--user-ink` and came back up: one
+    glyph colour across the whole palette is worth more than one deeper red.
+    Rose is at 72 rather than 65 because the two hexes are **1.1° apart** and a
+    band re-pins lightness *and* chroma, so at a shared 65 they painted
+    `#f47ba5` and `#f47ba6` — the same colour twice. Depth is the only axis
+    left to separate them on. An `ACCENTS` entry may carry
+    `band: {lstar, sat}`, which
+    **replaces** the derivation rather than capping it — the old `sat` clamp is
+    a ceiling, so `min(0.85, a duller hex)` silently hands back the hex and
+    paints the band you didn't ask for. Absent, which is the other six and
+    every sampled photo colour, is exactly the behaviour above, so **moving 74
+    still moves the palette.** Why it had to exist: at L\* 74 every red is a
+    pink, and that is a *lightness* fact — at 74, saturation .72 → 1.0 moves
+    OKLCH chroma .096 → .125 and still paints `#ff98aa`. **65 is the bottom of
+    the palette**, and going under it means leaving the set — see below.
+  - **A declared band has TWO landing zones and nothing between them, and the
+    OPAQUE FAB is what makes the gap uncrossable.** The near-black ink is
+    bounded from below by the thinned fill on **dark** paper; a white ink is
+    bounded from above by the FAB, which has no scheme to vary with. Measured at
+    ocean's hue: near-black holds to L\* **65** (4.68) and fails at 64 (4.48);
+    white doesn't clear the FAB until **48** and the light thinned fill until
+    44. So an accent is a deepened pastel at ~65 or a gem at ~44, and **nothing
+    lives in the lower zone today** — `--user-ink` stays wired end to end
+    (`ACCENTS` `ink` → `paintBrandBand` → `--pill-ink`) because it is the only
+    thing that makes that zone reachable, but no accent sets it. **And there is
+    no per-scheme ink to bridge it** — the natural answer in the gap is
+    near-black on light paper and white on dark, but at L\* 52 the FAB measures
+    3.85 against the near-black and 3.96 against the white, so a glyph that
+    flipped by scheme would fail on that button in *both*. One ink per accent is
+    what the FAB permits, not a shortcut. Final: ruby 4.65 / 6.90 / 6.06, ocean
+    4.68 / 7.08 / 6.09, rose 5.69 / 8.39 / 7.55 (thin-on-dark, thin-on-light,
+    opaque FAB).
+  - **The hex and the band have fully parted, and the hex is now tuned for the
+    WASH.** A declared band takes lightness and chroma from the recipe, so rose
+    `#ea7b8e`, ruby `#c32842` and ocean `#5f95f2` exist only for `.ambient`
+    (which paints them straight) and `heartsFrom`. They look duller than the
+    bands they produce, and that is correct — don't "fix" a hex to match its
+    button. **Ocean's hex deliberately did not move** when its band deepened,
+    so its profile page stays the blue it has been and its wash figures are the
+    ones already measured. Two costs, both
+    accepted: **a deep band no longer matches its own heart on dark paper**
+    (`HEART_LSTAR_DK` stays 74 and a band at 65 is nine points off it — a heart
+    that followed a band down is the lime-heart bug in red, which is the worse
+    failure), and **`app.css`'s 5.89 wash-ink figure was measured
+    over eight accents** — ruby is the deepest hex the wash has ever carried
+    (L\* 43.5 against a previous floor of ocean's 61.9) and is **not**
+    re-measured there; the note beside it says so and names the lever.
+    Ruby's key is new, so an older client falls through to the brand ramp;
+    **rose keeps the key `'rose'`** so everyone who already picked it lands on
+    the rose above rather than on nothing, and ocean keeps `'ocean'` so an older
+    client just paints the light blue it already knows.
+  - **The swatch grid is ROYGBIV, 3×3.** `ACCENTS` is sorted by hue from the red
+    end — 350 · 15 · 40 · 83 · 158 · 188 · 218 · 255 — which deals warm / green
+    / cool as the three rows. Ruby and rose are 1.1° apart, so depth breaks that
+    tie and the true red leads the pink. **Nothing reads the array by index**
+    (the picker maps it; everything else goes through `accentOf` on the stored
+    key), so the order is presentation only and free to change.
+  - **It is also the only reason the Photo option can touch a button.**
+    `glowNorm` pins a sample to HSL 0.55 — right behind a wash, wrong under
+    text, where a saturated blue measures **2.30** against that ink. Neither
+    source is trusted; both are pinned here.
+
+**The boot splash TURNS, and the mark is Tria's rather than the reader's.**
+`.splash-t` walks the four brand stops one position along its 115deg gradient
+every second, so the whole band passes through the glyph inside the curtain's
+own life. Two halves of that are worth keeping:
+
+- **It wears no accent, deliberately.** A version reading a `--user-band` cached
+  in localStorage was built and taken out. The splash is static HTML precisely
+  so it paints before any script, which means the only accent it could ever show
+  is the one this install wore LAST time — and a curtain that is sometimes your
+  colour and sometimes the brand's is the app looking uncertain about whose name
+  is on the door. It is the door. It says Tria. Keeping no cache also keeps
+  `--user-band`'s absence load-bearing everywhere it matters: there is nothing
+  for the gate to paint its submit button with by accident.
+- **The rotation is four registered `@property` colours interpolating in
+  place**, not a `background-position` slide over a widened gradient. A 115deg
+  ramp slid horizontally does not advance by a whole period — the shift maps
+  onto the gradient axis through `sin(115deg)` while the period is set by a line
+  length carrying the box's height too — so that version seams once a second
+  unless the ramp is flattened to horizontal. Rotating the stops is seamless by
+  construction and keeps the brand angle. Unregistered properties would step
+  between keyframes instead of interpolating, the same reason `--glow-wash` is
+  registered. The stops are named once in `tokens.css` (`--band-note` /
+  `--band-photo` / `--band-activity` / `--band-find`) and `--brand-band` is
+  built from the same four, so the mark that turns them and the button that
+  paints them cannot drift.
+
+It **is** the per-frame repaint of a text-clipped gradient that the old 2s loop
+was removed for, and the cost is real. What makes it affordable is that it is
+bounded where that one wasn't: one glyph, one element, about a second and a half
+before `dismissSplash` removes the node. If boot ever needs those frames back,
+drop the second animation and the mark falls back to the band at rest.
 
 **Page changes have NO transition, as of 1.2.** `renderPage` builds the
 destination and mounts it in the same task as the navigation: the new page is
@@ -925,8 +2166,12 @@ spotlight, to a remembered position, back to the top) and a thousand-pixel jump
 was reading as "scrolling down fast" — so landing on a post also slid the bar
 away, a second move stapled onto a navigation meant to have none.
 
-**A spotlight has no travel and no wash.** Tapping a post from Discover, Updates
-or a frame wall sets `spotlightPost`; the render then calls `parkCard`, which
+**A spotlight has no travel and no wash — and there is only ONE left.** Discover,
+Updates and the frame wall all open `#/p/<id>` now (see the post-page note under
+Backend notes), so the only thing still setting `spotlightPost` is the edit flow,
+which lands on your profile with a post's editor open. The rest of this note is
+about that one case, and about why the travel must not come back if another
+caller ever appears. Setting `spotlightPost` makes the render call `parkCard`, which
 moves the scroll **synchronously, inside `renderFn`**, so the position is set
 before the new page's first paint and the post is simply where the page opens. It
 used to glide 460ms to the card and then flash a tint over it, both starting 120ms
@@ -939,32 +2184,42 @@ the silent 900ms re-aim after landing — lazy media resolving *above* the card 
 legacy photo swapping its 3:2 reserve box for its real shape) shoves it down, and
 on a page that has only just landed that reads as the post sliding away.
 
-**The seg-tabs rise went with the fade, and then the dock went too.** The Updates
-switcher used to float above the bottom nav, tucked behind the pill on arrival and
-released a frame later. The rise came out first, for the fade's own reason: the
-router only ever played it when the outgoing page had no switcher of its own — two
-copies of the same fixed control at the same coordinates never moved, so animating
-one is inventing a move, and on a page that arrives instantly *nothing* moved. The
-dock itself came out after (see the design-system note above), so the switcher is
-now an ordinary inline control under the masthead and there is nothing left here
-to sequence. (The arriving page's glass has stayed live since the one-fade change, for
+**The seg-tabs rise went with the fade, then the dock went, then the control
+did.** The Updates switcher used to float above the bottom nav, tucked behind the
+pill on arrival and released a frame later. The rise came out first, for the
+fade's own reason: the router only ever played it when the outgoing page had no
+switcher of its own — two copies of the same fixed control at the same
+coordinates never moved, so animating one is inventing a move, and on a page that
+arrives instantly *nothing* moved. The dock came out after (see the design-system
+note above), and in 1.3 All / Mentions became a toolbar filter like every other
+page's, so on Updates there is nothing left here to sequence at all — and with
+the composer's Post / Activity gone the same way, the control itself is deleted.
+(The arriving
+page's glass has stayed live since the one-fade change, for
 the neighbouring reason: `backdrop-filter: none` applied to a promoted fading
 layer, and the destination is neither, so a page used to land wearing flat glass
 and frost up on cleanup — a little pop of the material switching on at the end of
 every navigation.)
 
-**Share is the tray, and the header tray shares.** `ICONS.send` is the
-arrow-out-of-a-box the OS itself draws for share, not an envelope (an envelope
-promises a message you compose; these buttons hand a link to the OS). Its mouth
-matters: an early circular vessel with a narrow break reads as the IEC
+**Share is the tray, and the tray is not in the header any more.** `ICONS.send`
+is the arrow-out-of-a-box the OS itself draws for share, not an envelope (an
+envelope promises a message you compose; these buttons hand a link to the OS).
+Its mouth matters: an early circular vessel with a narrow break reads as the IEC
 standby/power glyph at 22px, so if the vessel is ever redrawn, check it at true
-disc size, not at 96px. The header glyph is the share — it fires `shareOrCopy`
-in place and goes nowhere. It used to be a sprout opening `#/support`, a note
-from Zoe with the share button at the bottom, which put a page between someone
-and the thing they meant to do; the note moved to an About fold and has since
-been removed outright, and `#/support` redirects to `#/about`. index.html **inlines** the tray's
-path data because the header paints before app.js runs, so that copy and
-`ICONS.send` have to be changed together.
+disc size, not at 96px.
+
+Its history is three removals in a row, each for the same reason. It began as a
+sprout opening `#/support` — a note from Zoe with the share button at the bottom,
+which put a page between someone and the thing they meant to do. The note moved
+to an About fold, then was removed outright (`#/support` redirects to `#/about`),
+leaving a glyph in the header that fired `shareOrCopy` in place. Then 1.3 gave
+the bar to the page, and a *generic* action on every page is exactly what the bar
+stopped being for: sharing Tria is not something you do from Updates. So the
+header disc is gone too, along with the path data index.html used to inline for
+it (the header painted before app.js ran, so that copy and `ICONS.send` had to be
+changed together — no longer a hazard). What remains is where sharing belongs:
+**Share profile** in a profile's ••• sheet, a post's own ••• menu, and the
+invite banner at the foot of Discover.
 
 **Comments are a growing textarea, not a one-line input.** The comment composer
 auto-grows to fit its text (wraps into view instead of scrolling off one line);

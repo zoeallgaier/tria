@@ -55,18 +55,19 @@
        The maskable additionally sits at 78% to clear Android's 80% safe
        circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=377" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=377" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=377" />
+  <link rel="icon" href="icons/icon-32.png?v=436" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=436" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=436" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
   <!-- Transparent status bar in the installed (homescreen) app: the web view
        runs edge-to-edge UNDER the status bar (liquid-glass), rather than iOS
        reserving an opaque strip. Content clears the notch via the
-       env(safe-area-inset-top) padding on .topbar / main. At the top the frosted
-       topbar (wordmark + Post) sits under it; scroll down and the topbar tucks
-       away, leaving the status area fully clear. -->
+       env(safe-area-inset-top) padding on .topbar / main. The toolbar's own
+       frosted band sits under the clock while it's painted; it isn't at the top
+       of a page (the scroll edge effect) and it's gone once you scroll down, so
+       the .statusbar-scrim below is what keeps the glyphs legible in both. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <!-- Fonts are SELF-HOSTED (css/fonts/, declared in tokens.css). They used to
@@ -85,14 +86,15 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=377" />
-  <link rel="stylesheet" href="css/app.css?v=377" />
+  <link rel="stylesheet" href="css/tokens.css?v=436" />
+  <link rel="stylesheet" href="css/app.css?v=436" />
 </head>
 
 <body>
   <!-- Boot splash: static HTML so it paints before any JS or network work.
-       The serif t wears the Post button's drifting pastel gradient; app.js
-       fades it out once the first view is in (see dismissSplash). -->
+       The serif t wears Tria's four-stop brand ramp, turning — a full pass
+       through the colours every second. app.js fades it out once the first view
+       is in (see dismissSplash). -->
   <div class="splash" id="splash" aria-hidden="true">
     <span class="splash-t">t</span>
   </div>
@@ -105,28 +107,27 @@
        profile's photo when you're viewing one (see applyAmbient in app.js). -->
   <div class="ambient" aria-hidden="true"></div>
 
-  <!-- Brand bar: fixed top on every breakpoint. -->
+  <!-- Toolbar: fixed top on every breakpoint, and the page's own — a leading
+       back chevron (most pages have none; the tab bar already says where you
+       are), a centered small title, and the page's actions as glass buttons.
+       The standard HIG collapsing-title bar. Every signed-in page fills these
+       three slots from mountToolbar() (js/app.js); signed out the bar isn't
+       drawn at all (body.gate) and .auth-topbar carries the wordmark instead.
+
+       A `<a class="brand">tria</a>` sat here until 1.3 finished. It was the
+       pre-1.3 content — the app's name where the page's name belongs, which is
+       the whole thing this release set out to fix — and it survived the
+       migration as the fallback for a page that hadn't been converted yet.
+       There are none left, so it went: see resetToolbar in app.js.
+
+       #toolbar-title is aria-hidden: it's a decorative echo of the page's real,
+       in-flow <h1> (mastheadEl, or a profile's own name), invisible until that
+       one scrolls out from under the bar (see syncToolbarTitle), so it must
+       never be a second accessible heading with the same name. -->
   <header class="topbar">
-    <a class="brand" href="#/about" aria-label="Tria, about">
-      <span class="brand-mark">tria</span>
-    </a>
-    <!-- Share Tria: one tap straight to the OS share sheet (clipboard copy on
-         desktop). This used to be a sprout leading to a note from Zoe that held
-         the share button, which made handing Tria to a friend a two-tap errand
-         through a page; the note now lives on About and the glyph does the job
-         itself. Sits at the header's right edge on phones; floats top-right over
-         content on desktop, where the topbar is a left rail (see .share-tria).
-         The whole topbar is hidden signed-out, so this is signed-in only for
-         free. The tray is inlined rather than drawn by svgIcon('send') because
-         the header paints before app.js runs — the two must stay in step. -->
-    <button class="share-tria" type="button" aria-label="Share Tria">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 15V3" />
-        <path d="M8 6.5 12 3l4 3.5" />
-        <path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
-      </svg>
-    </button>
+    <div class="toolbar-page" id="toolbar-page" hidden></div>
+    <div class="toolbar-title" id="toolbar-title" aria-hidden="true"></div>
+    <div class="toolbar-actions" id="toolbar-actions"></div>
   </header>
 
   <!-- Legibility scrim for the iOS status bar. black-translucent (above) forces
@@ -163,10 +164,10 @@
        Local also PINS the version: the old src said `@2`, so any minor release
        shipped itself into production without a deploy. Update deliberately —
        drop a new file in, change this line, bump. -->
-  <script src="js/vendor/supabase-js-2.110.9.min.js?v=377"></script>
-  <script src="js/config.js?v=377"></script>
-  <script src="js/store.js?v=377"></script>
-  <script src="js/app.js?v=377"></script>
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=436"></script>
+  <script src="js/config.js?v=436"></script>
+  <script src="js/store.js?v=436"></script>
+  <script src="js/app.js?v=436"></script>
 </body>
 
 </html>

@@ -6,14 +6,15 @@
 --     foreign keys unwind cleanly.
 --
 -- CANONICAL: this file folds in every migration in this directory, so a fresh
--- install needs only this plus storage.sql (buckets) and push-subscriptions.sql
--- (push, optional). The dated migrations stay on disk as the record of what was
+-- install needs only this plus storage.sql (buckets) and the push family
+-- (push-subscriptions.sql, push-webhooks.sql, activity-reminders.sql — all
+-- optional, and all skipped here because push is dashboard state, not schema). The dated migrations stay on disk as the record of what was
 -- run against the live DB — don't run them after this one.
 --
 -- Folded in: rename-post-to-note · add-activities · add-activity-when ·
 -- add-likes · add-polls · add-frame-video · swap-photo-blur-for-tint ·
 -- friend-requests · activity-audience · profile-privacy · blocks ·
--- post-audience-public · restore-block-gate.
+-- post-audience-public · restore-block-gate · reposts.
 
 drop table if exists public.blocks   cascade;
 drop table if exists public.friend_declines cascade;
@@ -37,7 +38,7 @@ create table public.users (
   bio        text not null default '',
   avatar     text,                          -- Storage URL later; null = initial tile
   private    boolean not null default true, -- posts fenced to friends (see profile-privacy.sql)
-  accent     text,                          -- profile colour: palette slug, 'none', or null = sample the photo (see profile-accent.sql)
+  accent     text,                          -- profile colour: palette slug, 'default', 'none', or null = sample the photo (see profile-accent.sql)
   created_at timestamptz not null default now()
 );
 
@@ -45,7 +46,12 @@ create table public.users (
 create table public.posts (
   id         uuid primary key default gen_random_uuid(),
   author     uuid not null references public.users(id) on delete cascade,
-  type       text not null check (type in ('note','find','photo','activity','poll')),
+  type       text not null check (type in ('note','find','photo','activity','poll','repost')),
+  -- A repost IS a post row, pointing at the one it passes along. Cascading, so a
+  -- deleted original takes its reposts with it (quotes included — a quote is a
+  -- sentence ABOUT one post, not a post that stands alone). 'repost' is a sixth
+  -- FILING and deliberately not a sixth member of the app's pastel quintet.
+  repost_of  uuid references public.posts(id) on delete cascade,
   title      text,
   url        text,
   note       text,
@@ -61,8 +67,32 @@ create table public.posts (
   -- mutual-friends-only for every account, public ones included.
   audience   text not null default 'circle' check (audience in ('public', 'circle', 'list')),
   tags       text[] not null default '{}',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- A repost row is coherent or it isn't one: it points at something and carries
+  -- only the words of the quote (a title and a note, like any other post). What
+  -- it may never carry is a payload of its own — media, a poll, a place, a time —
+  -- because those are things you MAKE, and this row is about something somebody
+  -- else made. Both directions, so an ordinary post can't grow a pointer either.
+  constraint posts_repost_shape check (
+    (type = 'repost'
+       and repost_of is not null
+       and url is null and image is null and poster is null
+       and poll is null and location is null
+       and event_date is null and event_time is null)
+    or
+    (type <> 'repost' and repost_of is null)
+  )
 );
+
+create index if not exists posts_repost_of_idx on public.posts (repost_of);
+
+-- One BARE repost per person per post, so the glyph is an honest toggle. Quotes
+-- are exempt by the predicate: bare means no words of your own at all, so the
+-- same post can be quoted twice with something different said each time. Both
+-- columns are in the predicate because a quote may carry a title and no note.
+create unique index if not exists posts_one_bare_repost
+  on public.posts (author, repost_of)
+  where type = 'repost' and coalesce(note, '') = '' and coalesce(title, '') = '';
 
 -- ── Post audience allowlist ─────────────────────────────────────────────────
 -- Who may see a 'list' post. The author is always implicitly allowed (handled in
@@ -253,6 +283,33 @@ as $$
 $$;
 grant execute on function public.can_view_post(text, uuid, uuid) to anon, authenticated;
 
+-- The second half of a repost's gate: can you see the post it points at? A
+-- repost is readable only if BOTH answers are yes, which is what makes "inherit,
+-- never widen" true in the database rather than in the client's good intentions.
+-- Deliberately a SEPARATE function rather than a clause folded into
+-- can_view_post: that function is this schema's worst regression site (see
+-- restore-block-gate.sql, which exists because a rewrite dropped one of its
+-- clauses), so the read policy is what gets replaced instead of its body.
+-- Blocking falls out for free — this calls can_view_post, which still checks
+-- is_blocked_pair against the ORIGINAL's author.
+-- security definer for the same reason: it reads posts as the table owner, so
+-- the policy never re-enters posts' own RLS and recurses.
+create or replace function public.can_view_original(p_repost_of uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_repost_of is null or exists (
+    select 1
+      from public.posts o
+     where o.id = p_repost_of
+       and public.can_view_post(o.audience, o.author, o.id)
+  );
+$$;
+grant execute on function public.can_view_original(uuid) to anon, authenticated;
+
 -- Kept for anything still calling it directly. can_view_post above is what the
 -- read policy actually uses; this is the older, looser audience-only check.
 create or replace function public.can_see_post(p_audience text, p_author uuid, p_id uuid)
@@ -293,8 +350,27 @@ create policy "users update self" on public.users    for update to authenticated
 -- needs). NO `to` clause on purpose — it must serve `anon`, which is how the app
 -- reads the feed, or the feed goes dark.
 create policy "posts read visible" on public.posts
-  for select using ( public.can_view_post(audience, author, id) );
-create policy "posts insert own"  on public.posts    for insert to authenticated with check (author = auth.uid());
+  for select using (
+    public.can_view_post(audience, author, id)
+    and public.can_view_original(repost_of)
+  );
+-- A repost may only be inserted if you can see what you're pointing at, it wears
+-- the ORIGINAL's audience exactly (so it can never be tagged wider than its
+-- subject), the original isn't hand-addressed (that allowlist belongs to its
+-- author) and the original isn't itself a repost (a chain collapses to its first
+-- original). In a FUNCTION rather than inline for the reason can_view_post is:
+-- an inline `exists (select … from public.posts)` here would run under the
+-- CALLER's RLS and re-enter the posts SELECT policy, which itself now reads
+-- posts through can_view_original. security definer reads as the table owner and
+-- cuts that off. Passing the values as parameters also removes the scope trap —
+-- `o` has a repost_of and an audience of its own, so a bare column name inside
+-- the subquery would bind to the ORIGINAL.
+create policy "posts insert own" on public.posts
+  for insert to authenticated with check (
+    author = auth.uid()
+    and public.can_view_original(repost_of)
+    and public.repost_insert_ok(repost_of, audience)
+  );
 create policy "posts update own"  on public.posts    for update to authenticated using (author = auth.uid());
 create policy "posts delete own"  on public.posts    for delete to authenticated using (author = auth.uid());
 

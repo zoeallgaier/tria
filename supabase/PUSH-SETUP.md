@@ -47,21 +47,70 @@ Missing APNs secrets are **not fatal**: web push keeps working and iOS rows are
 skipped with one log line, so a half-finished setup degrades rather than breaks.
 
 ## 3. Deploy the Edge Function
-The function is at [`functions/push/index.ts`](functions/push/index.ts).
 
-```bash
-supabase functions deploy push --no-verify-jwt
-```
-`--no-verify-jwt` lets the Database Webhook call it. (Or paste the file into
-Dashboard → Edge Functions → new function named `push`.)
+**The folder is `push`. The deployed function is `swift-processor`. They do not
+match, and that is the one thing to get right here.** Supabase auto-named the
+function at creation and an invoke slug can't be renamed after the fact, so
+[`push-webhooks.sql`](push-webhooks.sql) posts to
+`…/functions/v1/swift-processor` and always will.
+
+Deploying to a function named `push` therefore does nothing at all: it creates a
+second function nobody invokes, while the live one keeps running the old code.
+Nothing errors, nothing logs, and pushes simply stop reflecting your changes.
+
+The source is at [`functions/push/index.ts`](functions/push/index.ts). Two ways
+to get it live, both landing on `swift-processor`:
+
+- **Dashboard** (what Zoe has been doing): Edge Functions → `swift-processor` →
+  paste the file's contents → Deploy.
+- **CLI**: the CLI deploys by FOLDER name, so the folder has to be the slug.
+  Copy it across first, then deploy:
+  ```bash
+  cp -r supabase/functions/push supabase/functions/swift-processor
+  supabase functions deploy swift-processor --no-verify-jwt
+  ```
+  `--no-verify-jwt` is what lets the database webhook call it. Delete the copy
+  afterwards, or keep `push/` as the one source of truth and re-copy each time —
+  two folders that can drift is how this goes wrong a second way.
 
 ## 4. Wire the triggers (webhooks)
 Newer dashboards hide the Database Webhooks UI, so this is done in SQL instead —
-same effect (AFTER INSERT triggers that POST the row to the `push` function via
+same effect (AFTER INSERT triggers that POST the row to `swift-processor` via
 pg_net). SQL Editor → run [`push-webhooks.sql`](push-webhooks.sql).
 
 It covers `comments`, `posts`, `headcount`, and `friends`. **Not `likes`** —
 likes stay a silent private nod, by design.
+
+## 4b. Turn on activity reminders
+SQL Editor → run [`activity-reminders.sql`](activity-reminders.sql). It creates
+the `activity_reminders` journal, enables `pg_cron`, and schedules one hourly
+job (`tria-activity-reminders`) that POSTs `{ kind: 'activity-reminders' }` to
+the same `swift-processor` function the webhooks use.
+
+Unlike everything in step 4 this is not trigger-driven — nothing inserts a row
+when a reminder is due, so there has to be a clock. Each activity gets three
+nudges (a week out, two days out, the morning of) and they go to the post's
+**audience**, not its RSVP list: reaching someone who hasn't answered yet is the
+whole reason the week-out one exists. The host gets one line of their own on the
+day, with the headcount in it.
+
+The job runs hourly but only *acts* between 09:00 and 21:00 US Mountain (the
+app's own timezone), and every send is journalled, so the extra passes are a
+retry rather than a repeat — if the 9am run fails, 10am finishes it and nobody
+is told twice. Nothing here needs a client bump; reminders are push-only.
+
+Check on it:
+
+```sql
+select * from cron.job where jobname = 'tria-activity-reminders';
+select * from cron.job_run_details order by start_time desc limit 20;
+select * from public.activity_reminders order by sent_at desc limit 50;
+```
+
+To stop it: `select cron.unschedule('tria-activity-reminders');`
+
+**This inherits step 5b.** Until the `.p8` exists, an activity reminder is as
+silent on iOS as every other notification.
 
 ## 5. Apple side, for the iOS app (developer portal — also owner only)
 
@@ -87,8 +136,8 @@ somewhere safe, out of the repo. The `XXXXXXXXXX` in the filename is the
 `APNS_KEY_ID`. One key covers sandbox and production, and every app under the
 team.
 
-Then paste the .p8's contents into `APNS_PRIVATE_KEY` (step 2) and redeploy the
-function.
+Then paste the .p8's contents into `APNS_PRIVATE_KEY` (step 2) and redeploy
+`swift-processor` (step 3 — mind the folder/slug mismatch).
 
 ### Sandbox vs production
 A build installed from Xcode registers with APNs **sandbox**; TestFlight and the
