@@ -32,6 +32,11 @@
 	<string>Tria uses your microphone so a Frame video can have sound.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Tria uses your photo library so you can pick a photo or video to share in a post.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Oxygen-Bold.ttf</string>
+		<string>Oxygen-Regular.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

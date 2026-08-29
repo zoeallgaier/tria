@@ -261,6 +261,29 @@
   --heart-activity: var(--user-heart-lt, color-mix(in srgb, var(--type-activity-ink) 70%, var(--type-activity)));
   --heart-poll:     var(--user-heart-lt, color-mix(in srgb, var(--type-poll-ink)     70%, var(--type-poll)));
 
+  /* GOING — the "Going" tag beside a name on a host's guest list. It is the one
+     place a WORD (rather than a glyph) says somebody is coming, so it wants the
+     same colour rule the heart already has: the reader's own accent where they
+     picked one, the activity green where they didn't. Absent --user-heart-lt is
+     the default, so a reader with no colour set sees exactly the green this tag
+     has always been.
+
+     It borrows the HEART's weight rather than the -ink twin's, because the
+     accent has exactly one mark weight per scheme and a second one would be a
+     third perceptual number to keep in step for one pill. The cost is measured
+     and worth naming: the green ink is 4.62 on paper and an accent at the
+     heart's L* 53 is ~3.46-3.50, so under a picked colour this word sits below
+     AA for small text. Acceptable here because it is a redundant label -- the
+     host's list is ordered, everyone tagged first and everyone still to answer
+     after -- and not a licence to reach for --user-heart-lt on body copy.
+
+     The HEADCOUNT GLYPH deliberately does NOT read this and stays
+     --type-activity-ink. The two never appear together: .card-attendees.going
+     is the state of a guest who raised their hand, and only the HOST is ever
+     shown tags (a guest's who's-going list carries none), so a host's glyph is
+     never green in the first place. */
+  --going-ink: var(--user-heart-lt, var(--type-activity-ink));
+
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
   --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
@@ -497,6 +520,11 @@
     --heart-photo:    var(--user-heart-dk, var(--type-photo-ink));
     --heart-activity: var(--user-heart-dk, var(--type-activity-ink));
     --heart-poll:     var(--user-heart-dk, var(--type-poll-ink));
+
+    /* Dark takes the dark heart weight for the same reason the hearts do, and
+       needs no contrast caveat: the accent at L* 74 on ink paper measures ~9.4,
+       and the fallback -ink twin IS the pastel. */
+    --going-ink: var(--user-heart-dk, var(--type-activity-ink));
 
     /* Lit surfaces on dark paper: the top-white sheen barely reads on the
        near-white fills, so lean on a deeper base shade and a stronger lift. */

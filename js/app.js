@@ -362,6 +362,12 @@
     // Plain left chevron — the toolbar's one leading control, replacing every
     // ad hoc "← Back" text link with a single icon-only affordance.
     chevron: '<path d="M15 5.5 8 12l7 6.5"/>',
+    // Plain up arrow — the comment bar's send disc, and deliberately NOT `send`.
+    // The tray hands a link to the OS; this posts a sentence into a thread that
+    // is on screen above it, so the mark points at where the words are going.
+    // It is the same shaft-and-chevron drawing as `send` with the box taken off,
+    // which is the honest relationship between the two.
+    arrowup: '<path d="M12 19.5V5.5"/><path d="M6 11.5 12 5.5l6 6"/>',
     // The at-sign, for Updates' Mentions row in the filter dial. It's the one
     // dial row whose subject is a piece of punctuation rather than a thing, and
     // drawing the punctuation is more direct than any metaphor for it — you
@@ -559,12 +565,1174 @@
       if (composing) { pub.setAttribute('aria-hidden', 'true'); pub.tabIndex = -1; }
       else { pub.removeAttribute('aria-hidden'); pub.removeAttribute('tabindex'); }
     }
+    // …and the same two facts to the native bar, in the shell that has one. It
+    // reads .nav--compose back off the element above rather than being handed
+    // `composing`, so every other caller of sync() gets the same answer without
+    // having to know this line ran.
+    NativeChrome.setActive(active);
   }
 
   // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
   // block), so navigation costs no layout read and no per-frame filter work.
   // Nothing calls into the nav on navigation any more beyond the
   // aria-current flip above.
+
+  /* ── Native chrome (1.4) ─────────────────────────────────────────────────────
+     In the App Store build the four destinations and the + are drawn by UIKit in
+     the system's Liquid Glass, around this same webview. The web layer keeps
+     everything above: it still owns the route, still renders the nav markup, and
+     still knows which destination is lit. The plan and the traps are in
+     docs/native-chrome.md; the two rules that govern this module are:
+
+     NATIVE IS A RENDERER, NOT A SECOND MODEL. Routes go out, taps come back, and
+     a tap calls the same `go('#/…')` a CSS nav link would. Nothing here lets
+     native decide where the reader is, because two things holding that answer —
+     one with the history, one with the highlighted tab — is a bug with no
+     natural end.
+
+     THE CSS CHROME IS THE DEFAULT AND STAYS THE FALLBACK. `data-chrome` is unset
+     until the plugin has actually answered a call. A build where the plugin
+     failed to compile in (which verify-plugins.sh cannot catch — it reads
+     packageClassList, and app-target plugins aren't in it), a phone below iOS 26,
+     the web, an installed PWA: every one of those never sets the attribute and
+     navigates exactly as 1.3 did. There is no error path to design because a
+     rejection IS the design.
+
+     Attribute, not class, and stamped on <html> rather than <body>: the same
+     shape data-shell already uses, so the stylesheet reads one gate the same way
+     twice. */
+  const NativeChrome = (() => {
+    let live = false;      // the plugin answered; the native bars are up
+    let asked = false;     // …and we only ever ask once
+    let activeRoute = '';
+    // What native was last TOLD, so a route change that moves nothing costs no
+    // bridge traffic. Every one of these calls is a hop to the main thread and
+    // back (see the haptics note above), and route() runs on every navigation.
+    const told = { route: null, chrome: null, fab: null };
+
+    const call = (method, opts) =>
+      window.Capacitor.nativePromise('TriaChrome', method, opts || {});
+
+    /* Resolving --pill-band to real numbers.
+
+       The + wears the reader's own accent as often as it wears Tria's ramp, and
+       both are CSS gradients built out of color-mix() and var() (see
+       paintBrandBand and the --pill-band note in tokens.css). Native gets the
+       resolved stops, never a token name — a Swift copy of that derivation would
+       be a second place for the band to drift, and the band is the one part of
+       the chrome that changes while the app is running.
+
+       The canvas is the parser. Handing a colour to fillStyle and reading the
+       pixel back is the only way to normalise every form the engine might
+       serialise a stop as — rgb(), color(srgb …), oklab() — without writing a
+       colour parser here. An invalid token leaves fillStyle untouched, which is
+       how the gradient's own angle ("115deg in oklab") is told apart from a
+       colour and dropped. */
+    let inkCanvas = null;
+    function toRgb(css) {
+      if (!inkCanvas) {
+        inkCanvas = document.createElement('canvas');
+        inkCanvas.width = inkCanvas.height = 1;
+      }
+      const ctx = inkCanvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      // Two probes from two different starting values: a token the engine can't
+      // parse leaves fillStyle where it was, so the two readings disagree.
+      ctx.fillStyle = '#000000';
+      ctx.fillStyle = css;
+      const first = ctx.fillStyle;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = css;
+      if (ctx.fillStyle !== first) return null;
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      try {
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        return `rgb(${d[0]}, ${d[1]}, ${d[2]})`;
+      } catch { return null; }
+    }
+
+    /* THE SAME READ, KEEPING THE ALPHA. `toRgb` reads a pixel and reports three
+       channels, which is right for every solid this file resolves and wrong for
+       exactly one thing: --glass-edge is a translucent hairline, and dropping
+       its alpha turns a 10% ring into an opaque one. getImageData is
+       non-premultiplied, so the three channels are still the colour and the
+       fourth is the coverage. */
+    function toRgba(css) {
+      if (!toRgb(css)) return '';
+      const ctx = inkCanvas.getContext('2d', { willReadFrequently: true });
+      try {
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        return `rgba(${d[0]}, ${d[1]}, ${d[2]}, ${(d[3] / 255).toFixed(3)})`;
+      } catch { return ''; }
+    }
+
+    // A property read off a real element, because a custom property's computed
+    // value is a token stream and `color:` is where the engine actually resolves
+    // one. The probe is fixed and off-screen rather than display:none — a
+    // display:none element still computes colours, but a laid-out one can't be
+    // optimised out from under us.
+    function probe(css) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;' +
+        'pointer-events:none;opacity:0;' + css;
+      document.body.appendChild(el);
+      const styles = getComputedStyle(el);
+      const out = { color: styles.color, image: styles.backgroundImage };
+      el.remove();
+      return out;
+    }
+
+    // Top-level commas only: every stop is itself a function call full of them.
+    function splitStops(gradient) {
+      const open = gradient.indexOf('(');
+      const shut = gradient.lastIndexOf(')');
+      if (open < 0 || shut < open) return [];
+      const parts = [];
+      let depth = 0, buf = '';
+      for (const ch of gradient.slice(open + 1, shut)) {
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        if (ch === ',' && depth === 0) { parts.push(buf); buf = ''; continue; }
+        buf += ch;
+      }
+      parts.push(buf);
+      // A stop may carry a position ("rgb(…) 40%"); the colour is what native
+      // wants and the even spacing is what the disc already paints.
+      return parts.map(p => p.trim().replace(/\s+[-\d.]+(%|px|r?em)$/, ''));
+    }
+
+    function fabSpec() {
+      const band = probe('background-image: var(--pill-band)');
+      const colors = splitStops(band.image || '').map(toRgb).filter(Boolean);
+      const ink = toRgb(probe('color: var(--pill-ink)').color || '');
+      const post = NAV.find(n => n.publish);
+      // Every stop, though native tints its glass with one of them: which stop
+      // is a rendering decision and it lives over there, beside the material
+      // that decision is about. --pill-alpha is deliberately NOT sent — it is a
+      // contrast floor for ink riding an unblurred fill, and the native + has
+      // neither an unblurred fill nor a legibility problem the system isn't
+      // already answering.
+      return {
+        route: post ? post.route : '#/publish',
+        label: post ? post.label : 'Post',
+        // The drawing itself, not the name of one. See the icon note on tabSpec.
+        glyph: svgIcon(post ? post.key : 'publish'),
+        colors,
+        ink: ink || '',
+      };
+    }
+
+    // The icon is SVG MARKUP — the same drawing renderNav puts in the DOM,
+    // rendered over there by TriaSVG. It used to be a glyph KEY, matched against
+    // five paths translated by hand into UIBezierPath calls, which was a second
+    // copy of ICONS living in Swift; the toolbar and its menus need about twenty
+    // more marks, and twenty more copies is not a thing to own. Markup is still
+    // presentation, so this stays inside the rule about what may cross: native
+    // can draw a triad of circles without knowing it means Discover.
+    const tabSpec = () => NAV.filter(n => !n.publish)
+      .map(n => ({ route: n.route, label: n.label, icon: svgIcon(n.key) }));
+
+    // Native measures its own bars and hands the number back; CSS reads the
+    // property and never a hardcoded height, so the bar can change size in Swift
+    // without a stylesheet edit chasing it.
+    function stampBottom(px) {
+      const n = Number(px);
+      if (!Number.isFinite(n) || n <= 0) return;
+      document.documentElement.style.setProperty('--native-chrome-bottom', n + 'px');
+    }
+
+    /* ── The top bar's controls ──────────────────────────────────────────────
+       The leading chevron and the trailing actions become real glass buttons,
+       and the menus three of them drop become the system's own menus. What
+       stays CSS, deliberately, is the rest of the bar: the collapsing title —
+       which is measured against the page's own <h1> sliding under it, a webview
+       measurement — and the scroll edge effect the bar fades in behind it. What
+       this replaces is the CONTROLS, which are the part that is a button in the
+       system's sense.
+
+       IT IS READ OFF THE DOM, NEVER HANDED IN. Every page states its bar in
+       markup through mountToolbar; a second, structured description passed
+       alongside would be that markup written twice, and the copy that drifted
+       would be the one nobody was looking at. So the push below walks the bar
+       that is already there and asks each control what it is — the glyph is the
+       <svg> inside it, the ink is the colour the cascade landed on it (which is
+       how a washed profile's --toolbar-ink arrives here for free, and how a
+       LIT FILTER does). The same rule sync() follows reading
+       .nav--compose off the nav rather than being told about the composer.
+
+       AND THE GEOMETRY GOES WITH IT. Native is handed each control's measured
+       rect and puts glass at it. A CSS pixel is a point and the web view fills
+       the host, so a rect crosses unconverted — and the top bar's layout, which
+       is two breakpoints, a safe-area inset, a pill that gives up padding at
+       360px and a web font that changes that pill's width when it lands, never
+       becomes a Swift copy chasing a stylesheet. */
+    /* IS THE WEB HOLDING SOMETHING OVER THE PAGE RIGHT NOW.
+
+       A sheet, a bar menu's card, a modal, the photo lightbox: each one is a
+       scrim at z-index 250+ that covers the whole viewport, INCLUDING the
+       .topbar and the nav, which is the point of a scrim. Native chrome is not
+       in that stacking context — it is UIKit, above the entire web view — so
+       every one of those left the tab pill, the + and the bar's discs sitting
+       lit and tappable on top of the thing that was meant to have taken the
+       screen. A + you can press while a "Delete post?" sheet is up is not a
+       cosmetic problem.
+
+       The signal is the one the page already keeps: every overlay in here locks
+       the page behind it by setting body's overflow, and the scroll-memory code
+       at the bottom of this file has read exactly this to mean "a modal is up"
+       since well before native chrome existed. So this is a second reader of an
+       existing fact, not a second source of it — which is why nothing had to
+       grow a class, and why an overlay added later is covered on the day it
+       locks the page like the rest.
+
+       It is deliberately ALL of the chrome, the top bar's controls included.
+       The web's own buttons are under the scrim being dimmed; ours have to be
+       in the same state, or the reader is looking at a bar where half the
+       controls went quiet and half didn't. */
+    const overlaid = () => document.body.style.overflow === 'hidden';
+
+    const CONTROL_SEL =
+      '#toolbar-page .toolbar-btn, #toolbar-page .toolbar-cta, ' +
+      '#toolbar-actions .toolbar-btn, #toolbar-actions .toolbar-cta';
+    let mounted = {};         // key → the web element each native control stands for
+    let toldBar = '';         // the last payload, so an unchanged bar costs nothing
+    let lastControls = null;  // …and the last MEASURED one, for a bar that is tucked away
+    let barQueued = false;
+
+    // The one <svg> actually showing. Discover's search control holds two,
+    // stacked in a single grid cell and cross-faded (the magnifier and the X),
+    // so "the first one" is wrong exactly where it matters.
+    function liveGlyph(el) {
+      const marks = [...el.querySelectorAll('svg')];
+      if (marks.length < 2) return marks[0] ? marks[0].outerHTML : '';
+      const shown = marks.find((svg) => {
+        let node = svg.parentElement, opacity = 1;
+        while (node && node !== el) {
+          opacity *= Number(getComputedStyle(node).opacity);
+          node = node.parentElement;
+        }
+        return opacity > 0.5;
+      });
+      return (shown || marks[0]).outerHTML;
+    }
+
+    // A control that carries WORDS instead of a glyph: the daily's "Add yours".
+    // The arrow travels separately because it sits a gap away from the words
+    // rather than inside them, and it is aria-hidden, which is what says so.
+    function words(el) {
+      let text = '', after = '';
+      el.childNodes.forEach((node) => {
+        if (node.nodeType === 3) { text += node.textContent; return; }
+        if (node.nodeType !== 1) return;
+        if (node.getAttribute('aria-hidden') === 'true') after += node.textContent;
+        else text += node.textContent;
+      });
+      return { text: text.trim(), after: after.trim() };
+    }
+
+    // .publish-fill paints its band on a ::before, so the element's own
+    // background is `none` and the pseudo is where to look.
+    function bandOf(el) {
+      const image = getComputedStyle(el, '::before').backgroundImage;
+      const stops = splitStops(image || '').map(toRgb).filter(Boolean);
+      return stops.length ? stops[Math.floor(stops.length / 2)] : '';
+    }
+
+    function controlSpec(el, key) {
+      const rect = el.getBoundingClientRect();
+      const styles = getComputedStyle(el);
+      const cta = el.classList.contains('toolbar-cta');
+      const tinted = cta || el.classList.contains('toolbar-commit');
+      const spec = {
+        id: key,
+        x: rect.left, y: rect.top, w: rect.width, h: rect.height,
+        label: el.getAttribute('aria-label') || el.title || '',
+        // The colour the cascade landed on, not the token it came from: a
+        // washed profile sets --toolbar-ink and a tinted control takes
+        // --pill-ink, and reading the element answers both without either rule
+        // being restated here.
+        ink: toRgb(styles.color) || '',
+        tint: tinted ? bandOf(el) : '',
+        glyph: cta ? '' : liveGlyph(el),
+        // A menu button already says so in markup: the web card is a WAI-ARIA
+        // menu and has had to declare aria-haspopup since 1.3.
+        menu: el.getAttribute('aria-haspopup') === 'menu',
+        // The editor's Save is mounted before it is earned and fades in on the
+        // keystroke that earns it. Read from its own class rather than from
+        // computed visibility, which the gate in app.css sets on every control
+        // in the bar and would therefore report every one of them as idle.
+        hidden: el.classList.contains('toolbar-commit--idle'),
+      };
+      if (cta) Object.assign(spec, words(el));
+      return spec;
+    }
+
+    /* THE COLLAPSING TITLE, WHICH HAD TO GO NATIVE WHEN THE MATERIAL DID.
+
+       It is the one thing on this bar that was always going to stay CSS, and
+       the reason was good: it is measured against the page's own <h1> sliding
+       under the bar (syncToolbarTitle), which is a webview fact with no native
+       equivalent to ask. That is still true, and it is still where the decision
+       is made. What changed is only WHO DRAWS IT.
+
+       The native chrome sits above the whole web view, so a native material
+       across the bar is above the web's title too — a glass pane with the
+       page's name blurred out underneath it, which is worse than either half
+       alone. There is no z-order that fixes it: every web pixel is under every
+       native one. So the string, its box and its colour cross the bridge and a
+       UILabel wears them, on exactly the terms the controls already do — the
+       web element stays the model, native only wears its face.
+
+       The BOX is measured rather than computed, which is what keeps the pile of
+       reasoning in .toolbar-title's max-width (a count of the busier side's
+       buttons, so a long name can't slide under a glyph) on the one side that
+       has it. */
+    function titleSpec(bar) {
+      const el = document.getElementById('toolbar-title');
+      const text = el ? (el.textContent || '') : '';
+      if (!el || !text) return { text: '', visible: false };
+      const rect = el.getBoundingClientRect();
+      const styles = getComputedStyle(el);
+      return {
+        text,
+        // Both of the classes that answer this are the stylesheet's own: the
+        // title is in once the big serif one has gone, and out again while
+        // Discover's field is open over the space it wants.
+        visible: !!bar && bar.classList.contains('topbar--title-visible')
+          && !bar.classList.contains('topbar--searching'),
+        x: rect.left, y: rect.top, w: rect.width, h: rect.height,
+        // 1.05rem, from the rule rather than from a number restated in Swift.
+        size: parseFloat(styles.fontSize) || 16.8,
+        ink: toRgb(styles.color) || '',
+      };
+    }
+
+    /* ── DISCOVER'S SEARCH, THE ONE CONTROL IN THIS BAR THAT HOLDS A CARET ────
+       The web control is three nodes behaving as one (see .toolbar-search-shell
+       in app.css): a glass shell pinned by its RIGHT edge — where the disc's own
+       right edge already sits — animating its WIDTH, so the field grows leftward
+       out of the button the finger is resting on.
+
+       Under native chrome the shell used to hand its dress BACK to the web the
+       moment it opened, because the X rides on it and a glass disc of ours over
+       a glass shell of theirs is the one stack "never glass on glass" has never
+       allowed. That fixed the stack by giving up the material: a reader watched
+       real Liquid Glass become a CSS impression of it, on the single control in
+       the app whose whole gesture is glass stretching. Native draws BOTH halves
+       now (TriaSearchField), which fixes the stack rather than dodging it.
+
+       THE GEOMETRY IS A PAIR OF BOXES, shut and open, and native animates
+       between them itself rather than chasing the stylesheet a frame at a time.
+       That is only true because the gate turns the shell's width transition OFF
+       under native chrome — so the rect read on the frame the class flips is
+       already the final one. Both halves of that are load-bearing; see the gate.
+
+       Shut, the shell IS the disc (44px, same right edge), so the two boxes
+       coincide and the numbers below are honest in both states. */
+    function searchSpec() {
+      const bar = document.querySelector('.topbar');
+      const shell = bar && bar.querySelector('.toolbar-search-shell');
+      const btn = bar && bar.querySelector('.toolbar-search-btn');
+      const input = bar && bar.querySelector('.toolbar-search-field');
+      if (!shell || !btn || !input) return { live: false };
+      const box = shell.getBoundingClientRect();
+      const disc = btn.getBoundingClientRect();
+      const cs = getComputedStyle(input);
+      const mark = btn.querySelector('.msb-ico--close svg');
+      return {
+        live: bar.classList.contains('topbar--searching'),
+        // Opt-OUT, and the caller is the tag rail: tapping a tag runs its query
+        // and should show you the answer, not raise a keyboard over it.
+        focus: searchFocus,
+        x: box.left, y: box.top, w: box.width, h: box.height,
+        closedX: disc.left, closedY: disc.top, closedW: disc.width, closedH: disc.height,
+        // The field's own padding, which is what clears the mark riding over it.
+        fieldLeft: parseFloat(cs.paddingLeft) || 0,
+        fieldRight: parseFloat(cs.paddingRight) || 0,
+        // The X is the disc's geometry at the shell's end — which is the disc's
+        // end, the two being pinned to the same edge — and none of the disc's
+        // material: the surface under it already blurs.
+        closeSize: disc.width,
+        closeRight: Math.max(0, box.right - disc.right),
+        text: input.value,
+        placeholder: input.getAttribute('placeholder') || '',
+        label: input.getAttribute('aria-label') || '',
+        closeLabel: btn.getAttribute('aria-label') || '',
+        closeGlyph: mark ? mark.outerHTML : '',
+        ink: toRgb(cs.color) || '',
+        caret: toRgb(cs.caretColor) || toRgb(cs.color) || '',
+        muted: cssColour('var(--muted)'),
+      };
+    }
+
+    function pushToolbar() {
+      if (!live) return;
+      const bar = document.querySelector('.topbar');
+      const gated = document.body.classList.contains('gate');
+      // body.toolbar-live means "this bar is a page's own" — false under the
+      // gate and in the frames between boot and the first route landing, both
+      // of which want no bar rather than an empty one.
+      const onDuty = !!bar && !gated && !overlaid()
+        && document.body.classList.contains('toolbar-live');
+      const visible = onDuty && !bar.classList.contains('topbar--hidden');
+
+      // Measured only while the bar is actually up. Tucked, every rect reads a
+      // bar-height too high (getBoundingClientRect sees the transform), and the
+      // right answer is the one native already has: it is animating the same
+      // controls off the top of the screen.
+      let controls = lastControls || [];
+      if (visible) {
+        mounted = {};
+        controls = [...bar.querySelectorAll(CONTROL_SEL)].filter((el) => {
+          // While the field is open the whole search control belongs to the
+          // web: the X rides ON the shell that grew out of the disc, and a
+          // glass disc of ours over a glass shell of theirs is the one stack
+          // this app's material rule has never allowed. See the gate in
+          // app.css, which hands the button back for exactly that state.
+          if (el.id === 'discover-search-toggle') {
+            return !bar.classList.contains('topbar--searching');
+          }
+          return el.offsetWidth > 0;
+        }).map((el, index) => {
+          // Its own id where it has one, since that is what goes back out on a
+          // tap; an index otherwise, because toolbarBackEl only takes an id
+          // when its caller needs to wire the button up.
+          const key = el.id || ('tb:' + index);
+          mounted[key] = el;
+          return controlSpec(el, key);
+        });
+        lastControls = controls;
+      }
+
+      const payload = {
+        live: onDuty,
+        visible,
+        // The height of the bar, which is the height of the material: 60px plus
+        // the notch on a phone, 88 on a tablet. Measured rather than assumed,
+        // and the only geometry the material needs — it is the system's own
+        // scroll edge effect now, and whether it is PAINTED is a question it
+        // answers itself off the scroll rather than one the web has a view on.
+        height: bar ? bar.getBoundingClientRect().height : 0,
+        title: titleSpec(bar),
+        controls,
+        // Sent whether or not it is open, so the box native shrinks back INTO is
+        // never a stale one. Absent from every route but Discover.
+        search: visible ? searchSpec() : { live: false },
+      };
+      const signature = JSON.stringify(payload);
+      if (signature === toldBar) return;
+      toldBar = signature;
+      call('setToolbar', { bar: payload }).catch(() => {});
+    }
+
+    // Coalesced to one push per frame: a render mutates the bar several times
+    // (empty it, fill it, light the dot) and they are all one change.
+    function scheduleToolbar() {
+      if (!live || barQueued) return;
+      barQueued = true;
+      requestAnimationFrame(() => { barQueued = false; pushToolbar(); });
+    }
+
+    function watchToolbar() {
+      const bar = document.querySelector('.topbar');
+      if (!bar) return;
+      // Every in-place change the bar makes to itself, without a call site for
+      // each: the filter's hue lighting, Save earning its fade-in, the
+      // search field opening, the bar tucking away on a scroll down, and
+      // resetToolbar emptying the whole thing on a navigation. One observer is
+      // the only version of this that cannot fall behind a page that grows a
+      // new control, which is the failure a list of hooks would eventually have.
+      new MutationObserver(scheduleToolbar).observe(bar, {
+        attributes: true, childList: true, subtree: true, characterData: true,
+      });
+      // body.gate and body.toolbar-live are the two facts about the bar that
+      // aren't ON the bar — and body's own `style`, which is where an overlay
+      // says it has taken the screen (see overlaid). sync() rather than a push,
+      // because that answer moves the bottom chrome as well as the bar's
+      // controls, and it ends in a push anyway.
+      new MutationObserver(sync).observe(document.body, {
+        attributes: true, attributeFilter: ['class', 'style'],
+      });
+      // A mutation says a change STARTED; a transition says one finished. The
+      // bar animates several of the things measured here — the filter's hue,
+      // Save's fade-in, the search glyphs' cross-fade — and a rect or a
+      // colour read on the frame the class flipped is a value still in flight.
+      // Cheap to add and free to be wrong about: an identical payload never
+      // leaves the page (see toldBar).
+      bar.addEventListener('transitionend', scheduleToolbar);
+      window.addEventListener('resize', scheduleToolbar, { passive: true });
+      // The comment bar is measured off the same layout, so it moves for the
+      // same two reasons: the window changed size, and the face the pill is set
+      // in arrived and changed nothing an observer can see.
+      window.addEventListener('resize', pushPostBar, { passive: true });
+      // A pill sized in Oxygen is a different width once Oxygen lands, and a
+      // font arriving mutates nothing for an observer to see.
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => { scheduleToolbar(); pushPostBar(); });
+      }
+    }
+
+    /* ── Menus ───────────────────────────────────────────────────────────────
+       A native menu asking the web layer what is in it.
+
+       The request arrives from a system that is ALREADY presenting the menu
+       (see the deferred-element note in TriaChromePlugin.swift), because a
+       menu in Tria is built at the moment its button is tapped: the profile's
+       ••• fans a different list on your own page than on a visitor's, Discover
+       drops its gallery/list row while you are looking at People, and the
+       filter dial marks whichever row is live right now. So the honest answer
+       is to run the page's OWN click handler and let the bar menu it opens
+       describe itself instead of drawing a card. One list, built once, by the
+       code that knows what a filter means. openBarMenu is the single funnel
+       every menu in the bar already goes through, which is what makes this one
+       hook rather than six. */
+    let capture = null;
+    let picked = null;
+    let anchoredSeq = 0;
+
+    function captureMenu(spec) {
+      if (!capture) return false;
+      capture.spec = spec;
+      return true;
+    }
+
+    // Colours written into icon markup, resolved to numbers — same reason the
+    // band is resolved here rather than over there. The filter dial's All row
+    // is the quintet, five var() tokens in one mark.
+    function paintIcon(markup) {
+      return String(markup || '').replace(/(fill|stroke)="([^"]+)"/g, (whole, prop, value) => {
+        if (value === 'none' || value === 'currentColor') return whole;
+        const rgb = value.slice(0, 4) === 'var(' ? cssColour(value) : toRgb(value);
+        return rgb ? prop + '="' + rgb + '"' : whole;
+      });
+    }
+    // A colour written as CSS the canvas can't parse on its own (a var(), a
+    // color-mix()): let the engine resolve it on a real element first.
+    const cssColour = (css) => toRgb(probe('color: ' + css).color || '') || '';
+
+    /* A DISC OF ONE COLOUR, as SVG markup, for a row whose subject IS the
+       colour. The profile's colour picker paints twelve `background-image`s —
+       eleven three-stop bands and a photograph — and a menu row takes an image,
+       not a fill, so each source has to arrive here as a drawing.
+
+       It takes the band's MIDDLE stop rather than flattening the ramp, because
+       the middle stop is the band's own weight: the two either side are a point
+       and a half up and three down from it (see bandFrom), so the one in the
+       middle is the colour the reader would name if asked. TriaSVG draws no
+       gradients and this is not the release that teaches it to — a 22pt disc
+       has about six points of arc to spend a ramp on, which is a ramp nobody
+       can see.
+
+       `css` is anything `background-image` takes: the caller hands over a
+       gradient it already built (accentBand) or a token (var(--brand-band)),
+       and the engine resolves it here, the same way the + resolves its band. */
+    function discIcon(css, ramp) {
+      const stops = splitStops(probe('background-image: ' + css).image || '')
+        .map(toRgb).filter(Boolean);
+      if (!stops.length) return '';
+      if (!ramp || stops.length < 2) {
+        const fill = stops[Math.floor(stops.length / 2)];
+        return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${fill}"/></svg>`;
+      }
+      /* A RAMP OF DIFFERENT HUES CANNOT BE ONE DISC. Tria's own band is four
+         of the five type pastels, and its middle stop is the green one — a
+         "Tria" swatch that came out pale green sat two rows above "Lime" and
+         measured within twenty points of it, which is a picker that cannot
+         tell you what you picked. So the ramp is cut into wedges, one per
+         stop, in order, starting at twelve o'clock: every colour in the band
+         is on the disc and the row is unmistakable at 22pt.
+         Only the caller that knows its band is polychrome asks for this. The
+         nine accents are three stops derived from ONE hue (see bandFrom), a
+         sheen rather than a ramp, and wedging them would draw seams nobody
+         can see through a disc that is honestly one colour. */
+      const arc = 360 / stops.length;
+      const at = (deg) => {
+        const rad = (deg - 90) * Math.PI / 180;
+        return `${(12 + 10 * Math.cos(rad)).toFixed(2)} ${(12 + 10 * Math.sin(rad)).toFixed(2)}`;
+      };
+      return `<svg viewBox="0 0 24 24">` + stops.map((fill, i) =>
+        `<path d="M12 12L${at(i * arc)}A10 10 0 ${arc > 180 ? 1 : 0} 1 ` +
+          `${at((i + 1) * arc)}Z" fill="${fill}"/>`).join('') + `</svg>`;
+    }
+
+    /* One row, in the shape both menus cross the bridge in. The two callers
+       reach it from opposite directions — a toolbar glyph's menu is already
+       open and asking (describeMenu), a page control's is about to be opened
+       and telling (presentMenu) — and neither of them has an opinion about what
+       a row looks like, so there is one mapping. */
+    function rowsFor(items) {
+      return (items || []).map((item) => ({
+        label: item.label || '',
+        icon: paintIcon(item.icon),
+        // No ink on a danger row: the system colours a destructive row and its
+        // mark red, which is the same statement the web's coral makes.
+        ink: item.ink && !item.danger ? cssColour(item.ink) : '',
+        checked: !!item.checked,
+        radio: !!item.radio,
+        danger: !!item.danger,
+        group: item.group || 0,
+      }));
+    }
+
+    function describeMenu(id, token) {
+      capture = { spec: null };
+      const el = mounted[id];
+      try { if (el) el.click(); } catch { /* the page's own handler threw; send nothing */ }
+      const spec = capture.spec;
+      capture = null;
+      picked = spec ? { id, items: spec.items, onRow: spec.onRow } : null;
+      // `data` stays this side: it is the row's own identity in the vocabulary
+      // of whoever built the menu, and native answers with an index.
+      call('menuReady', { token, items: rowsFor(spec ? spec.items : []) })
+        .catch(() => {});
+    }
+
+    /* THE OTHER DIRECTION: a control on the PAGE dropping a real menu.
+
+       A toolbar glyph's menu is presented by the system and then asks what is
+       in it. This one is asked for by the page — the finger landed on a web
+       button, the page's own handler ran and built the list — so the rows go
+       out with the request and native only has to put them somewhere. The rect
+       is the button's own, measured here, for the same reason every toolbar
+       control's is: a CSS pixel is a point and the web view fills the host.
+
+       Returns false when there is nothing native to ask, which is how the
+       caller knows to draw the web's own sheet instead. That is the whole
+       fallback: no branch anywhere else, and the CSS shell keeps the drawing it
+       has always had.
+
+       The TOKEN, not the control's id, is what a pick is checked against. These
+       menus hang off cards, and a card is a node a refresh can replace out from
+       under an open menu; an id would still match after that, a token cannot. */
+    let anchoredMenu = null;
+
+    /* WHY AN OPEN MENU HAS TO BE WATCHED, and what it is watched against.
+
+       A UIMenu is placed ONCE, against the rect it was handed, in a window of
+       UIKit's own above the web view. It does not follow anything afterwards.
+       For the toolbar's menus that is the end of it — a native control cannot
+       move while its own menu is up. For these it is not, because the thing
+       they hang off is a card in live HTML: a photo further up the feed
+       resolving its height, or refreshPostViews repainting a row, moves every
+       card below it while the menu stays exactly where it was put. The reader
+       gets a menu floating over an unrelated post with nothing pointing at it,
+       which is the bug this watch exists to end. Measured on the simulator: the
+       anchor scrolled 400pt out from under a menu that never moved.
+
+       EVENTS, NOT A FRAME LOOP. A menu is dismissed by tapping away as often as
+       by picking a row, and that is the one ending the web is never told about
+       — so anything polling would still be polling tomorrow. A scroll listener
+       and a ResizeObserver both cost nothing while nothing is happening, and
+       nothing happening is the normal case for as long as a menu is open.
+
+       Dismissing a menu that has already gone is a no-op over there (the
+       button's interaction chain is nil), so the untold ending costs nothing
+       either.
+
+       AND IT ONLY ARMS ONCE THE MENU IS ACTUALLY UP. Watching from the moment
+       the request goes out was a bug of its own and a worse one than the drift:
+       the frames right after a tap are the busiest a feed ever has — a
+       rubber-band still settling hands back fractional offsets, a photo lands,
+       the row repaints — so the watch fired, dismissed a menu that had not been
+       presented yet (a no-op), and then the menu arrived with nothing left
+       watching it. What the reader saw was a tap that undid itself. The token
+       coming back is the proof the menu exists, so that is where the watch
+       starts. */
+    let anchorWatch = null;
+
+    /* HOW FAR IS TOO FAR. Not one pixel, which is what this asked for first and
+       is the same mistake syncToolbarEdge already documents two hundred lines
+       up: iOS rubber-bands past the top and hands back fractional offsets on
+       the way home, so a threshold of a pixel is a threshold of nothing and any
+       tap taken near a settling scroll dismissed itself. The bug being fixed is
+       a menu with NOTHING UNDER IT, which is hundreds of points; a menu a few
+       points out is a menu, and a reader cannot tell. So: a third of a row. */
+    const ANCHOR_SLACK = 16;
+
+    function stopAnchorWatch() {
+      if (!anchorWatch) return;
+      anchorWatch.off();
+      anchorWatch = null;
+    }
+
+    function watchAnchor(el, sent, seq) {
+      stopAnchorWatch();
+      const moved = () => {
+        if (!anchoredMenu || anchoredMenu.seq !== seq) { stopAnchorWatch(); return; }
+        const r = el.getBoundingClientRect();
+        // Measured against the rect that was SENT, never against the last
+        // reading, so a slow drift accumulates into a dismissal instead of
+        // creeping under the threshold one frame at a time.
+        if (el.isConnected
+          && Math.abs(r.left - sent.x) <= ANCHOR_SLACK
+          && Math.abs(r.top - sent.y) <= ANCHOR_SLACK) return;
+        anchoredMenu = null;
+        stopAnchorWatch();
+        call('dismissMenu', {}).catch(() => {});
+      };
+      window.addEventListener('scroll', moved, { passive: true, capture: true });
+      // The layout shift that actually causes this is a photo above the fold
+      // arriving, which changes the height of the page rather than scrolling it.
+      const ro = new ResizeObserver(moved);
+      const doc = document.getElementById('view');
+      if (doc) ro.observe(doc);
+      anchorWatch = { off: () => {
+        window.removeEventListener('scroll', moved, { capture: true });
+        ro.disconnect();
+      } };
+    }
+
+    /* THE BAND A MENU IS ALLOWED TO HANG FROM.
+
+       UIKit clips a menu to the SAFE AREA, which is the only edge it knows
+       about. It has never heard of the two bars Tria floats over the web view,
+       and both of them cover the exact places these controls live: a post
+       page's card puts its ••• and its repost circle a few points above the
+       comment bar, and a feed card scrolled to the bottom of the screen puts
+       them under the tab bar. Hand UIKit the raw rect there and it opens the
+       menu from a coordinate the reader cannot see, which is what "the position
+       is out of whack on post pages" is — the menu is exactly where it was
+       asked to go, and where it was asked to go is underneath something.
+
+       So the rect is CLAMPED into the band that is actually visible before it
+       crosses. The menu then opens off the nearest edge the reader can see,
+       which is the same place their finger was. The bars are measured rather
+       than assumed, off the same hidden-but-laid-out boxes every other
+       measurement in here reads (see Geometry in docs/native-chrome.md). */
+    function visibleBand() {
+      let top = 0;
+      let bottom = window.innerHeight;
+      const bar = document.querySelector('.topbar');
+      if (bar && !bar.classList.contains('topbar--hidden')
+        && document.body.classList.contains('toolbar-live')) {
+        top = Math.max(top, bar.getBoundingClientRect().bottom);
+      }
+      // The comment bar replaces the nav on a post page, so at most one of
+      // these is ever laid out, but ask both rather than deriving which.
+      for (const sel of ['#postbar', '#nav']) {
+        const el = document.querySelector(sel);
+        if (!el || el.hidden || !el.getClientRects().length) continue;
+        const r = el.getBoundingClientRect();
+        if (r.height) bottom = Math.min(bottom, r.top);
+      }
+      return { top, bottom };
+    }
+
+    function presentMenu(anchor, { label, items, onRow }) {
+      if (!live || !anchor || !items || !items.length) return false;
+      const r = anchor.getBoundingClientRect();
+      if (!r.width || !r.height) return false;
+      // AN ANCHOR OFF THE SCREEN IS NOT AN ANCHOR. UIKit takes whatever rect it
+      // is given and then clamps the menu into the safe area, so a control below
+      // the fold produces a menu pinned to the bottom of the screen with nothing
+      // beside it — the same nonsense the watch above exists to stop, arriving a
+      // frame earlier. This cannot happen to a finger (you cannot tap what you
+      // cannot see) and does happen to a caller passing an anchor it kept from
+      // an earlier menu. The sheet is the honest answer for one of those.
+      if (r.bottom <= 0 || r.top >= window.innerHeight
+        || r.right <= 0 || r.left >= window.innerWidth) return false;
+      const band = visibleBand();
+      // Squeezed to nothing means the whole band is chrome, which is not a
+      // state any page reaches; refuse rather than send a zero-height rect.
+      if (band.bottom - band.top < 1) return false;
+      const top = Math.min(Math.max(r.top, band.top), band.bottom);
+      const bottom = Math.max(Math.min(r.bottom, band.bottom), band.top);
+      const seq = ++anchoredSeq;
+      const sent = { x: r.left, y: top, w: r.width, h: Math.max(1, bottom - top) };
+      anchoredMenu = { seq, token: 0, items, onRow };
+      call('presentMenu', {
+        label: label || '',
+        rect: sent,
+        items: rowsFor(items),
+      }).then((res) => {
+        // The token is minted over there, on the main thread, in the same hop
+        // that presents the menu. Keep it only if this is still the live one.
+        if (!anchoredMenu || anchoredMenu.seq !== seq) return;
+        anchoredMenu.token = (res && res.token) || 0;
+        // The menu exists now, so it is now worth watching. See the note above
+        // on why arming any earlier undid the reader's own tap.
+        watchAnchor(anchor, { x: r.left, y: r.top }, seq);
+      }).catch(() => { if (anchoredMenu && anchoredMenu.seq === seq) anchoredMenu = null; });
+      return true;
+    }
+
+    function pickAnchored(token, index) {
+      const open = anchoredMenu;
+      if (!open || !open.token || open.token !== token) return;
+      anchoredMenu = null;
+      stopAnchorWatch();
+      const item = open.items[index];
+      if (!item) return;
+      // The same contract the card's rows keep: onRow gets the row that was
+      // tapped and the close it should sequence against. The system has already
+      // dismissed, so closing is only running what came after it.
+      const row = document.createElement('button');
+      Object.assign(row.dataset, item.data || {});
+      open.onRow(row, (then) => { if (then) then(); });
+    }
+
+    function pickMenu(id, index) {
+      if (!picked || picked.id !== id) return;
+      const item = picked.items[index];
+      if (!item) return;
+      // The web card's contract, restated: onRow is handed the row that was
+      // tapped and the close it should sequence against. The system has already
+      // dismissed the menu, so closing is only running what came after it.
+      const row = document.createElement('button');
+      Object.assign(row.dataset, item.data || {});
+      picked.onRow(row, (then) => { if (then) then(); });
+    }
+
+    /* ── The comment bar ─────────────────────────────────────────────────────
+       The one piece of chrome that holds a CARET, which is why it is the one
+       piece that cannot be a face over a web control.
+
+       The tab bar and the toolbar work by wearing the web element's face and
+       clicking it when a finger lands: the page's own handler is still the only
+       implementation of itself. A field can't be borrowed that way. A hidden
+       element is not focusable, so there is nothing to click; and even if there
+       were, an iOS software keyboard raised for a web field is positioned
+       against the web view, while the whole job of this bar is to sit on top of
+       the keys. So the field is real UIKit and the reader types into it.
+
+       WHAT DOESN'T MOVE IS THE MODEL. `.postbar-form` stays in the DOM, hidden,
+       and every native keystroke is written straight back into that textarea,
+       which then fires its own `input`. So the mention picker, the send disc's
+       idle state, autoGrow, the 300 cap, Store.addComment, the confetti and
+       every error path are the code that already shipped, running unchanged —
+       and the bridge still carries nothing but a string, a caret and a set of
+       measured lengths.
+
+       THE MENTION PICKER STAYS WEB, and that is a line rather than an omission.
+       It is a filtered list of the reader's FRIENDS; drawing it over there would
+       mean telling native what a friend is, which is exactly the app vocabulary
+       this bridge is not allowed to carry. It opens upward out of the bar as it
+       always has, hung off the lift native measures and reports (see
+       --native-postbar-lift, and the gate at the end of app.css).
+
+       EVERY NUMBER IS MEASURED, NEVER NAMED. `.postbar-form` derives its shape
+       from itself — the field is as tall as the send disc at one line, the
+       corner is that disc's radius plus the padding around it, the avatar's
+       datum is the field's padding plus half a line plus an optical constant
+       nobody can derive — and a Swift copy of that arithmetic would be a second
+       place for it to drift. Custom properties are no good for reading it back
+       (an unregistered one computes to its own token stream, so
+       --postbar-field-pad comes back as the literal `calc(...)`), so what
+       crosses is the BOXES: where the face sits, where the text starts, how wide
+       it runs, where the disc lands. Only the growth sum is left in Swift, and
+       every term in it was measured here. */
+    let toldPostBar = '';
+    // Filled by wirePostBar, emptied by resetPostBar. The listeners below are
+    // registered once, at start(), and find whatever bar is mounted through
+    // this — the same shape `mounted` gives the toolbar.
+    const postBarHooks = {};
+    // Discover's search field, the toolbar's half of the same arrangement: the
+    // caret is over there, the input in the DOM is still the model, and these
+    // are the page's answers to what the reader does to it.
+    const searchHooks = {};
+    let searchFocus = true;
+
+    /* THE FACE CROSSES AS PIXELS, NOT AS A URL. It is already in the page,
+       already fetched with CORS (avatarEl sets crossorigin so the ambient wash
+       can sample it) and already read through a canvas by that sampler — so
+       there is a decoded copy right here, and no reason for Swift to open a
+       second connection for a file the web view has already got. Empty until the
+       image has actually landed; the push asks again on its `load`, and the
+       monogram is what draws until then, which is what the web row does too. */
+    function avatarPixels(img, side) {
+      if (!img || !img.complete || !img.naturalWidth) return '';
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = side;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+      ctx.beginPath();
+      ctx.arc(side / 2, side / 2, side / 2, 0, Math.PI * 2);
+      ctx.clip();
+      // object-fit: cover, by hand: the largest centred square of the source.
+      const crop = Math.min(img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, (img.naturalWidth - crop) / 2, (img.naturalHeight - crop) / 2,
+                    crop, crop, 0, 0, side, side);
+      try { return canvas.toDataURL('image/png'); } catch { return ''; }
+    }
+
+    function postBarSpec(bar, form) {
+      const field = form.querySelector('textarea');
+      const send = form.querySelector('.postbar-send');
+      const face = form.querySelector('.postbar-avatar');
+      const wrap = form.querySelector('.postbar-field');
+      const cs = getComputedStyle(form);
+      const fieldCS = getComputedStyle(field);
+      const box = form.getBoundingClientRect();
+      const textBox = field.getBoundingClientRect();
+      const faceBox = face ? face.getBoundingClientRect() : null;
+      const sendBox = send ? send.getBoundingClientRect() : null;
+      const line = parseFloat(fieldCS.lineHeight) || 22.4;
+      const textPad = parseFloat(fieldCS.paddingLeft) || 0;
+      const photo = face ? face.querySelector('img') : null;
+      const faceCS = face ? getComputedStyle(face) : null;
+      const faceBtn = form.querySelector('.postbar-face');
+      const faceX = form.querySelector('.postbar-face-x');
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      return {
+        live: true,
+        width: box.width,
+        // .postbar's own float above the safe area, and the smaller one it drops
+        // to while a keyboard is up. The second can't be measured — it belongs
+        // to `body.postbar-kb`, and setting that class to read it would move the
+        // bar — so it is the only figure here quoted rather than measured, in
+        // rem so it still follows the root size.
+        float: parseFloat(getComputedStyle(bar).paddingTop) || 0.6 * rem,
+        floatKeyboard: 0.5 * rem,
+        // The growth sum's own terms: the pill's padding, the field wrapper's,
+        // and the line the cap counts in.
+        pad: parseFloat(cs.paddingTop) || 0,
+        fieldPad: wrap ? parseFloat(getComputedStyle(wrap).paddingTop) || 0 : 0,
+        line,
+        maxLines: Math.max(1, Math.round((parseFloat(fieldCS.maxHeight) || line * 4) / line)),
+        radius: parseFloat(cs.borderTopLeftRadius) || 0,
+        // Boxes, relative to the pill, so nothing over there has to know that
+        // the row is a flex row or which end each child sits at.
+        faceLeft: faceBox ? faceBox.left - box.left : 0,
+        faceTop: faceBox ? faceBox.top - box.top : 0,
+        faceSize: faceBox ? faceBox.width : 0,
+        textLeft: textBox.left - box.left + textPad,
+        textWidth: Math.max(40, textBox.width - 2 * textPad),
+        /* THE DISC IS MEASURED WITHOUT ITS RECT, and it is the one child here
+           that has to be. `.postbar-send.is-idle` is `transform: scale(0.7)` —
+           an empty bar has no send — and getBoundingClientRect reports the
+           TRANSFORMED box, so at mount, which is the only moment this is read,
+           the disc came back as 30.8 and native drew a disc a third too small.
+           The used width is untransformed, and where it sits follows from the
+           layout rather than from a measurement: it is the last item in a
+           flex-end row, so its end is the form's own padding. */
+        discSize: parseFloat(getComputedStyle(send).width) || 0,
+        discRight: parseFloat(cs.paddingRight) || 0,
+        discBottom: parseFloat(cs.paddingBottom) || 0,
+        // What the field says about itself, so the placeholder, the label, the
+        // cap and the send's name are all stated once, in the markup.
+        text: field.value,
+        placeholder: field.getAttribute('placeholder') || '',
+        label: field.getAttribute('aria-label') || '',
+        maxLength: Number(field.getAttribute('maxlength')) || 300,
+        sendLabel: send ? send.getAttribute('aria-label') || '' : '',
+        ink: toRgb(fieldCS.color) || '',
+        caret: toRgb(fieldCS.caretColor) || toRgb(fieldCS.color) || '',
+        muted: cssColour('var(--muted)'),
+        pillInk: cssColour('var(--pill-ink)'),
+        // The send disc is a member of the primary-act set, so its band comes
+        // off the same ::before the + and the editor's Save read theirs from.
+        tint: send ? bandOf(send) : '',
+        // Thinned, not opaque. --pill-alpha is a contrast floor with measured
+        // figures behind it (see tokens.css), so it is read off the disc's own
+        // ::before rather than quoted over there — and the hairline that rides
+        // with it is --glass-edge, resolved the same way.
+        tintAlpha: send ? Number(getComputedStyle(send, '::before').opacity) || 1 : 1,
+        // Raw, not through toRgb: --glass-edge is a translucent hairline and the
+        // canvas parser reads a pixel, which drops the alpha that IS the edge.
+        // The Swift side takes rgba() as it comes.
+        edge: send ? toRgba(getComputedStyle(send).borderTopColor) : '',
+        edgeWidth: send ? parseFloat(getComputedStyle(send).borderTopWidth) || 0 : 0,
+        glyph: send && send.querySelector('svg') ? send.querySelector('svg').outerHTML : '',
+        // The close mark the face turns into while the field has the caret, and
+        // what it is called. Native flips between the two itself, because it is
+        // the side that owns the caret and therefore already knows — the web's
+        // `.is-typing` and this are one rule stated once on each side, not two.
+        faceGlyph: faceX && faceX.querySelector('svg') ? faceX.querySelector('svg').outerHTML : '',
+        faceLabel: faceBtn ? faceBtn.getAttribute('aria-label') || '' : '',
+        initials: face ? face.textContent.trim() : '',
+        avatarBg: faceCS ? toRgb(faceCS.backgroundColor) || '' : '',
+        avatarInk: faceCS ? toRgb(faceCS.color) || '' : '',
+        // 3× so the 26pt circle is sharp on every screen this ships to.
+        photo: avatarPixels(photo, Math.round((faceBox ? faceBox.width : 26) * 3)),
+      };
+    }
+
+    function pushPostBar() {
+      if (!live) return;
+      const bar = document.getElementById('postbar');
+      // The FIND bar is deliberately not this. It is the same pill doing a
+      // different job — a magnifier, a one-line input and a clear — and it has
+      // no keyboard problem worth a second native control: no mention picker, no
+      // growth, no send. It stays the web drawing it has always been.
+      const form = bar && !bar.hidden
+        ? bar.querySelector('.postbar-form:not(.postbar-form--find)') : null;
+      const spec = form && !overlaid() ? postBarSpec(bar, form) : { live: false };
+      const signature = JSON.stringify(spec);
+      if (signature === toldPostBar) return;
+      toldPostBar = signature;
+      call('setPostBar', { bar: spec }).catch(() => {});
+      // A face that hasn't landed yet draws as its monogram and comes back for
+      // the photograph. One shot: the next push reads a complete image.
+      if (!form || spec.photo) return;
+      const img = form.querySelector('.postbar-avatar img');
+      if (img && !img.complete) img.addEventListener('load', pushPostBar, { once: true });
+    }
+
+    // The web writing back into a field it no longer draws: a friend picked out
+    // of the mention popover, or the form emptying itself once a comment posted.
+    function postBarText(text, selection, focus) {
+      if (!live) return;
+      call('setPostBarText', { text, selection, focus: !!focus }).catch(() => {});
+    }
+
+    function start() {
+      if (asked || !nativeShell()) return;
+      asked = true;
+      call('setTabs', { tabs: tabSpec(), fab: fabSpec() }).then((res) => {
+        live = true;
+        stampBottom(res && res.bottom);
+        // The gate goes up only once the bars are real, so the web nav is never
+        // hidden in the frames before native has drawn anything.
+        document.documentElement.dataset.chrome = 'native';
+        try {
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'chromeTap' }, (ev) => {
+              const route = ev && ev.route;
+              if (!route) return;
+              // The SAME two calls a nav link makes, and it has to be both of
+              // them. The CSS nav answers a tap on the tab you are ALREADY on
+              // with reclick — scroll to the top, drop Home's filter, re-pull —
+              // from a click listener on #nav, and in this shell that element is
+              // hidden, so the listener is unreachable and every native re-tap
+              // fell through to go(), which sees an unchanged hash and re-runs
+              // route(): a full re-render that restores the scroll it just came
+              // from, i.e. a tab that visibly did nothing.
+              //
+              // Native does not move its own highlight either way — that comes
+              // back around through sync() once the router has actually landed.
+              if (route === (location.hash || '#/').split('?')[0]) reclick(route);
+              else go(route);
+            });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'chromeMetrics' }, (ev) => stampBottom(ev && ev.bottom));
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'toolbarTap' }, (ev) => {
+              const el = ev && mounted[ev.id];
+              // The web element is still the control; native only wears its
+              // face. Clicking it keeps every handler the page already wired —
+              // a chevron's href, the editor's form submit, the daily's route
+              // into the composer — as the one implementation of each.
+              if (el) el.click();
+            });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'toolbarMenu' }, (ev) => { if (ev) describeMenu(ev.id, ev.token); });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'toolbarPick' }, (ev) => { if (ev) pickMenu(ev.id, ev.index); });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'menuPick' }, (ev) => { if (ev) pickAnchored(ev.token, ev.index); });
+          // The comment bar's five. Each one hands the fact straight to the web
+          // half that already owns it — the textarea, the form, the pane walk —
+          // and none of them decides anything here.
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarText' }, (ev) => {
+              if (ev && postBarHooks.text) postBarHooks.text(ev.text || '', ev.selection || 0);
+            });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarSend' }, () => { if (postBarHooks.send) postBarHooks.send(); });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarFocus' }, (ev) => {
+              if (postBarHooks.focus) postBarHooks.focus(!!(ev && ev.focused));
+            });
+          // The face tapped while typing: over there the field is already empty
+          // and the keyboard already down, and this is the web's copy catching up.
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarDiscard' }, () => {
+              if (postBarHooks.discard) postBarHooks.discard();
+            });
+          // Discover's search capsule. Same shape as the comment bar's: native
+          // holds the caret, and every one of these hands the fact to the web
+          // half that already owns it.
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'searchText' }, (ev) => {
+              if (searchHooks.text) searchHooks.text((ev && ev.text) || '');
+            });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'searchClose' }, () => { if (searchHooks.close) searchHooks.close(); });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'searchBlur' }, () => { if (searchHooks.blur) searchHooks.blur(); });
+          // Where the top of the pill is, so the mention list can open upward
+          // out of a bar the web isn't drawing any more.
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarLift' }, (ev) => {
+              const lift = Number(ev && ev.lift);
+              if (Number.isFinite(lift) && lift > 0) {
+                document.documentElement.style.setProperty('--native-postbar-lift', lift + 'px');
+              }
+            });
+        } catch { /* the bars are up but inert; better than no bars */ }
+        watchToolbar();
+        told.route = told.chrome = told.fab = null;   // force the first push
+        sync();
+      }).catch(() => {
+        // iOS 25 or older, or a plugin that isn't in the binary. Nothing to say
+        // and nothing to clean up: data-chrome was never set, so the CSS nav has
+        // been the live one the whole time.
+      });
+    }
+
+    /* One push, from the DOM's own answer rather than from a parameter, because
+       the three facts native needs settle at three different moments in a
+       render: the route is known before renderFn, the composer's tucked + during
+       renderNav, and the post page's comment bar only once renderFn has mounted
+       it. Reading the state back is what lets every one of those call the same
+       function without knowing what the others did. */
+    function sync() {
+      if (!live) return;
+      const nav = document.getElementById('nav');
+      const gated = document.body.classList.contains('gate');
+      // Signed out there is no navigation to draw, and on a post's page the
+      // bottom of the screen belongs to the comment bar — the same two facts
+      // body.gate and body.postbar-live already state to the stylesheet.
+      const chrome = !gated && !overlaid()
+        && !document.body.classList.contains('postbar-live');
+      const fab = !(nav && nav.classList.contains('nav--compose'));
+      if (activeRoute !== told.route) {
+        told.route = activeRoute;
+        call('selectTab', { route: activeRoute }).catch(() => {});
+      }
+      if (chrome !== told.chrome || fab !== told.fab) {
+        told.chrome = chrome;
+        told.fab = fab;
+        call('setChrome', { visible: chrome, fab }).catch(() => {});
+      }
+      pushPostBar();
+      scheduleToolbar();
+    }
+
+    // The reader picked a colour, or their avatar resampled. Called from the one
+    // place that stamps the band, so the + can't be repainted a frame apart from
+    // every other thing wearing it.
+    function repaint() {
+      if (!live) return;
+      call('setFab', { fab: fabSpec() }).catch(() => {});
+    }
+
+    // renderNav owns which destination is lit, and it is also the first thing to
+    // run on a signed-in route — so it is where the bars are asked for. Under
+    // the gate renderNav never runs, which is why nothing native appears before
+    // sign-in.
+    function setActive(route) {
+      activeRoute = route || '';
+      start();
+      sync();
+    }
+
+    // Is the system drawing the chrome. The same fact html[data-chrome] carries
+    // for the stylesheet, read rather than re-derived — a caller that has
+    // expensive rows to build wants to know before it builds them.
+    const isLive = () => live;
+
+    // Said by openSearch on the frame before it flips the class, because "does
+    // this open want the caret" is an intent rather than a state and there is
+    // nothing in the DOM that records it.
+    function wantSearchFocus(wanted) { searchFocus = !!wanted; }
+
+    return { setActive, sync, repaint, captureMenu, presentMenu, discIcon,
+             postBarText, postBarHooks, searchHooks, wantSearchFocus,
+             live: isLive };
+  })();
 
   /* ── Publish speed dial (phones) ───────────────────────────────────────────
      On a phone the + doesn't jump straight to the composer — it fans open a
@@ -753,8 +1921,8 @@
   // chips themselves — ties the fold-out button to the rows it opens.
   // It does NOT read --type-mark, and neither do the five rows underneath it —
   // see the ink line in openFilterDial for why the dial as a whole opted out.
-  // Short version: this ring is the legend for the hue dot on the button that
-  // opened it, and that dot has never folded.
+  // Short version: this ring is the legend for the hue the button that opened
+  // it wears when a filter is on, and that hue has never folded.
   const ICON_ALL = `<svg viewBox="0 0 24 24" aria-hidden="true">` +
     `<circle cx="12" cy="4.6" r="2.5" fill="var(--type-note)"/>` +
     `<circle cx="19.1" cy="9.8" r="2.5" fill="var(--type-find)"/>` +
@@ -821,9 +1989,12 @@
   const READMORE_MIN = 320;   // notes shorter than this are shown whole
   const READMORE_MIN_BLOCKS = 5;   // …or with fewer paragraph/heading blocks than this
 
-  // Split a note's plain text into paragraphs (blank-line separated).
+  // Split a legacy plain-text note into paragraphs. ONE newline is enough, the
+  // same rule the rich walk keeps (see BREAK): a textarea soft-wraps on its own,
+  // so a "\n" in there is a Return somebody pressed and a line they saw. Blank
+  // lines collapse into the one break they read as.
   const noteParas = (text) =>
-    String(text || '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    String(text || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
 
   const notePara = (p, author) => `<p class="card-note">${richText(p, author)}</p>`;
 
@@ -868,6 +2039,30 @@
   const RICH_LEAD = /^\s*<(h1|h2|p)>/i;         // our serializer always leads with one of these
   const isRichNote = (s) => RICH_LEAD.test(String(s || ''));
 
+  // A LINE BREAK HAS THREE ENCODINGS AND THE WALK MUST NOT PREFER ONE. A block
+  // element is the obvious one, but the same Return can also arrive as a <br>
+  // (Shift+Enter everywhere; the plain Return in some engines) or as a literal
+  // "\n" inside a text node — which is what a `white-space: pre-wrap` editable
+  // invites, since a newline is a VISIBLE break there and the engine has no
+  // reason to build a block for one. The editor is pre-wrap (see .field--rich
+  // .rich-note), so the live field renders all three identically and the reader
+  // has no way to tell which one they just typed. The walk used to keep only the
+  // first: <br> was dropped outright and a "\n" was escaped into storage intact,
+  // where HTML collapses it to a space. Either way the paragraphs the editor
+  // showed were run together the moment the post was published — and the words
+  // either side of the break were joined without so much as a gap.
+  //
+  // So a break becomes a "\n" SENTINEL here and richBlocks splits blocks on it.
+  // Both directions share this walk, so the fix lands on capture AND on render:
+  // a note already stored with a swallowed break comes back correct the next
+  // time it paints, with no migration.
+  const BREAK = '\n';
+
+  // A break inside emphasis has to close and reopen the tag, or the split in
+  // richBlocks would hand one block half a <strong> and the next block the rest.
+  const breakInline = (tag, inner) =>
+    inner.split(BREAK).map(s => (s.trim() ? `<${tag}>${s}</${tag}>` : s)).join(BREAK);
+
   // Walk a node's children, emitting only bold/italic inline tags; each text node
   // passes through `textFn` (esc for storage, richText for display — so mentions
   // link only when rendering). Unknown elements are flattened to their text: a
@@ -879,14 +2074,13 @@
       if (n.nodeType !== 1) return;
       const tag = n.tagName.toLowerCase();
       if (tag === 'strong' || tag === 'b') {
-        const inner = richInline(n, textFn);
-        if (inner.trim()) out += `<strong>${inner}</strong>`;
+        out += breakInline('strong', richInline(n, textFn));
       } else if (tag === 'em' || tag === 'i') {
-        const inner = richInline(n, textFn);
-        if (inner.trim()) out += `<em>${inner}</em>`;
-      } else if (tag === 'script' || tag === 'style' || tag === 'br') {
-        // Drop entirely: never surface script/style text, even escaped; <br> is
-        // handled at the block level (each visual line is its own paragraph).
+        out += breakInline('em', richInline(n, textFn));
+      } else if (tag === 'br') {
+        out += BREAK;                           // a visual line, split out in richBlocks
+      } else if (tag === 'script' || tag === 'style') {
+        // Drop entirely: never surface script/style text, even escaped.
       } else {
         out += richInline(n, textFn);           // flatten anything else to its plain text
       }
@@ -901,10 +2095,14 @@
   function richBlocks(root, textFn, cls) {
     const out = [];
     const emit = (tag, node) => {
-      const inner = richInline(node, textFn);
-      if (!inner.replace(/<[^>]+>/g, '').trim()) return;    // no real text → skip
       const c = cls && cls[tag] ? ` class="${cls[tag]}"` : '';
-      out.push(`<${tag}${c}>${inner}</${tag}>`);
+      // One block in, one block per LINE out: richInline leaves a BREAK wherever
+      // the reader saw a new line, whatever the engine encoded it as. A run of
+      // them is one break (a blank line is spacing, not an empty paragraph).
+      richInline(node, textFn).split(/\n+/).forEach((line) => {
+        if (!line.replace(/<[^>]+>/g, '').trim()) return;   // no real text → skip
+        out.push(`<${tag}${c}>${line}</${tag}>`);
+      });
     };
     const kids = Array.from(root.childNodes);
     const blockLevel = (n) => n.nodeType === 1 && /^(div|p|h1|h2)$/i.test(n.tagName);
@@ -1207,10 +2405,12 @@
     const live = document.createElement('div');
     live.className = 'visually-hidden';
     live.setAttribute('aria-live', 'polite');
-    // The comment form is a flex row, so the list sits after the form itself; the
+    // The comment bar is a flex row, so the list sits after the form itself (and
+    // is then flipped to open UPWARD out of the bar in CSS — a popover under a
+    // control that is already at the foot of the screen is a popover off it); the
     // textarea composer drops it under the field; the rich Note editor drops it
     // below the whole combo box, clear of the toolbar strip at the box's foot.
-    const anchor = field.closest('.comment-form')
+    const anchor = field.closest('.postbar-form')
       || (isCE && field.closest('.field--combo'))
       || field;
     anchor.insertAdjacentElement('afterend', list);
@@ -1251,15 +2451,21 @@
       if (!isCE) {
         field.setRangeText(ins, token.start, token.end, 'end');
       } else {
-        // Splice the "@query" out of its text node, drop the caret past the handle,
-        // then fire input so the editor's count/placeholder refresh.
+        // Splice the "@query" out of its text node and drop the caret past the
+        // handle. The `input` that refreshes the editor's count and placeholder
+        // is fired once, below, for both kinds of field.
         const t = token.node, text = t.nodeValue || '';
         t.nodeValue = text.slice(0, token.start) + ins + text.slice(token.end);
         const sel = window.getSelection(), range = document.createRange();
         range.setStart(t, token.start + ins.length); range.collapse(true);
         sel.removeAllRanges(); sel.addRange(range);
-        field.dispatchEvent(new Event('input', { bubbles: true }));
       }
+      // setRangeText fires no `input` of its own, and the rich-editor branch
+      // above has always had to dispatch one by hand — so it moves out here and
+      // both branches tell their field the same thing. What listens: the comment
+      // bar's autoGrow and its send disc, the composer's counter, and (in the
+      // app) the native bar this text has to be mirrored into.
+      field.dispatchEvent(new Event('input', { bubbles: true }));
       close();
       field.focus();
     };
@@ -1441,6 +2647,13 @@
     const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
     const rsvpable = post.author !== Store.session() && !isPastActivity(post);
     const going = rsvpable && Store.goingByMe(post.id);
+    // The host's tap opens the same section carrying more: their circle listed
+    // under the people who said yes (see goingPanelHtml). The count on the glyph
+    // is still the headcount and only the headcount — a number that quietly meant
+    // "going" for everyone and "invited" for you would be the one control on the
+    // card saying two things.
+    const host = post.author === Store.session();
+    const what = rsvpable && !going ? 'Count me in' : host ? 'See the guest list' : 'See who';
     // aria-expanded only where there IS a section to expand — the post page. In
     // a feed this button either raises your hand or walks to that page, and
     // controls no panel either way. aria-pressed still marks the toggle case,
@@ -1448,9 +2661,8 @@
     return `<button class="card-attendees${going ? ' going' : ''}" type="button" ` +
         `${full ? `aria-expanded="${postPane === 'going'}" ` : ''}` +
         `${rsvpable ? `aria-pressed="${going}" ` : ''}` +
-        `aria-label="${n} going${going ? ', including you' : ''}. ` +
-          `${rsvpable && !going ? 'Count me in' : 'See who'}" ` +
-        `title="${rsvpable && !going ? 'Count me in' : 'Who’s going'}">` +
+        `aria-label="${n} going${going ? ', including you' : ''}. ${what}" ` +
+        `title="${rsvpable && !going ? 'Count me in' : host ? 'Guest list' : 'Who’s going'}">` +
         svgIcon('going') +
         // Always present, even at 0: the headcount is a public planning number
         // ("nobody's in yet" is real info), and the span has to exist for the
@@ -1470,25 +2682,85 @@
   // Page only, like likersPanelHtml. `.going-out` lives down here rather than on
   // the headcount button for the reason below (a deliberate second tap), and the
   // page is where it now sits waiting rather than behind a disclosure.
+  // Sort key for a name list: the display name if we have the row, the handle if
+  // the cache hasn't caught up. Never undefined, because localeCompare throws.
+  const sortName = (username) => {
+    const u = Store.user(username);
+    return (u && u.name) || username;
+  };
+
   function goingPanelHtml(post, full) {
     if (!full) return '';
     if (post.type !== 'activity') return '';
     if (!canJoin(post)) return '';
-    const list = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user));
+    const host = post.author === Store.session();
+    const going = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).map(h => h.user);
+
+    /* THE HOST'S LIST IS THE GUEST LIST, and it is the same list CONTINUED
+       rather than a second section with a control of its own. Everyone who said
+       yes, in the order they said it, then everyone else who was invited and
+       hasn't answered. So the glyph keeps meaning exactly what it meant — the
+       people who are coming are still the top of the list — and the host gets
+       the half only they can act on, which is who is still to answer.
+
+       Who counts as invited is `Store.audienceOf`, which copies the reminder
+       sweep's rule (see activity-reminders.sql): the allowlist for a 'list'
+       post, the host's mutual friends for 'circle' AND for 'public'. Those two
+       have to agree, or the people a reminder wakes up and the people this list
+       names are different sets.
+
+       Blocking is filtered out of both halves, and on the invited half that is
+       the truth rather than a courtesy: can_view_post opens with
+       `not is_blocked_pair(...)`, so somebody you blocked cannot see this. The
+       gap is unreachable from a client on purpose — someone who blocked YOU is
+       invisible to your cache, since you only ever learn about blocks you made.
+
+       A name can be GOING without being invited, which is why the two halves are
+       concatenated rather than the tag being a lookup over one list: unfriending
+       somebody who had already raised a hand drops them out of `audienceOf` (it
+       reads your circle as it stands now) while their headcount row survives.
+       They are still coming, so they are still on the list. */
+    let rows;
+    if (host) {
+      const answered = new Set(going);
+      const waiting = Store.audienceOf(post.id)
+        .filter(u => !Blocks.has(u) && !answered.has(u))
+        .sort((a, b) => sortName(a).localeCompare(sortName(b)));
+      rows = going.map(user => likerItemHtml({ user }, 'Going'))
+        .concat(waiting.map(user => likerItemHtml({ user })));
+    } else {
+      rows = going.map(user => likerItemHtml({ user }));
+    }
+
+    /* Only 'public' earns a word above the list, and only for the host. On a
+       circle or a hand-picked activity the names ARE the answer and saying
+       "everyone in your circle" over a list of your circle is the fact told
+       twice. Public is the one that misreads without it: its audience is
+       technically the whole room, but canJoin is friends-only, so what a host
+       sees here is their circle and nothing says why. */
+    const note = host && (post.audience || 'circle') === 'public'
+      ? `<p class="panel-note">Anyone on Tria can read this one, but only your circle can come.</p>`
+      : '';
+
     // The way back out sits under the list, the mirror of joining and one level
     // down from it — the host planned around this headcount, so changing your
     // mind should cost a deliberate second tap rather than ride the same button
     // you joined with.
-    const out = post.author !== Store.session() && !isPastActivity(post) && Store.goingByMe(post.id)
+    const out = !host && !isPastActivity(post) && Store.goingByMe(post.id)
       ? `<button class="going-out" type="button">${svgIcon('notgoing')}<span>Can’t make it</span></button>`
       : '';
+    // Two empty states, because the host's list is empty for a different reason:
+    // a guest count of zero means nobody has answered OR there was nobody to ask,
+    // and "no one's going yet" would be the wrong half of that on an account with
+    // an empty circle.
+    const empty = host
+      ? `<p class="likers-empty">Nobody to invite yet. Add some friends and they’ll show up here.</p>`
+      : `<p class="likers-empty">No one’s going yet.</p>`;
     return `<div class="going-panel going-panel--full post-pane${paneOpen('going')}" data-pane="going">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
-            `<p class="panel-label">Going</p>` +      // see the note in likersPanelHtml
-            (list.length
-              ? `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
-              : `<p class="likers-empty">No one’s going yet.</p>`) +
+            note +
+            (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty) +
             out +
           `</div>` +
         `</div>` +
@@ -1633,15 +2905,35 @@
        it belonged to was somewhere else — and then a submit that walked you there
        anyway, so the navigation happened regardless, just after the typing
        instead of before it. One door is simpler than a box plus a door to the
-       same place, and the composer belongs at the top of the thread it joins.
+       same place, and the composer is the bar at the foot of that page.
 
-       So: a link in a feed, a static count on the page (where the thread is
-       already underneath it). Same class either way, so the row's geometry
-       doesn't fork. */
+       ON THE PAGE IT IS A SWITCH ONLY WHERE THERE IS SOMETHING TO SWITCH TO.
+       The action row is the page's section switcher and the lit glyph says which
+       section is showing — a fact that means nothing when there is only one
+       section. Who-liked is drawn for the AUTHOR alone and who's-going needs an
+       activity you can JOIN, so on somebody else's note or find or frame the
+       thread is the only pane the card has, and the comment glyph was arriving
+       permanently accent-lit: a switch with one position, wearing the "you are
+       looking at this" treatment for a question nobody can answer differently.
+       Worse, it read as a control, so it invited a tap that could only ever be a
+       no-op.
+
+       Three drawings, then, and the row's geometry does not fork for any of them
+       (.card-social > a and > span carry the same measurements as the button,
+       named by class in the same rules):
+         · a feed card — a LINK to the post's page,
+         · the page, where the row switches — a BUTTON that lights,
+         · the page, where it doesn't — a SPAN, the static count it already is
+           beside the thread underneath it. role="img" so the glyph and its
+           number are announced as the one labelled thing they read as. */
+    const switches = full && (post.author === Store.session()
+      || (post.type === 'activity' && canJoin(post)));
     const comment = !canSocial(post) ? ''
-      : full ? `<button class="card-comment" type="button" ` +
-                 `aria-expanded="${postPane === 'comments'}" ${label} title="Comments">${inner}</button>`
-      : `<a class="card-comment" href="${postRoute(post)}" ${label} title="Comments">${inner}</a>`;
+      : !full ? `<a class="card-comment" href="${postRoute(post)}" ${label} title="Comments">${inner}</a>`
+      : switches
+        ? `<button class="card-comment" type="button" ` +
+            `aria-expanded="${postPane === 'comments'}" ${label} title="Comments">${inner}</button>`
+        : `<span class="card-comment" role="img" ${label}>${inner}</span>`;
     // The ••• overflow carries every owner tool now (Edit, Delete) plus Copy link
     // and Add to calendar — the same menu whether the card is on your profile or
     // in the feed. It sits leftmost of the left cluster, bottom-left corner of the
@@ -1686,10 +2978,21 @@
   // is the one case a view must drop rather than draw.
   const subjectOf = (p) => (p && p.repostOf ? Store.originalOf(p) : p);
 
+  // "You reposted", not your own name, and this is the one place in the app that
+  // makes that swap. Everywhere else your name is a byline, where it is telling
+  // somebody else who wrote the thing; here the line is telling YOU what you are
+  // looking at, and it sits directly on top of a byline that already says your
+  // name — so printing it twice, two lines apart, reads as a bug rather than as
+  // a fact. It only became reachable when self-reposts did (see Store.repostable).
   const repostLineHtml = (post) => {
     const u = Store.user(post.author);
-    const name = esc(u ? u.name : post.author);
-    return `<a class="card-passed" href="#/u/${esc(encodeURIComponent(post.author))}">` +
+    const mine = post.author === Store.session();
+    const name = mine ? 'You' : esc(u ? u.name : post.author);
+    // #/profile rather than #/u/<you> for your own, the same reason friendRowHtml
+    // makes that swap: renderUser draws the same page either way, but only one of
+    // the two lights the Profile tab.
+    const href = mine ? '#/profile' : `#/u/${esc(encodeURIComponent(post.author))}`;
+    return `<a class="card-passed" href="${href}">` +
         svgIcon('repost') +
         `<span><b>${name}</b> reposted</span>` +
         `<span class="dot">·</span>` +
@@ -1829,7 +3132,7 @@
       if (isVideo) wireFrameVideo(el, post);
       else wirePhoto(el, img);
       wireLikes(el, post, opts);
-      wireComments(el, post, opts);
+      wireComments(el);
       return el;
     }
 
@@ -1903,7 +3206,7 @@
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
-    wireComments(el, post, opts);
+    wireComments(el);
     return el;
   }
 
@@ -1969,7 +3272,7 @@
     el.dataset.sig = cardSig(el);
     wireGoing(el, orig, opts);
     wireLikes(el, orig, opts);
-    wireComments(el, orig, opts);
+    wireComments(el);
     return el;
   }
 
@@ -2237,7 +3540,12 @@
      Owner-only. The heart on the author's own card opens this list (same grid-
      rows reveal as the comment thread) — a friend's card has no heart-panel and
      no count at all, only a heart they can fill. */
-  function likerItemHtml(l) {
+  // `tag` is a word that rides beside the name (today: "Going", on a host's guest
+  // list). It's an argument rather than a second row-drawing because these lists
+  // are the same object wherever they appear — who liked, who's going, who was
+  // invited — and a second copy of this markup would drift the first time one of
+  // them moved.
+  function likerItemHtml(l, tag) {
     const u = Store.user(l.user);
     const name = esc(u ? u.name : l.user);
     return `<li class="comment liker">` +
@@ -2245,7 +3553,9 @@
           avatarEl(u || { name: l.user }, { cls: 'comment-avatar' }) +
         `</a>` +
         `<div class="comment-body">` +
-          `<p class="comment-text"><a class="comment-name" href="#/u/${esc(encodeURIComponent(l.user))}">${name}</a></p>` +
+          `<p class="comment-text"><a class="comment-name" href="#/u/${esc(encodeURIComponent(l.user))}">${name}</a>` +
+            (tag ? `<span class="liker-tag">${esc(tag)}</span>` : '') +
+          `</p>` +
         `</div>` +
       `</li>`;
   }
@@ -2257,20 +3567,38 @@
     if (!full) return '';
     if (post.author !== Store.session()) return '';    // only the author sees who liked
     const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
-    /* THE LABEL IS NOT DECORATION HERE, and its absence was a real bug for a
-       day. Under a disclosure the BUTTON was the label: you tapped a heart with
-       a count on it, so the names that unfolded could only be the people who
-       liked it. On a page nothing has been tapped, and the list arrives as a
-       bare name sitting between the action row and the composer — a reader
-       cannot tell a liker from an attendee from a comment with no text. Caught
-       by looking at it; every functional check passed. Sentence case at
-       --kicker, the app's one label voice. */
+    /* NO LABEL over the list, and the argument that put one here is worth
+       keeping because it was right about the disclosure and wrong about the
+       page. It said: under a disclosure the BUTTON was the label, you tapped a
+       heart carrying a count so the names could only be the people who liked it,
+       whereas on a page nothing has been tapped and a bare name between the
+       action row and the composer could be a liker or an attendee.
+
+       The second half doesn't hold, because the action row on this page is the
+       SECTION SWITCHER. Comments is the resting state, so a reader who has
+       tapped nothing is looking at the pane that needs no naming; the only way
+       to reach this list is the heart, which lights on `aria-expanded` the
+       moment it is showing. The button is still the label — it just stays lit
+       instead of folding away. A `?pane=likers` deep link arrives the same way,
+       since setPostPane writes the attribute on the way in.
+
+       So the label was naming a list the lit glyph above it had already named,
+       which is the fact-told-twice this app keeps removing (the post-type icons,
+       the profile shelf's caption). `.panel-label` is deleted, not merely
+       unused. */
     return `<div class="likers-panel likers-panel--full post-pane${paneOpen('likers')}" data-pane="likers">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
             (list.length
-              ? `<p class="panel-label">Liked by</p>` +
-                `<ul class="likers-list">${list.map(likerItemHtml).join('')}</ul>`
+              /* `l => likerItemHtml(l)`, never a bare `likerItemHtml` reference.
+                 map passes (item, INDEX, array), so a point-free pass handed the
+                 index in as `tag` — and `tag` is the word that rides beside the
+                 name in the activity ink. Index 0 is falsy, so the first liker
+                 looked right and every one after it wore a green pill counting
+                 1, 2, 3 down the list: a tally nobody asked for, in the colour
+                 this app reserves for who is coming to a plan. Any future call
+                 site that means "no tag" has to say so with an arrow. */
+              ? `<ul class="likers-list">${list.map(l => likerItemHtml(l)).join('')}</ul>`
               : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
           `</div>` +
         `</div>` +
@@ -2671,19 +3999,40 @@
     // the three you are looking at. Set here rather than left to the rebuild,
     // because switching panes deliberately does NOT rebuild the card — that is
     // the whole reason this is a class toggle and not a re-render.
-    el.querySelector('.card-comment')?.setAttribute('aria-expanded', String(postPane === 'comments'));
-    el.querySelector('.card-like--owner')?.setAttribute('aria-expanded', String(postPane === 'likers'));
-    el.querySelector('.card-attendees')?.setAttribute('aria-expanded', String(postPane === 'going'));
+    //
+    // ONLY ON A CONTROL THAT ALREADY CARRIES THE ATTRIBUTE, and that guard is
+    // load-bearing rather than defensive. Where the page has nothing to switch
+    // between, the comment glyph is drawn as a plain <span> count (see
+    // cardActionsHtml) — and setAttribute would give that span an
+    // `aria-expanded="true"`, which is exactly what .card-comment's accent rule
+    // matches on. The path is real: opening `#/p/<id>?pane=likers` on somebody
+    // else's post finds no likers panel and falls back through here, lighting a
+    // glyph that is not a control.
+    const say = (sel, on) => {
+      const n = el.querySelector(sel);
+      if (n && n.hasAttribute('aria-expanded')) n.setAttribute('aria-expanded', String(on));
+    };
+    say('.card-comment', postPane === 'comments');
+    say('.card-like--owner', postPane === 'likers');
+    say('.card-attendees', postPane === 'going');
   }
 
   /* The thread, on the post's own page and nowhere else.
 
-     ORDER: the composer sits at the TOP, above the comments. That is the reverse
-     of a chat log and deliberate — this is a page you navigated to in order to
-     say something, so the thing you came to do should not be at the bottom of
-     however many replies are already there. It also means the box is in the same
-     place whether a post has two comments or two hundred, and the empty state
-     sits under it rather than where the box would otherwise have been.
+     THE COMPOSER IS NOT IN HERE ANY MORE. It used to lead the thread — above the
+     comments rather than under them — on the argument that this is a page you
+     navigated to in order to say something, so the thing you came to do should
+     not sit below however many replies are already there, and the box should be
+     in the same place whether a post has two comments or two hundred. Both halves
+     of that survive; the bar just keeps them better than the top of a scrolling
+     list did (see mountPostBar). A box at the top of the thread is only in "the
+     same place" until you read three replies and scroll it off the screen.
+
+     So what is left here is the thread and nothing else, and the empty state is
+     free to lead it. The old rule — "No comments yet." goes UNDER the composer,
+     never over — was about not saying the same thing twice before the reader had
+     a chance to answer; with the box on its own layer at the foot of the screen
+     the two are never stacked and there is nothing to order.
 
      `full` is the only mode. A feed card carries no comments panel at all now —
      the glyph on the card is a link here (see cardActionsHtml), so there is no
@@ -2698,10 +4047,6 @@
     return `<div class="comments-panel comments-panel--full post-pane${paneOpen('comments')}" data-pane="comments">` +
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
-            `<form class="comment-form">` +
-              `<textarea name="text" rows="1" maxlength="300" placeholder="Add a comment…"></textarea>` +
-              `<button type="submit" disabled>Post</button>` +
-            `</form>` +
             (list.length
               ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>`
               : `<p class="comments-empty">No comments yet.</p>`) +
@@ -2710,7 +4055,41 @@
       `</div>`;
   }
 
-  function wireComments(el, post, opts) {
+  /* THE POST PAGE'S CARD, REBUILT IN PLACE. Adding or removing a comment changes
+     the list and the count, so the card is rebuilt — one card, swapped where it
+     stands, rather than re-rendering the column and replaying every card's rise.
+     Its ••• menu keeps working through the delegated click listener, so there is
+     nothing to re-wire.
+
+     It takes NO arguments beyond the direction, and re-reads the row from the DOM
+     on purpose. It used to be a closure (`apply`) inside wireComments, over the
+     `post` that function was handed — and on a repost that is the ORIGINAL, not
+     the row. So posting a comment from a quote's page rebuilt the card as the
+     original's own card, dropping the quoter's byline and note; from a bare
+     repost's page it dropped the "X reposted" line. Reading `data-id` off the
+     live card gets the ROW back in both cases, which is what makeCard has to be
+     handed for passedCard/quoteCard to draw the same thing twice.
+
+     The rebuilt card is deliberately NOT refocused anywhere. On the web that was
+     a courtesy (the caret stays in the box); on iOS a focused textarea IS the
+     keyboard, so posting a comment re-claimed focus and the keyboard never went
+     away — which reads as iOS failing to dismiss it. It also parks a focused
+     field on screen, and a focused field makes every background refresh skip its
+     paint (see `showWorld`). */
+  function rebuildPostCard(dir) {
+    const el = document.querySelector('#post-page .card');
+    if (!el) return null;
+    const row = Store.posts().find(p => String(p.id) === String(el.dataset.id));
+    if (!row) return null;
+    const fresh = makeCard(row, { full: true, solo: false });
+    fresh.style.animation = 'none';                 // no rise flash on an in-place swap
+    // Roll the comment count in its new direction (up on add, down on delete).
+    if (dir) odoTick(fresh.querySelector('.card-comment-count'), dir);
+    el.replaceWith(fresh);
+    return fresh;
+  }
+
+  function wireComments(el) {
     const panel = el.querySelector('.comments-panel');
     if (!panel) return;
     // This panel only ever exists on the post's page — a feed card has none, so
@@ -2718,93 +4097,25 @@
     // thread from whichever section is showing; tapping it while the thread is
     // already up is deliberately a no-op, because comments is the floor and
     // there is nothing under it to fall to.
-    el.querySelector('.card-comment')?.addEventListener('click', () => {
+    //
+    // `button` and not `.card-comment`: where the row isn't a switcher the glyph
+    // is a <span> count, and a listener on it would be a handler that can never
+    // do anything on an element that can never be tapped.
+    el.querySelector('button.card-comment')?.addEventListener('click', () => {
       if (postPane !== 'comments') setPostPane('comments', el);
     });
-    const input = panel.querySelector('.comment-form textarea');
-    const submitBtn = panel.querySelector('.comment-form button[type="submit"]');
-    wireMentions(input);
 
-    // The box starts at one line and grows to fit its text (like the composer),
-    // so a long comment wraps into view instead of scrolling off one line.
-    const autoGrow = () => { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; };
-
-    // The Post button is inert until there's something to post — flip `disabled`
-    // as the field fills/empties (drives the dimmed look; blocks empty submits).
-    const syncSubmit = () => { submitBtn.disabled = !input.value.trim(); };
-    input.addEventListener('input', () => { syncSubmit(); autoGrow(); });
-    syncSubmit();
-
-    /* Enter posts, and ONLY where there's a keyboard that can also say
-       Shift+Enter. That pairing was written for a desktop browser and it does
-       not survive the trip to a phone: an iOS software keyboard has no way to
-       deliver `shiftKey` on a Return keydown, so on every touch shell the
-       "deliberate line break" half of the rule was unreachable and Return was an
-       unlabelled Publish. Two bad outcomes from the one gap — a comment could not
-       be given a paragraph break from a phone at all, and the key that means
-       "new line" in every other multiline field on iOS silently published
-       instead. The keyboard even says `return` while doing it, so there was
-       nothing on screen to warn anyone.
-
-       On touch, Return is now just a Return and the Post button is the send —
-       which is what the field was already built for: it auto-grows for exactly
-       this, Post carries a 44px target, and it disables itself when empty. The
-       desktop reflex is untouched.
-       (defaultPrevented → the mentions picker already claimed this Enter to pick
-        a friend; wireMentions runs first, so let it win.) */
-    input.addEventListener('keydown', (e) => {
-      if (!finePointer()) return;
-      if (e.key === 'Enter' && !e.shiftKey && !e.defaultPrevented) {
-        e.preventDefault(); panel.querySelector('.comment-form').requestSubmit();
-      }
-    });
-
-    // Adding/removing a comment changes the list + the count, so the card is
-    // rebuilt. We swap just this card in place so the surrounding feed/column
-    // never re-animates — rather than re-rendering the whole column (which would
-    // replay every card's rise), we rebuild this one card. Its ••• menu keeps
-    // working through the delegated click listener, so there's nothing to re-wire.
-    const apply = (dir) => {
-      const fresh = makeCard(post, opts);
-      fresh.style.animation = 'none';               // no rise flash on an in-place swap
-      // Roll the comment count in its new direction (up on add, down on delete).
-      if (dir) odoTick(fresh.querySelector('.card-comment-count'), dir);
-      el.replaceWith(fresh);
-      // The rebuilt card's textarea is deliberately NOT refocused. On the web that
-      // was a courtesy (the caret stays in the box, you can keep typing); on iOS a
-      // focused textarea IS the keyboard, so posting a comment re-claimed focus and
-      // the keyboard never went away — which read as iOS failing to dismiss it.
-      // It also parked a focused field on screen, and a focused field makes every
-      // background refresh skip its paint (see `showWorld`).
-      return fresh;
-    };
-
-    panel.querySelector('.comment-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (submitBtn.disabled) return;               // empty, or a submit already in flight
-      submitBtn.disabled = true;                    // debounce: no double-post on a fast double-tap
-      const res = await Store.addComment(post.id, e.target.elements.text.value).catch(() => null);
-      if (res && res.ok) {
-        // The like heart has buzzed on its confirmed write since the haptics
-        // landed; its neighbour on the same row never did, which left the two
-        // halves of the social row speaking different languages. LIGHT: a posted
-        // comment lands on the screen, not in the world.
-        hapticTap('LIGHT');
-        const fresh = apply('up');                  // card rebuilt — its fresh button starts disabled
-        const mine = [...fresh.querySelectorAll('.comments-list > .comment')].pop();
-        celebrateComment(mine, post.type);
-        return;
-      }
-      submitBtn.disabled = false;                   // failed — let them try again
-    });
-
+    // The composer is the bar at the foot of the screen (mountPostBar), not a
+    // form in here — so this function wires the thread's own controls and
+    // nothing else. Guard on the PANEL, never on a form: there is no form here
+    // to find, and a `if (!form) return;` would take the delete rows with it.
     panel.querySelectorAll('.comment-delete').forEach(btn =>
       btn.addEventListener('click', () => {
         openSheet({
           title: 'Delete this comment?',
           items: [{ label: 'Delete comment', icon: 'trash', danger: true, run: async () => {
             await Store.deleteComment(btn.dataset.comment);
-            apply('down');
+            rebuildPostCard('down');
           } }],
         });
       }));
@@ -3126,6 +4437,12 @@
     if (actions) actions.innerHTML = '';
     setToolbarSides(0);
     document.querySelector('.topbar')?.classList.remove('topbar--title-visible', 'topbar--searching');
+    // The native capsule's hooks go with the page that wired them, so a late
+    // keystroke from a search that is leaving can't land on the next route. The
+    // capsule itself goes on the push the class removal above provokes.
+    delete NativeChrome.searchHooks.text;
+    delete NativeChrome.searchHooks.close;
+    delete NativeChrome.searchHooks.blur;
   }
   // `leading`/`actions` are markup (already-safe, same contract as mastheadEl's
   // own `actions` param) — `title` is plain text (textContent, not innerHTML),
@@ -3316,9 +4633,19 @@
   let activeFilter = 'all';
   let activeTag = null;
 
-  // The toolbar's filter control: the sliders glyph plus a hue dot that lights
-  // (in the active type's colour) only when a filter is on, so a closed menu
-  // still tells you the feed is narrowed. Tapping it opens the filter dial.
+  // The toolbar's filter control: the sliders glyph, WEARING the active type's
+  // hue whenever a filter is on, so a closed menu still tells you the feed is
+  // narrowed. Tapping it opens the filter dial.
+  //
+  // It used to be the glyph plus a lit 8px dot pinned to the disc's top-right,
+  // and that dot is gone. On the web it was a solid pastel bead ringed in 2px of
+  // --bg so it would punch clear of the strokes behind it, which is a fine trick
+  // on paper and the wrong one on GLASS: under native chrome the disc is real
+  // Liquid Glass, the ring is opaque, and an opaque bead ringed in opaque paper
+  // floating over a refracting surface reads as a rendering fault rather than as
+  // a state. Tinting the mark itself says the same thing in the material both
+  // chromes already share, and it crosses the bridge for free — native reads
+  // `ink` off the button's computed colour and has since stage 3.
   // `id` namespaces the button so Home and Discover can each carry their own
   // filter (they hold separate state — narrowing one never touches the other).
   // `label` names what's being narrowed, because Discover isn't a feed and its
@@ -3333,11 +4660,11 @@
         `aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}"` +
         `${on ? ` data-active="${filterVal}"` : ''}>` +
         svgIcon('sliders', 'masthead-filter-ico') +
-        `<span class="masthead-filter-dot" aria-hidden="true"${on ? '' : ' hidden'}></span>` +
       `</button>`;
   }
   // Reflect the current filter onto the masthead button without a full re-render
-  // (so picking one doesn't flash the whole page): light/clear the dot + hue.
+  // (so picking one doesn't flash the whole page): set or clear the hue, which
+  // is the whole of the state now.
   // document-wide, not view-scoped: a toolbar-mounted filter button lives in
   // #toolbar-actions, outside #view entirely.
   function syncFilterBtn(id, filterVal) {
@@ -3346,8 +4673,6 @@
     const on = filterVal !== 'all';
     if (on) btn.setAttribute('data-active', filterVal);
     else btn.removeAttribute('data-active');
-    const dot = btn.querySelector('.masthead-filter-dot');
-    if (dot) dot.hidden = !on;
   }
 
   function renderHome() {
@@ -3388,9 +4713,24 @@
      glass, the position, the focus trap and the one way out. Callers build their
      own rows, because the two kinds that live in here disagree about what a row
      is — see openFilterDial (radios) and openGlyphMenu (actions). `onRow(btn,
-     close)` runs on a tap and is handed the close it should sequence against. */
+     close)` runs on a tap and is handed the close it should sequence against.
+
+     Callers hand in the rows TWICE, as markup and as `items`, and that is not
+     duplication of the decision — both are built in one pass from one array, a
+     few lines apart, by the caller that made it. The markup is this card; the
+     items are the same menu drawn by UIKit in the native shell, where a toolbar
+     glyph drops a real system menu instead (see NativeChrome). What must not
+     happen is a second place deciding what a row MEANS, and there isn't one:
+     `onRow` is the single handler either drawing runs. */
   let barMenuOpen = false;
-  function openBarMenu(anchor, { label, rows, onRow }) {
+  // `items` arrives as `spec` because this function already has an items() of
+  // its own — the focusable rows of the card it builds.
+  function openBarMenu(anchor, { label, rows, items: spec, onRow }) {
+    // THE SAME MENU, DRAWN BY THE SYSTEM. In the native shell the tap that got
+    // here came from a UIMenu that is already open and waiting to be told what
+    // is in it, so this call's whole job is to have been made: captureMenu takes
+    // the description and returns true, and no card is built.
+    if (NativeChrome.captureMenu({ label, items: spec || [], onRow })) return;
     if (barMenuOpen) return;
     barMenuOpen = true;
     anchor.setAttribute('aria-expanded', 'true');
@@ -3458,8 +4798,8 @@
   /* The filter dial: a bar menu whose rows are a RADIO SET. Data-driven off
      FILTERS, so a new post type is one array entry and not a layout change. */
   function openFilterDial(anchor, opts = {}) {
-    // Caller supplies the current selection (for the checkmark) and what to do on
-    // a pick, so the one dial drives either the home feed or Discover.
+    // Caller supplies the current selection (which row reads as live) and what
+    // to do on a pick, so the one dial drives either the home feed or Discover.
     const current = opts.current || 'all';
     const onPick = opts.onPick || (() => {});
     // Which rows to fan. Home takes the five types; Discover adds People (see
@@ -3467,13 +4807,19 @@
     const filters = opts.filters || FILTERS;
     /* Two kinds of row can appear in here and they are not the same object.
 
-       A FILTER row is a RADIO: picking one un-picks another, and the checkmark
-       says which one is live. An ACTION row (`opts.extras`) is a SWITCH that
-       does a thing and comes back — Discover's gallery/list toggle is the only
-       one today. It takes `role="menuitem"` rather than `menuitemradio` and
-       never wears the checkmark, because it isn't a member of the set the
-       checkmark is choosing between: marking it would say "you are currently
-       looking at View", which isn't a thing you can be looking at.
+       A FILTER row is a RADIO: picking one un-picks another, and the set says
+       which one is live by being the only row at full strength — the others
+       fade back. (It was a checkmark in its own column until 1.4. The mark was
+       a second thing to read on a row that already had a hue and a name, and it
+       could only ever say "this one", where a dimmed ladder says "this one" and
+       "not these" in the same glance, without adding a column.) An ACTION row
+       (`opts.extras`) is a SWITCH that does a thing and comes back — Discover's
+       gallery/list toggle is the only one today. It takes `role="menuitem"`
+       rather than `menuitemradio`, and it never fades, because it isn't a
+       member of the set being chosen between: dimming it would say "you are
+       not currently looking at View", which isn't a thing you can be looking
+       at. The role IS the gate in the stylesheet, so that stays true without a
+       class saying it twice.
 
        It also always buzzes, and gets that for free — the haptic fires when the
        tapped key differs from `current`, and an action key never equals it. That
@@ -3483,8 +4829,9 @@
 
     // Extras LEAD. An action row isn't a member of the radio set below it, so
     // putting it at the top reads as "here is a switch, and here is the list" —
-    // trailing it read as a seventh filter that had lost its checkmark.
-    const rows = [...extras, ...filters].map((f) => {
+    // trailing it read as a seventh filter that had lost the vote.
+    const listed = [...extras, ...filters];
+    const rows = listed.map((f) => {
       // Three ways a row gets its mark, in order: All's own pentad, an `ico`
       // the caller named (Discover's People, Updates' Mentions — rows that
       // stand for something other than a post type), or the post type's glyph.
@@ -3510,9 +4857,9 @@
       // --type-mark first, for the same reason: the hue is the ANSWER the row
       // is offering, not ornament on a row that has already said its name.
       //
-      // And the receipt was already colourful. .masthead-filter's hue dot
-      // lights in the raw pastel and never folded, so under a picked accent the
-      // row you tapped was ink and the dot it lit was lavender: the legend
+      // And the receipt was already colourful. .masthead-filter wears the
+      // active type's hue and never folded, so under a picked accent the
+      // row you tapped was ink and the mark it lit was lavender: the legend
       // disagreeing with the thing it labels, in the one control where the two
       // are meant to teach each other. Fold both or fold neither, and a dial
       // whose whole job is to name the five is the wrong place to fold.
@@ -3527,18 +4874,36 @@
           `data-filter="${f.key}">` +
           `<span class="bar-menu-ico" style="color:${ink}">${glyph}</span>` +
           `<span class="bar-menu-label">${f.label}</span>` +
-          // The checkmark is the whole active state now (the label's pill
-          // outline and the glyph's hue ring both went with the chips). Always
-          // in the DOM on a radio row so every row is the same width and the
-          // column of labels can't shift when the pick moves; an action row has
-          // no checked state to show, so it gets nothing.
-          (f.action ? '' : `<span class="bar-menu-check" aria-hidden="true">${svgIcon('check')}</span>`) +
         `</button>`;
     }).join('');
+
+    /* The same rows for the native menu, from the same array. Only the
+       DRAWING differs, and every difference is the system saying what the card
+       says in its own words: `group` keeps the switch above the ladder as its
+       own inline section, which is the separator the card gets from row type
+       alone, and the ink is still the type's own hue, still spent only on rows
+       that name a type. `radio` + `checked` cross as they always did and mean
+       what they always did — a set, and the live member of it. What changed is
+       that neither side draws a tick for it any more: over there the un-picked
+       marks are rendered faded, which is as far as a UIMenu row will let the
+       statement go (see elements(from:) — a menu title has no alpha, and the
+       one attribute that would dim it also stops it being tappable). */
+    const items = listed.map((f) => ({
+      label: f.label,
+      icon: f.key === 'all' ? ICON_ALL
+        : f.ico ? svgIcon(f.ico)
+        : (TYPE_GLYPH[f.key] ? svgIcon(TYPE_GLYPH[f.key]) : ''),
+      ink: TYPE_GLYPH[f.key] ? `var(--type-${f.key}-ink)` : '',
+      checked: !f.action && f.key === current,
+      radio: !f.action,
+      group: f.action ? 0 : 1,
+      data: { filter: f.key },
+    }));
 
     openBarMenu(anchor, {
       label: opts.label || 'Filter the feed',
       rows,
+      items,
       onRow: (btn, close) => {
         const key = btn.dataset.filter;
         // The dial is the single place every filter pick passes through — the
@@ -3554,7 +4919,7 @@
   }
 
   /* The other kind of bar menu: a list of THINGS TO DO rather than a set to
-     choose from. The profile's ••• (Share · Edit profile · About, or Share ·
+     choose from. The profile's ••• (Edit profile · Share · About, or Share ·
      Block · Report for a visitor) and the friends tie's own menu, which are every
      such menu in the app — the four root pages carry nothing up there but a
      filter.
@@ -3583,12 +4948,67 @@
     openBarMenu(anchor, {
       label,
       rows,
+      // `danger` is the only thing the native menu reads differently: the
+      // system's destructive red is the coral row said in its own voice, and it
+      // takes the row's mark with it, so no ink is sent for one.
+      items: items.map((it, i) => ({
+        label: it.label,
+        icon: it.icon ? svgIcon(it.icon) : '',
+        danger: !!it.danger,
+        group: 0,
+        data: { i: String(i) },
+      })),
       onRow: (btn, close) => {
         const it = items[+btn.dataset.i];
         if (it && it.danger) hapticEvent('WARNING');
         close(() => { if (it && it.run) it.run(); });
       },
     });
+  }
+
+  /* ── A menu dropped by a control ON THE PAGE ───────────────────────────────
+     The post card's •••, the repost circle beside it, the profile's colour
+     ring. Same rows as openGlyphMenu, a different place to hang them from, and
+     a different fallback.
+
+     THE SHEET WAS RIGHT AND IS NO LONGER. All three of these threw an action
+     sheet up from the bottom of the screen, and the reason is written on
+     openRepostMenu: these controls ride a card at an arbitrary scroll position,
+     so a card dropped out of one lands anywhere between mid-screen and the
+     gutter above the nav, and the same tap produces a different-shaped thing
+     every time. A real UIMenu does not have that problem — the system flips it,
+     scrolls it, and clips it to the safe area itself — so where there is one to
+     ask for, the menu belongs to the control that opened it, exactly as it does
+     in the bar. Where there isn't (the web, an older phone), the sheet is still
+     the honest answer and still what runs.
+
+     `items` is openGlyphMenu's array: {label, icon, danger, run}, plus the two
+     a radio set adds (radio, checked) and an `ink` for a row that names a hue.
+     One array, two drawings, one `run` — the same contract the bar menu keeps,
+     which is what stops the fallback becoming a second version of the menu. */
+  function openAnchoredMenu(anchor, { label, items }) {
+    const fire = (it) => {
+      if (it && it.danger) hapticEvent('WARNING');
+      if (it && it.run) it.run();
+    };
+    if (anchor && NativeChrome.presentMenu(anchor, {
+      label,
+      items: items.map((it, i) => ({
+        label: it.label,
+        icon: it.markup || (it.icon ? svgIcon(it.icon) : ''),
+        ink: it.ink || '',
+        radio: !!it.radio,
+        checked: !!it.checked,
+        danger: !!it.danger,
+        group: it.group || 0,
+        data: { i: String(i) },
+      })),
+      onRow: (btn) => fire(items[+btn.dataset.i]),
+    })) return;
+    // The system has no menu to give, so the sheet rises as it always did. It
+    // sequences the run against its own close, which is why this is openSheet's
+    // items rather than a second call to fire().
+    openSheet({ items });
   }
 
   /* Reconcile a list of cards against what's already on screen rather than wiping
@@ -4541,7 +5961,7 @@
     // naming the active pane ("ALL POSTS", "FRAMES") with a bare glyph at its
     // right, sitting in flow between the identity and the posts. Two arguments
     // held it there and neither survives. The caption was a third telling of
-    // something the button's hue dot and the dial's own checkmark already say.
+    // something the button's own lit hue and the dial's live row already say.
     // And "the bar carries identity, the shelf narrows the pane it captions" is
     // a distinction the reader has no way to know they are supposed to be
     // making — what they see is the one glyph they have already learned three
@@ -4808,14 +6228,23 @@
       renderUser(username);      // reflect the new state in place
     });
 
-    // The ••• glyph on the profile header: your own carries Share, Edit profile
+    // The ••• glyph on the profile header: your own carries Edit profile, Share
     // and About; a non-friend visitor's carries Share, Block and Report.
     const moreBtn = document.getElementById('account-more');
     if (moreBtn) moreBtn.addEventListener('click', () => {
       if (isSelf) {
         openGlyphMenu(moreBtn, { label: 'Profile options', items: [
-          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
+          // Edit profile LEADS, and that is a discoverability fix rather than a
+          // preference. 1.3 took the standing "Edit profile" button off the
+          // identity block and folded it into this menu, so the one row here
+          // that a reader will come looking for BY NAME — the way into their
+          // photo, their bio, their colour, their notifications switch and the
+          // delete-account zone — is now behind an unlabelled glyph. Share sat
+          // above it on the visitor menu's ordering, where Share genuinely is
+          // the first thing you'd want; on your OWN page it is the rarer act,
+          // and it was making the reader read past it.
           { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
+          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
           // one of the three, and it's where the feedback form lives, so it also
@@ -4837,9 +6266,12 @@
       });
     });
 
+    // The stat opens a page now rather than a modal (see renderFriends). It
+    // stays a button and navigates through go(): it is one of a row of stats,
+    // and an <a> among spans reads as three links, two of which are dead.
     const friendsBtn = document.getElementById('show-friends');
     if (friendsBtn) friendsBtn.addEventListener('click',
-      () => openFriendsList(u));
+      () => go(`#/friends/${encodeURIComponent(u.username)}`));
   }
 
   /* Dismiss a .modal by playing the reverse of its open animation (frost fades,
@@ -4857,54 +6289,214 @@
     };
   }
 
-  /* ── Friends list ────────────────────────────────────────────────────────
-     Tapping a profile's friend count opens their circle as a frosted modal:
-     the same directory rows as the Friends page, each linking to that person's
-     profile (which closes the modal on the way). Read-only — no add controls. */
-  function openFriendsList(u) {
+  /* ── Someone's circle, as a PAGE ────────────────────────────────
+     `#/friends/<username>`. Tapping a profile's friend count used to open
+     `openFriendsList`, a frosted modal holding these same rows, and that was
+     the profile editor's bug a second time: `.modal` is a fixed, centred flex
+     box with no `overflow` and its card carries no `max-height`, so a circle
+     longer than the screen was clipped at BOTH ends with nothing left to
+     scroll (the body is locked while a modal owns it, and the veil doesn't
+     scroll either). A modal is also not a history entry and `route()` never
+     swept one away, so the App Store build's edge-swipe rendered the page
+     underneath and left the card floating over a locked body.
+
+     It is a page for the MATERIAL reason too, which is the half worth keeping
+     if the rest is ever forgotten. Glass is the layer that floats ABOVE
+     content, and a directory of people is content — the same call the roster
+     on your own profile already makes, and the same split iOS draws between a
+     lock-screen notification and a row in Contacts. So the rows are flat
+     editorial ones on an ordinary page, and the only glass on the screen is
+     the bar at the foot of it.
+
+     WHO someone's friends are is circle business, which `renderUser` says by
+     drawing the stat as a button only for you or a friend. A route is
+     reachable without the button that opens it, so the gate is re-checked here
+     rather than trusted from the door. */
+  function renderFriends(username) {
+    const u = Store.user(username);
+    if (!u) { location.hash = '#/'; return; }            // stale link → home
+    const isSelf = u.username === Store.session();
+    // Blocked → their profile, which is where the blocked wall lives; not a
+    // friend → their profile too, since the count is public and the names
+    // aren't. Both land somewhere true rather than on an empty list.
+    if (!isSelf && (Blocks.has(u.username) || !Store.isFriend(u.username))) {
+      go(`#/u/${encodeURIComponent(u.username)}`);
+      return;
+    }
+
     const list = Store.friendsOf(u.username)
       .map(name => Store.user(name))
       .filter(Boolean)
       .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
 
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', `${u.name}’s friends`);
-    const rows = list.map(f =>
-      `<a class="friend" href="#/u/${encodeURIComponent(f.username)}">` +
-        avatarEl(f, { cls: 'friend-avatar' }) +
-        `<span class="friend-text">` +
-          `<span class="friend-name">${esc(f.name)}</span>` +
-          `<span class="friend-user">@${esc(f.username)}</span>` +
-        `</span>` +
-        `<span class="friend-go" aria-hidden="true">→</span>` +
-      `</a>`).join('');
-    modal.innerHTML =
-      `<div class="modal-card modal-card--glass modal-card--list">` +
-        `<h2 class="modal-title">${esc(u.name)}’s friends</h2>` +
-        `<div class="friends-list friends-list--modal">${rows}</div>` +
-        `<div class="modal-actions">` +
-          `<button type="button" class="edit-cancel" id="fl-close">Close</button>` +
-        `</div>` +
-      `</div>`;
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
-
-    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
-    const onEsc = (e) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', onEsc);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    modal.querySelector('#fl-close').addEventListener('click', close);
-    // Rows cascade in with the same soft stagger as the Friends page and feed,
-    // so the popup reads as part of the same family. A row navigates to that
-    // friend's profile — close first so we don't leave a scroll-locked modal
-    // behind the new page.
-    modal.querySelectorAll('.friend').forEach((a, i) => {
-      a.style.animationDelay = staggerDelay(i);
-      a.addEventListener('click', close);
+    // "friends", not "circle", both ways: the stat button that opens this page
+    // is the word the reader just tapped, and My Circle is already the name of
+    // somewhere else.
+    const title = isSelf ? 'Your friends' : `${u.name}’s friends`;
+    mountToolbar({
+      leading: isSelf
+        ? toolbarBackEl('#/profile', 'Profile')
+        : toolbarBackEl(`#/u/${encodeURIComponent(u.username)}`, u.name),
+      title,
     });
+    view.innerHTML =
+      `<section class="view view--people">` +
+        mastheadEl('', esc(title)) +
+        (list.length
+          ? `<div class="friends-list" id="people-list">` +
+              list.map((f, i) => friendRowHtml(f, i)).join('') +
+            `</div>` +
+            // Under the list, not over it: the list is the page, and a line
+            // saying nothing matched belongs where the matches would have been.
+            `<p class="feed-empty" id="people-none" hidden>No one by that name.</p>`
+          : `<p class="feed-empty">${isSelf
+              ? 'Nobody yet. Discover is where you find people.'
+              : `${esc(u.name)} hasn’t added anyone yet.`}</p>`) +
+      `</section>`;
+
+    if (!list.length) return;
+    const listEl = document.getElementById('people-list');
+    const noneEl = document.getElementById('people-none');
+
+    wireTieList(listEl);
+
+    /* THE BOTTOM CHROME IS THE COMMENT BAR IN ITS OTHER JOB. A page that IS a
+       list of people has exactly one question to ask about itself, and the foot
+       of the screen is where this app already puts the one thing you do with
+       the page you are on — so the bar stands where the nav stands
+       (body.postbar-live takes the four destinations and the + off the screen
+       for the length of the route) and the way out is the toolbar's chevron,
+       which is where a pushed page's exit already was. */
+    mountFindBar({
+      // The placeholder does NOT name the person: the title says whose friends
+      // these are twice already, and at 320px "Search Ada Lovelace's friends"
+      // is cut off mid-name inside the field. The full sentence goes where
+      // there is no width to run out of, which is the label.
+      placeholder: 'Search friends',
+      label: `Search ${title}`,
+      onQuery: (q) => {
+        let shown = 0;
+        for (const row of listEl.children) {
+          const hit = !q || row.dataset.hay.includes(q);
+          row.hidden = !hit;
+          if (hit) shown++;
+        }
+        // The list goes with its rows, because the rule it opens with is drawn
+        // by the CONTAINER: left standing over an empty search it is a hairline
+        // under the title with nothing beneath it.
+        listEl.hidden = !shown;
+        noneEl.hidden = shown > 0;
+      },
+    });
+  }
+
+  /* THE TIE IS DELEGATED FROM THE CONTAINER rather than bound per row, because
+     answering one REPLACES the slot it lives in — a handler bound to the button
+     would die with the button that owns it. Delegation also means the container
+     can be handed a whole new set of rows (Discover repaints its body on every
+     query, filter and pull) without anything being rewired.
+
+     Bound once per container, which is what makes it safe to call from a paint:
+     Discover's body outlives its rows and would otherwise collect one listener
+     per keystroke. */
+  function wireTieList(el) {
+    if (!el || el.dataset.tieWired) return;
+    el.dataset.tieWired = '1';
+    el.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.friend-tie');
+      if (!btn) return;
+      const name = btn.dataset.user;
+      // sent → cancel the request · following → unfollow. Both drop my edge;
+      // add and accept both create it. The profile's own tie, same three ways.
+      const drop = btn.dataset.status === 'sent' || btn.dataset.status === 'following';
+      btn.disabled = true;
+      await (drop ? Store.removeFriend(name) : Store.addFriend(name)).catch(() => null);
+      // Every path hands the control back, a rejected write included: a row left
+      // disabled by one dropped connection is a control that does nothing,
+      // forever, with nothing on screen to say why.
+      btn.disabled = false;
+      const slot = btn.closest('.friend-slot');
+      if (slot) slot.innerHTML = tieHtml(Store.user(name) || { username: name, name });
+    });
+  }
+
+  /* One directory row: the person, and the one thing you can do about them.
+
+     THE TRAILING SLOT HOLDS EITHER THE TIE OR THE CHEVRON AND NEVER BOTH. A
+     56px face and a name on a 390px phone have room for one trailing object,
+     and the two never apply at once anyway — somebody already in your circle
+     has no tie left to offer, and next to a live tie a chevron is the least of
+     what you wanted from the row.
+
+     The whole row stays the link either way: `.friend-open` stretches a
+     pseudo-element across it and the slot is raised above that. Which is also
+     what lets the slot be swapped after an answer without touching the
+     anchor. */
+  /* `opts` is what DISCOVER'S list view needs and a friends list doesn't, which
+     is why the row takes it rather than being forked into a second component.
+     Everyone on the friends page is already yours: nobody there is behind a
+     private wall you haven't been let through, and nobody there is a stranger
+     you are deciding about. On Discover both are true, and both facts were
+     already ON the portrait tile this row replaces — so `locked` and `bio` exist
+     to stop the format switch losing something the gallery was telling you.
+       · locked — the same padlock ptileEl draws, in the same class, glued to the
+         name. No `.name-fence` wrapper: a row is not 96px wide, the name has a
+         whole line, and the mark has nothing to be orphaned onto.
+       · bio — the portrait tile's one line of prose, clamped by CSS. */
+  function friendRowHtml(f, i, opts = {}) {
+    // Read back through `dataset`, so the entities esc() writes are decoded
+    // again before anything is compared against them.
+    const hay = `${f.name || ''} @${f.username}`.toLowerCase();
+    // YOU are on somebody else's list like anyone else, and your own row goes to
+    // #/profile rather than #/u/<you>: renderUser draws the same page either
+    // way, but only one of those two routes lights the Profile tab, and the
+    // other has no back chevron (it is `isSelf` that drops it).
+    const href = f.username === Store.session()
+      ? '#/profile' : `#/u/${encodeURIComponent(f.username)}`;
+    const fence = opts.locked
+      ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
+    const bio = opts.bio && f.bio ? `<span class="friend-bio">${esc(f.bio)}</span>` : '';
+    return `<div class="friend" data-hay="${esc(hay)}" style="animation-delay:${staggerDelay(i)}">` +
+        `<a class="friend-open" href="${href}">` +
+          avatarEl(f, { cls: 'friend-avatar' }) +
+          `<span class="friend-text">` +
+            `<span class="friend-name">${esc(f.name)}${fence}</span>` +
+            `<span class="friend-user">@${esc(f.username)}</span>` +
+            bio +
+          `</span>` +
+        `</a>` +
+        `<span class="friend-slot">${tieHtml(f)}</span>` +
+      `</div>`;
+  }
+
+  /* The five states the profile's own tie draws, minus the two with nothing to
+     offer: `self` and `friends` fall through to the chevron.
+
+     NOT the publish-fill gradient those wear on a profile. There the tie is the
+     one primary act on the page and the band says exactly that; forty of them
+     down a list says it about nothing, which is the rule against spreading that
+     gradient in the first place. So a live tie is ink on a hairline and a
+     committed one — Requested / Following, the two that undo on tap — is muted,
+     which is the same split `.friend-btn` draws with aria-pressed, minus the
+     fill. */
+  const TIE_LABEL = { none: 'Add', sent: 'Requested', following: FOLLOW_STATE,
+                      incoming: 'Accept', follower: 'Add back' };
+  function tieHtml(f) {
+    const s = Store.friendStatus(f.username);
+    const label = TIE_LABEL[s];
+    if (!label) return `<span class="friend-go" aria-hidden="true">→</span>`;
+    // The compact label is for the row; the full sentence is for the reader who
+    // is hearing it, where "Add" alone in a column of names says which one.
+    const name = f.name || f.username;
+    const aria = { none: `Add ${name} as a friend`,
+                   sent: `Cancel your request to ${name}`,
+                   following: `Stop ${FOLLOW_STATE.toLowerCase()} ${name}`,
+                   incoming: `Accept ${name}’s request`,
+                   follower: `Add ${name} back` }[s];
+    const committed = s === 'sent' || s === 'following';
+    return `<button type="button" class="friend-tie" data-user="${esc(f.username)}" ` +
+      `data-status="${s}" aria-pressed="${committed}" ` +
+      `aria-label="${esc(aria)}">${esc(label)}</button>`;
   }
 
   /* ── Profile editor ──────────────────────────────────────────────────────
@@ -5225,7 +6817,7 @@
     // the same reason (iOS standalone flashes a native pressed fill on a filled
     // <button>), so it needs the same keyboard pair the camera gets.
     const pfAccent = view.querySelector('#pf-accent');
-    const openAccent = () => openAccentSheet();
+    const openAccent = () => openAccentSheet(pfAccent);
     pfAccent.addEventListener('click', openAccent);
     pfAccent.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccent(); }
@@ -5348,6 +6940,547 @@
     }
   }
 
+  /* ── The comment bar ────────────────────────────────────────────────────────
+     ON A POST'S PAGE THE BOTTOM CHROME IS THE COMPOSER, NOT THE NAV. The four
+     destinations and the + drop away on phones and this takes their place: the
+     one thing you can do here, in the one place your thumb already is.
+
+     The argument is the same one the post page was built on. A post's page exists
+     so a reader can answer it, and the composer used to lead the thread — top of
+     the list, above the replies, so the box sat in "the same place whether a post
+     has two comments or two hundred". That is true right up until you read three
+     replies, at which point the box you came for has scrolled off the top and the
+     bottom of the screen is showing you four tabs to somewhere else. A fixed bar
+     is that promise actually kept.
+
+     Five things about it are load-bearing:
+
+     · IT LIVES OUTSIDE THE PAGE, as a sibling of the nav in index.html, and it
+       has to. `position: fixed` on a page child is the one thing this app has
+       spent two versions removing (see the Updates dock, and every containment
+       caution in CLAUDE.md): any ancestor with a transform or containment turns
+       into its containing block and the bar quietly becomes a page element that
+       scrolls. Mounted and reset on the same contract as the toolbar —
+       `renderPage` clears it before every `renderFn`, so no page can inherit the
+       last one's bar.
+
+     · IT IS THE ONLY COMPOSER. There is no second box in the thread. One door,
+       the same settlement the feed card's comment glyph got when it became a
+       link: a box plus a door to the same place is worse than the door.
+
+     · THE SEND DISC IS THE FAB'S JOB ON THIS ROUTE. It wears the same tinted
+       glass as the + it replaces, in the same corner, because it is the same
+       promise — the round lit button at the bottom right is where you commit
+       the thing this page makes. That is why a comment's send earns the brand
+       band when the in-thread `Post` (bare type, --accent) never did. It is
+       `--idle` until there are words to send, the profile editor's own trick:
+       in the DOM, out of the tab order and the a11y tree, still a transition
+       target, so it fades in on the keystroke that earns it.
+
+     · THE KEYBOARD IS TRACKED BY HAND. A `position: fixed` element in WKWebView
+       does not move when the software keyboard opens — the layout viewport is
+       unchanged, so the bar stays where it was and the keyboard covers it, and
+       you type blind into a field you cannot see. @capacitor/keyboard's native
+       resize would fix it for one shell and cost a plugin in the binary (see the
+       push saga); `visualViewport` fixes it for all three and costs nothing. The
+       listeners are attached on FOCUS and dropped on BLUR, which is the whole
+       reason this isn't the per-frame scroll handler this file refuses elsewhere:
+       the only window in which they can fire is the one where the keyboard is up.
+
+     · A PANE THAT ISN'T COMMENTS DOESN'T HIDE IT. Who-liked and who's-going are
+       two other answers about the same post, and the bar is the page's constant.
+       Focusing it walks the page back to the thread you're about to join, so you
+       are never writing into a conversation that is off screen. */
+  const postBarEl = () => document.getElementById('postbar');
+  // Torn down with the bar. Null whenever no bar is mounted.
+  let postBarKeyboardOff = null;
+
+  function resetPostBar() {
+    postBarKeyboardOff?.();
+    postBarKeyboardOff = null;
+    // The native bar's hooks go with the bar they were wired for. sync() below
+    // is what actually takes it off the screen (and the keyboard with it); this
+    // is so a late event from the one that is leaving can't land on the next.
+    delete NativeChrome.postBarHooks.text;
+    delete NativeChrome.postBarHooks.send;
+    delete NativeChrome.postBarHooks.focus;
+    delete NativeChrome.postBarHooks.discard;
+    document.body.classList.remove('postbar-live', 'postbar-kb');
+    const bar = postBarEl();
+    if (!bar) return;
+    bar.hidden = true;
+    bar.innerHTML = '';
+    bar.style.removeProperty('--postbar-lift');
+    NativeChrome.sync();
+  }
+
+  /* `post` is the SUBJECT — the original, on a repost's page — because that is
+     whose thread this is (see quoteCard: the social controls act on what is being
+     passed along, not on the act of passing it). */
+  function mountPostBar(post) {
+    const bar = postBarEl();
+    if (!bar) return;
+    // Same gate as the thread itself: no panel, no bar. A stranger's public post
+    // is commentable (canSocial), a non-friend's circle post is not.
+    if (!canSocial(post)) return;
+    const me = Store.user(Store.session());
+    bar.innerHTML =
+      `<form class="postbar-form" autocomplete="off">` +
+        // THE FACE IS ALSO THE WAY OUT. At rest it is the avatar and nothing
+        // else — whose thread is this — and it takes no taps. While you are
+        // typing it turns into a close mark, and one tap on it empties the
+        // field and puts the keyboard away: the "never mind" this bar had no
+        // word for. It is deliberately absent when the field is idle, so a
+        // stray thumb can never reach it, and it is deliberately at the
+        // LEADING end, because the trailing end already means commit.
+        `<button class="postbar-face" type="button" ` +
+          `aria-label="Discard comment" aria-hidden="true" disabled>` +
+          avatarEl(me || {}, { cls: 'postbar-avatar' }) +
+          `<span class="postbar-face-x" aria-hidden="true">` +
+            svgIcon('close', 'postbar-face-ico') +
+          `</span>` +
+        `</button>` +
+        `<div class="postbar-field">` +
+          `<textarea name="text" rows="1" maxlength="300" placeholder="Add a comment…" ` +
+            `aria-label="Add a comment"></textarea>` +
+        `</div>` +
+        // aria-hidden rides with the idle state (see syncSend) rather than being
+        // stamped here: an empty bar has no send, and announcing one is worse
+        // than hiding it.
+        `<button class="postbar-send publish-fill is-solid is-idle" type="submit" ` +
+          `aria-label="Post comment" disabled>${svgIcon('arrowup', 'postbar-send-ico')}</button>` +
+      `</form>`;
+    bar.hidden = false;
+    document.body.classList.add('postbar-live');
+    // The four destinations and the + go away for the length of this page, the
+    // way body.postbar-live takes them off the screen on the web.
+    NativeChrome.sync();
+    wirePostBar(bar, post);
+  }
+
+  /* ── The find bar — the comment bar in its other job ───────────────────────
+     A page whose whole content is a LIST OF PEOPLE has exactly one question to
+     ask about itself, so the bottom chrome asks it. Everything between the two
+     ends is the bar that already shipped: the pill, the chrome-tier glass, the
+     keyboard tracking, the 16px floor that stops iOS zooming on focus, and the
+     phone's swap of the nav for the bar. Only the ends differ — the leading
+     avatar (whose thread is this) becomes a magnifier (what are you after), and
+     the send disc becomes a clear.
+
+     THE CLEAR DELIBERATELY DOES NOT WEAR THE SEND'S BAND. That gradient means
+     "commit, or go and commit" (see the .publish-fill.is-solid set), and
+     emptying a search field is neither; it is a dismissal, so it is a quiet
+     glyph at the same 44px on the same glass. What it does borrow is
+     `is-idle` — an empty field has nothing to clear, and a control that cannot
+     act should not be on the screen. */
+  function mountFindBar({ placeholder = 'Search', label = 'Search', onQuery }) {
+    const bar = postBarEl();
+    if (!bar) return;
+    bar.innerHTML =
+      `<form class="postbar-form postbar-form--find" role="search" autocomplete="off">` +
+        `<span class="postbar-glyph" aria-hidden="true">${svgIcon('search', 'postbar-glyph-ico')}</span>` +
+        `<div class="postbar-field">` +
+          // type=text, not type=search: WebKit draws its own clear affordance
+          // inside a search field and there is already one at the end of the
+          // bar. enterkeyhint gets the software keyboard to say the right word.
+          `<input class="postbar-input" type="text" inputmode="search" enterkeyhint="search" ` +
+            `autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="60" ` +
+            `placeholder="${esc(placeholder)}" aria-label="${esc(label)}">` +
+        `</div>` +
+        `<button class="postbar-send postbar-clear is-idle" type="button" ` +
+          `aria-label="Clear search" aria-hidden="true" disabled>` +
+          // Sized to the MAGNIFIER, not to the send arrow: the arrow is 22px
+          // because it rides a filled disc that carries it, and these two are
+          // bare marks at opposite ends of the same bar.
+          svgIcon('close', 'postbar-clear-ico') +
+        `</button>` +
+      `</form>`;
+    bar.hidden = false;
+    document.body.classList.add('postbar-live');
+    NativeChrome.sync();
+    wireFindBar(bar, onQuery);
+  }
+
+  function wireFindBar(bar, onQuery) {
+    const form  = bar.querySelector('.postbar-form');
+    const input = bar.querySelector('.postbar-input');
+    const clear = bar.querySelector('.postbar-clear');
+
+    // `disabled` blocks the tap, `.is-idle` takes the disc off the screen, and
+    // aria-hidden rides with them — all three flip together, so a visible clear
+    // is always a live one. The send disc's own contract.
+    const sync = () => {
+      const has = !!input.value.trim();
+      clear.disabled = !has;
+      clear.classList.toggle('is-idle', !has);
+      clear.setAttribute('aria-hidden', String(!has));
+    };
+    // No trailing beat here. Discover types on a SEARCH_BEAT because a keystroke
+    // there rebuilds a masonry grid; this filters rows that are already built by
+    // toggling `hidden`, which is a compare per row and a paint of nothing.
+    input.addEventListener('input', () => { sync(); onQuery(input.value.trim().toLowerCase()); });
+    sync();
+
+    // Enter puts the keyboard away rather than reloading the page. The list has
+    // been filtering the whole time, so there is nothing left to submit.
+    form.addEventListener('submit', (e) => { e.preventDefault(); input.blur(); });
+    // Escape empties a field with words in it and dismisses an empty one, which
+    // is the two things the key can usefully mean here, in that order.
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (input.value) { input.value = ''; sync(); onQuery(''); }
+      else input.blur();
+    });
+
+    /* THE CLEAR MUST NOT TAKE FOCUS, for the send disc's reason exactly: a tap
+       that blurs the field starts the keyboard dismissing, the bar drops the
+       ~300px it was lifted by, and the click resolves against wherever the disc
+       has landed rather than under the finger. Preventing the mousedown also
+       keeps the caret where it is, so the keyboard stays up and the next search
+       starts under the same thumb — which is why the focus() below is a no-op
+       that cannot draw a ring: a scripted focus inherits :focus-visible from the
+       element it took focus FROM, and here focus never left. */
+    clear.addEventListener('mousedown', (e) => e.preventDefault());
+    clear.addEventListener('click', () => {
+      input.value = '';
+      sync();
+      onQuery('');
+      input.focus();
+    });
+
+    // Same tracker the comment bar uses, and stored in the same place, so
+    // resetPostBar tears down the visualViewport listeners on the way out
+    // whichever of the two bars was mounted.
+    postBarKeyboardOff = trackKeyboard(bar, input);
+  }
+
+  function wirePostBar(bar, post) {
+    const form  = bar.querySelector('.postbar-form');
+    const input = bar.querySelector('textarea');
+    const send  = bar.querySelector('.postbar-send');
+    const face  = bar.querySelector('.postbar-face');
+    wireMentions(input);
+
+    // One line at rest, growing to fit (like the composer and like the box this
+    // replaced), so a long comment wraps into view instead of scrolling off the
+    // end. Capped in CSS by max-height, past which the field scrolls — a bar that
+    // can grow without limit is a bar that can eat the thread it belongs to.
+    const autoGrow = () => {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    };
+    // `disabled` blocks the empty submit; `.is-idle` is what takes the disc off
+    // the screen. Both flip together so a visible send is always a live one.
+    const syncSend = () => {
+      const has = !!input.value.trim();
+      send.disabled = !has;
+      send.classList.toggle('is-idle', !has);
+      send.setAttribute('aria-hidden', String(!has));
+    };
+    input.addEventListener('input', () => { syncSend(); autoGrow(); });
+    syncSend();
+
+    /* ── Backing out ──────────────────────────────────────────────────────────
+       Two ways down off this bar, and they mean different things.
+
+       PUT THE KEYBOARD AWAY, KEEP THE WORDS: tap the page, or drag it. On the
+       web that is the browser blurring a field for free, and it needs no code
+       here. Under the native bar it needed both halves written by hand, because
+       the caret is in a UITextView that no page tap can reach (see TriaPostBar's
+       dismiss gesture) — it was, until this, a keyboard with no way down that
+       was not posting the comment.
+
+       DISCARD: the face. `.is-typing` is the whole of its state, and the three
+       flags flip together the way the send disc's do, so a face that can act is
+       always a face you can see. The mousedown is prevented for the send disc's
+       reason exactly — a tap that blurs first starts the keyboard dismissing and
+       the click lands wherever the bar has dropped to by then. */
+    const syncFace = (typing) => {
+      form.classList.toggle('is-typing', typing);
+      face.disabled = !typing;
+      face.setAttribute('aria-hidden', String(!typing));
+    };
+    const discard = () => {
+      input.value = '';
+      syncSend();
+      autoGrow();
+      input.blur();
+      // The native field holds the second copy of the words, and emptying it is
+      // what closes an open mention popover on the way out (the write comes back
+      // as an `input` through the mirror below).
+      NativeChrome.postBarText('', 0, false);
+      syncFace(false);
+    };
+    face.addEventListener('mousedown', (e) => e.preventDefault());
+    face.addEventListener('click', discard);
+
+    /* THE SEND DISC MUST NOT TAKE FOCUS, and on iOS that is the difference
+       between a button and a button that runs away from your thumb. A tap on it
+       blurs the textarea first; the keyboard then starts dismissing, the bar
+       drops the ~300px it had been lifted by, and the `click` resolves against
+       wherever the disc has landed by then — which is not under the finger. The
+       comment is silently not posted and the reader taps a second time.
+
+       mousedown, not pointerdown or touchstart: preventing the default on
+       mousedown suppresses only the focus change, and WebKit still synthesises
+       the click. Preventing touchstart would cancel the click along with it.
+       Same trick the mentions picker and the composer's styles toggle already
+       use, for the same reason — keep the caret where it is through the tap. */
+    send.addEventListener('mousedown', (e) => e.preventDefault());
+
+    /* Enter posts, and ONLY where there's a keyboard that can also say
+       Shift+Enter. That pairing was written for a desktop browser and it does
+       not survive the trip to a phone: an iOS software keyboard has no way to
+       deliver `shiftKey` on a Return keydown, so on every touch shell the
+       "deliberate line break" half of the rule was unreachable and Return was an
+       unlabelled Publish. Two bad outcomes from the one gap — a comment could not
+       be given a paragraph break from a phone at all, and the key that means
+       "new line" in every other multiline field on iOS silently published
+       instead. The keyboard even says `return` while doing it, so there was
+       nothing on screen to warn anyone.
+
+       On touch, Return is just a Return and the send disc is the send.
+       (defaultPrevented → the mentions picker already claimed this Enter to pick
+        a friend; wireMentions runs first, so let it win.) */
+    input.addEventListener('keydown', (e) => {
+      if (!finePointer()) return;
+      if (e.key === 'Enter' && !e.shiftKey && !e.defaultPrevented) {
+        e.preventDefault(); form.requestSubmit();
+      }
+    });
+
+    // Writing into a conversation you cannot see is the one way this bar could be
+    // worse than the box it replaced, so taking focus walks the page back to the
+    // thread. Only ever TOWARD comments — it is the floor, and there is nothing
+    // under it to fall to. Named rather than inline because under the native bar
+    // the focus that triggers it happens in UIKit and arrives over the bridge,
+    // and both routes have to mean the same thing.
+    const walkToComments = () => {
+      const card = document.querySelector('#post-page .card');
+      if (card && postPane !== 'comments') setPostPane('comments', card);
+    };
+    input.addEventListener('focus', () => { walkToComments(); syncFace(true); });
+    input.addEventListener('blur', () => syncFace(false));
+
+    /* ── The native bar's half ────────────────────────────────────────────────
+       In the App Store build on iOS 26 the pill above is drawn by UIKit and the
+       reader types into a real UITextView (see TriaPostBar). This textarea is
+       still the MODEL: every native keystroke is written into it here and fires
+       its own `input`, so wireMentions, syncSend, autoGrow, the Return
+       semantics, the cap and the submit below are all still the one
+       implementation of themselves, running unchanged.
+
+       `mirroring` is what keeps the two from talking over each other. The write
+       above dispatches `input`, and the listener that answers `input` by pushing
+       the text back would otherwise send it straight home again — with a caret
+       that has since moved. */
+    let mirroring = false;
+    NativeChrome.postBarHooks.text = (text, caret) => {
+      mirroring = true;
+      input.value = text;
+      try { input.setSelectionRange(caret, caret); } catch { /* not selectable */ }
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      mirroring = false;
+    };
+    // The form is what posts, here as everywhere: the disc's disabled check, the
+    // debounce and every error path below are reached by the same submit a tap
+    // on the web disc would have made.
+    NativeChrome.postBarHooks.send = () => form.requestSubmit();
+    // The native field's own focus, which the hidden textarea never gets. It has
+    // to mean both of the things a web focus means here: walk the page to the
+    // thread, and turn the face into the way out.
+    NativeChrome.postBarHooks.focus = (on) => { if (on) walkToComments(); syncFace(on); };
+    // Native's own discard mark, tapped over there. The field is already empty
+    // and the keyboard already down by the time this arrives; what is left is
+    // the web's copy of the words.
+    NativeChrome.postBarHooks.discard = () => {
+      input.value = '';
+      syncSend();
+      autoGrow();
+      syncFace(false);
+    };
+    // The other direction, and the only thing that travels it: a friend picked
+    // out of the mention popover, which is still a web list writing into a web
+    // field. `true` asks for the caret back, because the tap that picked the row
+    // landed on the web view and may have taken first responder off the field.
+    input.addEventListener('input', () => {
+      if (!mirroring) NativeChrome.postBarText(input.value, input.selectionStart || 0, true);
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (send.disabled) return;                    // empty, or a submit already in flight
+      send.disabled = true;                         // debounce: no double-post on a fast double-tap
+      const res = await Store.addComment(post.id, input.value).catch(() => null);
+      if (res && res.ok) {
+        // The like heart has buzzed on its confirmed write since the haptics
+        // landed; its neighbour on the same row never did, which left the two
+        // halves of the social row speaking different languages. LIGHT: a posted
+        // comment lands on the screen, not in the world.
+        hapticTap('LIGHT');
+        input.value = '';
+        syncSend();                                 // empties the field, idles the disc
+        autoGrow();
+        // The native field is a second copy of the words, so emptying the model
+        // has to empty it as well. No focus request: a posted comment is a
+        // finished sentence, and the keyboard staying up is the reader's call
+        // (they are still in the field, and it does).
+        NativeChrome.postBarText('', 0, false);
+        const fresh = rebuildPostCard('up');
+        const mine = fresh && [...fresh.querySelectorAll('.comments-list > .comment')].pop();
+        celebrateComment(mine, post.type);
+        return;
+      }
+      // Every path hands the control back — a rejected write and a refused one
+      // mean the same thing to the person tapping, and a send disc left disabled
+      // over words still sitting in the field is a control that does nothing,
+      // forever, from one dropped connection.
+      syncSend();
+    });
+
+    postBarKeyboardOff = trackKeyboard(bar, input);
+  }
+
+  /* THE SOFTWARE KEYBOARD, WHICH ARRIVES BY ONE OF TWO ROUTES, and the whole
+     difficulty is that only one of them needs anything from us.
+
+       · THE WEBVIEW IS RESIZED (the App Store build — WKWebView shrinks itself
+         to the unobscured rect). `window.innerHeight` comes down with the
+         keyboard, a bottom-fixed bar is already sitting above the keys, and
+         there is NOTHING to lift. This is the shell Tria actually ships.
+       · THE WEBVIEW IS NOT RESIZED (a browser tab, a home-screen PWA). The
+         layout viewport is unchanged, so the bar stays where it was and the
+         keyboard covers it. Here the lift is the whole fix.
+
+     Reading only the visual viewport cannot tell them apart, and the first
+     version did exactly that: `innerHeight - vv.height` is the keyboard's height
+     in the second case and ~0 in the first, which is self-cancelling for the
+     TRANSFORM and useless for the QUESTION. So the App Store build kept its
+     safe-area padding while the keyboard was up — 34pt of dead space holding the
+     field off the keys — because the only thing saying "a keyboard is up" was a
+     lift that correctly never happened.
+
+     So measure both halves. `shrunk` is what the native layer already took care
+     of, `covered` is what is left for us, the keyboard is up if their SUM clears
+     the floor, and the lift is `covered` alone. Both shells answer correctly and
+     neither double-compensates. `baseH` is sampled at FOCUS, which is before the
+     keyboard animates in — and re-sampled on every focus, so a rotation between
+     two comments cannot leave a stale one behind.
+
+     The listeners are attached on focus and dropped on blur, and that bound is
+     the point: a `visualViewport` scroll listener is live on every frame of an
+     iOS rubber band, which is exactly the per-frame handler the ambient wash was
+     rewritten to avoid. Focus is the smallest window containing every moment the
+     keyboard can be up, and the write is guarded on a real change, so the
+     coalesced events WebKit delivers during a bounce cost a compare and nothing
+     else. */
+  // Below this, whatever the gap is, it is not a keyboard. Safari's URL bar
+  // collapsing and expanding moves the visual viewport by tens of pixels with no
+  // keyboard anywhere, and a rubber band can leave a pixel or two of rounding.
+  // The smallest iPhone keyboard is over 200pt.
+  const KB_FLOOR = 90;
+
+  function trackKeyboard(bar, input) {
+    const vv = window.visualViewport;
+    let lift = 0;
+    let baseH = window.innerHeight;   // the layout viewport with no keyboard up
+
+    const measure = () => {
+      const shrunk  = Math.max(0, baseH - window.innerHeight);
+      const covered = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+      // The home indicator is under the keyboard, so the safe-area reserve at the
+      // bar's foot is dead space while one is up. Driven by the SUM, so it is
+      // right in the resizing shell as well, where the lift below stays zero.
+      document.body.classList.toggle('postbar-kb', (shrunk + covered) > KB_FLOOR);
+      const want = covered > KB_FLOOR ? covered : 0;
+      if (Math.abs(want - lift) < 1) return;   // a compare, not a write, per scroll frame
+      lift = want;
+      bar.style.setProperty('--postbar-lift', lift + 'px');
+    };
+
+    /* AND THE DOCUMENT MUST NOT MOVE, which is a second bug wearing the first
+       one's clothes. WKWebView scrolls the page to bring a focused field into
+       view, and it does that even for a field inside a `position: fixed` bar —
+       an element that is in view by definition and cannot be scrolled to. What
+       it scrolls against is the layout viewport, where `main` is `min-height:
+       100dvh` plus the bar's own reserve and `dvh` does NOT shrink for a
+       keyboard, so there is a viewport of overhang below the content and WebKit
+       runs the scroll into it. The reader taps the comment box and the post they
+       were reading leaves the screen. Reported as "the keyboard pushes ALL the
+       page content up".
+
+       THE FIX IS TO NOT LET IT HAPPEN, not to put it back. Undoing it was the
+       first attempt and it is visibly wrong: the scroll lands on the compositor
+       and paints before any JS runs, so the page jumped and snapped back, and a
+       reader who was looking at one particular comment watched it leave and
+       return. A correction you can see is a second event, and this interaction
+       is supposed to have none.
+
+       So the tap never reaches the native focus at all. `mousedown` +
+       preventDefault suppresses it — and the reveal with it — and then we ask
+       for focus ourselves with `preventScroll`, which is the same request minus
+       the scrolling. Called synchronously inside the gesture, so iOS still
+       raises the keyboard.
+
+       Guarded on the field not ALREADY holding focus, which is what keeps the
+       caret honest: a native tap places the caret where you tapped and
+       `focus()` puts it at the end, so this only intercepts the tap that has
+       nothing to place — the first one, into an empty box — and every later tap
+       into text you are editing behaves normally. */
+    const takeFocus = (e) => {
+      if (document.activeElement === input) return;   // editing: let the tap place the caret
+      e.preventDefault();
+      try { input.focus({ preventScroll: true }); }
+      catch { input.focus(); }
+    };
+    input.addEventListener('mousedown', takeFocus);
+
+    /* The net, for the focus we did not open — a hardware Tab, a shell where
+       `preventScroll` is not honoured, or the keyboard re-opening later in the
+       same focus. It only writes when the scroll has ACTUALLY moved, so when the
+       line above does its job this costs a comparison per frame for a third of a
+       second and changes nothing. Over frames rather than once because WebKit
+       performs the reveal after focus resolves and again as the keyboard
+       animates, and it restores the reader's own position rather than imposing
+       one, so a deep thread stays where they left it. */
+    let hold = 0;
+    const park = () => {
+      const y = window.scrollY;
+      cancelAnimationFrame(hold);
+      let frames = 0;
+      const keep = () => {
+        if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+        if (++frames < 24) hold = requestAnimationFrame(keep);
+      };
+      hold = requestAnimationFrame(keep);
+    };
+
+    const on = () => {
+      baseH = Math.max(baseH, window.innerHeight);
+      park();
+      vv?.addEventListener('resize', measure);
+      vv?.addEventListener('scroll', measure);
+      // The resizing shell's own signal, and the only one an engine without a
+      // visualViewport would ever give us.
+      window.addEventListener('resize', measure);
+      measure();
+    };
+    const off = () => {
+      cancelAnimationFrame(hold);
+      vv?.removeEventListener('resize', measure);
+      vv?.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+      lift = 0;
+      bar.style.removeProperty('--postbar-lift');
+      document.body.classList.remove('postbar-kb');
+    };
+    input.addEventListener('focus', on);
+    input.addEventListener('blur', off);
+    // Teardown: the listeners are the input's and go with it, but the two on
+    // `vv` and the rAF outlive the bar — so drop those by hand.
+    return off;
+  }
+
   /* ── A post's own page ──────────────────────────────────────────────────────
      The place a single post is the whole subject: the card drawn `full` (no
      clamp on the note, the comment thread open, who liked and who's going drawn
@@ -5452,6 +7585,12 @@
       go('#/');
     });
 
+    /* The bottom chrome, last: the composer takes the nav's place on this route
+       (see mountPostBar). Handed the SUBJECT, because on a repost's page the
+       thread belongs to the original — the same post the heart and the ••• split
+       between them. It declines itself when canSocial does, which is the same
+       gate that decides whether there is a thread here at all. */
+    mountPostBar(subj);
   }
 
   // "Sam’s post" / "Sam’s activity" — see the note at the mountToolbar call.
@@ -5685,61 +7824,100 @@
      land. So the scrim is deliberately thin (.sheet-scrim--see-through), the
      page's wash stays lit above it, the pick paints SYNCHRONOUSLY, and the
      ring you opened it from wears the current colour the whole time. */
-  function openAccentSheet() {
+  function openAccentSheet(anchor) {
     const me = Store.currentUser();
     if (!me) return;
     // No photo, no photo option — and the fallback is DEFAULT, not 'none'. With
-    // nothing to sample the buttons paint the brand ramp, so that is the row the
-    // checkmark belongs on; 'none' would put the mark on a monochrome card while
-    // the FAB behind the sheet was plainly still the quintet.
+    // nothing to sample the buttons paint the brand ramp, so that is the row
+    // that reads as live; 'none' would leave the picker saying "no colour"
+    // while the FAB behind it was plainly still the quintet.
     const current = me.accent || (me.avatar ? 'auto' : 'default');
+
+    /* TWELVE SOURCES IN ONE LIST, and two drawings of it.
+
+       THREE SOURCES FIRST, widest to narrowest: Tria's colours, your
+       photograph's, none at all. The first is not merely the absence of a
+       choice — it is --brand-band, the app's own ramp, a colour with a name —
+       which is why it is labelled TRIA and why its disc shows the ramp rather
+       than a word for it. The stored value is still 'default'; the label moved,
+       the key did not. Then the nine you can name, three across and three down,
+       which is also why the source row is three: the two grids line up.
+
+       Each disc wears the BAND it will paint, not the palette hex it is filed
+       under. Those two parted when accents were pinned to L* 74: "Lime" is
+       filed as #b9df7d and paints #8cc731, so a raw-hex disc was a pale swatch
+       promising a button it no longer produced. They have parted completely now
+       that three accents declare their own band, so this goes through
+       accentBand rather than rebuilding the recipe here.
+
+       `mark` is for the two rows a colour cannot be drawn for. The native menu
+       takes an IMAGE per row and TriaSVG paints no photographs, so Photo wears
+       the picture glyph and None an empty ring — which is what the web's None
+       swatch already is, a disc with no fill in it. */
+    const EMPTY_DISC = '<svg viewBox="0 0 24 24">' +
+      '<circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+    const sources = [
+      { key: 'default', label: 'Tria', css: 'var(--brand-band)', group: 0, ramp: true },
+      ...(me.avatar
+        ? [{ key: 'auto', label: 'Photo', css: `url(${me.avatar})`, group: 0, mark: svgIcon('image') }]
+        : []),
+      { key: 'none', label: 'None', group: 0, mark: EMPTY_DISC },
+      ...ACCENTS.map(a => ({ key: a.key, label: a.label, css: accentBand(a.key), group: 1 })),
+    ];
+
+    /* THE SYSTEM'S OWN MENU WHERE THERE IS ONE, and what that costs.
+
+       The sheet below is deliberately see-through, the pick paints
+       SYNCHRONOUSLY, and the ring you opened it from wears the current colour
+       the whole time — because a colour is the one setting whose value you
+       cannot read off a control, you have to see it land. A UIMenu dismisses on
+       the pick, so trying colours on against the live page goes with it. What
+       comes back is a real menu in the material every other menu in the app now
+       wears, and the page under it still repaints in the same frame as the tap;
+       you see the answer, you just don't get to hold the picker open while you
+       compare. That trade was made deliberately, not overlooked. */
+    // NativeChrome.live() before the map, not after: building these twelve rows
+    // means resolving twelve bands through the layout engine, and presentMenu
+    // would only turn round and refuse them on the web.
+    if (anchor && NativeChrome.live() && NativeChrome.presentMenu(anchor, {
+      label: 'Profile colour',
+      items: sources.map(src => ({
+        label: src.label,
+        icon: src.mark || (src.css ? NativeChrome.discIcon(src.css, src.ramp) : ''),
+        radio: true,
+        checked: src.key === current,
+        group: src.group,
+        data: { accent: src.key },
+      })),
+      onRow: (row) => applyAccent(row.dataset.accent, current),
+    })) return;
 
     // The fill goes on the DISC, not the button: every source paints
     // .swatch-disc's background-image, and a url() on the button would sit
     // behind the label with no background-size to size it.
-    const swatch = (key, label, fill) =>
-      `<button class="swatch${key === current ? ' is-on' : ''}" type="button" ` +
-        `role="menuitemradio" aria-checked="${key === current}" data-accent="${key}" ` +
-        `title="${esc(label)}">` +
-        `<span class="swatch-disc"${fill ? ` style="${fill}"` : ''}>` +
-          `<span class="swatch-tick" aria-hidden="true">${svgIcon('check')}</span>` +
-        `</span>` +
-        `<span class="swatch-label">${esc(label)}</span>` +
+    //
+    // There was a white tick on the live disc until 1.4, and it has gone the
+    // way the filter dial's did: the picked swatch is the one that didn't fade.
+    // The RING stayed, though, and that is not belt-and-braces. A fade says
+    // "not this one" about the eleven; it cannot say "this one" about a disc
+    // that might be a photograph of anything, which is the case the two rings
+    // were drawn for in the first place.
+    const swatch = (src) =>
+      `<button class="swatch${src.key === current ? ' is-on' : ''}" type="button" ` +
+        `role="menuitemradio" aria-checked="${src.key === current}" data-accent="${src.key}" ` +
+        `title="${esc(src.label)}">` +
+        `<span class="swatch-disc"${src.css ? ` style="background-image:${esc(src.css)}"` : ''}></span>` +
+        `<span class="swatch-label">${esc(src.label)}</span>` +
       `</button>`;
 
-    /* THREE SOURCES, widest to narrowest: Tria's colours, your photograph's,
-       none at all. The first is new — it was the unnamed state you got by
-       picking 'none', which is how the sheet ended up with a "no colour" row
-       that painted the full brand ramp. Naming it costs one swatch and makes
-       every state in the sheet a state you can see and choose.
-
-       It is labelled TRIA rather than "Default", because that is what the disc
-       actually shows: --brand-band, the app's own ramp, which is a colour with
-       a name and not merely the absence of a choice. "Default" also quietly
-       ranked it above the other two, when all three are just answers to where
-       the colour comes from. The stored value is still 'default' — the label
-       moved, the key did not, the same split rose keeps below.
-
-       Its disc shows --brand-band itself, so the row is a preview of the button
-       rather than a word for it — the same courtesy the photo source and the
-       nine palette discs already extend. */
+    // The wash needs no preview — it repaints live on the page behind the
+    // see-through scrim, which is the whole reason this is a sheet.
     const head =
       `<div class="swatches swatches--source" role="group" aria-label="Colour source">` +
-        swatch('default', 'Tria', 'background-image:var(--brand-band)') +
-        (me.avatar ? swatch('auto', 'Photo', `background-image:url(${esc(me.avatar)})`) : '') +
-        swatch('none', 'None') +
+        sources.filter(x => !x.group).map(swatch).join('') +
       `</div>` +
       `<div class="swatches" role="group" aria-label="Colours">` +
-        /* Each disc wears the BAND it will paint, not the palette hex it is
-           filed under. Those two parted when accents were pinned to L* 74:
-           "Lime" is filed as #b9df7d and paints #8cc731, so a raw-hex disc was
-           a pale swatch promising a button it no longer produced. They have
-           parted completely now that three accents declare their own band, so
-           this goes through accentBand rather than rebuilding the recipe here.
-           The wash needs no preview — it repaints live on the page behind the
-           see-through scrim, which is the whole reason this is a sheet. */
-        ACCENTS.map(a => swatch(a.key, a.label,
-          `background-image:${accentBand(a.key)}`)).join('') +
+        sources.filter(x => x.group).map(swatch).join('') +
       `</div>`;
 
     openSheet({
@@ -5747,31 +7925,35 @@
       head,
       wire: (scrim, close) => {
         scrim.querySelectorAll('.swatch').forEach(btn =>
-          btn.addEventListener('click', () => {
-            const key = btn.dataset.accent;
-            // Re-picking the colour you already wear repaints nothing, so it gets
-            // no buzz and no write — the same rule the filter dial keeps, and for
-            // the same reason: a haptic means a change landed.
-            if (key === current) { close(); return; }
-            hapticTap('LIGHT');
-            const val = key === 'auto' ? null : key;
-            // updateAccent patches the cache before its first await, so the world
-            // this reads is already the new one and the card changes under the
-            // sheet in the same frame as the tap.
-            const saving = Store.updateAccent(val);
-            paintWash(Store.currentUser(), 'profile');
-            // Same tap, second surface: the wash is this page, the band is every
-            // primary button in the app. Both repaint here rather than waiting
-            // for a navigation, which is the point of a picker you can watch.
-            paintBrandBand();
-            saving.then(r => {
-              if (!r.ok) toast(r.error);
-              paintWash(Store.currentUser(), 'profile');  // confirmed, or store reverted it
-              paintBrandBand();
-            });
-            close();
-          }));
+          btn.addEventListener('click', () => { applyAccent(btn.dataset.accent, current); close(); }));
       },
+    });
+  }
+
+  /* THE PICK ITSELF, which both drawings of the picker run. It is the only
+     thing in here that changes anything, so it is the one thing that must not
+     exist twice: the sheet's swatch grid and the native menu's twelve rows are
+     two pictures of one list, and this is what a row MEANS. */
+  function applyAccent(key, current) {
+    // Re-picking the colour you already wear repaints nothing, so it gets no
+    // buzz and no write — the same rule the filter dial keeps, and for the same
+    // reason: a haptic means a change landed.
+    if (key === current) return;
+    hapticTap('LIGHT');
+    const val = key === 'auto' ? null : key;
+    // updateAccent patches the cache before its first await, so the world this
+    // reads is already the new one and the page changes under the picker in the
+    // same frame as the tap.
+    const saving = Store.updateAccent(val);
+    paintWash(Store.currentUser(), 'profile');
+    // Same tap, second surface: the wash is this page, the band is every
+    // primary button in the app. Both repaint here rather than waiting for a
+    // navigation, which is the point of a picker you can watch.
+    paintBrandBand();
+    saving.then(r => {
+      if (!r.ok) toast(r.error);
+      paintWash(Store.currentUser(), 'profile');   // confirmed, or store reverted it
+      paintBrandBand();
     });
   }
 
@@ -5843,7 +8025,10 @@
   // The per-post overflow (•••). Copy link for everyone; Add to calendar on
   // upcoming activities (a sibling "send this elsewhere" action); Report only on
   // posts that aren't yours (you can't report yourself).
-  function openPostMenu(post) {
+  //
+  // `anchor` is the ••• that was tapped, and it is the whole reason this drops a
+  // menu rather than raising a sheet in the native shell. See openAnchoredMenu.
+  function openPostMenu(post, anchor) {
     const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
     if (isCalendarable(post))
@@ -5858,23 +8043,25 @@
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
     }
     if (Store.repostable(post))
-      items.splice(1, 0, { label: 'Repost', icon: 'repost', run: () => openRepostMenu(post) });
-    openSheet({ items });
+      items.splice(1, 0, { label: 'Repost', icon: 'repost', run: () => openRepostMenu(post, anchor) });
+    // The second menu hangs off the SAME •••, which is where the first one came
+    // from and the only control still on screen by the time it opens.
+    openAnchoredMenu(anchor, { label: 'Post', items });
   }
 
-  // Tapping the circle. A rising SHEET rather than a menu dropped from the glyph,
-  // which is the same call the card's ••• already makes and for the same reason:
-  // this control rides a card at an arbitrary scroll position, so a menu hung off
-  // it would land anywhere between mid-screen and the gutter above the nav, and
-  // the same tap would produce a different-shaped thing every time.
+  // Tapping the circle. A menu dropped from the glyph where the system can draw
+  // one and a rising sheet where it can't, which is the same call the card's •••
+  // makes beside it — see openAnchoredMenu for why that split replaced the sheet
+  // both of them used to raise unconditionally.
   //
   // Two rows, and the first one changes. A bare repost is a toggle you can take
   // back; a quote is a post of yours and comes out through its own ••• like
   // anything else you wrote, so it is never listed here as something to undo.
-  function openRepostMenu(post) {
+  function openRepostMenu(post, anchor) {
     const orig = Store.originalOf(post) || post;
     const on = Store.repostedByMe(orig.id);
-    openSheet({
+    openAnchoredMenu(anchor, {
+      label: 'Repost',
       items: [
         on
           ? { label: 'Undo repost', icon: 'repost', run: async () => {
@@ -5914,7 +8101,7 @@
     if (!btn) return;
     e.preventDefault();
     const post = Store.posts().find(p => p.id === btn.dataset.repost);
-    if (post) openRepostMenu(post);
+    if (post) openRepostMenu(post, btn);
   });
 
   // Reuse the like tap's y2k burst on whichever repost button is on screen for
@@ -6053,7 +8240,7 @@
     if (!mb) return;
     e.preventDefault();
     const post = Store.posts().find(p => p.id === mb.dataset.menu);
-    if (post) openPostMenu(post);
+    if (post) openPostMenu(post, mb);
   });
 
   /* ── Dailies — one prompt, twenty-four hours, the whole room ─────────────────
@@ -7103,11 +9290,20 @@
       const answers = occ ? dailyAnswers(occ) : [];
       // discoverView is IN the signature, and has to be: the tiles are identical
       // either way, so without it a format switch would sign the same and this
-      // early return would swallow the repaint the tap asked for.
+      // early return would swallow the repaint the tap asked for. It also
+      // decides how much of a tile the signature has to describe — a person's
+      // row carries a TIE, so in list mode the answer to "are we friends" is
+      // part of what is drawn, and a request accepted between two pulls has to
+      // be able to move the button. The tap's own answer doesn't come through
+      // here: the delegated handler swaps the slot in place, exactly as the
+      // friends page does, so this only catches the change that arrives from
+      // somewhere else.
+      const asList = discoverView === 'list';
       const sig = JSON.stringify([q, discoverFilter, discoverView, tags,
         occ && [occ.slug, answers.length], tiles.map(t =>
           [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
-            t.post && t.post.id, isLocked(t.user.username)])]);
+            t.post && t.post.id, isLocked(t.user.username),
+            asList && !t.post ? Store.friendStatus(t.user.username) : ''])]);
       if (bodyEl.dataset.sig === sig) return;
       bodyEl.dataset.sig = sig;
       const empty = q
@@ -7115,23 +9311,57 @@
         : TYPE_PLURAL[discoverFilter]
           ? `No ${TYPE_PLURAL[discoverFilter]} out here yet.`
           : 'Nobody here yet.';
-      // LIST is Circle's column, not a second design of one: the same makeCard,
-      // so a stranger's post reads here exactly as a friend's does at home, and
-      // the two gates (canSocial, canJoin) keep meaning what they already mean
-      // because it is literally the same card.
+      // LIST is Circle's column and the friends page's directory, not a second
+      // design of either: the same makeCard, so a stranger's post reads here
+      // exactly as a friend's does at home and the two gates (canSocial,
+      // canJoin) keep meaning what they already mean; and the same friendRowHtml,
+      // so a person you find here offers the same Add the friends page does.
       //
-      // Portrait tiles are dropped rather than drawn as cards — a tile with no
-      // post has nothing for a card to be, and People hides the toggle anyway,
-      // so this only bites a name search under All, where the person you matched
-      // is one tap away in the grid you can switch back to.
-      const asList = discoverView === 'list' && discoverFilter !== 'people';
-      const listPosts = asList ? tiles.filter(t => t.post).map(t => t.post) : [];
+      // FORMAT IS NOW UNIVERSAL, which it wasn't through 1.3. A portrait tile
+      // was dropped in list mode on the argument that a tile with no post has
+      // nothing for a card to be — true, and the wrong conclusion: the answer
+      // isn't a card, it's a ROW, and the app already had one. That left People
+      // as the one filter with no column form (the dial hid the switch there),
+      // and it left a name search under All silently discarding the very person
+      // you searched for. Both are gone: every tile has a form in both formats.
+      //
+      // Drawn as RUNS rather than as one flat column, because the two forms are
+      // different objects and each brings a container that means something. A
+      // run of posts is a `.feed`; a run of people is a `.friends-list`, whose
+      // opening rule is on the CONTAINER (see the CSS note) — so alternating
+      // them one node at a time would draw a hairline above every single person.
+      // Grouping costs nothing in ORDER: consecutive tiles of a kind stay
+      // consecutive, so the column reads in exactly the sequence the grid would
+      // have dealt, ranked search included.
+      const runs = [];
+      if (asList) for (const t of tiles) {
+        const kind = t.post ? 'posts' : 'people';
+        const last = runs[runs.length - 1];
+        if (last && last.kind === kind) last.items.push(t);
+        else runs.push({ kind, items: [t] });
+      }
+      // Each run deals itself in from its own start, which is not a choice so
+      // much as the honest description of what already happens: syncCards
+      // staggers a container's cards from the index INSIDE that container, so a
+      // people run counting on from the posts above it would be the only block
+      // on the page not doing that. The cap is 0.4s either way, and a column
+      // with more than one run of each kind only exists under a ranked search.
+      const runHtml = (r, i) => r.kind === 'posts'
+        ? `<div class="feed" data-run="${i}"></div>`
+        : `<div class="friends-list" data-run="${i}">` +
+            r.items.map((t, j) => friendRowHtml(t.user, j,
+              { locked: isLocked(t.user.username), bio: true })).join('') +
+          `</div>`;
       bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') + tagRail(tags, q) +
         (asList
-          ? (listPosts.length ? `<div class="feed" id="discover-feed"></div>` : `<p class="feed-empty">${empty}</p>`)
+          ? (runs.length ? runs.map(runHtml).join('') : `<p class="feed-empty">${empty}</p>`)
           : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
             : `<p class="feed-empty">${empty}</p>`));
-      if (asList && listPosts.length) syncCards(bodyEl.querySelector('#discover-feed'), listPosts, wireFeedCard);
+      if (asList) runs.forEach((r, i) => {
+        if (r.kind !== 'posts') return;
+        syncCards(bodyEl.querySelector(`.feed[data-run="${i}"]`),
+          r.items.map(t => t.post), wireFeedCard);
+      });
       bodyEl.querySelector('.daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
       // The share ask ends the page, so it follows the two views that ARE the
@@ -7147,6 +9377,11 @@
       layoutGrid(stage);
       wireFaces();
       wireTags();
+      // The Add on a person's row, in list mode. Unguarded for the same reason
+      // and one more: it binds to the BODY, which outlives every repaint, and
+      // wireTieList refuses a second binding — so calling it from the paint is
+      // how it survives the innerHTML that just replaced the rows.
+      wireTieList(bodyEl);
     };
 
     // Share Tria: native share sheet where it exists, clipboard copy otherwise.
@@ -7175,11 +9410,18 @@
     // Focus is opt-OUT for the tag rail: tapping a tag should show you the query
     // it just ran, not raise a keyboard over the results you asked for.
     const openSearch = (focus = true) => {
+      // Said BEFORE the class flip, because the push that answers the flip is
+      // the one that has to carry it (see searchSpec).
+      NativeChrome.wantSearchFocus(focus);
       bar.classList.add('topbar--searching');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('aria-label', 'Close search');
       searchEl.tabIndex = 0;
-      if (focus) searchEl.focus();
+      // Under native chrome the caret belongs to a UITextField in the capsule
+      // that grew out of the disc, and this input is a hidden model. Focusing it
+      // would raise the WEB VIEW'S keyboard for a field nobody can see, on top of
+      // the one the capsule is about to raise for itself.
+      if (focus && !NativeChrome.live()) searchEl.focus();
     };
     // Closing has to say where focus goes, and the two answers are not the same
     // control. A keyboard close (Escape, or Enter/Space on the icon) must leave
@@ -7228,6 +9470,22 @@
       bar.classList.contains('topbar--searching') ? closeSearch(e.detail === 0) : openSearch());
     searchEl.addEventListener('blur', foldIfEmpty);
     searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(true); });
+
+    /* ── The native capsule's half ────────────────────────────────────────────
+       In the App Store build on iOS 26 the shell above is drawn by UIKit and the
+       reader types into a real UITextField (see TriaSearchField). This input is
+       still the MODEL: the keystroke is written into it here and runs the same
+       `input` listener below, so the beat, the widened rebuild, the tag rail's
+       pressed state and every read of `discoverQuery` are the code that already
+       shipped. The other two are the web's own answers to a field being left —
+       the X clears and folds, an empty blur folds, a full one stays open — and
+       both are reached by calling them rather than by restating them. */
+    NativeChrome.searchHooks.text = (text) => {
+      searchEl.value = text;
+      searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    NativeChrome.searchHooks.close = () => closeSearch(false);
+    NativeChrome.searchHooks.blur = foldIfEmpty;
     // Typing repaints on a short trailing beat rather than per letter. A paint
     // here is a full rebuild — search lifts the per-person cap and folds the
     // hand-addressed posts back in, so the grid it builds is roughly double the
@@ -7263,12 +9521,15 @@
       // reading as every OS toggle, and the only one that works on a row you tap
       // once.
       //
-      // Absent under People, not disabled: that row is a directory of portraits,
-      // so there is no column form of it to switch to, and a row that does
-      // nothing is worse than a row that isn't there. The dial is rebuilt on
-      // every open, so this is simply re-evaluated each time rather than needing
-      // to be hidden and unhidden.
-      extras: discoverFilter === 'people' ? [] : [{
+      // IT IS ON EVERY ROW NOW, People included. It used to be dropped there (not
+      // disabled — a row that does nothing is worse than a row that isn't there)
+      // because a directory of portraits had no column form to switch to. That
+      // stopped being true when the list learned to draw a person as a row, so
+      // the one filter that hid the switch is the one where the column reads
+      // best: a name, a handle, a line of bio and an Add, forty to a screen
+      // instead of six. Format is now genuinely a second axis — every filter has
+      // both forms — rather than a thing four of the six rows happened to have.
+      extras: [{
         key: 'view',
         label: discoverView === 'gallery' ? 'List' : 'Gallery',
         ico: DISCOVER_VIEWS[discoverView === 'gallery' ? 'list' : 'gallery'],
@@ -7741,7 +10002,7 @@
       wirePanelFull(panel);
 
       // Same contract as Circle's and Discover's: repaint only the pane, relabel
-      // the button's hue dot in place, leave the nameplate and the scroll alone.
+      // the button's hue in place, leave the nameplate and the scroll alone.
       // The dial itself declines to buzz for a pick that changes nothing, so the
       // early return here is only about not rebuilding the ledger for it.
       document.getElementById('updates-filter-btn')
@@ -10140,7 +12401,7 @@
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
     '.seg-tab', '.sheet-item', '.sheet-cancel',
-    '.comment-form button', '.comment-delete', '.modal-actions button',
+    '.postbar-send', '.comment-delete', '.modal-actions button',
     '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.
@@ -10720,7 +12981,7 @@
          speed dial (the composer's mark opts out at the element with
          --type-mark: initial). The FILTER DIAL opted out too — its rows and
          ICON_ALL's pentad both take the quintet outright now, because that dial
-         is the legend for a hue dot that never folded; see the ink line in
+         is the legend for a receipt that never folded; see the ink line in
          openFilterDial. So the rule the token still enforces is narrow and
          deliberate: what you are about to MAKE goes mono under a chosen colour,
          what you are choosing to LOOK AT keeps its hue. The + dial's --glow
@@ -10728,6 +12989,13 @@
          mark, and a mono glyph reads better on it than the tinted one did. */
       if (mark) el.style.setProperty('--type-mark', 'var(--text)');
       else el.style.removeProperty('--type-mark');
+
+      /* The native + wears this band too, and it is repainted HERE for the same
+         reason --user-ink is stamped in this call rather than the next one: a
+         fill and the chrome wearing it arriving a frame apart reads as a bug.
+         Native holds resolved numbers, so it has to be told; it cannot read a
+         custom property. Silent everywhere but the App Store build. */
+      NativeChrome.repaint();
     };
     const set = (rgb, accent) => {
       if (!rgb) return stamp(null);
@@ -11412,6 +13680,11 @@
     // the bar is a page's own bar with nothing in it, which is what body's
     // toolbar-live class is dropped here to say.
     resetToolbar();
+    // Same contract for the bottom chrome: only the post page mounts one, and a
+    // page that doesn't must not inherit the last one's. Clearing it here also
+    // drops the visualViewport listeners the keyboard tracker may still be
+    // holding, which is the one thing in the bar that outlives its own markup.
+    resetPostBar();
     renderFn();
 
     // Rows mounted BY a navigation do not play their entrance. This is the other
@@ -11436,7 +13709,7 @@
     // happening, which is exactly what the entrance is for. Any new page-level row
     // entrance has to join this list.
     if (!reduce) {
-      page.querySelectorAll('.card, .notif, .request-row, .ptile')
+      page.querySelectorAll('.card, .notif, .request-row, .ptile, .friend')
         .forEach(c => { c.style.animation = 'none'; });
       window.setTimeout(() => {
         if (token === navToken) page.classList.remove('enter');
@@ -11444,6 +13717,11 @@
     }
 
     settle();
+    // The bottom chrome's last word on this navigation. renderFn is the only
+    // thing that can mount a comment bar, so this is the first moment the native
+    // bar can be told whether the page it is sitting under wants it — and it is
+    // one call, deduped, not one per page that thought to make it.
+    NativeChrome.sync();
   }
 
   // Programmatic navigation. Setting location.hash to a NEW value fires a
@@ -11668,8 +13946,23 @@
     // Remember where a friend profile's back chevron should return to: the page
     // you came from. Chained profile→profile hops keep the original origin, so
     // back always lands you on the feed/directory you started browsing from.
-    if (path.startsWith('#/u/')) {
-      if (lastPath && !lastPath.startsWith('#/u/')) profileOrigin = lastPath;
+    // A CIRCLE IS NOT AN ORIGIN, for the reason a profile isn't: it is a hop
+    // along the way rather than the surface you were browsing. Recorded as one,
+    // the two chevrons point at each other — a profile's back aims at the list
+    // and the list's back aims at the profile — and tapping back alternates
+    // between them forever instead of ever leaving. So a circle CARRIES the
+    // origin instead: Discover → Ada → Ada's friends → Bea keeps Discover, and
+    // Bea's chevron goes there. Getting back to the LIST is the edge-swipe's
+    // job, which pops real history, where the list genuinely is the last entry.
+    //
+    // It does have to record one thing, and it is the last chance to: your OWN
+    // profile is not a #/u/ route, so nothing below ever files it, and a circle
+    // reached from #/profile is the one way into a profile whose origin has
+    // never been written down.
+    if (path.startsWith('#/friends/') || path.startsWith('#/u/')) {
+      if (lastPath && !lastPath.startsWith('#/u/') && !lastPath.startsWith('#/friends/')) {
+        profileOrigin = lastPath;
+      }
     }
     // Same for a post page. Post→post hops (a quote's tile into its original)
     // keep the original origin, so back always lands on the surface you were
@@ -11707,6 +14000,14 @@
       if (path.startsWith('#/p/')) {
         renderPost(decodeURIComponent(path.slice(4)),
                    new URLSearchParams(hash.split('?')[1] || '').get('pane'));
+        return;
+      }
+      // Someone's circle lives at #/friends/<username> — pushed from the friend
+      // count on their profile, so it highlights no tab either. Tested BEFORE
+      // the switch below, where bare #/friends is the retired Friends page and
+      // still redirects for the links that are out there.
+      if (path.startsWith('#/friends/')) {
+        renderFriends(decodeURIComponent(path.slice(10)));
         return;
       }
       // A daily lives at #/daily/<slug> — like a profile it highlights no nav tab,
@@ -11992,18 +14293,28 @@
     }
   }
 
-  // Tapping the tab (or the brand) for the page you're already on scrolls back
-  // to the top and clears any active filter/tag on Home. No `hashchange` fires
-  // when the target matches the current route, so we catch it here. This is the
-  // familiar bottom-tab-bar gesture on mobile, and that's ALL it is.
+  // Tapping the tab for the page you're already on scrolls back to the top,
+  // clears any active filter/tag on Home, and re-pulls the world. No
+  // `hashchange` fires when the target matches the current route, so we catch it
+  // here. This is the familiar bottom-tab-bar gesture on mobile.
   //
-  // It used to re-pull the world as well, which made it a second refresh sitting
-  // beside the pull — and an invisible one, since nothing on screen says a tab is
-  // also a reload button. The result was an app that seemed to refresh at random
-  // moments the user hadn't connected to anything they did. Pulling down is the
-  // gesture people already know and the one the indicator actually describes, so
-  // it's the only one now. Nothing polls on a timer; the world is otherwise
-  // refreshed at boot and on foreground.
+  // THE RE-PULL WAS TAKEN OUT ONCE AND IS BACK ON A CONDITION. The objection was
+  // never that a tab shouldn't refresh — it was that this one did it INVISIBLY,
+  // so the app appeared to reload at moments the reader hadn't connected to
+  // anything they did, a second refresh sitting silently beside the pull. What
+  // answers that is the ring, which did not exist on this path then: showWorld
+  // borrows the pull's own indicator for any repaint the reader didn't gesture
+  // for, so the tap now says what it did in the one vocabulary the app already
+  // has for "the world is being re-pulled". `force` skips the 4s spam guard,
+  // because a tap that visibly does nothing reads as a broken tap, and `hold` is
+  // false because we are already taking the reader to the top and keepPlace
+  // would only fight the scroll (see refreshWorld's own note on both). Nothing
+  // polls on a timer; the world is otherwise refreshed at boot and on foreground.
+  //
+  // refreshWorld ignores every path but Circle, Discover and Updates, so a
+  // re-tap on Profile is still only a scroll — that page has no reconciling
+  // repaint to run, and re-rendering it under the reader would be a different
+  // thing wearing the same gesture.
   function reclick(route) {
     const path = (location.hash || '#/').split('?')[0];
     if (route === '#/' && path === '#/' && (activeFilter !== 'all' || activeTag)) {
@@ -12012,6 +14323,7 @@
       renderHome();
     }
     scrollTop(true);
+    refreshWorld(path, { force: true, hold: false });
   }
 
   document.getElementById('nav').addEventListener('click', (e) => {

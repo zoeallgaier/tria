@@ -18,6 +18,9 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		TR1A0001000000000000001 /* TriaViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0002000000000000002 /* TriaViewController.swift */; };
 		TR1A0004000000000000004 /* TriaSettingsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0005000000000000005 /* TriaSettingsPlugin.swift */; };
+		TR1A0007000000000000007 /* TriaChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0008000000000000008 /* TriaChromePlugin.swift */; };
+		TR1A0009000000000000009 /* Oxygen-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = TR1A0010000000000000010 /* Oxygen-Bold.ttf */; };
+		TR1A0011000000000000011 /* Oxygen-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = TR1A0012000000000000012 /* Oxygen-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +38,9 @@
 		TR1A0002000000000000002 /* TriaViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaViewController.swift; sourceTree = "<group>"; };
 		TR1A0003000000000000003 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		TR1A0005000000000000005 /* TriaSettingsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaSettingsPlugin.swift; sourceTree = "<group>"; };
+		TR1A0008000000000000008 /* TriaChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaChromePlugin.swift; sourceTree = "<group>"; };
+		TR1A0010000000000000010 /* Oxygen-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oxygen-Bold.ttf"; sourceTree = "<group>"; };
+		TR1A0012000000000000012 /* Oxygen-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oxygen-Regular.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +80,9 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				TR1A0002000000000000002 /* TriaViewController.swift */,
 				TR1A0005000000000000005 /* TriaSettingsPlugin.swift */,
+				TR1A0008000000000000008 /* TriaChromePlugin.swift */,
+				TR1A0010000000000000010 /* Oxygen-Bold.ttf */,
+				TR1A0012000000000000012 /* Oxygen-Regular.ttf */,
 				TR1A0003000000000000003 /* App.entitlements */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -161,6 +170,8 @@
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				103E22D8300827C5000121BB /* TriaAppIcon.icon in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
+				TR1A0009000000000000009 /* Oxygen-Bold.ttf in Resources */,
+				TR1A0011000000000000011 /* Oxygen-Regular.ttf in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
@@ -203,6 +214,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				TR1A0001000000000000001 /* TriaViewController.swift in Sources */,
 				TR1A0004000000000000004 /* TriaSettingsPlugin.swift in Sources */,
+				TR1A0007000000000000007 /* TriaChromePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

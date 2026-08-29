@@ -646,13 +646,28 @@ const Store = (() => {
   // A repost with no original in the cache is a repost we can't see through.
   const visibleRepost = (p) => !p.repostOf || !!originalOf(p);
 
-  // Can I pass this along? Not my own (the same no-self rule toggleLike has), not
+  // Can I pass this along? Two rules, and there used to be three. Not
   // hand-addressed (that allowlist belongs to its author and isn't mine to
   // reproduce), and there has to be something there to point at.
+  //
+  // YOUR OWN POSTS ARE REPOSTABLE. The no-self rule toggleLike has was copied
+  // here on the reading that passing your own thing along is talking to
+  // yourself, and that reading was wrong about what a repost is FOR here: a
+  // circle post reaches the intersection of two circles, so bringing one of your
+  // own back up is the one move that reaches the people who joined since. A
+  // quote of your own post is the same act with a sentence on it — the thought
+  // you had about the thing you wrote a month ago — and there was never an
+  // argument for allowing that and refusing the bare form.
+  //
+  // Nothing downstream needed loosening to allow it, which is the sign it was
+  // only ever a client opinion: reposts.sql never had a no-self arm (the insert
+  // policy checks the audience, the allowlist and the chain, not the author),
+  // the derived ledger already skips `p.author !== me`, and the push function
+  // already refuses to buzz you about yourself (`orig.author !== rec.author`).
   function repostable(post) {
     if (!post || !state.session) return false;
     const target = originalOf(post) || post;
-    return target.author !== state.session && (target.audience || 'circle') !== 'list';
+    return (target.audience || 'circle') !== 'list';
   }
   function myRepostOf(postId) {
     const seed = byId(state.posts).get(postId);
@@ -723,6 +738,32 @@ const Store = (() => {
   // How many people a targeted post is shared with. Accurate for posts you
   // authored (RLS gives you all their allowlist rows); 0 for others' posts.
   const audienceCount = (postId) => rowsFor(state.audience, postId).length;
+
+  // WHO a post is addressed to, by username. audienceCount above answers "how
+  // many" off the allowlist alone; this answers "which people", and for the two
+  // audiences that name no rows at all it has to derive the set.
+  //
+  // The rule is COPIED from the reminder sweep (supabase/activity-reminders.sql),
+  // deliberately and not by coincidence: the people a reminder wakes up and the
+  // people this list names have to be the same set, or one of the two is lying to
+  // the host. So 'list' is the hand-picked allowlist, and 'circle' AND 'public'
+  // are both the author's mutual friends. Public is the case worth understanding:
+  // its audience is technically every account on Tria, but canJoin is friends-only,
+  // so anyone outside the circle would be reading about a plan the app will not let
+  // them answer. Same friends-only line, one more place.
+  //
+  // AUTHOR-ONLY, and that is a data fact rather than a courtesy. RLS hands you the
+  // post_audience rows for posts you wrote plus your own membership rows and
+  // nothing else, so on somebody else's 'list' post this could only ever answer
+  // with the fragment it happens to be holding. A partial guest list is worse than
+  // no guest list, so it refuses instead.
+  function audienceOf(postId) {
+    const post = byId(state.posts).get(postId);
+    if (!post || post.author !== state.session) return [];
+    if ((post.audience || 'circle') !== 'list') return friendsOf(post.author);
+    const names = nameMap();
+    return rowsFor(state.audience, postId).map(r => names.get(r.userId)).filter(Boolean);
+  }
 
   // ── Auth (async writes) ────────────────────────────────────────────────────
   // Create an account: Supabase Auth owns the email + password; the username and
@@ -2045,7 +2086,7 @@ const Store = (() => {
 
   return {
     init, refresh,
-    users, user, currentUser, isPrivate, friends, friendsOf, feed, discover, posts, postsBy, audienceCount,
+    users, user, currentUser, isPrivate, friends, friendsOf, feed, discover, posts, postsBy, audienceCount, audienceOf,
     // Auth
     session, isAuthed, signup, login, logout, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,

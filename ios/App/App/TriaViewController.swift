@@ -20,6 +20,15 @@ class TriaViewController: CAPBridgeViewController {
     /// callable by the time app.js can ask for it.
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(TriaSettingsPlugin())
+        // 1.4's native chrome, registered the same way and for the same reason.
+        // Note what it costs: `verify-plugins.sh` reads `packageClassList` and
+        // so cannot see either of these. A plugin that fails to compile in is
+        // the missing-push failure again — no build error, no crash, one line in
+        // the device log at the moment somebody taps — except this time the
+        // thing that is missing is the app's navigation. That is why app.js
+        // treats the CSS chrome as the default and only switches over once this
+        // plugin has actually answered; see docs/native-chrome.md.
+        bridge?.registerPluginInstance(TriaChromePlugin())
     }
 
     /// `--bg` from `css/tokens.css`, in the one form CSS can't reach: light

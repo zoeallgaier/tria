@@ -1392,6 +1392,7 @@ main {
    same one Discover's grid and Circle's feed answer to — so both titles part
    from the rows below them on their own, by the same amount. */
 .view--updates .masthead-title,
+.view--people .masthead-title,
 .view--discover .masthead-title { padding-bottom: 0.6rem; }
 
 
@@ -1414,8 +1415,8 @@ main {
 
    The FILTER DIAL has since left too, by not reading the token at all rather
    than by overriding it, and on the same argument read from the other side: its
-   rows and ICON_ALL's pentad are the legend for .masthead-filter's hue dot,
-   which never folded. So --type-mark is down to one reader — the phone's +
+   rows and ICON_ALL's pentad are the legend for .masthead-filter's own lit
+   hue, which never folded. So --type-mark is down to one reader — the phone's +
    speed dial — and the line it now draws is what you're about to MAKE goes
    mono, what you're choosing to LOOK AT keeps its hue.
 
@@ -1479,9 +1480,10 @@ main {
    that is where it used to hang; as of 1.3 every one of them is mounted in the
    toolbar, on all five pages that narrow anything (Circle, Discover, Updates
    and both profiles), which is what .toolbar-btn on the same element buys it.
-   A hue dot rides its upper-right ONLY when a filter is on, so a folded menu
-   still signals the page is narrowed — the dot carries the active type's colour;
-   All (no narrowing) carries no dot. */
+   It WEARS the active type's colour whenever a filter is on, so a folded menu
+   still signals the page is narrowed; All (no narrowing) leaves it in the bar's
+   ordinary ink. A lit 8px dot pinned to its upper-right did that job until 1.4
+   and is gone — see the note by the [data-active] rules below. */
 .masthead-filter {
   position: relative;
   flex-shrink: 0;
@@ -1510,32 +1512,30 @@ main {
    which is exactly how a mark drifts a size away from every other one in the
    bar. Move the two together. */
 .masthead-filter-ico { width: 24px; height: 24px; }
-.masthead-filter-dot {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--dot, var(--accent));
-  box-shadow:
-    0 0 0 2px var(--bg),                  /* punch it clear of the glyph strokes */
-    0 0 8px color-mix(in srgb, var(--dot, var(--accent)) 70%, transparent);
-}
-/* The raw pastels, and they have never folded under --type-mark — which is the
-   whole reason the dial's rows stopped folding either (see openFilterDial). The
-   row is the legend and this dot is the receipt: they are the same fact twice
-   in two places, so they wear one colour or neither is worth drawing. */
-.masthead-filter[data-active="note"]     { --dot: var(--type-note); }
-.masthead-filter[data-active="find"]     { --dot: var(--type-find); }
-.masthead-filter[data-active="photo"]    { --dot: var(--type-photo); }
-.masthead-filter[data-active="poll"]     { --dot: var(--type-poll); }
-.masthead-filter[data-active="activity"] { --dot: var(--type-activity); }
+/* ON is the MARK's own colour, not a bead stuck to the corner of the disc.
+   There was an 8px dot pinned at 3,3 here until 1.4, lit in the active type's
+   pastel and ringed in 2px of --bg so it would punch clear of the sliders
+   strokes behind it. The ring is what killed it: opaque paper is the right
+   answer on a page and the wrong one on GLASS, and under native chrome this
+   disc is real Liquid Glass, so the bead read as a paint bug sitting on a
+   refracting surface rather than as a state. The glyph carries it now, which
+   the bridge already ships — native reads `ink` off the computed colour.
+
+   The -ink half of each pair, not the raw pastel the dial's rows wear. A row is
+   a 15px label on paper with a swatch beside it; this is a 24px stroked mark on
+   glass, and a pastel at that weight on that material is a smudge. In dark mode
+   the -ink tokens fold back to the pastels themselves (see tokens.css), so this
+   is one rule that reads correctly on both grounds. */
+.masthead-filter[data-active="note"]     { color: var(--type-note-ink); }
+.masthead-filter[data-active="find"]     { color: var(--type-find-ink); }
+.masthead-filter[data-active="photo"]    { color: var(--type-photo-ink); }
+.masthead-filter[data-active="poll"]     { color: var(--type-poll-ink); }
+.masthead-filter[data-active="activity"] { color: var(--type-activity-ink); }
 /* The two rows that aren't post types — Discover's People, Updates' Mentions —
-   keep an ink dot rather than borrowing one of the five pastels, which are
-   spoken for. On is still unmistakably on. */
+   take ink rather than borrowing one of the five pastels, which are spoken for.
+   On is still unmistakably on. */
 .masthead-filter[data-active="people"],
-.masthead-filter[data-active="mention"]  { --dot: var(--text); }
+.masthead-filter[data-active="mention"]  { color: var(--text); }
 
 /* ── Bar menu ──────────────────────────────────────────────────────────────
    ONE GLASS CARD of listed rows, dropped from the toolbar button that opens it.
@@ -1678,20 +1678,26 @@ main {
   text-overflow: ellipsis;
 }
 .bar-menu-item.is-on .bar-menu-label { font-weight: 700; }
-/* Present on every radio row so the label column can't shift when the pick
-   moves; only the live one is visible. `visibility` rather than display so the
-   box is always reserved — the same --idle trick the toolbar's Save check uses. */
-.bar-menu-check {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  color: var(--text);
-  visibility: hidden;
-}
-.bar-menu-check svg { width: 100%; height: 100%; }
-.bar-menu-item.is-on .bar-menu-check { visibility: visible; }
+/* THE PICK IS THE ROW THAT DIDN'T FADE. There was a checkmark in a third column
+   here through 1.3; it has gone, and nothing took its place at the end of the
+   row. A tick can only say "this one" — it needs the reader to sweep the column
+   and find the one row wearing it — where a ladder with five rows pulled back
+   says "this one" and "not these" at once, in the shape of the list itself, and
+   it costs no column: the labels sit where they always did whichever row is
+   live, which is the thing the reserved tick box was there to protect.
+
+   The ROLE is the gate, not a class. Only a member of the radio set can be
+   un-picked; the action row above the ladder (Discover's gallery/list switch)
+   is a switch that does a thing and comes back, and dimming it would say it had
+   lost a vote it was never in. `role` already carries that distinction for the
+   accessibility tree, so it carries it here too rather than a second attribute
+   restating it.
+
+   Opacity, not a lighter ink: the glyph's hue and the label's ink are two
+   different colours and the row has to recede as one thing. It also leaves the
+   quintet alone — a type's hue at 48% is that hue, where a colour-mix toward
+   the paper is a new colour that has to be checked against both schemes. */
+.bar-menu-item[role="menuitemradio"]:not(.is-on) { opacity: 0.48; }
 /* Block, Report, and anything else that can't be taken back. The same coral the
    sheet has always used for them (--type-find-ink), so a row that was red down
    there is red up here — the menu moved, the warning didn't change. Its glyph
@@ -2226,16 +2232,43 @@ main {
    background pill; the glyph carries the colour the way every other social glyph
    does. At rest it's muted like its neighbours (it's a tally you may join, not a
    standing claim); once you're in, it takes the activity ink. */
-.card-attendees {
+/* Descendant-qualified, and that is load-bearing rather than tidy. This rule's
+   first three declarations were written at `.card-attendees` — (0,1,0) — where
+   `.card-actions button { padding: 0; justify-content: center }` at (0,1,1)
+   outranks them, so the padding and the flex-start were BOTH inert from the day
+   they were written: the button measured 0 padding and centred content, with the
+   trailing 0.55rem it thinks it has going to whichever end the centring put it.
+   `.card-social .card-attendees` is (0,2,0) and wins. The same shape of bug the
+   status-bar scrim carried for a version — a rule losing silently to a more
+   specific one and leaving no tell but the pixels. */
+.card-social .card-attendees {
   justify-content: flex-start;
+  /* The counted neighbours' own padding (see the :has() rule below), not the
+     asymmetric 0.35/0.55 this rule used to ask for. With the padding live, the
+     step off the thread belongs entirely to the margin below, and this button's
+     insides are measured exactly like the comment's and the like's. */
+  padding-inline: 0.35rem;
   gap: 0.4rem;
-  padding-inline: 0.35rem 0.55rem;
-  /* Sits a clear step off comment + like. The headcount is the plan; those two
-     are gestures. Activities lost their two-ended row when this control merged,
-     so this gap is what's left holding that distinction — and the glyph needs
+  /* Sits a step off comment + like. The headcount is the plan; those two are
+     gestures. Activities lost their two-ended row when this control merged, so
+     this margin is what's left holding that distinction — and the glyph needs
      the air anyway, since its ink fills only the left half of the box (the right
-     half is the check's landing space, see .check-arm). */
-  margin-right: 0.5rem;
+     half is the check's landing space, see .check-arm).
+
+     It was 0.5rem and read as a hole rather than a step, and the margin was only
+     half of why. Measured ink-to-ink at 390px, the white between the headcount's
+     number and the comment bubble was 22.4px against 18.5px from the comment's
+     number to the glyph beside it — 21% wider, past where a step stops reading as
+     intent and starts reading as a row that didn't line up. The rest of it was
+     slack: with the padding dead the content sat short of the 44px floor and
+     centred, leaving 5.2px at the trailing end — and only 0.8px once you JOIN,
+     because .going releases the count's -0.55rem and the content grows into the
+     floor. So the gap moved 4.4px on RSVP, and any margin picked by eye was
+     right in one state and wrong in the other. With the padding live the count
+     sits 0.35rem off the button's edge in both, and this is the only number left:
+     20.4px ink-to-ink, a ~2px step, which reads as even while the headcount still
+     isn't jammed against the thread. Re-measure ink, not margins, if it moves. */
+  margin-right: 0.35rem;
 }
 .card-attendees-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 /* Before you're in, the check's landing zone (the glyph's empty right half) sits
@@ -2641,10 +2674,6 @@ main {
 .comments-inner { min-height: 0; }
 .comments-content { padding: 1.1rem 0 0.5rem; }
 
-/* The composer LEADS the thread (see commentsPanelHtml), so the gap belongs
-   under it rather than above the list. */
-.comment-form { margin-bottom: 1.1rem; }
-
 /* ── The post page's own furniture ───────────────────────────────────────────
    On a post's page the three panels are not disclosures at all: they are the
    page. `--full` pins them open and takes the tween off, because a transition
@@ -2670,16 +2699,13 @@ main {
    never left with bare space under the card. */
 .post-pane:not(.open) { display: none; }
 
-/* The post page's section labels. On a card these lists unfolded from a button
-   that named them; on a page nothing has been tapped, so the label is the only
-   thing telling a liker from an attendee. The app's one label voice: sentence
-   case at --kicker, never uppercased. */
-.panel-label {
-  font-size: var(--kicker);
-  color: var(--muted);
-  letter-spacing: 0.02em;
-  margin: 0 0 0.5rem;
-}
+/* TOMBSTONE — .panel-label ("Liked by", "Going") is deleted. It named the two
+   name lists on the post page, on the argument that a page has had nothing
+   tapped so a bare name could be a liker or an attendee. What that missed is
+   that the action row on this page is the section SWITCHER: comments is the
+   resting state and needs no name, and the only way to reach either list is the
+   glyph that then stays lit. The button is the label, exactly as it was under a
+   disclosure. See the note in likersPanelHtml before adding one back. */
 
 /* Sits under the box, never over it: "No comments yet." above an empty composer
    would be the page saying the same thing twice before you had a chance to
@@ -2707,8 +2733,55 @@ main {
   flex-direction: column;
   gap: 0.6rem;
 }
-.liker .comment-body { display: flex; align-items: center; min-height: 26px; }
+.liker .comment-body { display: flex; align-items: center; min-height: 26px; flex: 1; min-width: 0; }
+/* A liker row's line has to be able to hold a name AND a tag pushed to the far
+   end, so it becomes the flex row (and takes the width, since .comment-body is
+   already flex and a <p> would otherwise size to its text). Bare name rows are
+   unchanged by this: one flex item, laid out exactly where it was. */
+.liker .comment-text { flex: 1; display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.liker .comment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .likers-empty { font-size: 0.85rem; color: var(--muted); }
+
+/* "Going", beside a name on the HOST's guest list. That list is the who's-going
+   list continued — everyone who said yes, then everyone still to answer — so the
+   tag is what separates the two halves, and it has to do it without a heading
+   between them (there are no headings on this page; the lit glyph is the label).
+
+   It takes --going-ink: the READER'S OWN accent where they picked one in Edit
+   profile, and the activity green where they didn't. That is the same rule the
+   liked heart already follows, and it is answered once in tokens.css so this
+   rule needs no dark-mode copy.
+
+   It used to be --type-activity-ink flat, on the argument that the tag and the
+   headcount glyph that opened the list had to be one colour. They never were:
+   .card-attendees.going is a GUEST's raised hand, tags are drawn for the HOST
+   alone (a guest's who's-going list carries none), and a host is never
+   rsvpable -- so the glyph above this list has always been plain ink. The
+   glyph correctly keeps its green; nothing here is left disagreeing with it.
+
+   Not a filled pill: this list sits in the flat editorial column
+   where comments live, and a row of solid chips down the right of it would read
+   as a set of buttons. A hairline and the word is enough, the same restraint the
+   composer's attach bar took when its live toggles went from filled discs to ink.
+
+   `margin-left: auto` parks it at the end of the line rather than tight against
+   the name, so a column of them lines up and the eye can run down the edge
+   instead of tracking a ragged right. */
+.liker-tag {
+  margin-left: auto;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--going-ink);
+}
+/* The one line above a name list, and only where the list would otherwise
+   misread (a public activity, whose guest list is the host's circle). Sentence
+   case at --kicker, the app's one label voice. */
+.panel-note { font-size: var(--kicker); color: var(--muted); margin: 0 0 0.7rem; }
 
 /* "Can't make it" — the way back out of a plan, at the FOOT of the who's-going
    list rather than on the card. Joining is one tap; leaving costs a deliberate
@@ -2812,59 +2885,372 @@ main {
   }
 }
 
-/* Bottom-aligned so the Post button hugs the last line as the box grows. */
-.comment-form { display: flex; align-items: flex-end; gap: 0.7rem; }
-.comment-form textarea {
+/* ── The comment bar ───────────────────────────────────────────────────────
+   THE BOTTOM CHROME OF A POST'S PAGE. On phones it stands where the nav pill
+   and the + stand everywhere else (both are hidden under body.postbar-live, in
+   the mobile block below); on desktop the nav is a sidebar off to the left, so
+   nothing collides and the sidebar stays. The bar mirrors .topbar's geometry
+   from the other end of the screen — clearing the same sidebar, capping its
+   contents at the same --feed-width — so the composer sits on the column it
+   belongs to rather than on the whole window.
+
+   Chrome-tier glass, and that tier is correct rather than a saving: this is
+   fixed over a feed that scrolls under it, so its backdrop changes every frame
+   of every scroll, which is exactly the area × radius × moving-frames bill the
+   panel tier is kept away from.
+
+   `--postbar-lift` is the software keyboard's reach (see trackKeyboard), and it
+   is a transform rather than a `bottom` so the move is composited. Absent —
+   which is every shell with a hardware keyboard, and every moment the field
+   isn't focused — falls through to 0. */
+.postbar {
+  position: fixed;
+  left: var(--sidebar-w);
+  right: 0;
+  bottom: 0;
+  z-index: 101;                     /* chrome, with the toolbar and above the nav */
+  padding: 0.6rem 2rem calc(0.6rem + env(safe-area-inset-bottom));
+  transform: translateY(calc(var(--postbar-lift, 0px) * -1));
+  /* No transition on the transform: the keyboard is already animating and a
+     second ramp on top of it slides the bar against the thing it is tracking.
+     iOS delivers the resize in steps, so this rides them. */
+}
+.postbar[hidden] { display: none; }
+/* WHILE THE KEYBOARD IS UP THE SAFE-AREA RESERVE IS DEAD SPACE, so it comes off.
+   The home indicator is underneath the keys and has nothing left to be kept
+   clear of, and 34pt of inset holding the field off the keyboard is a hole in
+   the middle of the one interaction this bar exists for. Declared at every width
+   rather than in the phone block: `postbar-kb` is driven by the keyboard, not by
+   the viewport, and an iPad in the App Store shell has both an inset and a
+   software keyboard. (Set by trackKeyboard — and it is driven by the SUM of the
+   two keyboard signals for exactly this reason: in the resizing shell the lift
+   is correctly zero, so a class gated on the lift never fired and this padding
+   never came off in the one shell that ships.) */
+body.postbar-kb .postbar { padding-bottom: 0.5rem; }
+/* The reserve at the foot of the page, so the last comment isn't sitting under
+   the bar. ONE number, here — the phone block restates it only to add the
+   safe-area inset, which is the single thing that actually differs (the bar is
+   the same height at both widths). A thread whose last comment stops exactly at
+   the bar reads as a thread that got cut off, so this is the bar's own height
+   plus reading room rather than the tightest figure that clears it. */
+body.postbar-live main { padding-bottom: 6.5rem; }
+/* The bar's own material, on a pseudo-element for the reason .topbar's is: the
+   glass has to stop at the bar's edges while the form inside it stays a plain
+   flex row, and a fill on the element itself would sit under the safe-area pad
+   as one enormous rounded slab on a phone. */
+.postbar-form {
+  /* The bar's resting geometry, named once so the radius and the avatar's own
+     nudge can be derived from it rather than measured off a screenshot. */
+  --postbar-pad: 0.4rem;
+  --postbar-disc: 44px;
+  /* Stated in px, not em: the field pins its own font-size at 16 (the iOS
+     auto-zoom floor) and does not inherit the form's, so an em here would
+     resolve against the wrong one. 16 × 1.4. */
+  --postbar-line: 22.4px;
+  /* THE FIELD IS EXACTLY AS TALL AS THE DISC AT ONE LINE, and that is what keeps
+     the avatar honest. The row is `align-items: flex-end`, so whichever child is
+     tallest sets the height and the shorter ones drop to the bottom of it — at
+     rest that was the 44px disc, which pushed the 38px field down 6px and left
+     the avatar (aligned to the TOP, where the first line normally is) sitting 6px
+     above the line it is supposed to be introducing. Sized this way there is no
+     taller child at rest: the field starts at the form's content top in BOTH
+     states, so one fixed nudge centres the face on the first line whether the
+     comment is one line or four. */
+  --postbar-field-pad: calc((var(--postbar-disc) - var(--postbar-line)) / 2);
+  /* THE FACE AND THE WORDS ARE CENTRED ON DIFFERENT THINGS, and one formula
+     cannot do both. A line BOX and the ink inside it do not share a midpoint:
+     Oxygen reports a full-em ascent, so in this 22.4px line the baseline sits at
+     19.2 — 19.2px of room above it and 3.2 below. Centre a solid 26px disc on
+     the box's own midpoint (11.2) and it lands 2.2px above the centre of the
+     type beside it, which is what reads as the avatar sitting high even though
+     every number says it is centred.
+     So the disc gets its own datum, and the value is BRACKETED rather than
+     derived — which is the honest thing to say about it, because both of the
+     candidate data are defensible and neither was right. Centred on the line
+     box (offset 0) the face reads high. Centred on the middle of the ink,
+     cap-top to baseline — 13.39 against the box's 11.2, measured against the
+     real face at the real size — it reads low, because that datum ignores the
+     descenders a real comment has and this placeholder happens not to. The
+     perceived centre is between the two, so this is their midpoint.
+
+     It is an OPTICAL constant and does not follow from the geometry above. It is
+     the one number to move if the face ever reads high or low again, and moving
+     it is the correct fix — don't go re-deriving the sums it rides on. */
+  --postbar-face-y: 1.1px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;            /* the send disc hugs the last line as the box grows */
+  gap: 0.6rem;
+  max-width: var(--feed-width);
+  margin-inline: auto;
+  padding: var(--postbar-pad) 0.5rem var(--postbar-pad) 0.7rem;
+  /* A PILL AT REST, AND THE SAME CORNER AT EVERY HEIGHT — not `--radius-pill`.
+     999px on a growing box is a stadium: at one line it is the nav pill it
+     stands in for, and at five it is a lozenge with 68px semicircles on its ends
+     and the avatar and the send disc floating inside the curve. The object
+     changes character as you type, which is the opposite of what a composer
+     should do while you are using it.
+
+     So the corner is FIXED, at the value that draws that same pill at rest. It
+     is written as the disc's own radius plus the padding around it, which is the
+     concentric-corners rule (a child reaching its parent's corner takes the
+     parent's radius minus the padding between them) — and it lands on exactly
+     half the resting height, because the 44px disc is what sets that height.
+     Two derivations, one number, so neither can drift from the other. +1px is
+     --glass-edge's width, since border-radius is measured on the border box.
+
+     The left pad is a touch deeper than the right to keep the avatar off the
+     curve; the send disc is round already and sits into its own end. */
+  border-radius: calc(var(--postbar-disc) / 2 + var(--postbar-pad) + 1px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: var(--glass-edge);
+  box-shadow: var(--glass-rim), var(--glass-lift);
+  /* Same layer pin as .nav-pill, for the same WebKit reason: a fixed element
+     with a backdrop-filter can lose its layer after a big DOM swap and go
+     invisible until something repaints it. */
+  transform: translateZ(0);
+}
+/* THE FACE IS THE AVATAR AND THE WAY OUT, one control doing both.
+
+   At rest it is a portrait and nothing more — whose thread is this — and it is
+   `disabled`, so it cannot be tapped at all. With the caret in the field it
+   turns into a close mark, and one tap empties the bar and drops the keyboard.
+   That is the escape this bar spent three releases without: on the web a tap on
+   the page blurs the field for free, but "put it away" and "I have changed my
+   mind" are not the same act, and neither of them was ever one tap.
+
+   LEADING, not trailing, and that is the whole reason it can be here at all.
+   The far end of this pill means COMMIT — it is the send disc, in the primary
+   act's own band — so a dismissal cannot sit beside it without the two reading
+   as a pair of equals. The near end holds the identity, which is the thing you
+   stop needing the moment you start typing.
+
+   The 26px is the avatar's, and it stays 26px: the touch target is a
+   pseudo-element reaching out to 44 in every direction, so the mark is the size
+   the thread's own rows draw it and the finger still gets what the HIG asks
+   for. Geometry the native bar measures off this box is therefore unchanged. */
+.postbar-face {
+  position: relative;
+  display: grid;
+  width: 26px;                      /* the thread's own avatar size, so the bar sits on its axis */
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  flex-shrink: 0;
+  /* TOP, not bottom. The row is flex-end so the send disc hugs the last line as
+     the field grows — right for the disc, wrong for the face: a six-line comment
+     left it stranded at the bottom of the bar beside the END of a sentence it is
+     supposed to be introducing. It sits on the FIRST line, which is where the
+     thread's own rows put it and where the eye reads "this is who is talking".
+
+     Down to the ink's middle, not the line box's: the field's own top padding,
+     plus half a line, plus the optical offset between those two (see
+     --postbar-face-y), less half an avatar. */
+  align-self: flex-start;
+  margin-top: calc(var(--postbar-field-pad) + var(--postbar-line) / 2
+                   + var(--postbar-face-y) - 13px);
+}
+/* 44 of target under 26 of mark, without moving the mark. */
+.postbar-face::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; }
+/* The two marks share one grid cell and cross-fade with a quarter turn, the
+   same morph the toolbar's search disc uses (.msb-ico) — which is what makes
+   this read as one thing becoming another rather than as two things swapping. */
+.postbar-face > * {
+  grid-area: 1 / 1;
+  transition: opacity var(--dur-quick) var(--ease-soft),
+              transform var(--dur-quick) var(--ease);
+}
+.postbar-face-x {
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: rotate(-90deg);
+}
+.postbar-face-ico { width: 19px; height: 19px; }
+.postbar-form.is-typing .postbar-avatar { opacity: 0; transform: rotate(90deg); }
+.postbar-form.is-typing .postbar-face-x { opacity: 1; transform: rotate(0); }
+@media (hover: hover) { .postbar-form.is-typing .postbar-face:hover { color: var(--text); } }
+.postbar-form.is-typing .postbar-face:active { color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .postbar-face > * { transition: opacity var(--dur-quick) ease; }
+}
+.postbar-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 0.86rem;
+  border-radius: 50%;
+}
+/* THE VERTICAL PADDING LIVES HERE, NOT ON THE TEXTAREA, and that is what stops
+   the cap slicing a line in half. A scroll container clips at its PADDING box,
+   not its content box, so a textarea with `padding-block` and a `max-height`
+   paints its overflowing next line INTO the bottom padding — four clean lines
+   and then the top half of a fifth, sitting there permanently at scrollTop 0.
+   On a non-scrolling wrapper the same measurement clips exactly where the text
+   ends. The field's height is unchanged either way, so the avatar's nudge and
+   the disc-matching sum above still hold. */
+.postbar-field {
   flex: 1;
   min-width: 0;
+  padding-block: var(--postbar-field-pad);
+}
+/* NEVER GLASS ON GLASS: the field sits on a surface that already blurs, so it
+   takes a flat fill and no sample of its own. */
+/* The two fields this bar can hold: the comment textarea, and the find bar's
+   single-line input (mountFindBar). Same box, same 16px floor, same nothing —
+   everything BELOW this rule is about growing, which is the textarea's alone.
+   appearance:none is for the input's sake: a text input arrives with a UA
+   border and a rounded corner on iOS that `border: none` alone doesn't take. */
+.postbar-form textarea,
+.postbar-form .postbar-input {
+  display: block;
+  width: 100%;
   font: inherit;
   font-size: 16px;          /* keep ≥16px so iOS doesn't auto-zoom on focus */
   line-height: 1.4;
   color: var(--text);
   background: none;
   border: none;
-  border-bottom: 1px solid var(--rule);
-  padding: 0.28rem 0;
+  -webkit-appearance: none;
+  appearance: none;
+  /* NO vertical padding here — it is the wrapper's (see .postbar-field above),
+     and the split is what stops the cap slicing a line. Horizontal only. */
+  padding: 0 0.2rem;
+}
+.postbar-form textarea {
   /* One line to start; JS grows the height to fit, so a long comment wraps into
-     view instead of scrolling off the end. No manual drag handle. */
+     view instead of scrolling off the end. Capped at FOUR lines — past that the
+     bar starts eating the thread it belongs to, and a composer taller than the
+     conversation it is joining has stopped being chrome. Beyond the cap the
+     field scrolls. No manual drag handle. */
   resize: none;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: calc(var(--postbar-line) * 4);
+  /* No scrollbar. It is 3px of chrome inside a 44px-tall field, it sat between
+     the last word and the send disc, and the field is four lines deep — there is
+     nothing here a scroll position needs to report. Firefox spells it the other
+     way, hence both. */
+  scrollbar-width: none;
   /* Ease the grow/shrink as lines wrap in and out, so the box breathes rather
      than jumping a line at a time. */
-  transition: border-color var(--dur-micro), height var(--dur-quick) var(--ease);
+  transition: height var(--dur-quick) var(--ease);
 }
 @media (prefers-reduced-motion: reduce) {
-  .comment-form textarea { transition: border-color var(--dur-micro); }
+  .postbar-form textarea { transition: none; }
 }
-.comment-form textarea::placeholder { color: var(--muted); opacity: 0.7; }
-.comment-form textarea:focus { outline: none; border-color: var(--accent); }
-.comment-form button {
-  position: relative;
+.postbar-form textarea::-webkit-scrollbar { width: 0; height: 0; }
+.postbar-form textarea::placeholder,
+.postbar-form .postbar-input::placeholder { color: var(--muted); opacity: 0.75; }
+/* No focus ring on the field. The bar is the only control on its layer and the
+   keyboard standing under it is the whole state indicator; a 2px --accent ring
+   here is the same white-on-dark mark the search disc used to draw. */
+.postbar-form textarea:focus,
+.postbar-form .postbar-input:focus { outline: none; }
+
+/* ── The find bar's two ends ───────────────────────────────────────────────
+   Everything between them is the comment bar unchanged (see mountFindBar): same
+   pill, same glass, same keyboard lift, same swap of the nav on a phone.
+
+   The magnifier takes the AVATAR'S OWN BOX AND DATUM — the same 26px square and
+   the same optical nudge onto the first line's ink — so the two bars sit on one
+   axis and a reader moving between a post page and a list sees one object doing
+   two jobs rather than two objects. */
+.postbar-glyph {
   flex-shrink: 0;
-  color: var(--accent);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--muted);
+  align-self: flex-start;
+  margin-top: calc(var(--postbar-field-pad) + var(--postbar-line) / 2
+                   + var(--postbar-face-y) - 13px);
+}
+.postbar-glyph-ico { width: 19px; height: 19px; }
+/* The clear is the send disc's GEOMETRY (44px, the disc is the target, and
+   `.is-idle` takes it off an empty field) and none of its material. The brand
+   band means "commit, or go and commit"; emptying a field is a dismissal, so
+   this is a quiet glyph on the bar's own glass. Never a second sample: it sits
+   on a surface that already blurs. */
+.postbar-clear {
   background: none;
   border: none;
-  font-weight: 700;
-  font-size: 0.88rem;
-  padding: 0.28rem 0.1rem;
-  transition: opacity var(--dur-micro);
+  color: var(--muted);
 }
-/* Stretch the tap target to the 44px HIG minimum without bloating the flat row:
-   an invisible overlay centred on the small label carries the hit area. */
-.comment-form button::after {
-  content: '';
+.postbar-clear-ico { width: 19px; height: 19px; }
+@media (hover: hover) { .postbar-clear:hover { color: var(--text); } }
+.postbar-clear:active { color: var(--text); }
+
+/* THE SEND DISC — the FAB's job on this route, so it wears the FAB's material
+   in the same corner of the same screen. It is a member of the primary-act set
+   (see the .publish-fill.is-solid block down near .composer-post, where the
+   band, the edge, the rim, the float and --pill-alpha are declared ONCE for all
+   of them), so nothing about the material is restated here — only geometry, the
+   ramp, and the way it isn't there.
+
+   Thinned, not opaque. The FAB is the set's one opaque member because it floats
+   over live scrolling content; this disc floats over the bar's own glass, which
+   is the .toolbar-cta case exactly.
+
+   44px, and the disc IS the target — the toolbar's settlement for the toolbar's
+   reason: a bar full of the page's own controls is drawn at the size it is
+   touched, so there is no invisible ::after to keep in step. */
+.postbar-send {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  /* .publish-fill declares a `transition` of its own EARLIER in this file, so
+     this replaces it wholesale — which means `color` has to be restated here or
+     the ink stops ramping with everything else. */
+  transition: color var(--dur-micro) var(--ease),
+              opacity var(--dur-quick) var(--ease),
+              visibility var(--dur-quick),
+              transform var(--dur-quick) var(--ease);
+}
+.postbar-send-ico { width: 22px; height: 22px; }
+/* Idle: in the DOM, out of the tab order and the a11y tree, still a transition
+   target — the profile editor's Save check exactly (see .toolbar-commit--idle).
+   An empty bar has nothing to send, and a permanently lit gradient disc that
+   does nothing is the brand band spent on a control with no act behind it.
+   Later in the file than `.publish-fill:disabled`, which it has to beat: the
+   disc is disabled while idle AND while a submit is in flight, and only the
+   second of those wants the dimmed-but-present look. */
+.postbar-send.is-idle {
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.7);
+}
+/* The scale is the only part that's motion; the fade stays, because appearing
+   instantly is the pop this exists to avoid. Same waiver .toolbar-commit takes. */
+@media (prefers-reduced-motion: reduce) {
+  .postbar-send {
+    transition: opacity var(--dur-quick) linear, visibility var(--dur-quick);
+  }
+  .postbar-send.is-idle { transform: none; }
+}
+
+/* The mentions popover opens UPWARD out of the bar. wireMentions drops it after
+   the form, so it is a sibling of the form and a child of the bar — and "below
+   the field" is the one place it cannot go here, because the field is already at
+   the foot of the screen. Pinned to the bar (its own fixed box is the containing
+   block), inset to the same padding and capped to the same column, so the list
+   lands over the form it belongs to rather than over the whole window. */
+.postbar .mention-list {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 100%;
-  height: 100%;
-  min-width: 44px;
-  min-height: 44px;
+  left: 2rem;
+  right: 2rem;
+  bottom: 100%;
+  max-width: var(--feed-width);
+  margin: 0 auto 0.5rem;
 }
-/* Empty field → the Post button is truly disabled (dimmed and inert), so it
-   never looks tappable while doing nothing. JS flips `disabled` on input. */
-.comment-form button:disabled { opacity: 0.5; cursor: default; }
 
 /* ── @mentions ─────────────────────────────────────────────────────────────
    A tag renders as the friend's display name, bold in the running text (not
@@ -3087,25 +3473,20 @@ main {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, #fff 72%, transparent),
               0 0 0 2px var(--text);
 }
-.swatch-tick {
-  /* 24 in a 56px disc, up from 20 in a 44. svgIcon authors on a 24x24 grid, so
-     this is the mark at 1:1 with the grid it was drawn on rather than scaled
-     to 0.83 with its strokes landing off-pixel — the same argument that took
-     the toolbar glyph to 24. */
-  width: 24px; height: 24px;
-  /* White with a shadow, the one tick that reads on nine colours AND a
-     photograph. A --on-type near-black is the house answer for a pastel fill
-     and is what the real buttons use, but this row also holds the Photo disc,
-     which has no fill at all — a sampled photograph can be any luminance, so
-     the tick has to bring its own contrast rather than borrow the disc's. The
-     shadow is what makes white work over the light end of the bands. */
-  color: #fff;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.55));
-  opacity: 0;
-  transition: opacity var(--dur-micro);
-}
-.swatch-tick svg { width: 100%; height: 100%; }
-.swatch.is-on .swatch-tick { opacity: 1; }
+/* And the rest of the set stands back, which is the same sentence the filter
+   dial's rows say (see .bar-menu-item[role="menuitemradio"]). The tick that
+   used to sit in the live disc has gone with the dial's checkmark.
+
+   IT FADES LESS THAN A MENU ROW DOES — 0.62 against 0.48 — because these rows
+   are the colours themselves. A menu row's job is to be read and a faded label
+   is still read; a swatch's job is to be JUDGED against eleven others, and past
+   about a third off, Ruby and Coral stop being distinguishable at 56px, which
+   makes the fade a tax on the one decision this sheet exists for.
+
+   The ring on .is-on stays. A fade can say "not these" about the eleven; it
+   cannot say "this one" about a disc that may be a photograph of anything,
+   which is exactly the case those two rings were drawn for. */
+.swatch:not(.is-on) { opacity: 0.62; }
 .swatch-label {
   font-size: 0.66rem;
   letter-spacing: 0.01em;
@@ -5196,28 +5577,120 @@ button.poll-option:disabled { cursor: default; }
 .card--photo .card-solometa { padding-inline: var(--inset); margin-bottom: 1.15rem; }
 
 /* ── Friends directory — a quiet list of rows linking out to each profile ────
-   These rows only appear inside modals now (someone's circle, the composer's
-   audience picker). Discover, which used to render them inline with a live
-   search over them, is a grid of .ptile instead — so nothing filters this list
-   any more, and the [hidden] machinery that went with it is gone. */
-.friends-list { display: flex; flex-direction: column; }
+   The one caller is #/friends/<username> (renderFriends), and it is a PAGE:
+   glass is the layer that FLOATS ABOVE content and a directory of people is
+   content, so these are flat editorial rows and the only glass on that screen
+   is the find bar at the foot of it. They spent two releases inside a modal,
+   which clipped a long circle at both ends — see renderFriends' own note.
+
+   The rows FILTER again, which the [hidden] machinery here was deleted for the
+   last time round; the search that drives it is the bar, not a field in the
+   page. */
+.friends-list {
+  display: flex;
+  flex-direction: column;
+  /* The list opens with a rule of its own — the boundary comes from the content,
+     not from a header divider. On the CONTAINER rather than on :first-child, and
+     the row rule below is on every row rather than :not(:last-child), because
+     rows go in and out under a search: a border that names a structural position
+     lands on whichever row the filter happens to have hidden. */
+  border-top: 1px solid var(--rule);
+}
 .friend {
+  position: relative;                 /* the stretched link's containing block */
   display: flex;
   align-items: center;
   gap: 0.85rem;
   padding: 1.1rem var(--inset);
+  border-bottom: 1px solid var(--rule);
   transition: background-color var(--dur-micro);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
 }
-/* The list opens with a top rule of its own — the boundary comes from the
-   content, not from a header divider. */
-.friend:first-child { border-top: 1px solid var(--rule); }
-.friend:not(:last-child) { border-bottom: 1px solid var(--rule); }
+/* A filtered-out row is GONE, not dimmed, and `hidden` has to beat the `display:
+   flex` above it to do that. */
+.friend[hidden] { display: none; }
+/* And the list itself when a search empties it, for the same reason and one
+   more: the opening rule is the container's, so a list left standing with every
+   row hidden draws a hairline under the title with nothing under it. */
+.friends-list[hidden] { display: none; }
 @media (hover: hover) { .friend:hover { background: var(--surface); } }
 .friend .avatar { width: 56px; height: 56px; font-size: 1.8rem; }
+/* THE WHOLE ROW IS THE LINK, via a pseudo-element stretched over it — which is
+   what lets the trailing slot be a tie one moment and a chevron the next
+   without the anchor having to contain either. The slot is raised over that
+   sheet so its button still takes the tap; everything else in the row is under
+   it and opens the profile. */
+.friend-open {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
+}
+.friend-open::after { content: ''; position: absolute; inset: 0; }
+/* The slot sits ABOVE the stretched link (both positioned, later in the DOM),
+   so anything in it that isn't the tie would swallow a tap and do nothing with
+   it — which is what the chevron did, killing the row's link along the one edge
+   a reader is most likely to aim at. Only the button wants the events; the
+   chevron is decoration and hands its taps down to the row. */
+.friend-slot { position: relative; display: flex; flex-shrink: 0; pointer-events: none; }
+/* The tie, at row scale. NOT .friend-btn's accent fill: on a profile that
+   button is the one primary act on the page and the fill says so, and a column
+   of forty of them says it about nothing. Ink on a hairline for a live tie,
+   muted for a committed one (Requested / Following, the two that undo on tap) —
+   the same split .friend-btn draws with aria-pressed, minus the fill.
+
+   44px, and the pill IS the target: a row's own control is drawn at the size it
+   is touched, which is the settlement --toolbar-btn already took, so there is no
+   invisible ::after here to keep in step with the paint. */
+.friend-tie {
+  pointer-events: auto;             /* the one thing in the slot that wants them */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--rule);
+  background: none;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1;
+  white-space: nowrap;
+  transition: color var(--dur-micro), background-color var(--dur-micro),
+              border-color var(--dur-micro), opacity var(--dur-micro);
+}
+.friend-tie[aria-pressed="true"] { color: var(--muted); font-weight: 400; }
+@media (hover: hover) {
+  .friend-tie:hover { background: var(--surface); border-color: var(--muted); }
+}
+/* Disabled means a write is in flight, and it always hands itself back (see the
+   delegated handler in renderFriends) — so this is a wait, not a dead end. */
+.friend-tie:disabled { opacity: 0.5; cursor: default; }
 .friend-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
 .friend-name { font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--text); }
 .friend-user { font-size: 0.82rem; color: var(--muted); }
+/* Discover's list view only (see friendRowHtml's opts): the portrait tile's one
+   line of prose, so switching format doesn't lose what the gallery was telling
+   you about a stranger. Clamped to two lines — the row is a scanning object and
+   a paragraph in it turns the column back into a feed — and it takes a real
+   top margin because .friend-text's 0.1rem gap is set for a name sitting on its
+   own handle, which is one thing, not two.
+   No rule for the LOCK: the row reuses .ptile-lock exactly as ptileEl draws it,
+   sized in rem against a name whose 1rem is close enough to the tile's that the
+   mark lands the same way. It needs no .name-fence wrapper here — a row is not
+   96px wide, the name has a whole line, and there is nothing to orphan it onto. */
+.friend-bio {
+  margin-top: 0.25rem;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .friend-go {
   flex-shrink: 0;
   color: var(--muted);
@@ -5653,7 +6126,8 @@ button.poll-option:disabled { cursor: default; }
 .friends-share-copy.publish-fill.is-solid,
 .toolbar-commit.publish-fill.is-solid,
 .toolbar-cta.publish-fill.is-solid,
-.daily-answer.publish-fill.is-solid {
+.daily-answer.publish-fill.is-solid,
+.postbar-send.publish-fill.is-solid {
   /* THE BAND lives in tokens.css now (--pill-band) and is no longer declared
      here, which is a change of meaning and not just of address.
 
@@ -5681,7 +6155,8 @@ button.poll-option:disabled { cursor: default; }
 .friends-share-copy.publish-fill.is-solid::before,
 .toolbar-commit.publish-fill.is-solid::before,
 .toolbar-cta.publish-fill.is-solid::before,
-.daily-answer.publish-fill.is-solid::before {
+.daily-answer.publish-fill.is-solid::before,
+.postbar-send.publish-fill.is-solid::before {
   /* The tint itself. Translucency lives HERE rather than in the band, because
      --pill-band may be a gradient this stylesheet never sees (paintBrandBand
      writes the accent one at runtime) and there is no way to reach into a
@@ -6416,27 +6891,12 @@ button.poll-option:disabled { cursor: default; }
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
 .crop--free { aspect-ratio: auto; cursor: default; touch-action: auto; }
 .crop--free img { position: static; width: 100%; height: auto; max-width: 100%; }
-/* The friends-list modal: a scrollable directory inside the frosted card. Rows
-   reuse the .friend geometry but sit edge-to-edge in the card (negative inset
-   cancels the card padding) with a lighter vertical rhythm. */
+/* A list inside a frosted card. Someone's circle used to be drawn this way and
+   is a page now (renderFriends) — for the material, and because a card with no
+   max-height clipped a long list at both ends. The composer's audience picker
+   is the one caller left, and it is short by construction: it lists your own
+   circle, with a mode row above it. */
 .modal-card--list { max-width: 420px; }
-/* Edge-to-edge scroll area inside the card (negative inset cancels the padding);
-   a soft top/bottom mask fades rows into the frost as they scroll under the
-   title and Close row, matching the read-more fade elsewhere. */
-.friends-list--modal {
-  max-height: min(60vh, 26rem);
-  overflow-y: auto;
-  margin: 0 -1.6rem;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
-}
-.friends-list--modal .friend { padding: 0.85rem 1.6rem; }
-/* The modal's top-mask already fades the first row into the frost, so it doesn't
-   need the flat directory's top rule (see .friend:first-child above) — a hard
-   line there would fight the fade. */
-.friends-list--modal .friend:first-child { border-top: none; }
-.friends-list--modal .friend .avatar { width: 44px; height: 44px; font-size: 1.4rem; }
-
 /* A modal's commit row: Cancel beside Save, inside the card.
    `.form-actions` rode alongside every selector here — the same row on the
    profile editor page, which is a form with the same two answers and no card
@@ -6573,7 +7033,12 @@ button.poll-option:disabled { cursor: default; }
      scroll down, and .topbar--bare has not brought it in yet at the top. */
   .topbar::before { content: ''; }
   /* Scrolling down tucks the bar away (see the scroll watcher in app.js);
-     scrolling up brings it straight back. */
+     scrolling up brings it straight back. A SLIDE on the web and a FADE in the
+     app, which is the one place those two answers legitimately differ: see the
+     gate at the end of this file. Here the bar's material is `.topbar::before`,
+     a backdrop-filter, and fading a bar that carries one means recompositing
+     the blur every frame AND racing the material's own fade-in — the app has
+     neither problem because over there the material is not CSS at all. */
   .topbar.topbar--hidden { transform: translateY(-100%); }
   @media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
 
@@ -6756,6 +7221,36 @@ button.poll-option:disabled { cursor: default; }
   }
   .nav--compose .nav-pill {
     transform: translateX(calc((var(--fab-size) + var(--nav-gap)) / 2)) translateZ(0);
+  }
+
+  /* ── The comment bar takes the nav's place ────────────────────────────────
+     ON A POST'S PAGE THE BOTTOM OF THE SCREEN IS THE COMPOSER. The four
+     destinations and the + are gone while one is mounted — not dimmed, not slid
+     behind it: gone, so the bar is the only thing down here and the whole of the
+     bottom edge belongs to the one act this page is for. Getting back out is the
+     toolbar's back chevron, which is where a pushed page's exit already is.
+
+     `display: none`, not opacity: the nav is a fixed row spanning the screen and
+     a hidden-but-present copy would eat the bar's taps along its whole width.
+     Only on phones — on desktop the nav is a sidebar off to the left, nowhere
+     near the bar, and taking somebody's whole navigation away to read one post
+     would be a phone answer applied where the phone's problem doesn't exist. */
+  body.postbar-live .nav { display: none; }
+
+  .postbar {
+    left: 0;
+    padding: 0.5rem 0.9rem calc(0.5rem + env(safe-area-inset-bottom));
+  }
+  /* The keyboard's answer to that inset is `body.postbar-kb` up in the base
+     block, at (0,2,0) — it beats this shorthand on specificity from anywhere in
+     the file, so it does not need restating here. */
+  .postbar .mention-list { left: 0.9rem; right: 0.9rem; }
+
+  /* The desktop figure plus the inset, which is the only part that differs —
+     `main`'s own 96px here was measured for the nav pill and the FAB, and the
+     bar is a different object. */
+  body.postbar-live main {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
   }
 
   /* ── The + button's post-type speed dial ──────────────────────────────────
@@ -7430,4 +7925,240 @@ button.poll-option:disabled { cursor: default; }
   .about-body, .about-back { padding-inline: 0; }   /* already inset by .view here */
   .about-back { margin-top: 1.6rem; }
   .about-head { font-size: 1.4rem; }
+}
+
+/* ── Native chrome (1.4) ─────────────────────────────────────────────────────
+   In the App Store build on iOS 26 the four destinations and the + are drawn by
+   UIKit in the system's Liquid Glass (see js/app.js's NativeChrome and
+   docs/native-chrome.md). This block is the web's half of that hand-off: the CSS
+   bars are HIDDEN, not deleted, and the page stops reserving space for chrome it
+   no longer draws.
+
+   THE GATE IS AN ATTRIBUTE ON <html>, and app.js does not set it until the
+   plugin has answered a call — so the web, an installed PWA, a phone below
+   iOS 26 and a build where the plugin failed to compile in all fall through this
+   block untouched and navigate exactly as 1.3 did.
+
+   LAST IN THE FILE ON PURPOSE. `html[data-chrome="native"] main` and
+   `body.postbar-live main` in the mobile block carry the same specificity
+   ((0,1,2) either way), so which one wins is decided by source order and nothing
+   else — the same trap design.md records about the status-bar scrim, arriving
+   here from the other direction. Both overrides below restate every gate they
+   have to beat rather than relying on that ordering to hold; the placement is
+   the belt, the restatement is the braces. Anything added to this block obeys
+   the same rule. */
+html[data-chrome="native"] .nav { display: none; }
+
+/* Reserve what native measured, and nothing by hand. `--native-chrome-bottom` is
+   stamped on <html> from the plugin's own answer (window bottom to the top of
+   the glass, plus the clearance a feed's last card wants) and already contains
+   the safe-area inset, so there is no env() to add here. The fallback is the
+   figure the CSS bar reserves, for the frames between the gate going up and the
+   first measurement landing. */
+html[data-chrome="native"] main {
+  padding-bottom: var(--native-chrome-bottom, calc(96px + env(safe-area-inset-bottom)));
+}
+
+/* On a post's page the native bars are gone (setChrome) and the comment bar is
+   the only thing down here, so the reserve is the BAR's, not the chrome's — the
+   same figure the mobile block sets, restated through the native gate so it
+   cannot lose to the rule above on source order. */
+html[data-chrome="native"] body.postbar-live main {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+}
+
+/* ── The top bar's controls (1.4, stage 3) ───────────────────────────────────
+   The leading chevron and the trailing actions are drawn by UIKit now (see
+   TriaToolbar in the plugin, and NativeChrome's toolbar half in app.js). The
+   bar ITSELF stays: its material is the scroll edge effect, and its centred
+   title is measured against the page's own <h1> sliding under it — a webview
+   measurement — so both keep being the web's to draw. Only the buttons go.
+
+   VISIBILITY, NOT DISPLAY, and both halves of that are load-bearing. Hidden
+   visibility is out of the tab order and out of the accessibility tree, so
+   there is exactly one of each control for VoiceOver to find and it is the
+   native one; and the box keeps its space, which is what the bar needs — the
+   title's --toolbar-side reserve is a count of the controls that ARE there,
+   Discover's search shell is pinned by an arithmetic that starts from the
+   filter disc's width, and app.js measures these boxes to tell native where to
+   put the glass. Dropping them from flow would take all three away at once.
+
+   The controls are still the real ones underneath: a tap on the native glass
+   comes back through the bridge and clicks the element this rule is hiding, so
+   every handler the page wired up is still the only implementation of itself. */
+html[data-chrome="native"] .topbar .toolbar-btn,
+html[data-chrome="native"] .topbar .toolbar-cta { visibility: hidden; }
+
+/* AND THE TITLE, for a reason the controls never had.
+
+   This one was meant to stay. It is measured against the page's own <h1>
+   sliding under the bar, which is a webview fact, and the rule above is still
+   what decides whether it shows. But the native chrome is a layer over the
+   WHOLE web view, so once the bar's material went native there was a pane of
+   glass above the page's name, blurring it. No z-order fixes that: every web
+   pixel is under every native one. So the string and this box cross the bridge
+   and a UILabel wears them — the same arrangement as the controls, where the
+   web element stays the model and native only wears its face.
+
+   `visibility`, not `display`: the box still has to be measurable. titleSpec in
+   app.js reads this element's rect on every push, and max-width above is where
+   the clearance for the busier side's buttons is worked out. */
+html[data-chrome="native"] .topbar .toolbar-title { visibility: hidden; }
+
+/* THE BAR'S MATERIAL IS NATIVE IN THE APP, and this is where it stops being
+   CSS. `.topbar::before` is the scroll edge effect — a `--bg` gradient over a
+   `backdrop-filter` — and it was the last thing on this bar the web still drew
+   under the gate. Three reasons it had to go, and only the third is new:
+
+   1. It is half a bar. The controls are real glass and the material was web, so
+      "the header and the buttons don't match" was never a tuning problem: they
+      were two objects with two animations and no way to agree.
+   2. Fading a `backdrop-filter` recomposites the blur every frame, on the
+      most-scrolled surface in the app. That is the cost floor CLAUDE.md refuses
+      everywhere else.
+   3. And the two fades RACE. `.topbar--bare` comes off at the same moment
+      `.topbar--hidden` goes on, so one gesture starts the material fading in
+      and the bar fading out, nested, in opposite directions. That is what
+      "the opacity and the blur are competing" was, and no amount of tuning
+      fixes it while both halves are separate elements.
+
+   And the Swift copy of the gradient that first replaced it was not the fix
+   either: a hand-rolled `--bg` wash under `.statusbar-scrim`'s hand-rolled
+   `--bg` wash is two paper scrims stacked over a photograph, which reads as
+   fog. The system's own scroll edge effect was tried next and cannot be reached
+   from a Capacitor webview at all (TriaToolbarMaterial has the paragraph, and
+   it is worth reading before anyone tries it a third time). What draws here now
+   is LIQUID GLASS: one `UIGlassEffect` pane the height of the bar, the same
+   material the discs riding on it are made of. The website keeps
+   `.topbar::before` exactly as it always was.
+
+   AND THE ELEMENT THIS RULE EMPTIES IS NOW EMPTY. Material gone, controls
+   hidden, title hidden: in the app `.topbar` draws nothing at all and only
+   exists to be measured. The two rules below are what is left of its
+   hide-on-scroll, and they matter for one reason only — an invisible box that
+   still hit-tests would eat taps meant for the page. The visible half of that
+   gesture is native now, and it is a fade in step, element by element
+   (TriaToolbar.setShown), against a material that does not leave with them
+   (TriaToolbar.frame(forShown:)). Off-app none of this applies and the bar
+   still slides out by `translateY(-100%)`, because a bar carrying a
+   backdrop-filter cannot afford to fade. */
+html[data-chrome="native"] .topbar::before { content: none; }
+
+/* AND THE STATUS BAR SCRIM GOES WITH IT, in the app only.
+
+   Read the long note by `.statusbar-scrim` for what it is: a hand-painted band
+   of `--bg` over `env(safe-area-inset-top)`, at z-index 102 so it sits above
+   everything, keeping the clock legible where the bar had tucked away and left
+   bare content under the glyphs. Every word of that is still true on the web
+   and it stays there.
+
+   In the app it was a second wash over the top of the bar's own, and it was the
+   one that did NOT recede: it goes to full strength exactly when the bar hides,
+   so the state where the design wants less chrome was the state carrying the
+   most opaque paper. Two of them over a photograph is what "looks like
+   dogshit" was.
+
+   Its job is done by the material now, which collapses to this exact strip
+   when the bar tucks away instead of leaving with it — glass rather than
+   paint, one object rather than two, and no `env()` arithmetic restated in a
+   second place. See `frame(forShown:)`. */
+html[data-chrome="native"] .statusbar-scrim { display: none; }
+html[data-chrome="native"] .topbar {
+  transition: opacity var(--dur-move) var(--ease);
+}
+html[data-chrome="native"] .topbar.topbar--hidden {
+  transform: none;
+  opacity: 0;
+  /* A bar at zero opacity still hit-tests, and the only thing left on this one
+     that can take a tap is the web title's box. UIKit needs no equivalent: it
+     declines to hit-test a view at alpha 0 by itself. */
+  pointer-events: none;
+}
+
+/* DISCOVER'S SEARCH GOES ALL THE WAY OVER, disc AND bar, and that is a change
+   of mind from the way stage 3 shipped it.
+
+   It used to be split. At rest the glass is the shell (.toolbar-search-btn is
+   deliberately chromeless — the disc you see IS the shell), so the shell gave
+   up its dress and native drew the disc; but OPEN, the shell has grown into a
+   search bar with the X riding ON it, and a glass disc of ours over a glass
+   shell of theirs is the one stack "never glass on glass" has never allowed. So
+   the whole control went back to the web for that state.
+
+   That fixed the stack by giving up the material, on the single control in this
+   app whose entire gesture IS glass stretching: you tapped real Liquid Glass and
+   watched it turn into a CSS impression of itself. Native draws both halves now
+   (TriaSearchField), with the X a bare mark on the capsule's own surface the way
+   the find bar's clear is on the comment pill — which fixes the stack instead of
+   dodging it.
+
+   So the shell is hidden here in BOTH states, and it is still measured in both:
+   visibility, not display, for the reason at the top of this section. It is the
+   ruler native lays its capsule against.
+
+   AND ITS WIDTH TRANSITION IS OFF, which is the load-bearing half. The web grows
+   the shell over --dur-move; native cannot follow that a frame at a time without
+   a resize per rAF and a stutter to show for it. With the transition off, the
+   box read on the frame the class flips is already the FINAL one, so app.js can
+   send the shut box and the open box together and let UIKit animate between them
+   on its own clock. Same argument as the .msb-ico rule below, and the same fix. */
+html[data-chrome="native"] .toolbar-search-shell {
+  visibility: hidden;
+  transition: none;
+}
+
+/* AND THE MORPH IS OFF ENTIRELY, for the shell's reason. The magnifier and the
+   X cross-fade over 0.24s on the web, and that fade is what makes the disc read
+   as one control turning into another — but this button is hidden in both
+   states now, so the whole quarter second is a mark nobody can see, and app.js
+   measures it on the very next frame to decide which glyph native should draw
+   (liveGlyph picks whichever mark is actually showing). It was reading a fade
+   that had barely started, so leaving search left an X on the native disc until
+   the next thing to touch the bar came along. Off, the class flip lands whole in
+   one style recalc and the frame after it is the truth.
+
+   The open capsule's X does not come through liveGlyph at all — searchSpec
+   names `.msb-ico--close` directly, because at that moment the mark is on a
+   control app.js has already stopped sending. */
+html[data-chrome="native"] .msb-ico { transition: none; }
+
+/* ── The comment bar (1.4) ───────────────────────────────────────────────────
+   A post page's bottom chrome is drawn by UIKit as well now (TriaPostBar in the
+   plugin, NativeChrome's postbar half in app.js) — and unlike the tab bar and
+   the toolbar, this one is not a face over a web control. It holds a CARET. A
+   hidden field cannot be focused, so there is nothing to click through to; and
+   the keyboard an iOS webview raises for a web field is positioned against the
+   webview, while the whole job of this bar is to sit on top of the keys. So the
+   field over there is real, and the reader types into it.
+
+   THIS FORM STAYS, HIDDEN, AND IT IS STILL THE MODEL. Every native keystroke is
+   written back into the textarea, which fires its own `input` — so the mentions
+   picker, the send disc's idle state, autoGrow, the 300 cap and the submit are
+   the code that already shipped, running unchanged. VISIBILITY, not display, for
+   the toolbar's three reasons exactly: out of the tab order and the a11y tree so
+   there is one of each control for VoiceOver to find, and the box keeps its
+   space, which is what app.js measures to tell native where the face, the text
+   and the disc go.
+
+   The FIND bar is deliberately untouched. It is the same pill doing a different
+   job — a magnifier, one line, a clear — with no mention picker, no growth and
+   no send, so there is nothing here it would gain. app.js doesn't send it
+   either (see pushPostBar's selector), and the two halves have to agree. */
+html[data-chrome="native"] .postbar .postbar-form:not(.postbar-form--find) {
+  visibility: hidden;
+}
+
+/* The mentions popover opens upward out of a bar the web is no longer drawing,
+   so "above the form" has to become "above the glass". --native-postbar-lift is
+   the window bottom to the top of the native pill, measured over there and
+   stamped on <html> from the plugin's own answer — which is the only figure that
+   is right while a keyboard is animating under it. Still `position: absolute`
+   inside .postbar, whose padding box bottom IS the window bottom, so the left,
+   the right and the column cap all still come from the two rules above. The
+   0.5rem gap is the list's own margin, as it always was.
+
+   The fallback is the resting bar's own height, for the frames between mounting
+   and the first measurement landing. */
+html[data-chrome="native"] .postbar .mention-list {
+  bottom: var(--native-postbar-lift, 96px);
 }
