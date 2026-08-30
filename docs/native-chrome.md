@@ -47,6 +47,16 @@ that COMMITS, and the post card's ••• had already crossed the same line fo
 same reason (see "A menu the page asks for"). **The set is closed:** `PAGE_SEL`
 in app.js is a list of four selectors, not a rule about buttons.
 
+It has already been tested once and held. Editing a post moved onto the post's
+own page in 1.4, and the old inline form's Cancel/Save pair was exactly the shape
+this list exists for — a painted commit at the foot of a form that SCROLLS. It is
+not a fifth selector, because an editor's two answers belong on the BAR, where
+they hold still over a scrolling form and where they are native by the toolbar's
+own path: a back chevron that becomes an X once a word has changed, and a check
+that fades in to meet it, which is the arrangement the profile editor has worn
+since 1.3. A page with one act gets a page button; a page with an act and a way
+to abandon it gets a bar.
+
 A MENU IS NOT CONTENT, wherever the control that drops one happens to sit. That
 line moved once, deliberately: the post card's •••, the repost circle and the
 profile's colour ring are page controls and their menus are native now, for the

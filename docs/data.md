@@ -395,9 +395,43 @@ it either way.
   Retired with it: `openLikers`, `openGoing`, `openReadMore`, `collapsePanel` and
   its three wrappers, `wireCardCollapse`, `wireReadMore`, `onDoubleTap`,
   `scrollCardIntoView`, `scrollCardToTop`, and `wireNotif`. `spotlightPost` and
-  `parkCard` **stay**, with exactly one caller left: the edit flow, which is the
-  one case that genuinely IS a position in a column, because the editor lives on
-  the profile.
+  `parkCard` outlived that list by one release, on the argument that the edit
+  flow was still a position in a column — and in 1.4 the editor moved onto the
+  post's page too, so both are **gone** (see the next note).
+
+- **EDITING A POST HAPPENS ON THE POST'S PAGE**, `#/p/<id>?edit=1`
+  (`renderPostEdit`), reached from the ••• wherever the card is drawn. The route
+  is the point: an editor that is a real history entry is cancelled by the back
+  gesture like any other page, a reload lands back in it rather than nowhere, and
+  the post is edited where it lives.
+
+  It used to be an **inline form on your profile**, which took three pieces of
+  state to arrange: `pendingEditId` carried the id across the navigation from
+  whichever ••• was tapped, `editingId` told the profile column which one of its
+  cards to build as a form, and `spotlightPost` parked the window on that card so
+  you could see what you had asked for. None of that was about editing. It was
+  about addressing a post on the one surface that could only address a post by
+  its position, which stopped being the only surface in 1.3. All three are
+  retired, with `parkCard` and the router's empty-settle branch behind them.
+
+  **The two answers are the toolbar's**, exactly as the profile editor's are: a
+  back chevron that becomes an X once a word has changed, a check that fades in
+  to meet it, both read off one `dirty()` predicate so the bar can never offer a
+  save with nothing to save. That is also what keeps `PAGE_SEL` at four
+  selectors — the old Cancel/Save pair sat at the foot of a *scrolling* form,
+  which is the shape that needs a native page button, and the honest fix was that
+  an editor's answers belong on the bar (see
+  [native-chrome.md](native-chrome.md)). The fields themselves are unchanged and
+  still mirror the composer's (`editFieldsFor`), the form wears `.composer` to
+  say so, and **Delete is still one row down in the post's •••**, where it can't
+  be reached by aiming at Save.
+
+  `submitEdit` takes the editor's own way out as a callback, so a save leaves
+  exactly the way a cancel does (popping the pushed entry where there is one).
+  And `refreshPostViews` learned the third surface: given the id of a post that
+  has just been deleted, a page whose subject that was hands the reader back to
+  wherever its chevron points, while anything else that happens up there (a
+  repost, an undo) repaints the page in place rather than through the router.
 
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are

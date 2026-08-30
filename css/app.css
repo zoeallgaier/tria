@@ -2507,40 +2507,19 @@ main {
   .odo .odo-old { display: none; }
 }
 
-/* Inline edit form — a card swapped for its editable fields. Inset to align with
-   the text column; the actions row carries Cancel + Save together, pinned right
-   (Delete moved out to the post's ••• menu). */
-.card--editing { padding: 0.35rem var(--inset) 0.9rem; }
-.card--editing.card--photo { padding-inline: var(--inset); }
-.edit-form .field:first-child { margin-top: 0.35rem; }
-.edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 1.1rem;
-}
-/* Both commit buttons stay on screen — the quiet Cancel and the accent Save pill,
-   the same pairing (and sizing) Edit profile's .modal-actions uses. Save dims to
-   half while the form is untouched, so "nothing to save yet" reads without the
-   button ever leaving, and backing out is always one tap away. */
-.edit-actions .composer-submit {
-  width: auto;
-  margin: 0;
-  padding: 0.6rem 1.4rem;
-  /* Dirty state flips on every keystroke, so fade the dim rather than snapping it. */
-  transition: background-color var(--dur-micro), opacity var(--dur-micro);
-}
-.edit-actions .composer-submit:disabled { opacity: 0.5; }
+/* The post editor is a PAGE now (#/p/<id>?edit=1 — see renderPostEdit), so it
+   is the composer's own column of fields and carries .composer to say so; there
+   is nothing left here for CSS to invent. What it needs is the air, because it
+   has no masthead between the bar and the first field — the same shape, and so
+   the same token, as the profile editor one page over.
 
-.edit-cancel {
-  color: var(--muted);
-  background: none;
-  border: none;
-  padding: 0.55rem 0.6rem;
-  font-size: 0.9rem;
-}
-.edit-cancel:hover { color: var(--text); }
+   GONE WITH THE INLINE FORM: .card--editing, which padded a card whose contents
+   had been swapped for fields, and .edit-actions / .edit-cancel, the Cancel and
+   Save pair at the foot of it. Both answers are the bar's now (an X and a
+   check), where they hold still instead of sitting at the bottom of a scrolling
+   form — the same move the profile editor's commit row made in 1.3, arriving at
+   the same place for the same reason. */
+.edit-form { padding-top: var(--identity-air); }
 
 /* ── Byline (identity) ────────────────────────────────────────────────────── */
 /* Flex row: the profile link on the left, the type-tag pushed to the right so it
@@ -6102,16 +6081,13 @@ button.poll-option:disabled { cursor: default; }
 .composer .field:first-of-type { margin-top: 0; }
 /* Softer, more iOS corners on the composer's own fields — a touch rounder than the
    shared --radius-img (8px), staying concentric under the 20px glass surfaces and
-   in step with the filled liquid-glass Post button. Scoped to the composer + the
-   inline edit form (which mirrors the composer's field layout) + the About page's
+   in step with the filled liquid-glass Post button. Scoped to the composer (which
+   the post editor wears too, its fields being the same fields) + the About page's
    feedback form, so post photos and other --radius-img corners are untouched. */
 .composer .field input,
 .composer .field textarea,
 .composer .field--combo,
 .composer .dropzone,
-.edit-form .field input,
-.edit-form .field textarea,
-.edit-form .field--combo,
 .fb-form .field input,
 .fb-form .field textarea { border-radius: var(--radius-field); }
 .composer-error {

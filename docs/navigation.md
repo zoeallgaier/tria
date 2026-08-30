@@ -69,9 +69,11 @@ history key (a push) or **found** it (a return), which is the same stamp the
 scroll memory runs on.
 
 **`settleScroll` stays a callback, and nothing may move the scroll after
-`renderPage` returns.** There are three destinations — the top, a spotlighted card
-`parkCard` already jumped to during `renderFn`, and a remembered position from
-`restoreScroll` — and only the caller knows which. This mattered doubly under the
+`renderPage` returns.** Two destinations now — the top, and a remembered position
+from `restoreScroll` — and only the caller knows which. It stays a callback
+rather than becoming a boolean because there were three until 1.4: a spotlighted
+card `parkCard` had already jumped to during `renderFn`, whose caller handed in
+an empty one. This mattered doubly under the
 fade, because the outgoing page's pin was measured against wherever the scroll
 finished; the pin is gone but the rule stands, since `syncTopbar` is placed off
 the settled position and a later jump leaves the bar answering the wrong page.
@@ -128,8 +130,8 @@ part-way down.
 **A jump is not a scroll gesture.** The topbar reads the scroll's DIRECTION —
 its header stands aside while you go down a page and comes back when you reach
 up (see [native-chrome.md](native-chrome.md)) — so it needs a guard against the
-router's own teleports: a jump to a spotlight, to a remembered position, back to
-the top. A thousand-pixel jump reading as "scrolling down fast" is what once slid
+router's own teleports: a jump to a remembered position, or back to the top. A
+thousand-pixel jump reading as "scrolling down fast" is what once slid
 the whole bar away on landing, a second move stapled onto a navigation meant to
 be one fade. Any move bigger than the viewport takes the new position and leaves
 the direction alone. Both halves guard it, because both read it: app.js for the
@@ -140,22 +142,28 @@ scroll (`syncTopbar`), instantly. A placed jump may fire no scroll event at all 
 if the destination is where the window already sits, nothing scrolls and nothing
 fires — and a route change is not an event that needs narrating.
 
-**A spotlight has no travel and no wash — and there is only ONE left.** Discover,
-Updates and the frame wall all open `#/p/<id>` now (see the post-page note in [data.md](data.md)), so the only thing still setting `spotlightPost` is the edit flow,
-which lands on your profile with a post's editor open. The rest of this note is
-about that one case, and about why the travel must not come back if another
-caller ever appears. Setting `spotlightPost` makes the render call `parkCard`, which
-moves the scroll **synchronously, inside `renderFn`**, so the position is set
-before the new page's first paint and the post is simply where the page opens. It
-used to glide 460ms to the card and then flash a tint over it, both starting 120ms
-after the route settled — three moves stacked on one tap, and the travel got
-longer and more obviously wrong the older the post was, since a spotlight
-routinely aims a thousand pixels down a feed. Don't reintroduce either: landing
-already there isn't a cheaper animation, it's the right one, and a highlight
-answers "which one did I mean?" when nothing asked. What `parkCard` **keeps** is
-the silent 900ms re-aim after landing — lazy media resolving *above* the card (a
-legacy photo swapping its 3:2 reserve box for its real shape) shoves it down, and
-on a page that has only just landed that reads as the post sliding away.
+**THE SPOTLIGHT IS GONE, and so is the thing it was for.** Discover, Updates and
+the frame wall all open `#/p/<id>` (see the post-page note in
+[data.md](data.md)), and in 1.4 the last caller went the same way: editing a post
+happens on the post's own page, not on your profile with one card swapped for a
+form. So `spotlightPost`, `parkCard` and the router's third settle destination —
+the empty callback a render that had already placed the scroll handed in — are
+all retired, and `renderPage` is down to the top or a remembered position.
+
+The reasoning is kept because it is a rule about **destinations, not
+mechanisms**: a post you asked for by name is a page, never a position somebody
+has to be driven to. `parkCard` placed the window synchronously inside `renderFn`
+so the card was simply where the page opened, and it got there by having its
+travel removed — it used to glide 460ms and then flash a tint, both starting
+120ms after the route settled, three moves stacked on one tap, and the glide got
+longer and more obviously wrong the older the post was. If a surface ever does
+need to open on one row of many, place it before the first paint and do not
+animate: landing already there isn't a cheaper animation, it's the right one, and
+a highlight answers "which one did I mean?" when nothing asked. What that
+function also had to do, and what any replacement would need, is a silent re-aim
+for a beat after landing — lazy media resolving *above* the target shoves it
+down, which on a page that has only just arrived reads as the thing sliding
+away.
 
 **The seg-tabs rise went with the fade, then the dock went, then the control
 did.** The Updates switcher used to float above the bottom nav, tucked behind the

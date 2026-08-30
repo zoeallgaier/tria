@@ -62,8 +62,11 @@
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
   let postOrigin = '#/';             // and where a post page's does
-  // Set by the tap that opens #/profile/edit and consumed by the render, so the
-  // editor knows whether leaving can pop an entry or has to navigate.
+  // Set by the tap that opens an editor — #/profile/edit, or a post's own
+  // #/p/<id>?edit=1 — and consumed by that render, so the editor knows whether
+  // leaving can pop an entry or has to navigate. One flag for both, because it
+  // is one fact about the tap rather than a fact about either page, and no tap
+  // can open two editors.
   let editorPushed = false;
   let stopActiveCrop = null;  // teardown for the profile editor's cropper (rAF + ResizeObserver)
   // One beat after a page mounts. Not a transition — nothing animates on a route
@@ -136,9 +139,9 @@
   /* ── The top bar after a placed scroll ─────────────────────────────────────
      The bar has two scroll-driven states left — the material behind it and the
      collapsing title on it — and both are read off a scroll EVENT that a
-     navigation may never fire. The router places the window itself (top, a
-     remembered position, a spotlighted card), and if the destination is already
-     where the window sits, nothing scrolls, nothing fires, and both states keep
+     navigation may never fire. The router places the window itself (the top, or
+     a remembered position), and if the destination is already where the window
+     sits, nothing scrolls, nothing fires, and both states keep
      an answer about a page that isn't on screen any more. So the router STATES
      them rather than hoping to infer them. Instantly, in both cases: a route
      change is not an event that needs narrating, and the `true` is what
@@ -158,67 +161,18 @@
     syncToolbarEdge(true);
   }
 
-  /* scrollCardIntoView and scrollCardToTop are GONE with the two gestures that
-     called them — the double-tap-to-fold and the Read more collapse. Both existed
-     for the same problem: folding something long dropped the timeline out from
-     under the reader, so the page had to glide back to the card first. Nothing
-     in the app collapses in place any more (the note's full text is a page now),
-     so there is no fold to rescue a scroll from. parkCard below is a different
-     thing and stays: it PLACES a scroll before the first paint rather than
-     animating one afterwards. */
-
-  // Put a targeted card where it needs to be, with NO travel — this runs inside
-  // renderFn, so the scroll is set before the page's first paint and the post is
-  // simply what's on screen when it arrives.
-  //
-  // It used to glide: a 460ms eased scroll to the card, then a tinted wash over
-  // it, both starting 120ms after the route settled. Three moves stacked on one
-  // tap — fade the page in, THEN travel, THEN flash — and the travel got longer
-  // and more obviously wrong the older the post was, because a spotlight from
-  // Discover or Updates routinely aims a thousand pixels down a feed. Landing
-  // already there is not a cheaper version of that animation, it's the correct
-  // one: you asked for a post, and the post is the page.
-  //
-  // The HOLD survives, and matters more now than it did. Everything between the
-  // top of the feed and the target is lazy-loaded, so it resolves over the next
-  // few hundred ms: legacy photos swap their 3:2 reserve box for the media's real
-  // shape, videos resolve, avatars arrive. Each one that lands ABOVE the card
-  // shoves it down, and on a page that has only just landed that reads as the
-  // post sliding away from you. So for a beat we keep re-aiming every frame —
-  // the content moves, the card doesn't. That's scroll anchoring, done by hand
-  // because WebKit won't do it for us. Any real input and we're gone; this never
-  // fights the user's own scroll.
-  function parkCard(el) {
-    const aim = () => {
-      const r = el.getBoundingClientRect();
-      const vh = window.innerHeight;
-      // Short card parks in the middle. A card taller than the screen pins its
-      // TOP just clear of the masthead instead, since centring something that
-      // doesn't fit means arriving with its first line already scrolled off.
-      const pad = r.height > vh - 140 ? 88 : (vh - r.height) / 2;
-      const max = Math.max(0, document.documentElement.scrollHeight - vh);
-      return Math.min(max, Math.max(0, window.scrollY + r.top - pad));
-    };
-
-    window.scrollTo(window.scrollX, aim());   // synchronous: before the first paint of the new page
-    if (prefersReduced()) return;
-
-    const t0 = performance.now();
-    const HOLD = 900;
-    const events = ['wheel', 'touchstart', 'keydown'];
-    let stopped = false;
-    const bail = () => { stopped = true; };
-    const done = () => events.forEach(ev => window.removeEventListener(ev, bail));
-    events.forEach(ev => window.addEventListener(ev, bail, { passive: true }));
-
-    const step = (now) => {
-      if (stopped || now - t0 > HOLD) return done();
-      const want = aim();
-      if (Math.abs(want - window.scrollY) > 0.5) window.scrollTo(window.scrollX, want);
-      requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
+  /* scrollCardIntoView, scrollCardToTop and parkCard are all GONE, and the last
+     of the three is the 1.4 removal. The first two went with the gestures that
+     called them (the double-tap-to-fold, the Read more collapse): nothing in the
+     app collapses in place any more, so there is no fold to rescue a scroll
+     from. parkCard outlived them because a SPOTLIGHT still existed — a post you
+     asked for by name was a position in somebody's column, so the render placed
+     the window on that card before the first paint. Every one of those callers
+     became a link to the post's own page instead, and the last of them was the
+     edit flow, which used to land you on your profile with one card swapped for
+     a form (see the editor note further down). A post has an address now. The
+     router's only remaining destinations are the top and a remembered position,
+     which is what renderPage's `settleScroll` is down to. */
 
   // The feed's entrance rhythm: each card/row rises a beat after the one above it,
   // capped so a long list doesn't trail on forever. Shared by every list view.
@@ -4378,39 +4332,28 @@
       }));
   }
 
-  // ── Inline edit (text only) ───────────────────────────────────────────────
-  // The post whose card is currently swapped for an edit form, or null. Only one
-  // at a time; reset on any navigation (see route()).
-  let editingId = null;
-  // A post the feed's ••• menu asked to edit, handed across the navigation to the
-  // profile (which owns the edit machinery). Consumed once by renderUser.
-  let pendingEditId = null;
+  /* ── Editing a post ────────────────────────────────────────────────────────
+     A post is edited ON ITS OWN PAGE (`#/p/<id>?edit=1`, see renderPostEdit),
+     which is where it belonged from the moment every post had one.
 
-  // Which posts' comment panels are expanded. A card rebuilds on every add/
-  // delete (same full-refresh pattern as edit/delete elsewhere), so this is
-  // what keeps a panel open across that refresh.
-  // openComments is retired with the last disclosure. A thread's open state was
-  // only ever a thing because the thread lived on a card that got rebuilt under
-  // it; on a page it is simply what the page is.
+     It used to be an INLINE FORM ON YOUR PROFILE, and that took three pieces of
+     state to work: `pendingEditId` carried the id across a navigation from
+     whichever ••• was tapped, `editingId` told the profile column which of its
+     cards to build as a form instead, and `spotlightPost` placed the window on
+     that card so you could see what you had asked for. All three are retired.
+     None of them was ever about editing — they were about getting the reader to
+     a post on a surface that could only address a post by its position, and
+     that surface stopped being the only one in 1.3.
 
-  // openLikers / openReadMore / openGoing are retired: who-liked and who's-going
-  // are the post page's furniture, and Read more is a link to it. openComments
-  // above is the last of the four, because writing a comment is still something
-  // you do without leaving the feed.
+     What is left is one flag, shared with the profile editor, saying whether the
+     tap that opened this pushed an entry (`editorPushed`, up top).
 
-  /* The profile column parks on this post when it renders. ONE caller left, and
-     it is the edit flow: `startPostEdit` from a feed card hands the id across to
-     the profile, which owns the editor, and the column has to open at the post
-     being edited rather than at the top.
+     THERE IS NO DRAFT. Leaving discards, the way it always has; the difference
+     is that leaving is now a real navigation, so the back gesture cancels an
+     edit exactly as it leaves any other page.
 
-     It used to have three more — a copied ?p= link, an Updates row and a
-     frame-wall tile — and all three now go to the post's own page instead, which
-     is a destination rather than a position. What is left is the one case that
-     genuinely IS a position in a column, because the editor lives there. */
-  let spotlightPost = null;
-
-  // The editable fields for a post, prefilled from its current values. Mirrors
-  // the composer's fields (minus the photo upload — captions/tags only there).
+     The editable fields for a post, prefilled from its current values. Mirrors
+     the composer's fields (minus the photo upload — captions/tags only there). */
   function editFieldsFor(post) {
     const tagsInput =
       `<div class="field">` +
@@ -4469,28 +4412,6 @@
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
     return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false }) + tagsInput;
-  }
-
-  function makeEditCard(post) {
-    const el = document.createElement('article');
-    el.className = `card card--${post.type} card--editing`;
-    el.dataset.id = post.id;      // lets the spotlight scroll target the open editor
-    el.innerHTML =
-      `<form class="edit-form" novalidate>` +
-        editFieldsFor(post) +
-        `<p class="composer-error" id="e-error" role="alert"></p>` +
-        `<div class="edit-actions">` +
-          // Cancel and Save are both always on screen (the same commit row Edit
-          // profile uses), so backing out is never hidden behind "have I changed
-          // anything yet". Save just sits disabled until a field diverges — see the
-          // dirty-tracking wiring in renderUser. Delete lives in the ••• menu.
-          `<button type="button" class="edit-cancel">Cancel</button>` +
-          `<button type="submit" class="composer-submit edit-save" disabled>Save changes</button>` +
-        `</div>` +
-      `</form>`;
-    wireWhenHints(el);
-    wireLocationSuggest(el.querySelector('#e-location'));
-    return el;
   }
 
   // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
@@ -4764,8 +4685,8 @@
   // crossfades in — so scrolling never shows both at once.
   // `instant` (mount, a navigation, the delayed re-check below) skips the
   // transition, because the crossfade is for a scroll gesture, not a page
-  // arriving already scrolled (a remembered position, a spotlighted card) —
-  // see .topbar--title-instant in app.css.
+  // arriving already scrolled (a remembered position) — see
+  // .topbar--title-instant in app.css.
   function syncToolbarTitle(instant) {
     if (!document.body.classList.contains('toolbar-live')) return;
     const bar = document.querySelector('.topbar');
@@ -4823,8 +4744,8 @@
     if (!bar) return;
     const y = window.scrollY;
     // A move bigger than the viewport can't have come from a thumb. The router
-    // teleports the window (to a spotlight, to a remembered position, back to
-    // the top) and a thousand-pixel jump used to read as "scrolling down fast",
+    // teleports the window (to a remembered position, back to the top) and a
+    // thousand-pixel jump used to read as "scrolling down fast",
     // which is a second move stapled onto a navigation meant to be one fade.
     const jumped = placed || Math.abs(y - barLastY) > window.innerHeight;
     if (!jumped) {
@@ -6096,13 +6017,6 @@
     const u = Store.user(username);
     if (!u) { location.hash = '#/'; return; }          // stale link → home
     const isSelf = u.username === Store.session();
-    // Arriving from the feed's ••• "Edit post": open that post in its editor and
-    // scroll it into view (spotlight), same as a copied-link landing.
-    if (isSelf && pendingEditId) {
-      editingId = pendingEditId;
-      spotlightPost = pendingEditId;
-      pendingEditId = null;
-    }
     if (!isSelf && Blocks.has(u.username)) { renderBlockedWall(u); return; }
     const isFriend = Store.isFriend(u.username);
     // A private profile fences its whole feed to friends: an outsider sees the
@@ -6148,9 +6062,6 @@
       filters.push({ key: 'repost', label: 'Reposts', ico: 'repost' });
     const canFilter = filters.length > 2 || types.has('photo');
     if (profileFilterFor !== u.username) { profileFilter = 'all'; profileFilterFor = u.username; }
-    // A spotlight is aimed at one CARD — a copied link, an Updates row, an Edit
-    // handed over from the feed — so it always lands in the post column.
-    if (spotlightPost || (isSelf && editingId)) profileFilter = 'all';
     // The world moves under a held filter (their last frame gets deleted while
     // you're standing in the wall), so re-check rather than trust it.
     if (!canFilter || !filters.some(f => f.key === profileFilter)) profileFilter = 'all';
@@ -6409,9 +6320,7 @@
       }
       const frag = document.createDocumentFragment();
       shown.forEach((p, i) => {
-        const card = (isSelf && p.id === editingId)
-          ? makeEditCard(p)
-          : makeCard(p, { solo: true });
+        const card = makeCard(p, { solo: true });
         card.style.animationDelay = staggerDelay(i);
         frag.appendChild(card);
       });
@@ -6423,55 +6332,16 @@
 
     paintPosts(true);
 
-    // An Updates row or a Discover tile targeted this post: the page arrives
-    // already sitting on it. Synchronous, so the position is set before the new
-    // page's first paint — the post is simply where the page opens.
-    //
-    // No wash. A highlight pulse answers "which one did I mean?", and nothing
-    // asked: the card is centred on a page you opened by tapping it. The router
-    // skips its top-snap while a spotlight is pending (see route), so there's no
-    // jump-to-top to undo either.
-    if (spotlightPost) {
-      const target = feedEl.querySelector(`[data-id="${spotlightPost}"]`);
-      spotlightPost = null;
-      if (target) parkCard(target);
-      else scrollTop(false);   // target filtered out — fall back to the top
-    }
-
     // Everything the post COLUMN needs hooked up. Called by paintPosts rather
     // than once at the end of the render, because the column is now rebuilt
     // whenever the dial moves and its wiring has to come back with it. (The
     // frame wall needs none of it: a tile is a link and nothing else.)
+    //
+    // It is one thing now. The editor used to be wired from here — the column
+    // held it — and it is a page of its own (see renderPostEdit), so what is
+    // left is the tag chips, which belong to the home feed's filter the same way
+    // the post page's do.
     function wirePosts() {
-      const editForm = feedEl.querySelector('.edit-form');
-      if (editForm) {
-        // Snapshot the fields exactly as rendered. Save stays disabled until a field
-        // diverges from that baseline (and re-disables if the edit is reverted), so it
-        // can never commit a no-op; Cancel sits beside it the whole time as the way
-        // back out, rather than being the same button wearing a different name.
-        const cancelBtn = editForm.querySelector('.edit-cancel');
-        const saveBtn = editForm.querySelector('.edit-save');
-        const snapshot = () => Array.from(editForm.querySelectorAll('input, textarea, [contenteditable]'))
-          .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
-        const baseline = snapshot();
-        const dirty = () => snapshot() !== baseline;
-        const syncSave = () => { saveBtn.disabled = !dirty(); };
-        editForm.addEventListener('input', syncSave);
-        editForm.addEventListener('change', syncSave);
-        cancelBtn.addEventListener('click', () => { editingId = null; renderUser(username); });
-        editForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          if (dirty()) submitEdit(editingId, username);   // Enter saves, but never a no-op
-        });
-        const eNote = editForm.querySelector('#e-note');
-        wireMentions(eNote);
-        if (eNote && eNote.isContentEditable) wireRichEditor(eNote, editForm.querySelector('#e-note-count'));
-        // Don't auto-focus on touch: it yanks up the keyboard and the viewport
-        // jumps to center the field, which reads as a jarring lurch. Let the tap
-        // that opens the field raise the keyboard instead. Desktop still autofocuses.
-        if (finePointer())
-          editForm.querySelector('#e-note')?.focus();
-      }
       feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
         btn.addEventListener('click', () => {
           activeFilter = 'all';
@@ -6482,9 +6352,7 @@
 
     // The dial. Picking a row repaints only the pane below the identity and
     // relights the button's dot in place — no page re-render, so the identity,
-    // its wash and your scroll position all stay exactly where they were. An
-    // open inline editor is dropped the same way navigating away drops it: the
-    // row you just picked is the newer intent.
+    // its wash and your scroll position all stay exactly where they were.
     //
     // document-wide, not view-scoped: the button lives in #toolbar-actions now,
     // which is outside #view entirely. Same reason syncFilterBtn has always
@@ -6500,7 +6368,6 @@
           if (key === profileFilter) return;
           profileFilter = key;
           profileFilterFor = u.username;
-          editingId = null;
           syncFilterBtn('profile-filter-btn', profileFilter);
           paintPosts(true);
         },
@@ -7945,6 +7812,141 @@
     return `${displayNameOf(bylineAuthor)}’s ${what}`;
   }
 
+  /* ── The post's own editor ─────────────────────────────────────────────────
+     `#/p/<id>?edit=1`: the page you were just reading, with the card swapped for
+     the fields that made it. The route is the point — the editor is a real
+     history entry, so the back gesture cancels an edit the way it leaves any
+     other page, and a post is edited where it lives rather than on a profile
+     that had to be scrolled to the right card first (see the editor note over
+     editFieldsFor for what that cost).
+
+     THE SHAPE IS THE PROFILE EDITOR'S, deliberately, because it is the same act.
+     No masthead (a serif nameplate over a form you opened by name is the page
+     introducing itself), the bar names the page in the small copy every other
+     page is named in, and the bar carries the two ANSWERS: a chevron that
+     becomes an X once a word has changed, and a check that fades in to meet it.
+     Both read one predicate, so the bar can never offer a save with nothing to
+     save or a plain way back over unsaved words.
+
+     That move also settles a 1.4 question rather than reopening it. The old
+     Cancel/Save pair sat at the foot of a SCROLLING form, which is exactly the
+     kind of painted commit `PAGE_SEL` exists for — but the honest fix was not a
+     fifth selector, it was that an editor's answers belong on the bar, where
+     they hold still and where the toolbar has been native since Stage 3. The set
+     stays closed at four.
+
+     Delete is not here. It is one row down in the post's own •••, which is where
+     it has always been and where it can't be reached by aiming at Save. */
+  function renderPostEdit(id) {
+    // Consumed on arrival, the way renderEditProfile consumes it: the flag
+    // belonged to the tap that came here, not to the page.
+    const canPop = editorPushed;
+    editorPushed = false;
+
+    const post = Store.posts().find(p => String(p.id) === String(id));
+    // Someone else's post, a poll (its choices are fixed once posted — the same
+    // rule openPostMenu reads when it decides whether to offer the row), or a
+    // post that has gone. A hand-typed or stale URL lands on the post itself
+    // rather than on an error: `replace`, so the way back doesn't walk through a
+    // page that refused to exist.
+    if (!post || post.author !== Store.session() || post.type === 'poll') {
+      location.replace(postRoute(id));
+      return;
+    }
+
+    mountToolbar({
+      // No href: leaving here POPS where it can, the same as the profile
+      // editor's, and toolbarBackEl emits the <button> that branch was built for
+      // — which is also the element syncAnswers swaps the glyph inside.
+      leading: toolbarBackEl('', 'your post', 'e-cancel'),
+      // "Edit activity" for the one type with a word of its own, "Edit post" for
+      // the other four, which is the distinction postPageTitle draws two
+      // functions up and for the same reason: Frame and Find name Tria's filing
+      // system at a reader who may only have met it on a dial.
+      title: post.type === 'activity' ? 'Edit activity' : 'Edit post',
+      // `form=` is what lets a submit live out here: the bar mounts into
+      // #toolbar-actions, which is outside #view and so outside the form. The
+      // reference resolves at activation, not at parse, so mounting the bar
+      // before the form exists is fine — and it is mounted idle rather than left
+      // out so it can FADE in on the keystroke that earns it.
+      actions: `<button type="submit" form="e-form" id="e-save" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `aria-label="Save changes">${svgIcon('check')}</button>`,
+    });
+
+    view.innerHTML =
+      `<section class="view">` +
+        // Present but not drawn, for renderEditProfile's reason: the bar's copy
+        // is aria-hidden everywhere else because it echoes an in-flow <h1>, and
+        // without this one the editors would be the only pages in Tria reaching
+        // a screen reader with no heading at all.
+        `<h1 class="visually-hidden">Edit post</h1>` +
+        // `.composer` is the container class on purpose: these ARE the composer's
+        // fields (editFieldsFor mirrors them field for field), so create and edit
+        // read the same and there is one set of measurements to keep true.
+        `<form id="e-form" class="composer edit-form" novalidate>` +
+          editFieldsFor(post) +
+          `<p class="composer-error" id="e-error" role="alert"></p>` +
+        `</form>` +
+      `</section>`;
+
+    const form = view.querySelector('#e-form');
+    wireWhenHints(form);
+    wireLocationSuggest(form.querySelector('#e-location'));
+    const noteEl = form.querySelector('#e-note');
+    wireMentions(noteEl);
+    if (noteEl && noteEl.isContentEditable)
+      wireRichEditor(noteEl, form.querySelector('#e-note-count'));
+
+    // Leaving POPS where it can, for the reason the profile editor's does: go()
+    // always pushes, so a save that navigated forward would leave the editor
+    // sitting one edge-swipe behind the post you just saved, ready to reopen
+    // itself. A cold arrival (a reload on this hash) has no entry to pop.
+    const leave = () => { if (canPop) history.back(); else go(postRoute(post.id)); };
+    // getElementById, not view.querySelector: both answers live on the bar,
+    // which is outside #view.
+    const cancelBtn = document.getElementById('e-cancel');
+    const saveBtn = document.getElementById('e-save');
+    cancelBtn.addEventListener('click', leave);
+
+    // Dirty is measured against the fields EXACTLY as rendered, so reverting an
+    // edit by hand takes the check away again and a save can never be a no-op.
+    const snapshot = () => Array.from(form.querySelectorAll('input, textarea, [contenteditable]'))
+      .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
+    const baseline = snapshot();
+    const dirty = () => snapshot() !== baseline;
+    // One predicate, both answers. Idle hides the check with `visibility` (see
+    // .toolbar-commit--idle) rather than dropping it: it keeps its slot, it stays
+    // a transition target, and hidden visibility is already out of the tab order
+    // and the a11y tree. The bar's own MutationObserver carries both swaps
+    // through to the native chrome; nothing here has to tell it.
+    const syncAnswers = () => {
+      const d = dirty();
+      cancelBtn.innerHTML = d ? svgIcon('close') : svgIcon('chevron', 'toolbar-back-ico');
+      cancelBtn.setAttribute('aria-label', d ? 'Discard changes' : 'Back to your post');
+      saveBtn.classList.toggle('toolbar-commit--idle', !d);
+    };
+    form.addEventListener('input', syncAnswers);
+    form.addEventListener('change', syncAnswers);
+    syncAnswers();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!dirty() || saveBtn.disabled) return;   // Enter saves, but never a no-op
+      // Hands itself back on every path, rejection included — submitEdit
+      // resolves whether the write landed or the error line took it.
+      saveBtn.disabled = true;
+      try { await submitEdit(post.id, leave); }
+      finally { saveBtn.disabled = false; }
+    });
+
+    // Don't auto-focus on touch: it yanks the keyboard up and the viewport jumps
+    // to centre the field, which reads as a lurch on a page that has only just
+    // arrived. Let the tap that opens the field raise the keyboard instead.
+    // (A rich note field focuses itself under the same rule — see wireRichEditor.)
+    if (finePointer()) noteEl?.focus();
+  }
+
   // Where a post page's back chevron points. Same shape as backTarget() below and
   // the same reasoning: you can reach a post from anywhere, so the chevron has to
   // name where you actually came from rather than one fixed place.
@@ -8539,36 +8541,44 @@
     openSheet({
       title: 'Delete this post? This can’t be undone.',
       items: [{ label: 'Delete post', icon: 'trash', danger: true, run: async () => {
-        if (editingId === post.id) editingId = null;   // may be open in the inline editor
         const res = await Store.deletePost(post.id);
         if (res && res.ok === false) { toast(res.error || 'Couldn’t delete, try again.'); return; }
-        refreshPostViews();
+        refreshPostViews(post.id);
       } }],
     });
   }
 
-  // After a post mutation (delete), re-render whichever of the two surfaces that
-  // can show your OWN posts is live: your profile (renderUser recomputes the
-  // "N posts" stat + empty state) or the home feed (renderFeed reconciles the
-  // card out). A visitor's #/u/<handle> never shows your posts, so it can't be
-  // the delete context.
-  function refreshPostViews() {
+  /* After a post mutation (a delete, a repost), re-render whichever surface is
+     live. Two of them can show your OWN posts — your profile (renderUser
+     recomputes the "N posts" stat and the empty state) and the home feed
+     (renderFeed reconciles the card out) — and a visitor's #/u/<handle> never
+     shows them, so it can't be the delete context.
+
+     THE THIRD IS THE POST'S OWN PAGE, and it needs `gone`, the id of a post that
+     has just stopped existing. A page whose whole subject was deleted has
+     nothing left to redraw, so it hands the reader back to wherever its chevron
+     points; anything else that happened up there (a repost, an undo) repaints
+     the page in place. In place, via renderPost rather than route(): the router
+     would place the scroll all over again, and nothing here is a navigation. */
+  function refreshPostViews(gone) {
     const path = (location.hash || '#/').split('?')[0];
+    if (path.startsWith('#/p/')) {
+      const here = decodeURIComponent(path.slice(4));
+      if (gone && String(gone) === here) { go(postBackTarget().href); return; }
+      renderPost(here, postPane);
+      return;
+    }
     if (path === '#/profile') renderUser(Store.session());
     else renderFeed();
   }
 
-  // Edit swaps the card for a form, but that machinery lives on the profile
-  // (renderUser + editingId). From anywhere else the ••• "Edit post" lands you
-  // on your own profile with that post already open in its editor.
+  // Edit opens the post's OWN page in its editor, from wherever the ••• was
+  // tapped — a feed card, your profile, the post page itself. It used to land
+  // you on your profile with that one card swapped for a form, which was the
+  // only surface that could hold an editor before a post had an address.
   function startPostEdit(post) {
-    if (location.hash === '#/profile') {
-      editingId = post.id;
-      renderUser(Store.session());
-      return;
-    }
-    pendingEditId = post.id;      // survives the router's editingId reset; consumed by renderUser
-    location.hash = '#/profile';
+    editorPushed = true;          // consumed by renderPostEdit; says leaving can pop
+    go(`${postRoute(post.id)}?edit=1`);
   }
 
   // The friend badge/menu: Remove friend, Block, Report. Replaces the old
@@ -12374,14 +12384,17 @@
     if (fill) fill.style.width = '0%';
   }
 
-  // Save an inline text edit. Reads the form by type, applies the same rules as
-  // the composer (a find needs a valid link; a post needs a headline or note),
-  // then persists and re-renders the profile in place.
-  async function submitEdit(id, username) {
+  // Save a text edit. Reads the form by type, applies the same rules as the
+  // composer (a find needs a valid link; a post needs a headline or note), then
+  // persists and calls `done` — which is the editor page's own way out, so a
+  // save leaves exactly the way a cancel does (see renderPostEdit's `leave`).
+  // A post that vanished while you were typing takes the same exit rather than
+  // writing into a row that isn't there.
+  async function submitEdit(id, done) {
     const errEl = document.getElementById('e-error');
     const val = (elId) => (document.getElementById(elId)?.value || '').trim();
     const post = Store.posts().find(p => p.id === id);
-    if (!post) { editingId = null; renderUser(username); return; }
+    if (!post) { done(); return; }
 
     const data = { note: readNoteField('e-note'), tags: parseTags(val('e-tags')) };
     // The daily join tag isn't in the field (see editFieldsFor), so put it back —
@@ -12422,8 +12435,7 @@
 
     const res = await Store.updatePost(id, data);
     if (!res.ok) { errEl.textContent = res.error; return; }
-    editingId = null;
-    renderUser(username);
+    done();
   }
 
   /* ── Lightbox ────────────────────────────────────────────────────────────── */
@@ -12830,7 +12842,6 @@
        own `:active { opacity: 0.55 }` and would otherwise be pressed twice. */
     '.auth-submit', '.friends-share-copy',
     '.push-ask-on', '.push-ask-dismiss',
-    '.edit-save', '.edit-cancel',
   ].join(', ');
   let pressing = null;   // { el, scale, down } while a finger is down
   function pressRelease() {
@@ -14059,11 +14070,13 @@
   // Build the next page and put it on screen. `renderFn` fills the fresh `view`.
   //
   // `settleScroll` puts the window where this navigation wants it. It stays a
-  // callback rather than a flag because there are three destinations and only
-  // the caller knows which: the top (an ordinary navigation), the spotlighted
-  // card (parkCard, which renderFn has already jumped to — pass a no-op), and a
-  // remembered position (restoreScroll, on a back or an edge-swipe). Omit it for
-  // the default. Nothing may move the scroll after renderPage returns.
+  // callback rather than a flag because the caller is the one that knows where
+  // this navigation is going: the top (an ordinary navigation) or a remembered
+  // position (restoreScroll, on a back or an edge-swipe). Omit it for the
+  // default. It took a third destination until 1.4 — a spotlighted card, which
+  // renderFn had already jumped to, so the caller handed in an empty callback —
+  // and that is why this is a callback rather than a boolean. Nothing may move
+  // the scroll after renderPage returns.
   function renderPage(renderFn, settleScroll) {
     const reduce = prefersReduced();
     const token = ++navToken;
@@ -14072,18 +14085,18 @@
     page.className = 'page';
 
     // Where the window sat BEFORE the render, so the default settle can tell
-    // "already at the top" from "needs to go there". renderFn can move the scroll
-    // itself (parkCard, aiming at the spotlighted card), so reading this
-    // afterwards would measure the destination, not the origin.
+    // "already at the top" from "needs to go there". Read here rather than after
+    // renderFn, which is free to move the scroll itself.
     const fromY = window.scrollY;
     // Put the window where this navigation wants it. Every path runs this, so no
     // caller is ever left holding a scroll the router didn't place.
     const settle = () => {
       if (settleScroll) settleScroll();
       else if (fromY > 0) window.scrollTo(0, 0);
-      // …and place the top bar while we're here. Note the spotlight path hands in
-      // an EMPTY callback (parkCard already moved the window during renderFn), so
-      // a branch that only ran "if we scrolled" would skip it.
+      // …and place the top bar while we're here, unconditionally: a settle that
+      // finds the window already where it wants it moves nothing and fires no
+      // scroll event, so a branch that only ran "if we scrolled" would leave the
+      // bar holding an answer about the page before this one.
       syncTopbar();
       // Again once the page has finished laying out — the same beat restoreScroll
       // re-aims over. Discover deals its masonry from JS and a photo swaps its
@@ -14368,7 +14381,6 @@
       return;
     }
     document.body.classList.remove('gate');
-    editingId = null;           // navigating away cancels any in-progress edit
 
     const hash = location.hash || '#/';
     const path = hash.split('?')[0];
@@ -14417,12 +14429,6 @@
 
     applyAmbient(path);   // warm (Circle) / cool (Friends) / photo tint (a profile)
 
-    // Coming from an Updates row, the profile render scrolls the tapped post into
-    // view itself — so skip the router's top-snap below (renderUser consumes and
-    // clears spotlightPost during the render, hence capturing it here) or the page
-    // would jump to the top and then scroll back down.
-    const spotlighting = !!spotlightPost;
-
     // A friend's profile lives at #/u/username. Own profile stays at #/profile so
     // the nav can mark it current (a friend view highlights nothing).
     // Discover's grid is laid out by JS, so it keeps a resize listener alive.
@@ -14440,9 +14446,15 @@
       }
       // A single post lives at #/p/<id>. Like a profile and a daily it highlights
       // no nav tab: it is somewhere you went, not one of the four places you live.
+      // ?edit=1 is the same post in its editor — a mode of this page rather than
+      // a route of its own, because it is the same subject, the same chevron
+      // destination and the same thing you came here to look at (see
+      // renderPostEdit). ?pane names which panel a link was tapped to open.
       if (path.startsWith('#/p/')) {
-        renderPost(decodeURIComponent(path.slice(4)),
-                   new URLSearchParams(hash.split('?')[1] || '').get('pane'));
+        const q = new URLSearchParams(hash.split('?')[1] || '');
+        const postId = decodeURIComponent(path.slice(4));
+        if (q.get('edit')) renderPostEdit(postId);
+        else renderPost(postId, q.get('pane'));
         return;
       }
       // Someone's circle lives at #/friends/<username> — pushed from the friend
@@ -14485,11 +14497,12 @@
         case '#/support': go('#/about'); break;
         default:          location.hash = '#/';
       }
-      // A spotlight has already parked the window on its card during the render,
-      // so this navigation's scroll is done; anything else lands where you left
-      // this history entry, or where you left this PAGE if it's Circle or
-      // Discover reached by a tab tap, or at the top.
-    }, spotlighting ? () => {} : () => restoreScroll(arriving, path));
+      // Every navigation lands where you left this history entry, or where you
+      // left this PAGE if it's Circle or Discover reached by a tab tap, or at
+      // the top. There is no third case left: the spotlight that used to place
+      // the window itself and hand in an empty settle retired with the inline
+      // editor (see the tombstone over staggerDelay).
+    }, () => restoreScroll(arriving, path));
 
     nudgeNav();           // installed shells: re-composite the nav's frosted layer
     // Deliberately NO background re-pull here: a refresh landing on the heels of
