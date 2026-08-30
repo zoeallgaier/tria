@@ -178,7 +178,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// late and a pill that got narrower at 360px from each needing a Swift copy
     /// of a stylesheet rule to chase them.
     ///
-    /// `bar` is `{live, height, title, search, controls: [...]}`; each control
+    /// `bar` is `{live, holdHeader, height, title, search, controls: [...]}`;
+    /// each control
     /// is `{id, kind, x, y, w, h, glyph, ink, tint, text, after, hidden,
     /// menu, label}`. `id` is the web element's own id and it is opaque here —
     /// it goes back out on a tap and app.js decides what it meant.
@@ -959,14 +960,22 @@ final class TriaToolbarMaterial: UIVisualEffectView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 }
 
-/// Watches the web view's scroll offset so the material can appear when there
-/// is finally something under it to separate the bar from.
+/// Watches the web view's scroll offset, and answers the two questions the
+/// bar's header is a function of: is the page at its top, and is the reader
+/// going DOWN it.
 ///
-/// This used to cross the bridge as a `bare` flag on every toolbar push, read
-/// off the `.topbar--bare` class app.js maintains. It does not need to: the
-/// question is "has the page scrolled", the answer is on a scroll view sitting
-/// right here, and a fact native can read itself is one fewer thing that can
-/// arrive a frame late.
+/// Both used to cross the bridge — `bare` as a flag on every toolbar push, read
+/// off the `.topbar--bare` class app.js maintains, and the direction not at all
+/// because the bar it drove was CSS. Neither needs to: the questions are about
+/// a scroll view sitting right here, and a fact native can read itself is one
+/// fewer thing that can arrive a frame late. What the web still owns is WHICH
+/// KIND OF PAGE this is (`holdHeader`), which changes on a navigation rather
+/// than on a scroll and so belongs in the payload.
+///
+/// The two thresholds are ONE NUMBER on purpose, matching `HEADER_SLACK` in
+/// app.js: starting down from the top, the first offset that counts as "off the
+/// top" has to already count as "reading", or the material fades in for the one
+/// frame in between and shimmers.
 ///
 /// KVO rather than the scroll delegate, because the web view's delegate is
 /// WebKit's and taking it is a way to break scrolling itself.
@@ -978,17 +987,36 @@ final class TriaScrollWatch: NSObject {
     /// iOS hands back sub-point offsets, so a threshold of zero is no threshold.
     private static let slack: CGFloat = 4
 
-    private var token: NSKeyValueObservation?
-    private var last: Bool?
+    struct State: Equatable {
+        /// Nothing has passed under the bar yet.
+        var atTop = true
+        /// The reader's last move was downward, so the header stands aside.
+        var reading = false
+    }
 
-    init(of source: UIScrollView, onScrolled: @escaping (Bool) -> Void) {
+    private var token: NSKeyValueObservation?
+    private var last: State?
+    private var lastY: CGFloat = 0
+
+    init(of source: UIScrollView, onChange: @escaping (State) -> Void) {
         super.init()
         token = source.observe(\.contentOffset, options: [.initial, .new]) { [weak self] view, _ in
             guard let self else { return }
-            let under = view.contentOffset.y + view.adjustedContentInset.top > Self.slack
-            guard under != self.last else { return }
-            self.last = under
-            onScrolled(under)
+            let y = view.contentOffset.y + view.adjustedContentInset.top
+            var state = State(atTop: y <= Self.slack, reading: self.last?.reading ?? false)
+            // A move bigger than the viewport can't have come from a thumb: the
+            // router teleports the window to a spotlight, to a remembered
+            // position, back to the top, and a thousand-point jump reading as
+            // "scrolling down fast" is a second move stapled onto a navigation
+            // meant to be one fade. app.js guards its own copy the same way.
+            if abs(y - self.lastY) <= view.bounds.height {
+                if y > self.lastY + Self.slack { state.reading = true }
+                else if y < self.lastY - Self.slack { state.reading = false }
+            }
+            self.lastY = y
+            guard state != self.last else { return }
+            self.last = state
+            onChange(state)
         }
     }
 
@@ -1057,8 +1085,19 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     private let titleLabel = UILabel()
     private var wantsTitle = false
     /// Nothing under the bar yet, so nothing for the material to separate it
-    /// from. Native's own reading of the scroll, not a flag from the web.
-    private var atTop = true
+    /// from, and whether the reader is going down the page. Native's own
+    /// reading of the scroll, not a flag from the web. See `TriaScrollWatch`.
+    private var scroll = TriaScrollWatch.State()
+    /// Whether this route KEEPS its header once you are off the top — a profile
+    /// or a daily, whose small title is a person's name or the day's prompt —
+    /// or hands it back only when the reader scrolls up, which is every page
+    /// named by the tab you pressed to reach it. The web decides (`holdsHeader`
+    /// in app.js): it is a fact about the route, so it arrives on a navigation
+    /// rather than on a scroll.
+    private var holdHeader = false
+    /// The header — the material behind the bar and the small title on it — is
+    /// one object in two views, and this is the single answer both wear.
+    private var headerUp: Bool { !scroll.atTop && (holdHeader || !scroll.reading) }
 
     /// A menu the system is presenting right now and whose rows have not arrived
     /// yet. See `attachMenu` for why they arrive late.
@@ -1092,10 +1131,11 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         host.addSubview(self)
         self.scroller = scroller
         if let scroller {
-            watch = TriaScrollWatch(of: scroller) { [weak self] under in
-                guard let self, self.atTop == under else { return }
-                self.atTop = !under
+            watch = TriaScrollWatch(of: scroller) { [weak self] state in
+                guard let self, state != self.scroll else { return }
+                self.scroll = state
                 self.syncMaterial(animated: true)
+                self.syncTitle(animated: true)
             }
         }
     }
@@ -1104,6 +1144,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     func apply(spec: [String: Any]) {
         live = spec["live"] as? Bool ?? false
+        holdHeader = spec["holdHeader"] as? Bool ?? false
         // The bar is 60px plus the notch on a phone and 88 on a tablet,
         // measured by app.js off the CSS bar rather than assumed here. It is
         // the height of the material and the only geometry it needs.
@@ -1185,8 +1226,11 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
        watcher in app.js): the controls in this bar are the PAGE'S OWN — back,
        the filter dial, Save, •••, search — and a control worth putting on the
        screen is not worth making the reader scroll up to fetch. What still
-       arrives with the scroll is the material behind them, which is what the
-       gesture was really for.
+       arrives with the scroll is the HEADER behind them — the material and the
+       small title — which is what the gesture was really for. It kept the
+       gesture's shape, too: on most routes the header stands aside while the
+       reader goes DOWN a page and comes back when they reach up. See
+       `headerUp`.
 
        Two facts it was built on are worth keeping, because the next animation
        on this class will need them both. `alpha` on a UIVisualEffectView is
@@ -1208,11 +1252,15 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
        is allowed to do that over the page, the way it does in every app that
        scrolls content under the clock.
 
-       So the material is a plain function of two booleans: on a route that
-       draws a bar at all, and on a page that has scrolled — there is something
-       beneath the bar to separate it from, the same reading `.topbar--bare` is,
-       taken natively. Neither one alone. There was a third, the bar being
+       So the material is `live && headerUp`: a route that draws a bar at all,
+       and a header that is currently up. There was a third term, the bar being
        shown, and it went with the hide-on-scroll gesture above.
+
+       AND IT LEAVES WITH THE TITLE, not on its own. `headerUp` is one property
+       read by both, deliberately: the material and the small title are two
+       views of ONE header, and the whole reason the bar's own hide-on-scroll
+       came out is that two halves of one bar were animating separately and
+       could not be made to agree. Change the rule in `headerUp` or in neither.
 
        AND IT FADES, it does not shrink. Everything else on this bar fades;
        nothing in 1.4 enters or leaves by travelling. A collapsing height read
@@ -1229,7 +1277,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     private func syncMaterial(animated: Bool) {
         material.frame = materialFrame()
-        let wanted: CGFloat = (live && !atTop) ? 1 : 0
+        let wanted: CGFloat = (live && headerUp) ? 1 : 0
         guard material.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,
@@ -1240,16 +1288,21 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         }
     }
 
-    /// The title's own arrival, which is a different event from the bar's: the
-    /// page's big serif name has scrolled out from under the bar and the small
-    /// one takes over. `--dur-quick`, the same the CSS rule used.
+    /// The title's arrival: the page's big serif name has scrolled out from
+    /// under the bar, the small one takes over, and the header it rides on is
+    /// up. `--dur-quick`, the same the CSS rule used.
+    ///
+    /// TWO FACTS, and only the first is a webview measurement. `wantsTitle` is
+    /// the web's answer to "has the big title gone", which native cannot see
+    /// (see `titleSpec` in app.js). `headerUp` is native's own, read off the
+    /// scroll view, and it is the same one the material wears.
     ///
     /// The web crossfades it on opacity AND a 6px blur. Only the opacity comes
     /// over: a blur on a UILabel means rasterising it into a layer every frame
     /// of the ramp, which is the cost this whole pass exists to stop paying,
     /// and at 16.8pt over a quarter of a second nobody has ever seen it.
     private func syncTitle(animated: Bool) {
-        let wanted: CGFloat = wantsTitle ? 1 : 0
+        let wanted: CGFloat = (wantsTitle && headerUp) ? 1 : 0
         guard titleLabel.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,

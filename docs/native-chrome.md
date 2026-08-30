@@ -108,7 +108,9 @@ learn what a "Discover filter" or a "daily" is.
   `setChrome({visible, fab})`, where `visible` takes the whole chrome away (the
   post page, the way `body.postbar-live` already does) and `fab` alone tucks the
   + (the composer, `.nav--compose`). `setToolbar({bar})` states the top bar
-  whole: `{live, height, title, controls, search}` — `height` sizes the
+  whole: `{live, holdHeader, height, title, controls, search}` — `holdHeader`
+  says whether this route keeps its header once you are off the top or hands it
+  back only on a scroll up (see "What the top bar kept"); `height` sizes the
   material and `title` is the collapsing small title, drawn natively since the
   material went glass (see "What the top bar kept"). Whether the material is
   PAINTED does not cross: native reads the scroll itself., each control
@@ -354,11 +356,13 @@ under it instead of veiling it. Three details are load-bearing:
   bevelled corners sitting on the page. The frame is inset by `rimSlack` past
   the left, right and top edges, so the only rim left is the bottom one, which
   is the edge a bar is supposed to have.
-- **It is the ONLY thing on this bar that answers to the scroll**, and it needs
-  two facts: `live && !atTop`. `bare` used to cross the bridge on every push;
-  native reads the offset off the webview's scroll view itself
+- **It answers to the scroll, and so does the title, and they answer TOGETHER.**
+  `headerUp` is one property both read: `!atTop && (holdHeader || !reading)`.
+  Neither the offset nor the direction crosses the bridge — `bare` used to, on
+  every push; native reads both off the webview's scroll view itself
   (`TriaScrollWatch`, KVO rather than the scroll delegate, which belongs to
-  WebKit). At the top of a page there is nothing under the bar to separate it
+  WebKit). What the web still owns is `holdHeader`, which is a fact about the
+  ROUTE. At the top of a page there is nothing under the bar to separate it
   from, so there is no material and the page runs clean to the edge.
 - **It FADES, it does not travel or collapse.** There was a build that kept
   `safeAreaInsets.top` behind as a glass tab in the notch, and one where the
@@ -371,17 +375,48 @@ under it instead of veiling it. Three details are load-bearing:
   under the gate: its second copy over the bar's own material was half of what
   made the first build fog.
 
-**THE BAR NO LONGER HIDES ON A SCROLL DOWN**, at either width, and this replaces
-the paragraph that used to say hide-on-scroll was a FADE in the app and a SLIDE
-on the web. It was both, and both are gone. The reason is a design one and it is
-not about the animation: the controls in this bar are the PAGE'S OWN — back, the
-filter dial, Save, •••, search — and a control worth putting on screen is not
-worth making the reader scroll up to fetch. The gesture bought back a 60px strip
-of a feed that had already reserved room for it. What the effect was really
-about survives, and is now the whole of it: **the chrome stays and the header
-arrives with the scroll.** At the top of a page the discs float over clean paper
-with no material behind them; content sliding under brings the glass in, and the
-page's big title going under the bar brings the small one in after it.
+**THE BAR NO LONGER HIDES ON A SCROLL DOWN. ITS HEADER DOES.** This replaces the
+paragraph that used to say hide-on-scroll was a FADE in the app and a SLIDE on
+the web; it was both, and the bar-shaped version of it is gone at either width.
+The split is the whole idea:
+
+- **The CONTROLS never leave.** They are the PAGE'S OWN — back, the filter dial,
+  Save, •••, search — and a control worth putting on screen is not worth making
+  the reader scroll up to fetch. The old gesture bought back a 60px strip of a
+  feed that had already reserved room for it, and charged the page's own
+  controls for it.
+- **The HEADER — the material and the small title — keeps the gesture.** It
+  stands aside while the reader goes DOWN a page and comes back the moment they
+  reach up. That is the half the gesture was always really about: paper and blur
+  between the reader and what they are reading.
+
+**TWO KINDS OF PAGE, and the split is whether the title is telling you anything.**
+`#/`, `#/discover` and `#/updates` are named by the tab you pressed to reach
+them, so their header is decoration while you read and comes back only when
+asked. A profile (`#/u/…` and `#/profile`) and a daily (`#/daily/…`) HOLD theirs:
+the small title there is a person's name or the day's prompt — whose posts are
+these, which question is this — and on a long page that is worth keeping
+overhead. `#/profile` is in the holding half even though it sits on the nav,
+because it is the same page as `#/u/<you>` through the same render function, and
+a bar that behaved differently on the two would read as a bug rather than a
+decision. `holdsHeader()` in app.js is the whole predicate, one line, and
+`holdHeader` is what crosses.
+
+**THE DIRECTION IS READ TWICE AND SHARED NEVER**, which is safe here for a reason
+worth writing down. `syncToolbarReading` keeps the web's copy
+(`.topbar--reading`) and `TriaScrollWatch` keeps native's, off the same scroll
+view, with the same deadband and the same guard against the router's teleports.
+They never both draw: under the gate the web's material is `content: none` and
+its title `visibility: hidden`, so the class is inert in the app and native's
+answer is inert off it. Two readers of one scroll view beats a per-frame flag on
+the bridge, which is what the direction would have to be if the web owned it for
+both.
+
+The DEADBANDS ARE ONE NUMBER on each side (`HEADER_SLACK` in app.js,
+`TriaScrollWatch.slack` in Swift) and it is also the threshold for "off the top".
+That is not tidiness: starting down from the top, the first offset that counts as
+off-the-top has to already count as reading, or the material fades in for the one
+frame in between and shimmers.
 
 So `setShown` is gone from `TriaToolbar`, the `visible` flag is gone from the
 toolbar payload (`live` was the only other answer it ever had), and
@@ -395,6 +430,16 @@ says exactly this, about exactly this class of view, and it was once read as
 being about the bottom bar). What DOES honour alpha is a nested glass ELEMENT,
 which is the fact the composer's + is animated on and the way each disc was
 faded here.
+
+**One thing this makes more visible, and it is a live question rather than a
+finding.** `.statusbar-scrim` is `display: none` under the gate on the reasoning
+that the bar's material does its job, and the material is now absent for most of
+a downward read — so the clock sits over feed content far more of the time than
+it did. iOS resolves it the way it does in every app that scrolls content under
+it, which was the original argument, and the scrim's own note explains why a
+second wash over the bar's material read as fog. A scrim that appeared ONLY while
+the header is down would not stack with anything. Nobody has decided that; it is
+written here so the next person does not re-derive the trade from scratch.
 
 **The collapsing title is DRAWN natively and DECIDED in the web**, and the split
 is the whole point. It appears exactly when the page's own in-flow `<h1>` has

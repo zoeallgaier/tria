@@ -153,6 +153,7 @@
      the controls are up on every route, and the only thing that arrives with
      the scroll is the header behind them. See the watcher further down. */
   function syncTopbar() {
+    syncToolbarReading(true);
     syncToolbarTitle(true);
     syncToolbarEdge(true);
   }
@@ -999,6 +1000,15 @@
 
       const payload = {
         live: onDuty,
+        // WHICH KIND OF PAGE this is, and it is the only thing about the
+        // header's arrival that crosses. A profile and a daily hold their
+        // header once you are off the top; every other route hands it back only
+        // when the reader scrolls up (see syncToolbarReading). That is a fact
+        // about the ROUTE, so it changes on a navigation and not on a scroll —
+        // which is what makes it payload rather than bridge traffic. The
+        // direction itself native reads off the scroll view, the same way it
+        // already reads whether the page is at its top.
+        holdHeader: holdsHeader(),
         // The height of the bar, which is the height of the material: 60px plus
         // the notch on a phone, 88 on a tablet. Measured rather than assumed,
         // and the only geometry the material needs — it is the system's own
@@ -4514,6 +4524,58 @@
       bar.classList.toggle('topbar--title-visible', past);
     }
   }
+  /* ── The header stands down while you read DOWN ────────────────────────────
+     The bar's CONTROLS are up on every route and stay up (see the scroll
+     watcher at the bottom of this file). Its HEADER — the material behind it
+     and the small title on it — is the half that comes and goes, and as of now
+     it answers to the reader's DIRECTION and not just to their position.
+
+     Reading down, there is nothing on the bar but the discs, and the page runs
+     under them clean. Reach back up and the header comes with you: glass, and
+     the page's name if its big one has gone. That is the gesture the whole bar
+     used to make, aimed at the half of it that was never the reason to keep the
+     bar on screen.
+
+     TWO KINDS OF PAGE, and the split is about whether the title is telling you
+     something you already know. `#/`, `#/discover` and `#/updates` are named by
+     the tab you pressed to get to them, so their header is pure decoration
+     while you read and only comes back when you ask. A profile and a daily
+     HOLD theirs: their small title is a person's name or the day's prompt —
+     whose posts are these, which question is this — and on a long page that is
+     the one thing worth keeping overhead. `#/profile` is in the holding half
+     even though it sits on the nav, because it is the same page as `#/u/<you>`
+     rendered by the same function, and a bar that behaved differently on the
+     two would read as a bug rather than a decision.
+
+     THE DEADBAND HAS TO MATCH `topbar--bare`'s, and that is not a coincidence
+     to be tidied away. Starting down from the top, the first frame that counts
+     as "off the top" must already count as "reading", or the material fades in
+     for the one frame in between and shimmers. Same number, one comment. */
+  const HEADER_SLACK = 4;
+  function holdsHeader() {
+    const path = (location.hash || '#/').split('?')[0];
+    return path.startsWith('#/u/') || path.startsWith('#/daily/') || path === '#/profile';
+  }
+  let barLastY = 0;
+  let barReading = false;
+  // `placed` is the router's own jump — see syncTopbar. It takes the new
+  // position without reading a direction out of it.
+  function syncToolbarReading(placed) {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    const y = window.scrollY;
+    // A move bigger than the viewport can't have come from a thumb. The router
+    // teleports the window (to a spotlight, to a remembered position, back to
+    // the top) and a thousand-pixel jump used to read as "scrolling down fast",
+    // which is a second move stapled onto a navigation meant to be one fade.
+    const jumped = placed || Math.abs(y - barLastY) > window.innerHeight;
+    if (!jumped) {
+      if (y > barLastY + HEADER_SLACK) barReading = true;
+      else if (y < barLastY - HEADER_SLACK) barReading = false;
+    }
+    barLastY = y;
+    bar.classList.toggle('topbar--reading', barReading && !holdsHeader());
+  }
   // The bar's MATERIAL, on the same terms as its title: a fill and a blur are
   // for separating the bar from something, and at the top of a page there is
   // nothing under it yet to separate it from — so the bar is bare there, the
@@ -4527,14 +4589,15 @@
   // actually answered (.topbar::before is `content: none` until a page owns the
   // bar), so this only has to keep the class in step with the scroll.
   //
-  // 2px of deadband rather than 0 because iOS rubber-bands past the top and
-  // hands back fractional offsets on the way home. A material that flickers at
-  // rest is worse than one that never leaves. `instant` is the navigation case,
-  // same as the title's: a route change must not play the material out.
+  // A deadband rather than 0 because iOS rubber-bands past the top and hands
+  // back fractional offsets on the way home. A material that flickers at rest
+  // is worse than one that never leaves. It is HEADER_SLACK and not a number of
+  // its own, for the reason written out beside it. `instant` is the navigation
+  // case, same as the title's: a route change must not play the material out.
   function syncToolbarEdge(instant) {
     const bar = document.querySelector('.topbar');
     if (!bar) return;
-    const bare = window.scrollY <= 2;
+    const bare = window.scrollY <= HEADER_SLACK;
     if (bare === bar.classList.contains('topbar--bare')) return;
     if (instant) {
       bar.classList.add('topbar--edge-instant');
@@ -14362,12 +14425,15 @@
     // State the material once at boot, before any render settles. The bar ships
     // in index.html without the class, so a page that opens at the top would
     // otherwise wear a fill for the length of the first paint.
+    syncToolbarReading(true);
     syncToolbarEdge(true);
     let ticking = false;
     window.addEventListener('scroll', () => {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
+        // FIRST: both of the two below are gated on the answer it writes.
+        syncToolbarReading();
         syncToolbarTitle();
         syncToolbarEdge();
         ticking = false;

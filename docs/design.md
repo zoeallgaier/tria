@@ -522,23 +522,27 @@ instead of hitting a wall. The gradient **is** the edge, so `border-bottom` is
 gone: a hard 1px rule under a fading bar draws the one line the effect exists to
 remove.
 
-**And as of 1.3 it is an EFFECT, not a permanent fill.** At the top of a page
-nothing has passed under the bar, so there is nothing to separate it from: the
-material is simply absent, the page runs clean to the top edge, and the controls
-sit on it as the glass objects they already are. It fades in the moment content
-starts sliding underneath — `.topbar--bare`, driven by `syncToolbarEdge`, the
+**And as of 1.3 it is an EFFECT, not a permanent fill — and as of 1.4 the
+reader's DIRECTION is half of when it draws.** At the top of a page nothing has
+passed under the bar, so there is nothing to separate it from: the material is
+simply absent, the page runs clean to the top edge, and the controls sit on it as
+the glass objects they already are. Going DOWN a page it is absent for the same
+reason in spirit — the reader is reading, not looking at chrome — and it comes
+back when they reach up (`.topbar--reading`, driven by `syncToolbarReading`;
+profiles and dailies hold theirs and never wear the class). It fades in the
+moment content starts sliding underneath — `.topbar--bare`, driven by
+`syncToolbarEdge`, the
 same shape as the collapsing title (a boolean crossing with a 2px deadband for
 iOS's rubber band, instant on navigation, never a per-frame value read off the
 scroll). It lives on `.topbar::before` because it has to FADE and neither half
 can do that in place: `background-image` doesn't interpolate between gradients at
 all, and dropping the fill while the blur ramps is two events for one change. One
 `opacity` transition on a layer carrying both does all of it. The status-bar
-scrim goes to full strength while the bar is bare, which is the one state it now
-has to answer for: the bar used to tuck away on a scroll down as well, and that
-gesture is gone (below).
+scrim goes to full strength wherever the material isn't drawn, which is two
+states: the top of a page, and a reader going DOWN one.
 
-**And the rule that takes it there must restate the shell gate, or it
-loses.** `.statusbar-scrim`'s baseline is `html[data-shell="installed"]
+**And the rules that take it there must restate the shell gate, or they
+lose.** `.statusbar-scrim`'s baseline is `html[data-shell="installed"]
 .statusbar-scrim` — an attribute plus a class, (0,2,1). A bare `.topbar--bare
 ~ .statusbar-scrim` is two classes, (0,2,0), so the baseline outranks it and
 0.8 is what the glyphs get in every state. That is not a hypothetical: the

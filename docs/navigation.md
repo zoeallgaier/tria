@@ -125,18 +125,20 @@ authed page while the scroll on screen belongs to the login form. And logging ou
 **clears both maps**, or the next person to sign in opens someone else's feed
 part-way down.
 
-**A jump is not a scroll gesture, and the bar no longer has to care.** The topbar
-read the scroll's DIRECTION through 1.3 and tucked away on a thumb going down,
-which meant a guard against the router's own teleports (to a spotlight, to a
-remembered position, back to the top): a thousand-pixel jump read as "scrolling
-down fast", so landing on a post also slid the bar away — a second move stapled
-onto a navigation meant to have none. The gesture is gone in 1.4 (see
-[native-chrome.md](native-chrome.md)): the controls are up on every route and
-only the bar's material and its small title answer to the scroll, both of them
-POSITION rather than direction, so a teleport has nothing to be mistaken for.
-What survives is the other half of the rule — the router states both after it
-places a scroll (`syncTopbar`), instantly, because a jump may fire no scroll
-event at all and a route change is not a thing to narrate.
+**A jump is not a scroll gesture.** The topbar reads the scroll's DIRECTION —
+its header stands aside while you go down a page and comes back when you reach
+up (see [native-chrome.md](native-chrome.md)) — so it needs a guard against the
+router's own teleports: a jump to a spotlight, to a remembered position, back to
+the top. A thousand-pixel jump reading as "scrolling down fast" is what once slid
+the whole bar away on landing, a second move stapled onto a navigation meant to
+be one fade. Any move bigger than the viewport takes the new position and leaves
+the direction alone. Both halves guard it, because both read it: app.js for the
+web, `TriaScrollWatch` for the app.
+
+The other half of the rule is that the router STATES the bar after it places a
+scroll (`syncTopbar`), instantly. A placed jump may fire no scroll event at all —
+if the destination is where the window already sits, nothing scrolls and nothing
+fires — and a route change is not an event that needs narrating.
 
 **A spotlight has no travel and no wash — and there is only ONE left.** Discover,
 Updates and the frame wall all open `#/p/<id>` now (see the post-page note in [data.md](data.md)), so the only thing still setting `spotlightPost` is the edit flow,

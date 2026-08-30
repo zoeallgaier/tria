@@ -741,6 +741,12 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
   transition: opacity var(--dur-quick) var(--ease);
 }
 .topbar--bare::before { opacity: 0; }
+/* Reading DOWN takes the material off wherever the top of the page would have.
+   The bar keeps its controls — those never leave now — and what goes is the
+   paper and the blur behind them, so a page read downward runs clean under
+   glass discs. Off on the pages that hold their header; see the block by
+   syncToolbarReading in app.js for which those are and why. */
+.topbar--reading::before { opacity: 0; }
 /* A navigation is not a scroll gesture. Landing at the top of a page whose
    predecessor was scrolled must not play the material out on arrival, for the
    same reason .topbar--title-instant exists a few rules down and for the same
@@ -871,6 +877,17 @@ body.toolbar-live .view { padding-top: 1rem; }
    control. Two classes rather than one rule with a fallback, so it outranks
    .topbar--title-visible regardless of source order. */
 .topbar--title-visible.topbar--searching .toolbar-title { opacity: 0; filter: blur(6px); }
+/* AND READING DOWN TAKES IT OUT AGAIN, by the same blur and fade, on every page
+   that doesn't hold its header (syncToolbarReading in app.js decides which; the
+   class is only ever on when it is suppressed, so this rule never has to know
+   about the pages that keep theirs). Two classes for the same reason the
+   searching rule above gives: it has to outrank .topbar--title-visible without
+   depending on source order.
+
+   The title and the material leave TOGETHER and arrive together — they are one
+   header, and the whole reason the bar's own hide-on-scroll came out was that
+   two halves of one bar were animating separately. */
+.topbar--title-visible.topbar--reading .toolbar-title { opacity: 0; filter: blur(6px); }
 /* Suppressed at mount/navigation and the post-layout re-check (syncTopbar in
    app.js), so a page that opens already scrolled past its large title (a
    remembered position, a spotlighted card) shows the small one AT ONCE —
@@ -1221,10 +1238,11 @@ body.toolbar-live .view { padding-top: 1rem; }
     background: var(--statusbar-scrim);   /* white in light mode, dark in dark — themed */
     transition: opacity var(--dur-move) var(--ease);
   }
-  /* Nothing but page under the glyphs, so the scrim goes to full strength: the
-     bar is at the top of a page and its material hasn't faded in yet (see
-     .topbar::before). There was a second way to get here — the bar tucked away
-     on a scroll down — and it went with the gesture.
+  /* Nothing but page under the glyphs, so the scrim goes to full strength.
+     Two ways to get there and they are the same situation, the material is not
+     drawn: the bar is at the top of a page and it hasn't faded in yet, or the
+     reader is going down the page and it has stood aside (see .topbar::before
+     and the two rules by it).
 
      The `html[data-shell="installed"]` gate is restated here on purpose, and
      removing it silently switches this whole behaviour off. It reads as
@@ -1239,7 +1257,8 @@ body.toolbar-live .view { padding-top: 1rem; }
      been stuck at 0.8 in the installed shell ever since — no error, no visual
      tell short of reading white glyphs over a white feed, and invisible in
      every other shell because the scrim isn't drawn there at all. */
-  html[data-shell="installed"] .topbar--bare ~ .statusbar-scrim { opacity: 1; }
+  html[data-shell="installed"] .topbar--bare ~ .statusbar-scrim,
+  html[data-shell="installed"] .topbar--reading ~ .statusbar-scrim { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { html[data-shell="installed"] .statusbar-scrim { transition: none; } }
 }
 
