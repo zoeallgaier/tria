@@ -731,6 +731,10 @@
       const n = Number(px);
       if (!Number.isFinite(n) || n <= 0) return;
       document.documentElement.style.setProperty('--native-chrome-bottom', n + 'px');
+      // This number IS the bottom of the band the page's own CTAs are clipped
+      // to (see pageBand), and it is not something an observer on #view can
+      // see change. A new measurement is a new clip.
+      schedulePage();
     }
 
     /* ── The top bar's controls ──────────────────────────────────────────────
@@ -1035,6 +1039,181 @@
       requestAnimationFrame(() => { barQueued = false; pushToolbar(); });
     }
 
+    /* ── THE PAGE'S OWN PRIMARY ACTS ───────────────────────────────────────────
+
+       Four buttons, named one by one rather than matched by a rule: the
+       composer's Share pill, the auth gate's submit, Share Tria at the foot of
+       Discover, and the daily card's Add yours. On the web they are
+       `.publish-fill.is-solid` — a painted gradient with a hairline and a rim,
+       which is an extremely good impression of Liquid Glass and is not it.
+
+       THIS MOVES A LINE docs/native-chrome.md DREW, and the line is worth
+       restating so the exception is not read as the rule. "Not native, ever:
+       content" was about CARDS, the feed, the composer FORM — the things a
+       reader READS. It was never about the one button on a page that COMMITS.
+       The post card's ••• already crossed here for its menu, on the argument
+       that a control is a control wherever it sits; this is that argument
+       applied to the same kind of object. THE SET IS CLOSED. PAGE_SEL is a list
+       of four selectors, not a rule about buttons, and it stays that way.
+
+       THE ONE THAT COULD NOT COME. The gate's own Create account / Log in are
+       `.auth-submit` and they are matched here, but nothing native exists while
+       `body.gate` is up — the bars are asked for by renderNav, which never runs
+       signed out. So on the gate itself these stay painted, and the selector
+       reaches the `.auth-submit`s that appear AFTER sign-in (Send feedback, and
+       the password change). That is a real seam and it is the safe half of one:
+       the riskiest screen in the app keeps the path that has always worked.
+
+       WHY A RECT IS NOT ENOUGH HERE, when it is for every toolbar control. A
+       control on a bar cannot move. These sit in content that scrolls, and a
+       native view at a web rect does not follow it — measured in this file, at
+       "the anchor scrolled 400pt out from under a menu that never moved" (see
+       watchAnchor). So what crosses is `docY`, the position in the DOCUMENT,
+       and native subtracts its own scroll offset on every change of it. That
+       works because the offset is read by KVO on the web view's scroller rather
+       than from a `scroll` event bounced out of here, which arrives late and
+       coalesced. See TriaPageButton. */
+    const PAGE_SEL = [
+      '.composer-post',        // the composer's Share pill
+      '.auth-submit',          // the gate's submit, and Send feedback
+      '.friends-share-copy',   // Share Tria, at the foot of Discover
+      '.daily-answer',         // the daily card's Add yours (NOT .toolbar-cta,
+                               // which is the same words on the bar and is
+                               // already native by the toolbar's own path)
+    ].join(', ');
+
+    let pageIds = 0;
+    let toldPage = '';
+    let pageQueued = false;
+
+    function pageSpec(el) {
+      if (!el.dataset.nativePage) el.dataset.nativePage = `p${++pageIds}`;
+      const r = el.getBoundingClientRect();
+      const styles = getComputedStyle(el);
+      const { text, after } = words(el);
+      // Share Tria is the only one of the four that carries a mark. liveGlyph
+      // would do here too, but none of these ever holds two.
+      const mark = el.querySelector('svg');
+      return {
+        id: el.dataset.nativePage,
+        x: r.left,
+        // The DOCUMENT position, which is the whole point — see the note above.
+        docY: r.top + window.scrollY,
+        w: r.width, h: r.height,
+        text, after,
+        glyph: mark ? mark.outerHTML : '',
+        // Resolved colours, never token names, the same as every toolbar
+        // control: a washed page and a reader's accent both land in the cascade
+        // and reading the element answers both.
+        ink: toRgb(styles.color) || '',
+        tint: bandOf(el),
+        // These four are set at four different sizes (1.02rem on the gate, 0.95
+        // on the composer's pill, 0.9 on Add yours, 0.85 on Share Tria), so the
+        // face's size is measured rather than being one constant over there.
+        font: parseFloat(styles.fontSize) || 14.4,
+        disabled: !!el.disabled,
+        label: el.getAttribute('aria-label') || text,
+      };
+    }
+
+    /* THE BAND THESE ARE CLIPPED TO, WHICH IS NOT QUITE visibleBand()'s.
+
+       visibleBand measures the bottom bar off `#postbar` and `#nav` — laid-out
+       boxes it can read. Under native chrome `#nav` is `display: none` (the
+       gate at the end of app.css), so there is no box to read and the band's
+       bottom comes back as the whole window. For a MENU that mostly did not
+       matter: UIKit clamps a menu into the safe area on its own. For a button
+       that has to be CUT OFF by the tab bar it matters completely — the whole
+       point of the clip is that a CTA scrolled to the bottom of the feed goes
+       under the chrome instead of floating over it.
+
+       So the bottom comes from the one number that does describe the native
+       bar: `--native-chrome-bottom`, which the plugin measures and stampBottom
+       writes. It is deliberately a little larger than the glass (it carries the
+       clearance a feed's last card wants, see the note in app.css), so the clip
+       lands a few points ABOVE the bar rather than exactly on it. That is the
+       right direction to be wrong in: a button that vanishes a moment early is
+       invisible, and one that vanishes a moment late is drawn on top of the
+       navigation.
+
+       `told.chrome` is the gate, because the post page takes the bottom chrome
+       away entirely and the band opens back up when it does. */
+    function pageBand() {
+      const band = visibleBand();
+      const reserved = parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--native-chrome-bottom')) || 0;
+      if (told.chrome && reserved > 0) {
+        band.bottom = Math.min(band.bottom, window.innerHeight - reserved);
+      }
+      return band;
+    }
+
+    function pushPage() {
+      if (!live) return;
+      // An overlay has taken the screen, so the page under it is frozen and
+      // being dimmed. Its buttons go with it, for the reason the toolbar's own
+      // controls do: half the app dimmed and half of it bright is worse than
+      // either. An empty set is also what every route without a CTA sends.
+      const controls = overlaid() ? []
+        : [...document.querySelectorAll(PAGE_SEL)]
+            .filter((el) => el.getClientRects().length)
+            .map(pageSpec);
+      const band = pageBand();
+      const payload = {
+        controls,
+        band: { top: band.top, bottom: band.bottom, width: window.innerWidth },
+      };
+      const signature = JSON.stringify(payload);
+      if (signature === toldPage) return;
+      toldPage = signature;
+      call('setPageControls', payload).catch(() => {});
+    }
+
+    // Coalesced per frame, like the toolbar's, and for the same reason: a render
+    // replaces the page and then wires it, which is several mutations and one
+    // change. Exported so the two call sites that change a CTA without touching
+    // its box — Share Tria's label after a share — can say so.
+    function schedulePage() {
+      if (!live || pageQueued) return;
+      pageQueued = true;
+      requestAnimationFrame(() => { pageQueued = false; pushPage(); });
+    }
+
+    function watchPage() {
+      const doc = document.getElementById('view');
+      if (!doc) return;
+      /* WHAT MOVES ONE OF THESE, and it is not the same list as the toolbar's.
+         A navigation replaces the whole page (childList). The composer's pill
+         earns and loses its commit (`disabled`). And a photo landing above the
+         fold changes the page's HEIGHT without changing anything an attribute
+         observer can see, which moves every docY below it — that is the
+         ResizeObserver, and it is the same failure watchAnchor documents for
+         menus.
+
+         Deliberately NOT characterData, which on a feed mid-render is thousands
+         of records for the one text swap that matters (Share Tria's label, for
+         1.6s after a share). That call site says so itself instead. */
+      new MutationObserver(schedulePage).observe(doc, {
+        attributes: true, attributeFilter: ['disabled', 'class', 'hidden'],
+        childList: true, subtree: true,
+      });
+      new ResizeObserver(schedulePage).observe(doc);
+      window.addEventListener('resize', schedulePage, { passive: true });
+      // A pill sized in Oxygen is a different width once Oxygen lands, and a
+      // font arriving mutates nothing for an observer to see. Same as the bar.
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(schedulePage);
+      }
+    }
+
+    /* A tap on a native CTA, handed straight back to the button it is wearing
+       the face of. The web element is still in the DOM (the data-chrome gate
+       hides it, it does not remove it) and its own handler is still the only
+       implementation of what the button does — so the composer's submit path,
+       shareOrCopy and the gate's own form all run exactly as they do off-app.
+
+       An id that no longer resolves is a page that has been replaced since the
+       push, and doing nothing is the right answer to it. */
     function watchToolbar() {
       const bar = document.querySelector('.topbar');
       if (!bar) return;
@@ -1721,9 +1900,24 @@
                 document.documentElement.style.setProperty('--native-postbar-lift', lift + 'px');
               }
             });
+          /* A tap on one of the page's own primary acts, handed straight back
+             to the button it is wearing the face of. The web element is still
+             in the DOM — the data-chrome gate hides it, it does not remove it —
+             so the composer's submit path, shareOrCopy and the gate's own form
+             all run exactly as they do off-app. An id that no longer resolves is
+             a page replaced since the push, and doing nothing is the right
+             answer to that. */
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'pageTap' }, (ev) => {
+              const el = ev && ev.id
+                && document.querySelector(`[data-native-page="${ev.id}"]`);
+              if (el) el.click();
+            });
         } catch { /* the bars are up but inert; better than no bars */ }
         watchToolbar();
+        watchPage();
         told.route = told.chrome = told.fab = null;   // force the first push
+        toldPage = '';
         sync();
       }).catch(() => {
         // iOS 25 or older, or a plugin that isn't in the binary. Nothing to say
@@ -1759,6 +1953,9 @@
       }
       pushPostBar();
       scheduleToolbar();
+      // The page's own CTAs move for a third set of reasons (see watchPage),
+      // but a navigation and an overlay opening are common to all three.
+      schedulePage();
     }
 
     // The reader picked a colour, or their avatar resampled. Called from the one
@@ -1791,7 +1988,7 @@
 
     return { setActive, sync, repaint, captureMenu, presentMenu, discIcon,
              postBarText, postBarHooks, searchHooks, wantSearchFocus,
-             live: isLive };
+             schedulePage, live: isLive };
   })();
 
   /* ── Publish speed dial (phones) ───────────────────────────────────────────
@@ -9232,8 +9429,14 @@
     const shareAsk =
       `<div class="feed-empty friends-share">` +
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
+        // The label names the ACT, not one of its two implementations. It read
+        // "Copy triaonline.com to share", which is what shareOrCopy does only on
+        // the branch it takes second: navigator.share exists in the webview and
+        // on every phone browser, so the app announced "copy" for a button that
+        // opens the share sheet. The visible word is already "Share Tria" and
+        // the label now agrees with it.
         `<button class="friends-share-copy publish-fill is-solid" type="button" ` +
-          `aria-label="Copy triaonline.com to share">` +
+          `aria-label="Share Tria">` +
           svgIcon('send', 'friends-share-ico') +
           `<span>Share Tria</span>` +
         `</button>` +
@@ -9568,9 +9771,18 @@
       shareBtn.addEventListener('click', async () => {
         const result = await shareOrCopy({ title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com' });
         if (result === 'cancelled') return;
+        // The receipt, and then the word back. Both say so: this is a
+        // characterData change, which is the one kind watchPage deliberately
+        // does NOT observe (thousands of records on a feed mid-render, for this
+        // single swap), so the native face would otherwise still read
+        // "Share Tria" while the web element underneath said "Shared".
         const label = shareBtn.querySelector('span');
         label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
-        setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
+        NativeChrome.schedulePage();
+        setTimeout(() => {
+          label.textContent = 'Share Tria';
+          NativeChrome.schedulePage();
+        }, 1600);
       });
     }
 
@@ -12607,6 +12819,18 @@
     // friends tie) — they're one component.
     '.toolbar-btn', '.pf-photo-edit', '.nav-link',
     '.feed-empty-cta', '.composer-post',
+    /* THE COMMITS THAT ANSWERED NOTHING. .publish-fill:active only drops the
+       ring mask and sets --pill-ink, and .is-solid already does both at rest —
+       so `:active` is a VISUAL NO-OP on every solid CTA, and these five had no
+       other press state and were not on this list. The auth gate's submit,
+       Share Tria and Save changes are the heaviest acts on their pages and were
+       the only ones in the app that took a finger without moving.
+
+       .daily-answer and .toolbar-cta are deliberately absent: they carry their
+       own `:active { opacity: 0.55 }` and would otherwise be pressed twice. */
+    '.auth-submit', '.friends-share-copy',
+    '.push-ask-on', '.push-ask-dismiss',
+    '.edit-save', '.edit-cancel',
   ].join(', ');
   let pressing = null;   // { el, scale, down } while a finger is down
   function pressRelease() {
@@ -13568,7 +13792,11 @@
           `<textarea id="fb-msg" rows="5" maxlength="4000" ` +
             `placeholder="Say whatever you need to say."></textarea></div>` +
         `<p class="auth-error" id="fb-error" role="alert"></p>` +
-        `<button class="auth-submit fb-submit" type="submit">Send feedback</button>` +
+        // Banded like every other .auth-submit. It was the one that wasn't, and
+        // there was no argument for it — Save password and Send reset link both
+        // wear the band, and a feedback form sitting in the same shell with a
+        // flat accent pill read as a different app's button.
+        `<button class="auth-submit fb-submit publish-fill is-solid" type="submit">Send feedback</button>` +
       `</form>`);
 
     // Signed in this is a pushed page and takes the bar; the chevron goes to

@@ -1388,6 +1388,13 @@ body.toolbar-live .view { padding-top: 1rem; }
    vibrant fill — no inner rim/shade, which only muddied the pastels. (The grain
    ::after that used to ride these fills went with the rest of the grain — see
    the note in the ambient section for why it had to be all or nothing.) */
+/* NOTE THAT `:active` HERE DOES NOTHING FOR .is-solid, which is most of the set.
+   Both lines below are what .is-solid already declares at rest, so a solid CTA
+   pressed looks exactly like a solid CTA idle. That is correct — the ring is the
+   thing being filled, and a filled pill has no ring left to fill — but it means
+   the press has to come from somewhere else. It comes from PRESS_TARGETS in
+   app.js, which is where every solid CTA is now listed. Don't read this block as
+   the press state for the buttons that wear .is-solid. */
 .publish-fill:active,
 .publish-fill[aria-current="page"],
 .publish-fill:focus-visible { color: var(--pill-ink); }
@@ -5828,11 +5835,19 @@ button.poll-option:disabled { cursor: default; }
 /* Standing at the foot of Find Friends — a hairline lifts it off the list above. */
 .friends-share { border-top: 1px solid var(--rule); margin-top: 1.25rem; }
 .friends-share-ask { margin-top: 0.35rem; }
+/* The 44px floor is STATED, not inherited from the padding — which is what it
+   was, and the padding measured 36.8. This is the app's only standing share CTA
+   that is a button rather than a menu row (every other share is a row in a
+   UIMenu, which the system sizes), so there was nothing beside it to keep it
+   honest. Same settlement as .daily-answer: the pill IS the target, no invisible
+   ::after to keep in step. */
 .friends-share-copy {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
   margin-top: 1rem;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   padding: 0.45rem 1rem;
   font-size: 0.85rem;
@@ -5872,7 +5887,16 @@ button.poll-option:disabled { cursor: default; }
   gap: 0.5rem;
   margin-left: auto;
 }
+/* Both of this card's buttons state the 44px floor — they measured 34.8 on their
+   padding alone, which is the smallest touch target the app had. A permission
+   prompt is the worst possible place to make someone aim: "Not now" is the
+   dismissal, and a dismissal that needs a second attempt reads as the app
+   refusing to take no. */
 .push-ask-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   border: none;
   background: none;
   border-radius: var(--radius-pill);
@@ -5885,6 +5909,10 @@ button.poll-option:disabled { cursor: default; }
    monochrome ink fill (like the Save-style submits), not the reserved pastel
    publish-fill gradient. */
 .push-ask-on {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   padding: 0.45rem 1.05rem;
   font-size: 0.85rem;
@@ -6118,10 +6146,33 @@ button.poll-option:disabled { cursor: default; }
    of the floating "+" (which used to sit on top of the right-aligned fill). It
    wears the same shifting-pastel liquid-glass fill as the nav Post and Share
    buttons (.publish-fill.is-solid) — the hero commit reads as the brand gesture. */
+/* FULL WIDTH, the way the profile's Follow / Requested pair is, rather than a
+   centred pill at a label's width. Three things fall out of it and all three are
+   why it's the better shape:
+
+   The old pill was centred to keep clear of the floating "+", which is a
+   constraint that stopped existing — the composer tucks the FAB away
+   (.nav--compose), so the corner it was dodging is empty. What was left was a
+   hero commit sized to the word "Share", which is the one button on this page
+   and did not look like it.
+
+   .friend-btn is the model: `flex: 1` in its row, a 44px floor, and `line-height:
+   1` so the box is the padding and not the font's leading. Stated here as
+   `width: 100%` because this button's parent is a form rather than a two-button
+   row — same result, one less thing to inherit.
+
+   And the floor is STATED. Measured in the app, with Oxygen actually landed,
+   this button was 43.81pt — under the HIG floor by a fifth of a point, on the
+   app's single most important act. The padding-derived height was right at the
+   line in the fallback face and over it in the real one; line-height: 1 plus an
+   explicit min-height settles it in both. */
 .composer .composer-post {
-  margin-inline: auto;
+  display: flex;
+  width: 100%;
+  margin-inline: 0;
   margin-top: 1.4rem;
-  min-width: 13rem;
+  min-height: 44px;
+  line-height: 1;
 }
 .composer .composer-post:disabled { opacity: 0.55; }
 
@@ -8340,3 +8391,38 @@ html[data-chrome="native"] .postbar .postbar-form {
 html[data-chrome="native"] .postbar .mention-list {
   bottom: var(--native-postbar-lift, 96px);
 }
+
+/* ── The page's own primary acts (1.4) ───────────────────────────────────────
+   The composer's Share pill, the auth gate's submit, Share Tria at the foot of
+   Discover, and the daily card's Add yours. UIKit draws these now, in real
+   Liquid Glass, over the page they sit on — see TriaPageButton in the plugin
+   and the PAGE_SEL half of NativeChrome in app.js for the whole argument,
+   including why a set that lives in SCROLLING content can be native at all.
+
+   VISIBILITY, NOT DISPLAY, for exactly the reasons the toolbar's controls
+   state two hundred lines up, and one more that is sharper here. Hidden
+   visibility keeps the box in flow — and these boxes are load-bearing in a way
+   a toolbar disc's never was: the composer's pill is `margin-inline: auto` in
+   the form's own flow and the page ends under it, Share Tria is what a masonry
+   grid ends ON, and the daily's pill is right-aligned on the card's foot with
+   the count beside it. Dropping any of them from flow would collapse the page
+   the native button is measured against, which is the one measurement this
+   whole path depends on being true.
+
+   And the element underneath is still the button: a tap on the glass comes back
+   through `pageTap` and clicks it, so shareOrCopy, the composer's submit and
+   the gate's own form remain the only implementations of themselves.
+
+   THE GATE'S OWN SUBMIT IS MATCHED HERE AND NEVER HIDDEN BY IT, which is not a
+   loose end. `data-chrome` goes up on a resolved setTabs, and setTabs is asked
+   for by renderNav, which does not run while body.gate is up — so signed out
+   this attribute is simply absent and the painted pill is the live one. The
+   selector is written for where the reader ends up, not for where they start.
+
+   LAST IN THE FILE, under the same rule the block above records: an attribute
+   selector carries specificity, and .publish-fill's own rules are stated later
+   than most of what they beat. Restated on the CTA rather than inherited. */
+html[data-chrome="native"] .composer-post,
+html[data-chrome="native"] .auth-submit,
+html[data-chrome="native"] .friends-share-copy,
+html[data-chrome="native"] .daily-answer { visibility: hidden; }

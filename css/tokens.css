@@ -562,3 +562,35 @@
     color-scheme: dark;
   }
 }
+
+/* ── Reduce Transparency and Increase Contrast, for the primary-act material ──
+   Native glass tracks both of these settings on its own, which is one of the
+   arguments native-chrome.md makes for the chrome going native at all. The
+   painted .publish-fill CTAs are the half native does NOT draw, so they have to
+   be told by hand — otherwise a reader with Reduce Transparency on still gets a
+   translucent brand band compositing live content through the Post pill, the
+   auth gate's submit, Share Tria and the daily's Add yours.
+
+   --pill-alpha is a CONTRAST FLOOR with measured figures behind it (see the note
+   where it's declared), so taking it to 1 moves every one of those pairs the
+   safe way: the fill stops compositing against the page at all, and the worst
+   measured 6.04 becomes the band's own opaque figure. Nothing to re-measure.
+
+   SCOPED TO THE CTA MATERIAL ON PURPOSE. The bars, panels, sheets and menus
+   still answer neither setting — that is a wider pass than this one, and it is
+   the one place the CSS chrome is still behind the native chrome beside it.
+
+   Both blocks sit LAST in the file so they beat the dark-mode :root at equal
+   specificity, and both are written in terms of the scheme's own primitives so
+   one copy answers light and dark. */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --pill-alpha: 1; }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --pill-alpha: 1;
+    /* Every glass surface reads this, not just the CTAs. A firmer hairline is
+       the whole ask under Increase Contrast, so the wider reach is the point. */
+    --glass-edge: 1px solid color-mix(in srgb, var(--text) 32%, transparent);
+  }
+}

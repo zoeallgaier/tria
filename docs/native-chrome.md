@@ -29,10 +29,23 @@ free and correct.
 top bar's leading/trailing controls, the bottom bar in both of its jobs (a post
 page's comment bar and a circle's find bar), and Discover's search field.
 
-**Not native, ever:** content. Cards, the feed, the composer form, the post
-page, and the sheets that belong to a *page* rather than to a control — a
+**Also native, and this moved the line below:** the page's own PRIMARY ACTS —
+the composer's **Share** pill, the auth gate's submit, **Share Tria** at the
+foot of Discover, and the daily card's **Add yours**. See "The page's own
+primary acts" near the end of this file for the whole argument, including what
+made a native control in SCROLLING content possible when it wasn't before.
+
+**Not native, ever:** content. Cards, the feed, the composer form's FIELDS, the
+post page, and the sheets that belong to a *page* rather than to a control — a
 confirmation, a list of report reasons. Tria is a web app in a webview and 1.4
 does not change that — it changes who draws the frame around it.
+
+That rule used to say "the composer form" whole, and the four buttons above are
+the correction rather than an exception to it. The rule was always about what a
+reader READS — cards, prose, fields. It was never about the one button on a page
+that COMMITS, and the post card's ••• had already crossed the same line for the
+same reason (see "A menu the page asks for"). **The set is closed:** `PAGE_SEL`
+in app.js is a list of four selectors, not a rule about buttons.
 
 A MENU IS NOT CONTENT, wherever the control that drops one happens to sit. That
 line moved once, deliberately: the post card's •••, the repost circle and the
@@ -1122,3 +1135,60 @@ boxes, which looks exactly like a renderer bug and is a build-order one.
 - **Extra haptics.** System controls buzz themselves. Don't add bridge calls
   beside them — and the shared-world rule in [ios-shell.md](ios-shell.md) still
   governs everything the web layer fires.
+
+## The page's own primary acts
+
+Four buttons that are not on a bar: the composer's **Share** pill, the auth
+gate's submit, **Share Tria** at the foot of Discover, and the daily card's
+**Add yours**. On the web they are `.publish-fill.is-solid` — the brand band
+behind a hairline and a rim, which is a very good impression of Liquid Glass and
+is not the material. In the app they are `UIGlassEffect`, tinted, like every
+other primary act in the chrome.
+
+**Why a rect was not enough here.** A control on a bar cannot move. These sit in
+content that scrolls, and a native view parked at a web rect does not follow it
+— measured in this repo at "the anchor scrolled 400pt out from under a menu that
+never moved" (`watchAnchor` in app.js). A *menu* can answer that by dismissing
+itself. A *button* cannot, so the choice was to track or to stay painted.
+
+**What made tracking work.** Each control crosses with `docY` — its position in
+the DOCUMENT, not on the screen — and `TriaPageControls` subtracts the scroller's
+own offset on every change of it. The offset comes from KVO on
+`webView.scrollView.contentOffset`, the same signal `TriaScrollWatch` already
+reads for the toolbar's material, which fires on the main thread on the turn
+UIKit moved the content. The button is moved by the runloop turn that moved the
+words, momentum included. A `scroll` event bounced out of the web view arrives
+late and coalesced and would have swum.
+
+**The band is the clip, and it is the whole answer to z-order.** Every native
+pixel is above every web pixel. The container is clipped to the strip between
+the two bars, so a CTA scrolled under the tab bar is cut off by the same edge
+the reader sees the content cut off by — nothing faded, nothing special-cased.
+
+**And the band's bottom is NOT `visibleBand()`'s.** That function measures the
+bottom bar off `#nav`, and under native chrome `#nav` is `display: none`, so
+there is no box to read and it reports the whole window. `pageBand()` takes the
+bottom from `--native-chrome-bottom` instead — the plugin's own measurement. It
+is deliberately a little larger than the glass (it carries the clearance a feed's
+last card wants), so the clip lands a few points ABOVE the bar. That is the right
+direction to be wrong in: a button that vanishes a moment early is invisible, and
+one that vanishes a moment late is drawn on top of the navigation.
+
+**What it costs, and it is worth stating.** `UIGlassEffect.tintColor` is ONE
+colour, so `bandOf()` sends the band's middle stop and the four-stop brand sweep
+does not survive. That is the same trade `.toolbar-commit` and `.toolbar-cta`
+already make, and it is far more visible on a full-width pill than on a 44pt
+disc. If the sweep ever has to come back, the FAB is the precedent — it takes the
+resolved stops as an array and paints a real gradient under the glass.
+
+**The gate's own submit is matched and never reached.** `data-chrome` goes up on
+a resolved `setTabs`, which `renderNav` asks for, and `renderNav` does not run
+while `body.gate` is up. So signed out these stay painted and the riskiest screen
+in the app keeps the path that has always worked. The selector reaches the
+`.auth-submit`s that appear AFTER sign-in — Send feedback, and the password
+change.
+
+**Still unverified on a device:** the scroll tracking itself. The bridge, the
+placement, the tint, the tap crossing back and a layout shift moving the button
+were all confirmed on the simulator; an actual scroll under one of these four
+was not reached there. It is the first thing to look at on a phone.

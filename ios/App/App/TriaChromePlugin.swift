@@ -45,7 +45,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "presentMenu", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "dismissMenu", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPostBar", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setPostBarText", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setPostBarText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setPageControls", returnType: CAPPluginReturnPromise)
     ]
 
     /// Built on the first `setTabs` and kept for the life of the app. Nil until
@@ -74,6 +75,11 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// A post page's comment bar, built the first time one is mounted. Same
     /// availability dance again.
     private var postBar: TriaPostBarControl?
+
+    /// The page's own primary acts — the composer's Share pill, the gate's
+    /// submit, Share Tria, the daily's Add yours — built the first time a route
+    /// carries one. Same availability dance again.
+    private var pageControls: TriaPageControlsControl?
 
     /// Mounts the bars (first call) or restates them (later ones — the FAB's
     /// band changes when the reader picks a colour). Resolves with the geometry
@@ -344,6 +350,60 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let focus = call.getBool("focus", false)
         DispatchQueue.main.async { [weak self] in
             self?.postBar?.setText(text, selection: selection, focus: focus)
+            call.resolve()
+        }
+    }
+
+    /// The page's own primary acts, stated whole on every change: the composer's
+    /// **Share** pill, the auth gate's submit, **Share Tria** and the daily
+    /// card's **Add yours**.
+    ///
+    /// These are the one set of native controls that do NOT live on a bar, and
+    /// what that costs is written on `TriaPageButton`. The short version: they
+    /// sit in content that scrolls, so each one crosses with a `docY` — its
+    /// position in the DOCUMENT rather than on the screen — and the container
+    /// tracks the web view's own `contentOffset` to keep it there. `band` is the
+    /// strip between the two bars that app.js already measures for the anchored
+    /// menus; the container is clipped to it, which is the whole answer to a
+    /// native button scrolling under native chrome.
+    ///
+    /// An empty `controls` is a route with no primary act on it, which is most
+    /// of them — the set empties rather than the view going away, so the
+    /// container is built once and the scroll observation is never restarted.
+    @objc func setPageControls(_ call: CAPPluginCall) {
+        guard #available(iOS 26.0, *) else {
+            call.reject("Liquid Glass needs iOS 26; the painted CTAs stay.")
+            return
+        }
+        let controls = (call.getArray("controls") as? [[String: Any]]) ?? []
+        let bandSpec = call.getObject("band") ?? [:]
+        let band = CGRect(x: 0,
+                          y: TriaToolbar.number(bandSpec["top"]),
+                          width: TriaToolbar.number(bandSpec["width"]),
+                          height: max(0, TriaToolbar.number(bandSpec["bottom"])
+                                        - TriaToolbar.number(bandSpec["top"])))
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard let host = self.bridge?.viewController?.view else {
+                call.reject("No view controller to hang the page controls on.")
+                return
+            }
+            let controlsView: TriaPageControls
+            if let existing = self.pageControls as? TriaPageControls {
+                controlsView = existing
+            } else {
+                controlsView = TriaPageControls()
+                // A tap is handed straight back. app.js finds the web element by
+                // the id it minted and clicks it, so the page's own handler is
+                // still the only implementation of what the button does — the
+                // same contract `toolbarTap` crosses on.
+                controlsView.onTap = { [weak self] id in
+                    self?.notifyListeners("pageTap", data: ["id": id])
+                }
+                controlsView.install(in: host, scroller: self.bridge?.webView?.scrollView)
+                self.pageControls = controlsView
+            }
+            controlsView.apply(controls: controls, band: band)
             call.resolve()
         }
     }
@@ -3402,5 +3462,297 @@ extension UIImage {
             draw(at: .zero, blendMode: .normal, alpha: alpha)
         }
         return out.withRenderingMode(renderingMode)
+    }
+}
+
+
+/// The availability-free face of `TriaPageControls`, so the plugin can hold one
+/// without becoming iOS 26-only itself. Same dance as `TriaAnchoredControl`.
+protocol TriaPageControlsControl: AnyObject {
+    func apply(controls: [[String: Any]], band: CGRect)
+}
+
+
+/// THE PAGE'S OWN PRIMARY ACTS, IN REAL GLASS.
+///
+/// The composer's **Share** pill, the auth gate's submit, **Share Tria** at the
+/// foot of Discover and the daily card's **Add yours**. On the web these are
+/// `.publish-fill.is-solid` — a painted gradient with a hairline and a rim,
+/// which is a very good impression of the material and is not the material.
+///
+/// THIS IS A DELIBERATE MOVE OF THE LINE `docs/native-chrome.md` DREW, and the
+/// line is worth restating before the exception is read as the rule. "Not
+/// native, ever: content" was about CARDS, the feed, the composer FORM — the
+/// things a reader reads. It was never about the one button on a page that
+/// COMMITS. The post card's ••• already crossed this line for the menus, on the
+/// argument that a control is a control wherever it happens to sit; this is the
+/// same argument applied to the same kind of object, and the set is closed:
+/// four primary acts, named one by one in app.js, not a rule about buttons.
+///
+/// WHAT MADE IT POSSIBLE, because it was not possible before. A native view at
+/// a web rect does not move when the page under it does — measured, in this
+/// repo, at "the anchor scrolled 400pt out from under a menu that never moved"
+/// (see `watchAnchor` in app.js). A MENU can answer that by dismissing itself; a
+/// BUTTON cannot, so the choice was to track or to stay painted. Tracking works
+/// here for one reason: the offset is read by KVO on the web view's own
+/// `scrollView.contentOffset` — the same signal `TriaScrollWatch` already reads
+/// for the toolbar's material — which fires on the main thread in step with the
+/// scroll, momentum included. The button is moved by the same runloop turn that
+/// moved the content, so it is locked to the page rather than chasing it. A
+/// `scroll` event bounced through the web view would not have been.
+///
+/// THE BAND IS THE CLIP, AND IT IS THE WHOLE ANSWER TO Z-ORDER. Every native
+/// pixel is above every web pixel, and these sit in content that scrolls under
+/// two bars. So the container is clipped to the band app.js measures between
+/// them (`visibleBand`, already built for the anchored menus), and a button
+/// leaving that band is cut off by the same edge the reader sees the web
+/// content cut off by. Nothing is faded, nothing is special-cased, and a button
+/// scrolled fully out draws nothing.
+///
+/// The web element stays the model, on exactly the terms every toolbar control
+/// crosses on: it is still in the DOM, still hidden by the `data-chrome` gate,
+/// and a tap here is handed back so app.js can click it. `.composer-post`'s
+/// disabled state, the label Share Tria swaps to for 1.6s after a share, the
+/// gate's own submit path — all of it is the code that already shipped.
+@available(iOS 26.0, *)
+final class TriaPageButton: UIVisualEffectView {
+
+    let id: String
+    let button = UIButton(type: .custom)
+    var onTap: ((String) -> Void)?
+
+    /// Where the control sits in the DOCUMENT, not on the screen. The screen
+    /// position is this minus wherever the scroller happens to be, recomputed on
+    /// every offset change — which is what `layout(scroll:)` below is.
+    var docY: CGFloat = 0
+    var docX: CGFloat = 0
+    var size: CGSize = .zero
+
+    private var drawn = ""
+
+    init(id: String) {
+        self.id = id
+        super.init(effect: UIGlassEffect(style: .regular))
+        (effect as? UIGlassEffect)?.isInteractive = true
+        cornerConfiguration = .capsule()
+        button.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            button.topAnchor.constraint(equalTo: contentView.topAnchor),
+            button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+        button.addTarget(self, action: #selector(tapped), for: .touchUpInside)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    @objc private func tapped() { onTap?(id) }
+
+    func update(spec: [String: Any]) {
+        docX = TriaToolbar.number(spec["x"])
+        docY = TriaToolbar.number(spec["docY"])
+        size = CGSize(width: TriaToolbar.number(spec["w"]),
+                      height: TriaToolbar.number(spec["h"]))
+        button.accessibilityLabel = spec["label"] as? String
+        button.accessibilityTraits = .button
+
+        let glyph = spec["glyph"] as? String ?? ""
+        let ink = spec["ink"] as? String ?? ""
+        let tint = spec["tint"] as? String ?? ""
+        let text = spec["text"] as? String ?? ""
+        let after = spec["after"] as? String ?? ""
+        let font = TriaToolbar.number(spec["font"], fallback: 14.4)
+        let disabled = spec["disabled"] as? Bool ?? false
+        let key = [glyph, ink, tint, text, after, "\(font)", "\(disabled)",
+                   "\(size.width)"].joined(separator: "|")
+        guard key != drawn else { return }
+        drawn = key
+
+        let inkColour = TriaChromeBar.color(fromHex: ink) ?? .label
+        /* A CONFIGURATION, NOT `setTitle` + `setImage`, and that is the one way
+           this differs from `TriaToolbarButton`. A toolbar control carries
+           EITHER a glyph or words; Share Tria carries a mark LEADING its words,
+           and the old pair of setters can only place an image beside a title
+           through `imageEdgeInsets`, which iOS 15 deprecated and which a
+           configuration ignores outright. `UIButton.Configuration` is the only
+           API that still lays the two out together.
+
+           The words are in the app's own face at the size the stylesheet set —
+           the same contract `TriaToolbarButton.pill` records, except that these
+           four are set at four DIFFERENT sizes (the gate's submit at 1.02rem,
+           the composer's pill 0.95, Add yours 0.9, Share Tria 0.85), so the size
+           is measured over there and sent rather than being one constant here.
+
+           `.plain()` is transparent, which is what a face on glass has to be:
+           the material is the view behind this button, and a configuration with
+           a background of its own would sit on top of it — "never glass on
+           glass", from the other direction. */
+        var conf = UIButton.Configuration.plain()
+        conf.contentInsets = .zero
+        conf.attributedTitle = AttributedString(
+            NSAttributedString(string: after.isEmpty ? text : "\(text)  \(after)",
+                               attributes: [
+                                   .font: TriaPageButton.face(font),
+                                   .foregroundColor: inkColour
+                               ]))
+        if !glyph.isEmpty {
+            conf.image = TriaSVG.image(markup: glyph, size: 15, ink: inkColour, template: false)
+            conf.imagePlacement = .leading
+            // 0.45rem, which is the `gap` .friends-share-copy sets between its
+            // mark and its words. Measured there, not chosen here.
+            conf.imagePadding = 7.2
+        }
+        button.configuration = conf
+
+        if let glass = effect as? UIGlassEffect {
+            glass.tintColor = TriaChromeBar.color(fromHex: tint)
+            effect = glass
+        }
+
+        /* `.composer-post:disabled { opacity: 0.55 }` — the composer's pill is
+           mounted before the form has anything to publish. Dimmed and inert,
+           not removed: it is the page's anchor, and a commit that vanishes until
+           you have earned it is a page that keeps changing shape while you fill
+           it.
+
+           THE DIM IS THE VIEW'S ALPHA AND THE INERTNESS IS THE VIEW'S, not
+           `button.isEnabled`. A UIButton driven by a configuration dims its own
+           title when disabled, on top of the 0.55 asked for here — 0.55 twice is
+           0.30, which is a different button. Taking interaction off the effect
+           view leaves the title's explicit colour alone and dims the glass with
+           the words, which is what one translucent element becoming fainter
+           looks like. */
+        isUserInteractionEnabled = !disabled
+        alpha = disabled ? 0.55 : 1
+    }
+
+    /// Oxygen Bold at whatever size the stylesheet set, with the system face at
+    /// the same size and weight as the fallback — see `TriaToolbarButton.pill`
+    /// for why a real copy of the face is in the bundle at all.
+    static func face(_ size: CGFloat) -> UIFont {
+        UIFont(name: "Oxygen-Bold", size: size) ?? .systemFont(ofSize: size, weight: .bold)
+    }
+
+    /// Put the button where the page currently is. `scroll` is the scroller's
+    /// own offset, so this is document space minus scroll space, which is screen
+    /// space — and it is recomputed rather than animated, because the thing it
+    /// is following is already being animated by UIKit.
+    func layout(scroll: CGFloat, in band: CGRect) {
+        frame = CGRect(x: docX, y: docY - scroll, width: size.width, height: size.height)
+        // Fully outside the band is not "clipped to nothing", it is OFF — a
+        // hidden view is not hit-tested, so a button scrolled under the tab bar
+        // cannot take a tap meant for the bar.
+        let onScreen = frame.maxY > band.minY && frame.minY < band.maxY
+        isHidden = !onScreen
+    }
+}
+
+
+/// The container the four page controls live in, and the thing that keeps them
+/// on the page while it scrolls. See `TriaPageButton` for why this exists at all.
+@available(iOS 26.0, *)
+final class TriaPageControls: UIView, TriaPageControlsControl {
+
+    var onTap: ((String) -> Void)?
+
+    private var buttons: [String: TriaPageButton] = [:]
+    private weak var scroller: UIScrollView?
+    private var token: NSKeyValueObservation?
+    /// The band between the two bars, in the host's coordinates. The container's
+    /// own frame IS the band, so `clipsToBounds` does the cutting.
+    private var band = CGRect.zero
+
+    init() {
+        super.init(frame: .zero)
+        clipsToBounds = true
+        backgroundColor = .clear
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// A container that takes no taps of its own. Without this the clipped band
+    /// is a full-width invisible sheet over the page, and every tap on a card
+    /// inside it would land here instead of in the web view.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
+    }
+
+    func install(in host: UIView, scroller: UIScrollView?) {
+        // UNDER the bars where they already exist, so the band's clip is a
+        // second line of defence rather than the only one. At boot the bars are
+        // installed first (setTabs, then setToolbar, then a page's controls), so
+        // this normally finds one.
+        if let chrome = host.subviews.first(where: { $0 is TriaChromeBar || $0 is TriaToolbar }) {
+            host.insertSubview(self, belowSubview: chrome)
+        } else {
+            host.addSubview(self)
+        }
+        self.scroller = scroller
+        guard let scroller else { return }
+        // THE WHOLE REASON THIS IS POSSIBLE. Not a `scroll` event bounced out of
+        // the web view — that arrives late and coalesced, and a button a frame
+        // behind the words it belongs to reads as broken. `contentOffset` under
+        // KVO fires on the main thread on the same turn UIKit moved the content.
+        token = scroller.observe(\.contentOffset, options: [.initial, .new]) { [weak self] _, _ in
+            self?.place()
+        }
+    }
+
+    deinit { token?.invalidate() }
+
+    /// The offset app.js's own `window.scrollY` agrees with. Capacitor pins the
+    /// web view's content inset to zero (the same fact that puts the system's
+    /// scroll edge effect out of reach — see `TriaToolbarMaterial`), so the
+    /// adjusted inset is 0 and these two are the same number. Added anyway,
+    /// because a build that stops pinning it should move the buttons, not slide
+    /// them by the inset.
+    private var offset: CGFloat {
+        guard let scroller else { return 0 }
+        return scroller.contentOffset.y + scroller.adjustedContentInset.top
+    }
+
+    func apply(controls: [[String: Any]], band: CGRect) {
+        self.band = band
+        frame = band
+        var live = Set<String>()
+        for spec in controls {
+            guard let id = spec["id"] as? String, !id.isEmpty else { continue }
+            live.insert(id)
+            let button: TriaPageButton
+            if let existing = buttons[id] {
+                button = existing
+            } else {
+                button = TriaPageButton(id: id)
+                button.onTap = { [weak self] tapped in self?.onTap?(tapped) }
+                addSubview(button)
+                buttons[id] = button
+            }
+            button.update(spec: spec)
+        }
+        // A control the page no longer draws. Navigations are the common case
+        // and they replace the whole set at once.
+        for (id, button) in buttons where !live.contains(id) {
+            button.removeFromSuperview()
+            buttons.removeValue(forKey: id)
+        }
+        place()
+    }
+
+    /// Every button, at the current scroll. Called on every offset change, so it
+    /// does no work beyond the arithmetic.
+    private func place() {
+        let scroll = offset
+        // The band is the container's frame, so a button's own coordinates are
+        // relative to the band's top — which is why the band is passed through
+        // in the container's own space rather than the host's.
+        let local = CGRect(origin: .zero, size: band.size)
+        for button in buttons.values {
+            button.layout(scroll: scroll + band.minY, in: local)
+        }
     }
 }

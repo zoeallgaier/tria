@@ -34,6 +34,15 @@ menus a control on the PAGE drops — the post card's •••, the repost circ
 profile's colour ring — which the web asks for rather than being asked about,
 and which fall back to the sheet they always were off-app.
 
+So do the page's own PRIMARY ACTS: the composer's **Share** pill, the auth
+gate's submit, **Share Tria** and the daily card's **Add yours**. Those sit in
+content that SCROLLS, which is why they could not be native until now — each one
+crosses with its position in the document and native tracks the web view's own
+`contentOffset`, clipped to the band between the bars. "Not native, ever:
+content" still holds and always meant what a reader READS; the one button on a
+page that commits was never that. **The set is closed** — `PAGE_SEL` in app.js
+is four selectors, not a rule about buttons.
+
 The PIECES THAT HOLD A CARET are native too, and they are the one place native is
 more than a face: a field cannot be borrowed from a hidden element, so the
 `UITextView` in a post page's COMMENT BAR, the `UITextField` in a circle's FIND
