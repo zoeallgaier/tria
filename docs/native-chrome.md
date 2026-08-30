@@ -675,6 +675,13 @@ something now that the circle is one tap from Repost and one more from having do
 it: the row was a slower route to a menu whose door the reader is already looking
 at, and it pushed Copy link off the end nearest the glyph.
 
+**A pick comes back as an INDEX, and that is the whole answer.** The toolbar's
+menus reply through a synthesised row the caller reads a `dataset` off, because
+their callers are the web card's own row handlers and that is the vocabulary they
+already speak. These two aren't: they built their list a few lines from where the
+pick lands, so `presentMenu` takes an `onPick(index)` and hands it straight back
+— no row to fabricate, no `data` to round-trip an integer through.
+
 **A pick is checked against a TOKEN, not against the control's id.** These menus
 hang off cards, and a card is a node a refresh can replace out from under an
 open menu; an id would still match after that and run a row against the wrong

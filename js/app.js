@@ -1319,22 +1319,11 @@
       return { top, bottom };
     }
 
-    /* THE RECT IS THE ONLY THING THE PLACEMENT LISTENS TO, and it is the
-       control's own. There is no way to ask UIKit for a side — a UIButton's menu
-       has no placement API, and no public call opens a menu at a point.
-
-       What the rect reliably buys is the VERTICAL, and that is what the two card
-       menus are built on: the menu's near edge comes to rest on the control's
-       (top on top opening downward, bottom on bottom opening upward), and the
-       first row is the row on that edge (see preferredMenuElementOrder), so the
-       row you want is under the finger that just tapped and tapping again runs
-       it. The HORIZONTAL is the system's and it is not consistent: it lands on
-       the control's own edge sometimes and drifts toward the middle of the
-       screen other times, off the same rect. The repost circle rides the right
-       end of the action row, where both answers put the menu's right edge on it;
-       the ••• at the left inset gets whichever UIKit felt like. Measured, not
-       assumed — see TriaAnchoredMenu. */
-    function presentMenu(anchor, { label, items, onRow }) {
+    /* The rect is the control's own and it is the only thing the placement
+       listens to — there is no way to ask UIKit for a side. What that buys, and
+       what it doesn't, is written where the two card menus are built
+       (openAnchoredMenu) and measured in docs/native-chrome.md. */
+    function presentMenu(anchor, { label, items, onPick }) {
       if (!live || !anchor || !items || !items.length) return false;
       const r = anchor.getBoundingClientRect();
       if (!r.width || !r.height) return false;
@@ -1355,7 +1344,7 @@
       const bottom = Math.max(Math.min(r.bottom, band.bottom), band.top);
       const seq = ++anchoredSeq;
       const sent = { x: r.left, y: top, w: r.width, h: Math.max(1, bottom - top) };
-      anchoredMenu = { seq, token: 0, items, onRow };
+      anchoredMenu = { seq, token: 0, onPick };
       call('presentMenu', {
         label: label || '',
         rect: sent,
@@ -1372,19 +1361,18 @@
       return true;
     }
 
+    /* The system has already dismissed by the time this arrives, so there is no
+       close to sequence against and nothing to hand back but WHICH ROW. The
+       toolbar's menus still speak in synthesised buttons (pickMenu below) —
+       their callers are the web card's own row handlers and read a dataset —
+       but these two callers built their list a few lines from here and an index
+       is all they ever wanted out of it. */
     function pickAnchored(token, index) {
       const open = anchoredMenu;
       if (!open || !open.token || open.token !== token) return;
       anchoredMenu = null;
       stopAnchorWatch();
-      const item = open.items[index];
-      if (!item) return;
-      // The same contract the card's rows keep: onRow gets the row that was
-      // tapped and the close it should sequence against. The system has already
-      // dismissed, so closing is only running what came after it.
-      const row = document.createElement('button');
-      Object.assign(row.dataset, item.data || {});
-      open.onRow(row, (then) => { if (then) then(); });
+      open.onPick(index);
     }
 
     function pickMenu(id, index) {
@@ -5094,54 +5082,48 @@
   /* ── A menu dropped by a control ON THE PAGE ───────────────────────────────
      The post card's •••, the repost circle beside it, the profile's colour
      ring. Same rows as openGlyphMenu, a different place to hang them from, and
-     a different fallback.
+     a different fallback: where there is a system menu to ask for these belong
+     to the control that opened them, and where there isn't (the web, an older
+     phone) the sheet they always were still rises.
 
-     THE SHEET WAS RIGHT AND IS NO LONGER. All three of these threw an action
-     sheet up from the bottom of the screen, and the reason is written on
-     openRepostMenu: these controls ride a card at an arbitrary scroll position,
-     so a card dropped out of one lands anywhere between mid-screen and the
-     gutter above the nav, and the same tap produces a different-shaped thing
-     every time. A real UIMenu does not have that problem — the system flips it,
-     scrolls it, and clips it to the safe area itself — so where there is one to
-     ask for, the menu belongs to the control that opened it, exactly as it does
-     in the bar. Where there isn't (the web, an older phone), the sheet is still
-     the honest answer and still what runs.
+     `items` is openGlyphMenu's array — {label, icon, danger, run} — plus the
+     two a radio set adds (radio, checked) and an `ink` for a row that names a
+     hue. One array, two drawings, one `run`, which is what stops the fallback
+     becoming a second version of the menu.
 
-     `items` is openGlyphMenu's array: {label, icon, danger, run}, plus the two
-     a radio set adds (radio, checked) and an `ink` for a row that names a hue.
-     One array, two drawings, one `run` — the same contract the bar menu keeps,
-     which is what stops the fallback becoming a second version of the menu.
+     TWO ROWS, NO TITLE, AND THE ONE THAT MATTERS FIRST. These menus are built
+     to be tapped twice: the system puts the first row nearest the control, so
+     Repost and Copy link land back on the glyph and tapping it again runs them.
+     A UIMenu's title would sit between them and the glyph, so there isn't one —
+     no loss on a two-row menu whose rows say the same words. The toolbar's
+     menus keep theirs; they hang off a bar rather than off a thumb.
 
-     AND NO TITLE, which is the one thing these give up that the toolbar's menus
-     keep. A UIMenu's title is a band at the TOP of the card, and the top of the
-     card is exactly where these land: a control in the upper half of the screen
-     drops its menu downward with the menu's top corner on the glyph, so the
-     thing sitting under the finger is the title and the row it names is 50pt
-     further on. That is the second tap gone, on the menus built to have one. It
-     costs nothing to drop: "Post" and "Repost" were labelling two- and
-     three-row menus whose rows say the same words. The toolbar's menus keep
-     theirs — they hang off a bar, not off the reader's thumb. */
+     WHERE THE MENU LANDS IS THE SYSTEM'S, and only roughly ours. The vertical
+     is reliable — the menu's near edge comes to rest on the control's — and the
+     horizontal is not: it lands on the control's own edge much of the time and
+     drifts toward the middle of the screen the rest. Everything public was
+     tried (see docs/native-chrome.md for the measurements, including the two
+     approaches that made it worse), so this is the honest ceiling rather than a
+     thing left undone. Don't add a fourth dial: the rect, the row order and the
+     missing title are the three that work, and they are enough. */
   function openAnchoredMenu(anchor, { items }) {
-    const fire = (it) => {
-      if (it && it.danger) hapticEvent('WARNING');
-      if (it && it.run) it.run();
-    };
+    // The row goes over as it already is, with only its MARK resolved — a glyph
+    // key becomes markup here because the key is app vocabulary and the bridge
+    // carries drawings. rowsFor over there reads the fields it knows and drops
+    // the rest, `run` included, so there is nothing to hand-copy.
+    const rows = items.map(it => ({ ...it, icon: it.markup || (it.icon ? svgIcon(it.icon) : '') }));
     if (anchor && NativeChrome.presentMenu(anchor, {
-      items: items.map((it, i) => ({
-        label: it.label,
-        icon: it.markup || (it.icon ? svgIcon(it.icon) : ''),
-        ink: it.ink || '',
-        radio: !!it.radio,
-        checked: !!it.checked,
-        danger: !!it.danger,
-        group: it.group || 0,
-        data: { i: String(i) },
-      })),
-      onRow: (btn) => fire(items[+btn.dataset.i]),
+      items: rows,
+      onPick: (i) => {
+        const it = items[i];
+        if (!it) return;
+        if (it.danger) hapticEvent('WARNING');
+        if (it.run) it.run();
+      },
     })) return;
-    // The system has no menu to give, so the sheet rises as it always did. It
-    // sequences the run against its own close, which is why this is openSheet's
-    // items rather than a second call to fire().
+    // The system has no menu to give, so the sheet rises as it always did — and
+    // it runs `run` against its own close, which is why the sheet gets the
+    // ORIGINAL array rather than a second copy of the handler above.
     openSheet({ items });
   }
 
@@ -8074,9 +8056,8 @@
         radio: true,
         checked: src.key === current,
         group: src.group,
-        data: { accent: src.key },
       })),
-      onRow: (row) => applyAccent(row.dataset.accent, current),
+      onPick: (i) => applyAccent(sources[i].key, current),
     })) return;
 
     // The fill goes on the DISC, not the button: every source paints
