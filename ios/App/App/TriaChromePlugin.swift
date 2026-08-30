@@ -2082,7 +2082,8 @@ protocol TriaPostBarControl: AnyObject {
     func setText(_ text: String, selection: Int, focus: Bool)
 }
 
-/// A POST'S COMMENT BAR, WHICH IS THE ONE PIECE OF CHROME THAT HOLDS A CARET.
+/// A POST'S COMMENT BAR AND A CIRCLE'S FIND BAR — THE PIECE OF CHROME THAT HOLDS
+/// A CARET.
 ///
 /// The tab bar and the toolbar are buttons: native wears their face, a tap
 /// crosses back, and the web element that was always the implementation runs.
@@ -2108,6 +2109,17 @@ protocol TriaPostBarControl: AnyObject {
 /// the 1.4 contract keeps off this bridge. It opens upward out of the bar as it
 /// always did, positioned against a lift this class measures and reports (see
 /// `onLift` and `--native-postbar-lift`).
+///
+/// AND IT IS A CIRCLE'S FIND BAR TOO. The same host, the same keyboard guide,
+/// the same ways down; the pill inside it swaps its two ends and its field (see
+/// `TriaPostBarPill`). It was left web at first on the argument that it had
+/// nothing to gain — no mention picker, no growth, no send — and that looked at
+/// the wrong half of the bar. What makes this class necessary is not what the
+/// bar grows into, it is that the bar sits ON the keys, and a keyboard raised
+/// for a web field is positioned against the web view. So the find bar was
+/// chasing its keyboard a `visualViewport` resize at a time while the bar one
+/// page away rode it, and the same pill visibly stopped being glass when a
+/// reader walked from a thread to a circle.
 @available(iOS 26.0, *)
 final class TriaPostBar: UIView, TriaPostBarControl {
 
@@ -2309,6 +2321,21 @@ final class TriaPostBar: UIView, TriaPostBarControl {
 /// The pill itself: the avatar, the field and the send disc, laid out from the
 /// numbers app.js measured off the stylesheet.
 ///
+/// AND IT IS TWO BARS, because the stylesheet says they are one. A post page's
+/// COMMENT BAR and a circle's FIND BAR are the same pill with their two ends
+/// swapped — the leading avatar becomes a magnifier on the avatar's own box and
+/// datum, and the send disc becomes a bare clear at the send's own 44 — so the
+/// glass, the corner, the keyboard tracking, the idle fade and every box in the
+/// spec are shared, and `find` switches the two ends and nothing else.
+///
+/// The one part that is not a swap is the FIELD. A comment grows to four lines
+/// and a search does not grow at all: on the web that is a `<textarea>` and an
+/// `<input>`, and here it is a `UITextView` and a `UITextField`. Holding both
+/// and showing one is smaller than it looks and much smaller than the
+/// alternative — a `UITextView` pinned to a single line either wraps a long
+/// query out of sight or has to be taught to scroll sideways, which is the one
+/// thing a text field already is.
+///
 /// EVERY NUMBER IN HERE ARRIVES FROM THE WEB, and it arrives as a BOX rather
 /// than as a rule. `.postbar-form` derives its shape from itself — the field is
 /// as tall as the send disc at one line, the corner is that disc's radius plus
@@ -2321,7 +2348,7 @@ final class TriaPostBar: UIView, TriaPostBarControl {
 /// the only sum left here is the growth — whose every term was measured over
 /// there too.
 @available(iOS 26.0, *)
-final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
+final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextFieldDelegate {
 
     var onChange: (() -> Void)?
     var onSend: (() -> Void)?
@@ -2349,6 +2376,10 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
     private let faceMark = UIImageView()
     private let faceButton = UIButton(type: .custom)
     private let field = UITextView()
+    /// The find bar's field. See the note on the class: a search does not grow,
+    /// and a one-line box that scrolls sideways under the caret is what a text
+    /// field already is. Only one of the two is ever on screen (`find`).
+    private let oneLine = UITextField()
     private let hint = UILabel()
     /// NOT GLASS, and that is the stylesheet's rule rather than a saving. The
     /// disc sits on a surface that already blurs, and a sample of its own would
@@ -2375,6 +2406,9 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
     private var limit = 300
     private var idle = true
     private var typing = false
+    /// Which of the two jobs this pill is doing. `kind` in the spec, and the one
+    /// thing on this bridge that is a branch rather than a measurement.
+    private var find = false
     /// The face, the colour and the pinned line box, held rather than read back
     /// off the field: assigning `attributedText` resets `typingAttributes` to
     /// whatever sits at the end of the new string, which for an empty field is
@@ -2410,6 +2444,18 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
         // so it takes no material of its own. The web rule, restated.
         contentView.addSubview(field)
 
+        // The find bar's field, built to the same rule and hidden until a bar
+        // asks for it. `borderStyle = .none` is the UITextField half of the
+        // stylesheet's `-webkit-appearance: none`: a text field arrives with a
+        // border and a rounded corner of its own, on a surface that already has
+        // both.
+        oneLine.borderStyle = .none
+        oneLine.backgroundColor = .clear
+        oneLine.delegate = self
+        oneLine.isHidden = true
+        oneLine.addTarget(self, action: #selector(lineEdited), for: .editingChanged)
+        contentView.addSubview(oneLine)
+
         hint.isUserInteractionEnabled = false
         contentView.addSubview(hint)
 
@@ -2433,6 +2479,21 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
     // MARK: State
 
     func apply(spec: [String: Any]) {
+        // WHICH BAR, FIRST, because everything below reads it. A page can only
+        // ever mount one of the two, and `TriaPostBar` tears the pill's state
+        // down between routes, so this flips at most once per navigation.
+        let wantsFind = (spec["kind"] as? String) == "find"
+        if wantsFind != find {
+            find = wantsFind
+            field.isHidden = find
+            oneLine.isHidden = !find
+            // The leading end goes back to rest whichever way the swap runs. The
+            // mark is about to become a different mark, and a bar the reader
+            // left with a keyboard up is mid-morph: without this, a find bar
+            // inherits a magnifier lying on its side at zero alpha, and a
+            // comment bar inherits a discard X standing over a resting thread.
+            resetFace()
+        }
         pad = TriaToolbar.number(spec["pad"], fallback: pad)
         fieldPad = TriaToolbar.number(spec["fieldPad"], fallback: fieldPad)
         line = TriaToolbar.number(spec["line"], fallback: line)
@@ -2466,23 +2527,73 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
             .flatMap(TriaChromeBar.color(fromHex:)) ?? .secondaryLabel
         field.font = TriaPostBarPill.face
         field.textColor = ink
+        oneLine.font = TriaPostBarPill.face
+        oneLine.textColor = ink
         attrs = [.font: TriaPostBarPill.face,
                  .paragraphStyle: paragraph,
                  .foregroundColor: ink]
-        setBody(field.text ?? "")
-        field.tintColor = (spec["caret"] as? String)
+        setBody(body)
+        let caret = (spec["caret"] as? String)
             .flatMap(TriaChromeBar.color(fromHex:)) ?? ink
+        field.tintColor = caret
+        oneLine.tintColor = caret
         field.accessibilityLabel = spec["label"] as? String
+        oneLine.accessibilityLabel = spec["label"] as? String
         hint.text = spec["placeholder"] as? String
         hint.font = TriaPostBarPill.face
         // The web's placeholder is --muted at 0.75. Baked into the colour rather
         // than set as a view alpha, so the label composites once.
         hint.textColor = muted.withAlphaComponent(0.75)
 
+        /* THE KEYBOARD'S MANNERS, READ OFF THE MARKUP. `autocapitalize`,
+           `autocorrect`, `spellcheck` and `enterkeyhint` are attributes the web
+           field already carries for the web's own sake, so they cross as
+           themselves rather than as a `find` branch — which also means a field
+           that changes its mind in the markup changes it here for free.
+
+           The Return key is the load-bearing one. A comment wants a real
+           newline (see the Return note in wirePostBar: on a touch shell Return
+           is a Return and the disc is the send), and a search has nothing to
+           submit — the list has been filtering the whole way — so the key means
+           "put the keyboard away", which is exactly what the web form's submit
+           handler does. */
+        applyTraits(spec)
+
+        /* THE LEADING END, WHICH IS THE HALF THAT IS NOT A SWAP.
+
+           A LIST asks what you are after and never asks anything else: the mark
+           is a magnifier, it is drawn in the same 19pt in the same --muted as
+           the discard mark it stands in for, and it takes no taps — the web's
+           `.postbar-glyph` is a <span>, not a button, and this is that fact
+           restated. So it borrows the face's IMAGE VIEW rather than adding a
+           second one: the stylesheet already hands the magnifier the avatar's
+           own box and datum, which is the whole reason the two bars sit on one
+           axis, and a view of its own would be a second place to keep that in
+           step. What it does not borrow is the morph — `setTyping` is fenced off
+           below, so the mark holds still while the caret is in the field. */
+        if find {
+            faceButton.isUserInteractionEnabled = false
+            faceButton.accessibilityElementsHidden = true
+            faceMark.alpha = 1
+            faceMark.transform = .identity
+            if let mark = spec["leadGlyph"] as? String, !mark.isEmpty {
+                faceMark.image = TriaSVG.image(markup: mark, size: 19, ink: muted,
+                                               template: false)
+            }
+            faceMark.isHidden = false
+            monogram.isHidden = true
+            photo.isHidden = true
+            applyDisc(spec, muted: muted)
+            syncIdle()
+            setNeedsLayout()
+            return
+        }
+
         // THE AVATAR IS THE MONOGRAM WITH THE PHOTOGRAPH OVER IT, in that order
         // and for the reason avatarEl gives: a face that pops in a frame late
         // reads as a reload, so the letter is there from the first paint and the
         // picture lands on top of it when it arrives.
+        monogram.isHidden = false
         monogram.text = spec["initials"] as? String
         monogram.font = UIFont(name: "Oxygen-Regular", size: faceBox.width * 0.53)
             ?? .systemFont(ofSize: faceBox.width * 0.53)
@@ -2505,17 +2616,33 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
             faceMark.image = TriaSVG.image(markup: mark, size: 19, ink: muted, template: false)
         }
 
+        applyDisc(spec, muted: muted)
+        syncIdle()
+        setNeedsLayout()
+    }
+
+    /* THE TRAILING END, AND IT IS ONE BLOCK FOR BOTH BARS BECAUSE IT MEASURES
+       RATHER THAN BRANCHES. A comment bar's send is the band, thinned, with a
+       22pt arrow on it; a find bar's clear is a bare 19pt X in --muted on the
+       pill's own glass and nothing else. Neither of those is written here: the
+       clear carries no `.publish-fill`, so `bandOf` finds no gradient and the
+       fill comes back empty; it carries `border: none`, so the hairline's width
+       comes back 0. The mark's size and its colour are measured off the web
+       element the same way, which is what stops a `size: 22` constant drawing a
+       clear a fifth too big.
+
+       Alpha and edge are still read off the web disc rather than quoted:
+       --pill-alpha is a CONTRAST FLOOR with measured figures behind it in
+       tokens.css, and --glass-edge is a translucent hairline. */
+    private func applyDisc(_ spec: [String: Any], muted: UIColor) {
         send.accessibilityLabel = spec["sendLabel"] as? String
         if let glyph = spec["glyph"] as? String, !glyph.isEmpty {
-            let pillInk = (spec["pillInk"] as? String)
-                .flatMap(TriaChromeBar.color(fromHex:)) ?? .white
-            send.setImage(TriaSVG.image(markup: glyph, size: 22, ink: pillInk, template: false),
+            let markInk = (spec["discInk"] as? String)
+                .flatMap(TriaChromeBar.color(fromHex:)) ?? muted
+            let size = TriaToolbar.number(spec["glyphSize"], fallback: 22)
+            send.setImage(TriaSVG.image(markup: glyph, size: size, ink: markInk, template: false),
                           for: .normal)
         }
-        // The band, thinned. --pill-alpha is a CONTRAST FLOOR rather than a
-        // taste setting (the measured figures live beside the token in
-        // tokens.css), so it is read off the web disc's own ::before rather than
-        // quoted here. The hairline is --glass-edge, resolved the same way.
         let alpha = TriaToolbar.number(spec["tintAlpha"], fallback: 1)
         disc.backgroundColor = (spec["tint"] as? String)
             .flatMap(TriaChromeBar.color(fromHex:))?.withAlphaComponent(alpha)
@@ -2528,35 +2655,68 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
         } else {
             disc.layer.borderWidth = 0
         }
-        syncIdle()
-        setNeedsLayout()
     }
 
+    /// The four things the web field says about the keyboard it wants, carried
+    /// as themselves. See the note at the call site for why Return is the one
+    /// that matters.
+    private func applyTraits(_ spec: [String: Any]) {
+        let caps = (spec["caps"] as? String) == "none"
+            ? UITextAutocapitalizationType.none : .sentences
+        let correct = (spec["correct"] as? String) == "off"
+            ? UITextAutocorrectionType.no : .default
+        let spell = (spec["spell"] as? String) == "false"
+            ? UITextSpellCheckingType.no : .default
+        let key: UIReturnKeyType = (spec["returnKey"] as? String) == "search"
+            ? .search : .default
+        field.autocapitalizationType = caps
+        field.autocorrectionType = correct
+        field.spellCheckingType = spell
+        oneLine.autocapitalizationType = caps
+        oneLine.autocorrectionType = correct
+        oneLine.spellCheckingType = spell
+        oneLine.returnKeyType = key
+    }
+
+    /// WHAT THE READER HAS TYPED, from whichever of the two fields is on screen.
+    /// Every read below goes through this rather than reaching for `field`, so
+    /// adding the find bar's one-line box could not leave a stale read behind in
+    /// the idle sync or the growth sum.
+    private var body: String { find ? (oneLine.text ?? "") : (field.text ?? "") }
+
     /// Every write restates the attributes, because assigning `attributedText`
-    /// throws away the typing ones. See `attrs`.
+    /// throws away the typing ones. See `attrs`. The text FIELD needs none of
+    /// that — it has one line, so there is no line box to pin and no typing
+    /// attributes to lose.
     private func setBody(_ text: String) {
+        if find { oneLine.text = text; return }
         field.attributedText = NSAttributedString(string: text, attributes: attrs)
         field.typingAttributes = attrs
     }
 
     func setText(_ text: String, selection: Int) {
-        guard field.text != text else { return }
+        guard body != text else { return }
         setBody(text)
-        let caret = max(0, min(selection, (text as NSString).length))
-        field.selectedRange = NSRange(location: caret, length: 0)
+        if !find {
+            let caret = max(0, min(selection, (text as NSString).length))
+            field.selectedRange = NSRange(location: caret, length: 0)
+        }
         syncIdle()
         onChange?()
     }
 
-    func startEditing() { if !field.isFirstResponder { field.becomeFirstResponder() } }
-    func stopEditing() { field.resignFirstResponder() }
+    private var caretHolder: UIView { find ? oneLine : field }
+    func startEditing() {
+        if !caretHolder.isFirstResponder { caretHolder.becomeFirstResponder() }
+    }
+    func stopEditing() { caretHolder.resignFirstResponder() }
 
     /// `.is-idle`: an empty bar has nothing to send, and a lit gradient disc with
     /// no act behind it is the brand band spent on nothing. Out of the
     /// accessibility tree with the same flip, so a visible send is always a live
     /// one — the web's contract, restated.
     private func syncIdle() {
-        let text = field.text ?? ""
+        let text = body
         hint.isHidden = !text.isEmpty
         setIdle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, animated: true)
     }
@@ -2594,7 +2754,11 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
         // back as two lines and stood 20pt too tall. `boundingRect` on an
         // attributed string honours the pinned line box, which is the number
         // both sides of this bridge are counting in.
-        let text = field.text ?? ""
+        // A find bar is one line by construction (maxLines arrives as 1 from a
+        // field that reports `max-height: none`), so the sum below is already
+        // the resting height and there is nothing to measure a string for.
+        if find { return 2 * pad + 2 * fieldPad + line }
+        let text = body
         let sample = NSAttributedString(string: text.isEmpty ? " " : text, attributes: attrs)
         let box = sample.boundingRect(
             with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
@@ -2631,8 +2795,14 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
                               y: box.height - discBottom - discSide / 2)
         disc.layer.cornerRadius = discSide / 2
 
-        field.frame = CGRect(x: textLeft, y: pad + fieldPad, width: textWidth,
+        // BOTH FIELDS TAKE THE SAME BOX, and only one of them is on screen. The
+        // text field is pinned to a single line rather than to the pill's
+        // remaining height, which for a find bar are the same number anyway —
+        // stating it as `line` is what says the box cannot grow.
+        let textBox = CGRect(x: textLeft, y: pad + fieldPad, width: textWidth,
                              height: max(line, box.height - 2 * pad - 2 * fieldPad))
+        field.frame = textBox
+        oneLine.frame = CGRect(x: textLeft, y: pad + fieldPad, width: textWidth, height: line)
         hint.frame = CGRect(x: textLeft, y: pad + fieldPad, width: textWidth, height: line)
     }
 
@@ -2671,6 +2841,38 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
         onFocus?(false)
     }
 
+    /* ── The find bar's field ────────────────────────────────────────────────
+       The same four answers as the textarea above, minus the caret. The mention
+       picker is what reads a caret, and a search has no mentions in it — so what
+       crosses is a string and the position is simply the end of it. */
+
+    @objc private func lineEdited() {
+        syncIdle()
+        onChange?()
+        onText?(oneLine.text ?? "", (oneLine.text as NSString?)?.length ?? 0)
+    }
+
+    func textField(_ textField: UITextField,
+                   shouldChangeCharactersIn range: NSRange,
+                   replacementString string: String) -> Bool {
+        // maxlength=60, enforced where the typing is. The web input still
+        // carries the attribute, so this is a mirror of the rule rather than the
+        // only copy of it — the textarea's 300 arrives through the same key.
+        let current = (textField.text ?? "") as NSString
+        return current.length - range.length + (string as NSString).length <= limit
+    }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        // NOTHING TO SUBMIT. The list has been filtering on every keystroke, so
+        // the key can only usefully mean "I'm done looking at the keyboard" —
+        // which is exactly what the web form's own submit handler does with it.
+        stopEditing()
+        return false
+    }
+
+    func textFieldDidBeginEditing(_ textField: UITextField) { onFocus?(true) }
+    func textFieldDidEndEditing(_ textField: UITextField) { onFocus?(false) }
+
     /// The face's two states. Native flips this itself rather than being told,
     /// because it owns the caret and therefore already knows — the web's
     /// `.is-typing` and this are one rule written once on each side.
@@ -2678,7 +2880,29 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate {
     /// The mark is only reachable while it is showing, the same three flags in
     /// step the send disc keeps (see `setIdle`), so a face that can throw a
     /// comment away is always a face you can see it on.
+    /// The leading end, put back at rest with no animation. `setTyping` guards on
+    /// a CHANGE, which is right while a caret moves in and out of one bar and
+    /// wrong at the moment the pill changes which bar it IS — the mark is being
+    /// swapped for a different one, and whatever alpha and quarter turn the last
+    /// was wearing would be inherited by it.
+    private func resetFace() {
+        typing = false
+        faceButton.isUserInteractionEnabled = false
+        faceButton.accessibilityElementsHidden = true
+        faceMark.alpha = 0
+        faceMark.transform = CGAffineTransform(rotationAngle: .pi / 2).inverted()
+        for mark in [monogram, photo] as [UIView] {
+            mark.alpha = 1
+            mark.transform = .identity
+        }
+    }
+
     private func setTyping(_ wanted: Bool) {
+        // A MAGNIFIER IS NEVER A DISCARD MARK. On a find bar the leading mark is
+        // the whole of what the leading end is, so there is no second state for
+        // the caret to move it into — and the web agrees: `.postbar-glyph` has no
+        // `.is-typing` rule and is not a button.
+        guard !find else { return }
         guard wanted != typing else { return }
         typing = wanted
         faceButton.isUserInteractionEnabled = wanted

@@ -488,6 +488,24 @@ no switcher. Five things about it:
   and the headline and body belong to the form rather than to a type, so a
   mis-tap costs the tap back and nothing else. That is the whole reason this is
   cheaper than a switcher, which re-mounted a field set and threw the draft away.
+- **The audience picker is a sheet, and it commits as you tap.** It was a centred
+  `.modal` card — the profile editor's and the friends list's bug a third time: a
+  fixed centred box with no `overflow`, holding a card with no `max-height`, over
+  a body whose scroll is locked. It was left there on the argument that it is
+  "short by construction", and it is not: it lists your whole circle, so past
+  about a dozen friends the question went off the top of the screen and Done went
+  off the bottom with nothing left to scroll. It is `openSheet` now (`head` +
+  `wire`, the way the colour picker already used it), the checklist is the one
+  thing on the panel that scrolls, and taking each tap as it lands is what makes
+  every way out — the dock, Escape, the scrim, the back gesture — leave the same
+  answer. The lock behind the sheet updates as you go, which is feedback the card
+  never gave. The coercion is unchanged and still stated once: **Choose people**
+  with nobody chosen is My circle, because an empty allowlist is a post nobody
+  can read.
+- **A sheet is not a history entry**, so `route()` sweeps one on its way in. The
+  edge-swipe used to render the next page straight through an open sheet and
+  leave a panel floating over a locked body with the native chrome still stood
+  down. One line, for every sheet at once.
 - **The audience default follows the type, but only while it IS a default.** An
   activity stays circle-first for a public account, the way it always has
   (`canJoin` is friends-only, so a plan the whole room can read is still one only
@@ -607,7 +625,8 @@ isn't fussy: a **confirmation** (delete a post, block someone, delete your
 account), which comes second after the menu that offered it has already closed;
 a **list of report reasons**, opened from a row rather than a button; a panel
 opened from the **page** rather than the bar (the accent picker's colour ring,
-the notifications switch's route into iOS Settings). And **the post card's own
+the composer's audience lock, the notifications switch's route into iOS
+Settings). And **the post card's own
 •••**, which is the deliberate one — it is not a toolbar glyph, it rides a card
 at an arbitrary scroll position, so a menu dropped from it would land anywhere
 between mid-screen and the 40px gutter above the nav and the same tap would

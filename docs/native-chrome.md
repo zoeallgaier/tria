@@ -3,8 +3,9 @@
 **The subject of 1.4: Tria's navigation stops being CSS pretending to be Apple's
 and becomes Apple's.** The bottom tab bar, the top bar's buttons and the compose
 **+** are drawn by UIKit, in the system's own material, around the webview that
-still draws every page. So are the two pieces of chrome that hold a caret: a
-post page's comment bar and Discover's search. The web keeps the CSS chrome it has
+still draws every page. So are the three pieces of chrome that hold a caret: the
+bottom bar in both of its jobs — a post page's comment bar and a circle's find
+bar — and Discover's search. The web keeps the CSS chrome it has
 ([shipping.md](shipping.md)), unchanged.
 
 ## Why native rather than a better CSS skin
@@ -25,8 +26,8 @@ free and correct.
 ## What goes native, and what must not
 
 **Native:** the bottom tab bar (the four destinations), the compose **+**, the
-top bar's leading/trailing controls, a post page's comment bar, and Discover's
-search field.
+top bar's leading/trailing controls, the bottom bar in both of its jobs (a post
+page's comment bar and a circle's find bar), and Discover's search field.
 
 **Not native, ever:** content. Cards, the feed, the composer form, the post
 page, and the sheets that belong to a *page* rather than to a control — a
@@ -52,10 +53,11 @@ DOM, which fires its own `input`, and the mention picker, the send disc's idle
 state, the 300 cap, `Store.addComment` and every error path run unchanged. See
 "The comment bar" below.
 
-**Discover's search is the same exception for the same reason**, and it is the
-only other control in the app that holds a caret. See "Discover's search" below.
-Both of them also had to be given something every web field gets for free: a way
-DOWN off the keyboard. See `TriaKeyboardDismisser`.
+**Discover's search is the same exception for the same reason.** So is the find
+bar, which is the comment bar's own class doing its other job — see "The find
+bar, which was left out and should not have been" below. All three also had to be
+given something every web field gets for free: a way DOWN off the keyboard. See
+`TriaKeyboardDismisser`.
 
 **Staged, in this order**, because the bridge traffic grows steeply:
 
@@ -124,14 +126,18 @@ learn what a "Discover filter" or a "daily" is.
   already built, and resolves with the token its pick will carry. `dismissMenu({})` takes an anchored menu down because the card
   it hangs off has moved out from under it, and is a no-op on a menu that has
   already gone.
-  `setPostBar({bar})` states a post page's comment bar whole —
-  `{live, width, float, floatKeyboard, pad, fieldPad, line, maxLines, radius,
-  faceLeft, faceTop, faceSize, textLeft, textWidth, discSize, discRight,
+  `setPostBar({bar})` states the bottom bar whole, in whichever of its two jobs
+  it is doing —
+  `{live, kind, width, float, floatKeyboard, pad, fieldPad, line, maxLines,
+  radius, faceLeft, faceTop, faceSize, textLeft, textWidth, discSize, discRight,
   discBottom, text, placeholder, label, maxLength, sendLabel, ink, caret, muted,
-  pillInk, tint, tintAlpha, edge, edgeWidth, glyph, faceGlyph, faceLabel,
-  initials, avatarBg, avatarInk, photo}` — and `live: false` is what takes it,
-  and the keyboard, away on a navigation. `setPostBarText({text, selection, focus})` writes back
-  into a field the web does not draw.
+  returnKey, caps, correct, spell, tint, tintAlpha, edge, edgeWidth, glyph,
+  glyphSize, discInk, faceGlyph, faceLabel, leadGlyph, initials, avatarBg,
+  avatarInk, photo}` — where `kind` is `comment` or `find` and is the only branch
+  on this bridge that is not a measurement, and `live: false` is what takes the
+  bar, and the keyboard, away on a navigation.
+  `setPostBarText({text, selection, focus})` writes back into a field the web
+  does not draw.
 - **Native → JS:** the `chromeTap` event carries the route and JS calls the same
   **two** things the CSS nav calls: `go('#/…')` for a different destination, and
   `reclick` for the tab you are already on. Both, not just the first — `reclick`
@@ -798,8 +804,8 @@ this decided on "was an ink sent?" and flattened it to black.
 ## What is still the web's, on purpose
 
 **The mention picker**, for the reason under "The comment bar" below: a list of
-friends is app vocabulary, and this bridge does not carry any. **The find bar**,
-which has none of the problems that made the comment bar native.
+friends is app vocabulary, and this bridge does not carry any. That is the whole
+list now — the find bar was on it and came off (see below).
 
 `transitionend` on the top bar is a push trigger alongside the mutations, for
 the same reason a mutation is: a mutation says a change started, a transition
@@ -953,10 +959,60 @@ Three things that were wrong first, all of them found on the simulator:
   The list opened behind the keys. A container was buying nothing anyway: it held
   one glass element, the disc having stopped being one.
 
-**The find bar is deliberately untouched.** It is the same pill doing a different
-job (a magnifier, one line, a clear) with no mention picker, no growth and no
-send, so there is nothing here it would gain. `pushPostBar`'s selector excludes
-it and the CSS gate excludes it, and those two have to agree.
+### The find bar, which was left out and should not have been
+
+**A circle's find bar is this bar too, and that is a change of mind.** It shipped
+web on the argument that it is the same pill doing a different job — a magnifier,
+one line, a clear — with no mention picker, no growth and no send, so there was
+nothing here it would gain.
+
+That looked at the wrong half of the bar. **What makes this class necessary is
+not what the bar grows into, it is that the bar sits ON the keys.** A keyboard
+raised for a web field in a Capacitor webview is positioned against the *web
+view*, which is why the CSS bar has to chase it a `visualViewport` resize at a
+time (`trackKeyboard`) while this one rides `keyboardLayoutGuide` and arrives
+with it. Every argument that made the comment bar native was already an argument
+for the find bar. And the omission cost something on its own: a reader walking
+from a post page to a circle watched the same pill stop being glass.
+
+**It is one class and one spec, because it is one bar.** `TriaPostBarPill` takes
+`kind`, and `find` swaps the two ends: the leading avatar becomes the magnifier
+— on the avatar's own box and datum, which is the stylesheet's own rule and the
+reason the two bars sit on one axis, so it borrows the face's image view rather
+than adding a second — and the send disc becomes the clear. Neither end is
+branched in Swift. The clear carries no `.publish-fill`, so `bandOf` finds no
+gradient and no fill is drawn; it carries `border: none`, so the hairline comes
+back 0 wide; its mark's size and colour are measured off the web element the same
+way every other number here is. A `size: 22` constant would have drawn the clear
+a fifth too big, which is what the measurement is for.
+
+**The one real difference is the field, and it is a second control.** A comment
+grows to four lines and a search does not grow at all: on the web that is a
+`<textarea>` and an `<input>`, and here it is a `UITextView` and a
+`UITextField`. The pill holds both and shows one. A text view pinned to a single
+line either wraps a long query out of sight or has to be taught to scroll
+sideways under the caret, which is the one thing a text field already is. Every
+read goes through `body` rather than reaching for `field`, which is what stops a
+stale read surviving in the growth sum or the idle flip.
+
+**Return means something different on each.** On a comment it is a real newline
+(see the Return note in `wirePostBar`); on a search there is nothing to submit,
+because the list has been filtering the whole way — so the key puts the keyboard
+away, which is exactly what the web form's submit handler does with it. That and
+`autocapitalize` / `autocorrect` / `spellcheck` cross as the attributes the web
+field already carries, not as a `kind` branch, so a field that changes its mind
+in the markup changes it here for free.
+
+**The leading mark has to be put back at rest on the swap.** `setTyping` guards
+on a *change*, which is right while a caret moves in and out of one bar and wrong
+at the moment the pill changes which bar it is — the mark is being replaced, and
+a bar the reader left with a keyboard up is mid-morph. Without `resetFace` a find
+bar inherits a magnifier lying on its side at zero alpha, and a comment bar
+inherits a discard X standing over a resting thread.
+
+`pushPostBar`'s selector sends both now and the CSS gate hides both, and those
+two still have to agree — the `:not(.postbar-form--find)` came out of each of
+them in the same pass.
 
 **The face crosses as pixels.** The avatar is already in the page, already
 fetched with CORS (`avatarEl` sets `crossorigin` so the ambient wash can sample

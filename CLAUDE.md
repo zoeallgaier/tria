@@ -34,15 +34,19 @@ menus a control on the PAGE drops — the post card's •••, the repost circ
 profile's colour ring — which the web asks for rather than being asked about,
 and which fall back to the sheet they always were off-app.
 
-The TWO PIECES THAT HOLD A CARET are native too, and they are the one place
-native is more than a face: a field cannot be borrowed from a hidden element, so
-the `UITextView` in a post page's COMMENT BAR and the `UITextField` in
-DISCOVER'S SEARCH are real, and every keystroke is written back into the web
-element that is still the model. Both also needed a way DOWN off the keyboard
-built by hand (`TriaKeyboardDismisser`) — a tap on the page reaches a page with
-no focus to lose — and the comment bar's leading avatar turns into a discard
-mark while you type. The mention picker stays web (a list of friends is app
-vocabulary), and so does the find bar.
+The PIECES THAT HOLD A CARET are native too, and they are the one place native is
+more than a face: a field cannot be borrowed from a hidden element, so the
+`UITextView` in a post page's COMMENT BAR, the `UITextField` in a circle's FIND
+BAR and the one in DISCOVER'S SEARCH are real, and every keystroke is written
+back into the web element that is still the model. All of them needed a way DOWN
+off the keyboard built by hand (`TriaKeyboardDismisser`) — a tap on the page
+reaches a page with no focus to lose — and the comment bar's leading avatar turns
+into a discard mark while you type. The comment bar and the find bar are ONE
+class doing two jobs (`kind` swaps the two ends and the field, nothing else); the
+find bar was left web at first, on the argument that it had no growth and no send
+to gain, and that looked at the wrong half of the bar — what makes the class
+necessary is that the bar sits ON the keys. The mention picker stays web (a list
+of friends is app vocabulary) and is the only thing that does.
 
 The top BAR's MATERIAL is native too, and it is real `UIGlassEffect`, not a
 hand-painted copy of the CSS: the copy read as fog, and the system's own scroll

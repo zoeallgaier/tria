@@ -6358,10 +6358,11 @@ button.poll-option:disabled { cursor: default; }
 .rich-attach--withlock { justify-content: space-between; }
 .rich-attach-tools { display: flex; align-items: center; gap: 0.1rem; flex-shrink: 0; }
 
-/* Audience sheet — a clean iOS checkmark list. No hard borders (they read as
-   harsh rings on frosted glass); selection is carried by a soft tint + an
-   accent tick. The checklist glides open/shut (grid-rows, like the About folds)
-   and its rows cascade in with the app's shared stagger. */
+/* Audience sheet — a clean iOS checkmark list, docked at the foot of the screen
+   in the app's own sheet (openSheet, .sheet-scrim--aud below). No hard borders
+   (they read as harsh rings on frosted glass); selection is carried by a soft
+   tint + an accent tick. The checklist glides open/shut (grid-rows, like the
+   About folds) and its rows cascade in with the app's shared stagger. */
 /* SVG check as a MASK so the mark inherits a themed colour (accent / bg) without
    per-theme duplicate URIs. */
 :root {
@@ -6372,13 +6373,14 @@ button.poll-option:disabled { cursor: default; }
   --spark-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 1c.4 7 3.6 10.6 11 11-7.4.4-10.6 4-11 11-.4-7-3.6-10.6-11-11 7.4-.4 10.6-4 11-11z'/%3E%3C/svg%3E");
 }
 
-/* Two modes grouped in one inset-list card, split by a hairline — no outlines. */
-.aud-modes {
-  border-radius: var(--radius-field);
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text) 4%, transparent);
-  margin-bottom: 0.6rem;
-}
+/* THE THREE MODES ARE .sheet-item's ROW, in two lines instead of one. They sit
+   directly on the sheet's own glass panel now: the inset-list fill this used to
+   carry was a second tinted block laid over a surface that is already a
+   material, which is the "never glass on glass" rule in its flat form. What
+   separates them is the hairline every other sheet row uses, and the corner is
+   the sheet's row radius, so a mode and a Report row are visibly the same
+   object. */
+.aud-modes { display: flex; flex-direction: column; }
 .aud-mode {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -6388,12 +6390,25 @@ button.poll-option:disabled { cursor: default; }
   text-align: left;
   padding: 0.72rem 0.9rem;
   border: 0;                 /* kill the UA default 2px outset button border */
+  border-radius: var(--radius-row-lg);
   background: none;
   color: var(--text);
+  -webkit-tap-highlight-color: transparent;
   transition: background-color var(--dur-micro);
 }
-.aud-mode + .aud-mode { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent); }
+.aud-mode + .aud-mode { position: relative; }
+.aud-mode + .aud-mode::before {
+  content: ""; position: absolute; left: 0.9rem; right: 0.9rem; top: 0;
+  border-top: 1px solid var(--rule);
+}
 .aud-mode[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+/* A pressed row draws its own tint, so the hairline that would run across the
+   top of it (and across the top of the row after it) is one line too many. */
+.aud-mode[aria-pressed="true"]::before,
+.aud-mode[aria-pressed="true"] + .aud-mode::before { border-top-color: transparent; }
+@media (hover: hover) {
+  .aud-mode:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+}
 .aud-mode-t { grid-column: 1; font-weight: 700; font-size: 0.95rem; }
 .aud-mode-d { grid-column: 1; font-size: 0.82rem; color: var(--muted); }
 .aud-mode-tick {
@@ -6420,17 +6435,41 @@ button.poll-option:disabled { cursor: default; }
 }
 .aud-list-wrap.is-open { grid-template-rows: 1fr; opacity: 1; }
 .aud-list-wrap > .aud-list { min-height: 0; }
+/* THE ONE THING ON THIS PANEL THAT SCROLLS, and the whole reason the picker is a
+   sheet. The list is your circle, which has no length this stylesheet gets to
+   assume — the card this replaced assumed it was short and clipped the question
+   off the top and Done off the bottom the moment it wasn't. Capped in dvh so it
+   is a share of the screen rather than a row count, floored in px so it doesn't
+   collapse to a slot on a short one, and `contain` so reaching the end of the
+   list doesn't start dragging the page behind the scrim. */
+.aud-list-wrap.is-open > .aud-list {
+  max-height: min(44dvh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* The hairline where the checklist meets the modes — two answers to two
+     questions rather than one long column of taps. On the SCROLLER rather than
+     above it, so the glide reveals it instead of it appearing a frame early over
+     a row that is still 0 tall, and so it holds still while the names run under
+     it (a border belongs to the box, not to the content). */
+  border-top: 1px solid var(--rule);
+  padding-top: 0.3rem;
+}
 
 .aud-pick {
   display: flex;
   align-items: center;
   gap: 0.85rem;
   width: 100%;
-  padding: 0.55rem 1.6rem;
+  /* Lines up with .sheet-item and with the mode rows above: one left edge down
+     the whole panel. (1.6rem was the centred card's own inset, which is gone.) */
+  padding: 0.55rem 0.9rem;
   border: 0;                 /* kill the UA default 2px outset button border */
+  border-radius: var(--radius-row-lg);
   background: none;
   color: var(--text);
   text-align: left;
+  -webkit-tap-highlight-color: transparent;
   animation: rise 0.4s var(--ease) both;   /* the app's shared row entrance */
 }
 .aud-pick .aud-avatar { width: 44px; height: 44px; font-size: 1.4rem; }
@@ -6459,11 +6498,47 @@ button.poll-option:disabled { cursor: default; }
 .aud-pick[aria-checked="true"] .aud-check { background: var(--accent); border-color: var(--accent); }
 .aud-pick[aria-checked="true"] .aud-check::after { opacity: 1; }
 @media (hover: hover) { .aud-pick:hover { background: color-mix(in srgb, var(--text) 4%, transparent); } }
+/* The panel's rows are in the sheet's focus trap now (openSheet traps every
+   button it holds), so they need the mark the sheet's own rows wear. Same inset
+   ring, for the same reason it is inset there: an outline on a row that sits on
+   glass reads as a hard edge cut into the material. */
+.aud-mode:focus-visible,
+.aud-pick:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
+}
 .aud-empty { color: var(--muted); text-align: center; padding: 1.2rem 0; }
 @media (prefers-reduced-motion: reduce) {
   .aud-list-wrap { transition: opacity var(--dur-quick) ease; }
   .aud-pick { animation: none; }
 }
+
+/* THE PANEL THIS ALL SITS IN, and the ceiling that makes the sheet a sheet.
+   Every other sheet in the app is a short fixed list, so `.sheet-items` can be
+   `overflow: hidden` and the panel is as tall as its rows. Here the height
+   belongs to a list nobody gets to assume the length of, so the whole sheet is
+   capped to the screen it is standing on and the column inside it is allowed to
+   shrink down to the one child that scrolls. The list's own dvh cap above is
+   what it wants to be; this is what it is allowed to be.
+
+   The insets are the scrim's own 0.7rem twice over, plus the notch and the home
+   indicator — the scrim only pads for the second of those, and a sheet that runs
+   under a status bar is a sheet with a hidden first row. */
+.sheet-scrim--aud .sheet {
+  max-height: calc(100dvh - 1.4rem
+                   - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+.sheet-scrim--aud .sheet-items {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* The modes and the dock hold still; the checklist is the only thing that gives.
+   `min-height: 0` on the wrap is what lets flex shrink it past its content — the
+   default `auto` would push the panel back out to the full list and put us right
+   back where the card was. */
+.sheet-scrim--aud .aud-modes { flex-shrink: 0; }
+.sheet-scrim--aud .aud-list-wrap { min-height: 0; }
 
 /* ── Frame picker — a plain upload field ────────────────────────────────────
    Same frame + fill as every other composer field (.field input/textarea) —
@@ -7011,12 +7086,13 @@ button.poll-option:disabled { cursor: default; }
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
 .crop--free { aspect-ratio: auto; cursor: default; touch-action: auto; }
 .crop--free img { position: static; width: 100%; height: auto; max-width: 100%; }
-/* A list inside a frosted card. Someone's circle used to be drawn this way and
-   is a page now (renderFriends) — for the material, and because a card with no
-   max-height clipped a long list at both ends. The composer's audience picker
-   is the one caller left, and it is short by construction: it lists your own
-   circle, with a mode row above it. */
-.modal-card--list { max-width: 420px; }
+/* A LIST INSIDE A FROSTED CARD IS GONE, and it took its bug with it. A card with
+   no max-height, centred in a `.modal` with no overflow, clipped a long list at
+   both ends with nothing left to scroll. Someone's circle went first and is a
+   page now (renderFriends). The composer's audience picker was argued safe here
+   because it was "short by construction" — it lists your whole circle, so it
+   never was — and it is a bottom sheet now too (.sheet-scrim--aud), where the
+   checklist scrolls inside a capped panel and the dock holds still under it. */
 /* A modal's commit row: Cancel beside Save, inside the card.
    `.form-actions` rode alongside every selector here — the same row on the
    profile editor page, which is a form with the same two answers and no card
@@ -8237,11 +8313,16 @@ html[data-chrome="native"] .msb-ico { transition: none; }
    space, which is what app.js measures to tell native where the face, the text
    and the disc go.
 
-   The FIND bar is deliberately untouched. It is the same pill doing a different
-   job — a magnifier, one line, a clear — with no mention picker, no growth and
-   no send, so there is nothing here it would gain. app.js doesn't send it
-   either (see pushPostBar's selector), and the two halves have to agree. */
-html[data-chrome="native"] .postbar .postbar-form:not(.postbar-form--find) {
+   THE FIND BAR IS THIS TOO, and that is a change of mind. It was excluded on
+   the argument that it had nothing to gain — no mention picker, no growth, no
+   send. Wrong half of the bar: the keyboard problem is not what the bar grows
+   into, it is that the bar sits ON the keys, and a web field in a webview raises
+   a keyboard positioned against the webview. So a circle's search chased its
+   keyboard a resize at a time while a post's comment bar rode it, and the same
+   pill visibly stopped being glass when you walked from one page to the other.
+   app.js sends both now (see pushPostBar's selector); the two halves have to
+   agree, so the `:not()` that used to stand here came out with it. */
+html[data-chrome="native"] .postbar .postbar-form {
   visibility: hidden;
 }
 

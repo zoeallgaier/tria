@@ -1471,10 +1471,25 @@
       try { return canvas.toDataURL('image/png'); } catch { return ''; }
     }
 
+    /* ONE SPEC FOR BOTH BARS, because they are one bar. The comment bar and the
+       find bar are the same pill with their two ends swapped — the stylesheet
+       says so and hands the magnifier the avatar's own box and datum to prove it
+       — so what crosses is the same set of boxes either way, and `kind` is the
+       only thing over there that has to know which job it is doing.
+
+       Every selector below is written to answer both. `.postbar-clear` carries
+       `.postbar-send` too, so the trailing control is one query; the leading one
+       is an avatar or a magnifier at the same 26px; and the field is a textarea
+       or a one-line input at the same 16px on the same 22.4px line. What differs
+       is measured rather than branched: the clear has no band, so `bandOf`
+       returns nothing and no fill is drawn; it has no border, so the hairline's
+       width comes back 0. The two real branches are the LINE COUNT (an input
+       cannot grow, and reports `max-height: none`) and the leading mark. */
     function postBarSpec(bar, form) {
-      const field = form.querySelector('textarea');
+      const find = form.classList.contains('postbar-form--find');
+      const field = form.querySelector('textarea, .postbar-input');
       const send = form.querySelector('.postbar-send');
-      const face = form.querySelector('.postbar-avatar');
+      const face = form.querySelector('.postbar-avatar, .postbar-glyph');
       const wrap = form.querySelector('.postbar-field');
       const cs = getComputedStyle(form);
       const fieldCS = getComputedStyle(field);
@@ -1489,8 +1504,12 @@
       const faceBtn = form.querySelector('.postbar-face');
       const faceX = form.querySelector('.postbar-face-x');
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const glyphEl = send ? send.querySelector('svg') : null;
       return {
         live: true,
+        // A THREAD OR A LIST. The only fact over there that is a branch rather
+        // than a measurement: which of the two jobs this pill is doing.
+        kind: find ? 'find' : 'comment',
         width: box.width,
         // .postbar's own float above the safe area, and the smaller one it drops
         // to while a keyboard is up. The second can't be measured — it belongs
@@ -1504,7 +1523,12 @@
         pad: parseFloat(cs.paddingTop) || 0,
         fieldPad: wrap ? parseFloat(getComputedStyle(wrap).paddingTop) || 0 : 0,
         line,
-        maxLines: Math.max(1, Math.round((parseFloat(fieldCS.maxHeight) || line * 4) / line)),
+        // AN INPUT CANNOT GROW. It reports `max-height: none`, which would fall
+        // through to the textarea's four — and a find bar that got taller as you
+        // typed would be a bar describing a wrap that the field it mirrors does
+        // not do. One line, and the words scroll sideways under the caret.
+        maxLines: find
+          ? 1 : Math.max(1, Math.round((parseFloat(fieldCS.maxHeight) || line * 4) / line)),
         radius: parseFloat(cs.borderTopLeftRadius) || 0,
         // Boxes, relative to the pill, so nothing over there has to know that
         // the row is a flex row or which end each child sits at.
@@ -1534,7 +1558,17 @@
         ink: toRgb(fieldCS.color) || '',
         caret: toRgb(fieldCS.caretColor) || toRgb(fieldCS.color) || '',
         muted: cssColour('var(--muted)'),
-        pillInk: cssColour('var(--pill-ink)'),
+        /* THE KEYBOARD'S OWN MANNERS, stated in the markup once and read back
+           here. The find bar asks for no capitals, no autocorrect, no spelling
+           and a Return that says `search`; the comment bar asks for none of that
+           and gets the system's defaults. Attributes rather than a `kind` branch,
+           because the field is where a reader of the markup would look for them.
+           `enterkeyhint` is the one that is load-bearing rather than cosmetic:
+           see the Return note in TriaPostBarPill. */
+        returnKey: field.getAttribute('enterkeyhint') || '',
+        caps: field.getAttribute('autocapitalize') || '',
+        correct: field.getAttribute('autocorrect') || '',
+        spell: field.getAttribute('spellcheck') || '',
         // The send disc is a member of the primary-act set, so its band comes
         // off the same ::before the + and the editor's Save read theirs from.
         tint: send ? bandOf(send) : '',
@@ -1548,30 +1582,54 @@
         // The Swift side takes rgba() as it comes.
         edge: send ? toRgba(getComputedStyle(send).borderTopColor) : '',
         edgeWidth: send ? parseFloat(getComputedStyle(send).borderTopWidth) || 0 : 0,
-        glyph: send && send.querySelector('svg') ? send.querySelector('svg').outerHTML : '',
+        glyph: glyphEl ? glyphEl.outerHTML : '',
+        /* THE MARK IS MEASURED, not sized over there. 22 on the send arrow
+           because it rides a filled disc that carries it, 19 on the clear
+           because it is a bare mark like the magnifier facing it — the
+           stylesheet sizes the bar's two bare marks together, and a constant in
+           Swift would be the place that forgot. Its colour is the one the
+           cascade landed on: --pill-ink on the band, --muted on the clear, which
+           is the same read `controlSpec` makes for every control in the top bar
+           rather than a token quoted twice. */
+        glyphSize: glyphEl ? parseFloat(getComputedStyle(glyphEl).width) || 0 : 0,
+        discInk: send ? toRgb(getComputedStyle(send).color) || '' : '',
         // The close mark the face turns into while the field has the caret, and
         // what it is called. Native flips between the two itself, because it is
         // the side that owns the caret and therefore already knows — the web's
         // `.is-typing` and this are one rule stated once on each side, not two.
         faceGlyph: faceX && faceX.querySelector('svg') ? faceX.querySelector('svg').outerHTML : '',
         faceLabel: faceBtn ? faceBtn.getAttribute('aria-label') || '' : '',
-        initials: face ? face.textContent.trim() : '',
-        avatarBg: faceCS ? toRgb(faceCS.backgroundColor) || '' : '',
-        avatarInk: faceCS ? toRgb(faceCS.color) || '' : '',
+        /* THE FIND BAR'S LEADING MARK, which is the one place the two bars are
+           genuinely different objects. A thread's leading end is an identity
+           that becomes a way out; a list's is a magnifier that is never anything
+           else and takes no taps (`.postbar-glyph` is a <span>, not a button).
+           So it crosses as a glyph rather than as a face, and the whole avatar
+           half of this spec — the monogram, the two colours, the photograph and
+           the discard mark — is simply absent from it. */
+        leadGlyph: find ? liveGlyph(face) : '',
+        initials: find || !face ? '' : face.textContent.trim(),
+        avatarBg: !find && faceCS ? toRgb(faceCS.backgroundColor) || '' : '',
+        avatarInk: !find && faceCS ? toRgb(faceCS.color) || '' : '',
         // 3× so the 26pt circle is sharp on every screen this ships to.
-        photo: avatarPixels(photo, Math.round((faceBox ? faceBox.width : 26) * 3)),
+        photo: find ? '' : avatarPixels(photo, Math.round((faceBox ? faceBox.width : 26) * 3)),
       };
     }
 
     function pushPostBar() {
       if (!live) return;
       const bar = document.getElementById('postbar');
-      // The FIND bar is deliberately not this. It is the same pill doing a
-      // different job — a magnifier, a one-line input and a clear — and it has
-      // no keyboard problem worth a second native control: no mention picker, no
-      // growth, no send. It stays the web drawing it has always been.
-      const form = bar && !bar.hidden
-        ? bar.querySelector('.postbar-form:not(.postbar-form--find)') : null;
+      /* BOTH BARS, and the find bar's inclusion is a change of mind. It was left
+         web on the argument that it had no keyboard problem worth a second
+         native control — no mention picker, no growth, no send. That was the
+         wrong half of the bar to look at. The keyboard problem is not what the
+         bar GROWS into, it is that the bar sits ON the keys: a web field in a
+         Capacitor webview raises a keyboard positioned against the webview, so
+         the CSS bar chases it a `visualViewport` resize at a time while the
+         native one rides `keyboardLayoutGuide` and arrives with it. Every
+         argument for the comment bar was already an argument for this one.
+         And leaving it out cost more than it saved — a reader going from a post
+         page to a circle watched the same pill stop being glass. */
+      const form = bar && !bar.hidden ? bar.querySelector('.postbar-form') : null;
       const spec = form && !overlaid() ? postBarSpec(bar, form) : { live: false };
       const signature = JSON.stringify(spec);
       if (signature === toldPostBar) return;
@@ -1579,7 +1637,7 @@
       call('setPostBar', { bar: spec }).catch(() => {});
       // A face that hasn't landed yet draws as its monogram and comes back for
       // the photograph. One shot: the next push reads a complete image.
-      if (!form || spec.photo) return;
+      if (!form || spec.kind === 'find' || spec.photo) return;
       const img = form.querySelector('.postbar-avatar img');
       if (img && !img.complete) img.addEventListener('load', pushPostBar, { once: true });
     }
@@ -7222,11 +7280,42 @@
       sync();
       onQuery('');
       input.focus();
+      // The native field holds the second copy of the words. `true` keeps the
+      // caret, which is the whole reason the mousedown above is prevented: the
+      // next search starts under the same thumb.
+      NativeChrome.postBarText('', 0, true);
+    });
+
+    /* ── The native bar's half ────────────────────────────────────────────────
+       In the App Store build on iOS 26 this pill is UIKit and the reader types
+       into a real UITextField (see TriaPostBarPill's `find` shape). It is the
+       comment bar's arrangement exactly, and it is shorter for the same reason
+       the bar is: there is no mention picker to feed and no caret to track, so
+       the only thing that crosses is a string.
+
+       This input is still the MODEL. Every native keystroke is written into it
+       here and fires its own `input`, so `sync`, `onQuery`, the row filter and
+       the empty line below it are the code that already shipped, running
+       unchanged. `mirroring` stops the echo, the way it does on a post page. */
+    let mirroring = false;
+    NativeChrome.postBarHooks.text = (text) => {
+      mirroring = true;
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      mirroring = false;
+    };
+    // The trailing control on this bar is a CLEAR, not a send, so the one event
+    // native has for "the far end was tapped" lands on the web button that
+    // already empties the field — and the focus rule above rides with it.
+    NativeChrome.postBarHooks.send = () => clear.click();
+    input.addEventListener('input', () => {
+      if (!mirroring) NativeChrome.postBarText(input.value, input.value.length, true);
     });
 
     // Same tracker the comment bar uses, and stored in the same place, so
     // resetPostBar tears down the visualViewport listeners on the way out
-    // whichever of the two bars was mounted.
+    // whichever of the two bars was mounted. Under the native gate it never
+    // fires: the input it listens to never takes focus.
     postBarKeyboardOff = trackKeyboard(bar, input);
   }
 
@@ -7807,14 +7896,28 @@
      rule (a menu floats above content). items: {label, icon?, danger?, run?}; run
      may be async and fires after the sheet closes. Reduced-motion aware. */
   let sheetOpen = false;
+  /* THE LIVE SHEET'S OWN close(), held here so a NAVIGATION can take it. A sheet
+     is not a history entry, so the back gesture — and any go() made from under
+     one — renders the next page straight through it and leaves a panel floating
+     over a body whose scroll is still locked and chrome that is still standing
+     down (see `overlaid`). That is the bug the profile editor and the friends
+     list were both made PAGES to escape; route() calls dismissSheet() on its way
+     in, which closes it for every sheet at once rather than one caller at a
+     time. */
+  let sheetAway = null;
+  const dismissSheet = () => { if (sheetAway) sheetAway(); };
   // Two shapes, one sheet. `items` is the ordinary list of labelled rows; `head`
   // is arbitrary markup mounted ABOVE them inside the same panel, wired by the
-  // caller's `wire(scrim, close)`. The accent picker is the one caller that uses
-  // it — a grid of swatches is not a list of rows, but it is the same scrim, the
+  // caller's `wire(scrim, close)`. The accent picker and the audience picker are
+  // the two callers that use it — a grid of swatches is not a list of rows, and
+  // neither is a set of modes over a checklist, but both are the same scrim, the
   // same panel, the same focus trap and the same way out, and a second copy of
   // all of that to hold one grid would be the expensive way to be inconsistent.
-  // `scrimClass` exists for that caller too (see .sheet-scrim--see-through).
-  function openSheet({ title, items, head, wire, scrimClass }) {
+  // `scrimClass` exists for those callers too (see .sheet-scrim--see-through and
+  // .sheet-scrim--aud). `dock` renames the button at the foot: it still only
+  // closes, but on a panel that has already taken every answer as it was tapped,
+  // "Cancel" is a word for something that cannot happen.
+  function openSheet({ title, items, head, wire, scrimClass, dock }) {
     if (sheetOpen) return;
     sheetOpen = true;
     items = items || [];
@@ -7829,7 +7932,7 @@
       `<div class="sheet" role="dialog" aria-modal="true"${title ? ` aria-label="${esc(title)}"` : ''}>` +
         (title ? `<p class="sheet-title">${esc(title)}</p>` : '') +
         `<div class="sheet-items">${head || ''}${rows}</div>` +
-        `<button class="sheet-cancel" type="button">Cancel</button>` +
+        `<button class="sheet-cancel" type="button">${esc(dock || 'Cancel')}</button>` +
       `</div>`;
     document.body.appendChild(scrim);
     document.body.style.overflow = 'hidden';
@@ -7837,7 +7940,13 @@
     // WAI-ARIA dialog: focus moves in on open, is trapped while open, returns on
     // close). Move focus to the first action once it's painted.
     const opener = document.activeElement;
-    const focusables = () => [...scrim.querySelectorAll('.sheet-item, .swatch, .sheet-cancel')];
+    // EVERY BUTTON THE PANEL ACTUALLY HOLDS, rather than a list of the classes
+    // that have turned up in one so far. `head` is the caller's markup, so a
+    // named list silently stops trapping the moment somebody mounts a control it
+    // has never heard of — which is exactly what the audience picker's modes and
+    // its checklist were.
+    const focusables = () =>
+      [...scrim.querySelectorAll('button')].filter((b) => !b.disabled);
     requestAnimationFrame(() => {
       scrim.classList.add('open');
       focusables()[0]?.focus();
@@ -7846,6 +7955,7 @@
     const close = (then) => {
       if (!sheetOpen) return;
       sheetOpen = false;
+      sheetAway = null;
       document.removeEventListener('keydown', onKey);
       scrim.classList.remove('open');
       document.body.style.overflow = '';
@@ -7878,6 +7988,7 @@
       }));
     if (wire) wire(scrim, close);
     document.addEventListener('keydown', onKey);
+    sheetAway = close;
   }
 
   /* ── Profile colour ─────────────────────────────────────────────────────────
@@ -10466,17 +10577,52 @@
     const btn = (scope || document).querySelector('#c-audience');
     if (btn) btn.innerHTML = audienceLockInner();
   }
+  /* ── Who can see this ─────────────────────────────────────────────────────
+     A SHEET RATHER THAN A CENTRED CARD, and that is the profile editor's bug
+     and the friends list's bug closed a third and last time.
+
+     It was a `.modal`: a fixed, centred flex box with no `overflow`, holding a
+     card with no `max-height`. The note beside `.modal-card--list` argued the
+     one caller left was safe because it is "short by construction" — and it is
+     not. It lists YOUR WHOLE CIRCLE. Past about a dozen friends the card grew
+     taller than the screen and was clipped at both ends with nothing left to
+     scroll (the body is locked while an overlay owns it, and the veil does not
+     scroll either): the question went off the top and Done — the only control
+     that committed the pick — went off the bottom.
+
+     So it is `openSheet` now, which is where 1.3 already files "a panel opened
+     by something in the PAGE rather than in the bar" (see the .sheet-scrim
+     block). It arrives with the focus trap, the return of focus to the lock,
+     Escape, the scrim tap, the safe-area dock and the panel-tier glass — all of
+     which this was a second, worse copy of, and one (the trap) it simply did not
+     have. The checklist is the part that scrolls now, inside a capped panel, so
+     the modes and the dock hold still above and below it.
+
+     AND IT COMMITS AS YOU TAP. Deferred commit is what turned an unreachable
+     Done into a bug that lost the answer rather than one that looked wrong;
+     taking each tap as it lands means every way out — the dock, Escape, the
+     scrim, the back gesture that now sweeps it — leaves the same state, and the
+     lock under the sheet updates as you go, which is feedback the card never
+     gave. The coercion is unchanged and still stated exactly once: "Choose
+     people" with nobody chosen is My circle, because an empty allowlist is a
+     post that nobody can read. */
   function openAudienceSheet(root) {
     const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
       .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
     const chosen = new Set(pubAudience.users);
     let mode = pubAudience.mode;
 
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Who can see this');
+    // What used to be the Done handler, run on every tap instead of once at the
+    // end. Nothing else writes pubAudience from here, so the fallback lives in
+    // one place and cannot be half-applied.
+    const commit = () => {
+      const users = [...chosen];
+      if (mode === 'public') pubAudience = { mode: 'public', users: [] };
+      else if (mode === 'list' && users.length) pubAudience = { mode: 'list', users };
+      else pubAudience = { mode: 'circle', users: [] };
+      pubAudienceTouched = true;      // an answer now, not a default
+      syncAudienceLock(root);
+    };
 
     const pickRows = friends.map((f, i) =>
       `<button type="button" class="aud-pick" role="checkbox" data-user="${esc(f.username)}" ` +
@@ -10495,66 +10641,54 @@
         `<span class="aud-mode-tick" aria-hidden="true"></span>` +
       `</button>`;
 
-    modal.innerHTML =
-      `<div class="modal-card modal-card--glass modal-card--list">` +
-        `<h2 class="modal-title">Who can see this?</h2>` +
-        `<div class="aud-modes">` +
+    openSheet({
+      title: 'Who can see this?',
+      // Not "Cancel": every tap has already been taken, so there is nothing left
+      // for the foot of the panel to undo. See openSheet's `dock`.
+      dock: 'Done',
+      scrimClass: 'sheet-scrim--aud',
+      head:
+        `<div class="aud-modes" role="group" aria-label="Who can see this">` +
           modeBtn('public', 'Anyone', 'Everyone on Tria, friend or not') +
           modeBtn('circle', 'My circle', 'Only your mutual friends') +
           modeBtn('list', 'Choose people', 'Only who you pick') +
         `</div>` +
         `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}">` +
-          `<div class="aud-list friends-list--modal">` +
+          `<div class="aud-list">` +
             (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
           `</div>` +
-        `</div>` +
-        `<div class="modal-actions">` +
-          `<button type="button" class="composer-submit" id="aud-done">Done</button>` +
-        `</div>` +
-      `</div>`;
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
+        `</div>`,
+      wire: (scrim) => {
+        const listWrap = scrim.querySelector('.aud-list-wrap');
+        const modes = [...scrim.querySelectorAll('.aud-mode')];
+        modes.forEach(b =>
+          b.addEventListener('click', () => {
+            mode = b.dataset.mode;
+            modes.forEach(x =>
+              x.setAttribute('aria-pressed', String(x.dataset.mode === mode)));
+            // Expand/collapse the checklist (grid-rows glide, matching the About
+            // folds); re-stamp the row stagger so they cascade in fresh each
+            // time it opens.
+            listWrap.classList.toggle('is-open', mode === 'list');
+            if (mode === 'list') {
+              scrim.querySelectorAll('.aud-pick').forEach((row, i) => {
+                row.style.animation = 'none';
+                void row.offsetWidth;                 // reflow so the restart takes
+                row.style.animation = '';
+                row.style.animationDelay = staggerDelay(i);
+              });
+            }
+            commit();
+          }));
 
-    const listWrap = modal.querySelector('.aud-list-wrap');
-    const close = modalCloser(modal, () => document.removeEventListener('keydown', onEsc));
-    const onEsc = (e) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', onEsc);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-
-    modal.querySelectorAll('.aud-mode').forEach(b =>
-      b.addEventListener('click', () => {
-        mode = b.dataset.mode;
-        modal.querySelectorAll('.aud-mode').forEach(x =>
-          x.setAttribute('aria-pressed', String(x.dataset.mode === mode)));
-        // Expand/collapse the checklist (grid-rows glide, matching the About folds);
-        // re-stamp the row stagger so they cascade in fresh each time it opens.
-        listWrap.classList.toggle('is-open', mode === 'list');
-        if (mode === 'list') {
-          modal.querySelectorAll('.aud-pick').forEach((row, i) => {
-            row.style.animation = 'none';
-            void row.offsetWidth;                 // reflow so the restart takes
-            row.style.animation = '';
-            row.style.animationDelay = staggerDelay(i);
-          });
-        }
-      }));
-
-    modal.querySelectorAll('.aud-pick').forEach(b =>
-      b.addEventListener('click', () => {
-        const u = b.dataset.user;
-        if (chosen.has(u)) chosen.delete(u); else chosen.add(u);
-        b.setAttribute('aria-checked', String(chosen.has(u)));
-      }));
-
-    modal.querySelector('#aud-done').addEventListener('click', () => {
-      // Picking nobody in "Choose people" falls back to My circle (no empty list).
-      const users = [...chosen];
-      if (mode === 'public') pubAudience = { mode: 'public', users: [] };
-      else if (mode === 'list' && users.length) pubAudience = { mode: 'list', users };
-      else pubAudience = { mode: 'circle', users: [] };
-      pubAudienceTouched = true;      // an answer now, not a default
-      syncAudienceLock(root);
-      close();
+        scrim.querySelectorAll('.aud-pick').forEach(b =>
+          b.addEventListener('click', () => {
+            const u = b.dataset.user;
+            if (chosen.has(u)) chosen.delete(u); else chosen.add(u);
+            b.setAttribute('aria-checked', String(chosen.has(u)));
+            commit();
+          }));
+      },
     });
   }
 
@@ -13965,6 +14099,15 @@
     // outlive the nodes the next render replaces.
     if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
     if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
+
+    // A SHEET IS NOT A HISTORY ENTRY, so the back gesture walks out from under
+    // one: the page behind it re-renders and the panel is left floating over a
+    // body whose scroll is still locked and chrome that is still standing down.
+    // The profile editor and the friends list were both made PAGES to escape
+    // exactly this; every remaining sheet gets it here, in one line, on the way
+    // in. Its own close() is what runs, so the scroll lock, the focus return and
+    // the exit animation are the sheet's, unchanged.
+    dismissSheet();
 
     // Your colour on the primary buttons. Above the gate check on purpose: it is
     // what CLEARS the band on the way out, so signing out doesn't leave the next
