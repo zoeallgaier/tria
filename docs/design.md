@@ -400,7 +400,7 @@ Six things about it are load-bearing:
   places, both of which want a bar that isn't there rather than an empty one:
   under the gate (which hides `.topbar` and draws `.auth-topbar` instead) and in
   the frames between boot and the first route landing. Geometry is unconditional;
-  what the class still gates is the material, hide-on-scroll, and the reserves.
+  what the class still gates is the material and the reserves.
 - **A page under a bar opens with a hairline, not an editorial margin.** `main`
   clears the bar and then `.view` used to open with the 4rem/1.5rem it had when
   the thing above it was a wordmark resting on the nav card. Two reserves for one
@@ -533,13 +533,13 @@ scroll). It lives on `.topbar::before` because it has to FADE and neither half
 can do that in place: `background-image` doesn't interpolate between gradients at
 all, and dropping the fill while the blur ramps is two events for one change. One
 `opacity` transition on a layer carrying both does all of it. The status-bar
-scrim goes to full strength while the bar is bare, the same answer it already
-gives for `.topbar--hidden` — which is now two reasons the scrim matters rather
-than one.
+scrim goes to full strength while the bar is bare, which is the one state it now
+has to answer for: the bar used to tuck away on a scroll down as well, and that
+gesture is gone (below).
 
-**And the two rules that take it there must restate the shell gate, or they
-lose.** `.statusbar-scrim`'s baseline is `html[data-shell="installed"]
-.statusbar-scrim` — an attribute plus a class, (0,2,1). A bare `.topbar--hidden
+**And the rule that takes it there must restate the shell gate, or it
+loses.** `.statusbar-scrim`'s baseline is `html[data-shell="installed"]
+.statusbar-scrim` — an attribute plus a class, (0,2,1). A bare `.topbar--bare
 ~ .statusbar-scrim` is two classes, (0,2,0), so the baseline outranks it and
 0.8 is what the glyphs get in every state. That is not a hypothetical: the
 deepen rule was written when the gate was `@media (display-mode: standalone)`,

@@ -351,6 +351,96 @@ body[data-ambient="profile"] .ambient {
    is written against it. */
 body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
 
+/* THE SAME WASH, IN TRIA'S OWN COLOURS, for a person who hasn't picked one.
+
+   ONLY a profile, and only a colourless one. `paintWash` used to land that case
+   on data-ambient="none" — the same value every non-profile route carries — so
+   there was no selector that could tell "this page is somebody without a
+   colour" from "this page isn't anybody", and a wash written against "none"
+   went under the feed, Updates and Discover as well. It is now its own value,
+   set in the one branch of `paintWash` that knows. The rest of the app is
+   paper, deliberately: the wash answers WHOSE is the thing in front of me, and
+   on a feed nobody is asking.
+
+   It is deliberately the same geometry as the block above, down to the last
+   value: same ellipse, same --wash-rise and --wash-drop, same 82% falloff, same
+   tint-first mix. Only the colour source differs. If the shape ever changes,
+   change it in both or the two washes stop being one idea.
+
+   THE RAMP IS TINTED PER STOP AND NOT AS A LAYER. --wash-col does its work with
+   a single color-mix, which a gradient can't be handed, so the obvious move is
+   a flat --wash-tint veil laid over --brand-band — and that is not the same
+   operation: a veil is one alpha over four colours of unequal luminance, so it
+   lifts the orange and the lavender by different amounts and the ramp comes out
+   lopsided. Mixing each stop toward the tint at --wash-keep is exactly what the
+   accent path does, four times.
+
+   --wash-band is declared HERE and not on :root, and that is not tidiness: a
+   custom property's var()s resolve in the scope of the element it is declared
+   on, so a :root copy would mix toward :root's --wash-tint — which does not
+   exist — rather than this body's. It has to live where the tint does.
+
+   Written without `in oklab` and upgraded in the @supports block below, for the
+   reason recorded beside --brand-band in tokens.css: a custom property accepts
+   any token stream, so an unparseable interpolation hint doesn't fail the
+   declaration, it fails at the point of use and takes the whole background to
+   nothing on iOS 15. */
+body[data-ambient="tria"] {
+  --wash-tint: #fff;
+  --wash-keep: 72%;
+  --wash-sat: 2.4;
+  --wash-band: linear-gradient(115deg,
+    color-mix(in srgb, var(--band-note)     var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--band-photo)    var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--band-activity) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--band-find)     var(--wash-keep), var(--wash-tint)));
+}
+@supports (background: linear-gradient(in oklab, #000, #fff)) {
+  body[data-ambient="tria"] {
+    --wash-band: linear-gradient(115deg in oklab,
+      color-mix(in srgb, var(--band-note)     var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--band-photo)    var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--band-activity) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--band-find)     var(--wash-keep), var(--wash-tint)));
+  }
+}
+@media (prefers-color-scheme: dark) {
+  body[data-ambient="tria"] {
+    --wash-tint: #000;
+    --wash-keep: 62%;
+    --wash-sat: 2.2;
+  }
+}
+body[data-ambient="tria"] .ambient {
+  position: absolute;
+  inset: calc(-1 * var(--wash-rise)) 0 auto 0;
+  height: calc(100vh + var(--wash-rise));
+  --wash-rise: 26vh;
+  --wash-drop: 15vh;
+  /* LOUDER THAN A PROFILE'S 56%, which is the opposite of where this started.
+     It was set at 30% on the arithmetic that four hues at equal alpha put four
+     times as much colour on screen as one — true, and beside the point, because
+     the four are spread ACROSS the page rather than stacked, so at any single
+     pixel there is one hue at 30% and the whole thing read as a smudge of
+     nothing. The tint mix does the luminance protection here (--wash-keep is up
+     too, so less of the paper is mixed in), and this dial is free to be the
+     loudness it looks like. */
+  --wash-amt: 68%;
+  /* The mask carries the bloom's SHAPE and the band carries its colour, which
+     is the one structural difference from the accent version: there the shape
+     and the colour are the same gradient, because one colour can live in a
+     radial's stops and a ramp cannot. Identical ellipse, identical falloff. */
+  background: var(--wash-band);
+  -webkit-mask-image: radial-gradient(ellipse 112% 43vh at 50% calc(var(--wash-rise) + var(--wash-drop)),
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  mask-image: radial-gradient(ellipse 112% 43vh at 50% calc(var(--wash-rise) + var(--wash-drop)),
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  filter: saturate(var(--wash-sat));
+  opacity: 1;
+  transition: opacity 0.4s ease;
+  transform: translateZ(0);
+}
+
 /* The chrome that stands on the colour rather than under it, in two weights,
    and the split is about how much of it there is.
 
@@ -394,6 +484,22 @@ body[data-ambient="profile"] .account-handle,
 body[data-ambient="profile"] .account-stat,
 body[data-ambient="profile"] .account-stat-label,
 body[data-ambient="profile"] .account-stat-dot { color: var(--wash-ink-soft); }
+
+/* The house wash gets the identical split, and it is not optional at 68%: the
+   handle and the stats are the line the note above says fails at 3.88:1 left
+   grey, and this ground is louder than the one that figure was measured on.
+   Written as a second selector rather than folded into the one above because
+   the two washes are separate blocks throughout, and a shared selector list
+   here would be the only place they were not. */
+body[data-ambient="tria"] {
+  --wash-ink: color-mix(in srgb, var(--muted) 30%, var(--text));
+  --wash-ink-soft: color-mix(in srgb, var(--muted) 70%, var(--text));
+  --toolbar-ink: var(--wash-ink);
+}
+body[data-ambient="tria"] .account-handle,
+body[data-ambient="tria"] .account-stat,
+body[data-ambient="tria"] .account-stat-label,
+body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   /* Colour still updates, just without the tween. */
@@ -654,7 +760,7 @@ body[data-ambient="profile"] .account-stat-dot { color: var(--wash-ink-soft); }
 
    The bar's geometry is no longer gated on it — .topbar is a real bar at both
    widths now, declared once up top. What stays gated is what an EMPTY bar
-   shouldn't have: the material, the hide-on-scroll gesture, and main's reserve.
+   shouldn't have: the material and main's reserve.
 
    The standard HIG collapsing-title nav bar: the page's name still lives where
    it always did too — in-flow, large serif, scrolling away with content
@@ -664,12 +770,8 @@ body[data-ambient="profile"] .account-stat-dot { color: var(--wash-ink-soft); }
    show at once, so the bar reads as carrying controls right up until there's no
    other title on screen, at which point it quietly becomes one. */
 @media (min-width: 681px) {
-  body.toolbar-live .topbar { transition: transform var(--dur-move) var(--ease); }
   /* The material (declared once, up by .topbar::before). */
   body.toolbar-live .topbar::before { content: ''; }
-  /* Hide-on-scroll (see syncTopbar/the scroll watcher in app.js). */
-  body.toolbar-live .topbar.topbar--hidden { transform: translateY(-100%); }
-  @media (prefers-reduced-motion: reduce) { body.toolbar-live .topbar { transition: none; } }
   /* main has no top padding on desktop of its own — nothing sat fixed over the
      content column there before 1.3. Reserve the bar's true BOTTOM, not its
      height: the bar floats at top:1rem, so height alone under-reserves by that
@@ -1098,8 +1200,8 @@ body.toolbar-live .view { padding-top: 1rem; }
    display-mode `browser` (it is the documented reason installedShell() exists in
    app.js), so the scrim was dead in the one shell that most needs it. The native
    app runs full-bleed under the clock — viewport-fit=cover plus Capacitor's own
-   full-height webview — and .topbar--hidden tucks the only other backing away on
-   scroll-down, so feed content passed under the OS glyphs with nothing behind it.
+   full-height webview — and at the top of a page the bar's own material has not
+   arrived yet, so feed content passed under the OS glyphs with nothing behind it.
 
    The gate is now a single JS predicate stamped onto <html> (data-shell), which
    answers for all three shells at once instead of each stylesheet re-deriving
@@ -1119,15 +1221,15 @@ body.toolbar-live .view { padding-top: 1rem; }
     background: var(--statusbar-scrim);   /* white in light mode, dark in dark — themed */
     transition: opacity var(--dur-move) var(--ease);
   }
-  /* Nothing but page under the glyphs, so the scrim goes to full strength. Two
-     ways to get there and they are the same situation: the bar has tucked away
-     on a scroll down, or it is at the top of a page and its material hasn't
-     faded in yet (see .topbar::before).
+  /* Nothing but page under the glyphs, so the scrim goes to full strength: the
+     bar is at the top of a page and its material hasn't faded in yet (see
+     .topbar::before). There was a second way to get here — the bar tucked away
+     on a scroll down — and it went with the gesture.
 
      The `html[data-shell="installed"]` gate is restated here on purpose, and
      removing it silently switches this whole behaviour off. It reads as
      redundant — the scrim is display:none without it — but specificity doesn't
-     care: the baseline above is (0,2,1) and a bare `.topbar--hidden ~
+     care: the baseline above is (0,2,1) and a bare `.topbar--bare ~
      .statusbar-scrim` is (0,2,0), so the baseline WINS and 0.8 is what the
      glyphs get in every state. That is not hypothetical. This rule was written
      when the gate was `@media (display-mode: standalone)`, which carries no
@@ -1137,7 +1239,6 @@ body.toolbar-live .view { padding-top: 1rem; }
      been stuck at 0.8 in the installed shell ever since — no error, no visual
      tell short of reading white glyphs over a white feed, and invisible in
      every other shell because the scrim isn't drawn there at all. */
-  html[data-shell="installed"] .topbar--hidden ~ .statusbar-scrim,
   html[data-shell="installed"] .topbar--bare ~ .statusbar-scrim { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { html[data-shell="installed"] .statusbar-scrim { transition: none; } }
 }
@@ -7020,7 +7121,6 @@ button.poll-option:disabled { cursor: default; }
     padding: env(safe-area-inset-top) var(--toolbar-pad) 0;   /* left edge aligns with content */
     border-right: none;
     border-bottom: none;
-    transition: transform var(--dur-move) var(--ease);
   }
   /* On a phone the bar spans the width and content runs under it whatever is
      in it, so the material applies unconditionally here rather than waiting on
@@ -7028,19 +7128,11 @@ button.poll-option:disabled { cursor: default; }
      .topbar::before; this is only the gate.
 
      It also means the bar does most of the status-bar scrim's job, but only
-     while it's actually painted. The scrim still matters, and now for two
-     reasons rather than one: .topbar--hidden takes the material away on a
-     scroll down, and .topbar--bare has not brought it in yet at the top. */
+     while it's actually painted, which is now a single case rather than two:
+     .topbar--bare has not brought the material in yet at the top of a page.
+     The other one used to be the bar tucking away on a scroll down, and the
+     bar does not do that any more. */
   .topbar::before { content: ''; }
-  /* Scrolling down tucks the bar away (see the scroll watcher in app.js);
-     scrolling up brings it straight back. A SLIDE on the web and a FADE in the
-     app, which is the one place those two answers legitimately differ: see the
-     gate at the end of this file. Here the bar's material is `.topbar::before`,
-     a backdrop-filter, and fading a bar that carries one means recompositing
-     the blur every frame AND racing the material's own fade-in — the app has
-     neither problem because over there the material is not CSS at all. */
-  .topbar.topbar--hidden { transform: translateY(-100%); }
-  @media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
 
   /* Floating liquid-glass nav: the old edge-to-edge tab bar becomes a detached
      pill hovering above the bottom edge, with Post breaking out beside it as
@@ -8016,11 +8108,13 @@ html[data-chrome="native"] .topbar .toolbar-title { visibility: hidden; }
    2. Fading a `backdrop-filter` recomposites the blur every frame, on the
       most-scrolled surface in the app. That is the cost floor CLAUDE.md refuses
       everywhere else.
-   3. And the two fades RACE. `.topbar--bare` comes off at the same moment
-      `.topbar--hidden` goes on, so one gesture starts the material fading in
+   3. And the two fades RACED. `.topbar--bare` came off at the same moment
+      `.topbar--hidden` went on, so one gesture started the material fading in
       and the bar fading out, nested, in opposite directions. That is what
       "the opacity and the blur are competing" was, and no amount of tuning
-      fixes it while both halves are separate elements.
+      fixed it while both halves were separate elements. The hide-on-scroll
+      gesture is gone now (the controls stay up and only the material arrives
+      with the scroll), which retires the race but not the first two reasons.
 
    And the Swift copy of the gradient that first replaced it was not the fix
    either: a hand-rolled `--bg` wash under `.statusbar-scrim`'s hand-rolled
@@ -8034,46 +8128,30 @@ html[data-chrome="native"] .topbar .toolbar-title { visibility: hidden; }
 
    AND THE ELEMENT THIS RULE EMPTIES IS NOW EMPTY. Material gone, controls
    hidden, title hidden: in the app `.topbar` draws nothing at all and only
-   exists to be measured. The two rules below are what is left of its
-   hide-on-scroll, and they matter for one reason only — an invisible box that
-   still hit-tests would eat taps meant for the page. The visible half of that
-   gesture is native now, and it is a fade in step, element by element
-   (TriaToolbar.setShown), against a material that does not leave with them
-   (TriaToolbar.frame(forShown:)). Off-app none of this applies and the bar
-   still slides out by `translateY(-100%)`, because a bar carrying a
-   backdrop-filter cannot afford to fade. */
+   exists to be measured. It does not move either, at either width — the bar's
+   hide-on-scroll is gone and the controls are up on every route, so the only
+   thing that answers to the scroll is the material, which is native here and
+   `.topbar--bare` off-app. */
 html[data-chrome="native"] .topbar::before { content: none; }
 
 /* AND THE STATUS BAR SCRIM GOES WITH IT, in the app only.
 
    Read the long note by `.statusbar-scrim` for what it is: a hand-painted band
    of `--bg` over `env(safe-area-inset-top)`, at z-index 102 so it sits above
-   everything, keeping the clock legible where the bar had tucked away and left
-   bare content under the glyphs. Every word of that is still true on the web
-   and it stays there.
+   everything, keeping the clock legible where the bar's own material has not
+   arrived and there is bare content under the glyphs. Every word of that is
+   still true on the web and it stays there.
 
    In the app it was a second wash over the top of the bar's own, and it was the
-   one that did NOT recede: it goes to full strength exactly when the bar hides,
-   so the state where the design wants less chrome was the state carrying the
-   most opaque paper. Two of them over a photograph is what "looks like
-   dogshit" was.
+   one that did NOT recede: it goes to full strength exactly where the design
+   wants the least chrome, at the top of a page, so the quietest state was the
+   one carrying the most opaque paper. Two of them over a photograph is what
+   "looks like dogshit" was.
 
-   Its job is done by the material now, which collapses to this exact strip
-   when the bar tucks away instead of leaving with it — glass rather than
+   Its job is done by the material now: real glass rather than a second wash of
    paint, one object rather than two, and no `env()` arithmetic restated in a
-   second place. See `frame(forShown:)`. */
+   second place. */
 html[data-chrome="native"] .statusbar-scrim { display: none; }
-html[data-chrome="native"] .topbar {
-  transition: opacity var(--dur-move) var(--ease);
-}
-html[data-chrome="native"] .topbar.topbar--hidden {
-  transform: none;
-  opacity: 0;
-  /* A bar at zero opacity still hit-tests, and the only thing left on this one
-     that can take a tap is the web title's box. UIKit needs no equivalent: it
-     declines to hit-test a view at alpha 0 by itself. */
-  pointer-events: none;
-}
 
 /* DISCOVER'S SEARCH GOES ALL THE WAY OVER, disc AND bar, and that is a change
    of mind from the way stage 3 shipped it.

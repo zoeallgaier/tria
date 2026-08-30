@@ -108,7 +108,7 @@ learn what a "Discover filter" or a "daily" is.
   `setChrome({visible, fab})`, where `visible` takes the whole chrome away (the
   post page, the way `body.postbar-live` already does) and `fab` alone tucks the
   + (the composer, `.nav--compose`). `setToolbar({bar})` states the top bar
-  whole: `{live, visible, height, title, controls, search}` — `height` sizes the
+  whole: `{live, height, title, controls, search}` — `height` sizes the
   material and `title` is the collapsing small title, drawn natively since the
   material went glass (see "What the top bar kept"). Whether the material is
   PAINTED does not cross: native reads the scroll itself., each control
@@ -249,20 +249,38 @@ which is the cost floor CLAUDE.md refuses everywhere. Liquid Glass answers both.
 The material refracts and diffuses what is behind it, and the system draws it
 rather than us.
 
-So the colour goes INTO the material, as `UIGlassEffect.tintColor`. **A thinned
-band laid over the glass was tried first and is not the same thing** — measured,
-at `--pill-alpha`: an opaque-ish layer in the `contentView` hides the material
-entirely, so what you get is a slightly see-through disc with page text ghosting
-through it, which is the CSS failure mode wearing the native button's clothes.
-The gradient came back out.
+**The colour is the +'s BACKDROP**: a `CAGradientLayer`-backed view
+(`TriaFabRamp`) the disc's exact size and capsule, sitting as a *sibling below*
+the glass. The material samples, displaces and frosts it the way it samples
+anything else, which is what tinted glass physically is, and all four stops
+survive because nothing is reducing them to a colour. We supply something to
+tint; the system does the tinting. Being a sibling is the one liability — the
++'s fade and its sink don't reach it on their own, so `syncVisibility` sets the
+same `alpha`, `transform` and `isHidden` on both inside one animation block. A
+frame out of step and the disc's colour hangs in the air behind a + that has
+already sunk.
 
-What it costs: `tintColor` is one colour and `--pill-band` is a ramp, so the disc
-no longer shows four brand stops travelling across it. The MIDDLE stop is the
-tint, which is *exact* for a reader's accent — those bands are three stops of a
-single hue (`bandFrom` in app.js) — and a real reduction only for Tria's own
-default ramp, where four hues become the one at their centre. The ramp is not
-lost; it still paints the composer's Share button, the splash and every other
-`.publish-fill`.
+**Three things were tried before that and all three are worth not repeating.**
+
+1. *A thinned band laid over the glass*, at `--pill-alpha`: an opaque-ish layer
+   in the `contentView` hides the material entirely, so what you get is a
+   slightly see-through disc with page text ghosting through it — the CSS
+   failure mode wearing the native button's clothes.
+2. *`UIGlassEffect.tintColor`*, which shipped for a while. It is **one colour**,
+   so the disc took the band's middle stop. Exact for a reader's accent (those
+   bands are three stops of a single hue, `bandFrom` in app.js) and a real loss
+   for Tria's own ramp, where four hues became the one at their centre.
+3. *A multiply blend* — `compositingFilter = "multiplyBlendMode"` on a layer
+   inside `fab.contentView`. **It renders nothing, silently.** Not because
+   `compositingFilter` is macOS-only (the CAFilter names do composite on iOS);
+   because a `UIVisualEffectView` composites its `contentView` as an isolated
+   group, so the blend has no backdrop to multiply against, and multiplying
+   against nothing is nothing. No ordering inside the effect view fixes it.
+   `UIGlassEffect(style: .clear)` underneath it was worse in a more instructive
+   way: clear glass is transparent enough that the disc took its value from
+   whatever photograph happened to be behind it and went near-black over a dark
+   one. The + is up on every route over a scrolling feed and cannot be allowed
+   to read the page for its colour.
 
 app.js resolves the band to real numbers and sends them (the canvas is the
 parser; see the note there), because the band is the reader's own accent as
@@ -294,10 +312,11 @@ is the one that made it a bug rather than a preference:
 2. Fading an element that carries `backdrop-filter` recomposites the blur every
    frame, on the most-scrolled surface in the app. That is the cost floor
    CLAUDE.md refuses everywhere else.
-3. And the two fades RACE. `.topbar--bare` comes off at the same instant
-   `.topbar--hidden` goes on, so one scroll starts the material fading IN and
-   the bar fading OUT, nested, in opposite directions. No amount of tuning fixes
-   that while they are separate elements.
+3. And the two fades RACED. `.topbar--bare` came off at the same instant
+   `.topbar--hidden` went on, so one scroll started the material fading IN and
+   the bar fading OUT, nested, in opposite directions. No amount of tuning fixed
+   that while they were separate elements. Hide-on-scroll has since gone
+   entirely (see below), which retires the race but not the first two reasons.
 
 The first attempt at drawing it natively was a Swift COPY of that gradient — a
 masked blur under the stylesheet's own `--bg` ramp. It shipped for one build and
@@ -335,47 +354,47 @@ under it instead of veiling it. Three details are load-bearing:
   bevelled corners sitting on the page. The frame is inset by `rimSlack` past
   the left, right and top edges, so the only rim left is the bottom one, which
   is the edge a bar is supposed to have.
-- **It LEAVES with the buttons, and it fades.** There was a build that kept
-  `safeAreaInsets.top` behind when the bar tucked away, on the reasoning that
-  the clock still needs something under it — the job `.statusbar-scrim` was
-  added to do. It is the wrong trade: a glass tab hanging in the notch after the
-  bar it belonged to has gone is a leftover, and iOS resolves the status bar
-  against the page perfectly well, as it does in every app that scrolls content
-  under the clock. The collapse also read as the bar folding into the notch
-  while the discs on it dissolved in place, which is two animations again;
-  alpha is safe on this view (a plain `UIVisualEffectView`, not the glass
-  container that refuses it). The scrim stays `display: none` under the gate
-  regardless — its second copy over the bar's own material was half of what made
-  the first build fog.
-- **It follows the SCROLL as well as the buttons**, and needs both: `live &&
-  !atTop && shown`. `bare` used to cross the bridge on every push; native reads
-  the offset off the webview's scroll view itself (`TriaScrollWatch`, KVO rather
-  than the scroll delegate, which belongs to WebKit). At the top of a page there
-  is nothing under the bar to separate it from, so there is no material and the
-  page runs clean to the edge.
+- **It is the ONLY thing on this bar that answers to the scroll**, and it needs
+  two facts: `live && !atTop`. `bare` used to cross the bridge on every push;
+  native reads the offset off the webview's scroll view itself
+  (`TriaScrollWatch`, KVO rather than the scroll delegate, which belongs to
+  WebKit). At the top of a page there is nothing under the bar to separate it
+  from, so there is no material and the page runs clean to the edge.
+- **It FADES, it does not travel or collapse.** There was a build that kept
+  `safeAreaInsets.top` behind as a glass tab in the notch, and one where the
+  pane collapsed into that strip rather than fading; both read as the bar
+  folding up while the discs on it dissolved in place, which is two animations
+  for one change. Alpha is safe on this view — a plain `UIVisualEffectView`, not
+  the glass container that refuses it. iOS resolves the status bar against the
+  page perfectly well without a tab under it, as it does in every app that
+  scrolls content under the clock, and `.statusbar-scrim` stays `display: none`
+  under the gate: its second copy over the bar's own material was half of what
+  made the first build fog.
 
-**Hide-on-scroll is a FADE in the app and a SLIDE on the web**, which is the one
-place the two answers legitimately differ. Off-app the bar carries a
-`backdrop-filter` and cannot afford to fade, so it still leaves by
-`translateY(-100%)`. Under the gate there is nothing left on `.topbar` at all —
-material native, controls hidden, title hidden — so the CSS half of the gesture
-is now only `pointer-events: none` on an invisible box, and the visible half is
-native and fades: nothing else in 1.4 enters or leaves by travelling in from an
-edge.
+**THE BAR NO LONGER HIDES ON A SCROLL DOWN**, at either width, and this replaces
+the paragraph that used to say hide-on-scroll was a FADE in the app and a SLIDE
+on the web. It was both, and both are gone. The reason is a design one and it is
+not about the animation: the controls in this bar are the PAGE'S OWN — back, the
+filter dial, Save, •••, search — and a control worth putting on screen is not
+worth making the reader scroll up to fetch. The gesture bought back a 60px strip
+of a feed that had already reserved room for it. What the effect was really
+about survives, and is now the whole of it: **the chrome stays and the header
+arrives with the scroll.** At the top of a page the discs float over clean paper
+with no material behind them; content sliding under brings the glass in, and the
+page's big title going under the bar brings the small one in after it.
 
-**NOT BY FADING THE CONTAINER**, which is the trap this repo had already written
-down and which the first attempt walked straight into. `alpha` on a
-`UIVisualEffectView` is unsupported, and on a GLASS CONTAINER it is worse than
-unsupported — the container renders its nested glass in a pass of its own, so
-`contentView.alpha` left the discs at partial strength and re-rendering every
-frame. The note on `TriaChromeBar.syncVisibility` says exactly this, about
-exactly this class of view, and it was read as being about the bottom bar. What
-DOES honour alpha is a nested glass ELEMENT, which is the fact the composer's +
-is already animated on. So `setShown` fades the discs one by one, the search
-capsule with them, and the title with those. The material does NOT go with them
-— see its own bullets above. The CSS needs
-`pointer-events: none` with its opacity, since a bar at zero opacity still
-hit-tests; UIKit declines to hit-test a view at alpha 0 on its own.
+So `setShown` is gone from `TriaToolbar`, the `visible` flag is gone from the
+toolbar payload (`live` was the only other answer it ever had), and
+`.topbar--hidden` is gone from app.js and the stylesheet. Two facts it was built
+on are kept in the comment where it stood, because the next animation on that
+class will need them: **alpha on a UIVisualEffectView is unsupported, and on a
+GLASS CONTAINER it is worse than unsupported** — the container renders its
+nested glass in a pass of its own, so `contentView.alpha` leaves the discs at
+partial strength and re-rendering every frame (`TriaChromeBar.syncVisibility`
+says exactly this, about exactly this class of view, and it was once read as
+being about the bottom bar). What DOES honour alpha is a nested glass ELEMENT,
+which is the fact the composer's + is animated on and the way each disc was
+faded here.
 
 **The collapsing title is DRAWN natively and DECIDED in the web**, and the split
 is the whole point. It appears exactly when the page's own in-flow `<h1>` has

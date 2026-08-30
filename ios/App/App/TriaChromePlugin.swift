@@ -178,7 +178,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// late and a pill that got narrower at 360px from each needing a Swift copy
     /// of a stylesheet rule to chase them.
     ///
-    /// `bar` is `{live, visible, height, paper, controls: [...]}`; each control
+    /// `bar` is `{live, height, title, search, controls: [...]}`; each control
     /// is `{id, kind, x, y, w, h, glyph, ink, tint, text, after, hidden,
     /// menu, label}`. `id` is the web element's own id and it is opaque here —
     /// it goes back out on a tap and app.js decides what it meant.
@@ -389,6 +389,73 @@ protocol TriaChromeControl: AnyObject {
 /// `docs/native-chrome.md`: the accessibility tree is built by hand below, and
 /// the icons don't scale with Dynamic Type — which is parity with the web bar,
 /// whose `.nav-ico` is a fixed 28px, not a regression.
+
+/* THE RAMP, UNDER THE GLASS RATHER THAN ON IT. This is the third answer to
+   "the + cannot carry the four brand stops", and the first that keeps all four.
+
+   The first was a gradient laid over regular glass in the contentView: an
+   opaque-ish layer hides the material entirely, so what you get is a slightly
+   see-through disc with page text ghosting through it — the CSS failure mode
+   wearing the native button's clothes. The second was
+   `UIGlassEffect.tintColor`, which is ONE colour, so the disc took the middle
+   stop and the travel across it was simply lost.
+
+   THE THIRD WAS MULTIPLY, AND IT DOES NOT WORK, which is worth writing down
+   because it is the obvious idea and it fails silently. `compositingFilter =
+   "multiplyBlendMode"` on a layer inside `fab.contentView` renders NOTHING: a
+   UIVisualEffectView composites its contentView as an isolated group, so the
+   blend has no backdrop to multiply against and multiplying against nothing is
+   nothing. Not a CALayer-is-macOS-only problem (the filter names do composite
+   on iOS) — an isolation problem, and no ordering inside the effect view fixes
+   it. Over `.clear` glass the same layer was invisible too, and the disc simply
+   went dark wherever the photograph behind it was dark, which is the reason
+   clear glass is wrong for this control anyway: the + is up on every route over
+   a scrolling feed and cannot take its colour from what happens to be under it.
+
+   So the ramp goes where a real backdrop is: a sibling BELOW the glass, exactly
+   the disc's size and capsule. The material then samples, displaces and frosts
+   it the way it samples anything else, which is what tinted glass physically
+   is, and the four stops survive because nothing is reducing them to a colour.
+   The system draws the tinting; we only supply something to tint.
+
+   WHY layerClass AND NOT A SUBLAYER: a CAGradientLayer added as a sublayer
+   needs its frame set by hand on every layout, and this view sits in a bar that
+   resizes on rotation and on the keyboard. Being the layer means Auto Layout
+   does it. */
+@available(iOS 26.0, *)
+final class TriaFabRamp: UIView {
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+    private var ramp: CAGradientLayer { layer as! CAGradientLayer }
+
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        isUserInteractionEnabled = false
+        // --brand-band is 115deg, measured CSS-style: clockwise from "to top".
+        // That resolves to (sin 115, -cos 115) = (0.906, 0.423) in screen
+        // coordinates, i.e. rightward and DOWN, which is these two points on a
+        // roughly square disc. Same travel as the web's, not a fresh guess.
+        ramp.startPoint = CGPoint(x: 0.05, y: 0.28)
+        ramp.endPoint = CGPoint(x: 0.95, y: 0.72)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func paint(_ stops: [UIColor]) {
+        // A single stop still has to be a two-entry array or CAGradientLayer
+        // draws nothing at all, which is the silent failure a reader's
+        // monochrome band would otherwise hit.
+        ramp.colors = (stops.count == 1 ? [stops[0], stops[0]] : stops).map(\.cgColor)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+        layer.masksToBounds = true
+    }
+}
+
 @available(iOS 26.0, *)
 final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
 
@@ -436,7 +503,12 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     var onMetrics: ((CGFloat) -> Void)?
 
     private let pill = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    /// CLEAR glass, not regular, and the difference is the whole experiment:
+    /// clear is the variant meant to sit over media, so it carries far less of
+    /// its own frosting and leaves room for a colour to be multiplied into it.
+    /// On regular glass the same ramp reads as a sticker.
     private let fab = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    private let fabRamp = TriaFabRamp()
     private let row = UIStackView()
     private let fabGlyph = UIImageView()
     private let fabButton = UIButton(type: .custom)
@@ -485,6 +557,8 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         pill.translatesAutoresizingMaskIntoConstraints = false
         fab.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(pill)
+        // BENEATH the glass, not inside it. See TriaFabRamp.
+        contentView.addSubview(fabRamp)
         contentView.addSubview(fab)
 
         // VoiceOver reads the capsule as a tab bar and each disc as a button
@@ -526,6 +600,10 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             fab.widthAnchor.constraint(equalToConstant: Metric.fabSize),
             fab.heightAnchor.constraint(equalToConstant: Metric.fabSize),
             fabX,
+            fabRamp.leadingAnchor.constraint(equalTo: fab.leadingAnchor),
+            fabRamp.trailingAnchor.constraint(equalTo: fab.trailingAnchor),
+            fabRamp.topAnchor.constraint(equalTo: fab.topAnchor),
+            fabRamp.bottomAnchor.constraint(equalTo: fab.bottomAnchor),
             fabGlyph.centerXAnchor.constraint(equalTo: fab.contentView.centerXAnchor),
             fabGlyph.centerYAnchor.constraint(equalTo: fab.contentView.centerYAnchor),
             fabButton.leadingAnchor.constraint(equalTo: fab.contentView.leadingAnchor),
@@ -616,48 +694,12 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             fabButton.accessibilityLabel = fabSpec["label"] as? String ?? fabButton.accessibilityLabel
             if let colors = fabSpec["colors"] as? [String], !colors.isEmpty {
                 let stops = colors.compactMap(TriaChromeBar.color(fromHex:))
-                if !stops.isEmpty { tintFab(stops[stops.count / 2]) }
+                if !stops.isEmpty { fabRamp.paint(stops) }
             }
             if let ink = fabSpec["ink"] as? String, let inkColor = TriaChromeBar.color(fromHex: ink) {
                 fabGlyph.tintColor = inkColor
             }
         }
-    }
-
-    /* TINTED GLASS, which is a different object from the web's + and worth
-       saying why.
-
-       On the web this disc is the one OPAQUE member of the primary-act set (see
-       the long note beside `.nav-publish::before`), and both of the reasons are
-       CSS reasons that dissolve here rather than being overruled. Thinning it in
-       CSS would show live content sliding through the app's most permanent
-       object, because a translucent fill composites against a SHARP backdrop;
-       and the `backdrop-filter` that would soften it is a per-frame bill on a
-       control that is up on every route over a scrolling feed, which is the cost
-       floor CLAUDE.md refuses everywhere. Liquid Glass answers both — the
-       material refracts and diffuses what is behind it, and the system draws it
-       rather than us.
-
-       So the colour goes INTO the material rather than on top of it. A thinned
-       band laid over the glass was tried first and is not the same thing: an
-       opaque-ish layer in the `contentView` hides the material entirely, so what
-       you get is a slightly see-through disc with page text ghosting through it,
-       which is the CSS failure mode wearing the native button's clothes.
-
-       WHAT THIS COSTS: `tintColor` is one colour and `--pill-band` is a ramp, so
-       the disc no longer shows the four brand stops travelling across it. The
-       MIDDLE stop is the tint, which is exact for a reader's accent — those
-       bands are three stops of a single hue (see `bandFrom` in app.js) — and a
-       real reduction only for Tria's own default ramp, where four hues become
-       the one at its centre. The ramp itself is not lost; it still paints the
-       composer's Share button, the splash and every other `.publish-fill`. */
-    private func tintFab(_ colour: UIColor) {
-        guard let glass = fab.effect as? UIGlassEffect else { return }
-        glass.tintColor = colour
-        // Reassigned, not just mutated: a UIVisualEffectView caches the effect it
-        // was handed, so a tint changed in place after the reader picks a colour
-        // does not reach the material until the effect is set again.
-        fab.effect = glass
     }
 
     func select(route: String) {
@@ -693,7 +735,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         isHidden = !chromeUp
         isUserInteractionEnabled = chromeUp
         fab.isUserInteractionEnabled = fabUp
-        if fabUp { fab.isHidden = false }
+        if fabUp { fab.isHidden = false; fabRamp.isHidden = false }
 
         // The + itself is a nested glass ELEMENT rather than the container, and
         // it does honour alpha — so the composer's tuck keeps the fade and the
@@ -703,6 +745,13 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             self.fab.alpha = fabUp ? 1 : 0
             self.fab.transform = fabUp ? .identity
                 : CGAffineTransform(translationX: 0, y: 14).scaledBy(x: 0.6, y: 0.6)
+            // The ramp is the +'s BACKDROP and therefore its sibling, not its
+            // subview, so none of the above reaches it on its own. It gets the
+            // same alpha and the same transform in the same animation block —
+            // one frame out of step and the disc's colour is left hanging in
+            // the air behind a + that has already sunk.
+            self.fabRamp.alpha = self.fab.alpha
+            self.fabRamp.transform = self.fab.transform
             // The + stays in flow at opacity 0 and the pill glides right by half
             // its footprint, which lands the pill's centre on the screen's —
             // the same recentring `.nav--compose` does in CSS, by the same
@@ -716,6 +765,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         let settle: (Bool) -> Void = { [weak self] _ in
             guard let self else { return }
             self.fab.isHidden = !(self.wantsChrome && !self.keyboardUp && self.wantsFab)
+            self.fabRamp.isHidden = self.fab.isHidden
         }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.28, delay: 0,
@@ -960,7 +1010,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     private var controls: [String: TriaToolbarButton] = [:]
     private var search: TriaSearchField?
     private weak var scroller: UIScrollView?
-    private var shown = true
     /* OXYGEN, IN THE ONE FORM UIKIT CAN READ.
 
        The stylesheet's `font-family: 'Oxygen'` is a `woff2` in `css/fonts/`,
@@ -1055,7 +1104,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     func apply(spec: [String: Any]) {
         live = spec["live"] as? Bool ?? false
-        let visible = spec["visible"] as? Bool ?? true
         // The bar is 60px plus the notch on a phone and 88 on a tablet,
         // measured by app.js off the CSS bar rather than assumed here. It is
         // the height of the material and the only geometry it needs.
@@ -1123,51 +1171,31 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         }
 
         isHidden = !live
-        setShown(visible, animated: !isHidden)
         syncMaterial(animated: !isHidden)
         syncTitle(animated: !isHidden)
         material.frame = materialFrame()
     }
 
-    /// The bar goes away on a scroll down (`.topbar--hidden`), and everything
-    /// drawn on it has to go with it.
-    ///
-    /// A FADE, NOT A SLIDE, matching the web. It used to mirror the CSS
-    /// `translateY(-100%)`, and a bar sliding up out of frame while the glass
-    /// riding it materialised in place read as two animations stapled together
-    /// — nothing else in 1.4 enters or leaves by travelling in from an edge.
-    ///
-    /// BUT NOT BY FADING THE CONTAINER, which is the trap this file already
-    /// documents on `syncVisibility` and which the first attempt at this walked
-    /// straight into. `alpha` on a UIVisualEffectView is unsupported, and on a
-    /// GLASS CONTAINER it is worse than unsupported: the container renders its
-    /// nested glass in a pass of its own, so `contentView.alpha` left the discs
-    /// drawn at partial strength and re-rendering every frame. That, plus the
-    /// CSS material fading IN over the top of it, is what "the opacity and the
-    /// blur are competing" was.
-    ///
-    /// What DOES honour alpha is a nested glass ELEMENT — the same fact the
-    /// composer's + is already animated on. So the discs are faded one by one
-    /// and the search capsule with them. Two alphas that work beats one the
-    /// system quietly refuses.
-    private func setShown(_ visible: Bool, animated: Bool) {
-        guard visible != shown else { return }
-        shown = visible
-        let move = {
-            for control in self.controls.values { control.alpha = visible ? 1 : 0 }
-            self.search?.alpha = visible ? 1 : 0
-            self.titleLabel.alpha = (visible && self.wantsTitle) ? 1 : 0
-            self.material.alpha = (visible && self.live && !self.atTop) ? 1 : 0
-        }
-        if animated && !UIAccessibility.isReduceMotionEnabled {
-            UIView.animate(withDuration: 0.36, delay: 0,
-                           options: [.allowUserInteraction, .beginFromCurrentState,
-                                     .curveEaseOut], animations: move)
-        } else {
-            move()
-        }
-        isUserInteractionEnabled = visible
-    }
+    /* THE BAR NO LONGER HIDES ON A SCROLL DOWN, and this is where that used to
+       be. `setShown` faded every disc, the search capsule and the title out
+       together when `.topbar--hidden` went on, and `visible` crossed the bridge
+       on every push to drive it.
+
+       It went for a design reason rather than a technical one (see the scroll
+       watcher in app.js): the controls in this bar are the PAGE'S OWN — back,
+       the filter dial, Save, •••, search — and a control worth putting on the
+       screen is not worth making the reader scroll up to fetch. What still
+       arrives with the scroll is the material behind them, which is what the
+       gesture was really for.
+
+       Two facts it was built on are worth keeping, because the next animation
+       on this class will need them both. `alpha` on a UIVisualEffectView is
+       unsupported, and on a GLASS CONTAINER it is worse than unsupported: the
+       container renders its nested glass in a pass of its own, so
+       `contentView.alpha` leaves the discs drawn at partial strength and
+       re-rendering every frame (`syncVisibility` documents the same trap on the
+       bottom bar). What DOES honour alpha is a nested glass ELEMENT, which is
+       how the composer's + animates and how each disc was faded here. */
 
     /* THE MATERIAL LEAVES WITH THE BUTTONS. It briefly did not.
 
@@ -1180,10 +1208,11 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
        is allowed to do that over the page, the way it does in every app that
        scrolls content under the clock.
 
-       So the material is a plain function of two booleans: on a page that has
-       scrolled (there is something beneath the bar to separate it from — the
-       same reading `.topbar--bare` is, taken natively) and with the bar shown.
-       Neither one alone.
+       So the material is a plain function of two booleans: on a route that
+       draws a bar at all, and on a page that has scrolled — there is something
+       beneath the bar to separate it from, the same reading `.topbar--bare` is,
+       taken natively. Neither one alone. There was a third, the bar being
+       shown, and it went with the hide-on-scroll gesture above.
 
        AND IT FADES, it does not shrink. Everything else on this bar fades;
        nothing in 1.4 enters or leaves by travelling. A collapsing height read
@@ -1200,7 +1229,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     private func syncMaterial(animated: Bool) {
         material.frame = materialFrame()
-        let wanted: CGFloat = (live && !atTop && shown) ? 1 : 0
+        let wanted: CGFloat = (live && !atTop) ? 1 : 0
         guard material.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,
@@ -1220,7 +1249,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// of the ramp, which is the cost this whole pass exists to stop paying,
     /// and at 16.8pt over a quarter of a second nobody has ever seen it.
     private func syncTitle(animated: Bool) {
-        let wanted: CGFloat = (shown && wantsTitle) ? 1 : 0
+        let wanted: CGFloat = wantsTitle ? 1 : 0
         guard titleLabel.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,

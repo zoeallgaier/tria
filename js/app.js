@@ -133,37 +133,26 @@
   const scrollTop = (smooth) =>
     window.scrollTo({ top: 0, behavior: smooth && !prefersReduced() ? 'smooth' : 'auto' });
 
-  /* ── The top bar's hidden state ─────────────────────────────────────────────
-     Mobile: the bar steps out of the way while you read down a feed and returns
-     the moment you scroll back up (the watcher is further down; the transform
-     lives in CSS and only applies at phone widths).
+  /* ── The top bar after a placed scroll ─────────────────────────────────────
+     The bar has two scroll-driven states left — the material behind it and the
+     collapsing title on it — and both are read off a scroll EVENT that a
+     navigation may never fire. The router places the window itself (top, a
+     remembered position, a spotlighted card), and if the destination is already
+     where the window sits, nothing scrolls, nothing fires, and both states keep
+     an answer about a page that isn't on screen any more. So the router STATES
+     them rather than hoping to infer them. Instantly, in both cases: a route
+     change is not an event that needs narrating, and the `true` is what
+     suppresses the two crossfades.
 
-     Hiding is INFERRED from a scroll delta, and that is fine for a thumb — but a
-     navigation is not a thumb, and the bar was being left to a scroll event that
-     may never come. The router places the window itself (top, a remembered
-     position, a spotlighted card), and if the destination happens to already be
-     where the window sits, nothing scrolls, no event fires, and the bar keeps a
-     `hidden` that was a statement about a page that isn't on screen any more.
-     Worse, the page you land on is often SHORTER than the one you left: at the
-     top of a page with nothing to scroll there is no gesture left that can bring
-     the bar back, so it is gone until you navigate somewhere tall. Hence: the
-     router STATES the bar the same way it states the scroll, rather than hoping
-     to infer it.
-
-     Two rules, and the asymmetry is deliberate. At the top of a page the bar is
-     always shown, because "hidden" only ever meant "you are reading DOWN
-     something". Anywhere else it is left exactly as the reader set it — a
-     spotlight lands a thousand pixels into a feed, and slamming the bar back
-     there would staple a second move onto a navigation meant to be one fade. */
-  let barLastY = 0;
+     THE BAR ITSELF NO LONGER MOVES, which is what this function used to be
+     about. It tucked away on a scroll down through 1.3, so most of the note
+     here was rules for when a navigation was allowed to bring it back: a page
+     shorter than the one you left has no gesture that can, and a spotlight
+     landing a thousand pixels in must not staple a second move onto a
+     navigation meant to be one fade. None of that has anything to answer now —
+     the controls are up on every route, and the only thing that arrives with
+     the scroll is the header behind them. See the watcher further down. */
   function syncTopbar() {
-    const bar = document.querySelector('.topbar');
-    if (!bar) return;
-    const y = window.scrollY;
-    // Also show it on a page too short to scroll at all: there is no way back.
-    const canScroll = document.documentElement.scrollHeight - window.innerHeight > 48;
-    if (y < 48 || !canScroll) bar.classList.remove('topbar--hidden');
-    barLastY = y;    // a placed scroll is not a gesture — don't let the next one measure from it
     syncToolbarTitle(true);
     syncToolbarEdge(true);
   }
@@ -798,7 +787,7 @@
       '#toolbar-actions .toolbar-btn, #toolbar-actions .toolbar-cta';
     let mounted = {};         // key → the web element each native control stands for
     let toldBar = '';         // the last payload, so an unchanged bar costs nothing
-    let lastControls = null;  // …and the last MEASURED one, for a bar that is tucked away
+    let lastControls = null;  // …and the last MEASURED one, for a bar that is off duty
     let barQueued = false;
 
     // The one <svg> actually showing. Discover's search control holds two,
@@ -976,14 +965,16 @@
       // of which want no bar rather than an empty one.
       const onDuty = !!bar && !gated && !overlaid()
         && document.body.classList.contains('toolbar-live');
-      const visible = onDuty && !bar.classList.contains('topbar--hidden');
 
-      // Measured only while the bar is actually up. Tucked, every rect reads a
-      // bar-height too high (getBoundingClientRect sees the transform), and the
-      // right answer is the one native already has: it is animating the same
-      // controls off the top of the screen.
+      // `visible` used to be a second answer here, onDuty minus the bar's own
+      // hide-on-scroll, and it went across as its own flag so native could fade
+      // the discs out with it. The bar does not hide any more (see the scroll
+      // watcher), so there is one answer and onDuty is it. The controls are
+      // still only measured while it is up: off duty every rect is a box the
+      // page has stopped maintaining, and the last good set is a better thing
+      // to hand across than a stale one.
       let controls = lastControls || [];
-      if (visible) {
+      if (onDuty) {
         mounted = {};
         controls = [...bar.querySelectorAll(CONTROL_SEL)].filter((el) => {
           // While the field is open the whole search control belongs to the
@@ -1008,7 +999,6 @@
 
       const payload = {
         live: onDuty,
-        visible,
         // The height of the bar, which is the height of the material: 60px plus
         // the notch on a phone, 88 on a tablet. Measured rather than assumed,
         // and the only geometry the material needs — it is the system's own
@@ -1019,7 +1009,7 @@
         controls,
         // Sent whether or not it is open, so the box native shrinks back INTO is
         // never a stale one. Absent from every route but Discover.
-        search: visible ? searchSpec() : { live: false },
+        search: onDuty ? searchSpec() : { live: false },
       };
       const signature = JSON.stringify(payload);
       if (signature === toldBar) return;
@@ -1040,10 +1030,10 @@
       if (!bar) return;
       // Every in-place change the bar makes to itself, without a call site for
       // each: the filter's hue lighting, Save earning its fade-in, the
-      // search field opening, the bar tucking away on a scroll down, and
-      // resetToolbar emptying the whole thing on a navigation. One observer is
-      // the only version of this that cannot fall behind a page that grows a
-      // new control, which is the failure a list of hooks would eventually have.
+      // search field opening, the title crossing in, and resetToolbar emptying
+      // the whole thing on a navigation. One observer is the only version of
+      // this that cannot fall behind a page that grows a new control, which is
+      // the failure a list of hooks would eventually have.
       new MutationObserver(scheduleToolbar).observe(bar, {
         attributes: true, childList: true, subtree: true, characterData: true,
       });
@@ -1305,8 +1295,7 @@
       let top = 0;
       let bottom = window.innerHeight;
       const bar = document.querySelector('.topbar');
-      if (bar && !bar.classList.contains('topbar--hidden')
-        && document.body.classList.contains('toolbar-live')) {
+      if (bar && document.body.classList.contains('toolbar-live')) {
         top = Math.max(top, bar.getBoundingClientRect().bottom);
       }
       // The comment bar replaces the nav on a post page, so at most one of
@@ -13089,7 +13078,13 @@
   function paintWash(user, mode) {
     const body = document.body;
     withAccent(user, (css) => {
-      if (!css) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = 'none'; return; }
+      // "tria", not "none", and the distinction is load-bearing: this branch is
+      // a PERSON who has set no colour, and "none" is also what applyAmbient
+      // stamps on every route that isn't a person at all. One value for both
+      // meant a stylesheet could not tell them apart, and the house-ramp wash
+      // written for this case went under the feed as well. See the
+      // [data-ambient="tria"] block in app.css.
+      if (!css) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = 'tria'; return; }
       body.style.setProperty('--glow-photo', css);
       body.style.setProperty('--glow-wash', css);
       body.dataset.ambient = mode;
@@ -14338,18 +14333,32 @@
 
   window.addEventListener('hashchange', route);
 
-  // The reading gesture half of the rule above: a thumb going down tucks the bar,
-  // a thumb going up brings it back. Pure class-toggling — the transform and its
-  // transition live in CSS, at BOTH widths as of 1.3. They used to be phone-only,
-  // because on desktop the bar wasn't a bar: it was a transparent box resting a
-  // wordmark on the nav card, and there was nothing there worth getting out of the
-  // way of. It carries the page's own controls now, so it reads down the same way
-  // the phone's does. State is shared with syncTopbar via barLastY, so a scroll
-  // the ROUTER placed can't be mistaken for a direction the reader chose on the
-  // next real gesture.
+  /* ── What the bar does on a scroll ──────────────────────────────────────────
+     Two boolean crossings per gesture and nothing else: the material, once
+     there is content underneath for the bar to be separated from, and the small
+     title, once the page's big one has scrolled up behind it. Both are read one
+     rAF per scroll rather than per frame, and a crossfade starting a beat late
+     is invisible — unlike a layer whose position is recomputed from the scroll.
+
+     THE BAR NO LONGER TUCKS AWAY, and this is the note for why the machinery
+     that used to live here is gone. Through 1.3 a thumb going down slid it out
+     by translateY(-100%) and a thumb going up brought it back, which took a
+     remembered offset, a deadband, a guard against the router's own thousand
+     pixel teleports being read as "scrolling down fast", and a rule that the
+     top of a page always wears its bar however the window got there. All of it
+     was in service of getting the chrome out of the reader's way — and the
+     chrome is 44px discs of glass at the top of a phone, while the thing it
+     was getting out of the way of is a feed that had already reserved room for
+     it. What it cost was the page's own controls: back, the filter dial, Save,
+     •••, search. Somewhere to go and fetch a control from is worse than the
+     strip of screen it was buying back.
+
+     So the controls stay up on every route and what arrives with the scroll is
+     the HEADER behind them. That is the same effect this always wanted — chrome
+     that is quiet at the top of a page and earns its material as content passes
+     under it — with the half that moved taken out. */
   (() => {
-    const topbar = document.querySelector('.topbar');
-    barLastY = window.scrollY;
+    if (!document.querySelector('.topbar')) return;
     // State the material once at boot, before any render settles. The bar ships
     // in index.html without the class, so a page that opens at the top would
     // otherwise wear a fill for the length of the first paint.
@@ -14359,37 +14368,8 @@
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        const y = window.scrollY;
-        // A boolean threshold crossing, not a per-frame reposition — same
-        // tolerance .topbar--hidden already accepts from a coalesced scroll
-        // event: a crossfade starting a beat late is invisible, unlike a
-        // layer whose position is recomputed from scroll every frame.
         syncToolbarTitle();
-        // Same, and deliberately ABOVE the teleport guard and the y<48 return
-        // below: both of those are statements about the bar's POSITION, and
-        // the material is a statement about what is behind it. A jump to the
-        // top of a page has to take the material off even though it wasn't a
-        // gesture, or the one arrangement this effect exists for — a page
-        // sitting at its top — is the one that keeps a fill it hasn't earned.
         syncToolbarEdge();
-        // The top of a page always wears its bar, however the window got there —
-        // checked BEFORE the teleport guard, or a jump bigger than a viewport
-        // (a long feed back to the top of a short page) takes the early return
-        // and strands you at the top with no header and nothing to scroll up
-        // against. Position beats direction: "hidden" is only ever a statement
-        // about reading DOWN something.
-        if (y < 48) { topbar.classList.remove('topbar--hidden'); barLastY = y; ticking = false; return; }
-        // A teleport is not a reading direction. The router jumps the window in
-        // one frame — to a spotlighted card, to a remembered position — and a jump
-        // of a thousand pixels used to read as "scrolling down fast", so landing
-        // on a post also slid the bar away: a second move stapled onto a
-        // navigation that was meant to be one clean fade. A move bigger than the
-        // viewport can't have come from a thumb, so take the new position and
-        // leave the bar exactly as the reader last set it.
-        if (Math.abs(y - barLastY) > window.innerHeight) { barLastY = y; ticking = false; return; }
-        if (y > barLastY + 4) topbar.classList.add('topbar--hidden');
-        else if (y < barLastY - 4) topbar.classList.remove('topbar--hidden');
-        barLastY = y;
         ticking = false;
       });
     }, { passive: true });

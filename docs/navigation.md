@@ -125,11 +125,18 @@ authed page while the scroll on screen belongs to the login form. And logging ou
 **clears both maps**, or the next person to sign in opens someone else's feed
 part-way down.
 
-**A jump is not a scroll gesture.** The topbar's hide-on-read handler ignores any
-scroll delta larger than a viewport, because the router teleports the window (to a
-spotlight, to a remembered position, back to the top) and a thousand-pixel jump
-was reading as "scrolling down fast" — so landing on a post also slid the bar
-away, a second move stapled onto a navigation meant to have none.
+**A jump is not a scroll gesture, and the bar no longer has to care.** The topbar
+read the scroll's DIRECTION through 1.3 and tucked away on a thumb going down,
+which meant a guard against the router's own teleports (to a spotlight, to a
+remembered position, back to the top): a thousand-pixel jump read as "scrolling
+down fast", so landing on a post also slid the bar away — a second move stapled
+onto a navigation meant to have none. The gesture is gone in 1.4 (see
+[native-chrome.md](native-chrome.md)): the controls are up on every route and
+only the bar's material and its small title answer to the scroll, both of them
+POSITION rather than direction, so a teleport has nothing to be mistaken for.
+What survives is the other half of the rule — the router states both after it
+places a scroll (`syncTopbar`), instantly, because a jump may fire no scroll
+event at all and a route change is not a thing to narrate.
 
 **A spotlight has no travel and no wash — and there is only ONE left.** Discover,
 Updates and the frame wall all open `#/p/<id>` now (see the post-page note in [data.md](data.md)), so the only thing still setting `spotlightPost` is the edit flow,
