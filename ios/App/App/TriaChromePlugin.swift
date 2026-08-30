@@ -479,6 +479,20 @@ protocol TriaChromeControl: AnyObject {
    is, and the four stops survive because nothing is reducing them to a colour.
    The system draws the tinting; we only supply something to tint.
 
+   AND THE RAMP IS THINNED, which is the last thing this took to actually read
+   as glass. Painted opaque it is a wall: the material samples it, finds nothing
+   else behind it, and has nothing to refract or displace — so the disc came out
+   a flat colour with a specular rim drawn round it, tinted glass with the tint
+   doing all the work and the glass doing none. It is the CSS failure mode
+   again, arriving from the opposite side. At --pill-alpha the page is behind
+   the colour, and the system has something to bend.
+
+   THE ALPHA IS `--pill-alpha` AND IT IS SENT, NOT QUOTED. It is a contrast
+   floor with measured figures behind it, and it is the token that answers
+   Reduce Transparency and Increase Contrast — both take it to 1, so reading it
+   live is how this disc inherits those two settings rather than being the one
+   surface that ignores them. See `fabSpec` in app.js.
+
    WHY layerClass AND NOT A SUBLAYER: a CAGradientLayer added as a sublayer
    needs its frame set by hand on every layout, and this view sits in a bar that
    resizes on rotation and on the keyboard. Being the layer means Auto Layout
@@ -503,11 +517,15 @@ final class TriaFabRamp: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func paint(_ stops: [UIColor]) {
+    func paint(_ stops: [UIColor], alpha: CGFloat) {
         // A single stop still has to be a two-entry array or CAGradientLayer
         // draws nothing at all, which is the silent failure a reader's
         // monochrome band would otherwise hit.
-        ramp.colors = (stops.count == 1 ? [stops[0], stops[0]] : stops).map(\.cgColor)
+        let pair = stops.count == 1 ? [stops[0], stops[0]] : stops
+        // Clamped rather than trusted: this number crossed the bridge, and an
+        // alpha of 0 is a + with no colour on every route.
+        let a = min(max(alpha, 0.05), 1)
+        ramp.colors = pair.map { $0.withAlphaComponent(a).cgColor }
     }
 
     override func layoutSubviews() {
@@ -755,7 +773,11 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             fabButton.accessibilityLabel = fabSpec["label"] as? String ?? fabButton.accessibilityLabel
             if let colors = fabSpec["colors"] as? [String], !colors.isEmpty {
                 let stops = colors.compactMap(TriaChromeBar.color(fromHex:))
-                if !stops.isEmpty { fabRamp.paint(stops) }
+                // Opaque is the fallback, i.e. the disc this was before the band
+                // was thinned: a spec that arrives without an alpha should lose
+                // the material, not the colour.
+                let alpha = TriaToolbar.number(fabSpec["alpha"], fallback: 1)
+                if !stops.isEmpty { fabRamp.paint(stops, alpha: alpha) }
             }
             if let ink = fabSpec["ink"] as? String, let inkColor = TriaChromeBar.color(fromHex: ink) {
                 fabGlyph.tintColor = inkColor

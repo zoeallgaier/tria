@@ -690,12 +690,17 @@ of retiring it, all worth keeping:
   0.85 stays for how solid a primary button reads, not because 0.75 fails.
   Deepening `BAND_LSTAR` is what would bring the cliff back — that number and
   this one draw on the same account.
-- **The FAB is the one OPAQUE member, deliberately.** It takes the same edge,
-  rim and float but not `--pill-alpha`. It floats over the feed itself rather
-  than over a form, so thinning it would show live content sliding through the
-  app's most permanent object, and the **+** sits on that fill at every moment
-  of the app's life — an opaque band is the only version whose contrast doesn't
-  depend on what happens to be scrolling underneath.
+- **The FAB is the one OPAQUE member, deliberately — in CSS.** It takes the same
+  edge, rim and float but not `--pill-alpha`. It floats over the feed itself
+  rather than over a form, so thinning it would show live content sliding
+  through the app's most permanent object, and the **+** sits on that fill at
+  every moment of the app's life — an opaque band is the only version whose
+  contrast doesn't depend on what happens to be scrolling underneath. Both of
+  those are arguments about compositing against a *sharp* backdrop with no
+  blur budget to soften it, so both dissolve on the native chrome, where the
+  disc's ramp **is** thinned to `--pill-alpha` and Liquid Glass does the
+  softening. See [native-chrome.md](native-chrome.md) — that is the one place
+  the two chromes disagree on purpose.
 
 **No `backdrop-filter` on any of them, FAB included**, and that is the same
 glass-minus-blur settlement the masonry tiles already take. The bill is area ×

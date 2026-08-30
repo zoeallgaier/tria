@@ -576,6 +576,12 @@
    safe way: the fill stops compositing against the page at all, and the worst
    measured 6.04 becomes the band's own opaque figure. Nothing to re-measure.
 
+   IT REACHES ONE NATIVE SURFACE TOO, and that is not a leak. The native +'s
+   band is thinned by this same token (the ramp under its glass — see
+   native-chrome.md), and app.js resolves the value here rather than Swift
+   quoting a number, so both settings reach the one native control whose colour
+   we supply instead of the system. Move this figure and the + moves with it.
+
    SCOPED TO THE CTA MATERIAL ON PURPOSE. The bars, panels, sheets and menus
    still answer neither setting — that is a wider pass than this one, and it is
    the one place the CSS chrome is still behind the native chrome beside it.

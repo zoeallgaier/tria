@@ -291,6 +291,26 @@ same `alpha`, `transform` and `isHidden` on both inside one animation block. A
 frame out of step and the disc's colour hangs in the air behind a + that has
 already sunk.
 
+**And the ramp is THINNED to `--pill-alpha`, which is what finally made it read
+as glass rather than as paint.** Painted opaque it is a wall: the material
+samples it, finds nothing else behind it, and has nothing to refract or
+displace, so what shipped was a flat coloured disc with a specular rim drawn
+round it — the tint doing all the work and the glass doing none. That is the CSS
+failure mode arriving from the opposite side, and it is not the same fault as
+attempt 1 below: there the thinned layer was *above* the material and hid it,
+here the opaque one was *below* it and starved it. At `--pill-alpha` the page
+sits behind the colour and the system has something to bend.
+
+The alpha crosses the bridge rather than being quoted in Swift, and that is
+worth more than one number's worth of tidiness: `--pill-alpha` is the token that
+answers **Reduce Transparency and Increase Contrast** (both take it to 1, see
+the last block of `tokens.css`), so reading it live is how the + inherits those
+two settings instead of being the one surface in the app that ignores them.
+`paintBrandBand` is memoised on the reader's identity and neither setting
+changes that, so `NativeChrome` listens to both media queries itself and
+repaints. A spec that arrives with no alpha falls back to 1 — the opaque disc
+this used to be, which is the right way to fail.
+
 **Three things were tried before that and all three are worth not repeating.**
 
 1. *A thinned band laid over the glass*, at `--pill-alpha`: an opaque-ish layer

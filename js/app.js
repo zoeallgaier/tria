@@ -647,23 +647,52 @@
       return parts.map(p => p.trim().replace(/\s+[-\d.]+(%|px|r?em)$/, ''));
     }
 
+    /* THE BAND'S TRANSLUCENCY, READ RATHER THAN QUOTED, and the read is worth
+       more than the number.
+
+       --pill-alpha is a contrast floor with measured figures behind it
+       (tokens.css), and it is also the one token that answers Reduce
+       Transparency and Increase Contrast — both take it to 1. Resolving it
+       through the engine is therefore how the native + inherits those two
+       settings without a second copy of them in Swift, which is the same
+       argument every other measured value on this bridge is sent for.
+
+       It is painted as the ALPHA OF A COLOUR because that is the only form
+       getComputedStyle will resolve a bare number token into. An unparseable
+       one is invalid at computed-value time, `color` inherits something with no
+       fourth channel, and the fallback is 1 — i.e. the opaque disc this used to
+       be, which is the right way to fail. */
+    function pillAlpha() {
+      const css = probe('color: rgb(0 0 0 / var(--pill-alpha))').color || '';
+      const n = parseFloat((css.split(',')[3] || '').trim());
+      return Number.isFinite(n) && n > 0 && n <= 1 ? n : 1;
+    }
+
     function fabSpec() {
       const band = probe('background-image: var(--pill-band)');
       const colors = splitStops(band.image || '').map(toRgb).filter(Boolean);
       const ink = toRgb(probe('color: var(--pill-ink)').color || '');
       const post = NAV.find(n => n.publish);
-      // Every stop, though native tints its glass with one of them: which stop
-      // is a rendering decision and it lives over there, beside the material
-      // that decision is about. --pill-alpha is deliberately NOT sent — it is a
-      // contrast floor for ink riding an unblurred fill, and the native + has
-      // neither an unblurred fill nor a legibility problem the system isn't
-      // already answering.
+      // Every stop, and all four survive: native lays them under the glass
+      // rather than reducing them to a tint colour. How that is drawn is a
+      // rendering decision and it lives over there, beside the material the
+      // decision is about.
+      //
+      // --pill-alpha DOES cross now. It used to be withheld on the grounds that
+      // the native + has neither an unblurred fill nor a legibility problem the
+      // system isn't already answering — both true, and both about the wrong
+      // question. An opaque ramp gives the material nothing behind it to
+      // refract, so the disc came out as a flat colour with a glass rim on it:
+      // tinted glass with the tint doing all the work and the glass doing none.
+      // Thinned, the system has a backdrop to displace and diffuse, which is
+      // what makes it read as the material rather than as paint.
       return {
         route: post ? post.route : '#/publish',
         label: post ? post.label : 'Post',
         // The drawing itself, not the name of one. See the icon note on tabSpec.
         glyph: svgIcon(post ? post.key : 'publish'),
         colors,
+        alpha: pillAlpha(),
         ink: ink || '',
       };
     }
@@ -1919,6 +1948,20 @@
       if (!live) return;
       call('setFab', { fab: fabSpec() }).catch(() => {});
     }
+
+    /* THE ONE THING ON THE + THAT CHANGES WITHOUT THE READER CHANGING ANYTHING.
+       Reduce Transparency and Increase Contrast both take --pill-alpha to 1
+       (tokens.css), and now that the disc's band is thinned by it, both are
+       settings the + has to answer. The CSS chrome gets that from the cascade
+       for free; native holds resolved numbers, so it has to be told — and
+       paintBrandBand is memoised on the reader's identity, which neither of
+       these changes, so nothing else would ever tell it. */
+    ['(prefers-reduced-transparency: reduce)', '(prefers-contrast: more)'].forEach((q) => {
+      const mq = window.matchMedia(q);
+      const again = () => repaint();
+      if (mq.addEventListener) mq.addEventListener('change', again);
+      else if (mq.addListener) mq.addListener(again);   // older WebKit
+    });
 
     // renderNav owns which destination is lit, and it is also the first thing to
     // run on a signed-in route — so it is where the bars are asked for. Under
@@ -13500,8 +13543,9 @@
     const done = (css) => { if (seq === ambientSeq) apply(css); };
     // 'default' joins 'none' here rather than falling through to the photo: a
     // wash is ONE hue lighting a page, and neither "Tria's own ramp" nor "no
-    // colour" names one. The buttons are where those two differ (see
-    // paintBrandBand); a profile page shows neither a gradient nor a grey.
+    // colour" names one. They are the same answer to the question this function
+    // asks and different answers to the one paintWash asks, which is why the
+    // parting happens down there and not here.
     if (!user || user.accent === 'none' || user.accent === 'default') return done(null);
     // A chosen colour is SYNCHRONOUS, and that is worth more than it looks: the
     // photo path has a decode in it, so a pick lands in the same frame as the tap.
@@ -13523,14 +13567,29 @@
   // initial lavender halfway out.
   function paintWash(user, mode) {
     const body = document.body;
+    /* WHERE A COLOURLESS ANSWER LANDS, and there are two of them.
+
+       "tria" is the house ramp, and the distinction it was drawn for is
+       load-bearing: that branch is a PERSON who has set no colour, and "none"
+       is also what applyAmbient stamps on every route that isn't a person at
+       all. One value for both meant a stylesheet could not tell them apart, and
+       the house-ramp wash written for this case went under the feed as well.
+       See the [data-ambient="tria"] block in app.css.
+
+       But 'none' is not that person. withAccent returns null for both because
+       neither NAMES a hue, and that is the right answer to "what colour is
+       this?" — it is the wrong answer to "what does this page wear?", because
+       the reader who picked the option labelled None was then handed the four
+       loudest stops in the app across their own profile. Default means "Tria's
+       colours, I didn't choose"; none means "no colour". So a picked 'none'
+       takes plain paper — the same data-ambient every non-person route carries,
+       which is exactly what it is asking for — and only the unpicked case falls
+       through to the ramp. The buttons already part these two the same way (see
+       paintBrandBand, where 'none' is --mono-band and default is the ramp);
+       this is that split arriving on the page. */
+    const bare = user && user.accent === 'none' ? 'none' : 'tria';
     withAccent(user, (css) => {
-      // "tria", not "none", and the distinction is load-bearing: this branch is
-      // a PERSON who has set no colour, and "none" is also what applyAmbient
-      // stamps on every route that isn't a person at all. One value for both
-      // meant a stylesheet could not tell them apart, and the house-ramp wash
-      // written for this case went under the feed as well. See the
-      // [data-ambient="tria"] block in app.css.
-      if (!css) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = 'tria'; return; }
+      if (!css) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = bare; return; }
       body.style.setProperty('--glow-photo', css);
       body.style.setProperty('--glow-wash', css);
       body.dataset.ambient = mode;

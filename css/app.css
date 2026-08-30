@@ -353,6 +353,12 @@ body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
 
 /* THE SAME WASH, IN TRIA'S OWN COLOURS, for a person who hasn't picked one.
 
+   HASN'T PICKED, not picked None. Those two shared this value for a while and
+   should not: "Tria" is the default nobody chose, and a reader who chose the
+   option labelled None was being handed the four loudest stops in the app
+   across their own profile. None takes paper now — data-ambient="none", the
+   value below — and this block is the unpicked case only. See paintWash.
+
    ONLY a profile, and only a colourless one. `paintWash` used to land that case
    on data-ambient="none" — the same value every non-profile route carries — so
    there was no selector that could tell "this page is somebody without a
