@@ -1319,6 +1319,21 @@
       return { top, bottom };
     }
 
+    /* THE RECT IS THE ONLY THING THE PLACEMENT LISTENS TO, and it is the
+       control's own. There is no way to ask UIKit for a side — a UIButton's menu
+       has no placement API, and no public call opens a menu at a point.
+
+       What the rect reliably buys is the VERTICAL, and that is what the two card
+       menus are built on: the menu's near edge comes to rest on the control's
+       (top on top opening downward, bottom on bottom opening upward), and the
+       first row is the row on that edge (see preferredMenuElementOrder), so the
+       row you want is under the finger that just tapped and tapping again runs
+       it. The HORIZONTAL is the system's and it is not consistent: it lands on
+       the control's own edge sometimes and drifts toward the middle of the
+       screen other times, off the same rect. The repost circle rides the right
+       end of the action row, where both answers put the menu's right edge on it;
+       the ••• at the left inset gets whichever UIKit felt like. Measured, not
+       assumed — see TriaAnchoredMenu. */
     function presentMenu(anchor, { label, items, onRow }) {
       if (!live || !anchor || !items || !items.length) return false;
       const r = anchor.getBoundingClientRect();
@@ -5037,14 +5052,23 @@
      `items` is openGlyphMenu's array: {label, icon, danger, run}, plus the two
      a radio set adds (radio, checked) and an `ink` for a row that names a hue.
      One array, two drawings, one `run` — the same contract the bar menu keeps,
-     which is what stops the fallback becoming a second version of the menu. */
-  function openAnchoredMenu(anchor, { label, items }) {
+     which is what stops the fallback becoming a second version of the menu.
+
+     AND NO TITLE, which is the one thing these give up that the toolbar's menus
+     keep. A UIMenu's title is a band at the TOP of the card, and the top of the
+     card is exactly where these land: a control in the upper half of the screen
+     drops its menu downward with the menu's top corner on the glyph, so the
+     thing sitting under the finger is the title and the row it names is 50pt
+     further on. That is the second tap gone, on the menus built to have one. It
+     costs nothing to drop: "Post" and "Repost" were labelling two- and
+     three-row menus whose rows say the same words. The toolbar's menus keep
+     theirs — they hang off a bar, not off the reader's thumb. */
+  function openAnchoredMenu(anchor, { items }) {
     const fire = (it) => {
       if (it && it.danger) hapticEvent('WARNING');
       if (it && it.run) it.run();
     };
     if (anchor && NativeChrome.presentMenu(anchor, {
-      label,
       items: items.map((it, i) => ({
         label: it.label,
         icon: it.markup || (it.icon ? svgIcon(it.icon) : ''),
@@ -8078,6 +8102,14 @@
   // upcoming activities (a sibling "send this elsewhere" action); Report only on
   // posts that aren't yours (you can't report yourself).
   //
+  // NO REPOST ROW. It used to be spliced in second, from back when this menu and
+  // the circle beside it both raised the same sheet from the bottom of the screen
+  // and neither one was near the finger — so a second way in cost nothing. It
+  // costs something now: both menus open ON the control that dropped them, the
+  // circle is one tap from Repost and one more from having done it, and a Repost
+  // row in here is a second, slower route to a menu the reader is already looking
+  // at the door of. Copy link leads instead, which is what this menu is for.
+  //
   // `anchor` is the ••• that was tapped, and it is the whole reason this drops a
   // menu rather than raising a sheet in the native shell. See openAnchoredMenu.
   function openPostMenu(post, anchor) {
@@ -8094,11 +8126,10 @@
     } else {
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
     }
-    if (Store.repostable(post))
-      items.splice(1, 0, { label: 'Repost', icon: 'repost', run: () => openRepostMenu(post, anchor) });
-    // The second menu hangs off the SAME •••, which is where the first one came
-    // from and the only control still on screen by the time it opens.
-    openAnchoredMenu(anchor, { label: 'Post', items });
+    // Copy link LEADS, and that is the shape of this menu now: the first row is
+    // the one the system puts nearest the •••, whichever way the menu opens, so
+    // tapping the ••• twice copies the link. See presentMenu.
+    openAnchoredMenu(anchor, { items });
   }
 
   // Tapping the circle. A menu dropped from the glyph where the system can draw
@@ -8113,7 +8144,9 @@
     const orig = Store.originalOf(post) || post;
     const on = Store.repostedByMe(orig.id);
     openAnchoredMenu(anchor, {
-      label: 'Repost',
+      // Repost (or Undo repost) leads for the reason Copy link does one function
+      // up: the first row is the one the system puts nearest the circle, so
+      // passing a post along is a tap and then that same tap again.
       items: [
         on
           ? { label: 'Undo repost', icon: 'repost', run: async () => {

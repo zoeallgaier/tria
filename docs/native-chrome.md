@@ -624,6 +624,51 @@ the same nonsense, arriving a frame earlier. A finger cannot cause it (you
 cannot tap what you cannot see); a caller passing an anchor it kept from an
 earlier menu can, and the sheet is the honest answer for one of those.
 
+**WHERE THE MENU LANDS IS UIKIT'S, AND THE RECT IS THE ONLY THING IT LISTENS
+TO.** There is no placement API on a `UIButton`'s menu, and no public way to
+open a menu at a point — `UIContextMenuInteraction` has `dismissMenu()` and
+nothing to match it. So the anchor's frame is the whole vocabulary, and what it
+buys was measured on the simulator with the frame logged beside the result:
+
+- THE VERTICAL IS RELIABLE. The menu's near edge comes to rest on the control's:
+  a control in the upper part of the screen drops its menu DOWNWARD with the
+  menu's top on the control's top, one low on the screen opens it UPWARD with the
+  menu's bottom on the control's bottom. Either way the row on that edge covers
+  the glyph that was tapped.
+- THE HORIZONTAL IS NOT. Off the same 32pt-wide ••• rect, at y 235 the menu came
+  up leading-aligned to it (anchor x 19.6, menu x 20.7) and at y 359 it came up
+  at x 86.7 — the same fixed box near the middle of the screen that the upward
+  case lands in, where two anchors 280pt apart put their menus 4pt apart. The
+  repost circle rides the right end of the action row, so both answers put the
+  menu's right edge on it and the corner lands either way. The ••• at the card's
+  left inset gets whichever UIKit felt like, and no rect changes that.
+- A TALL anchor — running the rect down to the bottom of the screen to leave no
+  room below and force the flip — is worse than what it was trying to fix. UIKit
+  does not flip, it CLAMPS: the menu ends up pinned to the safe area with nothing
+  beside it. Tried, measured, taken back out. The rect stays the control's.
+
+**AND THE TWO ON A CARD LOST THEIR TITLES.** A `UIMenu`'s title is a band at the
+TOP of the card, and the top of the card is exactly where these land when they
+open downward — so the thing under the finger is "Repost", the word, and the row
+it names is 50pt further on. That is the second tap gone on the two menus built
+to have one. It costs nothing: the titles were labelling two- and three-row menus
+whose rows say the same words. The toolbar's menus keep theirs, because they hang
+off a bar rather than off the reader's thumb.
+
+**`preferredMenuElementOrder = .priority` is what makes the double tap work.**
+The first row is the row the system puts nearest the control — the top row when
+the menu opens down, the bottom row when it opens up — so Repost and Copy link
+are one tap and then that same tap again. It is named rather than left
+`.automatic` because these two menus depend on it now, and a default that happens
+to agree is not a contract.
+
+**The ••• lost its Repost row** in the same change. It was spliced in second from
+back when both of these threw the same sheet up from the bottom of the screen and
+neither one was near the finger, so a second way in cost nothing. It costs
+something now that the circle is one tap from Repost and one more from having done
+it: the row was a slower route to a menu whose door the reader is already looking
+at, and it pushed Copy link off the end nearest the glyph.
+
 **A pick is checked against a TOKEN, not against the control's id.** These menus
 hang off cards, and a card is a node a refresh can replace out from under an
 open menu; an id would still match after that and run a row against the wrong

@@ -1919,6 +1919,26 @@ protocol TriaAnchoredControl: AnyObject {
 /// and scroll it had. Presentation doesn't need a hit — the menu is put up by
 /// UIKit in its own window, which is also why the native chrome cannot draw
 /// over it the way it drew over the web's sheets.
+///
+/// WHERE THE MENU LANDS IS UIKIT'S, AND THE RECT IS THE ONLY THING IT LISTENS
+/// TO. There is no placement API on a `UIButton`'s menu and no public way to
+/// present a menu at a point (`UIContextMenuInteraction` has `dismissMenu` and
+/// nothing to open one with), so the button's frame is the whole vocabulary.
+/// Measured on the simulator, iOS 26, with the frame logged beside the result:
+///
+/// - A control in the UPPER part of the screen drops its menu DOWNWARD, and the
+///   menu's top leading corner lands on the control's: anchor at x 19.6, menu at
+///   x 20.7. That corner is the one the reader tapped, so the menu covers it.
+/// - A control LOW on the screen opens UPWARD instead, and the menu's bottom
+///   edge comes to rest on the control's bottom — but the horizontal alignment
+///   is gone. Two anchors 280pt apart put their menus 4pt apart, in the same
+///   fixed box near the middle of the screen. The repost circle rides the right
+///   end of the action row and happens to sit under that box's trailing edge;
+///   the ••• at the card's left inset does not, and cannot be brought there.
+/// - A TALL anchor (the trick of running the rect to the bottom of the screen to
+///   leave no room below and force the flip) is worse than the thing it was
+///   trying to fix: UIKit does not flip, it clamps, and the menu ends up pinned
+///   to the safe area with nothing beside it. The rect stays the control's.
 @available(iOS 26.0, *)
 final class TriaAnchoredMenu: UIView, TriaAnchoredControl {
 
@@ -1932,6 +1952,15 @@ final class TriaAnchoredMenu: UIView, TriaAnchoredControl {
         backgroundColor = .clear
         isUserInteractionEnabled = true
         anchor.showsMenuAsPrimaryAction = true
+        // THE FIRST ROW IS THE NEAREST ROW. `.priority` reads the list as "most
+        // likely first" and lets the system decide which end of the menu that is:
+        // a menu that opens downward puts row one at the top, one that opens
+        // upward puts it at the bottom, and either way it is the row beside the
+        // glyph that was tapped. That is what makes tapping the repost circle
+        // twice a repost, and the ••• twice a copied link. Named rather than left
+        // `.automatic`, because these menus depend on it and a default that
+        // happens to agree is not a contract.
+        anchor.preferredMenuElementOrder = .priority
         // Nothing to see: the glass the reader tapped is the web's or the
         // toolbar's, and this is only the point the menu hangs from.
         anchor.backgroundColor = .clear
