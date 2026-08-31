@@ -647,53 +647,31 @@
       return parts.map(p => p.trim().replace(/\s+[-\d.]+(%|px|r?em)$/, ''));
     }
 
-    /* THE BAND'S TRANSLUCENCY, READ RATHER THAN QUOTED, and the read is worth
-       more than the number.
-
-       --pill-alpha is a contrast floor with measured figures behind it
-       (tokens.css), and it is also the one token that answers Reduce
-       Transparency and Increase Contrast — both take it to 1. Resolving it
-       through the engine is therefore how the native + inherits those two
-       settings without a second copy of them in Swift, which is the same
-       argument every other measured value on this bridge is sent for.
-
-       It is painted as the ALPHA OF A COLOUR because that is the only form
-       getComputedStyle will resolve a bare number token into. An unparseable
-       one is invalid at computed-value time, `color` inherits something with no
-       fourth channel, and the fallback is 1 — i.e. the opaque disc this used to
-       be, which is the right way to fail. */
-    function pillAlpha() {
-      const css = probe('color: rgb(0 0 0 / var(--pill-alpha))').color || '';
-      const n = parseFloat((css.split(',')[3] || '').trim());
-      return Number.isFinite(n) && n > 0 && n <= 1 ? n : 1;
-    }
-
     function fabSpec() {
       const band = probe('background-image: var(--pill-band)');
       const colors = splitStops(band.image || '').map(toRgb).filter(Boolean);
       const ink = toRgb(probe('color: var(--pill-ink)').color || '');
       const post = NAV.find(n => n.publish);
-      // Every stop, and all four survive: native lays them under the glass
-      // rather than reducing them to a tint colour. How that is drawn is a
-      // rendering decision and it lives over there, beside the material the
-      // decision is about.
-      //
-      // --pill-alpha DOES cross now. It used to be withheld on the grounds that
-      // the native + has neither an unblurred fill nor a legibility problem the
-      // system isn't already answering — both true, and both about the wrong
-      // question. An opaque ramp gives the material nothing behind it to
-      // refract, so the disc came out as a flat colour with a glass rim on it:
-      // tinted glass with the tint doing all the work and the glass doing none.
-      // Thinned, the system has a backdrop to displace and diffuse, which is
-      // what makes it read as the material rather than as paint.
+      // The band, sorted into the one form the material can wear it in: a tint
+      // for an accent, a ramp for Tria's four hues, nothing for "no colour".
+      // See bandFill — how each of the three is DRAWN is a rendering decision
+      // and it lives over there, beside the material it is about.
+      const fill = bandFill(colors);
       return {
         route: post ? post.route : '#/publish',
         label: post ? post.label : 'Post',
         // The drawing itself, not the name of one. See the icon note on tabSpec.
         glyph: svgIcon(post ? post.key : 'publish'),
-        colors,
-        alpha: pillAlpha(),
-        ink: ink || '',
+        colors: fill.colors,
+        tint: fill.tint,
+        /* AND A BARE BUTTON TAKES NO INK EITHER, which is the half of "no
+           colour" that is easy to miss. --pill-ink under --mono-band is
+           --mono-ink, a near-white made to ride a near-black fill; there is no
+           fill left to ride, so sending it would put a white + on clear glass
+           over white paper. Empty is what native reads as `.label` — the
+           system's own ink, right in both schemes, and nobody has to say which
+           scheme is live. */
+        ink: (fill.tint || fill.colors.length) ? (ink || '') : '',
       };
     }
 
@@ -813,16 +791,16 @@
 
        .publish-fill paints its band on a ::before, so the element's own
        background is `none` and the pseudo is where to look. This returned the
-       MIDDLE stop for as long as native drew these buttons with
-       `UIGlassEffect.tintColor`, which is one colour — exact for a reader's
-       accent (three stops of a single hue) and a real loss for Tria's own ramp,
-       where four hues arrived as the one at their centre. The + never made that
-       trade; every other primary act now doesn't either. See TriaBandRamp and
-       TriaBandRim in the plugin for what the two halves of the answer are.
+       MIDDLE stop for as long as native drew every one of these buttons with
+       `UIGlassEffect.tintColor`, which is one colour: right for a reader's
+       accent and a real loss for Tria's own ramp, where four hues arrived as
+       the one at their centre. Every stop comes back now, and bandFill below is
+       where a band that IS one colour gets to say so again — this function's
+       job is to report, not to decide.
 
        An element with no band comes back empty, which is a measurement rather
        than a branch: the find bar's clear carries no `.publish-fill`, so there
-       is no gradient to find and native hides both layers. */
+       is no gradient to find and native draws no colour at all. */
     function bandStops(el) {
       const image = getComputedStyle(el, '::before').backgroundImage;
       return splitStops(image || '').map(toRgb).filter(Boolean);
@@ -833,12 +811,77 @@
        `.publish-fill.is-solid::before` carries `opacity: var(--pill-alpha)` —
        a CONTRAST FLOOR with measured figures behind it in tokens.css, and the
        one token Reduce Transparency and Increase Contrast both take to 1. So
-       reading it here is how every one of these buttons inherits those two
-       settings, the same argument fabSpec's pillAlpha() makes. Reading the
-       ELEMENT rather than the token is the stricter version of it: a control
-       that ever thins its band differently answers for itself. */
+       reading it here is how the one button that still PAINTS its band — the
+       comment bar's send disc, which is deliberately not glass — inherits those
+       two settings. Reading the ELEMENT rather than the token is the stricter
+       version of it: a control that ever thins its band differently answers for
+       itself. The three GLASS families take no alpha at all any more; see
+       bandFill. */
     function bandAlpha(el) {
       return Number(getComputedStyle(el, '::before').opacity) || 1;
+    }
+
+    /* WHICH OF THE THREE THINGS A BAND IS, READ OFF THE STOPS THEMSELVES.
+
+       Three sources reach the primary acts (paintBrandBand) and Liquid Glass
+       wants a different answer from each. This is that decision, once, for the
+       + and for every other glass button wearing the same fill:
+
+       - A READER'S ACCENT is three stops eleven degrees apart at one weight
+         (bandFrom), which is one colour said three times. `UIGlassEffect`
+         takes ONE tint colour and that is the system's own tinted glass — its
+         refraction, its specular rim, its Reduce Transparency, none of it ours.
+         So an accent crosses as a TINT and loses nothing by it. The trade that
+         made a tint wrong in 1.4 was paying it for the four hues below; an
+         accent never owed it.
+       - NO COLOUR is --mono-band, three greys. A grey laid under glass is a
+         smudge on a surface whose whole job is to be colourless, so it crosses
+         as nothing at all and the button is plain glass wearing the system's
+         own label ink (see the ink note in fabSpec).
+       - TRIA'S OWN RAMP is four hues and cannot be one colour, so it stays a
+         gradient UNDER the material, thin enough that the glass still has the
+         page to bend. That is the case TriaBandRamp was built for and now the
+         only one it serves.
+
+       OFF THE STOPS, NOT OFF `me.accent`: the stops are the only thing that
+       crosses this bridge, four different elements are read for them, and one
+       test on colours is one place for it to be right.
+
+       WHAT THIS REPLACES is a lining that went back over the glass at full
+       strength (TriaBandRim, now gone). A colour painted on TOP of Liquid Glass
+       sits above the specular layer the material draws last, which is the one
+       thing the material asks you not to do — and it is what made these read as
+       stickers with a rainbow outline rather than as glass. The muting the
+       lining was there to answer is answered instead by not asking the material
+       to carry four hues when the band only has one. */
+    // Channel spread, out of 255, under which a stop carries no hue at all.
+    // --mono-band's stops measure 12, 11, 9 on paper and 3, 6, 8 on ink; the
+    // palest thing an accent or a brand stop ever is sits far above this.
+    const BAND_GREY = 20;
+    // Degrees of arc a band may span and still BE one colour. An accent spans
+    // 2 * BAND_ARC = 22; Tria's ramp spans about 180.
+    const BAND_ONE_HUE = 40;
+    // Reduce Transparency draws the material SOLID, and a backdrop under a
+    // solid material is a backdrop nobody sees — the ramp would simply vanish
+    // and the default + would go colourless on the one setting that can't be
+    // previewed from here. A tint is drawn BY the material, so it survives.
+    // Losing a sweep to an accessibility setting is the right half to lose.
+    const solidGlass = () =>
+      window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
+
+    function bandFill(stops) {
+      const rgb = stops.map(cssToRgb).filter(Boolean);
+      const none = { colors: [], tint: '' };
+      if (!rgb.length) return none;
+      const chroma = (c) => Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
+      if (rgb.every(c => chroma(c) < BAND_GREY)) return none;
+      const hues = rgb.map(c => rgbToHsl(c.r, c.g, c.b).h * 360);
+      const arc = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+      const spread = Math.max(...hues.map(a => Math.max(...hues.map(b => arc(a, b)))));
+      if (spread > BAND_ONE_HUE && !solidGlass()) return { colors: stops, tint: '' };
+      // The MIDDLE stop, which is the band's own weight: bandFrom puts the two
+      // either side a point and a half up and three down from it.
+      return { colors: [], tint: stops[stops.length >> 1] };
     }
 
     function controlSpec(el, key) {
@@ -846,6 +889,11 @@
       const styles = getComputedStyle(el);
       const cta = el.classList.contains('toolbar-cta');
       const tinted = cta || el.classList.contains('toolbar-commit');
+      const fill = tinted ? bandFill(bandStops(el)) : { colors: [], tint: '' };
+      // A control that ASKED for a band and resolved to none: "no colour" is
+      // live, so it wants the system's own ink rather than the near-white
+      // --mono-ink that was made to ride a fill. See the ink note in fabSpec.
+      const bare = tinted && !fill.tint && !fill.colors.length;
       const spec = {
         id: key,
         x: rect.left, y: rect.top, w: rect.width, h: rect.height,
@@ -854,10 +902,10 @@
         // washed profile sets --toolbar-ink and a tinted control takes
         // --pill-ink, and reading the element answers both without either rule
         // being restated here.
-        ink: toRgb(styles.color) || '',
-        // Every stop, not the middle one, and how thin it sits. See bandStops.
-        colors: tinted ? bandStops(el) : [],
-        alpha: tinted ? bandAlpha(el) : 1,
+        ink: bare ? '' : (toRgb(styles.color) || ''),
+        // A tint, a ramp, or neither. See bandFill.
+        colors: fill.colors,
+        tint: fill.tint,
         glyph: cta ? '' : liveGlyph(el),
         // A menu button already says so in markup: the web card is a WAI-ARIA
         // menu and has had to declare aria-haspopup since 1.3.
@@ -1103,6 +1151,10 @@
       // Share Tria is the only one of the four that carries a mark. liveGlyph
       // would do here too, but none of these ever holds two.
       const mark = el.querySelector('svg');
+      // The same three answers the + takes, off this button's own ::before.
+      // See bandFill, and the ink note in fabSpec for why a bare one sends none.
+      const fill = bandFill(bandStops(el));
+      const bare = !fill.tint && !fill.colors.length;
       return {
         id: el.dataset.nativePage,
         x: r.left,
@@ -1114,9 +1166,9 @@
         // Resolved colours, never token names, the same as every toolbar
         // control: a washed page and a reader's accent both land in the cascade
         // and reading the element answers both.
-        ink: toRgb(styles.color) || '',
-        colors: bandStops(el),
-        alpha: bandAlpha(el),
+        ink: bare ? '' : (toRgb(styles.color) || ''),
+        colors: fill.colors,
+        tint: fill.tint,
         // These four are set at four different sizes (1.02rem on the gate, 0.95
         // on the composer's pill, 0.9 on Add yours, 0.85 on Share Tria), so the
         // face's size is measured rather than being one constant over there.
@@ -1974,15 +2026,32 @@
     function repaint() {
       if (!live) return;
       call('setFab', { fab: fabSpec() }).catch(() => {});
+      /* AND EVERYTHING ELSE WEARING THE SAME BAND, which this used to leave
+         behind. The + is repainted on the frame the band is stamped; the
+         toolbar's CTA and Save, the page's own primary acts and the comment
+         bar's send disc were not. Each of those is cached on the payload it
+         last sent (`toldBar`, `toldPage`, the post bar's own signature), a
+         colour pick changes nothing else about any of them, and paintBrandBand
+         is memoised on the reader's identity — so the only thing that ever
+         corrected them was the next navigation happening to rebuild the page.
+
+         That is the bug Zoe saw: an amber + over a rainbow Share pill, two
+         halves of one fill a page apart, on every first load (the accent is
+         stamped after auth resolves, which is after the first route has already
+         drawn its buttons). The + was never the odd one out — it was the only
+         one being told. */
+      scheduleToolbar();
+      schedulePage();
+      pushPostBar();
     }
 
-    /* THE ONE THING ON THE + THAT CHANGES WITHOUT THE READER CHANGING ANYTHING.
-       Reduce Transparency and Increase Contrast both take --pill-alpha to 1
-       (tokens.css), and now that the disc's band is thinned by it, both are
-       settings the + has to answer. The CSS chrome gets that from the cascade
-       for free; native holds resolved numbers, so it has to be told — and
-       paintBrandBand is memoised on the reader's identity, which neither of
-       these changes, so nothing else would ever tell it. */
+    /* THE ONE THING ON THESE BUTTONS THAT CHANGES WITHOUT THE READER CHANGING
+       ANYTHING. Reduce Transparency takes the glass families' band from a ramp
+       to a tint (see bandFill) and Increase Contrast takes --pill-alpha to 1
+       under the send disc that still paints one. The CSS chrome gets both from
+       the cascade for free; native holds resolved numbers, so it has to be told
+       — and paintBrandBand is memoised on the reader's identity, which neither
+       of these changes, so nothing else would ever tell it. */
     ['(prefers-reduced-transparency: reduce)', '(prefers-contrast: more)'].forEach((q) => {
       const mq = window.matchMedia(q);
       const again = () => repaint();

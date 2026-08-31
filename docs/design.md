@@ -82,10 +82,11 @@ photo = cyan, activity = lime, poll = rose. Four of those five are also borrowed
 as `--brand-band`, the gradient on the primary-act buttons — where they name
 Tria rather than a type, and where a reader's own accent may replace them
 outright (see Lit dome). In the app those buttons are native glass and the band
-is stated TWICE on each: once under the material, which tints it, and once over
-it as a thin lining, which is the only place four hues survive the frosting (see
-"The ramp, and the rim" in [native-chrome.md](native-chrome.md)). The web needs
-no lining — nothing there is muting the fill. Instrument Serif on titles only; Oxygen everywhere
+takes one of three forms there: a reader's accent (one hue) tints the material
+itself, Tria's four-hue ramp sits under it as a thinned backdrop, and "no
+colour" draws neither. Nothing is ever painted OVER the material — see "The + is
+TINTED GLASS" in [native-chrome.md](native-chrome.md), which is also the note on
+what that mistake looked like. Instrument Serif on titles only; Oxygen everywhere
 else. Circular avatars. Don't touch the hue-drift gate wash — Zoe loves it. All
 motion is reduced-motion aware.
 
@@ -704,9 +705,10 @@ of retiring it, all worth keeping:
   contrast doesn't depend on what happens to be scrolling underneath. Both of
   those are arguments about compositing against a *sharp* backdrop with no
   blur budget to soften it, so both dissolve on the native chrome, where the
-  disc's ramp **is** thinned to `--pill-alpha` and Liquid Glass does the
-  softening. See [native-chrome.md](native-chrome.md) — that is the one place
-  the two chromes disagree on purpose.
+  disc is real Liquid Glass and the system does the softening. The native + is
+  translucent in all three of its band forms; the CSS one is opaque. See
+  [native-chrome.md](native-chrome.md) — that is the one place the two chromes
+  disagree on purpose.
 
 **No `backdrop-filter` on any of them, FAB included**, and that is the same
 glass-minus-blur settlement the masonry tiles already take. The bill is area ×

@@ -139,9 +139,10 @@ learn what a "Discover filter" or a "daily" is.
   material and `title` is the collapsing small title, drawn natively since the
   material went glass (see "What the top bar kept"). Whether the material is
   PAINTED does not cross: native reads the scroll itself., each control
-  `{id, kind…, x, y, w, h, glyph, ink, colors, alpha, text, after, hidden, menu,
-  label}` — `colors` is the band's stops, ALL of them, and `alpha` how thin they
-  sit (see "The ramp, and the rim"),
+  `{id, kind…, x, y, w, h, glyph, ink, colors, tint, text, after, hidden, menu,
+  label}` — a band arrives as EITHER `tint` (one colour, for the material's own
+  `tintColor`) or `colors` (every stop, for a gradient under it) or neither, and
+  never as both; see "The + is TINTED GLASS" for which band gets which,
   and `search` Discover's field: `{live, focus, x, y, w, h, closedX, closedY,
   closedW, closedH, fieldLeft, fieldRight, closeSize, closeRight, text,
   placeholder, label, closeLabel, closeGlyph, ink, caret, muted}` — two boxes,
@@ -282,62 +283,81 @@ which is the cost floor CLAUDE.md refuses everywhere. Liquid Glass answers both.
 The material refracts and diffuses what is behind it, and the system draws it
 rather than us.
 
-**The colour is the button's BACKDROP**: a `CAGradientLayer`-backed view
-(`TriaBandRamp`) the control's exact size and capsule, sitting as a *sibling
-below* the glass. The material samples, displaces and frosts it the way it samples
-anything else, which is what tinted glass physically is, and all four stops
-survive because nothing is reducing them to a colour. We supply something to
-tint; the system does the tinting. Being a sibling is the one liability — the
-+'s fade and its sink don't reach it on their own, so `syncVisibility` sets the
-same `alpha`, `transform` and `isHidden` on both inside one animation block. A
-frame out of step and the disc's colour hangs in the air behind a + that has
-already sunk. **Every button that took this arrangement inherited that
-liability**, and each pays it in the one place it moves: `TriaToolbarButton`
-mirrors the frame in `update` and the alpha and transform inside the idle
-animation's own block; `TriaPageButton` mirrors the frame and the hidden flag on
-every scroll tick; both override `removeFromSuperview` so a dropped control
-cannot leave a coloured capsule behind on the bar.
+**The band has THREE forms and the material takes a different one of each.**
+`bandFill` in app.js sorts them, off the resolved stops rather than off which
+accent is live, and sends the answer as a shape: a `tint`, a `colors` array, or
+neither. `TriaBand.apply` in the plugin is the whole of what Swift does with it.
 
-**And the ramp is THINNED to `--pill-alpha`, which is what finally made it read
-as glass rather than as paint.** Painted opaque it is a wall: the material
-samples it, finds nothing else behind it, and has nothing to refract or
-displace, so what shipped was a flat coloured disc with a specular rim drawn
-round it — the tint doing all the work and the glass doing none. That is the CSS
-failure mode arriving from the opposite side, and it is not the same fault as
-attempt 1 below: there the thinned layer was *above* the material and hid it,
-here the opaque one was *below* it and starved it. At `--pill-alpha` the page
-sits behind the colour and the system has something to bend.
+1. **A reader's ACCENT is one colour**, three stops eleven degrees apart at one
+   weight (`bandFrom`). So it goes to `UIGlassEffect.tintColor` and the system
+   tints its own material — refraction, specular response, Reduce Transparency,
+   Increase Contrast, all of it already answered and none of it ours. Nothing is
+   lost, because the band was one colour before it crossed. Measured across all
+   nine accents: hue spread 21.6 to 22.9 degrees, channel chroma 55 to 173.
+2. **"No colour" is `--mono-band`, three greys** (chroma 3 to 12 across both
+   schemes). A grey laid under glass is a smudge on a surface whose whole job is
+   to be colourless, so it crosses as nothing at all and the button is plain
+   glass. It also sends **no ink** — `--pill-ink` under this band is
+   `--mono-ink`, a near-white built to ride a near-black fill, and there is no
+   fill left to ride. Empty is what native reads as `.label`.
+3. **Tria's own ramp is four hues** (spread ~179 degrees) and no single colour
+   states it. That one, and only that one, stays a gradient UNDER the material:
+   a `CAGradientLayer`-backed view (`TriaBandRamp`) the control's exact size and
+   capsule, sitting as a *sibling below* the glass, thinned so the system still
+   has the page behind it to bend.
 
-The alpha crosses the bridge rather than being quoted in Swift, and that is
-worth more than one number's worth of tidiness: `--pill-alpha` is the token that
-answers **Reduce Transparency and Increase Contrast** (both take it to 1, see
-the last block of `tokens.css`), so reading it live is how the + inherits those
-two settings instead of being the one surface in the app that ignores them.
-`paintBrandBand` is memoised on the reader's identity and neither setting
-changes that, so `NativeChrome` listens to both media queries itself and
-repaints. A spec that arrives with no alpha falls back to 1 — the opaque disc
-this used to be, which is the right way to fail.
+The thresholds are `BAND_GREY` (20 of 255) and `BAND_ONE_HUE` (40 degrees) in
+app.js, and both sit at better than 2x margin against every real band.
 
-**AND THE BAND IS STATED TWICE, because the material that makes the fill read
-as glass is the same material that mutes it.** Sampled, displaced and diffused,
-four stops on a 56pt disc come out a pastel wash: right for a backdrop, and not
-what the web shows. So `TriaBandRim` puts the same stops back ABOVE the glass as
-a 1.6pt lining, one point inside the system's own specular rim, at full strength
-— the one place in the app where the band arrives unfiltered. It is not a new
-idiom: `.publish-fill`'s RESTING state on the web is exactly this, the band as an
-outline drawn by an xor mask, filled in only on press or on the page you are on.
-These buttons wear `.is-solid`, so off-app they show the fill and not the ring;
-in here the material mutes the fill, so they show both. Same stops, same order,
-same 115deg — the lining is handed the array the ramp beside it was handed.
+Being a sibling is the ramp's one liability — the +'s fade and its sink don't
+reach it on their own, so `syncVisibility` sets the same `alpha`, `transform`
+and `isHidden` on both inside one animation block. A frame out of step and the
+disc's colour hangs in the air behind a + that has already sunk. **Every button
+that takes the ramp inherits that liability**, and each pays it in the one place
+it moves: `TriaToolbarButton` mirrors the frame in `update` and the alpha and
+transform inside the idle animation's own block; `TriaPageButton` mirrors the
+frame and the hidden flag on every scroll tick; both override
+`removeFromSuperview` so a dropped control cannot leave a coloured capsule
+behind on the bar. `fabHasRamp` and `hasRamp` exist so those paths never
+un-hide a sibling that has no ramp to show.
 
-Two things it deliberately is not. It is not FLUSH with the edge: Liquid Glass
-draws its specular response on the outermost rim, and a colour laid over that
-reads as a rendering fault rather than as the button's colour (the same lesson
-the filter dot taught). And it carries NO BLOOM, which is the obvious next reach
-and the reason the shape of this note matters — a `shadow` takes one colour, so
-a four-stop ring would glow in one hue, on a surface already drawing highlights
-of its own. If a glow is ever wanted it is a second, blurrier rim behind the
-first, not a shadow on it.
+**And the ramp is THINNED, which is what makes it read as glass rather than as
+paint.** Painted opaque it is a wall: the material samples it, finds nothing
+else behind it, and has nothing to refract or displace, so what shipped was a
+flat coloured disc with a specular rim drawn round it — the tint doing all the
+work and the glass doing none. That is the CSS failure mode arriving from the
+opposite side, and it is not the same fault as attempt 1 below: there the
+thinned layer was *above* the material and hid it, here the opaque one was
+*below* it and starved it.
+
+**The number is `TriaBand.rampAlpha` (0.55) and it is NOT `--pill-alpha`.** That
+token is a contrast floor for a fill the *web* paints against the page; there is
+no painted fill here, the material supplies the contrast and the system answers
+the accessibility settings itself. What `rampAlpha` decides is only how much
+page the glass has left to bend, which is a rendering decision about the
+material and therefore lives beside it. It is the one knob to turn if the ramp
+starts reading as paint again. (`--pill-alpha` still crosses for the comment
+bar's send disc, which is deliberately not glass and does paint its band.)
+
+**Reduce Transparency is answered in `bandFill`, not in Swift.** The system
+draws glass SOLID under that setting, and a backdrop under a solid material is a
+backdrop nobody sees — the ramp would simply vanish and the default + would go
+colourless on the one setting that cannot be previewed from here. So under
+`(prefers-reduced-transparency: reduce)` even the four-hue band crosses as its
+middle stop, which the material still draws. The sweep is what is lost, and a
+sweep is the right thing to lose to an accessibility setting. `NativeChrome`
+already listens to that media query and to `(prefers-contrast: more)`.
+
+**WHAT WENT AWAY, AND DO NOT PUT IT BACK.** There was a `TriaBandRim`: the same
+stops laid back ABOVE the glass as a 1.6pt lining at full strength, on the
+argument that the material mutes what it samples. It does mute it. The lining
+was still wrong, for a reason that outranks the observation — **a colour drawn
+on top of Liquid Glass sits above the specular layer the material draws last**,
+which is the one thing the material asks you not to do. What shipped was a
+sticker with a rainbow outline, most obviously on the wide pills (Zoe's word for
+the Send feedback button was that it looked like a swatch). The muting is
+answered instead by not handing the material four hues when the band only has
+one: an accent tints the glass and comes out at full strength on its own.
 
 **Three things were tried before that and all three are worth not repeating.**
 
@@ -345,10 +365,11 @@ first, not a shadow on it.
    in the `contentView` hides the material entirely, so what you get is a
    slightly see-through disc with page text ghosting through it — the CSS
    failure mode wearing the native button's clothes.
-2. *`UIGlassEffect.tintColor`*, which shipped for a while. It is **one colour**,
-   so the disc took the band's middle stop. Exact for a reader's accent (those
-   bands are three stops of a single hue, `bandFrom` in app.js) and a real loss
-   for Tria's own ramp, where four hues became the one at their centre.
+2. *`UIGlassEffect.tintColor` for EVERY band*, which shipped for a while. It is
+   one colour, so Tria's four-hue ramp arrived as the hue at its centre. Note
+   what the answer above is and is not: the tint came back for the bands that
+   ARE one colour, and the ramp stayed for the one that is not. The mistake was
+   never the tint, it was paying its price on a band that could not afford it.
 3. *A multiply blend* — `compositingFilter = "multiplyBlendMode"` on a layer
    inside `fab.contentView`. **It renders nothing, silently.** Not because
    `compositingFilter` is macOS-only (the CAFilter names do composite on iOS);
@@ -368,11 +389,24 @@ would be a second place for it to drift. `NativeChrome.repaint()` hangs off the
 same `stamp()` call that sets `--user-band`, so the tint and everything else
 wearing that colour can never land a frame apart.
 
+**AND `repaint()` HAS TO PUSH ALL FOUR FAMILIES, which it did not.** It called
+`setFab` and nothing else. The toolbar's CTA, the page's own primary acts and
+the comment bar's send disc are each cached on the payload they last sent
+(`toldBar`, `toldPage`, `toldPostBar`); a colour pick changes nothing else about
+any of them, and `paintBrandBand` is memoised on the reader's identity, so the
+only thing that ever corrected them was the next navigation happening to rebuild
+the page. The accent is stamped once auth resolves, which is AFTER the first
+route has drawn its buttons — so on every cold start the + wore the reader's
+colour and every other primary act wore Tria's ramp. An amber + over a rainbow
+Share pill, two halves of one fill a page apart. `repaint()` now calls
+`scheduleToolbar`, `schedulePage` and `pushPostBar` beside `setFab`.
+
 **Reassign the effect, don't just mutate it.** A `UIVisualEffectView` caches the
-effect it was handed, so `glass.tintColor = …` alone does not reach the material
-— the + would hold whatever colour it was built with for the rest of the session
-and a colour pick would look like it did nothing. `fab.effect = glass` after the
-assignment is what makes it land.
+effect it was handed, so `(view.effect as? UIGlassEffect)?.tintColor = …` alone
+does not reach the material — the button would hold whatever colour it was built
+with for the rest of the session and a colour pick would look like it did
+nothing. `TriaBand.apply` builds a fresh `UIGlassEffect` every time and assigns
+it, which is also where `isInteractive` is set for these three families.
 
 ## What the top bar kept, and why
 
@@ -1022,7 +1056,10 @@ Three things that were wrong first, all of them found on the simulator:
   on glass" stack the stylesheet has always refused. On the web it is
   `.publish-fill.is-solid` thinned to `--pill-alpha` over the page, so it is now
   the band at that same alpha — a `TriaBandRamp` inside the disc, all four stops
-  of it — with `--glass-edge`'s hairline. It takes no `TriaBandRim`: a lining
+  of it — with `--glass-edge`'s hairline. It is the ONE caller that still paints
+  an accent through that view, and the one that still takes `--pill-alpha` over
+  the bridge; it takes none of `TriaBand`'s three answers, because it is not
+  glass. It took no lining either: a lining
   answers a material that mutes the fill, and this disc has none. Both the alpha
   and the edge are read off the web disc rather than quoted, and the edge is read
   through a canvas that keeps its ALPHA (`toRgba`) — `toRgb` reports three
@@ -1202,9 +1239,9 @@ Four buttons that are not on a bar: the composer's **Share** pill, the auth
 gate's submit, **Share Tria** at the foot of Discover, and the daily card's
 **Add yours**. On the web they are `.publish-fill.is-solid` — the brand band
 behind a hairline and a rim, which is a very good impression of Liquid Glass and
-is not the material. In the app they are `UIGlassEffect` wearing the band the way
-the + wears it — a `TriaBandRamp` under the glass and a `TriaBandRim` over it —
-like every other primary act in the chrome.
+is not the material. In the app they are `UIGlassEffect` wearing the band the
+way the + wears it — tinted for an accent, a `TriaBandRamp` under the glass for
+Tria's ramp, plain for "no colour" — like every other primary act in the chrome.
 
 **Why a rect was not enough here.** A control on a bar cannot move. These sit in
 content that scrolls, and a native view parked at a web rect does not follow it
@@ -1238,10 +1275,12 @@ one that vanishes a moment late is drawn on top of the navigation.
 **What it cost, and what paid it.** `UIGlassEffect.tintColor` is ONE colour, so
 for a while these sent the band's MIDDLE STOP and the four-stop brand sweep did
 not survive — the same trade `.toolbar-commit` and `.toolbar-cta` made, and far
-more visible on a full-width pill than on a 44pt disc. That note ended "if the
-sweep ever has to come back, the FAB is the precedent", and it has: `bandStops()`
-sends every stop and `bandAlpha()` how thin it sits, and all three families draw
-them the way the + does. Nothing on this bridge carries a `tint` any more.
+more visible on a full-width pill than on a 44pt disc. Then every band became a
+ramp with a full-strength lining over it, which cost the material instead: a
+full-width pill with a rainbow outline reads as a sticker, not as glass. The
+settled answer is `bandFill` — the tint for the bands that are one colour, the
+ramp for the one that is four, and nothing for the one that is grey — and all
+three families draw it the way the + does.
 
 **The gate's own submit is matched and never reached.** `data-chrome` goes up on
 a resolved `setTabs`, which `renderNav` asks for, and `renderNav` does not run
