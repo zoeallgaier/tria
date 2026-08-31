@@ -13507,6 +13507,19 @@
       if (!band) {
         ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink', '--type-mark']
           .forEach(p => el.style.removeProperty(p));
+        /* AND TRIA'S OWN RAMP IS A REPAINT TOO, which this branch used to
+           return past. Removing the properties is how the default expresses
+           itself in CSS (see the note above), and the web needs no telling —
+           but native holds resolved numbers and has to be told every time,
+           including the time the answer is "back to the brand band".
+
+           Everything ELSE wearing the band happened to correct itself, because
+           picking a colour rebuilds the page under it and the toolbar and the
+           page's own acts are re-measured when it does. The + is not on the
+           page; this call is the only thing that ever reaches it. So picking
+           Tria left an accent + over a brand-ramp everything-else, the same
+           split as the first-load bug below and from the other direction. */
+        NativeChrome.repaint();
         return;
       }
       el.style.setProperty('--user-band', band);

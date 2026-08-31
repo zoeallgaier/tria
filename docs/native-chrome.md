@@ -303,7 +303,7 @@ neither. `TriaBand.apply` in the plugin is the whole of what Swift does with it.
 3. **Tria's own ramp is four hues** (spread ~179 degrees) and no single colour
    states it. That one, and only that one, stays a gradient UNDER the material:
    a `CAGradientLayer`-backed view (`TriaBandRamp`) the control's exact size and
-   capsule, sitting as a *sibling below* the glass, thinned so the system still
+   shape, sitting as a *sibling below* the glass, thinned so the system still
    has the page behind it to bend.
 
 The thresholds are `BAND_GREY` (20 of 255) and `BAND_ONE_HUE` (40 degrees) in
@@ -320,6 +320,41 @@ frame and the hidden flag on every scroll tick; both override
 `removeFromSuperview` so a dropped control cannot leave a coloured capsule
 behind on the bar. `fabHasRamp` and `hasRamp` exist so those paths never
 un-hide a sibling that has no ramp to show.
+
+### The round ramp is a different drawing of the same band
+
+`TriaBandRamp(round:)` picks between two, and the + is the only circle in the
+set. Both halves of the difference were bugs Zoe saw on the phone, and neither
+is a corner radius.
+
+**A circle only ever showed the MIDDLE of the ramp.** A linear gradient holds
+its first colour everywhere before its start point and its last everywhere
+after its end point, so on a capsule the two ends of the band are exactly what
+the wide flat ends of the pill wear, and all four hues are on the button — which
+is why the Share pill reads. Clip that same drawing to a circle and both
+endpoints are in the corners the clipping takes away: what is left is the
+stretch between the second and third stop, the part of a four-hue ramp where the
+hues are closest together, and it comes out as a flat wash. The + was not too
+strong or too weak. It was the muddy third of the band. Both points now sit at
+0.39 of the radius from the centre, inside the inscribed circle, so the disc
+carries the band from first stop to last: `(0.15, 0.33) → (0.85, 0.67)` against
+the capsule's `(0.05, 0.28) → (0.95, 0.72)`. Same 115 degrees either way.
+
+**And the round one has no hard edge, because it sits under INTERACTIVE glass.**
+A capsule ramp is clipped — `masksToBounds` and a corner radius, an edge landing
+exactly where the glass's edge lands. That holds while the two edges agree, and
+pressing an interactive glass element is the moment they stop: the system lifts
+and deforms the material, and the ramp is a sibling below it, so it cannot
+follow. Held down, the +'s colour sat still inside a disc that was moving over
+it and the whole thing came apart into a coloured sticker with glass sliding on
+top. On a wide pill that mismatch is a point or two on an edge nobody watches;
+on a 56pt disc under a thumb it is the button. So the round ramp is masked by a
+radial `CAGradientLayer` instead — opaque out to 0.86 of the radius, then to
+nothing at the rim. The material has the same colour to bend, the disc still
+reads full-bleed, and when the glass moves there is no line for it to move away
+from. **This is the answer to "pressing it breaks the Tria option", and it is
+the only one available**: the deformation is drawn inside the effect and the
+effect view's own layer never moves, so there is nothing to track.
 
 **And the ramp is THINNED, which is what makes it read as glass rather than as
 paint.** Painted opaque it is a wall: the material samples it, finds nothing
@@ -338,6 +373,18 @@ page the glass has left to bend, which is a rendering decision about the
 material and therefore lives beside it. It is the one knob to turn if the ramp
 starts reading as paint again. (`--pill-alpha` still crosses for the comment
 bar's send disc, which is deliberately not glass and does paint its band.)
+
+**Measured in both schemes, on plain paper, with Tria's band on the + .** Light:
+the disc runs 0.49 to 0.73 relative luminance and the near-black `--on-type`
+glyph on it clears 9:1. Dark: the same band arrives undeepened (the pastels ARE
+their own `-ink` twins on dark paper, see tokens.css) but the material darkens
+what it samples, so the disc lands at 0.155 to 0.207 and the same near-black
+glyph measures **3.5 to 4.4:1**. That clears the 3:1 the guidelines ask of a
+graphical control and does not clear the 4.5:1 they ask of text, which is the
+right side of the line for a glyph but not a comfortable margin. It is the
+number to watch if `rampAlpha` ever comes down. White ink would not fix it —
+measured against the same disc it is worse, 4.1:1 at best — so the answer if it
+ever has to change is a lighter fill under the glyph, not a lighter glyph.
 
 **Reduce Transparency is answered in `bandFill`, not in Swift.** The system
 draws glass SOLID under that setting, and a backdrop under a solid material is a
@@ -400,6 +447,19 @@ route has drawn its buttons — so on every cold start the + wore the reader's
 colour and every other primary act wore Tria's ramp. An amber + over a rainbow
 Share pill, two halves of one fill a page apart. `repaint()` now calls
 `scheduleToolbar`, `schedulePage` and `pushPostBar` beside `setFab`.
+
+**AND `stamp(null)` HAS TO REPAINT TOO**, which is the same split arriving from
+the other side. Picking Tria's own ramp is expressed by REMOVING `--user-band`
+and its four companions, and that branch returned before it reached
+`NativeChrome.repaint()`. The web needs no telling — the fallback in
+`--pill-band` is the default, so every CSS reader is already correct — but
+native holds resolved numbers and has to be told every time, including the time
+the answer is "back to the brand band". Everything else wearing the band
+happened to right itself anyway, because picking a colour rebuilds the page
+under it and the toolbar and the page's own acts are re-measured when it does.
+The + is not on the page. This call is the only thing that reaches it, so
+choosing Tria left an accent + over a brand-ramp everything-else until the next
+navigation.
 
 **Reassign the effect, don't just mutate it.** A `UIVisualEffectView` caches the
 effect it was handed, so `(view.effect as? UIGlassEffect)?.tintColor = …` alone

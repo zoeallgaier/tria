@@ -474,10 +474,15 @@ protocol TriaChromeControl: AnyObject {
    a scrolling feed and cannot take its colour from what happens to be under it.
 
    So the ramp goes where a real backdrop is: a sibling BELOW the glass, exactly
-   the disc's size and capsule. The material then samples, displaces and frosts
+   the button's size and shape. The material then samples, displaces and frosts
    it the way it samples anything else, which is what tinted glass physically
    is, and the four stops survive because nothing is reducing them to a colour.
    The system draws the tinting; we only supply something to tint.
+
+   Its shape is one of two, and `round` picks: a capsule for the toolbar's and
+   the page's own buttons, a circle for the + . That is not a corner radius —
+   both of the things that make a gradient work on a circle are different, and
+   the notes on `round` and on `rim` are the two of them.
 
    AND THE RAMP IS THINNED, which is the last thing this took to actually read
    as glass. Painted opaque it is a wall: the material samples it, finds nothing
@@ -505,7 +510,46 @@ final class TriaBandRamp: UIView {
     override class var layerClass: AnyClass { CAGradientLayer.self }
     private var ramp: CAGradientLayer { layer as! CAGradientLayer }
 
-    init() {
+    /// Whether this ramp is drawn for a CIRCLE rather than a capsule, which
+    /// changes both of the things below. Only the + is one.
+    private let round: Bool
+
+    /* THE RIM, FADED OUT INSTEAD OF CUT OFF, and it is the round ramp's half of
+       being under INTERACTIVE glass.
+
+       A capsule ramp is clipped: `masksToBounds` and a corner radius, a hard
+       edge landing exactly where the glass's own edge lands. That holds while
+       the two edges agree, and pressing an interactive glass element is the
+       moment they stop — the system lifts and deforms the material, and the
+       ramp is a SIBLING below it, so it cannot follow. Held down, the +'s
+       colour sat still inside a disc that was moving over it, and the thing
+       came apart into a coloured sticker with glass sliding on top. That is
+       what "holding it breaks the Tria option" was.
+
+       On a wide pill the same mismatch is a point or two on an edge nobody is
+       looking at. On a 56pt disc under a thumb it is the whole button.
+
+       So the round one has no edge to catch out: opaque across the face, then
+       out to nothing over the last seventh of the radius. The material still
+       has exactly as much colour to bend, the disc still reads full-bleed, and
+       when the glass moves there is no line for it to move away from. */
+    private lazy var rim: CAGradientLayer = {
+        let mask = CAGradientLayer()
+        mask.type = .radial
+        mask.startPoint = CGPoint(x: 0.5, y: 0.5)
+        mask.endPoint = CGPoint(x: 1, y: 1)
+        mask.colors = [UIColor.white.cgColor, UIColor.white.cgColor,
+                       UIColor.white.withAlphaComponent(0).cgColor]
+        mask.locations = [0, 0.86, 1]
+        // A mask is off-screen and gets no implicit animation for free; laying
+        // out the bar (rotation, the keyboard) would otherwise slide the fade
+        // into place over a quarter second.
+        mask.actions = ["position": NSNull(), "bounds": NSNull()]
+        return mask
+    }()
+
+    init(round: Bool = false) {
+        self.round = round
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         isUserInteractionEnabled = false
@@ -513,8 +557,23 @@ final class TriaBandRamp: UIView {
         // That resolves to (sin 115, -cos 115) = (0.906, 0.423) in screen
         // coordinates, i.e. rightward and DOWN, which is these two points on a
         // roughly square disc. Same travel as the web's, not a fresh guess.
-        ramp.startPoint = CGPoint(x: 0.05, y: 0.28)
-        ramp.endPoint = CGPoint(x: 0.95, y: 0.72)
+        //
+        /* THE SAME TRAVEL, PULLED INSIDE THE CIRCLE, for the round one. A
+           linear gradient's first stop holds everything before its start point
+           and its last holds everything after its end point — so on a capsule
+           the two ends of the band are what the wide flat ends of the pill
+           wear, and all four hues are on the button. Clip that same drawing to
+           a circle and both endpoints are in the corners the clipping takes
+           away: the + was showing the MIDDLE of a four-hue ramp and never its
+           ends, which is the stretch where the hues are closest together and
+           the one part of the band that reads as no gradient at all. It was
+           not too strong or too weak. It was the muddy third of it.
+
+           Both points moved to 0.39 of the radius from the centre, which is
+           inside the inscribed circle with room to spare, so the disc now
+           carries the whole band from first stop to last. */
+        ramp.startPoint = round ? CGPoint(x: 0.15, y: 0.33) : CGPoint(x: 0.05, y: 0.28)
+        ramp.endPoint = round ? CGPoint(x: 0.85, y: 0.67) : CGPoint(x: 0.95, y: 0.72)
     }
 
     @available(*, unavailable)
@@ -533,8 +592,14 @@ final class TriaBandRamp: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        layer.cornerRadius = bounds.height / 2
-        layer.masksToBounds = true
+        if round {
+            rim.frame = bounds
+            layer.mask = rim
+            layer.masksToBounds = false
+        } else {
+            layer.cornerRadius = bounds.height / 2
+            layer.masksToBounds = true
+        }
     }
 }
 
@@ -659,7 +724,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     /// takes its value from whatever photograph is behind it, and the + is up
     /// on every route over a scrolling feed.
     private let fab = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-    private let fabRamp = TriaBandRamp()
+    private let fabRamp = TriaBandRamp(round: true)
     /// Whether the ramp is one of the three things the band turned out to be
     /// (see TriaBand). It is a SIBLING of the +, so the fade and the sink below
     /// have to hide and show it by hand — and "show it" is only right when
