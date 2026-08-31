@@ -498,7 +498,7 @@ protocol TriaChromeControl: AnyObject {
    resizes on rotation and on the keyboard. Being the layer means Auto Layout
    does it. */
 @available(iOS 26.0, *)
-final class TriaFabRamp: UIView {
+final class TriaBandRamp: UIView {
     override class var layerClass: AnyClass { CAGradientLayer.self }
     private var ramp: CAGradientLayer { layer as! CAGradientLayer }
 
@@ -532,6 +532,96 @@ final class TriaFabRamp: UIView {
         super.layoutSubviews()
         layer.cornerRadius = bounds.height / 2
         layer.masksToBounds = true
+    }
+}
+
+/* THE SAME BAND ON THE RIM, AND IT IS THE ONE PLACE THE COLOUR ARRIVES
+   UNFROSTED. The ramp above is a backdrop: the material samples it, displaces
+   it and diffuses it, which is what makes the button read as glass and is also
+   what takes the ramp's saturation down and smears the travel between its
+   stops. On a 56pt disc that is a pastel wash where the web shows four hues. So
+   the band is stated twice — once under the glass, where the system tints it,
+   and once ABOVE it as a 1.6pt lining, where nothing is filtering it.
+
+   IT IS NOT A NEW IDIOM. `.publish-fill`'s RESTING state on the web is exactly
+   this — the band as an outline, drawn by an xor mask on the ::before, filled
+   in only when the button is pressed or is the page you are on. The app's
+   primary acts wear `.is-solid`, so off-app they show the fill and not the
+   ring; in here the material mutes the fill, so they show both. Same band, same
+   order, same 115deg travel, and the ring's stops are the fill's stops — this
+   view is handed the array the ramp beside it was handed.
+
+   INSET, NOT FLUSH. Liquid Glass draws a specular rim on its outermost edge,
+   and a colour laid over that edge reads as a rendering fault rather than as
+   the button's colour (the same lesson as the filter dot in TriaToolbarButton).
+   One point in is a lining inside the system's rim, not a replacement for it.
+
+   AND NO BLOOM. The obvious next reach is a soft glow off the ring, which is
+   what the reference this came from has. A shadow takes ONE colour, so a
+   four-stop ring would bloom in one hue, and on a material that is already
+   drawing highlights of its own the extra light reads as a smudge. If it is
+   ever wanted, it is a second, blurrier TriaBandRim behind this one, not a
+   shadow on this one.
+
+   A MASK, NOT A BORDER, for the reason the web uses one: `layer.borderColor`
+   is a colour and this is a gradient. The gradient fills the view and the
+   shape layer keeps the ring. */
+@available(iOS 26.0, *)
+final class TriaBandRim: UIView {
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+    private var ramp: CAGradientLayer { layer as! CAGradientLayer }
+    private let ring = CAShapeLayer()
+
+    /// How far in from the glass's own edge the lining sits, and how thick it
+    /// is. 1.6 is the web ring's 2px seen at the size these buttons actually
+    /// are: the CSS ring is the WHOLE statement of the band, this one is a
+    /// lining on a fill that is already there.
+    static let inset: CGFloat = 1
+    static let width: CGFloat = 1.6
+
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        isUserInteractionEnabled = false
+        // The same two points TriaBandRamp uses, so the lining and the fill
+        // under it travel together. See the note there for the 115deg.
+        ramp.startPoint = CGPoint(x: 0.05, y: 0.28)
+        ramp.endPoint = CGPoint(x: 0.95, y: 0.72)
+        ring.fillColor = nil
+        ring.strokeColor = UIColor.black.cgColor
+        ring.lineWidth = TriaBandRim.width
+        layer.mask = ring
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// The stops at FULL strength, which is the whole point of this view: the
+    /// fill is thinned to --pill-alpha so the material has something to bend,
+    /// and thinning the lining as well would leave the band nowhere at its own
+    /// weight. Empty hides it — a control with no band asks for no lining.
+    func paint(_ stops: [UIColor]) {
+        guard !stops.isEmpty else { isHidden = true; return }
+        isHidden = false
+        // Same one-stop guard as the ramp: CAGradientLayer draws nothing at all
+        // from a single-entry array, which a reader's monochrome band would hit.
+        let pair = stops.count == 1 ? [stops[0], stops[0]] : stops
+        ramp.colors = pair.map { $0.cgColor }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // No implicit animation on the path: these views are moved by frame on
+        // every scroll tick (see TriaPageButton.layout), and a quarter-second
+        // default animation on each one is a ring lagging its own button.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ring.frame = bounds
+        let d = TriaBandRim.inset + TriaBandRim.width / 2
+        let box = bounds.insetBy(dx: d, dy: d)
+        ring.path = box.isEmpty ? nil
+            : UIBezierPath(roundedRect: box, cornerRadius: box.height / 2).cgPath
+        CATransaction.commit()
     }
 }
 
@@ -587,7 +677,9 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     /// its own frosting and leaves room for a colour to be multiplied into it.
     /// On regular glass the same ramp reads as a sticker.
     private let fab = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-    private let fabRamp = TriaFabRamp()
+    private let fabRamp = TriaBandRamp()
+    /// The band again, above the material rather than under it. See TriaBandRim.
+    private let fabRim = TriaBandRim()
     private let row = UIStackView()
     private let fabGlyph = UIImageView()
     private let fabButton = UIButton(type: .custom)
@@ -636,7 +728,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         pill.translatesAutoresizingMaskIntoConstraints = false
         fab.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(pill)
-        // BENEATH the glass, not inside it. See TriaFabRamp.
+        // BENEATH the glass, not inside it. See TriaBandRamp.
         contentView.addSubview(fabRamp)
         contentView.addSubview(fab)
 
@@ -658,6 +750,10 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         fabButton.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
         fab.contentView.addSubview(fabGlyph)
         fab.contentView.addSubview(fabButton)
+        // INSIDE the glass, which is the opposite of where fabRamp goes and is
+        // why this one needs no visibility bookkeeping: it is a child of the +,
+        // so the +'s own fade and sink carry it.
+        fab.contentView.addSubview(fabRim)
 
         let pillX = pill.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
         let fabX = fab.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
@@ -688,7 +784,11 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             fabButton.leadingAnchor.constraint(equalTo: fab.contentView.leadingAnchor),
             fabButton.trailingAnchor.constraint(equalTo: fab.contentView.trailingAnchor),
             fabButton.topAnchor.constraint(equalTo: fab.contentView.topAnchor),
-            fabButton.bottomAnchor.constraint(equalTo: fab.contentView.bottomAnchor)
+            fabButton.bottomAnchor.constraint(equalTo: fab.contentView.bottomAnchor),
+            fabRim.leadingAnchor.constraint(equalTo: fab.contentView.leadingAnchor),
+            fabRim.trailingAnchor.constraint(equalTo: fab.contentView.trailingAnchor),
+            fabRim.topAnchor.constraint(equalTo: fab.contentView.topAnchor),
+            fabRim.bottomAnchor.constraint(equalTo: fab.contentView.bottomAnchor)
         ])
 
         // The keyboard is the one piece of geometry the web layer genuinely
@@ -778,6 +878,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
                 // the material, not the colour.
                 let alpha = TriaToolbar.number(fabSpec["alpha"], fallback: 1)
                 if !stops.isEmpty { fabRamp.paint(stops, alpha: alpha) }
+                fabRim.paint(stops)
             }
             if let ink = fabSpec["ink"] as? String, let inkColor = TriaChromeBar.color(fromHex: ink) {
                 fabGlyph.tintColor = inkColor
@@ -1259,6 +1360,9 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
                 control = TriaToolbarButton(id: id)
                 control.button.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
                 contentView.addSubview(control)
+                // Below the glass, so the material has something to sample. See
+                // TriaToolbarButton.ramp for why it cannot live inside it.
+                contentView.insertSubview(control.ramp, belowSubview: control)
                 controls[id] = control
             }
             control.update(spec: item)
@@ -1499,6 +1603,24 @@ final class TriaToolbarButton: UIVisualEffectView {
     var wantsMenu = false
     var onTap: ((String) -> Void)?
 
+    /// THE BAND, THE WAY THE + WEARS IT. A `UIGlassEffect.tintColor` is one
+    /// colour, so this control used to take the band's middle stop and Tria's
+    /// four-hue sweep simply did not survive the trip — a real loss on a wide
+    /// pill like the daily's "Add yours", which is most of the width of a card.
+    /// The FAB solved this in 1.4 and this is that solution applied: the stops
+    /// go under the glass as a backdrop (`TriaBandRamp`) and over it as a lining
+    /// (`TriaBandRim`). See both classes for why it takes two.
+    ///
+    /// The ramp is a SIBLING, because a `UIVisualEffectView` has no way to put
+    /// anything behind its own material — `contentView` is above it. So the
+    /// toolbar inserts this below the button (see `apply`), and everything that
+    /// moves the button has to move it: `update` sets the frame, the idle
+    /// animation sets the alpha and the transform, and `removeFromSuperview`
+    /// takes it away. A frame out of step is a coloured ghost sitting where the
+    /// control used to be.
+    let ramp = TriaBandRamp()
+    private let rim = TriaBandRim()
+
     /// The face the daily's pill is set in: Oxygen Bold at the same 14.4pt the
     /// web sets it at. The app's whole UI is Oxygen, so a native control wearing
     /// San Francisco beside a web title wearing Oxygen was the one place the two
@@ -1529,32 +1651,50 @@ final class TriaToolbarButton: UIVisualEffectView {
         cornerConfiguration = .capsule()
         button.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(button)
+        contentView.addSubview(rim)
         NSLayoutConstraint.activate([
             button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             button.topAnchor.constraint(equalTo: contentView.topAnchor),
-            button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            rim.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            rim.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            rim.topAnchor.constraint(equalTo: contentView.topAnchor),
+            rim.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The sibling goes with it. Not a tidiness: `apply` drops a control the
+    /// page no longer mounts, and a ramp left behind is a coloured capsule on
+    /// the bar with no button on it.
+    override func removeFromSuperview() {
+        ramp.removeFromSuperview()
+        super.removeFromSuperview()
+    }
+
     func update(spec: [String: Any]) {
         frame = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
                        width: TriaToolbar.number(spec["w"]), height: TriaToolbar.number(spec["h"]))
+        ramp.frame = frame
         wantsMenu = spec["menu"] as? Bool ?? false
         button.accessibilityLabel = spec["label"] as? String
         button.accessibilityTraits = .button
 
         let glyph = spec["glyph"] as? String ?? ""
         let ink = spec["ink"] as? String ?? ""
-        let tint = spec["tint"] as? String ?? ""
+        let band = (spec["colors"] as? [String] ?? []).joined(separator: ",")
+        // NOT `alpha`: a local of that name shadows the view's own, and the
+        // idle animation a few lines down sets that one.
+        let bandAlpha = TriaToolbar.number(spec["alpha"], fallback: 1)
         let text = spec["text"] as? String ?? ""
         let after = spec["after"] as? String ?? ""
         // Everything the drawing depends on, in one string. Cheaper than four
         // comparisons and it cannot forget a field.
-        let key = [glyph, ink, tint, text, after, "\(frame.width)"].joined(separator: "|")
+        let key = [glyph, ink, band, "\(bandAlpha)", text, after,
+                   "\(frame.width)"].joined(separator: "|")
         if key != drawn {
             drawn = key
             let inkColour = TriaChromeBar.color(fromHex: ink) ?? .label
@@ -1576,14 +1716,15 @@ final class TriaToolbarButton: UIVisualEffectView {
                     .foregroundColor: inkColour
                 ]), for: .normal)
             }
-            // The tinted kinds — the editor's Save and the daily's pill — wear
-            // the same tinted glass the compose + does, for the same reason: on
-            // the web they are `.publish-fill.is-solid`, one family of primary
-            // acts. Reassigned rather than mutated (see tintFab).
-            if let glass = effect as? UIGlassEffect {
-                glass.tintColor = TriaChromeBar.color(fromHex: tint)
-                effect = glass
-            }
+            // The banded kinds — the editor's Save and the daily's pill — wear
+            // the band the compose + wears, for the same reason: on the web they
+            // are `.publish-fill.is-solid`, one family of primary acts. A bare
+            // control sends no colours and both layers hide themselves.
+            let stops = (spec["colors"] as? [String] ?? [])
+                .compactMap(TriaChromeBar.color(fromHex:))
+            ramp.isHidden = stops.isEmpty
+            if !stops.isEmpty { ramp.paint(stops, alpha: bandAlpha) }
+            rim.paint(stops)
         }
 
         // A LIT FILTER IS THE GLYPH'S OWN COLOUR, and there is nothing extra to
@@ -1605,10 +1746,17 @@ final class TriaToolbarButton: UIVisualEffectView {
         let settle = {
             self.alpha = hidden ? 0 : 1
             self.transform = hidden ? CGAffineTransform(scaleX: 0.82, y: 0.82) : .identity
+            // The ramp is a sibling and none of the above reaches it. Inside the
+            // same block, or the colour hangs in the air behind a Save that has
+            // already faded out.
+            self.ramp.alpha = self.alpha
+            self.ramp.transform = self.transform
         }
         if UIAccessibility.isReduceMotionEnabled {
             alpha = hidden ? 0 : 1
             transform = .identity
+            ramp.alpha = alpha
+            ramp.transform = .identity
         } else if alpha != (hidden ? 0 : 1) {
             UIView.animate(withDuration: 0.24, delay: 0,
                            options: [.allowUserInteraction, .beginFromCurrentState],
@@ -2470,6 +2618,11 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     /// a disc. On the web it is `.publish-fill.is-solid` thinned to --pill-alpha
     /// over the page, so here it is the band at that same alpha.
     private let disc = UIView()
+    /// The band, painted rather than tinted. The disc is not glass, so it needs
+    /// no lining above it (`TriaBandRim`) and no thinning argument beyond the
+    /// one the web already makes — this is `.publish-fill.is-solid` at
+    /// --pill-alpha, all four stops of it, over the pill's own blur.
+    private let discRamp = TriaBandRamp()
     private let send = UIButton(type: .custom)
 
     /// Every one of these is a MEASUREMENT that arrived from app.js, not a
@@ -2544,7 +2697,13 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         disc.layer.cornerCurve = .continuous
         send.translatesAutoresizingMaskIntoConstraints = false
         disc.addSubview(send)
+        // Under the arrow, not over it.
+        disc.insertSubview(discRamp, at: 0)
         NSLayoutConstraint.activate([
+            discRamp.leadingAnchor.constraint(equalTo: disc.leadingAnchor),
+            discRamp.trailingAnchor.constraint(equalTo: disc.trailingAnchor),
+            discRamp.topAnchor.constraint(equalTo: disc.topAnchor),
+            discRamp.bottomAnchor.constraint(equalTo: disc.bottomAnchor),
             send.leadingAnchor.constraint(equalTo: disc.leadingAnchor),
             send.trailingAnchor.constraint(equalTo: disc.trailingAnchor),
             send.topAnchor.constraint(equalTo: disc.topAnchor),
@@ -2726,8 +2885,13 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
                           for: .normal)
         }
         let alpha = TriaToolbar.number(spec["tintAlpha"], fallback: 1)
-        disc.backgroundColor = (spec["tint"] as? String)
-            .flatMap(TriaChromeBar.color(fromHex:))?.withAlphaComponent(alpha)
+        // A find bar's clear carries no `.publish-fill`, so no colours arrive
+        // and the ramp hides itself — which is the measurement doing the
+        // branching, exactly as the note above says.
+        let stops = (spec["colors"] as? [String] ?? [])
+            .compactMap(TriaChromeBar.color(fromHex:))
+        discRamp.isHidden = stops.isEmpty
+        if !stops.isEmpty { discRamp.paint(stops, alpha: alpha) }
         // No colour, no border: a nil borderColor with a width set draws the
         // layer's own opaque black, which is a hard ring where a 10% hairline
         // was asked for.
@@ -3543,12 +3707,29 @@ final class TriaPageButton: UIVisualEffectView {
     let button = UIButton(type: .custom)
     var onTap: ((String) -> Void)?
 
+    /// The band, in both of its layers — see `TriaToolbarButton.ramp`, which
+    /// this is the same arrangement as. It matters more here than anywhere: the
+    /// composer's Share pill and Share Tria are the widest primary acts in the
+    /// app, and a four-hue sweep flattened to its middle stop is most obviously
+    /// a loss across a full-width pill.
+    ///
+    /// The ramp being a sibling costs one extra line in `layout(scroll:in:)`,
+    /// which is on the scroll path: the frame and the hidden flag are set for
+    /// both, on every offset change, or the colour scrolls out of step with the
+    /// button sitting on it.
+    let ramp = TriaBandRamp()
+    private let rim = TriaBandRim()
+
     /// Where the control sits in the DOCUMENT, not on the screen. The screen
     /// position is this minus wherever the scroller happens to be, recomputed on
     /// every offset change — which is what `layout(scroll:)` below is.
     var docY: CGFloat = 0
     var docX: CGFloat = 0
     var size: CGSize = .zero
+
+    /// Whether this control asked for a band at all, kept because the scroll
+    /// path decides the ramp's visibility and must not un-hide a bare button's.
+    private var hasBand = false
 
     private var drawn = ""
 
@@ -3559,17 +3740,28 @@ final class TriaPageButton: UIVisualEffectView {
         cornerConfiguration = .capsule()
         button.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(button)
+        contentView.addSubview(rim)
         NSLayoutConstraint.activate([
             button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             button.topAnchor.constraint(equalTo: contentView.topAnchor),
-            button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            rim.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            rim.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            rim.topAnchor.constraint(equalTo: contentView.topAnchor),
+            rim.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
         button.addTarget(self, action: #selector(tapped), for: .touchUpInside)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// A navigation replaces the whole set, so this runs on every page change.
+    override func removeFromSuperview() {
+        ramp.removeFromSuperview()
+        super.removeFromSuperview()
+    }
 
     @objc private func tapped() { onTap?(id) }
 
@@ -3583,13 +3775,14 @@ final class TriaPageButton: UIVisualEffectView {
 
         let glyph = spec["glyph"] as? String ?? ""
         let ink = spec["ink"] as? String ?? ""
-        let tint = spec["tint"] as? String ?? ""
+        let band = (spec["colors"] as? [String] ?? []).joined(separator: ",")
+        let bandAlpha = TriaToolbar.number(spec["alpha"], fallback: 1)
         let text = spec["text"] as? String ?? ""
         let after = spec["after"] as? String ?? ""
         let font = TriaToolbar.number(spec["font"], fallback: 14.4)
         let disabled = spec["disabled"] as? Bool ?? false
-        let key = [glyph, ink, tint, text, after, "\(font)", "\(disabled)",
-                   "\(size.width)"].joined(separator: "|")
+        let key = [glyph, ink, band, "\(bandAlpha)", text, after, "\(font)",
+                   "\(disabled)", "\(size.width)"].joined(separator: "|")
         guard key != drawn else { return }
         drawn = key
 
@@ -3629,10 +3822,12 @@ final class TriaPageButton: UIVisualEffectView {
         }
         button.configuration = conf
 
-        if let glass = effect as? UIGlassEffect {
-            glass.tintColor = TriaChromeBar.color(fromHex: tint)
-            effect = glass
-        }
+        let stops = (spec["colors"] as? [String] ?? [])
+            .compactMap(TriaChromeBar.color(fromHex:))
+        hasBand = !stops.isEmpty
+        ramp.isHidden = !hasBand
+        if hasBand { ramp.paint(stops, alpha: bandAlpha) }
+        rim.paint(stops)
 
         /* `.composer-post:disabled { opacity: 0.55 }` — the composer's pill is
            mounted before the form has anything to publish. Dimmed and inert,
@@ -3649,6 +3844,9 @@ final class TriaPageButton: UIVisualEffectView {
            looks like. */
         isUserInteractionEnabled = !disabled
         alpha = disabled ? 0.55 : 1
+        // The sibling dims with it, or a disabled Share pill is a faint button
+        // sitting on a full-strength band.
+        ramp.alpha = alpha
     }
 
     /// Oxygen Bold at whatever size the stylesheet set, with the system face at
@@ -3669,6 +3867,10 @@ final class TriaPageButton: UIVisualEffectView {
         // cannot take a tap meant for the bar.
         let onScreen = frame.maxY > band.minY && frame.minY < band.maxY
         isHidden = !onScreen
+        ramp.frame = frame
+        // Two reasons to be hidden and they are both live: scrolled out of the
+        // band, or a control that carries no band at all.
+        ramp.isHidden = isHidden || !hasBand
     }
 }
 
@@ -3752,6 +3954,7 @@ final class TriaPageControls: UIView, TriaPageControlsControl {
                 button = TriaPageButton(id: id)
                 button.onTap = { [weak self] tapped in self?.onTap?(tapped) }
                 addSubview(button)
+                insertSubview(button.ramp, belowSubview: button)
                 buttons[id] = button
             }
             button.update(spec: spec)

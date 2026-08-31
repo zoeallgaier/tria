@@ -81,7 +81,11 @@ quintet reserved for the five post types: note = lavender, find = coral,
 photo = cyan, activity = lime, poll = rose. Four of those five are also borrowed
 as `--brand-band`, the gradient on the primary-act buttons — where they name
 Tria rather than a type, and where a reader's own accent may replace them
-outright (see Lit dome). Instrument Serif on titles only; Oxygen everywhere
+outright (see Lit dome). In the app those buttons are native glass and the band
+is stated TWICE on each: once under the material, which tints it, and once over
+it as a thin lining, which is the only place four hues survive the frosting (see
+"The ramp, and the rim" in [native-chrome.md](native-chrome.md)). The web needs
+no lining — nothing there is muting the fill. Instrument Serif on titles only; Oxygen everywhere
 else. Circular avatars. Don't touch the hue-drift gate wash — Zoe loves it. All
 motion is reduced-motion aware.
 
@@ -586,7 +590,9 @@ and `--radius-row-lg` (a sheet row inside a 20px one), both derived from
 actually reaches the corner — a form field 1.6rem inside a modal is nowhere near
 it and keeps its own radius. The pastel `publish-fill`
 gradient stays reserved for the primary publish/share action — don't spread it
-to every button, or it stops meaning anything.
+to every button, or it stops meaning anything. That holds for the native lining
+too: it is the same band on the same closed set of buttons, not a decoration
+glass is now allowed to wear.
 
 **Never glass on glass.** One material at a time: the FAB speed dial's discs
 (`.nav-dial-ico`) sit on a veil that already blurs the frozen page, so they carry

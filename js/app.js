@@ -809,12 +809,36 @@
       return { text: text.trim(), after: after.trim() };
     }
 
-    // .publish-fill paints its band on a ::before, so the element's own
-    // background is `none` and the pseudo is where to look.
-    function bandOf(el) {
+    /* THE BAND, WHOLE, and it used to be one stop of it.
+
+       .publish-fill paints its band on a ::before, so the element's own
+       background is `none` and the pseudo is where to look. This returned the
+       MIDDLE stop for as long as native drew these buttons with
+       `UIGlassEffect.tintColor`, which is one colour — exact for a reader's
+       accent (three stops of a single hue) and a real loss for Tria's own ramp,
+       where four hues arrived as the one at their centre. The + never made that
+       trade; every other primary act now doesn't either. See TriaBandRamp and
+       TriaBandRim in the plugin for what the two halves of the answer are.
+
+       An element with no band comes back empty, which is a measurement rather
+       than a branch: the find bar's clear carries no `.publish-fill`, so there
+       is no gradient to find and native hides both layers. */
+    function bandStops(el) {
       const image = getComputedStyle(el, '::before').backgroundImage;
-      const stops = splitStops(image || '').map(toRgb).filter(Boolean);
-      return stops.length ? stops[Math.floor(stops.length / 2)] : '';
+      return splitStops(image || '').map(toRgb).filter(Boolean);
+    }
+
+    /* HOW SOLID THAT BAND SITS, off the element rather than off the token.
+
+       `.publish-fill.is-solid::before` carries `opacity: var(--pill-alpha)` —
+       a CONTRAST FLOOR with measured figures behind it in tokens.css, and the
+       one token Reduce Transparency and Increase Contrast both take to 1. So
+       reading it here is how every one of these buttons inherits those two
+       settings, the same argument fabSpec's pillAlpha() makes. Reading the
+       ELEMENT rather than the token is the stricter version of it: a control
+       that ever thins its band differently answers for itself. */
+    function bandAlpha(el) {
+      return Number(getComputedStyle(el, '::before').opacity) || 1;
     }
 
     function controlSpec(el, key) {
@@ -831,7 +855,9 @@
         // --pill-ink, and reading the element answers both without either rule
         // being restated here.
         ink: toRgb(styles.color) || '',
-        tint: tinted ? bandOf(el) : '',
+        // Every stop, not the middle one, and how thin it sits. See bandStops.
+        colors: tinted ? bandStops(el) : [],
+        alpha: tinted ? bandAlpha(el) : 1,
         glyph: cta ? '' : liveGlyph(el),
         // A menu button already says so in markup: the web card is a WAI-ARIA
         // menu and has had to declare aria-haspopup since 1.3.
@@ -1089,7 +1115,8 @@
         // control: a washed page and a reader's accent both land in the cascade
         // and reading the element answers both.
         ink: toRgb(styles.color) || '',
-        tint: bandOf(el),
+        colors: bandStops(el),
+        alpha: bandAlpha(el),
         // These four are set at four different sizes (1.02rem on the gate, 0.95
         // on the composer's pill, 0.9 on Add yours, 0.85 on Share Tria), so the
         // face's size is measured rather than being one constant over there.
@@ -1631,7 +1658,7 @@
        `.postbar-send` too, so the trailing control is one query; the leading one
        is an avatar or a magnifier at the same 26px; and the field is a textarea
        or a one-line input at the same 16px on the same 22.4px line. What differs
-       is measured rather than branched: the clear has no band, so `bandOf`
+       is measured rather than branched: the clear has no band, so `bandStops`
        returns nothing and no fill is drawn; it has no border, so the hairline's
        width comes back 0. The two real branches are the LINE COUNT (an input
        cannot grow, and reports `max-height: none`) and the leading mark. */
@@ -1721,12 +1748,12 @@
         spell: field.getAttribute('spellcheck') || '',
         // The send disc is a member of the primary-act set, so its band comes
         // off the same ::before the + and the editor's Save read theirs from.
-        tint: send ? bandOf(send) : '',
+        colors: send ? bandStops(send) : [],
         // Thinned, not opaque. --pill-alpha is a contrast floor with measured
         // figures behind it (see tokens.css), so it is read off the disc's own
         // ::before rather than quoted over there — and the hairline that rides
         // with it is --glass-edge, resolved the same way.
-        tintAlpha: send ? Number(getComputedStyle(send, '::before').opacity) || 1 : 1,
+        tintAlpha: send ? bandAlpha(send) : 1,
         // Raw, not through toRgb: --glass-edge is a translucent hairline and the
         // canvas parser reads a pixel, which drops the alpha that IS the edge.
         // The Swift side takes rgba() as it comes.

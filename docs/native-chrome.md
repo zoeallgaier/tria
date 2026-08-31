@@ -139,7 +139,9 @@ learn what a "Discover filter" or a "daily" is.
   material and `title` is the collapsing small title, drawn natively since the
   material went glass (see "What the top bar kept"). Whether the material is
   PAINTED does not cross: native reads the scroll itself., each control
-  `{id, kind…, x, y, w, h, glyph, ink, tint, text, after, hidden, menu, label}`,
+  `{id, kind…, x, y, w, h, glyph, ink, colors, alpha, text, after, hidden, menu,
+  label}` — `colors` is the band's stops, ALL of them, and `alpha` how thin they
+  sit (see "The ramp, and the rim"),
   and `search` Discover's field: `{live, focus, x, y, w, h, closedX, closedY,
   closedW, closedH, fieldLeft, fieldRight, closeSize, closeRight, text,
   placeholder, label, closeLabel, closeGlyph, ink, caret, muted}` — two boxes,
@@ -154,7 +156,7 @@ learn what a "Discover filter" or a "daily" is.
   `{live, kind, width, float, floatKeyboard, pad, fieldPad, line, maxLines,
   radius, faceLeft, faceTop, faceSize, textLeft, textWidth, discSize, discRight,
   discBottom, text, placeholder, label, maxLength, sendLabel, ink, caret, muted,
-  returnKey, caps, correct, spell, tint, tintAlpha, edge, edgeWidth, glyph,
+  returnKey, caps, correct, spell, colors, tintAlpha, edge, edgeWidth, glyph,
   glyphSize, discInk, faceGlyph, faceLabel, leadGlyph, initials, avatarBg,
   avatarInk, photo}` — where `kind` is `comment` or `find` and is the only branch
   on this bridge that is not a measurement, and `live: false` is what takes the
@@ -280,16 +282,21 @@ which is the cost floor CLAUDE.md refuses everywhere. Liquid Glass answers both.
 The material refracts and diffuses what is behind it, and the system draws it
 rather than us.
 
-**The colour is the +'s BACKDROP**: a `CAGradientLayer`-backed view
-(`TriaFabRamp`) the disc's exact size and capsule, sitting as a *sibling below*
-the glass. The material samples, displaces and frosts it the way it samples
+**The colour is the button's BACKDROP**: a `CAGradientLayer`-backed view
+(`TriaBandRamp`) the control's exact size and capsule, sitting as a *sibling
+below* the glass. The material samples, displaces and frosts it the way it samples
 anything else, which is what tinted glass physically is, and all four stops
 survive because nothing is reducing them to a colour. We supply something to
 tint; the system does the tinting. Being a sibling is the one liability — the
 +'s fade and its sink don't reach it on their own, so `syncVisibility` sets the
 same `alpha`, `transform` and `isHidden` on both inside one animation block. A
 frame out of step and the disc's colour hangs in the air behind a + that has
-already sunk.
+already sunk. **Every button that took this arrangement inherited that
+liability**, and each pays it in the one place it moves: `TriaToolbarButton`
+mirrors the frame in `update` and the alpha and transform inside the idle
+animation's own block; `TriaPageButton` mirrors the frame and the hidden flag on
+every scroll tick; both override `removeFromSuperview` so a dropped control
+cannot leave a coloured capsule behind on the bar.
 
 **And the ramp is THINNED to `--pill-alpha`, which is what finally made it read
 as glass rather than as paint.** Painted opaque it is a wall: the material
@@ -310,6 +317,27 @@ two settings instead of being the one surface in the app that ignores them.
 changes that, so `NativeChrome` listens to both media queries itself and
 repaints. A spec that arrives with no alpha falls back to 1 — the opaque disc
 this used to be, which is the right way to fail.
+
+**AND THE BAND IS STATED TWICE, because the material that makes the fill read
+as glass is the same material that mutes it.** Sampled, displaced and diffused,
+four stops on a 56pt disc come out a pastel wash: right for a backdrop, and not
+what the web shows. So `TriaBandRim` puts the same stops back ABOVE the glass as
+a 1.6pt lining, one point inside the system's own specular rim, at full strength
+— the one place in the app where the band arrives unfiltered. It is not a new
+idiom: `.publish-fill`'s RESTING state on the web is exactly this, the band as an
+outline drawn by an xor mask, filled in only on press or on the page you are on.
+These buttons wear `.is-solid`, so off-app they show the fill and not the ring;
+in here the material mutes the fill, so they show both. Same stops, same order,
+same 115deg — the lining is handed the array the ramp beside it was handed.
+
+Two things it deliberately is not. It is not FLUSH with the edge: Liquid Glass
+draws its specular response on the outermost rim, and a colour laid over that
+reads as a rendering fault rather than as the button's colour (the same lesson
+the filter dot taught). And it carries NO BLOOM, which is the obvious next reach
+and the reason the shape of this note matters — a `shadow` takes one colour, so
+a four-stop ring would glow in one hue, on a surface already drawing highlights
+of its own. If a glow is ever wanted it is a second, blurrier rim behind the
+first, not a shadow on it.
 
 **Three things were tried before that and all three are worth not repeating.**
 
@@ -993,7 +1021,9 @@ Three things that were wrong first, all of them found on the simulator:
   as a soft blue halo, because it sat inside the pill's glass — the "never glass
   on glass" stack the stylesheet has always refused. On the web it is
   `.publish-fill.is-solid` thinned to `--pill-alpha` over the page, so it is now
-  a plain fill at that same alpha, with `--glass-edge`'s hairline. Both the alpha
+  the band at that same alpha — a `TriaBandRamp` inside the disc, all four stops
+  of it — with `--glass-edge`'s hairline. It takes no `TriaBandRim`: a lining
+  answers a material that mutes the fill, and this disc has none. Both the alpha
   and the edge are read off the web disc rather than quoted, and the edge is read
   through a canvas that keeps its ALPHA (`toRgba`) — `toRgb` reports three
   channels, which turns a 10% hairline into an opaque ring.
@@ -1172,8 +1202,9 @@ Four buttons that are not on a bar: the composer's **Share** pill, the auth
 gate's submit, **Share Tria** at the foot of Discover, and the daily card's
 **Add yours**. On the web they are `.publish-fill.is-solid` — the brand band
 behind a hairline and a rim, which is a very good impression of Liquid Glass and
-is not the material. In the app they are `UIGlassEffect`, tinted, like every
-other primary act in the chrome.
+is not the material. In the app they are `UIGlassEffect` wearing the band the way
+the + wears it — a `TriaBandRamp` under the glass and a `TriaBandRim` over it —
+like every other primary act in the chrome.
 
 **Why a rect was not enough here.** A control on a bar cannot move. These sit in
 content that scrolls, and a native view parked at a web rect does not follow it
@@ -1204,12 +1235,13 @@ last card wants), so the clip lands a few points ABOVE the bar. That is the righ
 direction to be wrong in: a button that vanishes a moment early is invisible, and
 one that vanishes a moment late is drawn on top of the navigation.
 
-**What it costs, and it is worth stating.** `UIGlassEffect.tintColor` is ONE
-colour, so `bandOf()` sends the band's middle stop and the four-stop brand sweep
-does not survive. That is the same trade `.toolbar-commit` and `.toolbar-cta`
-already make, and it is far more visible on a full-width pill than on a 44pt
-disc. If the sweep ever has to come back, the FAB is the precedent — it takes the
-resolved stops as an array and paints a real gradient under the glass.
+**What it cost, and what paid it.** `UIGlassEffect.tintColor` is ONE colour, so
+for a while these sent the band's MIDDLE STOP and the four-stop brand sweep did
+not survive — the same trade `.toolbar-commit` and `.toolbar-cta` made, and far
+more visible on a full-width pill than on a 44pt disc. That note ended "if the
+sweep ever has to come back, the FAB is the precedent", and it has: `bandStops()`
+sends every stop and `bandAlpha()` how thin it sits, and all three families draw
+them the way the + does. Nothing on this bridge carries a `tint` any more.
 
 **The gate's own submit is matched and never reached.** `data-chrome` goes up on
 a resolved `setTabs`, which `renderNav` asks for, and `renderNav` does not run

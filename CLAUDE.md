@@ -43,6 +43,12 @@ content" still holds and always meant what a reader READS; the one button on a
 page that commits was never that. **The set is closed** — `PAGE_SEL` in app.js
 is four selectors, not a rule about buttons.
 
+Every one of those buttons wears Tria's band the way the + does, and **the band
+is stated twice**: the stops go under the glass, where the system tints them,
+and the same stops go over it as a thin lining, because the material that makes
+a fill read as glass is the material that mutes it. Nothing on this bridge sends
+a single tint colour any more.
+
 The PIECES THAT HOLD A CARET are native too, and they are the one place native is
 more than a face: a field cannot be borrowed from a hidden element, so the
 `UITextView` in a post page's COMMENT BAR, the `UITextField` in a circle's FIND
