@@ -559,12 +559,12 @@
 
     /* Resolving --pill-band to real numbers.
 
-       The + wears the reader's own accent as often as it wears Tria's ramp, and
-       both are CSS gradients built out of color-mix() and var() (see
-       paintBrandBand and the --pill-band note in tokens.css). Native gets the
-       resolved stops, never a token name — a Swift copy of that derivation would
-       be a second place for the band to drift, and the band is the one part of
-       the chrome that changes while the app is running.
+       The + wears the reader's own accent, the page's own acts wear that or
+       Tria's ramp, and both bands are CSS gradients built out of color-mix()
+       and var() (see paintBrandBand and the --pill-band note in tokens.css).
+       Native gets the resolved stops, never a token name — a Swift copy of that
+       derivation would be a second place for the band to drift, and the band is
+       the one part of the chrome that changes while the app is running.
 
        The canvas is the parser. Handing a colour to fillStyle and reading the
        pixel back is the only way to normalise every form the engine might
@@ -657,21 +657,71 @@
       // See bandFill — how each of the three is DRAWN is a rendering decision
       // and it lives over there, beside the material it is about.
       const fill = bandFill(colors);
+      /* AND THE + DECLINES TRIA'S OWN BAND, which is the one place this bridge
+         draws a band differently from the rest of the app.
+
+         Every other glass control wears all four stops, and the composer's
+         Share pill is the proof they work: a capsule is wide enough to travel
+         across, so the band reads as a band on it. On a 56pt disc the same four
+         hues have nowhere to go. The sweep is a smudge, and the two things that
+         could have saved it — pulling the gradient's endpoints inside the
+         circle so the disc carries the whole band, fading the rim so the press
+         deformation has no hard edge to slide off — between them bought a
+         better-drawn smudge. Both are out with this. The + is one button, up on
+         every route over everything the app draws, and it does not have to be
+         the loudest thing on the screen to say what it does.
+
+         So Tria's band on the + is NO COLOUR: plain glass and `.label` ink, the
+         same + a reader who asked for no colour already gets. An ACCENT still
+         tints it, because that is the case where one colour has something to
+         say and the material can say it. `fill.ramp` is the flag rather than
+         `fill.colors` because Reduce Transparency has already turned the ramp
+         into a tint by the time it reaches here, and that tint is Tria's middle
+         stop rather than anybody's pick. */
+      const wear = fill.ramp ? { colors: [], tint: '' } : fill;
       return {
         route: post ? post.route : '#/publish',
         label: post ? post.label : 'Post',
         // The drawing itself, not the name of one. See the icon note on tabSpec.
         glyph: svgIcon(post ? post.key : 'publish'),
-        colors: fill.colors,
-        tint: fill.tint,
-        /* AND A BARE BUTTON TAKES NO INK EITHER, which is the half of "no
-           colour" that is easy to miss. --pill-ink under --mono-band is
-           --mono-ink, a near-white made to ride a near-black fill; there is no
-           fill left to ride, so sending it would put a white + on clear glass
-           over white paper. Empty is what native reads as `.label` — the
-           system's own ink, right in both schemes, and nobody has to say which
-           scheme is live. */
-        ink: (fill.tint || fill.colors.length) ? (ink || '') : '',
+        colors: wear.colors,
+        tint: wear.tint,
+        /* ONLY A TINT CARRIES ITS OWN INK — here, and in controlSpec and
+           pageSpec, which both point at this note. The other two send none, and
+           empty is what native reads as `.label` — the system's ink, black on
+           light and white on dark, flipped by the system with no JS asking
+           which scheme is live. Which is right for both of them, and it is
+           right for two different reasons.
+
+           "NO COLOUR" is the easy half: --pill-ink under --mono-band is
+           --mono-ink, a near-white made to ride a near-black fill, and there is
+           no fill left to ride — sending it would put a white + on clear glass
+           over white paper. It is the branch the + takes for Tria's band too
+           now, for the reason above.
+
+           TRIA'S RAMP is the half that took a device to see, and it is about
+           the buttons that still wear it: the composer's Share pill, the gate's
+           submit, Share Tria, Add yours, and the toolbar's own CTA. --on-type
+           is a near-black because the WEB paints this band at --pill-alpha and
+           gets a light fill in either scheme; native does not paint it, it
+           thins it to rampAlpha and lets the material sample it, and on dark
+           paper that lands mid-tone rather than light. Measured on the + while
+           it still carried the ramp, plain paper, relative luminance: 0.49-0.73
+           in light, where near-black reads 9.6:1, and 0.155-0.207 in dark,
+           where the same near-black falls to 3.5-4.4:1 — clear of the 3:1 asked
+           of a graphical control and short of the 4.5 asked of text, and three
+           of those four page acts have text for a face. `.label` inverts with
+           the paper instead and clears 4.5 on both sides of it. The other half
+           of that number is in Swift: the ramp is thinner on dark paper, so
+           what it lands on is dark enough for a white glyph. See
+           TriaBand.rampAlpha.
+
+           AN ACCENT IS NOT IN THAT BOAT and must keep --pill-ink. The system
+           draws a tint with its own idea of the material, and it comes out
+           LIGHT in both schemes: the same measurement on a lime + reads 0.64 in
+           dark mode, where near-black is 11.8:1 and white would be 1.5:1. A
+           blanket "white ink on dark" would erase every accent's glyph. */
+        ink: wear.tint ? (ink || '') : '',
       };
     }
 
@@ -841,7 +891,9 @@
        - TRIA'S OWN RAMP is four hues and cannot be one colour, so it stays a
          gradient UNDER the material, thin enough that the glass still has the
          page to bend. That is the case TriaBandRamp was built for and now the
-         only one it serves.
+         only one it serves — on the CAPSULES. The round + turns this one down
+         and takes the branch above instead; the why is in fabSpec, and it is
+         about the shape rather than about the band.
 
        OFF THE STOPS, NOT OFF `me.accent`: the stops are the only thing that
        crosses this bridge, four different elements are read for them, and one
@@ -878,10 +930,16 @@
       const hues = rgb.map(c => rgbToHsl(c.r, c.g, c.b).h * 360);
       const arc = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
       const spread = Math.max(...hues.map(a => Math.max(...hues.map(b => arc(a, b)))));
-      if (spread > BAND_ONE_HUE && !solidGlass()) return { colors: stops, tint: '' };
+      /* WHICH BAND THIS IS, reported beside how it can be WORN. The two used to
+         be the same answer — four hues meant a ramp — and they came apart when
+         the + stopped wearing Tria's band at all (see fabSpec). The + has to
+         recognise the brand ramp even on the one setting that has already
+         collapsed it to a single stop. */
+      const ramp = spread > BAND_ONE_HUE;
+      if (ramp && !solidGlass()) return { colors: stops, tint: '', ramp };
       // The MIDDLE stop, which is the band's own weight: bandFrom puts the two
       // either side a point and a half up and three down from it.
-      return { colors: [], tint: stops[stops.length >> 1] };
+      return { colors: [], tint: stops[stops.length >> 1], ramp };
     }
 
     function controlSpec(el, key) {
@@ -890,10 +948,9 @@
       const cta = el.classList.contains('toolbar-cta');
       const tinted = cta || el.classList.contains('toolbar-commit');
       const fill = tinted ? bandFill(bandStops(el)) : { colors: [], tint: '' };
-      // A control that ASKED for a band and resolved to none: "no colour" is
-      // live, so it wants the system's own ink rather than the near-white
-      // --mono-ink that was made to ride a fill. See the ink note in fabSpec.
-      const bare = tinted && !fill.tint && !fill.colors.length;
+      // Only a tint sends its own ink; a ramp and a bare control both take the
+      // system's, which flips with the paper. See the ink note in fabSpec.
+      const bare = !fill.tint;
       const spec = {
         id: key,
         x: rect.left, y: rect.top, w: rect.width, h: rect.height,
@@ -1154,7 +1211,7 @@
       // The same three answers the + takes, off this button's own ::before.
       // See bandFill, and the ink note in fabSpec for why a bare one sends none.
       const fill = bandFill(bandStops(el));
-      const bare = !fill.tint && !fill.colors.length;
+      const bare = !fill.tint;
       return {
         id: el.dataset.nativePage,
         x: r.left,
@@ -2045,14 +2102,20 @@
       pushPostBar();
     }
 
-    /* THE ONE THING ON THESE BUTTONS THAT CHANGES WITHOUT THE READER CHANGING
+    /* THE THINGS ON THESE BUTTONS THAT CHANGE WITHOUT THE READER CHANGING
        ANYTHING. Reduce Transparency takes the glass families' band from a ramp
-       to a tint (see bandFill) and Increase Contrast takes --pill-alpha to 1
-       under the send disc that still paints one. The CSS chrome gets both from
-       the cascade for free; native holds resolved numbers, so it has to be told
-       — and paintBrandBand is memoised on the reader's identity, which neither
-       of these changes, so nothing else would ever tell it. */
-    ['(prefers-reduced-transparency: reduce)', '(prefers-contrast: more)'].forEach((q) => {
+       to a tint (see bandFill), Increase Contrast takes --pill-alpha to 1 under
+       the send disc that still paints one, and the SCHEME changes the band's
+       stops outright — Tria's ramp is the deepened pastels on paper and the
+       undeepened ones on ink, and the mono band flips end to end. The CSS
+       chrome gets all three from the cascade for free; native holds resolved
+       numbers, so it has to be told — and paintBrandBand is memoised on the
+       reader's identity, which none of these changes, so nothing else would
+       ever tell it. Sunset on a phone set to Automatic is the common case, and
+       until this listed the scheme the native + kept the other scheme's colours
+       until the next colour pick. */
+    ['(prefers-reduced-transparency: reduce)', '(prefers-contrast: more)',
+     '(prefers-color-scheme: dark)'].forEach((q) => {
       const mq = window.matchMedia(q);
       const again = () => repaint();
       if (mq.addEventListener) mq.addEventListener('change', again);

@@ -43,11 +43,14 @@ content" still holds and always meant what a reader READS; the one button on a
 page that commits was never that. **The set is closed** — `PAGE_SEL` in app.js
 is four selectors, not a rule about buttons.
 
-Every one of those buttons wears Tria's band the way the + does, and **the band
-is stated twice**: the stops go under the glass, where the system tints them,
-and the same stops go over it as a thin lining, because the material that makes
-a fill read as glass is the material that mutes it. Nothing on this bridge sends
-a single tint colour any more.
+**The band crosses as one of three things**, sorted off the stops themselves
+(`bandFill`): a reader's accent is one colour and tints the glass, Tria's own
+ramp is four and stays a thinned gradient UNDER the material, "no colour" sends
+nothing and the button is plain glass wearing the system's `.label`. Only a tint
+carries its own ink; the other two take `.label`, which is how the same code is
+black on paper and white on ink. **The round + is the one control that turns
+Tria's ramp down** and takes it as no colour: four hues need a capsule to travel
+across, and a 56pt disc is not one. Every capsule still wears it.
 
 The PIECES THAT HOLD A CARET are native too, and they are the one place native is
 more than a face: a field cannot be borrowed from a hidden element, so the

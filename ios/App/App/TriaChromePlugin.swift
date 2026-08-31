@@ -479,10 +479,14 @@ protocol TriaChromeControl: AnyObject {
    is, and the four stops survive because nothing is reducing them to a colour.
    The system draws the tinting; we only supply something to tint.
 
-   Its shape is one of two, and `round` picks: a capsule for the toolbar's and
-   the page's own buttons, a circle for the + . That is not a corner radius —
-   both of the things that make a gradient work on a circle are different, and
-   the notes on `round` and on `rim` are the two of them.
+   IT IS ALWAYS A CAPSULE, because every button that wears the band is one.
+   There was a round version of this for the + , with the gradient's endpoints
+   pulled inside the circle so the disc carried all four stops and a radial mask
+   feathering the rim so the press deformation had no hard edge to slide off.
+   Both were right and the button was still worse than plain glass: a 56pt disc
+   has nowhere for a four-hue sweep to go. The + declines Tria's band now and
+   takes an accent as a tint like everything else, so the whole round path is
+   out. See `fabSpec` in app.js, and native-chrome.md for what it cost.
 
    AND THE RAMP IS THINNED, which is the last thing this took to actually read
    as glass. Painted opaque it is a wall: the material samples it, finds nothing
@@ -510,70 +514,18 @@ final class TriaBandRamp: UIView {
     override class var layerClass: AnyClass { CAGradientLayer.self }
     private var ramp: CAGradientLayer { layer as! CAGradientLayer }
 
-    /// Whether this ramp is drawn for a CIRCLE rather than a capsule, which
-    /// changes both of the things below. Only the + is one.
-    private let round: Bool
-
-    /* THE RIM, FADED OUT INSTEAD OF CUT OFF, and it is the round ramp's half of
-       being under INTERACTIVE glass.
-
-       A capsule ramp is clipped: `masksToBounds` and a corner radius, a hard
-       edge landing exactly where the glass's own edge lands. That holds while
-       the two edges agree, and pressing an interactive glass element is the
-       moment they stop — the system lifts and deforms the material, and the
-       ramp is a SIBLING below it, so it cannot follow. Held down, the +'s
-       colour sat still inside a disc that was moving over it, and the thing
-       came apart into a coloured sticker with glass sliding on top. That is
-       what "holding it breaks the Tria option" was.
-
-       On a wide pill the same mismatch is a point or two on an edge nobody is
-       looking at. On a 56pt disc under a thumb it is the whole button.
-
-       So the round one has no edge to catch out: opaque across the face, then
-       out to nothing over the last seventh of the radius. The material still
-       has exactly as much colour to bend, the disc still reads full-bleed, and
-       when the glass moves there is no line for it to move away from. */
-    private lazy var rim: CAGradientLayer = {
-        let mask = CAGradientLayer()
-        mask.type = .radial
-        mask.startPoint = CGPoint(x: 0.5, y: 0.5)
-        mask.endPoint = CGPoint(x: 1, y: 1)
-        mask.colors = [UIColor.white.cgColor, UIColor.white.cgColor,
-                       UIColor.white.withAlphaComponent(0).cgColor]
-        mask.locations = [0, 0.86, 1]
-        // A mask is off-screen and gets no implicit animation for free; laying
-        // out the bar (rotation, the keyboard) would otherwise slide the fade
-        // into place over a quarter second.
-        mask.actions = ["position": NSNull(), "bounds": NSNull()]
-        return mask
-    }()
-
-    init(round: Bool = false) {
-        self.round = round
+    init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         isUserInteractionEnabled = false
         // --brand-band is 115deg, measured CSS-style: clockwise from "to top".
         // That resolves to (sin 115, -cos 115) = (0.906, 0.423) in screen
-        // coordinates, i.e. rightward and DOWN, which is these two points on a
-        // roughly square disc. Same travel as the web's, not a fresh guess.
-        //
-        /* THE SAME TRAVEL, PULLED INSIDE THE CIRCLE, for the round one. A
-           linear gradient's first stop holds everything before its start point
-           and its last holds everything after its end point — so on a capsule
-           the two ends of the band are what the wide flat ends of the pill
-           wear, and all four hues are on the button. Clip that same drawing to
-           a circle and both endpoints are in the corners the clipping takes
-           away: the + was showing the MIDDLE of a four-hue ramp and never its
-           ends, which is the stretch where the hues are closest together and
-           the one part of the band that reads as no gradient at all. It was
-           not too strong or too weak. It was the muddy third of it.
-
-           Both points moved to 0.39 of the radius from the centre, which is
-           inside the inscribed circle with room to spare, so the disc now
-           carries the whole band from first stop to last. */
-        ramp.startPoint = round ? CGPoint(x: 0.15, y: 0.33) : CGPoint(x: 0.05, y: 0.28)
-        ramp.endPoint = round ? CGPoint(x: 0.85, y: 0.67) : CGPoint(x: 0.95, y: 0.72)
+        // coordinates, i.e. rightward and DOWN. Both points sit outside the
+        // stops' own span, so the two ends of the band land on the two flat
+        // ends of the capsule and all four hues are on the button. Same travel
+        // as the web's, not a fresh guess.
+        ramp.startPoint = CGPoint(x: 0.05, y: 0.28)
+        ramp.endPoint = CGPoint(x: 0.95, y: 0.72)
     }
 
     @available(*, unavailable)
@@ -585,21 +537,15 @@ final class TriaBandRamp: UIView {
         // monochrome band would otherwise hit.
         let pair = stops.count == 1 ? [stops[0], stops[0]] : stops
         // Clamped rather than trusted: this number crossed the bridge, and an
-        // alpha of 0 is a + with no colour on every route.
+        // alpha of 0 is a band nobody can see, on every route.
         let a = min(max(alpha, 0.05), 1)
         ramp.colors = pair.map { $0.withAlphaComponent(a).cgColor }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if round {
-            rim.frame = bounds
-            layer.mask = rim
-            layer.masksToBounds = false
-        } else {
-            layer.cornerRadius = bounds.height / 2
-            layer.masksToBounds = true
-        }
+        layer.cornerRadius = bounds.height / 2
+        layer.masksToBounds = true
     }
 }
 
@@ -631,22 +577,50 @@ final class TriaBandRamp: UIView {
 @available(iOS 26.0, *)
 enum TriaBand {
 
-    /// How thin the ramp sits UNDER the material, and it is deliberately not
-    /// `--pill-alpha`. That token is a CONTRAST FLOOR for a fill the web paints
-    /// against the page; there is no painted fill here, the material supplies
-    /// the contrast and the system answers the accessibility settings itself.
-    /// What this number decides is how much page the glass has left to bend —
-    /// opaque was a wall (a flat coloured disc with a specular rim round it),
-    /// and this is the one knob to turn if the ramp reads as paint again.
-    static let rampAlpha: CGFloat = 0.55
+    /* HOW THIN THE RAMP SITS UNDER THE MATERIAL, and it is deliberately not
+       `--pill-alpha`. That token is a CONTRAST FLOOR for a fill the web paints
+       against the page; there is no painted fill here, the material supplies
+       the contrast and the system answers the accessibility settings itself.
+       What this number decides is how much page the glass has left to bend —
+       opaque was a wall (a flat coloured disc with a specular rim round it),
+       and it is the knob to turn if the ramp reads as paint again.
+
+       IT IS THINNER ON DARK PAPER, and that is a contrast decision rather than
+       a taste one. The band arrives undeepened in dark mode (on ink paper the
+       pastels ARE their own -ink twins; see tokens.css) and the material
+       darkens what it samples, so at 0.55 it measured 0.155 to 0.207 relative
+       luminance — a mid-tone, the one place on this bridge where neither ink
+       clears 4.5:1. app.js answers the ink half by sending none, so the label
+       is `.label` and goes white here; this is the other half, which takes the
+       fill far enough down that white has somewhere to be read against. On
+       paper the same band composites over near-white and stays at 0.49 to 0.73
+       whatever this number is, so nothing there needs to move.
+
+       Both figures were measured on the + , which was the roundest and the
+       hardest case and no longer wears the band at all. What they govern now is
+       the capsules that do: the composer's Share pill, the gate's submit, Share
+       Tria, Add yours and the toolbar's CTA — same material, same thinning,
+       and three of those five have TEXT for a face, which is the 4.5 above.
+
+       A reader's ACCENT is untouched by this: it never comes through the ramp,
+       it tints the material, and the system draws a tint light in both schemes
+       (0.64 in dark, measured on lime) — which is why the accent keeps the
+       near-black ink that would be wrong here. */
+    static func rampAlpha(_ style: UIUserInterfaceStyle) -> CGFloat {
+        style == .dark ? 0.42 : 0.55
+    }
 
     /// Put a band on a glass view. Returns whether the ramp is drawing, which
     /// the callers that MOVE their ramp need — it is a sibling below the glass,
     /// not a child of it, so nothing that moves the button moves it too.
+    ///
+    /// The ramp is OPTIONAL because the + has none: it declines the only band a
+    /// ramp is ever drawn for (see `fabSpec` in app.js), so a caller with
+    /// nothing to draw one on passes nothing and gets `false` back.
     @discardableResult
     static func apply(_ spec: [String: Any],
                       glass: UIVisualEffectView,
-                      ramp: TriaBandRamp) -> Bool {
+                      ramp: TriaBandRamp? = nil) -> Bool {
         let stops = (spec["colors"] as? [String] ?? [])
             .compactMap(TriaChromeBar.color(fromHex:))
         let tint = TriaChromeBar.color(fromHex: spec["tint"] as? String ?? "")
@@ -663,9 +637,11 @@ enum TriaBand {
         if let tint { effect.tintColor = tint }
         glass.effect = effect
 
-        let wantsRamp = tint == nil && !stops.isEmpty
-        ramp.isHidden = !wantsRamp
-        if wantsRamp { ramp.paint(stops, alpha: rampAlpha) }
+        let wantsRamp = tint == nil && !stops.isEmpty && ramp != nil
+        ramp?.isHidden = !wantsRamp
+        if wantsRamp {
+            ramp?.paint(stops, alpha: rampAlpha(glass.traitCollection.userInterfaceStyle))
+        }
         return wantsRamp
     }
 }
@@ -724,13 +700,11 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     /// takes its value from whatever photograph is behind it, and the + is up
     /// on every route over a scrolling feed.
     private let fab = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-    private let fabRamp = TriaBandRamp(round: true)
-    /// Whether the ramp is one of the three things the band turned out to be
-    /// (see TriaBand). It is a SIBLING of the +, so the fade and the sink below
-    /// have to hide and show it by hand — and "show it" is only right when
-    /// there is a ramp to show. A tint lives on the glass and a bare + has no
-    /// colour at all; either way this stays false and the sibling stays away.
-    private var fabHasRamp = false
+    /// There is no ramp under the + . It wore one for as long as it wore Tria's
+    /// band, and that band was the only thing a ramp was ever for; the + takes
+    /// an accent as a tint on the glass and everything else as plain glass. See
+    /// `fabSpec` in app.js. What went with the ramp is a sibling view that the
+    /// fade and the sink below had to move, hide and show by hand.
     private let row = UIStackView()
     private let fabGlyph = UIImageView()
     private let fabButton = UIButton(type: .custom)
@@ -781,8 +755,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         pill.translatesAutoresizingMaskIntoConstraints = false
         fab.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(pill)
-        // BENEATH the glass, not inside it. See TriaBandRamp.
-        contentView.addSubview(fabRamp)
         contentView.addSubview(fab)
 
         // VoiceOver reads the capsule as a tab bar and each disc as a button
@@ -823,10 +795,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             fab.widthAnchor.constraint(equalToConstant: Metric.fabSize),
             fab.heightAnchor.constraint(equalToConstant: Metric.fabSize),
             fabX,
-            fabRamp.leadingAnchor.constraint(equalTo: fab.leadingAnchor),
-            fabRamp.trailingAnchor.constraint(equalTo: fab.trailingAnchor),
-            fabRamp.topAnchor.constraint(equalTo: fab.topAnchor),
-            fabRamp.bottomAnchor.constraint(equalTo: fab.bottomAnchor),
             fabGlyph.centerXAnchor.constraint(equalTo: fab.contentView.centerXAnchor),
             fabGlyph.centerYAnchor.constraint(equalTo: fab.contentView.centerYAnchor),
             fabButton.leadingAnchor.constraint(equalTo: fab.contentView.leadingAnchor),
@@ -915,14 +883,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
                                                ink: .black, template: true)
             }
             fabButton.accessibilityLabel = fabSpec["label"] as? String ?? fabButton.accessibilityLabel
-            fabHasRamp = TriaBand.apply(fabSpec, glass: fab, ramp: fabRamp)
-            // `apply` shows the ramp whenever there is one, and a band can be
-            // repainted while the + is tucked away (a colour picked on the post
-            // page, where the whole chrome is down). Re-assert the +'s own
-            // state, or the disc's colour is left floating where no + is.
-            fabRamp.isHidden = fab.isHidden || !fabHasRamp
-            fabRamp.alpha = fab.alpha
-            fabRamp.transform = fab.transform
+            TriaBand.apply(fabSpec, glass: fab)
             // `.label` when the spec names no ink, which is what "no colour"
             // sends: a bare + wears the system's own, right in both schemes.
             fabGlyph.tintColor = TriaChromeBar.color(fromHex: fabSpec["ink"] as? String ?? "")
@@ -963,7 +924,7 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         isHidden = !chromeUp
         isUserInteractionEnabled = chromeUp
         fab.isUserInteractionEnabled = fabUp
-        if fabUp { fab.isHidden = false; fabRamp.isHidden = !fabHasRamp }
+        if fabUp { fab.isHidden = false }
 
         // The + itself is a nested glass ELEMENT rather than the container, and
         // it does honour alpha — so the composer's tuck keeps the fade and the
@@ -973,13 +934,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             self.fab.alpha = fabUp ? 1 : 0
             self.fab.transform = fabUp ? .identity
                 : CGAffineTransform(translationX: 0, y: 14).scaledBy(x: 0.6, y: 0.6)
-            // The ramp is the +'s BACKDROP and therefore its sibling, not its
-            // subview, so none of the above reaches it on its own. It gets the
-            // same alpha and the same transform in the same animation block —
-            // one frame out of step and the disc's colour is left hanging in
-            // the air behind a + that has already sunk.
-            self.fabRamp.alpha = self.fab.alpha
-            self.fabRamp.transform = self.fab.transform
             // The + stays in flow at opacity 0 and the pill glides right by half
             // its footprint, which lands the pill's centre on the screen's —
             // the same recentring `.nav--compose` does in CSS, by the same
@@ -993,7 +947,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         let settle: (Bool) -> Void = { [weak self] _ in
             guard let self else { return }
             self.fab.isHidden = !(self.wantsChrome && !self.keyboardUp && self.wantsFab)
-            self.fabRamp.isHidden = self.fab.isHidden || !self.fabHasRamp
         }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.28, delay: 0,
@@ -1726,7 +1679,15 @@ final class TriaToolbarButton: UIVisualEffectView {
         let after = spec["after"] as? String ?? ""
         // Everything the drawing depends on, in one string. Cheaper than four
         // comparisons and it cannot forget a field.
-        let key = [glyph, ink, band, tint, text, after,
+        /* THE SCHEME IS PART OF THE KEY, because `.label` is what an empty ink
+           means and `.label` is not a value — it is two, and this cache would
+           otherwise hold the one that was live when the face was last drawn.
+           The ramp family gets away with it by accident (its stops are
+           different hexes on ink paper, so the band alone changes the key);
+           "no colour" sends no stops and no ink at all, so without this a bare
+           control keeps a black label after sunset. */
+        let scheme = traitCollection.userInterfaceStyle.rawValue
+        let key = ["\(scheme)", glyph, ink, band, tint, text, after,
                    "\(frame.width)"].joined(separator: "|")
         if key != drawn {
             drawn = key
@@ -3806,7 +3767,15 @@ final class TriaPageButton: UIVisualEffectView {
         let after = spec["after"] as? String ?? ""
         let font = TriaToolbar.number(spec["font"], fallback: 14.4)
         let disabled = spec["disabled"] as? Bool ?? false
-        let key = [glyph, ink, band, tint, text, after, "\(font)",
+        /* THE SCHEME IS PART OF THE KEY, because `.label` is what an empty ink
+           means and `.label` is not a value — it is two, and this cache would
+           otherwise hold the one that was live when the face was last drawn.
+           The ramp family gets away with it by accident (its stops are
+           different hexes on ink paper, so the band alone changes the key);
+           "no colour" sends no stops and no ink at all, so without this a bare
+           control keeps a black label after sunset. */
+        let scheme = traitCollection.userInterfaceStyle.rawValue
+        let key = ["\(scheme)", glyph, ink, band, tint, text, after, "\(font)",
                    "\(disabled)", "\(size.width)"].joined(separator: "|")
         guard key != drawn else { return }
         drawn = key
