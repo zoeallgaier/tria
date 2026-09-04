@@ -5463,9 +5463,9 @@ button.poll-option:disabled { cursor: default; }
 .ptile .friend-go { flex-shrink: 0; font-size: 1rem; }
 
 /* The heart in a tile's foot. It has no .card-actions row to take its box from
-   the way the feed's does, so the tile states one: a little tighter than the
-   card's 44px social target, because this sits in a foot beside a 30px avatar
-   rather than in a row of its own, and 32 still clears a thumb.
+   the way the feed's does, so the tile states one — sized to match the feed's
+   social target exactly (44px / 28px svg), so a liked heart reads the same
+   wherever it's tapped.
    Everything else — the liked fill, the ink flood, the pop, the --burst colour —
    comes from the shared .card-like rules up in the card section and needs
    nothing repeated here.
@@ -5479,8 +5479,8 @@ button.poll-option:disabled { cursor: default; }
   justify-content: center;
   gap: 0.3rem;
   flex-shrink: 0;
-  height: 32px;
-  min-width: 32px;
+  height: 44px;
+  min-width: 44px;
   padding: 0;
   background: none;
   border: none;
@@ -5495,7 +5495,7 @@ button.poll-option:disabled { cursor: default; }
    however it was liked. :where() zeroes the .ptile, putting the tile's heart
    back under the same rules as the card's: liked ink, hover, active, focus. */
 .ptile :where(.card-like) { color: var(--muted); }
-.ptile .card-like svg { width: 20px; height: 20px; }
+.ptile .card-like svg { width: 28px; height: 28px; }
 .ptile .card-like:has(.card-like-count) { padding-inline: 0.3rem; }
 /* The author's own count is TYPE, not a control (see tileLikeHtml) — so it takes
    none of the hover the shared rules hand every other heart. */
