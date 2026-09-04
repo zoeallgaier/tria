@@ -4755,11 +4755,11 @@ button.poll-option:disabled { cursor: default; }
 .pgrid--settled .ptile { animation: none; }
 
 /* ── On repeat — the listening rail ───────────────────────────────────────────
-   Discover's other strip, sitting between the day's cards and the trending
-   tags, and built to the same rules as the tags below it: flat editorial rather
-   than glass (it's contents, not something floating above content), one line
-   that scrolls sideways rather than wrapping, and the label in the page's
-   ordinary caption voice.
+   Discover's other strip, opening the page above the day's card, and built to
+   the same rules as the tags further down: flat editorial rather than glass
+   (it's contents, not something floating above content), one line that scrolls
+   sideways rather than wrapping, and the label in the page's ordinary caption
+   voice.
 
    SQUARES, not the round faces the daily card uses. A face would say "these are
    people", which the grid below already says about the same people; the square
@@ -4774,9 +4774,6 @@ button.poll-option:disabled { cursor: default; }
    interested. */
 .nowplaying {
   max-width: var(--feed-width);
-  /* Matches .dtags's own rhythm — the trending rail immediately below opens
-     with its caption, so this closes with the same 1.4rem less the strip's
-     bottom padding. */
   margin: 0 auto 1.1rem;
   padding-inline: var(--inset);
 }
@@ -4827,10 +4824,11 @@ button.poll-option:disabled { cursor: default; }
   background: var(--glass-bg-panel);
   background-size: cover;
   background-position: center;
+  /* A hairline only, not the full --glass-rim: the rim is a lit perimeter meant
+     to sit on a panel's own fill, and here there's no fill under it, just the
+     cover art. Painted straight over the artwork it doubled up right at the
+     rounded corner — a bright smear some covers wore worse than others. */
   border: var(--glass-edge);
-  /* Art is a photograph of an object, so it gets the same settle the app gives
-     every other image rather than appearing hard-edged over the page. */
-  box-shadow: var(--glass-rim);
 }
 /* The empty own-slot: a + on the same square, so the rail's first item is the
    same object whether or not it's holding anything. */

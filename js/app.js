@@ -10940,16 +10940,14 @@
       // the page, so it has to stay put and stay tappable while you're standing
       // inside one of its tags, or there's no way back out but the X.
       const tags = topTags();
-      // Today's daily heads the page, above the rail: it's the one thing here
-      // with a deadline, and it's the same for everybody, so it reads as the
-      // room's headline rather than as a tile that happens to be first. It stays
-      // out of SEARCH — you asked a question, the page owes you an answer and not
-      // a card — but rides every filter, because the card isn't part of the grid
+      // Today's daily, the one thing here with a deadline. It stays out of
+      // SEARCH — you asked a question, the page owes you an answer and not a
+      // card — but rides every filter, because the card isn't part of the grid
       // it would be narrowing.
       const occ = q ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
       // The rail rides every filter and stays out of SEARCH, exactly as the
-      // card above it does and for the same reason: it isn't part of the grid a
+      // card below it does and for the same reason: it isn't part of the grid a
       // query would be narrowing. Built here rather than at paint time so its
       // whole markup can go into the signature below — it's a string, and a
       // string IS the description of what changed, which beats hand-listing the
@@ -11020,8 +11018,8 @@
             r.items.map((t, j) => friendRowHtml(t.user, j,
               { locked: isLocked(t.user.username), bio: true })).join('') +
           `</div>`;
-      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') +
-        np +
+      bodyEl.innerHTML = np +
+        (occ ? dailyCardEl(occ, answers) : '') +
         tagRail(tags, q) +
         (asList
           ? (runs.length ? runs.map(runHtml).join('') : `<p class="feed-empty">${empty}</p>`)
