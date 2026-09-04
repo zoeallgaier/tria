@@ -10505,7 +10505,7 @@
     };
     view.innerHTML =
       `<section class="view view--listening">` +
-        mastheadEl('', 'Which one?', '') +
+        mastheadEl('', 'Pin a post', '') +
         (mine.length
           ? `<div class="song-results">${mine.map(row).join('')}</div>`
           : `<p class="feed-empty">Everything you’ve posted is already pinned.</p>`) +

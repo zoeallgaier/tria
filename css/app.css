@@ -4978,7 +4978,11 @@ button.poll-option:disabled { cursor: default; }
 /* A result row and the current song are the same object with different jobs, so
    they share everything but the trailing control. .pin-row is the third: picking
    one of your own posts to pin is the same act as picking a song, on the same
-   page shape, so it is the same row and not a lookalike. */
+   page shape, so it is the same row and not a lookalike. Horizontal padding is
+   --inset, not a smaller number of its own: these are list rows, not boxes (no
+   border, no fill until hover), so they take the masthead's own inset rather
+   than sitting flush like the field above them — the same split the composer
+   draws between its outdented fields and its inset caption. */
 .song-now,
 .song-hit,
 .pin-row {
@@ -4986,7 +4990,7 @@ button.poll-option:disabled { cursor: default; }
   align-items: center;
   gap: 0.75rem;
   width: 100%;
-  padding: 0.55rem 0.6rem;
+  padding: 0.55rem var(--inset);
   border: 0;
   background: none;
   text-align: left;
