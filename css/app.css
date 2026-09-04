@@ -5482,12 +5482,19 @@ button.poll-option:disabled { cursor: default; }
   height: 32px;
   min-width: 32px;
   padding: 0;
-  color: var(--muted);
   background: none;
   border: none;
   border-radius: var(--radius-pill);
   transition: color var(--dur-micro);
 }
+/* The resting grey, and the one rule in here that has to be careful about its
+   own weight. The card's heart takes this from `.card-actions button` (0,1,1),
+   which is why `.card-like.liked` (0,2,0) can outrank it and settle the heart on
+   the post's ink. Written flat as `.ptile .card-like` this rule is (0,2,0) too,
+   and later in the file — so it won the tie and every tile's heart settled grey
+   however it was liked. :where() zeroes the .ptile, putting the tile's heart
+   back under the same rules as the card's: liked ink, hover, active, focus. */
+.ptile :where(.card-like) { color: var(--muted); }
 .ptile .card-like svg { width: 20px; height: 20px; }
 .ptile .card-like:has(.card-like-count) { padding-inline: 0.3rem; }
 /* The author's own count is TYPE, not a control (see tileLikeHtml) — so it takes
