@@ -296,15 +296,18 @@
     // carrying a chevron arrowhead pointing the way round, so the mark reads as
     // circulation. Two things about the drawing are deliberate. It is a CIRCLE
     // rather than the squared-off two-arrow shape other apps use, because Tria's
-    // corner scale has nothing that shape belongs to. And the ends are true
-    // chevrons rotated onto the tangent, NOT the axis-aligned corner brackets a
-    // refresh glyph uses: pull-to-refresh is this app's other circular idea, it
-    // is the only way to reload the world, and a mark on a card that read as
-    // "reload this post" would be worse than no mark at all.
+    // corner scale has nothing that shape belongs to. And the chevrons are tucked
+    // 10° in from the tangent with a tight 64° opening, not the wide 90°-open,
+    // tangent-aligned pair this shipped with first — those had one arm reaching to
+    // r10.7 against the ring's r8, which read as a flick past the circle rather
+    // than an arrowhead sitting on it. NOT the axis-aligned corner brackets a
+    // refresh glyph uses, either: pull-to-refresh is this app's other circular
+    // idea, it is the only way to reload the world, and a mark on a card that read
+    // as "reload this post" would be worse than no mark at all.
     repost:  '<path d="M20 12a8 8 0 0 1-8 8 8 8 0 0 1-6.93-4"/>' +
              '<path d="M4 12a8 8 0 0 1 8-8 8 8 0 0 1 6.93 4"/>' +
-             '<path d="M15.65 7.12 18.93 8 19.81 4.72"/>' +
-             '<path d="M8.35 16.88 5.07 16 4.19 19.28"/>',
+             '<path d="M16.08 7.07 18.93 8 18.51 5.03"/>' +
+             '<path d="M7.92 16.93 5.07 16 5.49 18.97"/>',
     // Magnifier for the Friends search field, and the X it morphs into when open.
     search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
