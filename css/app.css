@@ -4780,10 +4780,13 @@ button.poll-option:disabled { cursor: default; }
    interested. */
 .nowplaying {
   max-width: var(--feed-width);
-  /* The grid opens straight under this now — the tags that used to sit between
-     them moved into the search field — so this is the whole gap rather than
-     half of one. */
-  margin: 0 auto 1.1rem;
+  /* 2rem below, matching .daily-card's own 2rem above the rail — the same
+     balance argument runs the other way too. At 1.1rem the rail sat more than
+     half again closer to what follows it than to the card above, which read
+     as the rail belonging to the grid — and in list view it read worse, since
+     a people run's opening hairline (.friends-list's border-top) landed right
+     where the gap ran out, with nothing between the rail and a rule. */
+  margin: 0 auto 2rem;
   padding-inline: var(--inset);
 }
 .np-kicker { margin: 0 0 0.5rem; }
