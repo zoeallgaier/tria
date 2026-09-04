@@ -5427,15 +5427,32 @@ button.poll-option:disabled { cursor: default; }
    reads as a deliberate letterform rather than a small mark in a big empty box. */
 .ptile .account-photo-initial { font-size: clamp(2.6rem, 15vw, 4rem); }
 
+/* The tile's destination, and since 1.5 the ONLY part of it that is a link (see
+   ptileEl: a heart in the foot is a button, and a button inside an anchor is
+   invalid HTML that WebKit resolves in the link's favour). Block, so the face
+   still meets the tile's clipped edge on all three sides. */
+.ptile-go { display: block; }
+
 /* ── The identity foot ───────────────────────────────────────────────────── */
 .ptile-foot { padding: 0.7rem 0.8rem 0.75rem; }
-/* Portrait (only when the face is a post), name, arrow — the row centres on the
-   identity block whether that block is one line or two, so a post tile's bare
-   byline and a portrait tile's name-over-handle both sit against the arrow. */
+/* Portrait (only when the face is a post), name, and then either an arrow or a
+   heart — the row centres on the identity block whether that block is one line
+   or two, so a post tile's bare byline and a portrait tile's name-over-handle
+   both sit against whatever trails them. */
 .ptile-who {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+/* Everything about the PERSON is one link to the person, arrow included. The
+   heart is the row's other child and stays outside it, so a thumb aiming at one
+   can't take the other. */
+.ptile-idlink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
 }
 .ptile-av { width: 30px; height: 30px; font-size: 1rem; }
 .ptile-id { min-width: 0; flex: 1; }
@@ -5444,6 +5461,41 @@ button.poll-option:disabled { cursor: default; }
   overflow-wrap: anywhere;             /* a long unbroken name must not shove the arrow off */
 }
 .ptile .friend-go { flex-shrink: 0; font-size: 1rem; }
+
+/* The heart in a tile's foot. It has no .card-actions row to take its box from
+   the way the feed's does, so the tile states one: a little tighter than the
+   card's 44px social target, because this sits in a foot beside a 30px avatar
+   rather than in a row of its own, and 32 still clears a thumb.
+   Everything else — the liked fill, the ink flood, the pop, the --burst colour —
+   comes from the shared .card-like rules up in the card section and needs
+   nothing repeated here.
+   No negative margin pulling it to the edge, deliberately: .ptile clips
+   (the face is full-bleed), and the sparkle burst throws ~22px from the heart's
+   centre. Inside the foot's 0.8rem padding the whole burst clears the clip; flush
+   to the edge it would be shaved on the right. */
+.ptile .card-like {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-micro);
+}
+.ptile .card-like svg { width: 20px; height: 20px; }
+.ptile .card-like:has(.card-like-count) { padding-inline: 0.3rem; }
+/* The author's own count is TYPE, not a control (see tileLikeHtml) — so it takes
+   none of the hover the shared rules hand every other heart. */
+.ptile .card-like--still { cursor: default; }
+@media (hover: hover) {
+  .ptile .card-like--still:hover { color: var(--muted); }
+}
 
 /* Only on a portrait tile (see ptileEl): the one line that tells two people with
    the same name apart. Small and muted so it reads as a subtitle to the name

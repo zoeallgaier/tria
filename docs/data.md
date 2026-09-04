@@ -303,6 +303,34 @@ it either way.
   the feed, and only the AUTHOR'S — which was never a like, always a disclosure —
   became a link.
 
+  **THE HEART REACHED DISCOVER'S TILES IN 1.5, and it cost the tile its anchor.**
+  A `.ptile` used to be one big `<a>` wrapping face and foot together. A heart is
+  a `<button>`, a button inside an anchor is invalid HTML, and WebKit settles the
+  overlap by handing the link both the tap and the long-press preview — so the
+  heart would have been a link to the post wearing a heart's clothes. The face
+  carries the destination now (`.ptile-go`), the identity row is its own link to
+  the PERSON (`.ptile-idlink`), and the foot is free to hold a control. That
+  incidentally fixed a thing already quietly wrong: tapping a person's name on
+  their post used to open the post.
+
+  The tile's heart is `tileLikeHtml`, not `likeButtonHtml`, and it differs on the
+  author's side only. On a card the author's heart is a link to the likers list;
+  in a tile the face beside it is already a link to the post, and a second
+  destination inside one tile is the ambiguity the unwrap existed to end — so an
+  owner gets the count as plain type (`.card-like--still`) and the list stays one
+  tap further on. An owner with no likes gets nothing and the foot falls back to
+  its arrow, which is also what a post you may not like draws: a nought on your
+  own tile is a scoreboard telling you you lost. The friend's heart itself is
+  `likeToggleHtml`, shared verbatim with the card so `wireLikes` drives either
+  without knowing which it found.
+
+  **Not on the "On repeat" rail, and not by oversight.** Its squares are pointers
+  at somebody's `listening_to`, not posts, and `public.likes` is keyed to a post
+  id — there is no row to write. Making one likeable means a new likeable kind
+  plus an answer to what a like means on something that is gone tomorrow. The
+  rail is ambient by design (see the CSS block above `.nowplaying`) and already
+  has its own reciprocity: you set your song to theirs.
+
   **THE PANELS ARE PAGE SECTIONS, so the collapse machinery is gone from the CSS
   too.** `.comments-panel` / `.likers-panel` / `.going-panel` were a grid-rows
   0fr→1fr tween under an opacity lift, with a 0.7rem left gutter for the reply

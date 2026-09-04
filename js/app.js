@@ -3045,16 +3045,52 @@
           inner +
         `</a>`;
     }
+    return likeToggleHtml(post);
+  }
+
+  /* The friend's heart on its own, because two surfaces draw it now: the feed
+     card above and Discover's tile. Pulled out rather than copied so the tile
+     can't drift — wireLikes finds `.card-like` and drives whichever it landed on
+     without knowing which one that was.
+
+     data-type sets the post's own colour (--burst) for the tap's ink flood and
+     sparkle burst; the classed heart is the target of the scale-pop. The settled
+     liked look is a still fill on that same colour — the tap adds the one-shot
+     motion. */
+  function likeToggleHtml(post) {
     const liked = Store.likedByMe(post.id);
-    // data-type sets the post's own colour (--burst) for the tap's ink flood and
-    // sparkle burst; the classed heart is the target of the scale-pop. The settled
-    // liked look is a still fill on that same colour — the tap adds the one-shot
-    // motion.
     return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
         `data-type="${burstTypeOf(post)}" ` +
         `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
         svgIcon('heart', 'like-heart') +
       `</button>`;
+  }
+
+  /* The same heart, in a Discover tile's foot. Two things differ from the card's,
+     and both come from a tile being a place you BROWSE rather than a post you are
+     reading:
+
+     · The author's heart doesn't go anywhere. On a card it is a link to the
+       likers list; in a tile the face beside it is already a link to the post,
+       and a second destination inside one tile is exactly the ambiguity that
+       unwrapping the tile was meant to end. So an owner gets the count as plain
+       type, and the list stays one tap further on, on the post's own page.
+     · An owner with no likes yet gets nothing, and the foot falls back to its
+       arrow. A nought on your own tile is a scoreboard telling you you lost.
+
+     Returns '' when the post isn't social to you, for the same fallback: a tile
+     you can't like is a tile you can only open. */
+  function tileLikeHtml(post) {
+    if (!canSocial(post)) return '';
+    if (post.author === Store.session()) {
+      const n = Store.likeCountFor(post.id);
+      if (!n) return '';
+      return `<span class="card-like card-like--owner card-like--still" ` +
+          `aria-label="${n} like${n === 1 ? '' : 's'}">` +
+          svgIcon('heart') + `<span class="card-like-count">${n}</span>` +
+        `</span>`;
+    }
+    return likeToggleHtml(post);
   }
 
   // Headcount AND RSVP, one control — activities only. The count is public
@@ -6175,23 +6211,62 @@
     // A POST tile opens the post; a PORTRAIT tile opens the person. It used to be
     // the profile either way, with `?p=` deciding where in the column you landed.
     const href = t.post ? postRoute(t.post) : `#/u/${encodeURIComponent(u.username)}`;
-    return `<a class="ptile" href="${href}">` +
-        (t.post
-          ? (t.post.type === 'photo' && t.post.image
-            ? mediaFaceEl(t.post, saidOf(t.post))
-            : sayFaceEl(t.post))
-          : whoFaceEl(u)) +
+    const who = `#/u/${encodeURIComponent(u.username)}`;
+    /* THE TILE IS NO LONGER ONE BIG ANCHOR, and a heart is why. A <button> inside
+       an <a> is invalid HTML, and WebKit settles the overlap by giving the link
+       the tap and the long-press preview — so the heart would have been a link to
+       the post wearing a heart's clothes. The FACE carries the destination now
+       and the foot is free to hold real controls.
+
+       Splitting it settled a second thing that was quietly wrong already: the
+       byline used to sit inside the post's link, so tapping a person's NAME on
+       their post opened the post. It opens the person now, which is the only
+       thing that row was ever saying.
+
+       Only the WHO face needs a label — a media face's alt carries the caption
+       and a say face is its own text, but a portrait is alt="" over an aria-hidden
+       initial, and it used to borrow its name from the foot inside the link. */
+    const like = t.post ? tileLikeHtml(t.post) : '';
+    // The arrow rides INSIDE the identity link, because it is that link's own
+    // "go" — which is also what makes it the right fallback when there's no heart
+    // to draw: the row still points at the person either way. The heart is a
+    // control BESIDE it, never inside, so the two can't be tapped for each other.
+    const trail = like ? '' : `<span class="friend-go" aria-hidden="true">→</span>`;
+    return `<div class="ptile"${t.post ? ` data-post="${esc(String(t.post.id))}"` : ''}>` +
+        `<a class="ptile-go" href="${href}"` +
+            (t.post ? '' : ` aria-label="${esc(u.name || u.username)}"`) + `>` +
+          (t.post
+            ? (t.post.type === 'photo' && t.post.image
+              ? mediaFaceEl(t.post, saidOf(t.post))
+              : sayFaceEl(t.post))
+            : whoFaceEl(u)) +
+        `</a>` +
         `<div class="ptile-foot">` +
-          `<div class="ptile-who">` + av +
-            `<div class="ptile-id">` +
-              `<p class="account-name">${nameHTML}</p>` +
-              (t.post ? '' : `<p class="ptile-handle">@${esc(u.username)}</p>`) +
-            `</div>` +
-            `<span class="friend-go" aria-hidden="true">→</span>` +
+          `<div class="ptile-who">` +
+            `<a class="ptile-idlink" href="${who}">` + av +
+              `<div class="ptile-id">` +
+                `<p class="account-name">${nameHTML}</p>` +
+                (t.post ? '' : `<p class="ptile-handle">@${esc(u.username)}</p>`) +
+              `</div>` + trail +
+            `</a>` + like +
           `</div>` +
           (!t.post && u.bio ? `<p class="ptile-bio">${esc(u.bio)}</p>` : '') +
         `</div>` +
-      `</a>`;
+      `</div>`;
+  }
+
+  /* Discover's grid and a daily's answers both deal tiles that can be liked now.
+     wireLikes wants the pair (element, post), so the tile carries its post id and
+     this walks them back together.
+
+     Safe on either side of the masonry deal: dealMasonry MOVES these nodes into
+     column elements, and a moved node keeps its listeners. */
+  function wireTileLikes(root, tiles) {
+    const byId = new Map(tiles.filter(t => t.post).map(t => [String(t.post.id), t.post]));
+    root.querySelectorAll('.ptile[data-post]').forEach(el => {
+      const post = byId.get(el.getAttribute('data-post'));
+      if (post) wireLikes(el, post);
+    });
   }
 
   /* ── Profile (own account or any friend, at #/u/username) ─────────────────────
@@ -9615,6 +9690,7 @@
     const layout = (fresh) => dealMasonry(bodyEl.querySelector('.pgrid'), fresh);
     layout(true);
     wireFrameFades(bodyEl);
+    wireTileLikes(bodyEl, tiles);
     // In the bar, so outside #view — same as the profile's dial and the editor's
     // chevron.
     document.getElementById('daily-answer')?.addEventListener('click', () => answerDaily(occ));
@@ -11097,10 +11173,12 @@
         bodyEl.insertAdjacentHTML('beforeend', shareAsk);
         wireShare();
       }
-      // Both are no-ops in list mode (there is no .pgrid to deal and no tile
-      // faces to fade), so they're left unguarded rather than branched around.
+      // All three are no-ops in list mode (there is no .pgrid to deal, no tile
+      // faces to fade and no tile hearts to wire), so they're left unguarded
+      // rather than branched around.
       layoutGrid(stage);
       wireFaces();
+      wireTileLikes(bodyEl, tiles);
       wireTags();
       // The Add on a person's row, in list mode. Unguarded for the same reason
       // and one more: it binds to the BODY, which outlives every repaint, and
