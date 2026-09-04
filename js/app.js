@@ -6640,6 +6640,14 @@
           // the first thing you'd want; on your OWN page it is the rarer act,
           // and it was making the reader read past it.
           { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
+          // Pinning, when there is a slot free. This is the only place a SONG
+          // pin can be started (a song has no ••• of its own the way a post
+          // does), and it is here rather than as an empty card on the page
+          // because an empty slot is furniture — see pinsSectionHtml. Absent at
+          // three: swapping one out is a decision about a particular thing, and
+          // it is offered where that thing is (a post's own •••, a pin's).
+          ...(myPins().length < PIN_MAX
+            ? [{ label: 'Pin to profile', icon: 'pinned', run: openPinAdd }] : []),
           { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
@@ -10136,12 +10144,11 @@
       const art = e.art ? `background-image:url('${encodeURI(e.art)}')` : '';
       return `<article class="pin pin--song" data-i="${at}" data-type="song">` +
           (e.art ? `<span class="pin-glow" style="${art}" aria-hidden="true"></span>` : '') +
-          `<span class="pin-art pin-cover${e.art ? '' : ' pin-art--empty'}"` +
-            (art ? ` style="${art}"` : '') + ` aria-hidden="true">` +
-            (e.art ? '' : svgIcon('sound', 'pin-art-ico')) +
-          `</span>` +
+          // A song ALWAYS keeps its square, art or none: a record without its
+          // sleeve is still a record, and the empty square is where the sleeve
+          // would be rather than a mark standing in for one.
+          `<span class="pin-art pin-cover" ${art ? `style="${art}"` : ''} aria-hidden="true"></span>` +
           `<span class="pin-lines">` +
-            `<span class="pin-kicker">Song</span>` +
             `<span class="pin-title">${esc(e.title)}</span>` +
             (e.artist ? `<span class="pin-sub">${esc(e.artist)}</span>` : '') +
           `</span>` +
@@ -10164,15 +10171,17 @@
     const sub = p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
       : p.type === 'find' && p.url ? domainOf(p.url)
       : '';
-    return `<article class="pin pin--post" data-i="${at}" data-type="${esc(p.type)}">` +
+    // NO STAND-IN SQUARE FOR A POST WITH NO PICTURE. A type glyph on a pastel
+    // tile was a mark saying "this is a Note" beside a note that is already
+    // legible as one, and three cards each carrying one turned the stack into a
+    // row of icons. A post with a picture shows the picture, at the same size
+    // an album cover sits at; a post without one is its own words, across the
+    // whole card.
+    return `<article class="pin pin--post${still ? '' : ' pin--wordy'}" ` +
+        `data-i="${at}" data-type="${esc(p.type)}">` +
         (p.tint && still ? `<span class="pin-glow pin-glow--flat" style="background:${esc(p.tint)}" aria-hidden="true"></span>` : '') +
-        `<span class="pin-art${still ? '' : ' pin-art--empty'}"` +
-          (face ? ` style="${face}"` : (p.tint ? ` style="background:${esc(p.tint)}"` : '')) +
-          ` aria-hidden="true">` +
-          (still ? '' : svgIcon(TYPE_GLYPH[p.type] || 'note', 'pin-art-ico')) +
-        `</span>` +
+        (still ? `<span class="pin-art" style="${face}" aria-hidden="true"></span>` : '') +
         `<span class="pin-lines">` +
-          `<span class="pin-kicker">${esc(TYPE_LABEL[p.type] || 'Post')}</span>` +
           `<span class="pin-title">${esc(saidOf(p) || TYPE_LABEL[p.type] || 'Post')}</span>` +
           (sub ? `<span class="pin-sub">${esc(sub)}</span>` : '') +
         `</span>` +
@@ -10181,34 +10190,22 @@
       `</article>`;
   }
 
-  /* The section. Empty on somebody else's profile with nothing pinned, and on
-     your own it is never empty: the add tile stands in, because a feature that
-     hides itself until it has been used can never have a first user (the same
-     argument that keeps your own square on the listening rail). */
+  /* The section: the cards and nothing else. NO CAPTION AND NO EMPTY SLOT, and
+     both absences are the same decision. A card is already a card — it does not
+     need a word above it announcing that a card is what it is — and an empty
+     slot is furniture standing where content isn't, on the one page that is
+     supposed to be about a person rather than about the app. Two pins mean two
+     cards, none means nothing at all, including on your own profile.
+
+     What that costs is the only surface a SONG pin could be started from, since
+     a song has no ••• of its own anywhere else. So the way in moved to the
+     profile's own ••• (renderUser), beside Edit profile, which is where a
+     reader already goes to change what their profile says. */
   function pinsSectionHtml(u, ctx) {
     const items = pinsFor(u, ctx);
-    if (!items.length && !ctx.isSelf) return '';
-    const room = myPins().length < PIN_MAX;
-    const add = ctx.isSelf && room
-      ? `<button type="button" class="pin pin-add" id="pin-add">` +
-          `<span class="pin-art pin-art--add" aria-hidden="true">+</span>` +
-          `<span class="pin-lines">` +
-            `<span class="pin-title pin-title--add">${items.length ? 'Pin something else' : 'Pin something here'}</span>` +
-            `<span class="pin-sub">A song, or a post of yours</span>` +
-          `</span>` +
-        `</button>`
-      : '';
-    // The kicker teaches the drag, once, in the only place it can be said
-    // without drawing a handle on every card: a grip mark beside a ••• is two
-    // controls on a 110px card doing one job each, and the ••• already holds
-    // Move up / Move down for anyone who never tries the gesture.
-    const hint = ctx.isSelf && items.length > 1
-      ? `<span class="daily-sep" aria-hidden="true">·</span>hold to reorder` : '';
+    if (!items.length) return '';
     return `<section class="pins" aria-label="Pinned">` +
-        (items.length ? `<p class="pins-kicker">Pinned${hint}</p>` : '') +
-        `<div class="pin-stack">` +
-          items.map(it => pinCardEl(it, ctx)).join('') + add +
-        `</div>` +
+        `<div class="pin-stack">${items.map(it => pinCardEl(it, ctx)).join('')}</div>` +
       `</section>`;
   }
 
@@ -10238,9 +10235,14 @@
     openSheet({ items });
   }
 
-  // The way in, from an empty slot. Three rows because there are three kinds of
-  // thing to pin and the ask names all three; the middle one is absent for
-  // somebody who hasn't posted yet, rather than opening an empty picker.
+  /* The way in, from your own profile's ••• . Three rows because there are three
+     kinds of thing to pin and the ask names all three; the middle one is absent
+     for somebody who hasn't posted yet, rather than opening an empty picker.
+
+     At three pins it does not open: the row that offers it isn't drawn, because
+     every one of these three would land on a full row and the swap belongs to
+     the thing being pinned (see pinPostFromMenu), not to a menu of ways to
+     start. */
   function openPinAdd() {
     const me = Store.session();
     const mine = Store.postsBy(me).filter(pinnablePost);
@@ -10404,7 +10406,6 @@
 
   // Everything the section needs hooked up, re-run whenever it repaints.
   function wirePins(host, u, ctx, repaint) {
-    host.querySelector('#pin-add')?.addEventListener('click', openPinAdd);
     if (!ctx.isSelf) return null;
     host.querySelectorAll('.pin-more').forEach(btn =>
       btn.addEventListener('click', (e) => {
@@ -10439,8 +10440,9 @@
       const still = post.image && !isVideoUrl(post.image) ? post.image : (post.poster || '');
       const face = still ? ` style="background-image:url('${encodeURI(still)}')"`
         : (post.tint ? ` style="background:${esc(post.tint)}"` : '');
-      return `<button type="button" class="pin-row" data-id="${esc(p.id)}">` +
-          `<span class="pin-row-art${still ? '' : ' pin-art--empty'}"${face} aria-hidden="true">` +
+      return `<button type="button" class="pin-row" data-id="${esc(p.id)}" ` +
+          `data-type="${esc(post.type)}">` +
+          `<span class="pin-row-art"${face} aria-hidden="true">` +
             (still ? '' : svgIcon(TYPE_GLYPH[post.type] || 'note', 'pin-art-ico')) +
           `</span>` +
           `<span class="song-lines">` +

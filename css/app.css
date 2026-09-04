@@ -4993,7 +4993,6 @@ button.poll-option:disabled { cursor: default; }
    The daily's OWN page takes the identical treatment through .masthead-kicker. */
 .dtags-cap,
 .np-kicker,
-.pins-kicker,
 .daily-kicker {
   font-size: var(--kicker);
   font-weight: 400;
@@ -5797,11 +5796,13 @@ button.poll-option:disabled { cursor: default; }
 .pins {
   max-width: var(--feed-width);
   margin: 1.7rem auto 0;
-  /* The page's type axis, the same one the identity above and the feed below
-     stand on, so the stack lines up with the name rather than floating free. */
-  padding-inline: var(--inset);
 }
-.pins-kicker { margin: 0 0 0.5rem; }
+/* THE CARD'S EDGE IS THE PAGE'S AXIS, which is the daily card's arrangement and
+   not the account block's. It had --inset of its own padding on top of the
+   view's, which set the stack a further 26px in on each side and made three
+   cards that are the page's headline the narrowest thing on it — narrower than
+   the identity above and than every post below. The type inside a card is inset
+   by the card's own padding, which is what a card is for; the box is not. */
 .pin-stack { display: flex; flex-direction: column; gap: 0.6rem; }
 
 .pin {
@@ -5815,8 +5816,16 @@ button.poll-option:disabled { cursor: default; }
   align-items: center;
   gap: 0.85rem;
   width: 100%;
-  min-height: 110px;
-  padding: 0.7rem 0.8rem;
+  /* ONE HEIGHT FOR EVERY CARD, and it is derived rather than typed: the square
+     plus the padding either side plus the hairline either side. A card with no
+     square (a post that is only words) meets the same number through the
+     min-height, so the three are exactly equal instead of nearly. The drag
+     depends on that — a displacement is one card plus one gap, and 2px of drift
+     per card is 2px the dropped card lands out by. */
+  --pin-art: 88px;
+  --pin-pad: 0.7rem;
+  min-height: calc(var(--pin-art) + var(--pin-pad) * 2 + 2px);
+  padding: var(--pin-pad) 0.8rem;
   border: var(--glass-edge);
   border-radius: var(--radius-card);
   background: var(--glass-bg-panel);
@@ -5835,12 +5844,12 @@ button.poll-option:disabled { cursor: default; }
               transform var(--dur-quick) var(--ease);
 }
 
-/* Each type lends the card its own pastel, and only where a hue is allowed to
-   mean a type: the square on the leading edge and the glyph inside it. The
-   PANEL stays plain glass — a filled coloured panel is the app's one
-   filled-object vocabulary and means "press this to make something", which is
-   the mistake the daily card spent 1.3 undoing. A song has no type colour
-   because the album cover is the colour. */
+/* Each type lends its own pastel to the SQUARE, and to nothing else: it is the
+   backstop behind a photograph that hasn't decoded yet, and on the picker's
+   rows it is the whole mark. The PANEL stays plain glass — a filled coloured
+   panel is the app's one filled-object vocabulary and means "press this to make
+   something", which is the mistake the daily card spent 1.3 undoing. A song has
+   no type colour because the album cover is the colour. */
 .pin[data-type="note"],     .pin-row[data-type="note"]     { --pin-hue: var(--type-note);     --pin-ink: var(--type-note-ink); }
 .pin[data-type="find"],     .pin-row[data-type="find"]     { --pin-hue: var(--type-find);     --pin-ink: var(--type-find-ink); }
 .pin[data-type="photo"],    .pin-row[data-type="photo"]    { --pin-hue: var(--type-photo);    --pin-ink: var(--type-photo-ink); }
@@ -5860,8 +5869,20 @@ button.poll-option:disabled { cursor: default; }
    colour we already computed at publish time, rather than blurring a full-size
    upload behind a 110px card for a colour we know. */
 .pin-glow {
+  /* Bigger than the card by BLEED on every side, so the blur's own soft edge
+     falls outside the card rather than showing as a halo inside it, and then
+     clipped back to exactly the card's rounded rect. The clip is not belt and
+     braces: WebKit does not clip a composited child (this one has a filter)
+     against an ancestor's border-radius, so `overflow: hidden` on .pin leaves
+     the bloom filling the square corners — measured, in the simulator and in
+     Playwright's WebKit. A clip-path on .pin itself would fix it too and would
+     take the card's lift shadow with it, since clip-path clips everything an
+     element paints. So the clip goes here, where the same number is used twice
+     and the two are visibly the same number. */
+  --bleed: 40px;
   position: absolute;
-  inset: -30%;
+  inset: calc(var(--bleed) * -1);
+  clip-path: inset(var(--bleed) round var(--radius-card));
   z-index: -1;
   background-size: cover;
   background-position: center;
@@ -5871,25 +5892,23 @@ button.poll-option:disabled { cursor: default; }
   -webkit-mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.5) 38%, transparent 70%);
   mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.5) 38%, transparent 70%);
 }
-.pin-glow--flat { inset: 0; filter: none; opacity: 0.3; }
+.pin-glow--flat { inset: 0; clip-path: none; filter: none; opacity: 0.3; }
 
-/* The square on the leading edge: an album cover, a photo, or the type's own
-   glyph on its pastel. 88px, the same square the listening rail draws, because
-   they are the same object at the same size in two places. */
+/* The square on the leading edge: an album cover, or a photograph. 88px, the
+   same square the listening rail draws, because they are the same object at the
+   same size in two places. A post with no picture has NO square — see
+   .pin--wordy below and pinCardEl in app.js. */
 .pin-art {
   position: relative;
   flex: 0 0 auto;
-  width: 88px;
-  height: 88px;
-  display: grid;
-  place-items: center;
+  width: var(--pin-art);
+  height: var(--pin-art);
   border-radius: var(--radius-img);
   border: var(--glass-edge);
   background-color: color-mix(in srgb, var(--pin-hue, var(--text)) 20%, transparent);
   background-size: cover;
   background-position: center;
 }
-.pin-art-ico { width: 30px; height: 30px; color: var(--pin-ink, var(--muted)); }
 
 /* THE COVER GETS THE EXTRA. A hairline would draw the sleeve as a picture
    printed into the glass; a real drop shadow and a lit top edge draw it as an
@@ -5921,10 +5940,11 @@ button.poll-option:disabled { cursor: default; }
   min-width: 0;
   flex: 1 1 auto;
 }
-/* The type word, in the label voice the composer and the daily's kicker speak.
-   It says Song / Frame / Activity, which is the one thing a stack of three
-   different objects needs said out loud. */
-.pin-kicker { font-size: var(--kicker); color: var(--muted); }
+/* NO TYPE WORD ABOVE THE TITLE. It said Song / Note / Frame over a card that is
+   visibly a song, a note or a photograph, and three of them stacked read as a
+   form with three labelled fields. The one sub-line that survived says something
+   the card doesn't already show — an artist, a domain, a date — and it sits
+   UNDER the words, where it annotates rather than announces. */
 /* What it says, in the serif, clamped to two lines. Smaller than the daily's
    headline on purpose: three of these stack, and at the daily's size two of
    them would be the page. */
@@ -5976,35 +5996,14 @@ button.poll-option:disabled { cursor: default; }
 }
 .pin-more svg { width: 20px; height: 20px; }
 
-/* The empty slot, on your own profile only. Dashed and short: it is an
-   invitation and not a card, so it must not weigh what a real pin weighs, and
-   the stack has to read as "two things and a way to add a third". */
-.pin-add {
-  min-height: 64px;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--text) 16%, transparent);
-  background: color-mix(in srgb, var(--bg) 45%, transparent);
-  box-shadow: none;
-  cursor: pointer;
-}
-.pin-art--add {
-  width: 44px;
-  height: 44px;
-  border: 0;
-  background-color: color-mix(in srgb, var(--text) 8%, transparent);
-  font-size: 1.5rem;
-  font-weight: 300;
-  line-height: 1;
-  color: var(--muted);
-}
-/* The add tile speaks in the UI voice, not the serif: it is a control, and the
-   serif on this page is reserved for what people actually said. */
-.pin-title--add {
-  font-family: inherit;
-  font-size: 0.95rem;
-  line-height: 1.3;
-  -webkit-line-clamp: 1;
-}
+/* A post with no picture is its own words, across the whole card. It keeps the
+   stack's height so the three still read as a set, and it takes a third line of
+   the clamp, because the words are all there is here and a card with room for
+   them should use it. There is no empty-slot tile any more: an empty slot is
+   furniture standing where content isn't, and the way to fill one is a row in
+   the profile's own ••• (see pinsSectionHtml). */
+.pin--wordy .pin-title { -webkit-line-clamp: 3; }
+.pin--wordy .pin-lines { gap: 0.25rem; }
 
 /* ── Being dragged ────────────────────────────────────────────────────────────
    The lifted card takes its transform from JS on every pointer move, so it
@@ -6039,7 +6038,11 @@ button.poll-option:disabled { cursor: default; }
   background-size: cover;
   background-position: center;
 }
-.pin-row .pin-art-ico { width: 22px; height: 22px; }
+/* The picker's rows KEEP a mark, where the cards dropped theirs, and the two
+   are not in tension: a card is one thing being looked at and says what it is by
+   being it, while this is a list of your own posts being scanned, where the
+   glyph is the only thing telling a note from a find at a glance. */
+.pin-row .pin-art-ico { width: 22px; height: 22px; color: var(--pin-ink, var(--muted)); }
 
 /* The pre-friend tie sits UNDER the whole identity block and spans it, rather
    than at the foot of the column beside the photo. (Your own card has no in-flow

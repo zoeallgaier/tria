@@ -1046,13 +1046,46 @@ rather than three unrelated blocks, and it is what makes the drag exact — ever
 card displaces every other by one card plus one gap, so a reorder measures the
 rects once at the lift and never guesses.
 
-**The panel stays plain glass and the hue lives in the square.** Each pin's
-leading 88px square wears its type's pastel with the type's own glyph in the ink
-twin; the card behind it does not. That is the same rule the daily card spent 1.3
-learning: a filled coloured panel is the app's one filled-object vocabulary and
-means "press this to make something", so a hue-filled pin would read as an
-enormous button that isn't one. A song has no type colour at all, because the
-album cover is the colour.
+**The card's edge is the page's axis**, which is the daily card's arrangement and
+not the account block's. It shipped with `--inset` of its own padding on top of
+the view's, which set the stack a further 26px in on each side and made three
+cards that are the page's headline the narrowest thing on it. The type inside a
+card is inset by the card's own padding — that is what a card is for; the box is
+not.
+
+**The panel stays plain glass.** A filled coloured panel is the app's one
+filled-object vocabulary and means "press this to make something", so a
+hue-filled pin would read as an enormous button that isn't one — the same rule
+the daily card spent 1.3 learning. The type pastels survive only as the backstop
+behind a photograph that hasn't decoded, and as the mark on the picker's rows.
+
+**What a card DOESN'T carry, and it is most of what it started with.** No caption
+over the stack, no type word over the title, no glyph tile for a post with no
+picture, and no empty slot inviting a third pin:
+
+- **A card is already a card.** "Pinned" above three cards was the page
+  announcing its own furniture, which is the rule the caps subheadings died for.
+- **The type word said Song / Note / Frame over a card that is visibly one**, and
+  three of them stacked read as a form with three labelled fields. The one
+  sub-line that survived — an artist, a domain, a date — says something the card
+  doesn't already show, and sits UNDER the words where it annotates rather than
+  announces.
+- **A glyph on a pastel tile is a mark saying "this is a Note" beside a note.**
+  A post with a picture shows the picture, at the size an album cover sits at; a
+  post without one is its own words, across the whole card, with a third line of
+  clamp because the words are all there is.
+- **An empty slot is furniture standing where content isn't**, on the one page
+  that is about a person rather than about the app. The way to fill one is a row
+  in the profile's own ••• beside Edit profile — which is also the only place a
+  SONG pin can be started, since a song has no ••• of its own the way a post
+  does. The row is absent at three: swapping is a decision about a particular
+  thing, and it is offered where that thing is.
+
+**Every card is exactly one height, and it is derived rather than typed** — the
+square, plus the padding either side, plus the hairline either side, with a
+square-less card meeting the same number through its min-height. Nearly equal is
+not equal: the drag displaces by one card plus one gap, so 2px of drift per card
+is 2px the dropped card lands out by.
 
 **The album cover gets three things a thumbnail doesn't**, and this is the one
 place in the app where an image is treated as an object rather than as content:
@@ -1071,11 +1104,22 @@ place in the app where an image is treated as an object rather than as content:
   means this needs no colour column, no sampler and no second request. A photo
   post gets the same bloom from its stored `tint` instead — one flat colour we
   already computed at publish time, rather than blurring a full-size upload
-  behind a 110px card for a colour we know.
+  behind a 112px card for a colour we know.
 
-**No grip mark, and the kicker teaches the gesture instead.** A handle beside the
-••• is two controls on a 110px card doing one job each. Your own stack's caption
-reads "Pinned · hold to reorder" while there is more than one card, and the •••
-carries Move up / Move down for anyone who never tries the gesture — which is
-also the only way to reorder with a keyboard.
+**AND THE BLOOM HAS TO CLIP ITSELF.** It runs 40px past the card on every side so
+the blur's own soft edge falls outside, and `overflow: hidden` on the card does
+NOT hold it: WebKit will not clip a composited child — this one has a filter —
+against an ancestor's border-radius, so the bloom filled the square corners while
+the card's rounded edge showed through it. Measured in the simulator and
+reproduced in Playwright's WebKit, which is the fast way to see it. The fix is a
+`clip-path` on the bloom itself, back to exactly the card's rounded rect, using
+the same number the bleed uses. A `clip-path` on the CARD fixes it too and takes
+the lift shadow with it, since clip-path clips everything an element paints.
+
+**No grip mark, and nothing teaches the gesture.** A handle beside the ••• is two
+controls on a 112px card doing one job each, and the caption that used to say
+"hold to reorder" went with the rest of the furniture. What carries the fact is
+the ••• itself: Move up / Move down sit in it, which is where somebody looking
+for a way to reorder will open first, and is the only way to do it with a
+keyboard. The drag is the shortcut for people who try it.
 
