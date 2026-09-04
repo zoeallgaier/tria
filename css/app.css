@@ -782,8 +782,25 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    show at once, so the bar reads as carrying controls right up until there's no
    other title on screen, at which point it quietly becomes one. */
 @media (min-width: 681px) {
-  /* The material (declared once, up by .topbar::before). */
-  body.toolbar-live .topbar::before { content: ''; }
+  /* NO MATERIAL ON DESKTOP, and no `content` is the whole of how — the band is
+     declared once up by .topbar::before and this block used to be one of the
+     two places that turned it on.
+
+     It is a phone answer. On a phone the bar spans the width, sits at y=0 over
+     the status bar, and every column of content runs under it, so a scroll edge
+     effect is the only thing separating chrome from page. A desktop window has
+     the sidebar and the content column's own margins doing that already, and
+     what the band adds there is a wide frosted stripe that arrives when the
+     wheel turns up and leaves when it turns down — motion across the widest
+     surface in the app, narrating a scroll direction nobody asked it to narrate.
+     The controls are glass discs floating over the page at every scroll
+     position instead, which is what .topbar--bare already made them for the
+     whole top of every page.
+
+     .topbar--bare and .topbar--reading still toggle here (they are one class on
+     one element, set from a scroll handler that knows nothing about width) and
+     now drive nothing at desktop, because there is no pseudo-element for their
+     opacity to move. The phone keeps all of it — see the max-width block. */
   /* main has no top padding on desktop of its own — nothing sat fixed over the
      content column there before 1.3. Reserve the bar's true BOTTOM, not its
      height: the bar floats at top:1rem, so height alone under-reserves by that
@@ -791,6 +808,15 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
      only for as long as .view's own 4rem editorial margin covered it, which is
      the very margin the rule below takes away. */
   body.toolbar-live main { padding-top: calc(var(--topbar-h) + 1rem); }
+  /* AND THE SMALL TITLE GOES WITH THE BAND, because it was only ever legible
+     ON it. The collapsing title is type with no box of its own: with a material
+     behind it, it is the page's name; with the material gone it is a line of
+     bold sans sitting directly on whatever post happens to be sliding past,
+     which is a smudge and not a title. Desktop does not need it either — the
+     page's own large serif name is in the content column, and the sidebar says
+     which tab you are on. This is a display change, not a visibility one: only
+     native chrome measures this box, and desktop is never native. */
+  .toolbar-title { display: none; }
 }
 
 /* ── The page's own top margin, under a bar that is now chrome ──────────────
@@ -904,11 +930,29 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 
 /* Toolbar glass buttons — filter, search, •••, friend tie, the leading back
-   chevron. A fill + rim + edge + lift disc, MINUS a backdrop-filter of its
-   own: every one of these sits ON the toolbar bar, which already blurs, and a
-   second sample per button is exactly the redundant compositor work the
-   "never glass on glass" rule exists to avoid (see the masonry tiles'
-   identical glass-minus-blur — same reasoning, same fix).
+   chevron. A fill + rim + edge + lift disc, WITH a backdrop-filter of its own,
+   which is the one place in the app that "never glass on glass" is knowingly
+   spent rather than saved. Here is the trade it buys.
+
+   These discs are drawn on the WEBSITE only: the app hides every one of them
+   the moment native chrome answers (html[data-chrome="native"] .topbar
+   .toolbar-btn, near the bottom of this file) and puts real UIGlassEffect
+   capsules in their place. So the surface this rule describes is not the one
+   the phone app ships, and the compositor bill it runs is a browser's.
+
+   And on the website the bar underneath is NOT reliably a material. It is bare
+   at the top of every page, it stands down for the whole of a read DOWN on the
+   pages syncToolbarReading lets it stand down on, and on desktop it does not
+   exist at all any more (see the min-width block up by .topbar::before). A disc
+   that borrowed its blur from the bar was therefore flat translucent glass over
+   moving text for most of a scroll, which is what it looked like: a grey chip,
+   not glass. Carrying its own means the control is the same object at every
+   scroll position, and the doubled sample is paid only on a phone browser, only
+   while the band happens to be up.
+
+   NOT ON .toolbar-search-shell, and that is a rendering fact rather than a
+   taste — the note on that rule has it. Nor on .toolbar-commit, which is opaque
+   (see below).
 
    The disc is --toolbar-btn (44px) and that IS the tap target: it meets the HIG
    floor by being drawn at it, with no invisible box around it. Which is the
@@ -934,6 +978,8 @@ body.toolbar-live .view { padding-top: 1rem; }
   background: var(--glass-bg);
   border: var(--glass-edge);
   box-shadow: var(--glass-rim), var(--glass-lift);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   transition: color var(--dur-micro), transform var(--dur-quick) var(--ease);
 }
 /* The 44px disc IS the tap target — no invisible ::after to keep in step. */
@@ -968,7 +1014,9 @@ body.toolbar-live .view { padding-top: 1rem; }
    `background: none` / `border: none` already beat the glass; .publish-fill
    .is-solid's --on-type ink beats --toolbar-ink on specificity, wash or no
    wash; and the glass box-shadow is replaced by the dome rule's own at (0,3,0).
-   So the commit button carries no geometry of its own at all.
+   One line IS overridden below: .toolbar-btn's backdrop-filter would sample
+   behind a pill that is already opaque, which is pure wasted compositor work
+   rather than a visual bug, but there's no reason to pay it.
 
    What it does carry is a way to NOT BE THERE. The editor's Save only exists
    once the form has something to commit (syncAnswers in app.js drives both bar
@@ -984,6 +1032,8 @@ body.toolbar-live .view { padding-top: 1rem; }
    of its own, so a bare .toolbar-commit (0,1,0) would lose the ramp it needs.
    At (0,2,0) it wins wherever it sits. */
 .toolbar-btn.toolbar-commit {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   transition:
     color var(--dur-micro) var(--ease),
     opacity var(--dur-quick) var(--ease),
@@ -1106,12 +1156,24 @@ body.toolbar-live .view { padding-top: 1rem; }
    fill + rim + lift at the same 44px in the same place is "never glass on glass"
    in its most literal form. What's left is a 44px hit target and the glyph, which
    is all this button was ever doing. Geometry is untouched — box-sizing is
-   border-box, so dropping the 1px --glass-edge doesn't move the mark. */
+   border-box, so dropping the 1px --glass-edge doesn't move the mark.
+
+   THE BACKDROP-FILTER IS PART OF THE CHROME BEING TURNED OFF, and it is the
+   line here that actually bites. .toolbar-btn carries its own blur now (see its
+   note), and this button is a .toolbar-btn that is transparent and sits INSIDE
+   .toolbar-search-shell, on top of the shell's glass. Inheriting the blur meant
+   a second sample of an already-blurred surface, taken inside that shell's
+   `overflow: hidden` — which renders as a hard square patch sitting over the
+   44px circle, not as a rounded disc. Every other .toolbar-btn is its own glass
+   object on the page and blurs correctly; this one is a glyph and a hit target
+   riding someone else's, so it takes no material of any kind. */
 .toolbar-search-btn {
   z-index: 2;
   background: none;
   border: none;
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 /* The two glyphs stack in one grid cell; opening cross-fades + quarter-turns
    the magnifier into the X (and back), so the morph reads as one control. */
@@ -1138,9 +1200,13 @@ body.toolbar-live .view { padding-top: 1rem; }
    so shut it lands exactly on the button and open it stops exactly short of the
    filter — which therefore stays put and tappable throughout.
 
-   Glass-MINUS-blur, like every other toolbar-btn: it sits on a bar that already
-   samples the scroll behind it, and a second backdrop-filter here would be the
-   redundant per-frame work "never glass on glass" exists to cut. It takes
+   Glass-MINUS-blur, and the one control in the bar that stayed that way when
+   the discs beside it got their own backdrop-filter. This box is not a disc: it
+   is `overflow: hidden` with an absolutely-placed input inside it and a WIDTH
+   that animates, and a backdrop-filter on it renders its blurred patch as the
+   square border box rather than the pill — a hard bright rectangle sitting
+   where the 44px circle should be. It also blurs the field open and shut, which
+   is the one moving-frames bill this bar had managed to avoid. It takes
    --glass-lift as well as the rim, because at rest it isn't "a field on the bar",
    it's the disc, and the disc floats. */
 .toolbar-search-shell {
