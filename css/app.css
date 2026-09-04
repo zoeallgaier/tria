@@ -2181,8 +2181,17 @@ main {
 /* The heart's weight lives in its top lobes — the point at the bottom is almost
    empty — so a mathematically-centred heart reads as floating above the comment
    glyph and the "going" text beside it. A hair of downward nudge sits it back on
-   the row's optical line. (Visual tuning, not geometry — adjust to taste.) */
-.card-social .card-like svg { transform: translateY(1.5px); }
+   the row's optical line. (Visual tuning, not geometry — adjust to taste.)
+
+   Every heart takes it, not just the social row's, and that is load-bearing now
+   rather than tidy: like-pop and the ink overlay both bake this nudge into every
+   frame, so a heart that RESTS without it jumps 1.5px the instant the animation
+   starts and jumps back when .is-liking clears. Scoped to .card-social this rule
+   left the tile's heart resting flat and popping nudged — the punch landed on a
+   different line than the heart it grew out of. One selector, one --like-nudge
+   (declared on .card-like below), and the resting glyph, the punch and the ink
+   are guaranteed to agree wherever a heart is drawn. */
+.card-like svg { transform: translateY(var(--like-nudge)); }
 
 /* Like heart. A friend sees a fillable heart, no count. The author sees the
    count and (via --owner) opens the "who liked" list; the heart fills to the
@@ -2228,6 +2237,14 @@ main {
    keep the burst tight. */
 .card-like {
   position: relative;
+  /* The optical nudge, in one place — the resting glyph, the pop keyframes and
+     the ink overlay all read it, so they cannot drift apart. */
+  --like-nudge: 1.5px;
+  /* The drawn heart's size. The ink overlay is a masked BLOCK, not an svg, so it
+     cannot inherit the glyph's box — it has to be told. Stating it once means the
+     flood is the same silhouette as the outline it fills in every context that
+     draws a heart, instead of matching the feed's by coincidence. */
+  --heart-size: 28px;
   /* Filled-heart silhouette, shared by the ink overlay's mask below. */
   --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z'/%3E%3C/svg%3E");
 }
@@ -2249,15 +2266,15 @@ main {
 .card-like.is-liking .like-heart   { fill: none; animation: like-pop 0.42s var(--ease) both; }
 .card-like.is-unliking .like-heart { animation: like-unpop 0.3s var(--ease-soft) both; }
 @keyframes like-pop {
-  0%   { transform: translateY(1.5px) scale(1); }
-  20%  { transform: translateY(1.5px) scale(1.5); }
-  48%  { transform: translateY(1.5px) scale(0.9); }
-  100% { transform: translateY(1.5px) scale(1); }
+  0%   { transform: translateY(var(--like-nudge)) scale(1); }
+  20%  { transform: translateY(var(--like-nudge)) scale(1.5); }
+  48%  { transform: translateY(var(--like-nudge)) scale(0.9); }
+  100% { transform: translateY(var(--like-nudge)) scale(1); }
 }
 @keyframes like-unpop {
-  0%   { transform: translateY(1.5px) scale(1); }
-  45%  { transform: translateY(1.5px) scale(0.8); }
-  100% { transform: translateY(1.5px) scale(1); }
+  0%   { transform: translateY(var(--like-nudge)) scale(1); }
+  45%  { transform: translateY(var(--like-nudge)) scale(0.8); }
+  100% { transform: translateY(var(--like-nudge)) scale(1); }
 }
 
 /* 2. The ink. A solid block of the post's colour, masked to the filled-heart
@@ -2272,9 +2289,9 @@ main {
   content: "";
   position: absolute;
   left: 50%; top: 50%;
-  width: 28px; height: 28px;
-  margin: -14px 0 0 -14px;
-  transform: translateY(1.5px);
+  width: var(--heart-size); height: var(--heart-size);
+  margin: calc(var(--heart-size) / -2) 0 0 calc(var(--heart-size) / -2);
+  transform: translateY(var(--like-nudge));
   background: var(--burst);
   -webkit-mask: var(--heart-mask) center / 100% 100% no-repeat;
           mask: var(--heart-mask) center / 100% 100% no-repeat;
@@ -5463,9 +5480,9 @@ button.poll-option:disabled { cursor: default; }
 .ptile .friend-go { flex-shrink: 0; font-size: 1rem; }
 
 /* The heart in a tile's foot. It has no .card-actions row to take its box from
-   the way the feed's does, so the tile states one — sized to match the feed's
-   social target exactly (44px / 28px svg), so a liked heart reads the same
-   wherever it's tapped.
+   the way the feed's does, so the tile states one: a little tighter than the
+   card's 44px social target, because this sits in a foot beside a 30px avatar
+   rather than in a row of its own, and 32 still clears a thumb.
    Everything else — the liked fill, the ink flood, the pop, the --burst colour —
    comes from the shared .card-like rules up in the card section and needs
    nothing repeated here.
@@ -5479,13 +5496,22 @@ button.poll-option:disabled { cursor: default; }
   justify-content: center;
   gap: 0.3rem;
   flex-shrink: 0;
-  height: 44px;
-  min-width: 44px;
+  height: 32px;
+  min-width: 32px;
   padding: 0;
   background: none;
   border: none;
   border-radius: var(--radius-pill);
   transition: color var(--dur-micro);
+  /* The tile draws a SMALLER heart than the feed, and everything the tap does
+     has to be told that, because none of it can measure the glyph: the ink flood
+     is a masked block sized by hand, and the pop's nudge is baked into keyframes
+     shared with the card. Left at the card's numbers the flood came up 28px over
+     a 20px outline and the punch sat on a line the resting heart wasn't on — so
+     the burst bloomed a size too big and dropped into the settled heart. Both
+     are declared here now, so the tile's tap is the card's tap to scale. */
+  --heart-size: 20px;
+  --like-nudge: 1px;   /* 1.5px × 20/28, the card's optical nudge in proportion */
 }
 /* The resting grey, and the one rule in here that has to be careful about its
    own weight. The card's heart takes this from `.card-actions button` (0,1,1),
@@ -5495,7 +5521,9 @@ button.poll-option:disabled { cursor: default; }
    however it was liked. :where() zeroes the .ptile, putting the tile's heart
    back under the same rules as the card's: liked ink, hover, active, focus. */
 .ptile :where(.card-like) { color: var(--muted); }
-.ptile .card-like svg { width: 28px; height: 28px; }
+/* Not a number of its own: the --heart-size set above, which is also what the
+   ink flood is cut to, so outline and flood are one object. */
+.ptile .card-like svg { width: var(--heart-size); height: var(--heart-size); }
 .ptile .card-like:has(.card-like-count) { padding-inline: 0.3rem; }
 /* The author's own count is TYPE, not a control (see tileLikeHtml) — so it takes
    none of the hover the shared rules hand every other heart. */
