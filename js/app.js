@@ -10546,7 +10546,7 @@
       `<section class="view view--listening">` +
         mastheadEl('', 'Pin a post', '') +
         (mine.length
-          ? `<div class="song-results">${mine.map(row).join('')}</div>`
+          ? `<div class="song-results pin-list">${mine.map(row).join('')}</div>`
           : `<p class="feed-empty">Everything you’ve posted is already pinned.</p>`) +
       `</section>`;
 

@@ -4980,9 +4980,10 @@ button.poll-option:disabled { cursor: default; }
    one of your own posts to pin is the same act as picking a song, on the same
    page shape, so it is the same row and not a lookalike. Horizontal padding is
    --inset, not a smaller number of its own: these are list rows, not boxes (no
-   border, no fill until hover), so they take the masthead's own inset rather
-   than sitting flush like the field above them — the same split the composer
-   draws between its outdented fields and its inset caption. */
+   border, no fill until hover), so on a wide screen they take the same inset the
+   Updates ledger's rows take. On a phone the list breaks out and this drops to
+   1.15rem — see the phone block; the two together put the row's content on the
+   view's own axis, which is where every other list in the app sits. */
 .song-now,
 .song-hit,
 .pin-row {
@@ -6154,6 +6155,23 @@ button.poll-option:disabled { cursor: default; }
    being it, while this is a list of your own posts being scanned, where the
    glyph is the only thing telling a note from a find at a glance. */
 .pin-row .pin-art-ico { width: 22px; height: 22px; color: var(--pin-ink, var(--muted)); }
+/* Where the row is the same, the LIST is not: a song search is a result set that
+   redraws under a live field, but this is a standing list of your own posts being
+   scanned — which is the Updates ledger's job, so it takes the ledger's row
+   language. Hairline dividers, the same vertical rhythm, and a hover that runs to
+   the screen edge (the break-out is in the phone block, with the other lists). The
+   song picker keeps the rounded fill: a grid of rules that rebuilds on every
+   keystroke is noise, and there is a field above it already drawing lines. */
+.pin-list .pin-row {
+  padding-block: 1.05rem;
+  border-radius: 0;
+  transition: background-color var(--dur-micro);
+}
+.pin-list .pin-row:first-child { border-top: 1px solid var(--rule); }
+.pin-list .pin-row:not(:last-child) { border-bottom: 1px solid var(--rule); }
+@media (hover: hover) {
+  .pin-list .pin-row:hover { background: var(--surface); }
+}
 
 /* The pre-friend tie sits UNDER the whole identity block and spans it, rather
    than at the foot of the column beside the photo. (Your own card has no in-flow
@@ -8306,6 +8324,17 @@ button.poll-option:disabled { cursor: default; }
   .friends-list, .requests-list, .notif-list { margin-inline: -1.15rem; }
   .friend, .request-row, .notif { padding-inline: 1.15rem; }
   .requests-kicker { padding-inline: 0; }
+
+  /* The picker lists break out with the rest of them. --inset is a desktop
+     measure; a row that keeps it on a phone is sitting 2.75rem in, level with the
+     masthead's own serif, while every other list in the app sits at 1.15rem. So
+     the list takes the same break-out and the row pays the inset back as padding
+     — content lands on the ledger's axis, and the pin list's hairlines and hovers
+     reach the screen edge the way Updates' do. .song-now is left out on purpose:
+     it's a bordered panel, not a row, and a box wants the view's margin. */
+  .song-results { margin-inline: -1.15rem; }
+  .song-now { padding-inline: 1.15rem; }
+  .song-hit, .pin-row { padding-inline: 1.15rem; }
 
   /* Composer already sits inside the view's padding here. */
   .composer { padding-inline: 0; }
