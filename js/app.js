@@ -9961,9 +9961,9 @@
             `</div>`
           : '') +
         `<input id="song-q" class="song-input" type="search" ` +
-          `placeholder="A song, or a link from your music app" ` +
+          `placeholder="Search a song, or paste a link" ` +
           `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
-          `aria-label="Search for a song" value="${esc(songQuery)}">` +
+          `aria-label="Search a song, or paste a link" value="${esc(songQuery)}">` +
         `<div class="song-results" id="song-results" aria-live="polite"></div>` +
       `</section>`;
 
