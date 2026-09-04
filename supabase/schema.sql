@@ -14,7 +14,8 @@
 -- Folded in: rename-post-to-note · add-activities · add-activity-when ·
 -- add-likes · add-polls · add-frame-video · swap-photo-blur-for-tint ·
 -- friend-requests · activity-audience · profile-privacy · blocks ·
--- post-audience-public · restore-block-gate · reposts.
+-- post-audience-public · restore-block-gate · reposts · add-pronouns ·
+-- add-listening-to · add-pins.
 
 drop table if exists public.blocks   cascade;
 drop table if exists public.friend_declines cascade;
@@ -39,7 +40,15 @@ create table public.users (
   avatar     text,                          -- Storage URL later; null = initial tile
   private    boolean not null default true, -- posts fenced to friends (see profile-privacy.sql)
   accent     text,                          -- profile colour: palette slug, 'default', 'none', or null = sample the photo (see profile-accent.sql)
-  created_at timestamptz not null default now()
+  pronouns   text,                          -- freeform, e.g. 'she/her'; null = nothing shown (see add-pronouns.sql)
+  listening_to jsonb,                       -- self-reported song {title, artist?, art?, apple?, spotify?, at}; a link per service, chosen at the reading end; expires after 7d on READ (see add-listening-to.sql)
+  pinned     jsonb,                         -- up to 3 cards held above your wall, in order: {k:'post',id} | {k:'song',title,…} (see add-pins.sql)
+  created_at timestamptz not null default now(),
+  -- Three slots, and only an array. See add-pins.sql for why the order lives in
+  -- the array rather than in a position column on a table of its own.
+  constraint users_pinned_shape check (
+    pinned is null or (jsonb_typeof(pinned) = 'array' and jsonb_array_length(pinned) <= 3)
+  )
 );
 
 -- ── Posts ───────────────────────────────────────────────────────────────────

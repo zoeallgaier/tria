@@ -110,6 +110,46 @@ Safari" — it stays underneath, and the reader lands back on the same card. Any
 new outbound link inherits this for free; a new *internal* one must not carry
 `target="_blank"`.
 
+**There is a second way out, and one link asks for it.** SFSafariViewController
+deliberately does **not** follow a universal link into the app that owns the
+domain — it stays on the web page, which is right for reading and wrong for a
+link whose whole job is to hand you to another app. The listening rail's songs
+are exactly that: `music.apple.com` belongs to Apple Music and
+`open.spotify.com` to Spotify, and through the sheet you always get the web
+player. So an anchor may carry **`data-out="system"`**, which routes it to
+`TriaSettings.openExternal` (`UIApplication.shared.open`) instead — the app when
+it's installed, the web player when it isn't. The handler falls back to the
+sheet if the plugin predates the method, so an older binary still opens the link
+somewhere. **The default stays the sheet**; `data-out="system"` is for links
+that name an app, not a preference to sprinkle on outbound links generally.
+
+Worth stating because it comes up: **iOS has no "default music app."** Default
+browser and default mail are real settings with real APIs; music is not one, and
+nothing can ask which app someone prefers. The universal link *is* the
+mechanism — whoever owns the domain gets the tap.
+
+Which puts the choice on us, because **a song's link belongs to whoever set it**
+and search can only find Apple's copy without a key. So `musicApps` asks
+`canOpenURL("spotify://")` and the web picks the link at the reading end
+(`songLink` in app.js): the wanted service's exact link if the song carries one,
+otherwise a **search URL in that service**, which still lands in the right app,
+one row short of the right track. Having installed Spotify is a better signal
+than a modal interrupting the tap, so **nobody is asked** — the picker on the
+profile editor (`Open songs in`, per-device in `localStorage`, never in the
+users table) exists only for the case the guess gets wrong.
+
+Two traps in that one call. `canOpenURL` answers **false for any scheme not in
+`LSApplicationQueriesSchemes`**, whatever is installed, so the Info.plist entry
+is load-bearing rather than boilerplate — and it fails *safe*, since a missing
+entry just means "no Spotify", which is the old behaviour. And **Apple Music is
+deliberately not queried**: it ships preinstalled, so its presence would tell us
+nothing about anybody. The absence of Spotify is the whole signal.
+
+A third trap, for whoever tests this next: **the simulator cannot answer this
+question**. Spotify can't be installed there, so `canOpenURL` returns false and
+Automatic resolves to Apple Music every time, which looks exactly like a working
+build and exactly like a broken one. Verified on a real phone (2026-09-03).
+
 **Push is two transports behind one switch, because a WKWebView has no Push
 API.** Not a degraded one — absent. `PushManager` is undefined, `Notification` is
 undefined, and a worker can't be registered from a custom scheme, so the entire
@@ -197,7 +237,7 @@ plugin, the AppDelegate forwards and the `registration` event all work, and
 offering to.
 
 So `blocked` now opens a sheet with a route in it, via **`TriaSettings`**, Tria's
-own one-method Swift plugin (`TriaSettingsPlugin.swift` →
+own Swift plugin (`TriaSettingsPlugin.swift` →
 `UIApplication.open(openSettingsURLString)`), reached by
 `Store.openAppSettings()`. Three things about it: it **must** be native —
 `location.href = 'app-settings:'` is completely inert in the webview (measured;
@@ -209,6 +249,15 @@ only. It lives in the **app target**, so it is registered by hand from
 would overwrite an entry added there. And it's **native-only on purpose**: a
 browser's permission is re-askable from site settings the reader already knows,
 so on the web the words are still the whole answer.
+
+It has **three methods** now. Two are the same call twice: `openSettings` and
+`openExternal` (above) are both `UIApplication.shared.open`, which is the honest
+description of what this plugin is — the hand-offs a webview cannot make for
+itself. `musicApps` is the third and the odd one, a `canOpenURL` rather than an
+`open`: it asks a question instead of handing something over, and it lives here
+because it is about the same hand-off (which app should get the link) rather
+than because it fits the name. A method added here needs no registration change;
+only a new *class* would need a hand-written entry in `capacitorDidLoad`.
 
 Both `enablePush` callers also wrap the round trip in `try/finally`. The switch
 disables itself while it waits, and a **throw** (the Supabase write at the end is

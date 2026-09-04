@@ -43,6 +43,26 @@ than asserting it either way — same standing as the `.p8` key.
 alongside every probe. So there is no pending migration left: the `.p8` key
 above is the whole outstanding list, and it is the one thing REST cannot reach.
 
+**Re-probed 2026-09-03: two migrations written since that sweep, and both have
+been run.** `users.pronouns` and `users.listening_to` each answer `200 []`
+against a bogus-column control returning `400 42703`, so `add-pronouns.sql` and
+`add-listening-to.sql` are both live.
+
+**`supabase/add-pins.sql` IS PENDING** (probed 2026-09-03: `users.pinned` answers
+`400 42703`, the missing-column code, against the same controls). It is the one
+migration in the tree that has not been run, and pinned profile cards are inert
+without it in the exact way this section warns about: nothing errors on READ (a
+missing column is simply absent, so nobody has any pins), and the first thing
+that goes wrong is a save, which says "Pinned cards aren't set up on this server
+yet" rather than a generic failure. Run it and the feature is live with no
+deploy. **So the outstanding list is two: the `.p8` key and this.**
+
+The client stays tolerant of a database without `listening_to` anyway, and it's
+worth knowing what that looks like so it isn't mistaken for a bug on a fresh
+install: PostgREST omits a column that doesn't exist, so `mapUser` finds no song,
+the listening rail shows only its empty own-slot, and `setListeningTo` reports
+"Listening to isn't set up on this server yet" rather than a generic failure.
+
 It has no client-side fix and Claude cannot do it; if a report looks like
 "notifications are broken", check this before reading code. (The other recurring
 not-a-bug is the one-shot iOS permission prompt — see the push notes in [ios-shell.md](ios-shell.md).)
@@ -933,3 +953,69 @@ it either way.
   (circular). Push notifications: see `supabase/PUSH-SETUP.md`; the Edge Function's
   real slug is `swift-processor`, not `push`.
 
+- **`users.listening_to`** is a self-reported song and the app's FIRST piece of
+  content that is not audience-gated. It sits on `users`, so `can_view_post` and
+  the private-account fence don't reach it: any signed-in reader sees it, the
+  same way a name and a bio are already public to the room. That is a deliberate
+  trade for a song and it should not be quietly generalised — anything with more
+  in it than a track title belongs on `posts`, behind the gates that already
+  exist. Shape is `{title, artist?, art?, apple?, spotify?, at}`, one jsonb
+  because nothing queries inside it; `artist` is optional because Spotify's
+  oEmbed (the paste path) returns a title and no artist.
+- **A link PER SERVICE, because the reader who taps is not the reader who set
+  it.** Usually only one of `apple`/`spotify` is known — search finds Apple's
+  copy, a paste keeps whichever was pasted — and `songLink` in app.js picks the
+  one the *reader's* device wants, falling back to a search URL in that service.
+  Rows written the day the feature shipped carry a single `url` instead;
+  `freshSong` folds it into the service its hostname names, on the read. **That
+  fold is deliberately not a migration**: jsonb tolerates both shapes, and a
+  column whose every row expires within a week is not worth an ALTER.
+- **A song expires on the READ, not on a schedule.** `freshSong` (store.js) drops
+  anything whose `at` is more than seven days old before it ever reaches
+  `.listening`, so the expiry rule lives in exactly one place and no render site
+  can forget it. A cron sweep was the obvious alternative and it's the wrong
+  shape: it would still leave a stale song on screen for up to a day, and the
+  whole point of the clock is that a status stops claiming to be true. A row with
+  no `at` is dropped too — every write stamps one, so its absence means malformed,
+  and showing a song that can't be dated is the one thing this must not do.
+- **Nothing connects to Spotify or Apple Music.** Both would need OAuth, a stored
+  refresh token and a poller, and the failure mode of all of it is a stale answer
+  indistinguishable from "not listening to anything". Metadata comes from two
+  keyless, CORS-open endpoints the webview calls directly — Apple's iTunes Search
+  API (search, artist, artwork, and an Apple Music link) and Spotify's oEmbed
+  (title and artwork for a pasted Spotify link, the only part of Spotify's API
+  needing no token). Artwork is **hotlinked, never re-hosted**: Apple's terms
+  cover displaying it beside a link to the store, which is not permission to copy
+  it into our bucket. Full reasoning, including what a real Spotify search would
+  cost, is in [1.5.md](1.5.md).
+
+- **`users.pinned`** is up to three cards a person holds above their own wall: a
+  post of theirs, or a song. An ORDERED JSONB ARRAY, and the order is the array
+  — `[{k:'post',id} | {k:'song',title,artist?,art?,apple?,spotify?}]`, capped at
+  three by a check constraint. A `pinned_items` table was the first proposal
+  (see [1.5.md](1.5.md)) and lost on the reorder: a `position` column wants
+  `unique(user_id, position)`, and swapping two rows under that needs deferred
+  constraints or a three-step shuffle, where an array has no such thing as two
+  things in slot 1 and a drag is one write of the whole list. It also costs no
+  read — `readWorld` pulls table by table, and a new table is a round trip on
+  every load for at most three rows a person.
+- **A song pin is `listening_to`'s object minus `at`**, and that absence is the
+  difference between the two features: a status is a claim about right now and
+  has to be able to stop being true (`freshSong`), a pin is a choice and stands
+  until it is changed. Both go through `cleanSong` in store.js, so the https-only
+  rule on `art` and the two service links is written once.
+- **A post pin is a POINTER and cannot widen an audience.** No fk, no copy of the
+  text: every reader resolves the id against their own cache, which only holds
+  what RLS handed them, so a pin at a friends-only post draws nothing for a
+  stranger rather than leaking it. `pinsFor` (app.js) runs the same tests the
+  wall runs — subject, block, activity courtesy, a locked profile's public-only
+  fence — and DROPS what it can't draw, which is why each entry carries its slot
+  index: the third card on screen can be the fourth thing in the row, and every
+  write names the slot rather than the card.
+- **`Store.setPins` writes the whole list, every time** — pin, unpin, reorder,
+  swap — because half a reorder is a worse state than none of it. It validates
+  per entry and silently: a post that isn't yours, isn't there, or is already
+  pinned is dropped and the rest is saved, so a reorder doesn't fail outright
+  because one pinned post was deleted this morning. `Store.deletePost` prunes a
+  pin at the post it just deleted, so a spent slot with nothing in it is the
+  fallback rather than the normal path.

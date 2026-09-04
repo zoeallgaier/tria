@@ -87,7 +87,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// means "keep the CSS chrome".
     ///
     /// `tabs` is `[{route, label, icon}]` and `fab` is `{route, label, glyph,
-    /// colors, ink}`. `icon` and `glyph` are SVG MARKUP — the same drawing the
+    /// colors, tint, ink}` — `tint` also becomes the lit tab's own colour, see
+    /// `tabTint`. `icon` and `glyph` are SVG MARKUP — the same drawing the
     /// web nav puts in the DOM, rendered here by `TriaSVG`. Markup is
     /// presentation, which is the only kind of app vocabulary allowed across
     /// this bridge: it still cannot name a single thing the app is about.
@@ -149,7 +150,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
 
     /// The FAB's band, restated when the reader's accent changes. Same shape as
     /// `setTabs`' `fab` argument, on its own, so a colour pick doesn't have to
-    /// rebuild the tab row to repaint one disc.
+    /// rebuild the tab row to repaint one disc — and retints whichever tab is
+    /// lit, since it wears the same band as the +.
     @objc func setFab(_ call: CAPPluginCall) {
         let fab = call.getObject("fab")
         DispatchQueue.main.async { [weak self] in
@@ -677,6 +679,12 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     /// reach. A trait-closure UIColor re-resolves itself when the system scheme
     /// flips, so this needs no `traitCollectionDidChange` — the same trick, and
     /// the same standing obligation, as `TriaViewController.paper`.
+    ///
+    /// `liveInk` is the FALLBACK the lit tab takes when the reader has no
+    /// accent to wear. `tabTint`, sent on the same `fab` payload as the +'s own
+    /// band and already declining the ramp (see fabSpec's note on why the +
+    /// can't carry four hues — a tab icon has even less room than a 56pt disc),
+    /// stands in for it whenever the reader has one.
     private static let idleInk = UIColor { $0.userInterfaceStyle == .dark
         ? UIColor(red: 0.588, green: 0.612, blue: 0.639, alpha: 1)   // #969ca3
         : UIColor(red: 0.361, green: 0.388, blue: 0.420, alpha: 1)   // #5c636b
@@ -685,9 +693,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         ? UIColor(red: 0.914, green: 0.922, blue: 0.929, alpha: 1)   // #e9ebed
         : UIColor(red: 0.078, green: 0.090, blue: 0.102, alpha: 1)   // #14171a
     }
-    /// `.nav-pill .nav-link { opacity: 0.4 }` — where you are is told by ink AND
-    /// opacity, and dimming the three you are not on is the whole control.
-    private static let idleAlpha: CGFloat = 0.4
 
     var onTap: ((String) -> Void)?
     var onMetrics: ((CGFloat) -> Void)?
@@ -711,6 +716,11 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
 
     private var routes: [String] = []
     private var fabRoute = ""
+    private var currentRoute = ""
+    /// The reader's own accent, off the same `fab` payload's `tint` — nil is
+    /// "no colour" (or Tria's ramp, which a tab icon declines the same way the
+    /// + does). See the note on `liveInk` above.
+    private var tabTint: UIColor?
     private var pillCenterX: NSLayoutConstraint?
     private var fabCenterX: NSLayoutConstraint?
 
@@ -855,7 +865,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
                 // blue glyphs. Idle is the right guess for three of the four,
                 // and `select` corrects the fourth on the same run loop.
                 button.tintColor = Self.idleInk
-                button.alpha = Self.idleAlpha
                 button.accessibilityLabel = tab["label"] as? String
                 button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
                 NSLayoutConstraint.activate([
@@ -888,15 +897,21 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             // sends: a bare + wears the system's own, right in both schemes.
             fabGlyph.tintColor = TriaChromeBar.color(fromHex: fabSpec["ink"] as? String ?? "")
                 ?? .label
+            // The same band, on the lit tab. A colour pick sends this on
+            // `setFab` alone, so re-run `select` to retint whichever tab is
+            // already lit rather than waiting on a navigation to correct it —
+            // the amber-+-over-rainbow-pill bug `repaint` exists to close.
+            tabTint = TriaChromeBar.color(fromHex: fabSpec["tint"] as? String ?? "")
+            select(route: currentRoute)
         }
     }
 
     func select(route: String) {
+        currentRoute = route
         for (index, button) in row.arrangedSubviews.enumerated() {
             guard let button = button as? UIButton, index < routes.count else { continue }
             let live = routes[index] == route
-            button.tintColor = live ? Self.liveInk : Self.idleInk
-            button.alpha = live ? 1 : Self.idleAlpha
+            button.tintColor = live ? (tabTint ?? Self.liveInk) : Self.idleInk
             if live { button.accessibilityTraits.insert(.selected) }
             else { button.accessibilityTraits.remove(.selected) }
         }
@@ -2117,6 +2132,10 @@ protocol TriaAnchoredControl: AnyObject {
 
 /// A MENU DROPPED BY A CONTROL ON THE PAGE, rather than by one in the top bar.
 ///
+/// As of 2026-08-30 the post card's ••• and the repost circle beside it went
+/// back to raising a sheet from the web side (see docs/native-chrome.md); the
+/// profile's colour picker is the only caller left that reaches this class.
+///
 /// The post card's •••, the repost circle beside it and the profile's colour
 /// picker all used to throw an action sheet up from the bottom of the screen,
 /// which was the right answer while every one of them was a web drawing: a card
@@ -2481,9 +2500,12 @@ final class TriaPostBar: UIView, TriaPostBarControl {
 
     /// The web writing back into the field — a mention picked out of the web's
     /// own popover, or the form clearing itself once a comment has posted.
+    /// `focus` is not "leave it alone" when false — it is the other direction:
+    /// a posted comment asks for the keyboard back the same way the discard
+    /// mark does.
     func setText(_ text: String, selection: Int, focus: Bool) {
         pill.setText(text, selection: selection)
-        if focus { pill.startEditing() }
+        if focus { pill.startEditing() } else { pill.stopEditing() }
         resize()
     }
 

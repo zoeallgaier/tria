@@ -1,0 +1,58 @@
+-- Listening to ───────────────────────────────────────────────────────────────
+-- What someone is playing, self-reported. Shows as a rail on Discover and as a
+-- line on the identity card. NOT a post: no audience, no tag, no row in
+-- `posts` — a status is a property of the person, and the moment it became a
+-- post it would want a like, a comment and a place in the feed, which is three
+-- things this feature is deliberately not.
+--
+-- SELF-REPORTED IS THE WHOLE DESIGN, not a stepping stone to an integration.
+-- Spotify and Apple Music can both tell you what someone is playing, and both
+-- want an OAuth account connection, a stored refresh token and something that
+-- polls them on a schedule. Tria has no OAuth of any kind and one cron job, and
+-- a poller that quietly goes stale reads exactly like "not listening to
+-- anything" — an integration whose failure mode is indistinguishable from its
+-- resting state. A person typing a song is honest about being a person typing a
+-- song.
+--
+-- One jsonb rather than five columns, because nothing ever queries INSIDE it —
+-- it is read whole, written whole, and displayed. Shape:
+--
+--   { title, artist?, art?, apple?, spotify?, at }
+--
+--   title   the track. The only required key.
+--   artist  absent when the source couldn't name one (Spotify's oEmbed hands
+--           back a title and no artist — see resolveSpotify in app.js).
+--   art     album artwork, hotlinked from whichever CDN named it. Not copied
+--           into our own storage: Apple's Search API terms cover DISPLAYING
+--           artwork alongside a link to the store, and re-hosting is a
+--           different thing than displaying.
+--   apple   music.apple.com link. What a SEARCH finds, since Apple's is the
+--   spotify open.spotify.com link. What a PASTE usually carries.
+--           Both optional and usually only one is present. Two keys and not
+--           one, because the reader who taps a song is not the reader who set
+--           it and they may be on different services — songLink (app.js) picks
+--           per reader, and falls back to a search url in the wanted service.
+--           Neither present is allowed: someone typed a title and nothing else.
+--   at      ISO timestamp, and it is load-bearing — see below.
+--
+-- THE DDL BELOW DID NOT CHANGE when `url` became `apple`/`spotify` on
+-- 2026-09-03, which is the point of a jsonb column: the old shape and the new
+-- one are the same type, rows written before the change are folded by hostname
+-- on the READ (freshSong, store.js), and nothing had to be migrated twice.
+--
+-- `at` EXISTS SO THE STATUS CAN STOP BEING TRUE. A self-reported status with no
+-- expiry is a lie with a long tail: a rail of songs from March says the room is
+-- dead more loudly than an empty rail would. Anything older than seven days
+-- stops rendering (LISTENING_TTL_MS, store.js) and your own clears itself on
+-- your next visit. Enforced on the read rather than by a cron job, because the
+-- rule is about what is TRUE ON SCREEN, and a nightly sweep would still leave a
+-- stale row showing for up to a day.
+--
+-- No new policy. "users update self" already scopes writes to your own row and
+-- "users read all" already hands every column to any signed-in reader. That
+-- second one is worth saying out loud, because it makes this the first thing
+-- about a person that ISN'T audience-gated: `can_view_post` and the private
+-- account fence don't reach a column on `users`, so a song is visible to
+-- anyone signed in, the way a name and a bio already are.
+
+alter table public.users add column if not exists listening_to jsonb;

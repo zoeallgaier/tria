@@ -26,6 +26,15 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- canOpenURL answers false for any scheme not listed here, whatever is
+	     installed. Spotify is asked about so a song's link can open in the
+	     service the reader actually uses (see TriaSettingsPlugin.musicApps).
+	     Apple Music is deliberately absent: it ships preinstalled, so its
+	     presence would tell us nothing about anybody. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>spotify</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Tria uses your camera so you can take a photo or a short video to share in a post.</string>
 	<key>NSMicrophoneUsageDescription</key>

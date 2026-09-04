@@ -4754,6 +4754,206 @@ button.poll-option:disabled { cursor: default; }
    would play its entrance again because the phone turned. */
 .pgrid--settled .ptile { animation: none; }
 
+/* ── On repeat — the listening rail ───────────────────────────────────────────
+   Discover's other strip, sitting between the day's cards and the trending
+   tags, and built to the same rules as the tags below it: flat editorial rather
+   than glass (it's contents, not something floating above content), one line
+   that scrolls sideways rather than wrapping, and the label in the page's
+   ordinary caption voice.
+
+   SQUARES, not the round faces the daily card uses. A face would say "these are
+   people", which the grid below already says about the same people; the square
+   says "these are records", and the album art is the only thing on the page
+   doing that job. 88px is the smallest a piece of cover art can be and still be
+   a picture instead of a swatch — under about 80 the art stops reading and the
+   rail turns into a row of coloured tiles.
+
+   Two lines under each square, both clamped to the square's own width: the song
+   in the body face, the person in the muted caption. Song first, because the
+   rail is about what is being played; you find out who after you've been
+   interested. */
+.nowplaying {
+  max-width: var(--feed-width);
+  /* Matches .dtags's own rhythm — the trending rail immediately below opens
+     with its caption, so this closes with the same 1.4rem less the strip's
+     bottom padding. */
+  margin: 0 auto 1.1rem;
+  padding-inline: var(--inset);
+}
+.np-kicker { margin: 0 0 0.5rem; }
+.np-strip {
+  display: flex;
+  gap: 0.7rem;
+  overflow-x: auto;
+  /* Keeps the swipe INSIDE the rail: without it, running out of squares hands
+     the gesture on, and in the installed app the thing waiting to catch a
+     horizontal swipe is the back navigation. Same reasoning as .dtags-rail,
+     touch-action left alone so a finger here can still scroll the page. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* The squares carry no vertical padding of their own, so the rail's own box
+     is exactly its content and nothing is clipped by the overflow. */
+  padding-block: 0.1rem;
+}
+.np-strip::-webkit-scrollbar { display: none; }
+
+.np-item {
+  flex: 0 0 auto;
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  /* Squares are their own tap targets and they're 88px wide by ~120 tall, so
+     there's no 44pt problem to solve here and no padding to take back. */
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+/* .np-item--flat is gone with the linkless square it dressed. A song with no
+   service link used to draw a plain <div>, since a tap target that does nothing
+   is worse than none; songLink now sends a typed-in title to a search for
+   itself, so there is no such square left to style. */
+
+.np-art {
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-img);
+  background: var(--glass-bg-panel);
+  background-size: cover;
+  background-position: center;
+  border: var(--glass-edge);
+  /* Art is a photograph of an object, so it gets the same settle the app gives
+     every other image rather than appearing hard-edged over the page. */
+  box-shadow: var(--glass-rim);
+}
+/* The empty own-slot: a + on the same square, so the rail's first item is the
+   same object whether or not it's holding anything. */
+.np-art--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--muted);
+}
+/* Both lines clamp to two and one respectively rather than ellipsising on one:
+   a song title is a sentence often enough that one line loses the half that
+   distinguishes it, and a name never is. */
+.np-song {
+  font-size: 0.82rem;
+  line-height: 1.25;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.np-who {
+  font-size: var(--kicker);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── The picker (#/listening) ─────────────────────────────────────────────────
+   A page, not a sheet — see renderListening in app.js for why (the keyboard
+   would sit on top of a sheet's results). The field and the rows are the
+   composer's field vocabulary rather than a new one: same radius, same hairline,
+   same inset behaviour as every other text box in the app. */
+.song-input {
+  display: block;
+  width: 100%;
+  max-width: var(--feed-width);
+  margin: 0 auto 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border: var(--glass-edge);
+  border-radius: var(--radius-field);
+  background: var(--glass-bg-panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+.song-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.song-results,
+.song-now {
+  max-width: var(--feed-width);
+  margin: 0 auto;
+}
+/* A result row and the current song are the same object with different jobs, so
+   they share everything but the trailing control. .pin-row is the third: picking
+   one of your own posts to pin is the same act as picking a song, on the same
+   page shape, so it is the same row and not a lookalike. */
+.song-now,
+.song-hit,
+.pin-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  border-radius: var(--radius-img);
+}
+.song-hit,
+.pin-row { cursor: pointer; }
+.song-hit:hover,
+.pin-row:hover { background: var(--glass-bg); }
+.pin-row:disabled { opacity: 0.5; cursor: default; }
+/* The current song sits above the field as a statement rather than a choice, so
+   it keeps the hairline the rows deliberately don't have. */
+.song-now {
+  margin-bottom: 1rem;
+  border: var(--glass-edge);
+  background: var(--glass-bg-panel);
+}
+.song-art {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-img);
+  background: var(--glass-bg-panel);
+  background-size: cover;
+  background-position: center;
+  border: var(--glass-edge);
+}
+.song-lines { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.song-title,
+.song-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-title { font-size: 0.95rem; color: var(--text); }
+.song-artist { font-size: var(--kicker); color: var(--muted); }
+/* Pushed to the trailing edge, and quiet: clearing is a thing you can do here,
+   not a thing the page is asking for. */
+.song-clear {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.7rem;
+  border: var(--glass-edge);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--kicker);
+  cursor: pointer;
+}
+.song-clear:disabled { opacity: 0.5; cursor: default; }
+
 /* ── Trending tags — the one index on Discover (rule 7 in renderDiscover) ─────
    Flat editorial, NOT glass. It's a contents strip for the page below it, and
    the material rule reserves frosted glass for what floats ABOVE content.
@@ -4792,6 +4992,8 @@ button.poll-option:disabled { cursor: default; }
    page announcing its own furniture, and Tria's pages are quieter than that.
    The daily's OWN page takes the identical treatment through .masthead-kicker. */
 .dtags-cap,
+.np-kicker,
+.pins-kicker,
 .daily-kicker {
   font-size: var(--kicker);
   font-weight: 400;
@@ -5568,8 +5770,276 @@ button.poll-option:disabled { cursor: default; }
 
 
 /* Their posts sit below the card as a single-author column, with a clear gap so
-   the card reads as its own header, not the top of the feed. */
-.account + .feed { margin-top: 2.4rem; }
+   the card reads as its own header, not the top of the feed. A general sibling
+   and not an adjacent one since 1.5: the pins host always sits between the two,
+   even when it is empty and drawing nothing. */
+.account ~ .feed { margin-top: 2.4rem; }
+
+/* ── Pinned cards ─────────────────────────────────────────────────────────────
+   Up to three things somebody holds above their own wall, between the identity
+   and the posts. The PANEL IS THE DAILY CARD'S, declared again rather than
+   shared, and the difference is worth naming: .daily-card is one headline on
+   Discover and can afford a serif question at 1.95rem, while this is a STACK of
+   up to three on a page that already opened with a photograph and a name. Same
+   material, same corner, same lift; a smaller voice and a fixed height.
+
+   THE FIXED HEIGHT IS LOAD-BEARING TWICE. It makes three cards read as a set
+   rather than as three unrelated blocks, and it is what lets the drag be exact:
+   every card displaces every other by one card plus one gap, so a reorder never
+   has to measure anything but the rects it took on the lift (wirePinDrag).
+
+   Panel-grade FILL over chrome-grade BLUR, the same trade the daily card makes
+   and for the same reason — it carries text and needs the body, but it sits in
+   a profile's normal flow with a wall of photographs scrolling behind it, and
+   cost follows the backdrop rather than the component's name. */
+.pins-host:empty { display: none; }
+
+.pins {
+  max-width: var(--feed-width);
+  margin: 1.7rem auto 0;
+  /* The page's type axis, the same one the identity above and the feed below
+     stand on, so the stack lines up with the name rather than floating free. */
+  padding-inline: var(--inset);
+}
+.pins-kicker { margin: 0 0 0.5rem; }
+.pin-stack { display: flex; flex-direction: column; gap: 0.6rem; }
+
+.pin {
+  position: relative;
+  /* isolate + overflow are what keep the glow inside: it is a negative-z child
+     bleeding well past the card's own box, and without both it would wash over
+     the posts underneath. */
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-height: 110px;
+  padding: 0.7rem 0.8rem;
+  border: var(--glass-edge);
+  border-radius: var(--radius-card);
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-rim), var(--glass-lift);
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  /* A card is held before it is dragged, and a long press on iOS otherwise
+     raises the link preview or a selection loupe over the thing being lifted. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: box-shadow var(--dur-micro) var(--ease),
+              transform var(--dur-quick) var(--ease);
+}
+
+/* Each type lends the card its own pastel, and only where a hue is allowed to
+   mean a type: the square on the leading edge and the glyph inside it. The
+   PANEL stays plain glass — a filled coloured panel is the app's one
+   filled-object vocabulary and means "press this to make something", which is
+   the mistake the daily card spent 1.3 undoing. A song has no type colour
+   because the album cover is the colour. */
+.pin[data-type="note"],     .pin-row[data-type="note"]     { --pin-hue: var(--type-note);     --pin-ink: var(--type-note-ink); }
+.pin[data-type="find"],     .pin-row[data-type="find"]     { --pin-hue: var(--type-find);     --pin-ink: var(--type-find-ink); }
+.pin[data-type="photo"],    .pin-row[data-type="photo"]    { --pin-hue: var(--type-photo);    --pin-ink: var(--type-photo-ink); }
+.pin[data-type="activity"], .pin-row[data-type="activity"] { --pin-hue: var(--type-activity); --pin-ink: var(--type-activity-ink); }
+.pin[data-type="poll"],     .pin-row[data-type="poll"]     { --pin-hue: var(--type-poll);     --pin-ink: var(--type-poll-ink); }
+
+/* ── The album's own colour ───────────────────────────────────────────────────
+   A blown-up, blurred copy of the artwork, lying over the card's glass and
+   dissolving before it reaches the words. It is the cheapest honest way to let
+   a record colour its own card: the artwork is HOTLINKED from Apple's or
+   Spotify's CDN, so CSS may blur it but canvas may not read it (touching the
+   pixels taints the canvas), and nothing here needs a colour column, a second
+   request or a sampler. The mask is not decoration — it is what keeps a serif
+   title on plain glass while the cover end of the card glows.
+
+   A photo post gets the same bloom from its stored `tint` instead (--flat): one
+   colour we already computed at publish time, rather than blurring a full-size
+   upload behind a 110px card for a colour we know. */
+.pin-glow {
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  filter: blur(26px) saturate(1.5);
+  opacity: 0.5;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.5) 38%, transparent 70%);
+  mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.5) 38%, transparent 70%);
+}
+.pin-glow--flat { inset: 0; filter: none; opacity: 0.3; }
+
+/* The square on the leading edge: an album cover, a photo, or the type's own
+   glyph on its pastel. 88px, the same square the listening rail draws, because
+   they are the same object at the same size in two places. */
+.pin-art {
+  position: relative;
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-img);
+  border: var(--glass-edge);
+  background-color: color-mix(in srgb, var(--pin-hue, var(--text)) 20%, transparent);
+  background-size: cover;
+  background-position: center;
+}
+.pin-art-ico { width: 30px; height: 30px; color: var(--pin-ink, var(--muted)); }
+
+/* THE COVER GETS THE EXTRA. A hairline would draw the sleeve as a picture
+   printed into the glass; a real drop shadow and a lit top edge draw it as an
+   object lying ON it, which is what a record sleeve is. */
+.pin-cover {
+  border: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 10px 22px -8px rgba(0, 0, 0, 0.55);
+}
+/* One soft diagonal, the light a sleeve catches. It stops at 58% so it reads as
+   a highlight rather than as a scrim over the artwork. */
+.pin-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(128deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.06) 34%,
+    transparent 58%);
+  pointer-events: none;
+}
+
+.pin-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* The type word, in the label voice the composer and the daily's kicker speak.
+   It says Song / Frame / Activity, which is the one thing a stack of three
+   different objects needs said out loud. */
+.pin-kicker { font-size: var(--kicker); color: var(--muted); }
+/* What it says, in the serif, clamped to two lines. Smaller than the daily's
+   headline on purpose: three of these stack, and at the daily's size two of
+   them would be the page. */
+.pin-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(1.15rem, 3.4vw, 1.35rem);
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pin-sub {
+  font-size: 0.84rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The whole card is the tap — the daily card's stretched link, drawn as a real
+   <a> rather than an ::after because these cards carry a control (•••) that has
+   to sit above it. */
+.pin-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+/* Your own card's overflow. Full 44pt target in the corner, glyph-sized ink —
+   the same quiet tool the post card's ••• is, and above the stretched link. */
+.pin-more {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pin-more svg { width: 20px; height: 20px; }
+
+/* The empty slot, on your own profile only. Dashed and short: it is an
+   invitation and not a card, so it must not weigh what a real pin weighs, and
+   the stack has to read as "two things and a way to add a third". */
+.pin-add {
+  min-height: 64px;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--text) 16%, transparent);
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+  box-shadow: none;
+  cursor: pointer;
+}
+.pin-art--add {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background-color: color-mix(in srgb, var(--text) 8%, transparent);
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--muted);
+}
+/* The add tile speaks in the UI voice, not the serif: it is a control, and the
+   serif on this page is reserved for what people actually said. */
+.pin-title--add {
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  -webkit-line-clamp: 1;
+}
+
+/* ── Being dragged ────────────────────────────────────────────────────────────
+   The lifted card takes its transform from JS on every pointer move, so it
+   cannot also be transitioning one — the others can, and that is what makes the
+   gap open smoothly under it. Nothing on the page may be tapped through while a
+   card is up: a drag that ends on a link would otherwise open it. */
+.pin.is-lifted {
+  transition: none;
+  z-index: 3;
+  box-shadow: var(--glass-rim), 0 18px 40px rgba(0, 0, 0, 0.42);
+}
+.pin-stack.is-reordering .pin-open { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pin { transition: none; }
+}
+
+/* ── Picking something to pin (#/pin/post) ────────────────────────────────────
+   The same row the song search draws, because they are two ways to fill one
+   slot and should look like it — the square, the two lines, the same rhythm.
+   Everything but the square's size is declared once, up in the song picker's
+   own block, with .pin-row named alongside .song-hit. */
+.pin-row-art {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-img);
+  border: var(--glass-edge);
+  background-color: color-mix(in srgb, var(--pin-hue, var(--text)) 20%, transparent);
+  background-size: cover;
+  background-position: center;
+}
+.pin-row .pin-art-ico { width: 22px; height: 22px; }
 
 /* The pre-friend tie sits UNDER the whole identity block and spans it, rather
    than at the foot of the column beside the photo. (Your own card has no in-flow
@@ -5874,7 +6344,7 @@ button.poll-option:disabled { cursor: default; }
 }
 /* Both of this card's buttons state the 44px floor — they measured 34.8 on their
    padding alone, which is the smallest touch target the app had. A permission
-   prompt is the worst possible place to make someone aim: "Not now" is the
+   prompt is the worst possible place to make someone aim: "No thanks" is the
    dismissal, and a dismissal that needs a second attempt reads as the app
    refusing to take no. */
 .push-ask-dismiss {
@@ -5890,9 +6360,12 @@ button.poll-option:disabled { cursor: default; }
   color: var(--muted);
 }
 .push-ask-dismiss:hover { color: var(--text); }
-/* The affirmative action, but not a publish/share gesture — so it wears the
-   monochrome ink fill (like the Save-style submits), not the reserved pastel
-   publish-fill gradient. */
+/* The affirmative action wears .publish-fill.is-solid — the same tinted glass
+   as Add yours, down in the shared rule that names it alongside the other
+   PRIMARY ACTS. Turning notifications on is that same weight of commitment, so
+   it gets the app's real brand gesture rather than a plain accent fill standing
+   in for it. Only the geometry is stated here, sized to this card rather than
+   the toolbar's own tokens. */
 .push-ask-on {
   display: inline-flex;
   align-items: center;
@@ -5901,12 +6374,6 @@ button.poll-option:disabled { cursor: default; }
   border-radius: var(--radius-pill);
   padding: 0.45rem 1.05rem;
   font-size: 0.85rem;
-  font-weight: 700;
-  border: none;
-  color: var(--on-accent);
-  background: var(--lit-top), var(--accent);
-  box-shadow: var(--lit-rim), var(--lit-drop);
-  transition: background-color var(--dur-micro) var(--ease);
 }
 .push-ask--out { opacity: 0; transition: opacity var(--dur-quick) var(--ease); }
 @media (max-width: 460px) {
@@ -5925,6 +6392,32 @@ button.poll-option:disabled { cursor: default; }
   margin-top: 1.1rem;   /* sits in the form now, matching the field rhythm */
 }
 .push-toggle-label { font-size: 0.9rem; color: var(--muted); }
+/* The one row in this group that opens a menu instead of flipping. It reads as
+   a value with a way in rather than as a button: the label stays muted like its
+   neighbours and the VALUE takes the text colour, so the eye lands on the answer
+   and not on the affordance. The chevron is the shared one, mirrored — the icon
+   set carries a single left-pointing arrowhead and every other user of it is a
+   back control. */
+.music-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 0;
+  background: none;
+  padding: 0.2rem 0;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.music-pick svg {
+  width: 17px;
+  height: 17px;
+  transform: scaleX(-1);
+  color: var(--muted);
+  flex: none;
+}
 .push-toggle {
   position: relative;
   width: 40px;
@@ -6227,12 +6720,16 @@ button.poll-option:disabled { cursor: default; }
 
 /* TINTED GLASS — the primary-action material, and what the LIT DOME became.
 
-   The list is unchanged and the rule for joining it has not moved: this is what
-   the app's PRIMARY ACT looks like — commit, or go and commit. Post, the FAB,
-   the gate's Create account, Share Tria, the editor's Save, and the daily's
-   "Add yours" in both the places it appears. It is not decoration for any
-   button that would look nice with a gradient on it; spread it and it stops
-   meaning anything.
+   The rule for joining the list has not moved: this is what the app's PRIMARY
+   ACT looks like — commit, or go and commit. Post, the FAB, the gate's Create
+   account, Share Tria, the editor's Save, the daily's "Add yours" in both the
+   places it appears, and — as of the Updates push pre-ask — "Turn on". It is
+   not decoration for any button that would look nice with a gradient on it;
+   spread it and it stops meaning anything. "Turn on" qualifies on the same
+   test as the others: tapping it is the one irreversible commitment on its
+   card (iOS answers `requestAuthorization` once per install), not a filter or
+   a dismissal, so it earns the same weight as Add yours rather than borrowing
+   a plain accent fill.
 
    What changed is the material. It used to be a lit dome: a top-left specular
    gloss and a base cavity shadow layered over an opaque band, so the button
@@ -6280,7 +6777,8 @@ button.poll-option:disabled { cursor: default; }
 .toolbar-commit.publish-fill.is-solid,
 .toolbar-cta.publish-fill.is-solid,
 .daily-answer.publish-fill.is-solid,
-.postbar-send.publish-fill.is-solid {
+.postbar-send.publish-fill.is-solid,
+.push-ask-on.publish-fill.is-solid {
   /* THE BAND lives in tokens.css now (--pill-band) and is no longer declared
      here, which is a change of meaning and not just of address.
 
@@ -6309,7 +6807,8 @@ button.poll-option:disabled { cursor: default; }
 .toolbar-commit.publish-fill.is-solid::before,
 .toolbar-cta.publish-fill.is-solid::before,
 .daily-answer.publish-fill.is-solid::before,
-.postbar-send.publish-fill.is-solid::before {
+.postbar-send.publish-fill.is-solid::before,
+.push-ask-on.publish-fill.is-solid::before {
   /* The tint itself. Translucency lives HERE rather than in the band, because
      --pill-band may be a gradient this stylesheet never sees (paintBrandBand
      writes the accent one at runtime) and there is no way to reach into a
@@ -7646,7 +8145,7 @@ button.poll-option:disabled { cursor: default; }
   /* Already inset by .view here, so the type-axis padding comes back off. .dtags
      rides with them: on a phone the rail, the title and the grid all sit on the
      view's own inset and no second one is wanted. */
-  .masthead, .dtags, .daily-lede, .daily-banner { padding-inline: 0; }
+  .masthead, .dtags, .nowplaying, .daily-lede, .daily-banner { padding-inline: 0; }
   /* And the identity header, which is now type on the same axis. (Its badge
      cluster used to be positioned off that inset and needed pulling back with
      it; those controls are in the toolbar as of 1.3.) */

@@ -29,7 +29,9 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "TriaSettingsPlugin"
     public let jsName = "TriaSettings"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openExternal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise)
     ]
 
     /// Resolves once iOS has accepted the hand-off, rejects if it refuses. The
@@ -50,6 +52,72 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
             UIApplication.shared.open(url, options: [:]) { opened in
                 if opened { call.resolve() } else { call.reject("Settings didn’t open.") }
             }
+        }
+    }
+
+    /// Hand a web URL to iOS itself, rather than to the in-app browser.
+    ///
+    /// THIS IS NOT @capacitor/browser, and the difference is the whole reason it
+    /// exists. That plugin presents SFSafariViewController, which is right for
+    /// READING a page — a Find's article, an activity's map pin — and which
+    /// deliberately does not follow a universal link into the app that claims
+    /// the domain. A song's link claims one: `music.apple.com` belongs to Apple
+    /// Music and `open.spotify.com` to Spotify, and handed to UIApplication each
+    /// lands IN that app when it's installed and on the web player when it
+    /// isn't. Through the in-app sheet it is always the web player, which is the
+    /// wrong half of what "open my song" means.
+    ///
+    /// There is no iOS notion of a default music app to target — unlike the
+    /// browser and mail, it isn't a setting and there's no API to ask. The
+    /// universal link IS the mechanism: whoever owns the domain gets the tap.
+    ///
+    /// http(s) ONLY. These URLs reach here from a link a person pasted into the
+    /// picker, and `UIApplication.open` will launch any scheme some installed
+    /// app has registered. The store already refuses to save anything but https
+    /// (see setListeningTo); this is the second of the two checks, on the side
+    /// of the bridge where the call actually happens.
+    @objc func openExternal(_ call: CAPPluginCall) {
+        guard let raw = call.getString("url"),
+              let url = URL(string: raw),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            call.reject("Only http(s) links can be handed to iOS.")
+            return
+        }
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url, options: [:]) { opened in
+                if opened { call.resolve() } else { call.reject("iOS didn’t open that link.") }
+            }
+        }
+    }
+
+    /// Is Spotify on this phone? Asked so that nobody has to be.
+    ///
+    /// A song's link belongs to whoever set it, and search can only find Apple's
+    /// copy without a key — so a Spotify listener tapping somebody's song lands
+    /// on a page selling them a service they already declined. The web's fix is
+    /// to pick the link at the reading end (see songLink in app.js), which needs
+    /// to know which end that is.
+    ///
+    /// iOS will not say which music app is "default" — unlike the browser and
+    /// mail, there is no such setting and no API for one. But `canOpenURL` will
+    /// say what is INSTALLED, and having gone and installed Spotify is a
+    /// stronger signal than a modal interrupting the tap to ask. It needs the
+    /// scheme declared in LSApplicationQueriesSchemes; undeclared, it silently
+    /// answers false, which is exactly the old behaviour and so fails safe.
+    ///
+    /// Apple Music is NOT queried, and its absence from the answer is the point:
+    /// it ships preinstalled, so its presence tells us nothing about anybody. The
+    /// signal is Spotify or no Spotify. Anyone the guess gets wrong (both
+    /// installed, Apple preferred) has the picker on the profile editor.
+    @objc func musicApps(_ call: CAPPluginCall) {
+        // `canOpenURL` is main-actor work like `open` above, and a bridge call
+        // arrives on Capacitor's queue.
+        DispatchQueue.main.async {
+            let spotify = URL(string: "spotify://").map {
+                UIApplication.shared.canOpenURL($0)
+            } ?? false
+            call.resolve(["spotify": spotify])
         }
     }
 }

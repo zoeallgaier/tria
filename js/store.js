@@ -45,7 +45,7 @@ const Store = (() => {
   const onRecovery = (fn) => { recoveryHandlers.push(fn); };
 
   // In-memory mirror of the shared world, shaped like the old save file:
-  //   users: [{id, username, name, bio, avatar?, accent?}]
+  //   users: [{id, username, name, bio, avatar?, accent?, pronouns?}]
   //   posts: [{id, author(username), type, date, tags, title?, url?, note?, image?, _ts}]
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
@@ -133,6 +133,70 @@ const Store = (() => {
     } catch { /* private mode */ }
   }
 
+  /* A self-reported status stops being true, and this is where it stops. Seven
+     days is long enough that a song set on Monday is still up on Friday, and
+     short enough that a rail of them describes this week rather than last year
+     — a wall of songs from March says the room is dead more loudly than an
+     empty wall would. See add-listening-to.sql.
+
+     Applied HERE, in the mapper, rather than at each render site: `.listening`
+     then means "what to show", not "what's in the row", and no future caller
+     can forget the rule. A row with no `at` is dropped rather than trusted —
+     every write stamps one, so its absence means malformed, and the one thing
+     this feature must never do is show a song it can't date. */
+  const LISTENING_TTL_MS = 7 * 86400000;
+  /* A song can carry a link PER SERVICE (`apple`, `spotify`), because the reader
+     who taps it is not the reader who set it and they may not be on the same
+     one. Rows written on the day the feature shipped carry a single `url`
+     instead, so it is sorted into the service it belongs to on the way past and
+     every reader downstream sees one shape. Nothing is rewritten in the
+     database for this: a jsonb column tolerates both, and a read-time fold is
+     cheaper and safer than a migration over a column that expires anyway. */
+  function freshSong(v) {
+    if (!v || typeof v !== 'object' || !v.title) return null;
+    const at = Date.parse(v.at || '');
+    if (!Number.isFinite(at) || Date.now() - at > LISTENING_TTL_MS) return null;
+    if (v.url && !v.apple && !v.spotify) {
+      const key = /^https:\/\/music\.apple\.com\//i.test(v.url) ? 'apple'
+        : /^https:\/\/open\.spotify\.com\//i.test(v.url) ? 'spotify' : '';
+      if (key) return { ...v, [key]: v.url };
+    }
+    return v;
+  }
+
+  /* ── Pins ───────────────────────────────────────────────────────────────────
+     Up to three cards a person holds above their own wall: a post they wrote,
+     or a song. Read whole, written whole, ordered by the array itself (see
+     add-pins.sql for why this is a column and not a table).
+
+     VALIDATED ON THE WAY IN, because a jsonb column takes whatever was last
+     written to it and the readers downstream index into it without asking
+     twice. A malformed entry is DROPPED rather than repaired: a pin that can't
+     say what it points at isn't a pin, and the owner's next write cleans the
+     row. The cap is applied here as well as in the database, so a row written
+     before the check constraint existed still draws three.
+
+     A song pin carries no `at`, and that absence is the difference between the
+     two features: `listening_to` is a claim about right now and expires
+     (freshSong above), a pin is a choice and stands until it's changed. */
+  const PIN_MAX = 3;
+  function pinsFrom(v) {
+    if (!Array.isArray(v)) return [];
+    const out = [];
+    for (const e of v) {
+      if (!e || typeof e !== 'object') continue;
+      if (e.k === 'post' && typeof e.id === 'string' && e.id) out.push({ k: 'post', id: e.id });
+      else if (e.k === 'song' && typeof e.title === 'string' && e.title) {
+        const o = { k: 'song', title: e.title };
+        for (const key of ['artist', 'art', 'apple', 'spotify'])
+          if (typeof e[key] === 'string' && e[key]) o[key] = e[key];
+        out.push(o);
+      }
+      if (out.length === PIN_MAX) break;
+    }
+    return out;
+  }
+
   function mapUser(u) {
     // `private` gates whether outsiders (non-friends) can see this person's posts.
     // Defaults true where the column isn't there yet (pre-migration DB) so a fresh
@@ -140,6 +204,17 @@ const Store = (() => {
     const o = { id: u.id, username: u.username, name: u.name, bio: u.bio || '',
                 private: u.private !== false };
     if (u.avatar) o.avatar = u.avatar;
+    if (u.pronouns) o.pronouns = u.pronouns;
+    // The song, if it's still true. Absent on a DB that hasn't run
+    // add-listening-to.sql — PostgREST omits a column that doesn't exist, so
+    // the whole feature simply isn't there rather than erroring.
+    const song = freshSong(u.listening_to);
+    if (song) o.listening = song;
+    // Pinned cards, in order. Absent on a DB that hasn't run add-pins.sql —
+    // PostgREST omits a column that doesn't exist, so `pinned` is undefined,
+    // pinsFrom answers [] and the whole feature simply isn't there.
+    const pins = pinsFrom(u.pinned);
+    if (pins.length) o.pins = pins;
     // Accent: the slug of a chosen palette colour, 'default' for Tria's own
     // brand ramp, 'none' for deliberately off (monochrome), or absent for
     // "sample it from my photo", which is still what a new account gets.
@@ -1259,6 +1334,14 @@ const Store = (() => {
     write('headcount', xs => xs.filter(x => x.postId !== id));
     write('pollVotes', xs => xs.filter(x => x.postId !== id));
     write('audience', xs => xs.filter(x => x.postId !== id));
+    // And the pin, if this post was one. A pin at a post that no longer exists
+    // draws nothing (the readers drop what they can't resolve), but leaving it
+    // in the row silently spends a slot: you'd be at three pins with two cards
+    // showing and no way to see which one is the ghost. Only your own posts
+    // reach this function, so the pin being pruned is always your own.
+    const mine = currentUser();
+    if (mine && (mine.pins || []).some(e => e.k === 'post' && e.id === id))
+      await setPins(mine.pins.filter(e => !(e.k === 'post' && e.id === id)));
     return { ok: true };
   }
 
@@ -1566,22 +1649,152 @@ const Store = (() => {
     return { ok: false, error: 'Couldn\u2019t save your colour.' };
   }
 
-  async function updateProfile({ name, bio, isPrivate } = {}) {
+  /* Set (or clear, with null) the signed-in user's song. Optimistic and
+     synchronous before the first await, like updateAvatar and updateAccent, so
+     the rail repaints under the sheet while the save goes out.
+
+     Everything is normalized rather than trusted. Most of the time these keys
+     come straight off a search result, but the paste path is a person typing
+     into a box, and this is the LAST place a URL is ours before it becomes
+     something every other reader's page loads (`art`) and opens (`url`). So
+     both are https-only: that rules out `javascript:` and `data:` in one test
+     rather than blacklisting schemes one at a time, and http would be a mixed-
+     content image that silently fails to load anyway. */
+  const clip = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  const httpsOnly = (v) => (/^https:\/\//i.test(v || '') ? String(v).slice(0, 500) : '');
+
+  /* One song, cleaned. Shared by the status (`listening_to`) and by a song PIN,
+     which store the same object for the same reason: both are metadata that
+     arrived from a search result or from a person pasting a link into a box,
+     and both end up as an image every other reader's page loads (`art`) and a
+     URL every other reader opens. So both links are https-only, which rules out
+     `javascript:` and `data:` in one test rather than blacklisting schemes one
+     at a time — and http would be a mixed-content image that silently fails to
+     load anyway.
+
+     Keys are added only when they have something in them, so the stored object
+     never carries an empty string the readers would have to retest. Null when
+     there is no title, because a song with no name is not a song. */
+  function cleanSong(song) {
+    if (!song) return null;
+    const title = clip(song.title, 120);
+    if (!title) return null;
+    const o = { title };
+    const artist = clip(song.artist, 120);
+    const art = httpsOnly(song.art);
+    // One key per service rather than one `url`, so a reader on the other one
+    // can be sent somewhere useful. Usually only one of the two is known: a
+    // search knows Apple's copy, a pasted link knows whichever was pasted.
+    const apple = httpsOnly(song.apple);
+    const spotify = httpsOnly(song.spotify);
+    if (artist) o.artist = artist;
+    if (art) o.art = art;
+    if (apple) o.apple = apple;
+    if (spotify) o.spotify = spotify;
+    return o;
+  }
+
+  async function setListeningTo(song) {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    const id = u.id;
+    const prev = u.listening || null;
+    const clean = cleanSong(song);
+    if (song && !clean) return { ok: false, error: 'That song needs a name.' };
+    // `at` is the status's own key and a pin never carries one: this is a claim
+    // about right now, and it has to be able to stop being true (freshSong).
+    const value = clean ? { ...clean, at: new Date().toISOString() } : null;
+
+    patchUser(id, { listening: value });                  // optimistic, synchronous
+    const { error } = await sb.from('users').update({ listening_to: value }).eq('id', id);
+    if (error) {
+      patchUser(id, { listening: prev });
+      // A DB that hasn't run add-listening-to.sql says so in its own words —
+      // "couldn't save" would send someone looking at their network instead.
+      return { ok: false, error: /listening|column|schema/i.test(error.message || '')
+        ? 'Listening to isn’t set up on this server yet.'
+        : 'Couldn’t save that, try again.' };
+    }
+    return { ok: true };
+  }
+
+  /* Replace the whole pin list, in order. One write for every act the feature
+     has — pin, unpin, reorder, swap — because the list IS the order and half of
+     a reorder is a worse state than none of it. Optimistic and synchronous
+     before the first await, like every other profile writer here, so the cards
+     move under your finger while the save goes out.
+
+     WHAT IT WILL NOT STORE: a post that isn't yours (a pin is a thing you do
+     with your own work, and RLS would let you point at anything readable), a
+     post that isn't in the world any more, the same post twice (three slots
+     holding one card is a bug the reader can't undo without help), and anything
+     past the third slot. A song is cleaned by cleanSong above, exactly as the
+     listening status is.
+
+     The validation is per-entry and SILENT: a bad one is dropped and the rest
+     are saved. The alternative — refusing the whole list because one id went
+     stale — would mean a reorder failing outright because a post you pinned
+     last week was deleted this morning. */
+  async function setPins(list) {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    const id = u.id;
+    const prev = u.pins || null;
+    const clean = [];
+    for (const e of (Array.isArray(list) ? list : [])) {
+      if (!e) continue;
+      if (e.k === 'post') {
+        const post = state.posts.find(p => p.id === e.id);
+        if (!post || post.author !== state.session) continue;
+        if (clean.some(x => x.k === 'post' && x.id === e.id)) continue;
+        clean.push({ k: 'post', id: String(e.id) });
+      } else if (e.k === 'song') {
+        const song = cleanSong(e);
+        if (song) clean.push({ k: 'song', ...song });
+      }
+      if (clean.length === PIN_MAX) break;
+    }
+    // An empty list is null and not [], so "no pins" is one value in the column
+    // rather than two the readers would both have to know about.
+    const value = clean.length ? clean : null;
+
+    patchUser(id, { pins: value });                       // optimistic, synchronous
+    const { error } = await sb.from('users').update({ pinned: value }).eq('id', id);
+    if (error) {
+      patchUser(id, { pins: prev });
+      // A DB that hasn't run add-pins.sql says so in its own words, the same way
+      // the listening status does — "couldn't save" would send someone looking
+      // at their network instead of at their migrations.
+      return { ok: false, error: /pinned|column|schema/i.test(error.message || '')
+        ? 'Pinned cards aren\u2019t set up on this server yet.'
+        : 'Couldn\u2019t save that, try again.' };
+    }
+    return { ok: true };
+  }
+
+  async function updateProfile({ name, bio, pronouns, isPrivate } = {}) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
     name = (name || '').trim();
     bio = (bio || '').trim();
+    pronouns = (pronouns || '').trim();
     if (!name) return { ok: false, error: 'Add a display name.' };
     if (name.length > 40) return { ok: false, error: 'Name: keep it under 40 characters.' };
     if (bio.length > 160) return { ok: false, error: 'Bio: keep it under 160 characters.' };
-    const patch = { name, bio };
+    // Empty means "nothing shown", which is null, not '' — matches the column's
+    // own default and mapUser's `if (u.pronouns)` read.
+    const patch = { name, bio, pronouns: pronouns || null };
     if (typeof isPrivate === 'boolean') patch.private = isPrivate;
     let { error } = await sb.from('users').update(patch).eq('id', u.id);
-    // Tolerate a DB that hasn't run the privacy migration yet: the `private`
-    // column may not exist, so retry the name/bio save without it rather than
-    // failing the whole edit. (The UI still reflects the toggle until reload.)
+    // Tolerate a DB that hasn't run the privacy/pronouns migrations yet: those
+    // columns may not exist, so retry the rest of the save without them rather
+    // than failing the whole edit. (The UI still reflects the change until reload.)
     if (error && 'private' in patch && /private|column|schema/i.test(error.message || '')) {
       delete patch.private;
+      ({ error } = await sb.from('users').update(patch).eq('id', u.id));
+    }
+    if (error && 'pronouns' in patch && /pronouns|column|schema/i.test(error.message || '')) {
+      delete patch.pronouns;
       ({ error } = await sb.from('users').update(patch).eq('id', u.id));
     }
     if (error) return { ok: false, error: 'Couldn’t save your changes.' };
@@ -2115,7 +2328,9 @@ const Store = (() => {
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,
     // Profile
-    updateAvatar, updateProfile, updateAccent,
+    updateAvatar, updateProfile, updateAccent, setListeningTo,
+    // Pins
+    setPins,
   };
 })();
 

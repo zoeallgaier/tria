@@ -29,10 +29,13 @@ web keeps its CSS glass unchanged. Plan, contract and traps:
 
 **All three stages have landed** (`ios/App/App/TriaChromePlugin.swift`,
 `NativeChrome` in app.js, the gate at the end of app.css): the tab bar, the +,
-and the top bar's controls with the menus they drop as real `UIMenu`s. So do the
-menus a control on the PAGE drops — the post card's •••, the repost circle, the
-profile's colour ring — which the web asks for rather than being asked about,
-and which fall back to the sheet they always were off-app.
+and the top bar's controls with the menus they drop as real `UIMenu`s. The
+profile's colour ring drops one too — a control on the PAGE, which the web asks
+for rather than being asked about, and which falls back to the sheet it always
+was off-app. **The post card's ••• and the repost circle beside it went back to
+that sheet as of 2026-08-30** (`openPostMenu`, `openRepostMenu` in app.js) —
+they no longer try a native menu at all; see "A menu the page asks for" in
+[docs/native-chrome.md](docs/native-chrome.md).
 
 So do the page's own PRIMARY ACTS: the composer's **Share** pill, the auth
 gate's submit, **Share Tria** and the daily card's **Add yours**. Those sit in

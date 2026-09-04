@@ -43,9 +43,10 @@ does not change that — it changes who draws the frame around it.
 That rule used to say "the composer form" whole, and the four buttons above are
 the correction rather than an exception to it. The rule was always about what a
 reader READS — cards, prose, fields. It was never about the one button on a page
-that COMMITS, and the post card's ••• had already crossed the same line for the
-same reason (see "A menu the page asks for"). **The set is closed:** `PAGE_SEL`
-in app.js is a list of four selectors, not a rule about buttons.
+that COMMITS, and the post card's ••• had crossed the same line for the same
+reason for a while (see "A menu the page asks for" for where it stands now).
+**The set is closed:** `PAGE_SEL` in app.js is a list of four selectors, not a
+rule about buttons.
 
 It has already been tested once and held. Editing a post moved onto the post's
 own page in 1.4, and the old inline form's Cancel/Save pair was exactly the shape
@@ -58,11 +59,11 @@ since 1.3. A page with one act gets a page button; a page with an act and a way
 to abandon it gets a bar.
 
 A MENU IS NOT CONTENT, wherever the control that drops one happens to sit. That
-line moved once, deliberately: the post card's •••, the repost circle and the
-profile's colour ring are page controls and their menus are native now, for the
-reason in "A menu the page asks for" below. What stays web is the sheet with no
-control to belong to, which is the same split the CSS `.sheet` block has always
-drawn.
+line moved once, deliberately, for three page controls: the post card's •••,
+the repost circle and the profile's colour ring. As of 2026-08-30 only the
+colour ring still drops a native menu, for the reason in "A menu the page asks
+for" below — the ••• and the repost circle went back to the sheet, the same one
+every other page-owned control (with no bar to belong to) has always raised.
 
 THE COMMENT BAR IS CHROME AND IS ALSO THE ONE EXCEPTION TO "native wears the web
 control's face". Everything else here works by drawing over an element that is
@@ -747,12 +748,24 @@ completes empty. That is not tidiness; it is the failure mode.
 
 ### A menu the page asks for
 
-A toolbar glyph's menu is opened by the system and then asks what is in it. The
-post card's •••, the repost circle beside it and the profile's colour ring go
-the other way: the finger lands on a **web** button, the page runs its own
-handler and builds the list, and only then does anything native happen. So the
-rows go out **with** the request — `presentMenu({label, rect, items})` — and
-there is nothing to defer, no token to wait on, and no 1.2s timeout to protect.
+**As of 2026-08-30, the post card's ••• and the repost circle beside it went
+back to being a sheet — `openPostMenu` and `openRepostMenu` call `openSheet`
+directly now, the way the audience picker always has, and neither goes through
+`openAnchoredMenu` (removed) or `NativeChrome.presentMenu` any more.** The
+profile's colour ring is the one caller left that drops a menu this way, with
+its own `presentMenu` call inline (see `openAccentSheet` in app.js). The rest
+of this section describes the mechanism as it still serves that one caller; the
+paragraphs that talk about "the two on a card" (the lost titles, the dropped
+Repost row, the double-tap ordering) describe behaviour that applied only to
+the reverted post/repost menus and no longer runs, but are left as the record
+of why they looked the way they did.
+
+A toolbar glyph's menu is opened by the system and then asks what is in it. A
+control on the page goes the other way: the finger lands on a **web** button,
+the page runs its own handler and builds the list, and only then does anything
+native happen. So the rows go out **with** the request —
+`presentMenu({label, rect, items})` — and there is nothing to defer, no token
+to wait on, and no 1.2s timeout to protect.
 
 `TriaAnchoredMenu` is the whole native half: one invisible `UIButton` inside a
 host view spanning the web view, moved to whichever rect app.js measured, with
@@ -884,16 +897,17 @@ open menu; an id would still match after that and run a row against the wrong
 post. The token is minted on the main thread in the same hop that presents, and
 comes back as the promise's value.
 
-**THE SHEET WAS RIGHT AND IS NO LONGER.** All three of these threw an action
-sheet up from the bottom of the screen, and `openRepostMenu` still carries the
-argument for it: these controls ride a card at an arbitrary scroll position, so
-a *web* card dropped out of one lands anywhere between mid-screen and the gutter
-above the nav, and the same tap produces a different-shaped thing every time. A
-real `UIMenu` does not have that problem — the system flips it, scrolls it and
-clips it to the safe area itself. Where there is no system to ask, the sheet is
-still the honest answer and still what runs: `openAnchoredMenu` falls back to
-`openSheet` with the same array, and `run` is the one implementation either
-drawing reaches.
+**THE SHEET WAS RIGHT, and the post card's ••• and the repost circle are back
+on it.** All three of these threw an action sheet up from the bottom of the
+screen, and `openRepostMenu` still carries the argument for it: these controls
+ride a card at an arbitrary scroll position, so a *web* card dropped out of one
+lands anywhere between mid-screen and the gutter above the nav, and the same
+tap produces a different-shaped thing every time. A real `UIMenu` does not have
+that problem — the system flips it, scrolls it and clips it to the safe area
+itself — which is the argument the colour picker's own `presentMenu` call still
+rests on. `openPostMenu` and `openRepostMenu` no longer make that call: as of
+2026-08-30 they build their array and hand it straight to `openSheet`, the way
+the audience picker always has, with no native branch to fall back from.
 
 **What the colour picker gave up, on purpose.** Its sheet is deliberately
 see-through, the pick paints synchronously, and the ring you opened it from

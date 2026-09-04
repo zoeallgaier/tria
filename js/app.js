@@ -269,6 +269,11 @@
              '<path class="check-arm" pathLength="1" d="m15.5 12.5 2.2 2.2 4.2-4.2"/>',
     // Bare check — the poll's "your pick" mark.
     check:   '<path d="M5 12.5 10 17.5 19 7"/>',
+    // Draws nothing on purpose. A sheet lays its rows out as icon-then-label, so
+    // a RADIO list — where only the chosen row wears a check — needs the other
+    // rows to hold the column open or their labels step left of it. Cheaper and
+    // more honest than a second row layout for the one sheet that needs it.
+    blank:   '',
     // The going person with an x where the check was — the "can't make it"
     // sheet action, so backing out reads as the mirror of joining.
     notgoing: '<circle cx="8.5" cy="8.5" r="3.1"/><path d="M3 20a5.5 5.5 0 0 1 11 0"/><path d="m16.2 11.2 4.4 4.4"/><path d="m20.6 11.2-4.4 4.4"/>',
@@ -312,6 +317,17 @@
     // It is the same shaft-and-chevron drawing as `send` with the box taken off,
     // which is the honest relationship between the two.
     arrowup: '<path d="M12 19.5V5.5"/><path d="M6 11.5 12 5.5l6 6"/>',
+    // The same arrow the other way up, for a pin's Move down row. Drawn rather
+    // than rotated in CSS: a sheet row's glyph sits in a shared 24px box with
+    // every other row's, and a transform on one of them is a rule the next
+    // reader has to find in a stylesheet to understand a list.
+    arrowdown: '<path d="M12 4.5v14"/><path d="M18 12.5 12 18.5l-6-6"/>',
+    // A pushpin, for pinning a post to a profile. NOT `pin`, which is the map
+    // marker on an activity's location line — two different senses of the word,
+    // and the one that means "held up on purpose" is the thumbtack.
+    pinned:  '<path d="M9 3.5h6"/>' +
+             '<path d="M10.2 3.5v5.4c0 1.2-.6 2.3-1.6 2.9l-1.1.7h9l-1.1-.7c-1-.6-1.6-1.7-1.6-2.9V3.5"/>' +
+             '<path d="M12 12.5V21"/>',
     // The at-sign, for Updates' Mentions row in the filter dial. It's the one
     // dial row whose subject is a piece of punctuation rather than a thing, and
     // drawing the punctuation is more direct than any metaphor for it — you
@@ -1619,8 +1635,8 @@
 
     /* The rect is the control's own and it is the only thing the placement
        listens to — there is no way to ask UIKit for a side. What that buys, and
-       what it doesn't, is written where the two card menus are built
-       (openAnchoredMenu) and measured in docs/native-chrome.md. */
+       what it doesn't, is written where this is called (openAccentSheet) and
+       measured in docs/native-chrome.md. */
     function presentMenu(anchor, { label, items, onPick }) {
       if (!live || !anchor || !items || !items.length) return false;
       const r = anchor.getBoundingClientRect();
@@ -4249,6 +4265,23 @@
     const href = a.getAttribute('href') || '';
     if (!/^https?:\/\//i.test(href)) return;   // in-app routes navigate normally
     e.preventDefault();
+    /* TWO WAYS OUT, and the link says which it wants. The default is the sheet
+       above, which is right for a page you READ. `data-out="system"` asks for
+       iOS itself instead, and the one caller is a song on the listening rail:
+       SFSafariViewController does not follow a universal link into the app that
+       owns the domain, so `music.apple.com` through the sheet is always the web
+       player and never Apple Music. Handed to UIApplication it's the app when
+       it's installed and the web player when it isn't, which is the behaviour
+       "open my song" actually means.
+       The fallback is the sheet, because a build whose plugin predates
+       openExternal should still open the link somewhere. */
+    if (a.dataset.out === 'system') {
+      try {
+        window.Capacitor.nativePromise('TriaSettings', 'openExternal', { url: href })
+          .catch(() => { try { window.Capacitor.toNative('Browser', 'open', { url: href }); } catch { /* inert */ } });
+        return;
+      } catch { /* no bridge for it at all; fall through to the sheet */ }
+    }
     try { window.Capacitor.toNative('Browser', 'open', { url: href }); }
     catch { /* if the sheet can't open, leaving the tap inert is the old behaviour */ }
   }, true);
@@ -5399,54 +5432,6 @@
     });
   }
 
-  /* ── A menu dropped by a control ON THE PAGE ───────────────────────────────
-     The post card's •••, the repost circle beside it, the profile's colour
-     ring. Same rows as openGlyphMenu, a different place to hang them from, and
-     a different fallback: where there is a system menu to ask for these belong
-     to the control that opened them, and where there isn't (the web, an older
-     phone) the sheet they always were still rises.
-
-     `items` is openGlyphMenu's array — {label, icon, danger, run} — plus the
-     two a radio set adds (radio, checked) and an `ink` for a row that names a
-     hue. One array, two drawings, one `run`, which is what stops the fallback
-     becoming a second version of the menu.
-
-     TWO ROWS, NO TITLE, AND THE ONE THAT MATTERS FIRST. These menus are built
-     to be tapped twice: the system puts the first row nearest the control, so
-     Repost and Copy link land back on the glyph and tapping it again runs them.
-     A UIMenu's title would sit between them and the glyph, so there isn't one —
-     no loss on a two-row menu whose rows say the same words. The toolbar's
-     menus keep theirs; they hang off a bar rather than off a thumb.
-
-     WHERE THE MENU LANDS IS THE SYSTEM'S, and only roughly ours. The vertical
-     is reliable — the menu's near edge comes to rest on the control's — and the
-     horizontal is not: it lands on the control's own edge much of the time and
-     drifts toward the middle of the screen the rest. Everything public was
-     tried (see docs/native-chrome.md for the measurements, including the two
-     approaches that made it worse), so this is the honest ceiling rather than a
-     thing left undone. Don't add a fourth dial: the rect, the row order and the
-     missing title are the three that work, and they are enough. */
-  function openAnchoredMenu(anchor, { items }) {
-    // The row goes over as it already is, with only its MARK resolved — a glyph
-    // key becomes markup here because the key is app vocabulary and the bridge
-    // carries drawings. rowsFor over there reads the fields it knows and drops
-    // the rest, `run` included, so there is nothing to hand-copy.
-    const rows = items.map(it => ({ ...it, icon: it.markup || (it.icon ? svgIcon(it.icon) : '') }));
-    if (anchor && NativeChrome.presentMenu(anchor, {
-      items: rows,
-      onPick: (i) => {
-        const it = items[i];
-        if (!it) return;
-        if (it.danger) hapticEvent('WARNING');
-        if (it.run) it.run();
-      },
-    })) return;
-    // The system has no menu to give, so the sheet rises as it always did — and
-    // it runs `run` against its own close, which is why the sheet gets the
-    // ORIGINAL array rather than a second copy of the handler above.
-    openSheet({ items });
-  }
-
   /* Reconcile a list of cards against what's already on screen rather than wiping
      it. A refresh re-pulls the whole world, but most pulls change nothing in view
      (or just a like/comment on one post). Rebuilding every card from scratch would
@@ -6214,6 +6199,11 @@
   let profileFilter = 'all';
   let profileFilterFor = null;
   let profileResizeOff = null;   // drops the frame wall's resize listener when the view goes
+  // The pin drag holds three listeners on the DOCUMENT (a gesture that starts on
+  // a card keeps going when the finger leaves it), so they outlive the section
+  // and have to be handed back by hand — on every repaint of the pins and on the
+  // way off the page.
+  let pinDragOff = null;
 
   function renderUser(username) {
     const u = Store.user(username);
@@ -6430,7 +6420,8 @@
             `<div class="account-meta">` +
               `<div class="account-id">` +
                 `<h1 class="account-name">${esc(u.name)}</h1>` +
-                `<p class="account-handle">@${esc(u.username)}</p>` +
+                `<p class="account-handle">@${esc(u.username)}` +
+                  (u.pronouns ? ` · ${esc(u.pronouns)}` : '') + `</p>` +
               `</div>` +
               statsRow +
               bio +
@@ -6444,8 +6435,30 @@
           // on and always lands in the same place.
           action +
         `</div>` +
+        // The pins, between the identity and the wall. An always-present host
+        // rather than markup built inline, because the section repaints ITSELF
+        // when a pin moves — the same contract paintPosts has with the dial, and
+        // for the same reason: rebuilding the whole profile to move one card
+        // would re-run the ambient wash and re-decode the photograph.
+        `<div class="pins-host" id="pins"></div>` +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
+
+    // Whatever this reader may see of what this person pinned. `locked` rides
+    // along so a private profile's pins meet the same public-only fence its wall
+    // does, and `isSelf` is what turns the section into an editor.
+    const pinCtx = { isSelf, isFriend, locked };
+    const pinsHost = view.querySelector('#pins');
+    const paintPins = () => {
+      pinDragOff?.();
+      // Re-read the person: a pin write has already landed in the cache by the
+      // time this runs (Store.setPins is optimistic), and `u` is the object this
+      // render closed over.
+      const fresh = Store.user(u.username) || u;
+      pinsHost.innerHTML = pinsSectionHtml(fresh, pinCtx);
+      pinDragOff = wirePins(pinsHost, fresh, pinCtx, paintPins);
+    };
+    paintPins();
 
     // Their posts as a single-author column (slim date line, not a repeated
     // byline). Photos keep the lightbox; tags jump to the home feed filtered.
@@ -6607,6 +6620,7 @@
       // sent → cancel the request · following → unfollow. Both drop my edge.
       if (status === 'sent' || status === 'following') await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
+      hapticTap('LIGHT');
       renderUser(username);      // reflect the new state in place
     });
 
@@ -6792,7 +6806,8 @@
       // add and accept both create it. The profile's own tie, same three ways.
       const drop = btn.dataset.status === 'sent' || btn.dataset.status === 'following';
       btn.disabled = true;
-      await (drop ? Store.removeFriend(name) : Store.addFriend(name)).catch(() => null);
+      const ok = await (drop ? Store.removeFriend(name) : Store.addFriend(name)).then(() => true, () => false);
+      if (ok) hapticTap('LIGHT');
       // Every path hands the control back, a rejected write included: a row left
       // disabled by one dropped connection is a control that does nothing,
       // forever, with nothing on screen to say why.
@@ -7044,10 +7059,34 @@
               `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
           `</div>` +
           `<p class="field-hint field-hint--combo" id="pf-count"></p>` +
-          // Notifications + privacy sit below the identity as quiet settings.
-          // Notifications lead: it's the smaller, self-contained switch, so the
-          // privacy pair (switch + its live sentence) closes the group instead of
-          // being split by another row.
+          // Pronouns: one quiet field of its own rather than a third slot in the
+          // combo box above (that box is specifically title+note, mirroring the
+          // composer — a third unrelated field would break the pairing). A
+          // label names it instead of a placeholder, since a placeholder like
+          // "she/her" would read as a format the field expects rather than one
+          // example among many.
+          `<div class="field">` +
+            `<label for="pf-pronouns">Pronouns</label>` +
+            `<input id="pf-pronouns" type="text" autocomplete="off" autocapitalize="none" ` +
+              `value="${esc(u.pronouns || '')}" aria-label="Pronouns">` +
+          `</div>` +
+          // Music links, notifications and privacy sit below the identity as
+          // quiet settings, ordered by how far each one reaches. Songs is the
+          // smallest and most local — it changes where a tap on this phone
+          // lands and nothing else — so it leads; notifications reaches the OS;
+          // privacy reaches everybody who can see you, and its pair (switch +
+          // live sentence) closes the group rather than being split by a row.
+          //
+          // The first two don't wait for Save. Neither is part of the profile
+          // being edited, so Cancel has nothing to take back from either.
+          `<div class="push-toggle-row">` +
+            `<span class="push-toggle-label" id="music-label">Open songs in</span>` +
+            `<button type="button" class="music-pick" id="music-pick" ` +
+              `aria-labelledby="music-label" aria-haspopup="menu">` +
+              `<span id="music-value">${esc(musicLabel())}</span>` +
+              svgIcon('chevron') +
+            `</button>` +
+          `</div>` +
           pushToggleHtml() +
           `<div class="push-toggle-row">` +
             `<span class="push-toggle-label" id="privacy-label">Private account</span>` +
@@ -7080,9 +7119,39 @@
 
     const nameEl = view.querySelector('#pf-name');
     const bioEl = view.querySelector('#pf-bio');
+    const pronounsEl = view.querySelector('#pf-pronouns');
     const countEl = view.querySelector('#pf-count');
     const errEl = view.querySelector('#pf-error');
     const privacyBtn = view.querySelector('#privacy-toggle');
+
+    // Three radio rows, through the system's own menu where there is one and
+    // the sheet everywhere else — the same two-tier pattern the profile colour
+    // ring uses, and for the same reason: this is a control on a PAGE, so the
+    // web asks native for a menu rather than native asking about it.
+    const musicBtn = view.querySelector('#music-pick');
+    const musicValEl = view.querySelector('#music-value');
+    const pickMusic = (key) => {
+      setMusicPref(key);
+      musicValEl.textContent = musicLabel();
+      hapticEvent('SELECT');
+    };
+    musicBtn.addEventListener('click', () => {
+      const current = musicPref();
+      const items = MUSIC_CHOICES.map(c => ({ label: c.label, key: c.key }));
+      if (NativeChrome.live() && NativeChrome.presentMenu(musicBtn, {
+        label: 'Open songs in',
+        items: items.map(c => ({ label: c.label, radio: true, checked: c.key === current })),
+        onPick: (i) => pickMusic(items[i].key),
+      })) return;
+      openSheet({
+        title: 'Open songs in',
+        items: items.map(c => ({
+          label: c.label,
+          icon: c.key === current ? 'check' : 'blank',
+          run: () => pickMusic(c.key),
+        })),
+      });
+    });
 
     // A plain UI switch — it holds its state until Save commits it alongside the
     // words (Cancel discards it, same as name/bio).
@@ -7127,6 +7196,7 @@
       return !!pfCropper
         || nameEl.value !== (u.name || '')
         || bioEl.value !== (u.bio || '')
+        || pronounsEl.value !== (u.pronouns || '')
         || (privacyBtn.getAttribute('aria-checked') === 'true') !== (u.private !== false);
     }
     // One predicate, both answers, so the bar can never offer a Save with
@@ -7266,11 +7336,16 @@
       // one impatient tap; finally, so a throw can't leave Save dead either.
       pfSave.disabled = true;
       try {
+        const nowPrivate = privacyBtn.getAttribute('aria-checked') === 'true';
         const res = await Store.updateProfile({
-          name: nameEl.value, bio: bioEl.value,
-          isPrivate: privacyBtn.getAttribute('aria-checked') === 'true',
+          name: nameEl.value, bio: bioEl.value, pronouns: pronounsEl.value,
+          isPrivate: nowPrivate,
         });
         if (!res.ok) { errEl.textContent = res.error; return; }
+        // The one haptic on this form, and it's scoped to the privacy switch
+        // specifically (not a general "save landed" buzz) — flipping who can see
+        // you is the shared-world change here; the name/bio/pronoun fields aren't.
+        if (nowPrivate !== (u.private !== false)) hapticTap('LIGHT');
         // A freshly cropped photo commits alongside — optimistic (cache updates
         // synchronously), upload in the background; on failure the store reverts.
         const pendingAvatar = shot ? Store.updateAvatar(shot) : null;
@@ -7734,10 +7809,11 @@
         input.value = '';
         syncSend();                                 // empties the field, idles the disc
         autoGrow();
+        input.blur();
         // The native field is a second copy of the words, so emptying the model
-        // has to empty it as well. No focus request: a posted comment is a
-        // finished sentence, and the keyboard staying up is the reader's call
-        // (they are still in the field, and it does).
+        // has to empty it as well. `false` also puts the native keyboard away —
+        // a posted comment is a finished sentence, not an invitation to keep
+        // typing into an empty field.
         NativeChrome.postBarText('', 0, false);
         const fresh = rebuildPostCard('up');
         const mine = fresh && [...fresh.querySelectorAll('.comments-list > .comment')].pop();
@@ -8192,13 +8268,15 @@
   }
 
   // A shareable link straight to someone's profile. Uses the current origin +
-  // path so it works wherever the prototype is served, with the #/u/ route the
-  // recipient lands on. Falls back to a bare @handle if there's no http origin.
+  // path when it's a real http(s) origin (so local dev and the website work
+  // wherever they're served), and falls back to the deployed site's origin
+  // otherwise — the app's own origin is Capacitor's `capacitor://localhost`,
+  // not a link anyone outside the app could open.
   function profileLink(username) {
     const base = /^https?:/.test(location.origin)
       ? location.origin + location.pathname
-      : '';
-    return base ? `${base}#/u/${encodeURIComponent(username)}` : `@${username}`;
+      : 'https://triaonline.com/';
+    return `${base}#/u/${encodeURIComponent(username)}`;
   }
 
   /* Handing someone a profile, from all three places that offer it: your own
@@ -8531,12 +8609,15 @@
   // link you sent someone opened an archive and then jumped. Old links still
   // work (the router redirects the query, see route). Only resolves for someone
   // who can already see that author's posts, which the DB decides, not this.
-  // Falls back to the bare @handle off-web.
+  // Uses the current origin when it's a real http(s) one (local dev, the
+  // website), and falls back to the deployed site's origin otherwise — the
+  // app's own origin is Capacitor's `capacitor://localhost`, not a link anyone
+  // outside the app could open. Mirrors profileLink for the same reason.
   function postLink(post) {
     const base = /^https?:/.test(location.origin)
       ? location.origin + location.pathname
-      : '';
-    return base ? base + postRoute(post) : `@${post.author}`;
+      : 'https://triaonline.com/';
+    return base + postRoute(post);
   }
 
   function copyPostLink(post) {
@@ -8597,20 +8678,25 @@
   //
   // NO REPOST ROW. It used to be spliced in second, from back when this menu and
   // the circle beside it both raised the same sheet from the bottom of the screen
-  // and neither one was near the finger — so a second way in cost nothing. It
-  // costs something now: both menus open ON the control that dropped them, the
-  // circle is one tap from Repost and one more from having done it, and a Repost
-  // row in here is a second, slower route to a menu the reader is already looking
-  // at the door of. Copy link leads instead, which is what this menu is for.
-  //
-  // `anchor` is the ••• that was tapped, and it is the whole reason this drops a
-  // menu rather than raising a sheet in the native shell. See openAnchoredMenu.
-  function openPostMenu(post, anchor) {
+  // and neither one was near the finger — so a second way in cost nothing.
+  // Copy link still leads: it's the row a reader wants most often, danger sits
+  // at the tail, and there is no ordering trick to defend now that this rises
+  // as the sheet it always was — see openSheet.
+  function openPostMenu(post) {
     const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
     if (isCalendarable(post))
       items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(post) });
     if (own) {
+      // Pin, above the editor: it's a positive act on a finished post, and the
+      // two rows below it are the ones that change or end it. The label flips
+      // rather than the row appearing and disappearing, so the same place in the
+      // same menu is where a pin goes on and comes off.
+      const at = myPins().findIndex(e => e.k === 'post' && e.id === post.id);
+      items.push(at >= 0
+        ? { label: 'Unpin from profile', icon: 'pinned', run: () =>
+            commitPins(myPins().filter((_, j) => j !== at), { toastOk: 'Unpinned.' }) }
+        : { label: 'Pin to profile', icon: 'pinned', run: () => pinPostFromMenu(post) });
       // Polls aren't editable — the choices are fixed once posted (editing them out
       // from under people who already voted makes no sense), so it's delete-only.
       if (post.type !== 'poll')
@@ -8619,27 +8705,18 @@
     } else {
       items.push({ label: 'Report post', icon: 'flag', danger: true, run: () => reportPost(post) });
     }
-    // Copy link LEADS, and that is the shape of this menu now: the first row is
-    // the one the system puts nearest the •••, whichever way the menu opens, so
-    // tapping the ••• twice copies the link. See presentMenu.
-    openAnchoredMenu(anchor, { items });
+    openSheet({ items });
   }
 
-  // Tapping the circle. A menu dropped from the glyph where the system can draw
-  // one and a rising sheet where it can't, which is the same call the card's •••
-  // makes beside it — see openAnchoredMenu for why that split replaced the sheet
-  // both of them used to raise unconditionally.
+  // Tapping the circle. A sheet, like the card's ••• beside it.
   //
   // Two rows, and the first one changes. A bare repost is a toggle you can take
   // back; a quote is a post of yours and comes out through its own ••• like
   // anything else you wrote, so it is never listed here as something to undo.
-  function openRepostMenu(post, anchor) {
+  function openRepostMenu(post) {
     const orig = Store.originalOf(post) || post;
     const on = Store.repostedByMe(orig.id);
-    openAnchoredMenu(anchor, {
-      // Repost (or Undo repost) leads for the reason Copy link does one function
-      // up: the first row is the one the system puts nearest the circle, so
-      // passing a post along is a tap and then that same tap again.
+    openSheet({
       items: [
         on
           ? { label: 'Undo repost', icon: 'repost', run: async () => {
@@ -8679,7 +8756,7 @@
     if (!btn) return;
     e.preventDefault();
     const post = Store.posts().find(p => p.id === btn.dataset.repost);
-    if (post) openRepostMenu(post, btn);
+    if (post) openRepostMenu(post);
   });
 
   // Reuse the like tap's y2k burst on whichever repost button is on screen for
@@ -8826,7 +8903,7 @@
     if (!mb) return;
     e.preventDefault();
     const post = Store.posts().find(p => p.id === mb.dataset.menu);
-    if (post) openPostMenu(post, mb);
+    if (post) openPostMenu(post);
   });
 
   /* ── Dailies — one prompt, twenty-four hours, the whole room ─────────────────
@@ -9177,6 +9254,25 @@
     return occurrenceOf(DAILIES[day % DAILIES.length], day);
   }
   const todaysDaily = () => dailyOn(dayNumber());
+
+  /* DISCOVER GETS ONE CARD, and this is the note that keeps it that way.
+
+     Manifest Monday was built here and taken back out on 2026-09-03, the day
+     after it worked: a weekly prompt stacked under the daily one, on its own
+     epoch, drawing a second smaller card every Monday. Nothing was wrong with
+     it mechanically. What was wrong is what two cards plus the listening rail
+     do to the page — Discover is a MEETING GROUND, and the grid of what people
+     actually made is the meeting. Every fixture above it pushes that grid down,
+     and three of them push it off the first screen entirely. A prompt nobody
+     scrolls past is not a prompt.
+
+     So the rule is a budget, not a preference: ONE scheduled card. A holiday
+     daily, when it comes, REPLACES that day's rotation entry rather than
+     stacking beside it (see 1.5.md) — same card, different question. If a
+     second one is ever proposed, the thing to weigh is not whether the idea is
+     good but what it costs the grid, because that is the cost that got paid
+     here and it is the one that is easy to forget. */
+
   // The most recent run of one prompt, so a link to #/daily/<slug> keeps working
   // after its day is out: it lands on that round's answers instead of nothing.
   function lastDailyFor(slug) {
@@ -9288,6 +9384,13 @@
   let pendingQuote = null;
   let quotingPost = null;
 
+  // An empty pin slot can send you here too ("Write something new"), and the
+  // post that comes out goes straight into the slot. Same one-shot contract as
+  // the two above: `pendingPin` is consumed by the next renderPublish,
+  // `pinningPost` outlives that render because submitComposer is what reads it.
+  let pendingPin = false;
+  let pinningPost = false;
+
   function answerDaily(occ) {
     if (!occ || myAnswer(occ)) return;   // one each — the UI shouldn't have offered
     pendingDaily = occ;
@@ -9310,18 +9413,25 @@
      sitting on top as its own control — read the room, or go say your bit, and
      nothing in between. The faces are who has answered; the count beside them is
      the one number Discover allows besides the trending rail's, and it's here
-     because "12 answers" is the difference between a party and an empty room. */
+     because "12 answers" is the difference between a party and an empty room.
+
+     It takes no options and draws one shape. It briefly grew a `kicker` and a
+     `compact` for Manifest Monday's second, smaller card; both came out with
+     that card, because a parameter whose only caller is gone is a shape the
+     next reader has to work out the purpose of. Discover gets one card (see the
+     note above lastDailyFor), so this draws one card. */
   function dailyCardEl(occ, answers) {
     const faces = answers.slice(0, 4).map(p => Store.user(p.author)).filter(Boolean);
     const n = answers.length;
     const mine = myAnswer(occ, answers);
-    return `<section class="daily-card" data-type="${occ.type}">` +
+    return `<section class="daily-card" ` +
+        `data-type="${occ.type}" data-slug="${esc(occ.slug)}">` +
         // Still no coloured dot, and now for the simpler reason: there is no one
         // colour to put in it. Any type answers any prompt, so a type dot here
         // would name a requirement that stopped existing. (It came out when the
         // card itself was hue-filled, where it was the same fact said twice.)
         `<p class="daily-kicker">` +
-          `Today’s daily<span class="daily-sep" aria-hidden="true">·</span>` +
+          `Today’s Daily<span class="daily-sep" aria-hidden="true">·</span>` +
           `<span class="daily-left">${esc(dailyLeft(occ))}</span>` +
         `</p>` +
         `<a class="daily-open" href="#/daily/${encodeURIComponent(occ.slug)}">` +
@@ -9389,9 +9499,9 @@
     const kicker = `Daily<span class="daily-sep" aria-hidden="true">·</span>` +
       `${open ? esc(dailyLeft(occ)) : 'closed'}`;
 
-    // The daily's bar. "Daily" and not the prompt for the small title: the
-    // collapsed copy is a stand-in for the nameplate, and this nameplate is a
-    // SENTENCE — a question truncated to 220px with an ellipsis is a worse
+    // The daily's bar. The label above and not the prompt for the small title:
+    // the collapsed copy is a stand-in for the nameplate, and this nameplate is
+    // a SENTENCE — a question truncated to 220px with an ellipsis is a worse
     // answer to "where am I" than the word the page is called.
     //
     // Trailing is the invitation, and it is the one toolbar control that carries
@@ -9452,6 +9562,913 @@
       window.removeEventListener('resize', onResize);
       dailyResizeOff = null;
     };
+  }
+
+  /* ── What you're listening to ────────────────────────────────────────────────
+     A song, self-reported, that stands until you change it or until a week goes
+     by (see `freshSong` in store.js, and add-listening-to.sql for why the clock
+     is part of the design rather than housekeeping).
+
+     IT IS A RAIL AND NOT A CARD, and that is the feature rather than a layout
+     preference. A card is one thing the whole room is looking at, which is what
+     a Daily is. This is one thing EACH PERSON is holding, so it wants a row of
+     small squares — which says "here's everyone" in the height of a chip
+     instead of the height of a headline. A constant fixture has to cost less
+     vertical space than the thing that is only here today, or it crowds it out
+     every day of the week.
+
+     NOBODY LOGS INTO ANYTHING. Spotify and Apple Music will both tell you what
+     someone is playing, and both want an OAuth connection, a stored refresh
+     token and something that polls them on a schedule. Tria has no OAuth of any
+     kind, and the failure mode of all that machinery is a stale answer that
+     reads exactly like "not listening to anything" — an integration you cannot
+     tell apart from its own resting state. Typing a song is honest about being
+     a person typing a song, and it works on day one for every reader whichever
+     service they pay.
+
+     WHERE THE METADATA COMES FROM. Two endpoints, both keyless, accountless and
+     answering CORS with `*` — so the webview calls them itself, with no server,
+     no secret, and nothing new in config.js:
+
+       - Apple's iTunes Search API backs the SEARCH box. One request returns the
+         canonical title, the artist, artwork and a music.apple.com link.
+       - Spotify's oEmbed backs a PASTED Spotify link. It is the only part of
+         Spotify's API that needs no token: every /v1 endpoint 401s without one,
+         and a token needs a client secret, which cannot live in a bundle
+         anybody can unzip. It returns a title and artwork and NO ARTIST, which
+         is the entire reason `artist` is optional in the stored shape.
+
+     So search finds Apple's copy of a song and paste keeps whichever service
+     the reader actually uses, and nobody is ever asked which one they're on.
+     A song that resolves to neither is still allowed: a title on its own, with
+     no art and nowhere to go, is a complete answer and the shape permits it. */
+  const ITUNES = 'https://itunes.apple.com';
+  const SPOTIFY_TRACK = /^https:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?track\/[A-Za-z0-9]+/i;
+
+  // Artwork arrives at 100px from Apple, and both CDNs size in the URL PATH
+  // rather than a query parameter — so a bigger copy is a string edit and not a
+  // second request. 300px covers a 96pt square on a 3x screen exactly. Spotify's
+  // oEmbed already hands back 300, so it needs nothing done to it.
+  const bigArt = (url) => String(url || '').replace('/100x100bb.', '/300x300bb.');
+
+  // The stored shape, from an iTunes row. Every source normalizes through here
+  // so the picker's list is one kind of object however it was found.
+  const songOf = (r) => ({
+    title: r.trackName || '',
+    artist: r.artistName || '',
+    art: bigArt(r.artworkUrl100),
+    apple: r.trackViewUrl || '',
+    spotify: '',
+  });
+
+  // Does this song have a link to anywhere at all? Only a typed-in title
+  // doesn't, and the picker says so out loud when it happens.
+  const songHasLink = (s) => !!(s.apple || s.spotify);
+
+  /* DEDUPED BY TITLE + ARTIST, which is why the limit asks for far more than it
+     shows. iTunes ranks across every RELEASE, so one song on its album, as a
+     single, and on three compilations is five rows that read as one row: a
+     search for "midnight city" came back with the M83 track twice and four
+     identical "Lofi Jazz Terrace" lines, and a list where most rows are the same
+     words is a list nobody can pick from. The reader is choosing a SONG, not a
+     pressing, so the first of each pair wins — that's the highest-ranked one —
+     and eight distinct results is the whole page. */
+  const songKey = (s) => `${s.title}|${s.artist}`.toLowerCase();
+
+  async function searchSongs(q, signal) {
+    const res = await fetch(
+      `${ITUNES}/search?term=${encodeURIComponent(q)}&entity=song&limit=25`, { signal });
+    if (!res.ok) throw new Error('itunes ' + res.status);
+    const json = await res.json();
+    const seen = new Set();
+    const out = [];
+    for (const r of json.results || []) {
+      const s = songOf(r);
+      if (!s.title || seen.has(songKey(s))) continue;
+      seen.add(songKey(s));
+      out.push(s);
+      if (out.length === 8) break;
+    }
+    return out;
+  }
+
+  /* A pasted link, resolved as far as it can be. Returns null for one we can't
+     read, which the picker turns into a sentence naming the two we can rather
+     than a silent empty list. */
+  async function resolveSongUrl(url, signal) {
+    if (SPOTIFY_TRACK.test(url)) {
+      const res = await fetch(
+        'https://open.spotify.com/oembed?url=' + encodeURIComponent(url), { signal });
+      if (!res.ok) return null;
+      const j = await res.json();
+      return j.title
+        ? { title: j.title, artist: '', art: j.thumbnail_url || '', apple: '', spotify: url }
+        : null;
+    }
+    // Apple Music: the TRACK's id rides in `?i=` (the path names the album), and
+    // the same keyless Search API has a lookup form that takes it — so a pasted
+    // Apple link comes back with the artist a Spotify one can't give.
+    let id = '';
+    try {
+      const u = new URL(url);
+      if (/(^|\.)music\.apple\.com$/i.test(u.hostname)) id = u.searchParams.get('i') || '';
+    } catch { /* not a URL we can parse; falls through to null */ }
+    if (!/^\d+$/.test(id)) return null;
+    const res = await fetch(`${ITUNES}/lookup?id=${id}&entity=song`, { signal });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const hit = (j.results || []).find(x => x.trackName);
+    return hit ? songOf(hit) : null;
+  }
+
+  /* ── Which app a song opens in ───────────────────────────────────────────────
+     THE LINK BELONGS TO WHOEVER SET IT, and that is the problem this solves. A
+     song found by search carries Apple's copy of it, because Apple's is the
+     search we can reach without a key. Hand that to a reader who pays Spotify
+     and they land on a web page asking them to subscribe to something else —
+     the tap did nothing, and it did nothing in the most annoying way available.
+
+     So the link is chosen AT THE READING END, not the writing end. Every song
+     stores what it knows per service (`apple`, `spotify`) and this picks one.
+     When the wanted service has no exact link, it gets a SEARCH url in that
+     service instead: both domains are claimed by their apps, so the tap still
+     lands in the right app, one row short of the right track. That is a much
+     smaller failure than the one it replaces, and it is the entire reason this
+     needs no server, no secret and no Spotify developer account. (An exact
+     Spotify link for a searched song is reachable — client credentials on an
+     edge function beside supabase/functions/push — and would drop straight in
+     here, replacing a search url with a real one and changing nothing else.)
+
+     NOBODY IS ASKED. iOS has no default-music-app setting to read, but it will
+     answer `canOpenURL("spotify://")`, and somebody who went and installed
+     Spotify is telling us which service they are on more reliably than a modal
+     interrupting the tap would. Apple Music ships preinstalled, so its presence
+     says nothing and isn't asked about — the absence of Spotify is the signal.
+     The picker below exists for the one case the guess gets wrong: both
+     installed, Apple preferred. */
+  const MUSIC_KEY = 'tria:music';
+  const MUSIC_CHOICES = [
+    { key: '',        label: 'Automatic' },
+    { key: 'apple',   label: 'Apple Music' },
+    { key: 'spotify', label: 'Spotify' },
+  ];
+  // Per DEVICE, not per account, and never in the users table: this is a fact
+  // about the phone in your hand, like the accent mirror and the block list.
+  // Which service YOU pay for is nobody else's row.
+  const musicPref = () => {
+    try {
+      const v = localStorage.getItem(MUSIC_KEY);
+      return v === 'apple' || v === 'spotify' ? v : '';
+    } catch { return ''; }                      // private mode → Automatic
+  };
+  const setMusicPref = (v) => {
+    try {
+      if (v) localStorage.setItem(MUSIC_KEY, v);
+      else localStorage.removeItem(MUSIC_KEY);
+    } catch { /* private mode; the choice lasts the session and no longer */ }
+  };
+
+  // Null until iOS answers, and false everywhere else — a browser cannot see
+  // what is installed, so the web is always Automatic → Apple Music.
+  let spotifyInstalled = false;
+  const musicService = () => musicPref() || (spotifyInstalled ? 'spotify' : 'apple');
+  const musicLabel = () =>
+    (MUSIC_CHOICES.find(c => c.key === musicPref()) || MUSIC_CHOICES[0]).label;
+
+  const MUSIC_SEARCH = {
+    apple:   (q) => 'https://music.apple.com/search?term=' + encodeURIComponent(q),
+    spotify: (q) => 'https://open.spotify.com/search/' + encodeURIComponent(q),
+  };
+
+  /* Always somewhere to go: a song has a title or it isn't stored, and a title
+     is enough to search with. That is what retired the linkless square the rail
+     used to draw for a typed-in song. */
+  function songLink(s) {
+    const want = musicService();
+    return s[want] || MUSIC_SEARCH[want]([s.title, s.artist].filter(Boolean).join(' '));
+  }
+
+  // Asked once, on the native shell only, as early as the bridge allows. A
+  // failure to answer leaves the default standing rather than blocking a paint.
+  async function readMusicApps() {
+    if (!nativeShell() || !window.Capacitor?.nativePromise) return;
+    try {
+      const res = await window.Capacitor.nativePromise('TriaSettings', 'musicApps', {});
+      spotifyInstalled = !!res?.spotify;
+    } catch { /* old build without the method; Automatic stays Apple Music */ }
+  }
+
+  // Everyone with a song still standing, me first and the rest newest-set
+  // first — so the rail reads as what the room is on right now rather than as a
+  // directory. Blocked accounts drop out the way they do everywhere else.
+  function listeners() {
+    const me = Store.session();
+    let mine = null;
+    const rest = [];
+    for (const u of Store.users()) {
+      if (!u.listening || !u.username) continue;
+      if (u.username === me) { mine = u; continue; }
+      if (Blocks.has(u.username)) continue;
+      rest.push(u);
+    }
+    rest.sort((a, b) => Date.parse(b.listening.at || 0) - Date.parse(a.listening.at || 0));
+    return { mine, rest };
+  }
+
+  /* One square's CONTENTS, without a wrapper — because the same three spans go
+     inside two different elements. Somebody else's song is an <a>; mine is a
+     <button>, because you edit yours rather than open it. Keeping the wrapper
+     out here is what lets both exist without a second copy of the innards.
+
+     There was a third, a flat <div> for a song with nowhere to go, on the rule
+     that a tap target that does nothing is worse than no tap target. songLink
+     retired it: a typed-in title with no service link now opens a search for
+     itself, so every square goes somewhere. */
+  function npFace(u, me) {
+    const s = u.listening;
+    const who = u.username === me ? 'You' : (u.name || u.username);
+    return {
+      label: `${who}: ${s.title}${s.artist ? ', ' + s.artist : ''}`,
+      html:
+        `<span class="np-art"${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''}` +
+          ` aria-hidden="true"></span>` +
+        `<span class="np-song">${esc(s.title)}</span>` +
+        `<span class="np-who">${esc(who)}</span>`,
+    };
+  }
+
+  // target="_blank" is what the outbound handler up top reads to hand the URL to
+  // iOS rather than letting a WKWebView swallow it.
+  function npSquare(u, me) {
+    const f = npFace(u, me);
+    return `<a class="np-item" href="${esc(songLink(u.listening))}" ` +
+        `target="_blank" rel="noopener noreferrer" ` +
+        `data-out="system" aria-label="${esc(f.label)}">${f.html}</a>`;
+  }
+
+  /* The rail. Your own square is always drawn, even empty, because it is the
+     only way into the feature — a strip that hides itself until somebody has
+     used it can never have a first user. */
+  function nowPlayingEl() {
+    const me = Store.session();
+    const { mine, rest } = listeners();
+    const first = mine
+      ? `<button type="button" class="np-item np-mine" data-np="edit" ` +
+          `aria-label="Change your song">${npFace(mine, me).html}</button>`
+      : `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
+          `aria-label="Say what you’re listening to">` +
+          `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
+          `<span class="np-song">Add a song</span>` +
+          `<span class="np-who">You</span>` +
+        `</button>`;
+    return `<section class="nowplaying" aria-label="What people are listening to">` +
+        `<p class="np-kicker">On repeat</p>` +
+        `<div class="np-strip">${first}${rest.map(u => npSquare(u, me)).join('')}</div>` +
+      `</section>`;
+  }
+
+  /* ── The picker (#/listening) ────────────────────────────────────────────────
+     A PAGE and not a sheet, which is the call the profile editor and the friends
+     list already made for the same reason: a sheet is fixed to the bottom of the
+     screen and this one holds a text field, so the iOS keyboard would rise over
+     the panel and cover the results it exists to show. On a page the field sits
+     in the flow and the keyboard pushes nothing off anything.
+
+     The field is ordinary web, not one of the native carets. Those three (the
+     comment bar, the find bar, Discover's search) are native because each one
+     sits ON the keyboard; a field in a page's normal flow is the profile
+     editor's situation, and the profile editor's fields are web. */
+  let songQuery = '';
+  let songHits = [];
+  let songState = '';        // '', 'looking', or a sentence to show instead of rows
+  let songAbort = null;
+  let songTimer = 0;
+
+  const LINK_HELP = 'I can read Spotify and Apple Music links. ' +
+    'Try the song’s name instead.';
+
+  /* TWO DESTINATIONS, ONE PICKER. `mode` is '' for the listening status and
+     'pin' for a song pin (#/pin/song), and everything between the two is the
+     same search over the same two keyless endpoints landing on the same stored
+     shape. The only differences are the words at the top, where the back
+     chevron aims, and which writer the pick is handed to — which is a good deal
+     less than a second copy of an iTunes search would cost, and it means a
+     fix to the debounce or the dedupe lands in both places at once.
+
+     `at` is the pin slot to REPLACE, from "Change song" or a swap; null means
+     take the next free one. Ignored entirely outside pin mode. */
+  function renderListening(mode, at) {
+    const me = Store.user(Store.session());
+    if (!me) { go('#/discover'); return; }
+    const pin = mode === 'pin';
+    const pins = myPins();
+    const slot = pin && Number.isInteger(at) && at >= 0 && at < pins.length ? at : null;
+    // Nothing to fill: the add tile is hidden at three, so arriving here full
+    // means a stale link or a back button, and an empty-handed picker is a page
+    // that can only disappoint.
+    if (pin && slot == null && pins.length >= PIN_MAX) { go('#/profile'); return; }
+    mountToolbar({
+      leading: pin ? toolbarBackEl('#/profile', 'Profile') : toolbarBackEl('#/discover', 'Discover'),
+      title: pin ? 'Pin a song' : 'Listening to',
+      actions: '',
+    });
+
+    // The current song is the status's own business: it's shown above the field
+    // so you can see (and clear) what stands. A pin is being ADDED to a list
+    // that is already on the page you came from, so there is nothing to restate.
+    const now = pin ? null : me.listening;
+    view.innerHTML =
+      `<section class="view view--listening">` +
+        mastheadEl('', pin ? 'Which song?' : 'What are you listening to?', '') +
+        (now
+          ? `<div class="song-now">` +
+              `<span class="song-art"${now.art
+                ? ` style="background-image:url('${encodeURI(now.art)}')"` : ''} aria-hidden="true"></span>` +
+              `<span class="song-lines">` +
+                `<span class="song-title">${esc(now.title)}</span>` +
+                (now.artist ? `<span class="song-artist">${esc(now.artist)}</span>` : '') +
+              `</span>` +
+              `<button type="button" class="song-clear" id="song-clear">Clear</button>` +
+            `</div>`
+          : '') +
+        `<input id="song-q" class="song-input" type="search" ` +
+          `placeholder="A song, or a link from your music app" ` +
+          `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
+          `aria-label="Search for a song" value="${esc(songQuery)}">` +
+        `<div class="song-results" id="song-results" aria-live="polite"></div>` +
+      `</section>`;
+
+    const resEl = view.querySelector('#song-results');
+    const input = view.querySelector('#song-q');
+
+    // Every control here awaits the network, so each one hands itself back on
+    // every path including a rejection — the house rule, and the reason both
+    // writers below are wrapped rather than fired and forgotten.
+    const commit = async (btn, song) => {
+      if (btn) btn.disabled = true;
+      try {
+        if (pin) {
+          const next = pins.slice();
+          const entry = { k: 'song', ...song };
+          if (slot == null) next.push(entry); else next[slot] = entry;
+          // commitPins says its own piece on failure and fires its own haptic on
+          // the confirmed write, so there is nothing to add here but the exit.
+          if (!(await commitPins(next, {}))) return;
+          songQuery = ''; songHits = []; songState = '';
+          go('#/profile');
+          return;
+        }
+        const res = await Store.setListeningTo(song);
+        if (!res.ok) { toast(res.error); return; }
+        hapticEvent('SUCCESS');
+        songQuery = ''; songHits = []; songState = '';
+        go('#/discover');
+      } catch {
+        toast('Couldn’t save that, try again.');
+      } finally {
+        if (btn && btn.isConnected) btn.disabled = false;
+      }
+    };
+
+    const paint = () => {
+      if (songState === 'looking') {
+        resEl.innerHTML = `<p class="feed-empty">Looking…</p>`;
+        return;
+      }
+      if (songState) { resEl.innerHTML = `<p class="feed-empty">${esc(songState)}</p>`; return; }
+      resEl.innerHTML = songHits.map((s, i) =>
+        `<button type="button" class="song-hit" data-i="${i}">` +
+          `<span class="song-art"${s.art
+            ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+          `<span class="song-lines">` +
+            `<span class="song-title">${esc(s.title)}</span>` +
+            (s.artist ? `<span class="song-artist">${esc(s.artist)}</span>`
+              : (songHasLink(s) ? '' : `<span class="song-artist">Just as you typed it</span>`)) +
+          `</span>` +
+        `</button>`).join('');
+      resEl.querySelectorAll('.song-hit').forEach(b =>
+        b.addEventListener('click', () => commit(b, songHits[+b.dataset.i])));
+    };
+
+    const run = async (raw) => {
+      const q = raw.trim();
+      songAbort?.abort();
+      if (!q) { songHits = []; songState = ''; paint(); return; }
+      const ctrl = new AbortController();
+      songAbort = ctrl;
+      songHits = []; songState = 'looking'; paint();
+      const isLink = /^https?:\/\//i.test(q);
+      try {
+        const found = isLink
+          ? [await resolveSongUrl(q, ctrl.signal)].filter(Boolean)
+          : await searchSongs(q, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        songHits = found;
+        // Never a dead end. A search that found nothing offers the words back
+        // as a plain title, which the stored shape allows; a link we can't read
+        // says which two we can, because "no results" would read as "that song
+        // doesn't exist" when the truth is "that service isn't one I know".
+        songState = found.length ? ''
+          : (isLink ? LINK_HELP : '');
+        if (!found.length && !isLink) {
+          songHits = [{ title: q.slice(0, 120), artist: '', art: '', apple: '', spotify: '' }];
+        }
+      } catch (err) {
+        if (ctrl.signal.aborted || err?.name === 'AbortError') return;
+        songHits = [];
+        songState = 'Couldn’t reach the music search. Try again in a moment.';
+      }
+      paint();
+    };
+
+    input.addEventListener('input', () => {
+      songQuery = input.value;
+      clearTimeout(songTimer);
+      // Debounced rather than per-keystroke: the Search API rate-limits by IP
+      // at around twenty a minute, and a typing burst is one question.
+      songTimer = setTimeout(() => run(songQuery), 320);
+    });
+    view.querySelector('#song-clear')
+      ?.addEventListener('click', (e) => commit(e.currentTarget, null));
+
+    paint();
+    if (songQuery.trim() && !songHits.length) run(songQuery);
+  }
+
+  /* ── Pinned cards ────────────────────────────────────────────────────────────
+     Up to three things somebody chooses to hold above their own wall: a post
+     they wrote, or a song. THE PANEL IS THE DAILY CARD'S — plain glass, the
+     floating-card look, a serif line doing the talking — because both are the
+     same object in the app's grammar: one thing the page wants you to read
+     before it hands you the rest. What the pins do NOT take from the daily is
+     its content (a prompt with a countdown belongs to a question the whole room
+     got, and this is one person's choice), or its size: three headline cards
+     stacked would be the wall.
+
+     A PIN IS A SPOTLIGHT, NOT A MOVE. A pinned post still sits in its own place
+     down the wall, the way a pinned tweet does — taking it out of chronology
+     would mean the profile quietly lies about when things happened, and a
+     reader who scrolled past the card at the top has no way to know that is why
+     the post isn't where they expected it.
+
+     THE ORDER IS THE ARRAY, and dragging is what edits it (see wirePinDrag).
+     There is a Move up / Move down pair in each card's own ••• as well, and
+     that is not a fallback for a fussy gesture — it is the only way to reorder
+     with a keyboard, and the only way that says out loud that these three are
+     ordered at all.
+
+     WHAT A READER MAY SEE IS DECIDED BY THE POST, NEVER BY THE PIN (see
+     pinsFor). The pin is a pointer; every reader resolves it against their own
+     cache, which holds only what RLS handed them. So a pin cannot widen an
+     audience, and a card that can't be drawn is dropped rather than shown as a
+     locked box — "there is something here you can't see" is a worse thing to
+     print on somebody's profile than nothing at all.
+
+     Activities are pinnable. They meet the same friends-only courtesy on the
+     way out that the wall below already applies to them, which is the whole
+     reason the exclusion elsewhere exists — a daily excludes activities because
+     answering a prompt with a plan makes no sense, not because an activity is
+     unfit to be looked at. */
+  const PIN_MAX = 3;
+  const myPins = () => (Store.currentUser() || {}).pins || [];
+
+  /* The pins a given reader may actually see on a given profile, resolved and in
+     order. Same three tests the wall itself runs (subject, block, activity
+     courtesy, and a locked profile's public-only fence), because a pin is a
+     louder copy of a row that has already had to pass them. A pin whose post has
+     gone, or was never visible here, simply isn't in the list. */
+  function pinsFor(u, ctx) {
+    const list = u.pins || [];
+    if (!list.length) return [];
+    const all = Store.posts();
+    const out = [];
+    // `at` is the slot the entry actually occupies in the stored array, and it
+    // rides along because it is NOT the position of the card that gets drawn: a
+    // pin that can't be resolved is dropped, so the third card on screen can be
+    // the fourth thing in the row. Everything that WRITES (unpin, move, drop)
+    // has to name the slot; only the geometry uses the drawn position.
+    list.forEach((e, at) => {
+      if (e.k === 'song') { out.push({ pin: e, at }); return; }
+      const row = all.find(p => p.id === e.id);
+      const post = row ? subjectOf(row) : null;
+      if (!post || Blocks.has(post.author)) return;
+      if (post.type === 'activity' && !ctx.isSelf && !ctx.isFriend && post.audience !== 'public') return;
+      if (ctx.locked && row.audience !== 'public') return;
+      out.push({ pin: e, row, post, at });
+    });
+    return out;
+  }
+
+  // What a pin is called when it has to be named in a list rather than drawn —
+  // the swap sheet, an aria-label. A post says what it said; a song says itself.
+  function pinLabel(e) {
+    // Clipped, because a sheet row is one line and a note can be a paragraph.
+    // Same shape notifPostLabel uses to name a post in a list, at the width a
+    // row of the sheet actually has.
+    const clip = (t) => (t.length > 46 ? t.slice(0, 46).trimEnd() + '…' : t);
+    if (e.k === 'song') return clip(e.title + (e.artist ? ' · ' + e.artist : ''));
+    const row = Store.posts().find(p => p.id === e.id);
+    const post = row ? subjectOf(row) : null;
+    if (!post) return 'A post that isn’t here any more';
+    return clip(saidOf(post) || TYPE_LABEL[post.type] || 'A post');
+  }
+
+  /* Write the list, and draw it before the network answers. Store.setPins is
+     optimistic and synchronous before its first await (the cache has already
+     moved by the time it returns a promise), so `repaint` runs immediately and
+     the card is where you dropped it under your finger. A rejection reverts the
+     cache inside the store, so the SAME repaint puts it back.
+
+     LIGHT, on the confirmed write, like every other haptic in the app: pinning
+     changes what everyone else sees, so it earns one, and the lift of a drag
+     does not (it changes only what you are looking at, and the card visibly
+     rising says so already). This is the row the 1.5 haptics audit deferred for
+     want of a pin feature. */
+  function commitPins(next, { repaint, toastOk, quiet } = {}) {
+    const p = Store.setPins(next);
+    repaint?.();
+    const failed = (msg) => { toast(msg); repaint?.(); return false; };
+    return p.then(res => {
+      if (res && res.ok) { if (!quiet) hapticTap('LIGHT'); if (toastOk) toast(toastOk); return true; }
+      return failed((res && res.error) || 'Couldn’t save that, try again.');
+    }).catch(() => failed('Couldn’t save that, try again.'));
+  }
+
+  const movedPins = (list, from, to) => {
+    const next = list.slice();
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    return next;
+  };
+
+  /* ── One card ───────────────────────────────────────────────────────────────
+     A song and a post draw the same object: a square on the leading edge, a
+     type word above a serif line, a quiet line under it, and the whole card is
+     the tap. They share a fixed height, which is a design decision AND the
+     thing that makes the drag exact — every card displaces every other card by
+     the same distance, so a reorder never has to guess.
+
+     THE ALBUM COVER IS THE POINT OF THE SONG CARD, so it gets three things a
+     thumbnail doesn't. It sits at 88px with a real drop shadow, so it reads as
+     an object lying ON the glass rather than a picture printed into it. It
+     carries a sheen — one soft diagonal highlight, the light a record sleeve
+     catches. And a blurred, blown-up copy of the same artwork lies over the
+     card's glass and is masked out before it reaches the words, so the panel
+     wears the record's own colour without anyone having to sample a pixel: a
+     hotlinked image can be blurred by CSS but not read by canvas (it would
+     taint it), and this needs no CORS, no second request and no colour column.
+     It is the same idea as a photo post's `tint`, paid for in blur instead of
+     in arithmetic.
+
+     A post with a photo gets the glow too, from its own stored tint — one flat
+     colour rather than a blurred bitmap, because a post image is a full-size
+     upload and blurring one behind a card is real work for a colour we already
+     computed at publish time. */
+  function pinCardEl(item, ctx) {
+    const e = item.pin;
+    const at = item.at;
+    const own = ctx.isSelf;
+    const more = own
+      ? `<button type="button" class="pin-more" data-pin="${at}" aria-haspopup="menu" ` +
+          `aria-label="Options for this pin" title="Options">${svgIcon('dots')}</button>`
+      : '';
+
+    if (e.k === 'song') {
+      const art = e.art ? `background-image:url('${encodeURI(e.art)}')` : '';
+      return `<article class="pin pin--song" data-i="${at}" data-type="song">` +
+          (e.art ? `<span class="pin-glow" style="${art}" aria-hidden="true"></span>` : '') +
+          `<span class="pin-art pin-cover${e.art ? '' : ' pin-art--empty'}"` +
+            (art ? ` style="${art}"` : '') + ` aria-hidden="true">` +
+            (e.art ? '' : svgIcon('sound', 'pin-art-ico')) +
+          `</span>` +
+          `<span class="pin-lines">` +
+            `<span class="pin-kicker">Song</span>` +
+            `<span class="pin-title">${esc(e.title)}</span>` +
+            (e.artist ? `<span class="pin-sub">${esc(e.artist)}</span>` : '') +
+          `</span>` +
+          // target="_blank" + data-out="system" is what the outbound handler up
+          // top reads to hand the link to iOS itself, which is the only way a
+          // universal link reaches Apple Music or Spotify (see songLink).
+          `<a class="pin-open" href="${esc(songLink(e))}" target="_blank" ` +
+            `rel="noopener noreferrer" data-out="system" ` +
+            `aria-label="${esc(e.title + (e.artist ? ', ' + e.artist : ''))}"></a>` +
+          more +
+        `</article>`;
+    }
+
+    const p = item.post;
+    // A video Frame with no stored poster has no still to show, so it falls back
+    // to its tint square like a note does — the same rule the feed's own frames
+    // follow rather than a second one for small pictures.
+    const still = p.image && !isVideoUrl(p.image) ? p.image : (p.poster || '');
+    const face = still ? `background-image:url('${encodeURI(still)}')` : '';
+    const sub = p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
+      : p.type === 'find' && p.url ? domainOf(p.url)
+      : '';
+    return `<article class="pin pin--post" data-i="${at}" data-type="${esc(p.type)}">` +
+        (p.tint && still ? `<span class="pin-glow pin-glow--flat" style="background:${esc(p.tint)}" aria-hidden="true"></span>` : '') +
+        `<span class="pin-art${still ? '' : ' pin-art--empty'}"` +
+          (face ? ` style="${face}"` : (p.tint ? ` style="background:${esc(p.tint)}"` : '')) +
+          ` aria-hidden="true">` +
+          (still ? '' : svgIcon(TYPE_GLYPH[p.type] || 'note', 'pin-art-ico')) +
+        `</span>` +
+        `<span class="pin-lines">` +
+          `<span class="pin-kicker">${esc(TYPE_LABEL[p.type] || 'Post')}</span>` +
+          `<span class="pin-title">${esc(saidOf(p) || TYPE_LABEL[p.type] || 'Post')}</span>` +
+          (sub ? `<span class="pin-sub">${esc(sub)}</span>` : '') +
+        `</span>` +
+        `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(saidOf(p) || 'Open this post')}"></a>` +
+        more +
+      `</article>`;
+  }
+
+  /* The section. Empty on somebody else's profile with nothing pinned, and on
+     your own it is never empty: the add tile stands in, because a feature that
+     hides itself until it has been used can never have a first user (the same
+     argument that keeps your own square on the listening rail). */
+  function pinsSectionHtml(u, ctx) {
+    const items = pinsFor(u, ctx);
+    if (!items.length && !ctx.isSelf) return '';
+    const room = myPins().length < PIN_MAX;
+    const add = ctx.isSelf && room
+      ? `<button type="button" class="pin pin-add" id="pin-add">` +
+          `<span class="pin-art pin-art--add" aria-hidden="true">+</span>` +
+          `<span class="pin-lines">` +
+            `<span class="pin-title pin-title--add">${items.length ? 'Pin something else' : 'Pin something here'}</span>` +
+            `<span class="pin-sub">A song, or a post of yours</span>` +
+          `</span>` +
+        `</button>`
+      : '';
+    // The kicker teaches the drag, once, in the only place it can be said
+    // without drawing a handle on every card: a grip mark beside a ••• is two
+    // controls on a 110px card doing one job each, and the ••• already holds
+    // Move up / Move down for anyone who never tries the gesture.
+    const hint = ctx.isSelf && items.length > 1
+      ? `<span class="daily-sep" aria-hidden="true">·</span>hold to reorder` : '';
+    return `<section class="pins" aria-label="Pinned">` +
+        (items.length ? `<p class="pins-kicker">Pinned${hint}</p>` : '') +
+        `<div class="pin-stack">` +
+          items.map(it => pinCardEl(it, ctx)).join('') + add +
+        `</div>` +
+      `</section>`;
+  }
+
+  // The card's own ••• — the one surface a SONG pin has, since a song has no
+  // post menu anywhere else to be unpinned from.
+  function openPinMenu(at, repaint) {
+    const me = Store.currentUser();
+    const pins = myPins();
+    const e = pins[at];
+    if (!e || !me) return;
+    // Move by one DRAWN card and not by one slot: a card can only trade places
+    // with a card, and swapping with something that isn't on screen is a row
+    // that appears to do nothing.
+    const slots = pinsFor(me, { isSelf: true, isFriend: true }).map(x => x.at);
+    const k = slots.indexOf(at);
+    const items = [];
+    if (e.k === 'song')
+      items.push({ label: 'Change song', icon: 'sound', run: () => go(`#/pin/song?at=${at}`) });
+    if (k > 0)
+      items.push({ label: 'Move up', icon: 'arrowup',
+        run: () => commitPins(movedPins(pins, at, slots[k - 1]), { repaint }) });
+    if (k >= 0 && k < slots.length - 1)
+      items.push({ label: 'Move down', icon: 'arrowdown',
+        run: () => commitPins(movedPins(pins, at, slots[k + 1]), { repaint }) });
+    items.push({ label: 'Unpin', icon: 'pinned',
+      run: () => commitPins(pins.filter((_, j) => j !== at), { repaint }) });
+    openSheet({ items });
+  }
+
+  // The way in, from an empty slot. Three rows because there are three kinds of
+  // thing to pin and the ask names all three; the middle one is absent for
+  // somebody who hasn't posted yet, rather than opening an empty picker.
+  function openPinAdd() {
+    const me = Store.session();
+    const mine = Store.postsBy(me).filter(pinnablePost);
+    openSheet({
+      title: 'Pin to your profile',
+      items: [
+        { label: 'A song', icon: 'sound', run: () => go('#/pin/song') },
+        ...(mine.length
+          ? [{ label: 'Something you’ve posted', icon: 'list', run: () => go('#/pin/post') }]
+          : []),
+        { label: 'Write something new', icon: 'pencil',
+          run: () => { pendingPin = true; go('#/publish'); } },
+      ],
+    });
+  }
+
+  /* A bare repost is not offered as a pin. It is the one row on your wall that
+     isn't a thing you made — you passed it along, and the card it draws is
+     somebody else's post with your name over it, which is a strange thing to
+     hold up as one of the three you chose. A QUOTE is yours (you wrote the
+     note) and is offered like any other post. Nothing stops a bare repost being
+     pinned by hand if some other path ever hands one over; this is the picker
+     being opinionated, not the store. */
+  const pinnablePost = (p) => !(p.repostOf && !p.note);
+
+  /* Pin a post from its own ••• (openPostMenu). At three, the row does not go
+     away and does not do nothing: it asks which of the three to swap out. A
+     sheet row that turns out to be dead is worse than one that was never
+     offered, and "unpin something first, then come back here" is a two-page
+     errand for a one-tap decision. */
+  function pinPostFromMenu(post) {
+    const pins = myPins();
+    if (pins.some(e => e.k === 'post' && e.id === post.id)) return;
+    if (pins.length < PIN_MAX) {
+      commitPins(pins.concat([{ k: 'post', id: post.id }]), { toastOk: 'Pinned to your profile.' });
+      return;
+    }
+    openSheet({
+      title: 'Your profile holds three pins. Swap one out?',
+      items: pins.map((e, i) => ({
+        label: pinLabel(e),
+        run: () => {
+          const next = pins.slice();
+          next[i] = { k: 'post', id: post.id };
+          commitPins(next, { toastOk: 'Pinned to your profile.' });
+        },
+      })),
+    });
+  }
+
+  /* ── Dragging one card to a new slot ────────────────────────────────────────
+     Pointer events and a long press, not HTML5 drag-and-drop, which does not
+     exist on touch. The press has to be LONG (a lift at 280ms with no movement)
+     for one reason: these cards live in a page you scroll, and a finger that
+     starts on a card and moves is almost always scrolling. Anything shorter
+     turns the top of a profile into a place where scrolling picks things up.
+
+     THE SCROLL IS STOPPED BY A NON-PASSIVE touchmove, added at the moment of
+     the lift. `touch-action: none` on the card would be the tidy way and is the
+     wrong one — it would kill scrolling that merely BEGINS on a card, which is
+     most of the top of the page. Adding the listener late works because nothing
+     has moved yet: the browser has not yet decided this gesture is a scroll, so
+     a preventDefault still takes it.
+
+     The cards are all one height (see .pin in app.css), so a displacement is
+     exactly one card plus one gap and the geometry needs no measuring beyond
+     the rects taken at the lift. */
+  function wirePinDrag(stack, pins, repaint) {
+    const cards = [...stack.querySelectorAll('.pin[data-i]')];
+    if (cards.length < 2) return;
+    const LIFT_MS = 280, SLOP = 8;
+    let press = null;      // finger down, not yet a lift
+    let drag = null;       // lifted and moving
+
+    const blockScroll = (e) => { if (drag) e.preventDefault(); };
+    const cancelPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
+
+    const layoutGap = () => {
+      const step = drag.rects[drag.from].height + drag.gap;
+      cards.forEach((c, j) => {
+        if (j === drag.from) return;
+        const up = drag.to > drag.from && j > drag.from && j <= drag.to;
+        const down = drag.to < drag.from && j < drag.from && j >= drag.to;
+        c.style.transform = up ? `translateY(${-step}px)` : down ? `translateY(${step}px)` : '';
+      });
+    };
+
+    const lift = () => {
+      const el = press.el;
+      const rects = cards.map(c => c.getBoundingClientRect());
+      const i = cards.indexOf(el);
+      drag = { el, from: i, to: i, y: press.y, rects,
+               gap: rects.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0 };
+      press = null;
+      stack.classList.add('is-reordering');
+      el.classList.add('is-lifted');
+      document.addEventListener('touchmove', blockScroll, { passive: false });
+    };
+
+    const onMove = (e) => {
+      if (press) {
+        if (Math.abs(e.clientY - press.y) > SLOP || Math.abs(e.clientX - press.x) > SLOP) cancelPress();
+        return;
+      }
+      if (!drag) return;
+      const dy = e.clientY - drag.y;
+      drag.el.style.transform = `translateY(${dy}px)`;
+      const r = drag.rects[drag.from];
+      const mid = r.top + dy + r.height / 2;
+      let to = drag.from;
+      drag.rects.forEach((rr, j) => {
+        if (j === drag.from) return;
+        const c = rr.top + rr.height / 2;
+        if (j < drag.from && mid < c) to = Math.min(to, j);
+        if (j > drag.from && mid > c) to = Math.max(to, j);
+      });
+      if (to !== drag.to) { drag.to = to; layoutGap(); }
+    };
+
+    const onUp = () => {
+      if (press) { cancelPress(); return; }
+      if (!drag) return;
+      const { from, to } = drag;
+      document.removeEventListener('touchmove', blockScroll);
+      drag.el.classList.remove('is-lifted');
+      stack.classList.remove('is-reordering');
+      cards.forEach(c => { c.style.transform = ''; });
+      drag = null;
+      // A lift that barely moved still ends in a click on the stretched link
+      // under the finger, and that click means "open this", which is not what
+      // just happened. Swallow exactly one.
+      const kill = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+      document.addEventListener('click', kill, { capture: true, once: true });
+      setTimeout(() => document.removeEventListener('click', kill, true), 350);
+      // Drawn positions became slots on the way out (see pinsFor): the geometry
+      // above counts cards, and the array being written counts everything.
+      if (to !== from)
+        commitPins(movedPins(pins, +cards[from].dataset.i, +cards[to].dataset.i), { repaint });
+    };
+
+    cards.forEach(el => {
+      el.addEventListener('pointerdown', (e) => {
+        if (e.button > 0 || drag) return;
+        if (e.target.closest('.pin-more')) return;       // the menu is not a handle
+        press = { el, x: e.clientX, y: e.clientY, timer: setTimeout(lift, LIFT_MS) };
+      });
+    });
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    // The listeners outlive the stack (they are on the document), so the caller
+    // hands them back when the section is repainted or the page changes.
+    return () => {
+      cancelPress();
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      document.removeEventListener('touchmove', blockScroll);
+    };
+  }
+
+  // Everything the section needs hooked up, re-run whenever it repaints.
+  function wirePins(host, u, ctx, repaint) {
+    host.querySelector('#pin-add')?.addEventListener('click', openPinAdd);
+    if (!ctx.isSelf) return null;
+    host.querySelectorAll('.pin-more').forEach(btn =>
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openPinMenu(+btn.dataset.pin, repaint);
+      }));
+    const stack = host.querySelector('.pin-stack');
+    return stack ? wirePinDrag(stack, myPins(), repaint) : null;
+  }
+
+  /* ── Picking one of your own posts to pin (#/pin/post) ───────────────────────
+     A page rather than a sheet, the same call the song picker made: this is a
+     list that can run the length of somebody's archive, and a sheet is a panel
+     stuck to the bottom of the screen. Rows are the picker vocabulary the song
+     search already speaks (a square, two lines) so the two ways to fill a slot
+     look like two ways to do one thing. */
+  function renderPinPost(at) {
+    const me = Store.session();
+    if (!me) { go('#/profile'); return; }
+    const pins = myPins();
+    const slot = Number.isInteger(at) && at >= 0 && at < pins.length ? at : null;
+    if (slot == null && pins.length >= PIN_MAX) { go('#/profile'); return; }
+    mountToolbar({
+      leading: toolbarBackEl('#/profile', 'Profile'),
+      title: 'Pin a post',
+      actions: '',
+    });
+    const already = new Set(pins.filter(e => e.k === 'post').map(e => e.id));
+    const mine = Store.postsBy(me).filter(p => pinnablePost(p) && !already.has(p.id));
+    const row = (p) => {
+      const post = subjectOf(p) || p;
+      const still = post.image && !isVideoUrl(post.image) ? post.image : (post.poster || '');
+      const face = still ? ` style="background-image:url('${encodeURI(still)}')"`
+        : (post.tint ? ` style="background:${esc(post.tint)}"` : '');
+      return `<button type="button" class="pin-row" data-id="${esc(p.id)}">` +
+          `<span class="pin-row-art${still ? '' : ' pin-art--empty'}"${face} aria-hidden="true">` +
+            (still ? '' : svgIcon(TYPE_GLYPH[post.type] || 'note', 'pin-art-ico')) +
+          `</span>` +
+          `<span class="song-lines">` +
+            `<span class="song-title">${esc(saidOf(post) || TYPE_LABEL[post.type] || 'Post')}</span>` +
+            `<span class="song-artist">${esc((TYPE_LABEL[post.type] || 'Post') + ' · ' + niceDate(p.date))}</span>` +
+          `</span>` +
+        `</button>`;
+    };
+    view.innerHTML =
+      `<section class="view view--listening">` +
+        mastheadEl('', slot == null ? 'Which one?' : 'Swap in which one?', '') +
+        (mine.length
+          ? `<div class="song-results">${mine.map(row).join('')}</div>`
+          : `<p class="feed-empty">Everything you’ve posted is already pinned.</p>`) +
+      `</section>`;
+
+    view.querySelectorAll('.pin-row').forEach(btn =>
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const entry = { k: 'post', id: btn.dataset.id };
+          const next = pins.slice();
+          if (slot == null) next.push(entry); else next[slot] = entry;
+          if (await commitPins(next, {})) go('#/profile');
+        } finally {
+          if (btn.isConnected) btn.disabled = false;
+        }
+      }));
   }
 
   /* ── Discover — the meeting ground ───────────────────────────────────────────
@@ -9880,6 +10897,13 @@
       // it would be narrowing.
       const occ = q ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
+      // The rail rides every filter and stays out of SEARCH, exactly as the
+      // card above it does and for the same reason: it isn't part of the grid a
+      // query would be narrowing. Built here rather than at paint time so its
+      // whole markup can go into the signature below — it's a string, and a
+      // string IS the description of what changed, which beats hand-listing the
+      // fields of everyone's song and forgetting one.
+      const np = q ? '' : nowPlayingEl();
       // discoverView is IN the signature, and has to be: the tiles are identical
       // either way, so without it a format switch would sign the same and this
       // early return would swallow the repaint the tap asked for. It also
@@ -9891,8 +10915,9 @@
       // friends page does, so this only catches the change that arrives from
       // somewhere else.
       const asList = discoverView === 'list';
-      const sig = JSON.stringify([q, discoverFilter, discoverView, tags,
-        occ && [occ.slug, answers.length], tiles.map(t =>
+      const sig = JSON.stringify([q, discoverFilter, discoverView, tags, np,
+        occ && [occ.slug, answers.length],
+        tiles.map(t =>
           [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
             t.post && t.post.id, isLocked(t.user.username),
             asList && !t.post ? Store.friendStatus(t.user.username) : ''])]);
@@ -9944,7 +10969,9 @@
             r.items.map((t, j) => friendRowHtml(t.user, j,
               { locked: isLocked(t.user.username), bio: true })).join('') +
           `</div>`;
-      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') + tagRail(tags, q) +
+      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') +
+        np +
+        tagRail(tags, q) +
         (asList
           ? (runs.length ? runs.map(runHtml).join('') : `<p class="feed-empty">${empty}</p>`)
           : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
@@ -9956,6 +10983,10 @@
       });
       bodyEl.querySelector('.daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
+      // Everyone else's square is a link the outbound handler already covers;
+      // only my own needs wiring, and it goes to the picker.
+      bodyEl.querySelector('[data-np="edit"]')
+        ?.addEventListener('click', () => go('#/listening'));
       // The share ask ends the page, so it follows the two views that ARE the
       // page (All and People) and stays out of a narrowed one. It earns its place
       // under People especially: a list of everyone here is exactly where "know
@@ -10442,8 +11473,8 @@
             `adds you, or shows up for your plans.</p>` +
         `</div>` +
         `<div class="push-ask-actions">` +
-          `<button type="button" class="push-ask-dismiss" id="push-not-now">Not now</button>` +
-          `<button type="button" class="push-ask-on" id="push-turn-on">Turn on</button>` +
+          `<button type="button" class="push-ask-dismiss" id="push-not-now">No thanks</button>` +
+          `<button type="button" class="push-ask-on publish-fill is-solid" id="push-turn-on">Turn on</button>` +
         `</div>` +
       `</div>`;
   }
@@ -10475,7 +11506,7 @@
   }
 
   // The standing on/off control, on your own profile foot. Mirrors the pre-prompt
-  // but is always available — the place to turn push back on after "Not now", or
+  // but is always available — the place to turn push back on after "No thanks", or
   // off later. Hidden entirely where the shell can't do push.
   function pushToggleHtml() {
     if (!Store.pushSupported()) return '';
@@ -10554,14 +11585,16 @@
       scope.querySelectorAll('.request-accept').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          await Store.addFriend(btn.dataset.accept).catch(() => {});
+          const ok = await Store.addFriend(btn.dataset.accept).then(() => true, () => false);
+          if (ok) hapticTap('LIGHT');
           btn.disabled = false;              // or a dropped write leaves the row dead
           renderUpdates();
         }));
       scope.querySelectorAll('.request-ignore').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          await Store.declineRequest(btn.dataset.ignore).catch(() => {});
+          const ok = await Store.declineRequest(btn.dataset.ignore).then(() => true, () => false);
+          if (ok) hapticTap('LIGHT');
           btn.disabled = false;
           renderUpdates();
         }));
@@ -11141,6 +12174,10 @@
       ? pendingQuote : null;
     pendingQuote = null;
     quotingPost = quote;
+    // Dropped if this compose turned into a quote: a quote is a post about
+    // somebody else's post, which is not what an empty pin slot asked for.
+    pinningPost = pendingPin && !quote;
+    pendingPin = false;
     // The composer never persists a draft across navigations, so every entry opens
     // fresh: a plain Note until something's attached.
     pubType = 'note';
@@ -11196,7 +12233,7 @@
         // write always counts, so there's nothing left for a colour to signal.
         (daily
           ? `<div class="daily-banner">` +
-              `<p class="daily-banner-cap">Answering the daily</p>` +
+              `<p class="daily-banner-cap">Answering the Daily</p>` +
               `<p class="daily-banner-prompt">${esc(daily.prompt)}</p>` +
             `</div>`
           : '') +
@@ -12515,6 +13552,22 @@
     // everyone else said, and the home feed is not where that is. Only if the tag
     // actually survived — someone who deleted it out of the field posted a normal
     // post, and dropping them on a page their post isn't on would be a small lie.
+    // The slot that sent you here, filled with the thing it sent you to make.
+    // It goes to the profile rather than home for the daily's own reason: the
+    // point of the trip was the card at the top of your profile, and the home
+    // feed is not where you can see it land. A post can't be both a pin and a
+    // daily answer — each flag is set by one tap on one surface and consumed on
+    // arrival — so the two branches never race. Quiet, because publishing has
+    // already buzzed: SUCCESS and then a LIGHT 200ms later is one act reported
+    // twice.
+    if (pinningPost) {
+      pinningPost = false;
+      const pins = myPins();
+      if (pins.length < PIN_MAX)
+        await commitPins(pins.concat([{ k: 'post', id: res.post.id }]), { quiet: true });
+      go('#/profile');
+      return;
+    }
     const answered = answeringDaily;
     answeringDaily = null;
     if (answered && (res.post.tags || []).includes(answered.tag)) {
@@ -14666,9 +15719,17 @@
     // Drop it on the way out; renderDiscover re-arms one on the way back in.
     if (path !== '#/discover') discoverResizeOff?.();
     // A profile's frame wall is the same deal, so it keeps the same listener.
-    if (!path.startsWith('#/u/') && path !== '#/profile') profileResizeOff?.();
+    if (!path.startsWith('#/u/') && path !== '#/profile') {
+      profileResizeOff?.();
+      pinDragOff?.(); pinDragOff = null;
+    }
     // And a daily's wall of answers, which is the same grid a third time.
     if (!path.startsWith('#/daily/')) dailyResizeOff?.();
+    // Leaving the song picker takes its pending question with it: a debounce
+    // that fires after you've gone asks iTunes for a page nobody is reading,
+    // and an in-flight search resolves into a node that isn't in the document.
+    // Neither errors, both are work nobody wanted.
+    if (path !== '#/listening' && path !== '#/pin/song') { clearTimeout(songTimer); songAbort?.abort(); }
 
     renderPage(() => {
       if (path.startsWith('#/u/')) {
@@ -14702,6 +15763,18 @@
         renderDaily(decodeURIComponent(path.slice(8)));
         return;
       }
+      // Filling a pin slot: a song (the listening picker, aimed somewhere else)
+      // or one of your own posts. `?at=<n>` replaces that slot instead of taking
+      // the next free one, which is what "Change song" and a swap need.
+      if (path.startsWith('#/pin/')) {
+        const q = new URLSearchParams(hash.split('?')[1] || '');
+        const raw = q.get('at');
+        const at = raw != null && /^\d+$/.test(raw) ? +raw : null;
+        if (path === '#/pin/song') renderListening('pin', at);
+        else if (path === '#/pin/post') renderPinPost(at);
+        else go('#/profile');
+        return;
+      }
       switch (path) {
         case '#/':         renderHome(); break;
         case '#/discover': renderDiscover(); break;
@@ -14710,6 +15783,7 @@
         case '#/profile': renderUser(Store.session()); break;
         case '#/profile/edit': renderEditProfile(); break;
         case '#/publish': renderPublish(); break;
+        case '#/listening': renderListening(); break;
         case '#/about':   renderAbout(false); break;
         // #/business is browser-only, and the reason is Apple's rather than
         // ours: guideline 3.1.1 reads a price plus a way to act on it as a
@@ -15293,15 +16367,30 @@
      Registered at boot, before anything else touches the route, because the
      plugin RETAINS this event until something consumes it — a cold launch from a
      notification fires it the moment the listener exists, which is how a tap on a
-     closed app still lands on the right page rather than the home feed. */
+     closed app still lands on the right page rather than the home feed.
+
+     A re-pull comes FIRST, and the web gets this for free where the app doesn't:
+     `notificationclick` calls `client.navigate()`, which reloads the document and
+     re-runs Store.init() with it, while this handler is a hash change inside the
+     same already-running page. A notification is BY DEFINITION about something
+     that arrived after this device's cache was last filled — a comment on a post
+     the world never had, a brand new friend's post — and a tap that was still
+     backgrounded a while can easily be sitting on a cache from before it existed.
+     Land on that with no re-pull and renderPost finds nothing, which reads as
+     "This post isn't here any more" for a post that very much is — the tap
+     opening to what looks like nothing. Store.refresh() is a no-op pre-auth (it
+     bails on `!state.session`), so this costs a cold launch nothing: Store.init()
+     is already mid-flight doing the real load. */
   if (nativeShell()) {
     try {
       window.Capacitor.nativeCallback('PushNotifications', 'addListener',
-        { eventName: 'pushNotificationActionPerformed' }, (ev) => {
+        { eventName: 'pushNotificationActionPerformed' }, async (ev) => {
           if (ev?.actionId === 'dismiss') return;
           const url = String(ev?.notification?.data?.url || '');
           const hash = url.slice(url.indexOf('#'));
-          location.hash = /^#\//.test(hash) ? hash : '#/updates';
+          const target = /^#\//.test(hash) ? hash : '#/updates';
+          await Store.refresh();
+          location.hash = target;
         });
     } catch { /* no listener; a tap just opens the app where it was */ }
   }
@@ -15309,6 +16398,14 @@
   // If the recovery event lands after the first paint (it usually resolves during
   // init, but the URL parse is async), re-route so set-new-password takes over.
   Store.onRecovery(route);
+
+  /* Ask iOS what music apps are installed, in flight for the whole of init.
+     Deliberately NOT awaited: it is a canOpenURL on the main queue and settles
+     in a frame, while init is a network round trip, so it always wins the race
+     it isn't running in — and gating the splash on a bridge call that could
+     hang trades a wrong link for a dead app. What it feeds (songLink) is read
+     on Discover, which is never the first paint of a cold launch. */
+  readMusicApps();
 
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.

@@ -639,13 +639,14 @@ at an arbitrary scroll position, so a menu dropped from it would land anywhere
 between mid-screen and the 40px gutter above the nav and the same tap would
 produce a different-shaped thing every time.
 
-**That last one holds for a card WE draw, and 1.4 found the edge of it.** In the
-app the ••• , the repost circle and the colour ring drop a real `UIMenu`, and the
-system flips it, scrolls it and clips it to the safe area itself — so the "lands
-anywhere" objection, which is an objection to our positioning code, simply is not
-true of theirs. On the web and on an older phone the sheet is still the honest
-answer and still what runs; `openAnchoredMenu` picks between them off one array
-with one `run`. See "A menu the page asks for" in
+**That last one holds for a card WE draw, and 1.4 found the edge of it — for one
+of the three.** In the app the colour ring still drops a real `UIMenu`, and the
+system flips it, scrolls it and clips it to the safe area itself, so the "lands
+anywhere" objection, which is an objection to our positioning code, simply is
+not true of its own. The ••• and the repost circle tried the same move and went
+back: as of 2026-08-30 `openPostMenu` and `openRepostMenu` build their array and
+hand it straight to `openSheet`, same as the audience picker always has, with no
+native branch. See "A menu the page asks for" in
 [native-chrome.md](native-chrome.md), including what the colour picker gave up
 for it.
 
@@ -1028,3 +1029,53 @@ auto-grows to fit its text (wraps into view instead of scrolling off one line);
 Enter posts, Shift+Enter breaks a line. It stays flat editorial (comments are
 content, never glass). Post-photos fade in as they load over the neutral
 placeholder box (JS adds `.is-loaded`), so they settle rather than pop.
+
+## Pinned cards, and what an album cover is worth
+
+Up to three things a person holds above their own wall, between the identity and
+the posts. **The panel is the daily card's** — plain glass, `--glass-bg-panel`,
+the same corner and the same lift — because the two are the same object in the
+app's grammar: one thing the page wants you to read before it hands you the rest.
+They are declared separately anyway, and that is the difference worth naming: the
+daily is ONE headline on Discover and can afford a serif question at 1.95rem;
+this is a STACK of up to three on a page that already opened with a photograph
+and a name, so the voice steps down and the height is fixed.
+
+**The fixed height is load-bearing twice.** It makes three cards read as a set
+rather than three unrelated blocks, and it is what makes the drag exact — every
+card displaces every other by one card plus one gap, so a reorder measures the
+rects once at the lift and never guesses.
+
+**The panel stays plain glass and the hue lives in the square.** Each pin's
+leading 88px square wears its type's pastel with the type's own glyph in the ink
+twin; the card behind it does not. That is the same rule the daily card spent 1.3
+learning: a filled coloured panel is the app's one filled-object vocabulary and
+means "press this to make something", so a hue-filled pin would read as an
+enormous button that isn't one. A song has no type colour at all, because the
+album cover is the colour.
+
+**The album cover gets three things a thumbnail doesn't**, and this is the one
+place in the app where an image is treated as an object rather than as content:
+
+- **A drop shadow and a lit top edge**, no hairline. A border draws a picture
+  printed into the glass; a shadow draws a sleeve lying on it.
+- **A sheen** — one soft diagonal highlight stopping at 58%, the light a record
+  sleeve catches. It is a highlight, not a scrim: past 58% it would start
+  greying the artwork it is meant to flatter.
+- **The record's own colour, on the card.** A blown-up, blurred copy of the same
+  artwork sits over the card's glass and is MASKED OUT before it reaches the
+  words. The mask is not decoration — it is what lets the cover end of the card
+  bloom while a serif title stays on clean glass. And the blur is the whole
+  trick: the artwork is hotlinked from Apple's or Spotify's CDN, so CSS may blur
+  it but canvas may not read it (touching the pixels taints the canvas), which
+  means this needs no colour column, no sampler and no second request. A photo
+  post gets the same bloom from its stored `tint` instead — one flat colour we
+  already computed at publish time, rather than blurring a full-size upload
+  behind a 110px card for a colour we know.
+
+**No grip mark, and the kicker teaches the gesture instead.** A handle beside the
+••• is two controls on a 110px card doing one job each. Your own stack's caption
+reads "Pinned · hold to reorder" while there is more than one card, and the •••
+carries Move up / Move down for anyone who never tries the gesture — which is
+also the only way to reorder with a keyboard.
+
