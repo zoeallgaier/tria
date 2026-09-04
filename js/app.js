@@ -11066,10 +11066,11 @@
             r.items.map((t, j) => friendRowHtml(t.user, j,
               { locked: isLocked(t.user.username), bio: true })).join('') +
           `</div>`;
-      // The tags LEAD the body and are invisible until the field opens (see the
-      // CSS). They sat between the listening rail and the grid until 1.5, which
-      // put the page's index — the one fixture here that isn't content — in the
-      // 68px directly above the thing everyone came for.
+      // The tags LEAD the body, on every screen and always (see .dtags in the
+      // CSS). They sat between the listening rail and the grid until 1.5, then
+      // hid inside the open search field for a version; neither survived. An
+      // index belongs at the top of the thing it indexes, where it can be read
+      // without being asked for.
       bodyEl.innerHTML = tagRail(tags, q) +
         (occ ? dailyCardEl(occ, answers) : '') +
         np +
@@ -11134,33 +11135,30 @@
     // focuses it; tapping again (or Escape) folds it back and clears the query so
     // the full grid returns.
     //
-    // Both of these carry the trending rail with them: it is drawn in every paint
-    // and shown by a class here, never by a repaint. Opening a field is not a
-    // change to what the page is showing, and a rebuild would have restaged
-    // seventy tiles to reveal one strip.
+    // Neither of them touches the trending rail any more. The strip stood inside
+    // the open field for one version and now stands at the top of the page for
+    // good (see .dtags in app.css), so opening search is once again only about
+    // the field.
     const foldSearch = () => {
       bar.classList.remove('topbar--searching');
-      bodyEl.classList.remove('is-searching');
-      // Off on the way out so the next open can play it again: re-adding a class
-      // an element already carries restarts nothing.
-      bodyEl.querySelector('.dtags')?.classList.remove('dtags--in');
       toggleBtn.setAttribute('aria-expanded', 'false');
       toggleBtn.setAttribute('aria-label', 'Search Tria');
       searchEl.tabIndex = -1;
     };
     /* AN EMPTY FIELD NO LONGER FOLDS ITSELF ON BLUR, and that is the price of
-       putting the trending rail inside it — paid gladly, because the thing it
-       bought was a bug.
+       having put the trending rail inside it for a version. The rail has since
+       come back out to the top of the page, but the behaviour stays, because it
+       was the right one on its own merits.
 
        The old `foldIfEmpty` collapsed an untouched field back to a disc when you
        looked away, which was a nice manner while the field held nothing but a
-       caret. Now it holds the page's index, and blur fires on the PRESS: tapping
-       a tag blurred the field, folded it, and took the tag out of the document
-       under the finger that was pressing it — mouseup landed on nothing and the
-       click never happened. (Reproduced in both engines; it is the same race the
-       toggle's mousedown preventDefault above was written for, and preventDefault
-       can't reach it here because the native shell's blur arrives over the bridge
-       rather than from the DOM.)
+       caret. While the field held the page's index it was a bug: blur fires on
+       the PRESS, so tapping a tag folded the field and took the tag out of the
+       document under the finger that was pressing it — mouseup landed on nothing
+       and the click never happened. (Reproduced in both engines; it is the same
+       race the toggle's mousedown preventDefault above was written for, and
+       preventDefault can't reach it here because the native shell's blur arrives
+       over the bridge rather than from the DOM.)
 
        Not folding is also the standard behaviour it should have had: a
        UISearchController drops the keyboard when you tap away and leaves the bar
@@ -11169,14 +11167,10 @@
     // Focus is opt-OUT for the tag rail: tapping a tag should show you the query
     // it just ran, not raise a keyboard over the results you asked for.
     const openSearch = (focus = true) => {
-      // A tag tap calls this too, on a field that is already open — and the rail
-      // must not re-introduce itself to a finger that is already using it.
-      const fresh = !bar.classList.contains('topbar--searching');
       // Said BEFORE the class flip, because the push that answers the flip is
       // the one that has to carry it (see searchSpec).
       NativeChrome.wantSearchFocus(focus);
       bar.classList.add('topbar--searching');
-      bodyEl.classList.add('is-searching');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('aria-label', 'Close search');
       searchEl.tabIndex = 0;
@@ -11185,14 +11179,6 @@
       // would raise the WEB VIEW'S keyboard for a field nobody can see, on top of
       // the one the capsule is about to raise for itself.
       if (focus && !NativeChrome.live()) searchEl.focus();
-      /* The rail's entrance (dtags--in in app.css). It is marked HERE rather
-         than in the paint that draws it, and that is the whole reason it can't
-         stutter: the strip is rebuilt every paint, typing paints on a beat, so
-         an entrance the markup carried would re-run under every word searched.
-         Opening a folded field is the one moment it plays. Same frame as the
-         class flip above, so it starts on the first render the rail is visible
-         for. */
-      if (fresh) bodyEl.querySelector('.dtags')?.classList.add('dtags--in');
     };
     // Closing has to say where focus goes, and the two answers are not the same
     // control. A keyboard close (Escape, or Enter/Space on the icon) must leave
@@ -16310,7 +16296,7 @@
      filter; it simply no longer re-pulls the world. */
   (() => {
     const THRESHOLD = 72;
-    let ptr = null, pulling = false, raf = 0, busy = false;
+    let ptr = null, pulling = false, raf = 0, busy = false, armed = false;
     const el = () => {
       if (!ptr) {
         ptr = document.createElement('div');
@@ -16343,6 +16329,13 @@
       const p = Math.min(d / THRESHOLD, 1);
       box.classList.add('ptr--show');
       box.classList.toggle('ptr--armed', p >= 1);
+      // One buzz the instant the pull crosses the threshold, not per frame past
+      // it — `armed` gates it to the single rising edge, same shape as the
+      // filter dial's "only when the tapped key differs" guard above. This is
+      // the finger's own signal that letting go will fire the refresh, same
+      // job the system pull-to-refresh's tick does natively elsewhere in iOS.
+      if (p >= 1 && !armed) { armed = true; hapticTap('MEDIUM'); }
+      else if (p < 1 && armed) { armed = false; }
       box.style.setProperty('--ptr-p', p.toFixed(3));
       box.style.setProperty('--ptr-y', (Math.min(d, 140) * 0.72).toFixed(1) + 'px');
     };
@@ -16350,6 +16343,7 @@
     window.addEventListener('touchstart', () => {
       if (window.scrollY > 1 || !eligible()) return;
       pulling = true;
+      armed = false;
       window.addEventListener('scroll', onScroll, { passive: true });
     }, { passive: true });
     const finish = async () => {

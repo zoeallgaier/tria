@@ -5083,37 +5083,24 @@ button.poll-option:disabled { cursor: default; }
    caption size so it reads as an annotation rather than a score. It's the one
    number allowed anywhere on this page (tiles carry none, on purpose). */
 .dtags {
-  /* THE RAIL LIVES IN THE OPEN SEARCH FIELD, and that is a hierarchy fix with a
-     measurement under it. It used to stand in the page's flow between the
-     listening rail and the grid, where it cost 68px of a 741px window that three
-     fixtures were already sharing: the grid — the actual meeting — opened at
-     601px, 27% of the first screen, and the daily card heading the page was the
-     smallest of the three things above it.
+  /* THE RAIL STANDS AT THE TOP OF THE PAGE, ALWAYS. It spent 1.5 hidden inside
+     the open search field, on the argument that an index isn't content and
+     shouldn't cost the grid 68px of the first screen. That argument was right
+     about the measurement and wrong about the reader: a strip nobody can see
+     until they tap search is a strip nobody discovers, and the five words are
+     the cheapest thing on Discover to read. Standing at the top they are what
+     the room is talking about, which is worth the height.
 
-     The tags are the one fixture here that isn't content. They are an INDEX, and
-     the act one performs is a SEARCH (a tap fills the field rather than carrying
-     a filter of its own, which is the call this rail was built on), so they
-     belong where that act lives: under the open field, above its results, and
-     absent from the page until somebody asks. The grid opens at 517px now, 38%.
-
-     Hidden with `display` rather than dropped from the markup, and shown by a
-     class on the body rather than by a repaint: the strip is rebuilt in every
-     paint so its counts stay honest, and opening the field is not a change to
-     what the page is showing. */
-  display: none;
+     So no `display: none` and no class gate. It leads the body above the daily
+     card, on the same type axis as the masthead: the rail is TYPE and the grid
+     is media, and this page follows the feed's rule that text lines up with the
+     nameplate while media reaches the edge of the measure. Mobile zeroes the
+     inset again (see the mobile block), where .view already supplies it. */
   max-width: var(--feed-width);
   /* 1.4rem of air under the tags, less the tag's own bottom padding below. */
   margin: 0 auto 0.64rem;
-  /* Inset to the same axis as the masthead's type. The rail and the grid share a
-     box, but the rail is TYPE and the grid is media, and this page follows the
-     same rule the feed does: text lines up with the nameplate, media reaches the
-     edge of the measure. Without this, "TRENDING" started 26px left of
-     "Discover" — two labels a few pixels apart on the page, each on its own
-     axis. Mobile zeroes it again (see the mobile block), where .view already
-     supplies the inset and the masthead drops its own. */
   padding-inline: var(--inset);
 }
-.discover-body.is-searching .dtags { display: block; }
 /* Discover's two section labels — this one and the daily card's kicker — set
    together because they sat about 40px apart on the page, and still do on the
    one screen that shows both (an open field over an empty query). They
@@ -5228,75 +5215,6 @@ button.poll-option:disabled { cursor: default; }
     text-decoration-thickness: 1px;
     text-underline-offset: 0.2em;
   }
-}
-
-/* THE RAIL ARRIVES WITH THE FIELD, ONCE. Tapping search is the one moment the
-   strip appears, so it introduces itself: the label fades, then the five words
-   settle into the line one at a time. A stagger is right here and wrong on the
-   chips above (see .chips) because this is five items on ONE line arriving
-   together, not a list assembling itself row by row.
-
-   GATED ON A CLASS THE OPEN PUTS ON, and that gate is the whole trick. The strip
-   is rebuilt in every paint so its counts stay honest, and typing repaints on a
-   beat — an ungated entrance would re-fly five words in behind every word you
-   search for. `dtags--in` is added by revealTags() only when a folded field
-   opens, and comes off again when it folds; a repaint's fresh rail carries no
-   class and simply stands where it is.
-
-   THE TAGS TRAVEL SIDEWAYS, FROM THE LEFT, and that is not a taste call — it is
-   the overflow container. The note on .dtag above records that `overflow-x: auto`
-   on the rail forces `overflow-y` to auto with it, so anything reaching past the
-   line is clipped; the half of that which bites an ANIMATION is that a transform
-   still counts toward the scrollable area, and only toward the end you can
-   scroll to. A tag starting 8px BELOW its rest would add 8px of scrollable
-   height to the strip for the length of the entrance — an 8px nested vertical
-   scroll sitting inside a horizontal rail, which on a phone is a finger that
-   meant to scroll the page and got the strip instead. Overflow to the LEFT is
-   not reachable by scrolling and grows nothing, so the same 8px is free there.
-   It also happens to be the rail's own axis: the tags settle along the line they
-   scroll on, in the direction the row reads, which is the motion iOS gives a row
-   of items arriving in a scroll view.
-
-   Slow enough to be read as a move: --dur-move each, 60ms apart, so the last of
-   five lands around 660ms. --ease is the signature easeOut the tokens reserve
-   for reveals (--spring is for answers to a touch and would be wrong on a
-   fixture appearing). It is also the decelerating curve UIKit and SwiftUI open
-   with, so the strip settles on the same timing as the native chrome around it.
-
-   CHEAP IN THE WEBVIEW, which is the part that matters on a page carrying
-   seventy tiles:
-     · translate3d, not translateY — the 3D transform is what gets WebKit to
-       promote each tag to its own layer and slide a texture, instead of
-       re-rasterising serif type on every frame of the run.
-     · `backwards`, not `both` — the fill is needed BEFORE the animation (each
-       tag has to hold at 0 through its delay) and never after, because the
-       to-state IS the resting style. Ending unheld lets WebKit drop the six
-       layers the moment the run finishes rather than holding them for as long
-       as the field stays open.
-     · no `will-change` anywhere: the keyframe's own 3D transform promotes for
-       exactly the length of the run, where a standing will-change would pin six
-       layers open under a masonry grid for the life of the page. */
-.dtags--in .dtags-cap { animation: dtag-cap-in var(--dur-move) var(--ease) backwards; }
-.dtags--in .dtag { animation: dtag-in var(--dur-move) var(--ease) backwards; }
-.dtags--in .dtag:nth-child(1) { animation-delay: 0.06s; }
-.dtags--in .dtag:nth-child(2) { animation-delay: 0.12s; }
-.dtags--in .dtag:nth-child(3) { animation-delay: 0.18s; }
-.dtags--in .dtag:nth-child(4) { animation-delay: 0.24s; }
-.dtags--in .dtag:nth-child(5) { animation-delay: 0.30s; }
-/* The label introduces the rail, so it only fades: a caption that slides is the
-   furniture announcing itself, and it is the one line here that isn't the act. */
-@keyframes dtag-cap-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes dtag-in {
-  from { opacity: 0; transform: translate3d(-8px, 0, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  /* The rail just appears with its field. */
-  .dtags--in .dtags-cap,
-  .dtags--in .dtag { animation: none; }
 }
 
 .ptile {
@@ -5460,11 +5378,21 @@ button.poll-option:disabled { cursor: default; }
   background: color-mix(in srgb, var(--surface-2) 55%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
+/* SET IN OXYGEN, NOT THE SERIF, and it is the one place the display face was
+   doing a job it isn't for. Instrument Serif is reserved for TITLES — a page's
+   nameplate and a post's headline — and what a tile says is neither: it is the
+   caption, the person talking, three lines of prose in a box the width of a
+   thumb. Six clamped lines of a high-contrast display serif at 1.3rem is a
+   masonry wall of pull quotes, every one of them shouting at the same volume as
+   the mastheads above; in Oxygen they read as what they are and the wall
+   quietens down. The photo tiles get their pictures back as the loud things.
+   Sized a step smaller with more leading, because Oxygen's larger x-height sets
+   heavier at the same nominal size and prose wants the air. */
 .ptile-say {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
-  font-size: clamp(1.1rem, 4.6vw, 1.3rem);
-  line-height: 1.22;
+  font-size: clamp(0.95rem, 3.9vw, 1.06rem);
+  line-height: 1.36;
+  letter-spacing: -0.005em;
   color: var(--text);
   display: -webkit-box;
   -webkit-line-clamp: 6;
