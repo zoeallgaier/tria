@@ -9961,7 +9961,7 @@
                 `<span class="song-title">${esc(now.title)}</span>` +
                 (now.artist ? `<span class="song-artist">${esc(now.artist)}</span>` : '') +
               `</span>` +
-              `<button type="button" class="song-clear" id="song-clear">Clear</button>` +
+              `<button type="button" class="song-clear" id="song-clear" aria-label="Clear">×</button>` +
             `</div>`
           : '') +
         `<input id="song-q" class="song-input" type="search" ` +
@@ -11141,6 +11141,9 @@
     const foldSearch = () => {
       bar.classList.remove('topbar--searching');
       bodyEl.classList.remove('is-searching');
+      // Off on the way out so the next open can play it again: re-adding a class
+      // an element already carries restarts nothing.
+      bodyEl.querySelector('.dtags')?.classList.remove('dtags--in');
       toggleBtn.setAttribute('aria-expanded', 'false');
       toggleBtn.setAttribute('aria-label', 'Search Tria');
       searchEl.tabIndex = -1;
@@ -11166,6 +11169,9 @@
     // Focus is opt-OUT for the tag rail: tapping a tag should show you the query
     // it just ran, not raise a keyboard over the results you asked for.
     const openSearch = (focus = true) => {
+      // A tag tap calls this too, on a field that is already open — and the rail
+      // must not re-introduce itself to a finger that is already using it.
+      const fresh = !bar.classList.contains('topbar--searching');
       // Said BEFORE the class flip, because the push that answers the flip is
       // the one that has to carry it (see searchSpec).
       NativeChrome.wantSearchFocus(focus);
@@ -11179,6 +11185,14 @@
       // would raise the WEB VIEW'S keyboard for a field nobody can see, on top of
       // the one the capsule is about to raise for itself.
       if (focus && !NativeChrome.live()) searchEl.focus();
+      /* The rail's entrance (dtags--in in app.css). It is marked HERE rather
+         than in the paint that draws it, and that is the whole reason it can't
+         stutter: the strip is rebuilt every paint, typing paints on a beat, so
+         an entrance the markup carried would re-run under every word searched.
+         Opening a folded field is the one moment it plays. Same frame as the
+         class flip above, so it starts on the first render the rail is visible
+         for. */
+      if (fresh) bodyEl.querySelector('.dtags')?.classList.add('dtags--in');
     };
     // Closing has to say where focus goes, and the two answers are not the same
     // control. A keyboard close (Escape, or Enter/Space on the icon) must leave
