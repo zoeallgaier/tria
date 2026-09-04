@@ -5005,10 +5005,19 @@ button.poll-option:disabled { cursor: default; }
 .pin-row:hover { background: var(--glass-bg); }
 .pin-row:disabled { opacity: 0.5; cursor: default; }
 /* The current song sits above the field as a statement rather than a choice, so
-   it keeps the hairline the rows deliberately don't have. */
+   it keeps the hairline the rows deliberately don't have. And having a hairline
+   it is a BOX, not a row, so it takes back the row padding it was inheriting:
+   --inset is a measure for content sitting on the page's axis, and inside a box
+   it read as 18px of air on the sides against 9px above and below, with the
+   square marooned in the middle of it. The padding is one number on all four
+   sides now, and the square is what sets the height — the card is the artwork
+   plus its pad, which is the arrangement the pinned cards already use.
+   Concentric corners (the tokens note): 14 - 0.4rem lands on the square's 8. */
 .song-now {
   margin-bottom: 1rem;
+  padding: 0.4rem;
   border: var(--glass-edge);
+  border-radius: var(--radius-card);
   background: var(--glass-bg-panel);
 }
 .song-art {
@@ -8331,9 +8340,9 @@ button.poll-option:disabled { cursor: default; }
      the list takes the same break-out and the row pays the inset back as padding
      — content lands on the ledger's axis, and the pin list's hairlines and hovers
      reach the screen edge the way Updates' do. .song-now is left out on purpose:
-     it's a bordered panel, not a row, and a box wants the view's margin. */
+     it's a bordered panel, not a row — it keeps the view's margin, and its own
+     padding hugs the square rather than tracking any list's inset. */
   .song-results { margin-inline: -1.15rem; }
-  .song-now { padding-inline: 1.15rem; }
   .song-hit, .pin-row { padding-inline: 1.15rem; }
 
   /* Composer already sits inside the view's padding here. */
