@@ -5908,7 +5908,7 @@ button.poll-option:disabled { cursor: default; }
 
    A photo post gets the same bloom from its stored `tint` instead (--flat): one
    colour we already computed at publish time, rather than blurring a full-size
-   upload behind a 110px card for a colour we know. */
+   upload behind an 88px card for a colour we know. */
 .pin-glow {
   /* Bigger than the card by BLEED on every side, so the blur's own soft edge
      falls outside the card rather than showing as a halo inside it, and then
@@ -5951,17 +5951,17 @@ button.poll-option:disabled { cursor: default; }
   background-position: center;
 }
 
-/* THE COVER GETS THE EXTRA. A hairline would draw the sleeve as a picture
-   printed into the glass; a real drop shadow and a lit top edge draw it as an
-   object lying ON it, which is what a record sleeve is. */
+/* THE COVER GETS THE EXTRA, on a song's art and a photo's alike. A hairline
+   would draw it as a picture printed into the glass; a real drop shadow and a
+   lit top edge draw it as an object lying ON it instead. */
 .pin-cover {
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 10px 22px -8px rgba(0, 0, 0, 0.55);
 }
-/* One soft diagonal, the light a sleeve catches. It stops at 58% so it reads as
-   a highlight rather than as a scrim over the artwork. */
+/* One soft diagonal, the light a glossy surface catches. It stops at 58% so it
+   reads as a highlight rather than as a scrim over the picture. */
 .pin-cover::after {
   content: '';
   position: absolute;
@@ -6687,6 +6687,8 @@ button.poll-option:disabled { cursor: default; }
    explicit min-height settles it in both. */
 .composer .composer-post {
   display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   margin-inline: 0;
   margin-top: 1.4rem;
