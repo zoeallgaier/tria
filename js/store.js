@@ -2455,6 +2455,22 @@ function isVideoUrl(url) {
   return /\.(mp4|webm|mov)$/i.test(url || '');
 }
 
+// A right-sized rendition of a photo/poster already sitting in our own 'media'
+// bucket, via Supabase Storage's on-the-fly image transform — same host, `object`
+// swapped for `render/image`, a width/height/quality query added. A thumbnail
+// slot (a pin's 88px square, say) has no business pulling down the same
+// multi-hundred-KB upload a full post view does just to paint a few thousand
+// pixels; this asks Storage's CDN for a small JPEG instead, pre-cropped to the
+// square the same way `background-size: cover` already treats it. Anything not
+// hosted at our own object endpoint (hotlinked song art) is handed back
+// untouched — the transform only knows about objects already in Storage.
+function thumbUrl(url, cssPx) {
+  const m = /^(.*\/storage\/v1\/)object\/public\/(.+)$/.exec(url || '');
+  if (!m) return url || '';
+  const px = Math.round(cssPx * (window.devicePixelRatio || 2));
+  return `${m[1]}render/image/public/${m[2]}?width=${px}&height=${px}&resize=cover&quality=70`;
+}
+
 // A trimmed clip stamps its play-window into the filename (…-t<startMs>-<endMs>…),
 // same trick as the -WxH dims. The feed + lightbox read it straight off the URL and
 // loop just that window — no cut, no re-encode, no metadata round-trip. Whole clips

@@ -10148,21 +10148,17 @@
      thing that makes the drag exact — every card displaces every other card by
      the same distance, so a reorder never has to guess.
 
-     THE ALBUM COVER IS THE POINT OF THE SONG CARD, so it gets three things a
-     thumbnail doesn't. It sits at 88px with a real drop shadow, so it reads as
-     an object lying ON the glass rather than a picture printed into it. It
-     carries a sheen — one soft diagonal highlight, the light a record sleeve
-     catches. And a blurred, blown-up copy of the same artwork lies over the
-     card's glass and is masked out before it reaches the words, so the panel
-     wears the record's own colour without anyone having to sample a pixel: a
-     hotlinked image can be blurred by CSS but not read by canvas (it would
-     taint it), and this needs no CORS, no second request and no colour column.
-     It is the same idea as a photo post's `tint`, paid for in blur instead of
-     in arithmetic.
-
-     A post with a photo gets the glow too, from its own stored tint — one flat
-     colour rather than a blurred bitmap, because a post image is a full-size
-     upload and blurring one behind a card is real work for a colour we already
+     EVERY SQUARE IS AN OBJECT, never a picture printed into the glass: no
+     hairline, a real drop shadow, and a sheen — one soft diagonal highlight,
+     the light a sleeve catches (`.pin-cover`, the same class on a song's art
+     and a photo's). Only the bloom behind the card differs, because of what
+     the picture IS. A song's art is hotlinked from Apple's or Spotify's CDN,
+     so CSS may blur it but canvas may not read it (touching the pixels taints
+     it) — a blurred, blown-up copy of the same artwork lies over the card's
+     glass and is masked out before it reaches the words, no CORS, no second
+     request, no colour column. A post's photo is our own upload, so blurring a
+     full-size copy behind an 88px card is real work for a colour we already
+     have: it glows from its own stored `tint` instead, one flat colour
      computed at publish time. */
   function pinCardEl(item, ctx) {
     const e = item.pin;
@@ -10203,7 +10199,9 @@
     // to its tint square like a note does — the same rule the feed's own frames
     // follow rather than a second one for small pictures.
     const still = p.image && !isVideoUrl(p.image) ? p.image : (p.poster || '');
-    const face = still ? `background-image:url('${encodeURI(still)}')` : '';
+    // 88 to match --pin-art in app.css — the square this card actually draws,
+    // not the full-size upload `still` points at (see thumbUrl in store.js).
+    const face = still ? `background-image:url('${encodeURI(thumbUrl(still, 88))}')` : '';
     const sub = p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
       : p.type === 'find' && p.url ? domainOf(p.url)
       : '';
@@ -10216,7 +10214,7 @@
     return `<article class="pin pin--post${still ? '' : ' pin--wordy'}" ` +
         `data-i="${at}" data-type="${esc(p.type)}">` +
         (p.tint && still ? `<span class="pin-glow pin-glow--flat" style="background:${esc(p.tint)}" aria-hidden="true"></span>` : '') +
-        (still ? `<span class="pin-art" style="${face}" aria-hidden="true"></span>` : '') +
+        (still ? `<span class="pin-art pin-cover" style="${face}" aria-hidden="true"></span>` : '') +
         `<span class="pin-lines">` +
           `<span class="pin-title">${esc(saidOf(p) || TYPE_LABEL[p.type] || 'Post')}</span>` +
           (sub ? `<span class="pin-sub">${esc(sub)}</span>` : '') +

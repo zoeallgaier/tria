@@ -1089,24 +1089,23 @@ square-less card meeting the same number through its min-height. Nearly equal is
 not equal: the drag displaces by one card plus one gap, so 2px of drift per card
 is 2px the dropped card lands out by.
 
-**The album cover gets three things a thumbnail doesn't**, and this is the one
-place in the app where an image is treated as an object rather than as content:
+**Every image in a pin card is treated as an object, not as content** — a song's
+art and a photo's alike get three things a thumbnail doesn't:
 
 - **A drop shadow and a lit top edge**, no hairline. A border draws a picture
-  printed into the glass; a shadow draws a sleeve lying on it.
-- **A sheen** — one soft diagonal highlight stopping at 58%, the light a record
-  sleeve catches. It is a highlight, not a scrim: past 58% it would start
-  greying the artwork it is meant to flatter.
-- **The record's own colour, on the card.** A blown-up, blurred copy of the same
-  artwork sits over the card's glass and is MASKED OUT before it reaches the
-  words. The mask is not decoration — it is what lets the cover end of the card
-  bloom while a serif title stays on clean glass. And the blur is the whole
-  trick: the artwork is hotlinked from Apple's or Spotify's CDN, so CSS may blur
-  it but canvas may not read it (touching the pixels taints the canvas), which
-  means this needs no colour column, no sampler and no second request. A photo
-  post gets the same bloom from its stored `tint` instead — one flat colour we
-  already computed at publish time, rather than blurring a full-size upload
-  behind a 112px card for a colour we know.
+  printed into the glass; a shadow draws it as a thing lying on it.
+- **A sheen** — one soft diagonal highlight stopping at 58%, the light a glossy
+  surface catches. It is a highlight, not a scrim: past 58% it would start
+  greying the picture it is meant to flatter.
+- **The picture's own colour, on the card**, by two different routes. A song's
+  art is hotlinked from Apple's or Spotify's CDN, so CSS may blur it but canvas
+  may not read it (touching the pixels taints the canvas) — a blown-up, blurred
+  copy sits over the card's glass and is MASKED OUT before it reaches the words.
+  The mask is not decoration — it is what lets the cover end of the card bloom
+  while a serif title stays on clean glass. A post's photo is our own upload, so
+  blurring a full-size copy behind an 88px card is real work for a colour
+  already known: it glows from its stored `tint` instead, one flat colour
+  computed at publish time.
 
 **AND THE BLOOM HAS TO CLIP ITSELF.** It runs 40px past the card on every side so
 the blur's own soft edge falls outside, and `overflow: hidden` on the card does
@@ -1119,7 +1118,7 @@ the same number the bleed uses. A `clip-path` on the CARD fixes it too and takes
 the lift shadow with it, since clip-path clips everything an element paints.
 
 **No grip mark, and nothing teaches the gesture.** A handle beside the ••• is two
-controls on a 112px card doing one job each, and the caption that used to say
+controls on an 88px card doing one job each, and the caption that used to say
 "hold to reorder" went with the rest of the furniture. What carries the fact is
 the ••• itself: Move up / Move down sit in it, which is where somebody looking
 for a way to reorder will open first, and is the only way to do it with a
