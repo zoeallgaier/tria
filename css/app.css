@@ -4902,10 +4902,12 @@ button.poll-option:disabled { cursor: default; }
   background: var(--glass-bg-panel);
   background-size: cover;
   background-position: center;
-  /* A hairline only, not the full --glass-rim: the rim is a lit perimeter meant
-     to sit on a panel's own fill, and here there's no fill under it, just the
-     cover art. Painted straight over the artwork it doubled up right at the
-     rounded corner — a bright smear some covers wore worse than others. */
+  /* The hairline is the EMPTY square's dress, not the artwork's. It was never
+     the full --glass-rim (a lit perimeter wants a fill under it, and there is
+     none here, just the cover) and now it doesn't reach a cover at all: a square
+     holding art takes .pin-cover with the pins' squares, which drops the border
+     for a shadow and a sheen. What keeps it is the + slot and a song whose art
+     never loaded — an outline where a sleeve would be. */
   border: var(--glass-edge);
 }
 /* The empty own-slot: a + on the same square, so the rail's first item is the
@@ -5020,6 +5022,11 @@ button.poll-option:disabled { cursor: default; }
   border-radius: var(--radius-card);
   background: var(--glass-bg-panel);
 }
+/* 48px in a RESULT ROW, which is a list being scanned: a rail of 88s is what
+   Discover draws because there the square IS the item, while here the square
+   is an aid to reading twelve titles. The card above the field is the other
+   thing — one record, stated — so it takes the 88 the pins and the rail use.
+   See .song-now--art below. */
 .song-art {
   flex: 0 0 auto;
   width: 48px;
@@ -5030,6 +5037,11 @@ button.poll-option:disabled { cursor: default; }
   background-position: center;
   border: var(--glass-edge);
 }
+/* THE ONE RECORD YOU ARE ALREADY PLAYING, at the size it is everywhere else:
+   88px on Discover's rail, 88 on a pinned card, and 88 here, so walking between
+   the three never resizes the same sleeve. The card is still the artwork plus
+   its pad on all four sides, so this is what sets its height. */
+.song-now .song-art { width: 88px; height: 88px; }
 .song-lines { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .song-title,
 .song-artist {
@@ -6033,8 +6045,18 @@ button.poll-option:disabled { cursor: default; }
 
 /* THE COVER GETS THE EXTRA, on a song's art and a photo's alike. A hairline
    would draw it as a picture printed into the glass; a real drop shadow and a
-   lit top edge draw it as an object lying ON it instead. */
+   lit top edge draw it as an object lying ON it instead.
+
+   IT IS THE APP'S COVER TREATMENT, not the pin card's: the same class rides
+   Discover's rail (.np-art) and both pickers' squares (.song-art, .pin-row-art)
+   as of 1.5, so a record looks like the same object wherever you meet it. It is
+   added only where there is actually a picture — the empty sleeve on a song
+   with no art, the + on the rail's own slot and a wordless post's pastel tile
+   keep the hairline, because there is no object there to lie on anything. The
+   `position` is here rather than on each host for the same reason the rest is:
+   the ::after below needs it, and one class carries the whole treatment. */
 .pin-cover {
+  position: relative;
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
@@ -6154,11 +6176,15 @@ button.poll-option:disabled { cursor: default; }
   display: grid;
   place-items: center;
   border-radius: var(--radius-img);
-  border: var(--glass-edge);
   background-color: color-mix(in srgb, var(--pin-hue, var(--text)) 20%, transparent);
   background-size: cover;
   background-position: center;
 }
+/* The hairline dresses the PASTEL TILE only. A row showing a real picture takes
+   .pin-cover with every other cover in the app, and this rule sits after that
+   one at the same weight, so the exception is stated here rather than fought
+   over there. */
+.pin-row-art:not(.pin-cover) { border: var(--glass-edge); }
 /* The picker's rows KEEP a mark, where the cards dropped theirs, and the two
    are not in tension: a card is one thing being looked at and says what it is by
    being it, while this is a list of your own posts being scanned, where the

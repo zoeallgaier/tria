@@ -9865,7 +9865,11 @@
     return {
       label: `${who}: ${s.title}${s.artist ? ', ' + s.artist : ''}`,
       html:
-        `<span class="np-art"${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''}` +
+        // .pin-cover is the app's cover treatment (shadow + sheen, no hairline),
+        // and it rides a square only when there is a sleeve on it — an artless
+        // song keeps the outline where one would be.
+        `<span class="np-art${s.art ? ' pin-cover' : ''}"` +
+          `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''}` +
           ` aria-hidden="true"></span>` +
         `<span class="np-song">${esc(s.title)}</span>` +
         `<span class="np-who">${esc(who)}</span>`,
@@ -9951,7 +9955,7 @@
         mastheadEl('', 'What are you listening to?', '') +
         (now
           ? `<div class="song-now">` +
-              `<span class="song-art"${now.art
+              `<span class="song-art${now.art ? ' pin-cover' : ''}"${now.art
                 ? ` style="background-image:url('${encodeURI(now.art)}')"` : ''} aria-hidden="true"></span>` +
               `<span class="song-lines">` +
                 `<span class="song-title">${esc(now.title)}</span>` +
@@ -9999,7 +10003,7 @@
       if (songState) { resEl.innerHTML = `<p class="feed-empty">${esc(songState)}</p>`; return; }
       resEl.innerHTML = songHits.map((s, i) =>
         `<button type="button" class="song-hit" data-i="${i}">` +
-          `<span class="song-art"${s.art
+          `<span class="song-art${s.art ? ' pin-cover' : ''}"${s.art
             ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
           `<span class="song-lines">` +
             `<span class="song-title">${esc(s.title)}</span>` +
@@ -10533,7 +10537,7 @@
         : (post.tint ? ` style="background:${esc(post.tint)}"` : '');
       return `<button type="button" class="pin-row" data-id="${esc(p.id)}" ` +
           `data-type="${esc(post.type)}">` +
-          `<span class="pin-row-art"${face} aria-hidden="true">` +
+          `<span class="pin-row-art${still ? ' pin-cover' : ''}"${face} aria-hidden="true">` +
             (still ? '' : svgIcon(TYPE_GLYPH[post.type] || 'note', 'pin-art-ico')) +
           `</span>` +
           `<span class="song-lines">` +
