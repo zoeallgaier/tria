@@ -330,9 +330,12 @@ it either way.
   asking. Only activity earns its own word: the other four types are all things
   you wrote, and "Sam's frame" or "Sam's find" names Tria's filing system at
   someone who may only have met it on a filter dial. The name is the one on the
-  card's own BYLINE, so `postPageTitle` takes makeCard's branch (`repostOf &&
-  note` is a quote, `repostOf && !note` is a pass-along) and the bar can't
-  disagree with the byline under it.
+  card's own BYLINE, so `postPageTitle` takes makeCard's branch (`isQuote`:
+  `repostOf && note` is a quote, `repostOf && !note` is a pass-along) and the bar
+  can't disagree with the byline under it. A quote gives the WORD as well as the
+  name, because it is a post ABOUT somebody's plan rather than a plan — quoting
+  an activity still reads "Sam's post", where "Sam's activity" would promise a
+  page with a date and a place on it.
 
   Five more that are easy to undo by accident:
 
@@ -568,14 +571,43 @@ it either way.
   note on your own profile is somebody else's words under your name.
 
   Four rules that aren't guessable from the code:
-  - **The heart and the comment act on the ORIGINAL, the ••• acts on the ROW.**
-    Likes are private, so a like credited to a quote splits a count the original's
-    author can never see; but ••• manages the thing in your feed, which is the
-    quote and the only part you can delete. `cardActionsHtml`'s `opts.menuPost`
-    is that split.
+  - **A QUOTE IS ITS OWN POST, so the whole row acts on the ROW** — its page, its
+    likes, its thread, its •••. It did not use to be: the heart and the comment
+    acted on the ORIGINAL and only ••• acted on the row (`cardActionsHtml`'s
+    `opts.menuPost`, now gone), on two arguments that are both true. Likes are
+    private, so a like credited to a quote splits a count the original's author
+    can never see; and a reader who wants to react to what is in front of them
+    shouldn't have to tap through. Neither survives what it cost. A quote is
+    somebody's own words under their own byline, so a heart beneath those words
+    landing on a stranger's post is a reader agreeing with one sentence and
+    having it filed against another, and a thread under them was a conversation
+    about a post the quoter didn't write. **The split count is the correct
+    outcome rather than the regrettable one** — two posts said different things,
+    so they are owed different counts, and the original's card still carries its
+    own. The nested tile stays a link to the original's page, which is where a
+    reader who wants to react to THAT goes.
+
+    **The headcount is the one control that did not move**, and it is the only
+    split left (`cardActionsHtml`'s `opts.goingPost`). You cannot RSVP to a
+    sentence about a plan: the hand you raise is raised at the activity, so the
+    going control and its panel stay aimed at the original while everything else
+    on the row is the quote's. It is also load-bearing rather than a nicety — a
+    quote's own type is `repost`, and `goingControlHtml` returns nothing for a
+    row that isn't an `activity`, so pointing it at the quote would delete the
+    RSVP from a quoted plan in silence.
+
+    Two things follow downstream. `renderPost` hands **the quote's own row** to
+    `mountPostBar` (a bare repost still hands it the subject, having no thread of
+    its own), and `postPageTitle` names the quote too — including its WORD, so a
+    quote of an activity is "Sam's post" rather than "Sam's activity", which
+    would promise a page with a date and a place on it. `isQuote` is the one
+    predicate all three read, so they can't drift apart.
   - **`data-burst` overrides `data-type` for sparkles.** A repost's type names no
     colour, so `celebratePost` and the button's `--burst` take the ORIGINAL's
-    type. A hue naming a type is the one thing the quintet is for. That is also
+    type. `burstTypeOf` is that fallback wherever the colour is needed before
+    there is a card to read it off — the like button's own `data-type` and the
+    comment sparkle, both of which now sit on a quote and would otherwise ask a
+    `repost` row for a hue it hasn't got. A hue naming a type is the one thing the quintet is for. That is also
     what the reposted glyph itself wears — `.card-repost.reposted` is
     `var(--burst)`, the same ink `.card-like.liked` takes, and it sits AFTER the
     hover/active rules for `.liked`'s reason: at equal specificity the later rule

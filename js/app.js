@@ -3051,7 +3051,7 @@
     // liked look is a still fill on that same colour — the tap adds the one-shot
     // motion.
     return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
-        `data-type="${post.type}" ` +
+        `data-type="${burstTypeOf(post)}" ` +
         `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
         svgIcon('heart', 'like-heart') +
       `</button>`;
@@ -3324,7 +3324,13 @@
 
   function cardActionsHtml(post, opts) {
     const full = !!(opts && opts.full);
-    const going = goingControlHtml(post, full);
+    // opts.goingPost is a QUOTE's one split, and it is the only one left. Every
+    // other control on that row belongs to the quote, but you cannot RSVP to a
+    // sentence about a plan — the hand you raise is raised at the activity, so
+    // the headcount alone stays aimed at the original. Every other card hands us
+    // the same post twice.
+    const goingPost = (opts && opts.goingPost) || post;
+    const going = goingControlHtml(goingPost, full);
     const like = likeButtonHtml(post, full);
     const repost = repostBtnHtml(post);
     const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
@@ -3359,7 +3365,7 @@
            beside the thread underneath it. role="img" so the glyph and its
            number are announced as the one labelled thing they read as. */
     const switches = full && (post.author === Store.session()
-      || (post.type === 'activity' && canJoin(post)));
+      || (goingPost.type === 'activity' && canJoin(goingPost)));
     const comment = !canSocial(post) ? ''
       : !full ? `<a class="card-comment" href="${postRoute(post)}" ${label} title="Comments">${inner}</a>`
       : switches
@@ -3371,11 +3377,10 @@
     // in the feed. It sits leftmost of the left cluster, bottom-left corner of the
     // card, out of the way.
     //
-    // opts.menuPost splits the row for a QUOTE, and the split is the point rather
-    // than a shortcut: the heart and the comment thread react to the CONTENT, so
-    // they belong to the original, while ••• manages the ROW in your feed, which
-    // is the quote — the thing you wrote and the only thing you can delete.
-    const menu = menuBtnHtml((opts && opts.menuPost) || post);
+    // It used to take an opts.menuPost, because a quote's ••• managed the ROW
+    // while its heart and thread acted on the ORIGINAL. Now that the whole row is
+    // the quote's own, there is nothing left to split.
+    const menu = menuBtnHtml(post);
 
     if (!going && !like && !comment && !repost && !menu) return '';
 
@@ -3409,6 +3414,20 @@
   // post it points at. Returns null for a repost whose original isn't here, which
   // is the one case a view must drop rather than draw.
   const subjectOf = (p) => (p && p.repostOf ? Store.originalOf(p) : p);
+
+  // A QUOTE is a repost carrying words of its own, and that is what makes it a
+  // post rather than an act of passing one along: it has a byline, a sentence,
+  // its own page, its own likes and its own thread. A bare repost has none of
+  // those, because it IS the original wearing one extra line.
+  const isQuote = (p) => !!(p && p.repostOf && p.note);
+
+  // The colour a post bursts in. 'repost' names no colour — the quintet is types
+  // and that isn't one — so anything painting in a post's hue asks what the post
+  // points at, which is the same fallback the card's own data-burst carries.
+  const burstTypeOf = (p) => {
+    const s = subjectOf(p);
+    return (s && s.type) || (p && p.type);
+  };
 
   // "You reposted", not your own name, and this is the one place in the app that
   // makes that swap. Everywhere else your name is a byline, where it is telling
@@ -3491,7 +3510,7 @@
     // path rather than throwing — an empty note card is a better failure than a
     // dead feed.
     const orig = post.repostOf ? Store.originalOf(post) : null;
-    if (orig) return post.note ? quoteCard(post, orig, opts) : passedCard(post, orig, opts);
+    if (orig) return isQuote(post) ? quoteCard(post, orig, opts) : passedCard(post, orig, opts);
 
     const head = opts.solo ? soloMetaEl(post) : bylineEl(post);
     const actions = cardActionsHtml(post, opts);
@@ -3674,11 +3693,23 @@
   }
 
   // A QUOTE: your byline, your sentence, then the original as a nested tile.
-  // The social controls act on the ORIGINAL, not on the quote, which is the one
-  // decision here worth arguing with. Two reasons it lands this way. Tria's likes
-  // are private, so a like credited to the quote splits a count the original's
-  // author can never see. And a reader who wants to react to what they are
-  // already reading shouldn't have to tap through to do it.
+  //
+  // THE SOCIAL CONTROLS ACT ON THE QUOTE, and they used to act on the original.
+  // The old reading was that a like credited to the quote splits a count the
+  // original's author can never see, and that a reader shouldn't have to tap
+  // through to react to what is in front of them. Both are true and neither
+  // survives the thing they cost: a quote is somebody's own words, with their
+  // byline over them, and a heart under those words that lands on a stranger's
+  // post is a reader agreeing with a sentence and having it filed against a
+  // different one. The split count is the correct outcome rather than the
+  // regrettable one — the two posts said different things, so they are owed
+  // different counts, and the original's own card still carries its own.
+  //
+  // So a quote has a page (its byline, its note, its thread) exactly as any note
+  // does, and the tile below stays a link to the original's, which is where a
+  // reader who wants to react to THAT goes. The one control that does not move
+  // is the headcount: you cannot RSVP to a sentence about a plan, so it stays
+  // aimed at the activity (cardActionsHtml's goingPost).
   function quoteCard(post, orig, opts) {
     const full = !!(opts && opts.full);
     const el = document.createElement('article');
@@ -3696,14 +3727,14 @@
         (post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '') +
         cardNoteHtml(post, full) +
         quotedCardEl(orig) +
-        cardActionsHtml(orig, { ...opts, menuPost: post }) +
+        cardActionsHtml(post, { ...opts, goingPost: orig }) +
       `</div>` +
       goingPanelHtml(orig, full) +
-      likersPanelHtml(orig, full) +
-      commentsPanelHtml(orig, full);
+      likersPanelHtml(post, full) +
+      commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
     wireGoing(el, orig, opts);
-    wireLikes(el, orig, opts);
+    wireLikes(el, post, opts);
     wireComments(el);
     return el;
   }
@@ -7853,7 +7884,7 @@
         NativeChrome.postBarText('', 0, false);
         const fresh = rebuildPostCard('up');
         const mine = fresh && [...fresh.querySelectorAll('.comments-list > .comment')].pop();
-        celebrateComment(mine, post.type);
+        celebrateComment(mine, burstTypeOf(post));
         return;
       }
       // Every path hands the control back — a rejected write and a refused one
@@ -8111,19 +8142,27 @@
     });
 
     /* The bottom chrome, last: the composer takes the nav's place on this route
-       (see mountPostBar). Handed the SUBJECT, because on a repost's page the
-       thread belongs to the original — the same post the heart and the ••• split
-       between them. It declines itself when canSocial does, which is the same
-       gate that decides whether there is a thread here at all. */
-    mountPostBar(subj);
+       (see mountPostBar). Handed whatever the thread on this page belongs to — a
+       QUOTE's own row, because its words are its own and so is the conversation
+       under them, and the SUBJECT for a bare repost, which is the original's card
+       with a line on top and has no thread of its own to hold. It declines itself
+       when canSocial does, the same gate that decides whether there is a thread
+       here at all. */
+    mountPostBar(isQuote(post) ? post : subj);
   }
 
   // "Sam’s post" / "Sam’s activity" — see the note at the mountToolbar call.
   // A typographic apostrophe, matching every other possessive in the app's copy.
+  // The name is the one on the card's own BYLINE, so the bar can never disagree
+  // with the line under it: a bare repost draws the original's card and takes the
+  // original's author, a quote is its own post and takes the quoter's. It takes
+  // the quote's own WORD too — a quote of an activity is a post about a plan, not
+  // a plan, and "Sam's activity" over somebody's sentence would promise a page
+  // with a date and a place on it.
   function postPageTitle(post, subj) {
-    const bylineAuthor = (post.repostOf && !post.note) ? subj.author : post.author;
-    const what = subj.type === 'activity' ? 'activity' : 'post';
-    return `${displayNameOf(bylineAuthor)}’s ${what}`;
+    const named = isQuote(post) ? post : subj;
+    const what = named.type === 'activity' ? 'activity' : 'post';
+    return `${displayNameOf(named.author)}’s ${what}`;
   }
 
   /* ── The post's own editor ─────────────────────────────────────────────────
