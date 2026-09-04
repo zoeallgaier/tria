@@ -6204,6 +6204,12 @@
   // and have to be handed back by hand — on every repaint of the pins and on the
   // way off the page.
   let pinDragOff = null;
+  // Set while YOUR OWN profile is mounted: repaint its pins in place. A pin is
+  // made from a post's ••• as often as from the stack itself — and that ••• is
+  // on a card in the column right below the pins — so a write that only toasted
+  // left you looking at the page it changed, unchanged. Repainting the section
+  // rather than the page keeps the scroll and the photograph where they were.
+  let pinsRepaint = null;
 
   function renderUser(username) {
     const u = Store.user(username);
@@ -6459,6 +6465,24 @@
       pinDragOff = wirePins(pinsHost, fresh, pinCtx, paintPins);
     };
     paintPins();
+    // Reachable from anywhere while this page is up — a pin made from a card's
+    // ••• down the column repaints the stack above it. Only your own, because
+    // nothing you can do changes what somebody else has pinned.
+    pinsRepaint = isSelf ? paintPins : null;
+
+    /* A SONG PIN WHOSE SONG HAS GONE is the one dangling pin no write is
+       watching. A cleared song takes its pin with it (Store.setListeningTo) and
+       a deleted post takes its pin with it (Store.deletePost), but a song that
+       simply aged past freshSong's week expires on the READ, with nothing
+       running — so the entry stays, draws nothing, and quietly spends one of
+       three slots where the reader can't see it to take it off.
+
+       Pruned here, the next time you look at your own profile, which is the
+       first moment anybody would notice. It is a write from a render and that is
+       worth flagging, but it is your own row, it is idempotent, and the
+       alternative is a cap that counts a card nobody can see. */
+    if (isSelf && !u.listening && (u.pins || []).some(e => e.k === 'song'))
+      Store.setPins(u.pins.filter(e => e.k !== 'song')).then(paintPins, () => {});
 
     // Their posts as a single-author column (slim date line, not a repeated
     // byline). Photos keep the lightbox; tags jump to the home feed filtered.
@@ -6640,12 +6664,13 @@
           // the first thing you'd want; on your OWN page it is the rarer act,
           // and it was making the reader read past it.
           { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
-          // Pinning, when there is a slot free. This is the only place a SONG
-          // pin can be started (a song has no ••• of its own the way a post
-          // does), and it is here rather than as an empty card on the page
-          // because an empty slot is furniture — see pinsSectionHtml. Absent at
-          // three: swapping one out is a decision about a particular thing, and
-          // it is offered where that thing is (a post's own •••, a pin's).
+          // Pinning, when there is a slot free. It is here rather than as an
+          // empty card on the page because an empty slot is furniture — see
+          // pinsSectionHtml. Absent at three: swapping one out is a decision
+          // about a particular thing, and it is offered where that thing is (a
+          // post's own •••, a pin's). Setting a song pins it without ever coming
+          // through here; this row is for pinning one you have already set, and
+          // for the deliberate trip when you haven't.
           ...(myPins().length < PIN_MAX
             ? [{ label: 'Pin to profile', icon: 'pinned', run: openPinAdd }] : []),
           { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
@@ -9855,39 +9880,33 @@
   const LINK_HELP = 'I can read Spotify and Apple Music links. ' +
     'Try the song’s name instead.';
 
-  /* TWO DESTINATIONS, ONE PICKER. `mode` is '' for the listening status and
-     'pin' for a song pin (#/pin/song), and everything between the two is the
-     same search over the same two keyless endpoints landing on the same stored
-     shape. The only differences are the words at the top, where the back
-     chevron aims, and which writer the pick is handed to — which is a good deal
-     less than a second copy of an iTunes search would cost, and it means a
-     fix to the debounce or the dedupe lands in both places at once.
+  /* ONE PICKER, because there is one song. It briefly had a second mode for
+     filling a pin slot, back when a song pin was a COPY of a track; the pin is a
+     pointer at this same status now, so pinning a song is setting a song and the
+     mode had nothing left to do. What survives from it is `songBack`: this page
+     is reached from the rail on Discover and from a pin card on your profile,
+     and a chevron that always says Discover would walk you off the page you came
+     from. */
+  let songBack = '#/discover';
+  function goListening(from) { songBack = from || '#/discover'; go('#/listening'); }
 
-     `at` is the pin slot to REPLACE, from "Change song" or a swap; null means
-     take the next free one. Ignored entirely outside pin mode. */
-  function renderListening(mode, at) {
+  function renderListening() {
     const me = Store.user(Store.session());
     if (!me) { go('#/discover'); return; }
-    const pin = mode === 'pin';
-    const pins = myPins();
-    const slot = pin && Number.isInteger(at) && at >= 0 && at < pins.length ? at : null;
-    // Nothing to fill: the add tile is hidden at three, so arriving here full
-    // means a stale link or a back button, and an empty-handed picker is a page
-    // that can only disappoint.
-    if (pin && slot == null && pins.length >= PIN_MAX) { go('#/profile'); return; }
+    const back = songBack === '#/profile'
+      ? { href: '#/profile', label: 'Profile' } : { href: '#/discover', label: 'Discover' };
     mountToolbar({
-      leading: pin ? toolbarBackEl('#/profile', 'Profile') : toolbarBackEl('#/discover', 'Discover'),
-      title: pin ? 'Pin a song' : 'Listening to',
+      leading: toolbarBackEl(back.href, back.label),
+      title: 'Listening to',
       actions: '',
     });
 
-    // The current song is the status's own business: it's shown above the field
-    // so you can see (and clear) what stands. A pin is being ADDED to a list
-    // that is already on the page you came from, so there is nothing to restate.
-    const now = pin ? null : me.listening;
+    // The current song sits above the field so you can see, and clear, what
+    // stands.
+    const now = me.listening;
     view.innerHTML =
       `<section class="view view--listening">` +
-        mastheadEl('', pin ? 'Which song?' : 'What are you listening to?', '') +
+        mastheadEl('', 'What are you listening to?', '') +
         (now
           ? `<div class="song-now">` +
               `<span class="song-art"${now.art
@@ -9915,22 +9934,14 @@
     const commit = async (btn, song) => {
       if (btn) btn.disabled = true;
       try {
-        if (pin) {
-          const next = pins.slice();
-          const entry = { k: 'song', ...song };
-          if (slot == null) next.push(entry); else next[slot] = entry;
-          // commitPins says its own piece on failure and fires its own haptic on
-          // the confirmed write, so there is nothing to add here but the exit.
-          if (!(await commitPins(next, {}))) return;
-          songQuery = ''; songHits = []; songState = '';
-          go('#/profile');
-          return;
-        }
+        // Setting a song hangs it on your profile too, in the same write (see
+        // Store.setListeningTo). So this lands you back where you came from:
+        // from the rail, on the rail; from a pin, on the card that just changed.
         const res = await Store.setListeningTo(song);
         if (!res.ok) { toast(res.error); return; }
         hapticEvent('SUCCESS');
         songQuery = ''; songHits = []; songState = '';
-        go('#/discover');
+        go(back.href);
       } catch {
         toast('Couldn’t save that, try again.');
       } finally {
@@ -10005,7 +10016,18 @@
 
   /* ── Pinned cards ────────────────────────────────────────────────────────────
      Up to three things somebody chooses to hold above their own wall: a post
-     they wrote, or a song. THE PANEL IS THE DAILY CARD'S — plain glass, the
+     they wrote, or the song they are on.
+
+     THE SONG PIN IS THE LISTENING STATUS, not a copy of it. `{k:'song'}` carries
+     no track — it is a window on `listening_to`, the same row Discover's rail
+     draws — which is why setting a song hangs it on your profile, changing it
+     changes the card, letting it expire takes the card with it, and taking the
+     card off leaves the song in the rail. It was a copy for about a day, and the
+     copy meant two songs to keep in step and a card that could go on naming a
+     track a month after the rail had moved on. It also meant two ways to put a
+     song into the app, which was one more than the app has songs.
+
+     THE PANEL IS THE DAILY CARD'S — plain glass, the
      floating-card look, a serif line doing the talking — because both are the
      same object in the app's grammar: one thing the page wants you to read
      before it hands you the rest. What the pins do NOT take from the daily is
@@ -10056,7 +10078,11 @@
     // the fourth thing in the row. Everything that WRITES (unpin, move, drop)
     // has to name the slot; only the geometry uses the drawn position.
     list.forEach((e, at) => {
-      if (e.k === 'song') { out.push({ pin: e, at }); return; }
+      // A song pin is a POINTER at this person's listening status, so it is
+      // resolved the same way a post pin is and drops the same way: no song, or
+      // one that has aged out of `freshSong`'s week, and there is no card. The
+      // slot stays in the row so the next song lands back in the same place.
+      if (e.k === 'song') { if (u.listening) out.push({ pin: e, song: u.listening, at }); return; }
       const row = all.find(p => p.id === e.id);
       const post = row ? subjectOf(row) : null;
       if (!post || Blocks.has(post.author)) return;
@@ -10074,7 +10100,10 @@
     // Same shape notifPostLabel uses to name a post in a list, at the width a
     // row of the sheet actually has.
     const clip = (t) => (t.length > 46 ? t.slice(0, 46).trimEnd() + '…' : t);
-    if (e.k === 'song') return clip(e.title + (e.artist ? ' · ' + e.artist : ''));
+    if (e.k === 'song') {
+      const s = (Store.currentUser() || {}).listening;
+      return s ? clip(s.title + (s.artist ? ' · ' + s.artist : '')) : 'What you’re listening to';
+    }
     const row = Store.posts().find(p => p.id === e.id);
     const post = row ? subjectOf(row) : null;
     if (!post) return 'A post that isn’t here any more';
@@ -10093,9 +10122,13 @@
      rising says so already). This is the row the 1.5 haptics audit deferred for
      want of a pin feature. */
   function commitPins(next, { repaint, toastOk, quiet } = {}) {
+    // Whoever asked wins; otherwise repaint your own profile if it is what you
+    // are looking at. Pinning from a card's ••• has no repaint of its own to
+    // hand in, and it is the commonest way a pin gets made.
+    const paint = repaint || pinsRepaint;
     const p = Store.setPins(next);
-    repaint?.();
-    const failed = (msg) => { toast(msg); repaint?.(); return false; };
+    paint?.();
+    const failed = (msg) => { toast(msg); paint?.(); return false; };
     return p.then(res => {
       if (res && res.ok) { if (!quiet) hapticTap('LIGHT'); if (toastOk) toast(toastOk); return true; }
       return failed((res && res.error) || 'Couldn’t save that, try again.');
@@ -10141,23 +10174,26 @@
       : '';
 
     if (e.k === 'song') {
-      const art = e.art ? `background-image:url('${encodeURI(e.art)}')` : '';
+      const s = item.song;
+      const art = s.art ? `background-image:url('${encodeURI(s.art)}')` : '';
       return `<article class="pin pin--song" data-i="${at}" data-type="song">` +
-          (e.art ? `<span class="pin-glow" style="${art}" aria-hidden="true"></span>` : '') +
+          (s.art ? `<span class="pin-glow" style="${art}" aria-hidden="true"></span>` : '') +
           // A song ALWAYS keeps its square, art or none: a record without its
           // sleeve is still a record, and the empty square is where the sleeve
-          // would be rather than a mark standing in for one.
+          // would be rather than a mark standing in for one. (A post with no
+          // picture has no square at all — see below. The difference is that a
+          // sleeve is missing, where a note's picture was never a thing.)
           `<span class="pin-art pin-cover" ${art ? `style="${art}"` : ''} aria-hidden="true"></span>` +
           `<span class="pin-lines">` +
-            `<span class="pin-title">${esc(e.title)}</span>` +
-            (e.artist ? `<span class="pin-sub">${esc(e.artist)}</span>` : '') +
+            `<span class="pin-title">${esc(s.title)}</span>` +
+            (s.artist ? `<span class="pin-sub">${esc(s.artist)}</span>` : '') +
           `</span>` +
           // target="_blank" + data-out="system" is what the outbound handler up
           // top reads to hand the link to iOS itself, which is the only way a
           // universal link reaches Apple Music or Spotify (see songLink).
-          `<a class="pin-open" href="${esc(songLink(e))}" target="_blank" ` +
+          `<a class="pin-open" href="${esc(songLink(s))}" target="_blank" ` +
             `rel="noopener noreferrer" data-out="system" ` +
-            `aria-label="${esc(e.title + (e.artist ? ', ' + e.artist : ''))}"></a>` +
+            `aria-label="${esc(s.title + (s.artist ? ', ' + s.artist : ''))}"></a>` +
           more +
         `</article>`;
     }
@@ -10197,10 +10233,9 @@
      supposed to be about a person rather than about the app. Two pins mean two
      cards, none means nothing at all, including on your own profile.
 
-     What that costs is the only surface a SONG pin could be started from, since
-     a song has no ••• of its own anywhere else. So the way in moved to the
-     profile's own ••• (renderUser), beside Edit profile, which is where a
-     reader already goes to change what their profile says. */
+     Nothing here is the only way to make a pin, which is what lets it be this
+     bare: a post is pinned from its own •••, a song by being the song you set,
+     and the profile's own ••• holds the deliberate way in (see renderUser). */
   function pinsSectionHtml(u, ctx) {
     const items = pinsFor(u, ctx);
     if (!items.length) return '';
@@ -10222,8 +10257,10 @@
     const slots = pinsFor(me, { isSelf: true, isFriend: true }).map(x => x.at);
     const k = slots.indexOf(at);
     const items = [];
+    // One picker, one song. "Change song" is the same page the rail's own square
+    // opens, because there is only one song and this card is a window on it.
     if (e.k === 'song')
-      items.push({ label: 'Change song', icon: 'sound', run: () => go(`#/pin/song?at=${at}`) });
+      items.push({ label: 'Change song', icon: 'sound', run: () => goListening('#/profile') });
     if (k > 0)
       items.push({ label: 'Move up', icon: 'arrowup',
         run: () => commitPins(movedPins(pins, at, slots[k - 1]), { repaint }) });
@@ -10246,10 +10283,21 @@
   function openPinAdd() {
     const me = Store.session();
     const mine = Store.postsBy(me).filter(pinnablePost);
+    const u = Store.currentUser() || {};
+    const pins = myPins();
+    // Two different acts behind one row, and the difference is whether there is
+    // a song to point at. With one, this is just re-hanging the window you took
+    // down, which is a write and not a journey. Without one, the way to pin a
+    // song is to have a song, so it opens the picker — where saving pins it.
+    const songRow = pins.some(e => e.k === 'song') ? []
+      : [{ label: u.listening ? 'What you’re listening to' : 'A song', icon: 'sound',
+           run: () => (u.listening
+             ? commitPins(pins.concat([{ k: 'song' }]), { toastOk: 'Pinned to your profile.' })
+             : goListening('#/profile')) }];
     openSheet({
       title: 'Pin to your profile',
       items: [
-        { label: 'A song', icon: 'sound', run: () => go('#/pin/song') },
+        ...songRow,
         ...(mine.length
           ? [{ label: 'Something you’ve posted', icon: 'list', run: () => go('#/pin/post') }]
           : []),
@@ -10422,12 +10470,15 @@
      stuck to the bottom of the screen. Rows are the picker vocabulary the song
      search already speaks (a square, two lines) so the two ways to fill a slot
      look like two ways to do one thing. */
-  function renderPinPost(at) {
+  function renderPinPost() {
     const me = Store.session();
     if (!me) { go('#/profile'); return; }
     const pins = myPins();
-    const slot = Number.isInteger(at) && at >= 0 && at < pins.length ? at : null;
-    if (slot == null && pins.length >= PIN_MAX) { go('#/profile'); return; }
+    // Full: the row that offers this isn't drawn at three, so arriving here is a
+    // stale link or a back button, and a picker that can't place what you pick
+    // is a page that can only disappoint. (Swapping at three is offered where
+    // the thing being pinned is — see pinPostFromMenu.)
+    if (pins.length >= PIN_MAX) { go('#/profile'); return; }
     mountToolbar({
       leading: toolbarBackEl('#/profile', 'Profile'),
       title: 'Pin a post',
@@ -10453,7 +10504,7 @@
     };
     view.innerHTML =
       `<section class="view view--listening">` +
-        mastheadEl('', slot == null ? 'Which one?' : 'Swap in which one?', '') +
+        mastheadEl('', 'Which one?', '') +
         (mine.length
           ? `<div class="song-results">${mine.map(row).join('')}</div>`
           : `<p class="feed-empty">Everything you’ve posted is already pinned.</p>`) +
@@ -10463,10 +10514,8 @@
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          const entry = { k: 'post', id: btn.dataset.id };
-          const next = pins.slice();
-          if (slot == null) next.push(entry); else next[slot] = entry;
-          if (await commitPins(next, {})) go('#/profile');
+          if (await commitPins(pins.concat([{ k: 'post', id: btn.dataset.id }]), {}))
+            go('#/profile');
         } finally {
           if (btn.isConnected) btn.disabled = false;
         }
@@ -10988,7 +11037,7 @@
       // Everyone else's square is a link the outbound handler already covers;
       // only my own needs wiring, and it goes to the picker.
       bodyEl.querySelector('[data-np="edit"]')
-        ?.addEventListener('click', () => go('#/listening'));
+        ?.addEventListener('click', () => goListening('#/discover'));
       // The share ask ends the page, so it follows the two views that ARE the
       // page (All and People) and stays out of a narrowed one. It earns its place
       // under People especially: a list of everyone here is exactly where "know
@@ -15724,6 +15773,7 @@
     if (!path.startsWith('#/u/') && path !== '#/profile') {
       profileResizeOff?.();
       pinDragOff?.(); pinDragOff = null;
+      pinsRepaint = null;
     }
     // And a daily's wall of answers, which is the same grid a third time.
     if (!path.startsWith('#/daily/')) dailyResizeOff?.();
@@ -15731,7 +15781,7 @@
     // that fires after you've gone asks iTunes for a page nobody is reading,
     // and an in-flight search resolves into a node that isn't in the document.
     // Neither errors, both are work nobody wanted.
-    if (path !== '#/listening' && path !== '#/pin/song') { clearTimeout(songTimer); songAbort?.abort(); }
+    if (path !== '#/listening') { clearTimeout(songTimer); songAbort?.abort(); }
 
     renderPage(() => {
       if (path.startsWith('#/u/')) {
@@ -15765,15 +15815,11 @@
         renderDaily(decodeURIComponent(path.slice(8)));
         return;
       }
-      // Filling a pin slot: a song (the listening picker, aimed somewhere else)
-      // or one of your own posts. `?at=<n>` replaces that slot instead of taking
-      // the next free one, which is what "Change song" and a swap need.
+      // Filling a free slot with one of your own posts. There is no #/pin/song
+      // beside it: a song pin points at your listening status, so the way to pin
+      // a song is to set one, at #/listening.
       if (path.startsWith('#/pin/')) {
-        const q = new URLSearchParams(hash.split('?')[1] || '');
-        const raw = q.get('at');
-        const at = raw != null && /^\d+$/.test(raw) ? +raw : null;
-        if (path === '#/pin/song') renderListening('pin', at);
-        else if (path === '#/pin/post') renderPinPost(at);
+        if (path === '#/pin/post') renderPinPost();
         else go('#/profile');
         return;
       }

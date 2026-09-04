@@ -24,14 +24,20 @@
 -- Shape: an array, in display order, of
 --
 --   { "k": "post", "id": "<posts.id>" }
---   { "k": "song", "title": …, "artist"?: …, "art"?: …, "apple"?: …, "spotify"?: … }
+--   { "k": "song" }
 --
--- A SONG PIN IS THE SAME OBJECT `listening_to` HOLDS, minus `at` — self-reported
--- metadata off the iTunes Search API or a pasted link, with a link per service
--- picked at the reading end (see add-listening-to.sql, which explains the two
--- keys). It carries no `at` because a pin does not expire: a status is a claim
--- about right now and goes stale, a pin is a choice and stands until it's
--- changed. That difference is the whole reason this isn't the same column.
+-- A SONG PIN CARRIES NO SONG. It is a WINDOW on `listening_to` (see
+-- add-listening-to.sql), which is the one place a song lives, and it is bare
+-- because a copy of the track would be a second song to keep in step: change
+-- what you're listening to and the card would go on naming last week's. So
+-- setting a song hangs it on your profile in the same UPDATE, changing it
+-- changes the card, letting it age past the seven-day expiry takes the card with
+-- it, and taking the card off leaves the song in Discover's rail. At most one
+-- such entry: a second window on one status shows the same thing twice.
+--
+-- The first build stored the track here and it lasted a day. What killed it was
+-- not the duplication in the abstract, it was that there were then two ways to
+-- put a song into the app for an app that has one song per person.
 --
 -- A POST PIN IS A POINTER, never a copy. No fk: `posts.id` is a uuid in a jsonb
 -- value, so a deleted post leaves a dangling id, and the readers drop a pin they

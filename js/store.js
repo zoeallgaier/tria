@@ -176,22 +176,25 @@ const Store = (() => {
      row. The cap is applied here as well as in the database, so a row written
      before the check constraint existed still draws three.
 
-     A song pin carries no `at`, and that absence is the difference between the
-     two features: `listening_to` is a claim about right now and expires
-     (freshSong above), a pin is a choice and stands until it's changed. */
+     A SONG PIN CARRIES NO SONG. It is `{k:'song'}` and nothing else: a pointer at
+     `listening_to`, which is the one place a song lives. It was a copy of the
+     track for about a day, and the copy was the mistake — two songs to keep in
+     step, two places to change one, and a card on your profile that could go on
+     saying "Midnight City" a month after the rail had moved on. Now the pin is a
+     WINDOW on the status: change your song and the card changes, let it expire
+     and the card goes with it, unpin it and the song stays in the rail. One
+     entry at most, because a second window on the same thing shows the same
+     thing. */
   const PIN_MAX = 3;
+  let hasPinsColumn = false;
   function pinsFrom(v) {
     if (!Array.isArray(v)) return [];
     const out = [];
+    let song = false;
     for (const e of v) {
       if (!e || typeof e !== 'object') continue;
       if (e.k === 'post' && typeof e.id === 'string' && e.id) out.push({ k: 'post', id: e.id });
-      else if (e.k === 'song' && typeof e.title === 'string' && e.title) {
-        const o = { k: 'song', title: e.title };
-        for (const key of ['artist', 'art', 'apple', 'spotify'])
-          if (typeof e[key] === 'string' && e[key]) o[key] = e[key];
-        out.push(o);
-      }
+      else if (e.k === 'song' && !song) { song = true; out.push({ k: 'song' }); }
       if (out.length === PIN_MAX) break;
     }
     return out;
@@ -213,6 +216,14 @@ const Store = (() => {
     // Pinned cards, in order. Absent on a DB that hasn't run add-pins.sql —
     // PostgREST omits a column that doesn't exist, so `pinned` is undefined,
     // pinsFrom answers [] and the whole feature simply isn't there.
+    //
+    // `'pinned' in u` is exactly "has this DB run the migration?", the same test
+    // `accent` makes below and for the same reason: PostgREST returns an
+    // existing-but-null column as a null KEY and omits a missing one entirely.
+    // setListeningTo needs the answer, because it writes both columns in ONE
+    // statement and naming a column that isn't there would fail the whole
+    // update — taking the song with it, on a DB where the song works fine.
+    if ('pinned' in u) hasPinsColumn = true;
     const pins = pinsFrom(u.pinned);
     if (pins.length) o.pins = pins;
     // Accent: the slug of a chosen palette colour, 'default' for Tria's own
@@ -1694,6 +1705,26 @@ const Store = (() => {
     return o;
   }
 
+  /* THE SONG AND ITS PIN MOVE TOGETHER, in one statement on one row.
+
+     Setting a song pins it, because the profile is where you would look for what
+     somebody is on and the rail is a strip of 88px squares on another page. It
+     is not forced: the card comes off from its own ••• and the song stays in the
+     rail, which is the whole reason the pin is a pointer rather than a copy.
+     Setting a NEW song after that puts the card back — a song you just chose is
+     a thing you just chose to say, and the alternative is a tombstone recording
+     that you once declined, on a row that expires within a week anyway.
+
+     Clearing the song takes the pin with it: a window on nothing is a slot spent
+     on nothing, and the reader cannot see it to take it off. (The other way a
+     song stops existing is the seven-day expiry, which no write is watching —
+     renderUser prunes that one the next time you look at your own profile.)
+
+     ONE UPDATE and not two, because they are two columns of the same row and "a
+     song that saved with a pin that didn't" is a state nothing else in here can
+     produce. `pinned` is named only when the DB actually has it (see mapUser):
+     naming a column that isn't there fails the whole statement, and the song
+     would stop saving on a database where the song works fine. */
   async function setListeningTo(song) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
@@ -1705,10 +1736,22 @@ const Store = (() => {
     // about right now, and it has to be able to stop being true (freshSong).
     const value = clean ? { ...clean, at: new Date().toISOString() } : null;
 
-    patchUser(id, { listening: value });                  // optimistic, synchronous
-    const { error } = await sb.from('users').update({ listening_to: value }).eq('id', id);
+    const pins = u.pins || [];
+    const onProfile = pins.some(e => e.k === 'song');
+    let next = pins;
+    if (value && !onProfile && pins.length < PIN_MAX) next = pins.concat([{ k: 'song' }]);
+    else if (!value && onProfile) next = pins.filter(e => e.k !== 'song');
+    const movesPin = next !== pins && hasPinsColumn;
+    const nextPins = next.length ? next : null;
+
+    // Optimistic and synchronous before the first await, like every writer here.
+    patchUser(id, movesPin ? { listening: value, pins: nextPins } : { listening: value });
+    const patch = { listening_to: value };
+    if (movesPin) patch.pinned = nextPins;
+    const { error } = await sb.from('users').update(patch).eq('id', id);
     if (error) {
-      patchUser(id, { listening: prev });
+      patchUser(id, movesPin ? { listening: prev, pins: pins.length ? pins : null }
+                             : { listening: prev });
       // A DB that hasn't run add-listening-to.sql says so in its own words —
       // "couldn't save" would send someone looking at their network instead.
       return { ok: false, error: /listening|column|schema/i.test(error.message || '')
@@ -1727,9 +1770,8 @@ const Store = (() => {
      WHAT IT WILL NOT STORE: a post that isn't yours (a pin is a thing you do
      with your own work, and RLS would let you point at anything readable), a
      post that isn't in the world any more, the same post twice (three slots
-     holding one card is a bug the reader can't undo without help), and anything
-     past the third slot. A song is cleaned by cleanSong above, exactly as the
-     listening status is.
+     holding one card is a bug the reader can't undo without help), a second song
+     entry (one window on one status), and anything past the third slot.
 
      The validation is per-entry and SILENT: a bad one is dropped and the rest
      are saved. The alternative — refusing the whole list because one id went
@@ -1749,8 +1791,10 @@ const Store = (() => {
         if (clean.some(x => x.k === 'post' && x.id === e.id)) continue;
         clean.push({ k: 'post', id: String(e.id) });
       } else if (e.k === 'song') {
-        const song = cleanSong(e);
-        if (song) clean.push({ k: 'song', ...song });
+        // Bare, and at most one: the entry says "my song goes here" and the song
+        // itself lives in `listening_to`. A second window on the same status
+        // would draw the same card twice.
+        if (!clean.some(x => x.k === 'song')) clean.push({ k: 'song' });
       }
       if (clean.length === PIN_MAX) break;
     }

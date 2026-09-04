@@ -1033,7 +1033,9 @@ placeholder box (JS adds `.is-loaded`), so they settle rather than pop.
 ## Pinned cards, and what an album cover is worth
 
 Up to three things a person holds above their own wall, between the identity and
-the posts. **The panel is the daily card's** — plain glass, `--glass-bg-panel`,
+the posts: a post they wrote, or the song they're on — and the song card is a
+window on the listening status rather than a copy of it, so it is the same song
+Discover's rail is showing (see [data.md](data.md)). **The panel is the daily card's** — plain glass, `--glass-bg-panel`,
 the same corner and the same lift — because the two are the same object in the
 app's grammar: one thing the page wants you to read before it hands you the rest.
 They are declared separately anyway, and that is the difference worth naming: the

@@ -999,11 +999,29 @@ it either way.
   things in slot 1 and a drag is one write of the whole list. It also costs no
   read — `readWorld` pulls table by table, and a new table is a round trip on
   every load for at most three rows a person.
-- **A song pin is `listening_to`'s object minus `at`**, and that absence is the
-  difference between the two features: a status is a claim about right now and
-  has to be able to stop being true (`freshSong`), a pin is a choice and stands
-  until it is changed. Both go through `cleanSong` in store.js, so the https-only
-  rule on `art` and the two service links is written once.
+- **A song pin carries no song: it is `{k:'song'}`, a WINDOW on `listening_to`.**
+  It stored a copy of the track for about a day, and the copy was the mistake —
+  two songs to keep in step, and a card that could go on naming last week's
+  track after the rail had moved on. So the two are one thing now: setting a song
+  pins it, changing it changes the card, letting it age past `freshSong`'s week
+  takes the card with it, and taking the card off leaves the song in the rail.
+  At most one such entry — a second window on one status draws the same card
+  twice.
+- **The song and its pin move in ONE `update`**, on the two columns of one row
+  (`setListeningTo`), because "the song saved and the pin didn't" is a state
+  nothing else in the store can produce. `pinned` is named in that statement only
+  when the DB actually has the column — `hasPinsColumn`, set from `'pinned' in u`
+  in `mapUser`, the same probe `accent` makes — since naming a column that isn't
+  there fails the whole statement, and the song would stop saving on a database
+  where the song works fine.
+- **Three ways a song pin can end, and only one of them is watched.** Clearing
+  your song drops the pin in that same write; unpinning from the card's •••
+  leaves the song alone. The third is the seven-day expiry, which happens on the
+  READ with nothing running — so the entry survives its song, draws nothing, and
+  spends a slot the reader can't see to reclaim. `renderUser` prunes it the next
+  time you look at your OWN profile, which is the first moment anybody could
+  notice. It is a write from a render, which is worth knowing about; it is your
+  own row and it is idempotent.
 - **A post pin is a POINTER and cannot widen an audience.** No fk, no copy of the
   text: every reader resolves the id against their own cache, which only holds
   what RLS handed them, so a pin at a friends-only post draws nothing for a
