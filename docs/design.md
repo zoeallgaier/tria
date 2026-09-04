@@ -1125,3 +1125,54 @@ the ••• itself: Move up / Move down sit in it, which is where somebody loo
 for a way to reorder will open first, and is the only way to do it with a
 keyboard. The drag is the shortcut for people who try it.
 
+
+## Discover's first screen, and what a fixture costs
+
+Discover opens with furniture above the grid, and the grid is the meeting. This
+is the arithmetic of how much furniture, measured at 402×874 with a populated
+room (the usable window between the bars is **741px**):
+
+| | height | |
+|---|---|---|
+| masthead "Discover" | 59 + 37 in gaps | 60→156 |
+| daily card | 146 + 32 | 156→334 |
+| On repeat | 165 + 18 | 334→517 |
+| the grid | whatever is left | 517→801 |
+
+**Three fixtures was one too many, and the app's own notes had already said so.**
+The rule above `lastDailyFor` in app.js — written when Manifest Monday came back
+out — sets a budget of one scheduled card and warns that *"three of them push
+that grid off the first screen entirely."* That was about a second CARD, but the
+arithmetic never cared: the page shipped a daily card, a listening rail and a
+trending strip, the grid opened at 601px, and it had **27% of the first screen**.
+The [NN/g scrolling study](https://www.nngroup.com/articles/scrolling-and-attention/)
+puts 42% of viewing time in the top 20% of a page; on this page that was three
+pieces of app furniture and no room.
+
+**The tags left because they are the only fixture that isn't content.** They are
+an INDEX, and the act one performs is a search, so they went inside the open
+search field — top of the body, above the results, absent until asked for. The
+grid opens at 517px now, **38%**, which is two full tile rows instead of one and
+a bit. Order was never the problem: the daily card was already first.
+
+**The rail was the other half, and its defect was that its height wasn't its
+own.** A song title clamped to two lines, so the strip stood 165px tall when
+every title fit and 181 the moment any one wrapped — one long song title in your
+circle moved where the page's contents began. Worse, a wrapped title pushed only
+ITS name down, so the row of names stopped being a row (six squares up: five
+names at y=478, one at 494). One line each, ellipsised. The square identifies the
+record; the words underneath only name it.
+
+**What was considered and not done.** Shrinking the art (80px is the documented
+floor, and 76 buys 8px for a swatch); dropping the type entirely, which reaches
+45% and looks superb, and turns the rail into a row of anonymous squares — the
+one thing in it that is social is *who* is playing *what*. And putting the rail
+above the card, which is the opposite of right: the card is the only thing on
+this page with a deadline.
+
+**The rail stays taller than the card (165 to 146) and that is fine.** Height is
+a weak signal between objects of different material. The card is a floating glass
+panel with the page's one serif headline and its one filled pill; the rail is
+flat contents under a caption. What made the rail win the first glance was the
+three together — bigger, the only saturated colour above the fold, and ragged.
+Two of those are gone.

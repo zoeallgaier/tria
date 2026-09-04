@@ -4755,11 +4755,17 @@ button.poll-option:disabled { cursor: default; }
 .pgrid--settled .ptile { animation: none; }
 
 /* ── On repeat — the listening rail ───────────────────────────────────────────
-   Discover's other strip, opening the page above the day's card, and built to
-   the same rules as the tags further down: flat editorial rather than glass
-   (it's contents, not something floating above content), one line that scrolls
+   Discover's other strip, UNDER the day's card and above the grid, and built to
+   the same rules as the trending tags: flat editorial rather than glass (it's
+   contents, not something floating above content), one line that scrolls
    sideways rather than wrapping, and the label in the page's ordinary caption
    voice.
+
+   It opened the page for a day. The card took the top back on 2026-09-04 and
+   the reason is the one this page keeps relearning: the card is the only thing
+   on Discover with a DEADLINE, it is the same question for everybody, and it is
+   the page's headline. The rail is ambient — it will still be there tonight.
+   See "Discover's first screen" in design.md for what each fixture costs.
 
    SQUARES, not the round faces the daily card uses. A face would say "these are
    people", which the grid below already says about the same people; the square
@@ -4774,6 +4780,9 @@ button.poll-option:disabled { cursor: default; }
    interested. */
 .nowplaying {
   max-width: var(--feed-width);
+  /* The grid opens straight under this now — the tags that used to sit between
+     them moved into the search field — so this is the whole gap rather than
+     half of one. */
   margin: 0 auto 1.1rem;
   padding-inline: var(--inset);
 }
@@ -4841,17 +4850,28 @@ button.poll-option:disabled { cursor: default; }
   line-height: 1;
   color: var(--muted);
 }
-/* Both lines clamp to two and one respectively rather than ellipsising on one:
-   a song title is a sentence often enough that one line loses the half that
-   distinguishes it, and a name never is. */
+/* ONE LINE EACH, and the title's is a measurement rather than a preference. It
+   clamped to two, which made the strip's height a fact about your friends'
+   taste: 165px when every title fits one line, 181 the moment any single one
+   wraps — and this strip is what stands between the daily card and the grid, so
+   one long song title in your circle moved where the page's actual contents
+   begin. It broke the rail's own baseline too, since a wrapped title pushes only
+   ITS name down and the row of names stops being a row (measured with six
+   squares up: five names at y=478, one at 494).
+
+   The argument for two lines was that a song title is a sentence often enough
+   that one line loses the half that distinguishes it. True, and two lines of
+   0.82rem in an 88px column lose it as well — about twenty characters either
+   way. The square above is what identifies the record, which is the same
+   argument that made these squares and not faces; the words underneath NAME it,
+   and a name is allowed to end in an ellipsis. */
 .np-song {
   font-size: 0.82rem;
   line-height: 1.25;
   color: var(--text);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .np-who {
   font-size: var(--kicker);
@@ -4963,8 +4983,26 @@ button.poll-option:disabled { cursor: default; }
    caption size so it reads as an annotation rather than a score. It's the one
    number allowed anywhere on this page (tiles carry none, on purpose). */
 .dtags {
+  /* THE RAIL LIVES IN THE OPEN SEARCH FIELD, and that is a hierarchy fix with a
+     measurement under it. It used to stand in the page's flow between the
+     listening rail and the grid, where it cost 68px of a 741px window that three
+     fixtures were already sharing: the grid — the actual meeting — opened at
+     601px, 27% of the first screen, and the daily card heading the page was the
+     smallest of the three things above it.
+
+     The tags are the one fixture here that isn't content. They are an INDEX, and
+     the act one performs is a SEARCH (a tap fills the field rather than carrying
+     a filter of its own, which is the call this rail was built on), so they
+     belong where that act lives: under the open field, above its results, and
+     absent from the page until somebody asks. The grid opens at 517px now, 38%.
+
+     Hidden with `display` rather than dropped from the markup, and shown by a
+     class on the body rather than by a repaint: the strip is rebuilt in every
+     paint so its counts stay honest, and opening the field is not a change to
+     what the page is showing. */
+  display: none;
   max-width: var(--feed-width);
-  /* 1.4rem of air under the tags, less the rail's own bottom padding below. */
+  /* 1.4rem of air under the tags, less the tag's own bottom padding below. */
   margin: 0 auto 0.64rem;
   /* Inset to the same axis as the masthead's type. The rail and the grid share a
      box, but the rail is TYPE and the grid is media, and this page follows the
@@ -4975,8 +5013,10 @@ button.poll-option:disabled { cursor: default; }
      supplies the inset and the masthead drops its own. */
   padding-inline: var(--inset);
 }
-/* Discover's two section labels — this one and the daily card's kicker directly
-   above it — set together because they sit about 40px apart on the page. They
+.discover-body.is-searching .dtags { display: block; }
+/* Discover's two section labels — this one and the daily card's kicker — set
+   together because they sat about 40px apart on the page, and still do on the
+   one screen that shows both (an open field over an empty query). They
    were tracked micro-caps at two different sizes until 1.3, which was a
    harmonisation of the wrong thing: the question was never whether TRENDING and
    TODAY'S DAILY agreed with each other, it was whether either of them should be

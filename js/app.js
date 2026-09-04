@@ -10940,14 +10940,18 @@
       // the page, so it has to stay put and stay tappable while you're standing
       // inside one of its tags, or there's no way back out but the X.
       const tags = topTags();
-      // Today's daily, the one thing here with a deadline. It stays out of
-      // SEARCH — you asked a question, the page owes you an answer and not a
-      // card — but rides every filter, because the card isn't part of the grid
-      // it would be narrowing.
+      // Today's daily heads the page, above the rail: it's the one thing here
+      // with a deadline, and it's the same for everybody, so it reads as the
+      // room's headline rather than as a tile that happens to be first. The rail
+      // led for one day (2026-09-03) and gave the top back the next, on Zoe's
+      // read of it: two objects of that size in a row compete, and the tie goes
+      // to the one that expires. It stays out of SEARCH — you asked a question,
+      // the page owes you an answer and not a card — but rides every filter,
+      // because the card isn't part of the grid it would be narrowing.
       const occ = q ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
       // The rail rides every filter and stays out of SEARCH, exactly as the
-      // card below it does and for the same reason: it isn't part of the grid a
+      // card above it does and for the same reason: it isn't part of the grid a
       // query would be narrowing. Built here rather than at paint time so its
       // whole markup can go into the signature below — it's a string, and a
       // string IS the description of what changed, which beats hand-listing the
@@ -11018,9 +11022,13 @@
             r.items.map((t, j) => friendRowHtml(t.user, j,
               { locked: isLocked(t.user.username), bio: true })).join('') +
           `</div>`;
-      bodyEl.innerHTML = np +
+      // The tags LEAD the body and are invisible until the field opens (see the
+      // CSS). They sat between the listening rail and the grid until 1.5, which
+      // put the page's index — the one fixture here that isn't content — in the
+      // 68px directly above the thing everyone came for.
+      bodyEl.innerHTML = tagRail(tags, q) +
         (occ ? dailyCardEl(occ, answers) : '') +
-        tagRail(tags, q) +
+        np +
         (asList
           ? (runs.length ? runs.map(runHtml).join('') : `<p class="feed-empty">${empty}</p>`)
           : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
@@ -11081,13 +11089,36 @@
     // Open/close the search field. The icon fans it out over the toolbar and
     // focuses it; tapping again (or Escape) folds it back and clears the query so
     // the full grid returns.
+    //
+    // Both of these carry the trending rail with them: it is drawn in every paint
+    // and shown by a class here, never by a repaint. Opening a field is not a
+    // change to what the page is showing, and a rebuild would have restaged
+    // seventy tiles to reveal one strip.
     const foldSearch = () => {
       bar.classList.remove('topbar--searching');
+      bodyEl.classList.remove('is-searching');
       toggleBtn.setAttribute('aria-expanded', 'false');
       toggleBtn.setAttribute('aria-label', 'Search Tria');
       searchEl.tabIndex = -1;
     };
-    const foldIfEmpty = () => { if (!searchEl.value.trim()) foldSearch(); };
+    /* AN EMPTY FIELD NO LONGER FOLDS ITSELF ON BLUR, and that is the price of
+       putting the trending rail inside it — paid gladly, because the thing it
+       bought was a bug.
+
+       The old `foldIfEmpty` collapsed an untouched field back to a disc when you
+       looked away, which was a nice manner while the field held nothing but a
+       caret. Now it holds the page's index, and blur fires on the PRESS: tapping
+       a tag blurred the field, folded it, and took the tag out of the document
+       under the finger that was pressing it — mouseup landed on nothing and the
+       click never happened. (Reproduced in both engines; it is the same race the
+       toggle's mousedown preventDefault above was written for, and preventDefault
+       can't reach it here because the native shell's blur arrives over the bridge
+       rather than from the DOM.)
+
+       Not folding is also the standard behaviour it should have had: a
+       UISearchController drops the keyboard when you tap away and leaves the bar
+       ACTIVE until Cancel. The X is our Cancel, it is one tap, and it is already
+       under your eye. */
     // Focus is opt-OUT for the tag rail: tapping a tag should show you the query
     // it just ran, not raise a keyboard over the results you asked for.
     const openSearch = (focus = true) => {
@@ -11095,6 +11126,7 @@
       // the one that has to carry it (see searchSpec).
       NativeChrome.wantSearchFocus(focus);
       bar.classList.add('topbar--searching');
+      bodyEl.classList.add('is-searching');
       toggleBtn.setAttribute('aria-expanded', 'true');
       toggleBtn.setAttribute('aria-label', 'Close search');
       searchEl.tabIndex = 0;
@@ -11131,11 +11163,23 @@
     // A tag is a shortcut into search, and tapping the live one again undoes it —
     // the rail is the only control on this page that can turn itself off, so it
     // has to be able to.
+    //
+    // The un-press USED TO FOLD THE FIELD, which stopped being possible when the
+    // rail moved inside it: folding would take the tags away along with the query
+    // and leave nothing standing to press again. So both halves leave the field
+    // open — empty, with the whole grid back, and the other four tags still
+    // there to try. The X is still how you leave.
+    //
+    // The push is said by hand because the native field reads `input.value`
+    // (searchSpec) and a value set from script mutates nothing for watchPage to
+    // see. The repaint below usually covers it; a tag whose grid happens to sign
+    // the same would not.
     const wireTags = () => {
       bodyEl.querySelectorAll('.dtag').forEach(btn => btn.addEventListener('click', () => {
         const on = btn.getAttribute('aria-pressed') === 'true';
         discoverQuery = searchEl.value = on ? '' : btn.dataset.tag;
-        if (discoverQuery) openSearch(false); else foldSearch();
+        openSearch(false);
+        NativeChrome.schedulePage();
         paintNow();
       }));
     };
@@ -11149,7 +11193,6 @@
     // whether closing hands focus back to the icon or drops it (see closeSearch).
     toggleBtn.addEventListener('click', (e) =>
       bar.classList.contains('topbar--searching') ? closeSearch(e.detail === 0) : openSearch());
-    searchEl.addEventListener('blur', foldIfEmpty);
     searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(true); });
 
     /* ── The native capsule's half ────────────────────────────────────────────
@@ -11158,15 +11201,16 @@
        still the MODEL: the keystroke is written into it here and runs the same
        `input` listener below, so the beat, the widened rebuild, the tag rail's
        pressed state and every read of `discoverQuery` are the code that already
-       shipped. The other two are the web's own answers to a field being left —
-       the X clears and folds, an empty blur folds, a full one stays open — and
-       both are reached by calling them rather than by restating them. */
+       shipped. The close hook is the web's own answer to the field being left —
+       the X clears and folds — reached by calling it rather than by restating it.
+       There is no blur hook any more: nothing folds on blur in either shell (see
+       above), so the native field resigning first responder is exactly what it
+       looks like, a keyboard going down. */
     NativeChrome.searchHooks.text = (text) => {
       searchEl.value = text;
       searchEl.dispatchEvent(new Event('input', { bubbles: true }));
     };
     NativeChrome.searchHooks.close = () => closeSearch(false);
-    NativeChrome.searchHooks.blur = foldIfEmpty;
     // Typing repaints on a short trailing beat rather than per letter. A paint
     // here is a full rebuild — search lifts the per-person cap and folds the
     // hand-addressed posts back in, so the grid it builds is roughly double the

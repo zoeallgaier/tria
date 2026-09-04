@@ -759,8 +759,15 @@ it either way.
   (a rich note costs a DOMParser document, and this walks every post), haystacks
   are cached per post object, `Store.discover()` is pooled per paint, scoring
   happens once per tile rather than inside the sort comparator, and typing paints
-  on a trailing `SEARCH_BEAT` rather than per keystroke. Five **trending tags** head the page, each a shortcut
-  into search. A **post** tile shows the person's **name only, no @handle** —
+  on a trailing `SEARCH_BEAT` rather than per keystroke. Five **trending tags** live INSIDE the open search field (1.5), at the top of
+  the body and shown by an `is-searching` class rather than by a repaint, each a
+  shortcut into search. They headed the page until then, which put the one
+  fixture here that isn't content in the 68px directly above the grid; the tags
+  are an index whose act IS a search, so they moved to where that act lives. A
+  tag never folds the field any more (it would take the tags with it), and
+  **nothing folds on blur** — an empty field left alone stays open, the way a
+  `UISearchController` does, because blur fires on the press and folding mid-tap
+  removed the tag from under the finger. A **post** tile shows the person's **name only, no @handle** —
   there it's a byline, and a handle under every one of them is the same fact
   twice — while a **portrait** tile prints the handle under the name, because
   there the person is the content and nothing else on the tile tells one Sam
