@@ -415,3 +415,79 @@ select o.idx, o.on_date, o.weekday, o.slug, o.kind, o.type,
        o.photo_answers, o.note_answers, o.find_answers
 from metrics.daily_occurrence_stats o
 order by o.post_rate desc nulls last, o.answers desc;
+
+-- ── Cadence: is a daily too often? ──────────────────────────────────────────
+-- Q12 and Q13 exist to answer one question the per-prompt tables cannot: is
+-- participation limited by APPETITE (a person has about one answer in them per
+-- stretch of days, and the cadence only decides where it lands) or by
+-- OPPORTUNITY (people answer when a prompt happens to hit, so more prompts
+-- means more answers)? Weekly wins under the first and loses under the second,
+-- and nothing in the per-prompt data distinguishes them.
+
+-- Q12 · Per-person cadence. `answers_per_week` is the number to read: if the
+--       typical answerer is near 1.0, the room is already answering weekly and
+--       a daily is just seven doors into the same room.
+with a as (
+  select author, occurrence_day as d
+  from metrics.daily_answer_posts
+  where occurrence_day is not null
+  group by author, occurrence_day
+),
+g as (
+  select author, d,
+         d - lag(d) over (partition by author order by d) as gap
+  from a
+)
+select u.username,
+       count(*)                                          as answers,
+       min(g.d)                                          as first_day,
+       max(g.d)                                          as last_day,
+       max(g.d) - min(g.d) + 1                           as span_days,
+       round(count(*)::numeric * 7
+             / nullif(max(g.d) - min(g.d) + 1, 0), 2)    as answers_per_week,
+       round(avg(g.gap), 2)                              as mean_gap_days,
+       max(g.gap)                                        as longest_gap
+from g
+join public.users u on u.id = g.author
+group by u.id, u.username
+order by answers desc;
+
+-- Q13 · THE APPETITE TEST, and the one number that decides daily vs weekly.
+--       For every day inside a person's own active span, did they answer the
+--       NEXT day — split by whether they answered today.
+--
+--         p_next_after_answering  <  p_next_after_skipping  → appetite-limited.
+--           Answering today uses something up. Seven prompts a week are
+--           competing for one person's single answer, and weekly loses nothing
+--           by asking once.
+--
+--         p_next_after_answering  >  p_next_after_skipping  → habit-limited.
+--           Answering begets answering, the daily is building a rhythm, and
+--           dropping to weekly would break the thing that is working.
+--
+--       The span is per-person (first answer → last answer) so someone who
+--       joined late or drifted off is not counted as skipping months.
+with a as (
+  select author, occurrence_day as d
+  from metrics.daily_answer_posts
+  where occurrence_day is not null
+  group by author, occurrence_day
+),
+span as (
+  select author, min(d) as first_d, max(d) as last_d
+  from a group by author having count(*) > 1
+),
+pairs as (
+  select s.author, gs.d,
+         exists (select 1 from a where a.author = s.author and a.d = gs.d)     as answered,
+         exists (select 1 from a where a.author = s.author and a.d = gs.d + 1) as answered_next
+  from span s
+  cross join lateral generate_series(s.first_d, s.last_d - 1) gs(d)
+)
+select
+  count(*) filter (where answered)                                   as days_they_answered,
+  round(avg(answered_next::int) filter (where answered), 3)          as p_next_after_answering,
+  count(*) filter (where not answered)                               as days_they_skipped,
+  round(avg(answered_next::int) filter (where not answered), 3)      as p_next_after_skipping,
+  round(avg(answered_next::int), 3)                                  as p_next_overall
+from pairs;
