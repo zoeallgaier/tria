@@ -393,3 +393,25 @@ select (select count(*) from metrics.daily_prompts) as prompts,
        count(*) filter (where answers = 0)        as zero_answers,
        sum(answers)                               as answers_all_time
 from metrics.daily_prompt_stats;
+
+-- Q11 · THE OVERHAUL BRIEF. One statement, one row per occurrence that has
+--       actually happened, ordered by the fair comparator. Written for the 1.6
+--       cut: 40 of the 70 have run and every one of them has run exactly once,
+--       so `answers` is the whole sample and `answers_avg` means nothing yet.
+--
+--       READ post_rate, NOT answers. The room grew across the first six weeks,
+--       so a prompt on day 38 is fishing in a bigger pond than one on day 3;
+--       raw counts flatter whatever ran late. post_rate divides that out.
+--
+--       AND READ IT IN GROUPS. At ~4.6 answers a day, one prompt beating
+--       another by two answers is noise. The signal is in the bands — kind,
+--       weekday, the top and bottom thirds — which is what a per-row dump is
+--       for, so the grouping can happen after the fact instead of being baked
+--       into an aggregate that hides the spread.
+select o.idx, o.on_date, o.weekday, o.slug, o.kind, o.type,
+       o.active, o.answers, o.answerers, o.post_rate,
+       o.answers_with_response, o.response_rate,
+       o.comments, o.likes, o.public_answers,
+       o.photo_answers, o.note_answers, o.find_answers
+from metrics.daily_occurrence_stats o
+order by o.post_rate desc nulls last, o.answers desc;
