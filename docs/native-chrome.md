@@ -269,23 +269,6 @@ Dynamic Type. That second one is parity rather than a regression — `.nav-ico` 
 a fixed 28px on the web too — but it is the thing a real `UITabBar` would have
 given free, and it is what to reach for if this ever needs revisiting.
 
-**The capsule can be scrubbed as well as tapped.** `TriaChromeBar.scrubGesture`
-is a `UIPanGestureRecognizer` on the pill, added beside the buttons rather than
-instead of them — a plain tap never moves a touch past the recognizer's slop, so
-it stays in `.possible` and the tap reaches the button underneath exactly as
-before, and `tabTapped(_:)` is unchanged. Once a drag does move, `handleScrub`
-retints the tab under the finger on every `.changed` (`previewHighlight`, the
-paint half of `select(route:)` with none of its model half — `currentRoute`
-does not move), and on `.ended` sends `onTap?(routes[tabIndex(at:)])`, the exact
-call a button sends. So a scrub is never a second navigation path: it lands on
-the same `chromeTap` the router already handles, which still decides go vs.
-reclick and still calls `selectTab` back once it has landed — the same round
-trip that corrects a button tap corrects a scrub, and a drag cancelled or
-interrupted mid-air (`.cancelled` / `.failed`) just calls `select(route:
-currentRoute)` to drop the preview, since nothing is coming to confirm it.
-`tabIndex(at:)` clamps to the row rather than answering nil past either end, so
-a finger dragged off the capsule still means "the nearest tab to it".
-
 **The glyphs are drawn, not imported.** `TriaSVG` renders the same markup
 `ICONS` holds in app.js — see the renderer's own section below. SF Symbols were
 cheaper and wrong: the material is what goes to the system, not the identity,

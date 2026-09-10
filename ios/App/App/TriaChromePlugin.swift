@@ -481,13 +481,6 @@ protocol TriaChromeControl: AnyObject {
 /// `docs/native-chrome.md`: the accessibility tree is built by hand below, and
 /// the icons don't scale with Dynamic Type — which is parity with the web bar,
 /// whose `.nav-ico` is a fixed 28px, not a regression.
-///
-/// It DOES pick up a `UITabBar` habit anyway: `scrubGesture` lets a drag across
-/// the capsule preview and land on a tab, not only a tap on one icon. That
-/// stays true to "native is a renderer" — the drag only ever paints a preview
-/// and, at release, calls the same `onTap` a button sends; the router still
-/// decides whether that is a navigation or a reclick, and still owns
-/// `currentRoute`. See `handleScrub`.
 
 /* THE RAMP, UNDER THE GLASS RATHER THAN ON IT. This is the third answer to
    "the + cannot carry the four brand stops", and the first that keeps all four.
@@ -791,13 +784,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     private var keyboardUp = false
     private var lastReportedBottom: CGFloat = -1
 
-    /// A drag along the capsule, the way Apple's own tab bar can be scrubbed
-    /// across rather than only tapped. It never fires on a plain tap — a pan
-    /// recognizer sits in `.possible` until the touch actually moves past its
-    /// slop, so a tap still reaches the button underneath untouched — and it
-    /// never moves `currentRoute` itself; see `handleScrub`.
-    private lazy var scrubGesture = UIPanGestureRecognizer(target: self, action: #selector(handleScrub(_:)))
-
     init() {
         // spacing 0, deliberately. The container's job here is combined
         // rendering; the merge is a separate behaviour and Tria's design keeps
@@ -827,7 +813,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         // the note there about mutating a cached one.
         (pill.effect as? UIGlassEffect)?.isInteractive = true
         pill.cornerConfiguration = .capsule()
-        pill.addGestureRecognizer(scrubGesture)
         fab.cornerConfiguration = .capsule()
         pill.translatesAutoresizingMaskIntoConstraints = false
         fab.translatesAutoresizingMaskIntoConstraints = false
@@ -1150,45 +1135,6 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     @objc private func fabTapped() {
         guard !fabRoute.isEmpty else { return }
         onTap?(fabRoute)
-    }
-
-    // MARK: Swiping between tabs
-
-    /// Retints tabs live as a finger crosses them and, at release, sends
-    /// whichever one it is over — the same `onTap` a button itself sends, so
-    /// the router still decides whether that lands as a navigation or a
-    /// reclick. Nothing here moves `currentRoute`; only `select(route:)`,
-    /// called back through `selectTab` once the router has actually landed,
-    /// does that. A cancelled or failed drag undoes the preview the same way.
-    @objc private func handleScrub(_ gesture: UIPanGestureRecognizer) {
-        guard !routes.isEmpty, row.arrangedSubviews.count == routes.count else { return }
-        switch gesture.state {
-        case .began, .changed:
-            previewHighlight(index: tabIndex(at: gesture.location(in: row)))
-        case .ended:
-            onTap?(routes[tabIndex(at: gesture.location(in: row))])
-        default:
-            select(route: currentRoute)
-        }
-    }
-
-    /// Which tab a point in the row's own coordinates falls under, clamped
-    /// rather than nil past either end — a finger dragged off the capsule's
-    /// edge still means "the tab nearest it".
-    private func tabIndex(at point: CGPoint) -> Int {
-        for (index, view) in row.arrangedSubviews.enumerated() where point.x < view.frame.maxX {
-            return index
-        }
-        return routes.count - 1
-    }
-
-    /// The paint half of `select(route:)`, without the model half — a
-    /// preview for a drag that has not landed on anything yet.
-    private func previewHighlight(index liveIndex: Int) {
-        for (index, view) in row.arrangedSubviews.enumerated() {
-            guard let button = view as? UIButton else { continue }
-            button.tintColor = index == liveIndex ? (tabTint ?? Self.liveInk) : Self.idleInk
-        }
     }
 
     @objc private func keyboardShown() {
