@@ -4884,7 +4884,9 @@ button.poll-option:disabled { cursor: default; }
    says "these are records", and the album art is the only thing on the page
    doing that job. 88px is the smallest a piece of cover art can be and still be
    a picture instead of a swatch — under about 80 the art stops reading and the
-   rail turns into a row of coloured tiles.
+   rail turns into a row of coloured tiles. This rail is where the record IS the
+   page's content rather than a detail beside it, so it takes 132px — 1.5× the
+   pin card's own 88 — and is the one place cover art gets to be that big.
 
    Two lines under each square, both clamped to the square's own width: the song
    in the body face, the person in the muted caption. Song first, because the
@@ -4921,7 +4923,7 @@ button.poll-option:disabled { cursor: default; }
 
 .np-item {
   flex: 0 0 auto;
-  width: 88px;
+  width: 132px;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -4942,8 +4944,8 @@ button.poll-option:disabled { cursor: default; }
    itself, so there is no such square left to style. */
 
 .np-art {
-  width: 88px;
-  height: 88px;
+  width: 132px;
+  height: 132px;
   border-radius: var(--radius-img);
   background: var(--glass-bg-panel);
   background-size: cover;
@@ -6145,10 +6147,10 @@ button.poll-option:disabled { cursor: default; }
 }
 .pin-glow--flat { inset: 0; clip-path: none; filter: none; opacity: 0.3; }
 
-/* The square on the leading edge: an album cover, or a photograph. 88px, the
-   same square the listening rail draws, because they are the same object at the
-   same size in two places. A post with no picture has NO square — see
-   .pin--wordy below and pinCardEl in app.js. */
+/* The square on the leading edge: an album cover, or a photograph. 88px — the
+   listening rail draws the same object at 132 (see .np-art), where the record
+   is the whole content rather than a detail beside a title. A post with no
+   picture has NO square — see .pin--wordy below and pinCardEl in app.js. */
 .pin-art {
   position: relative;
   flex: 0 0 auto;
@@ -8488,6 +8490,15 @@ button.poll-option:disabled { cursor: default; }
      cluster used to be positioned off that inset and needed pulling back with
      it; those controls are in the toolbar as of 1.3.) */
   .account { padding-inline: 0; }
+  /* The strip itself breaks out past .view's own 1.15rem, the same move as
+     .feed below: without it the scrollable box still stops at the view's
+     inset, so a square caught mid-scroll clips hard against visible page
+     padding well short of the screen edge. Padding-inline puts the same
+     1.15rem back as the row's own content inset, so it still opens flush with
+     the rest of the page and closes with the same breathing room once you've
+     scrolled all the way — the box is just wider than its resting content
+     now, out to where the screen actually ends. */
+  .np-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; }
   /* The frame wall lives inside #feed, which breaks out by 1.15rem on a phone to
      put post photos screen-edge-to-edge. A masonry grid doesn't want that: it's
      already on Discover's axis and the card above it is on the view's, so the
