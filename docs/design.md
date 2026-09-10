@@ -789,7 +789,11 @@ between two hex values, and between two pastels that line sags — the midpoint
 comes out duller and a shade darker than either end, so four stops read as four
 bands with three grey seams. Worst exactly where the band is smallest: on the
 60px FAB the gradient is the whole button. Same four stops, same 115deg, same
-order; only the travel between them changed. It sits behind
+order; only the travel between them changed. (The phone's + no longer wears
+this band at all — it takes the neutral, for the reason set out under "The + does
+not wear Tria's band" in native-chrome.md. The measurement stands: it was taken
+on the worst case, and every capsule that still wears the ramp is an easier one.)
+It sits behind
 `@supports (background: linear-gradient(in oklab, …))` because the deployment
 target is **iOS 15** and this landed in Safari 16.2, and it has to be a feature
 query rather than a second declaration — an unregistered custom property accepts

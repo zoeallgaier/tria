@@ -103,7 +103,13 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   a refresh in flight silently eats it.
 - **Never read `Notification.permission` in app.js** — it throws in the app. Go
   through `Store.pushPermission()`.
-- **No badge, anywhere** — not in `aps`, not on the nav, not on a native tab.
+- **No COUNT, anywhere** — not in `aps`, not on the nav, not on a native tab.
+  What the rule refuses is a NUMBER: something that climbs while you are away
+  and asks to be driven back to zero. A DOT is allowed, on Updates only, and
+  it is one: it cannot climb, there is nothing to be behind on, and it clears
+  by looking. Zoe's call, 2026-09-09. See `updatesAreNew` in app.js and
+  `setDots` in `TriaChromePlugin.swift`; the dot wears `--dot`, the reader's
+  own colour.
 - **Every control that awaits the network hands itself back on *every* path**,
   rejection included.
 - **Ask all three shells, not one** — `nativeShell()` vs `installedShell()`, and

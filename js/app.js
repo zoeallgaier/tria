@@ -241,13 +241,23 @@
      One list drives the desktop top-right links and the mobile bottom tab bar.
      The publish "+" is the primary action (filled pill on desktop). */
   const ICONS = {
-    // Three interlocking rings — overlapping circles, a nod to the name (Tria)
-    // and to the wider community you meet on Discover. Kept an outline to sit
-    // with the other nav glyphs.
-    circle:  '<circle cx="8.5" cy="10" r="3.8"/><circle cx="15.5" cy="10" r="3.8"/><circle cx="12" cy="15.5" r="3.8"/>',
-    // One ring — your single, intimate circle (the home feed). The plainest mark
-    // against Discover's three, so "the small private one" reads at a glance.
-    myCircle: '<circle cx="12" cy="12" r="7"/>',
+    // A WOVEN TRIAD — three rings that OVERLAP, which is the whole difference
+    // between some people and a circle of them. The drawing it replaces set them
+    // apart at r 3.8 on a wide triangle and read at nav size as three unrelated
+    // dots; these are r 4.4 on a tighter one, so what you see is the weave.
+    // Same idea, same tab, drawn so it survives being 28pt across.
+    circle:  '<circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/>',
+    // A RING WITH A CENTRE — the people around you, and you in the middle of
+    // them, which is what the home feed is. The bare ring it replaces said
+    // "circle" and had no way to say WHICH circle, so it leaned entirely on
+    // being the plainest mark in the row. The centre is the reader, and that is
+    // the whole distinction between this tab and Discover's said in the drawings
+    // rather than in how busy they are: one triad has somebody at its middle and
+    // the other does not. The centre is FILLED rather than outlined so the mark
+    // has one solid thing in it at 28pt, and `stroke="none"` matters as much as
+    // the fill does: ICON_ATTRS strokes everything at 1.8, and a 1.9-radius
+    // circle stroked at 1.8 is not a dot, it is a smudge with a hole in it.
+    myCircle: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/>',
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
@@ -481,12 +491,14 @@
       },
     };
   })();
+  // `dot` is the one destination allowed to say something happened without
+  // being visited. See updatesAreNew, and the rule it sits inside.
   const NAV = [
     { route: '#/',         key: 'myCircle', label: 'My Circle' },
     { route: '#/discover', key: 'circle',   label: 'Discover' },
-    { route: '#/updates', key: 'bell',    label: 'Updates' },
-    { route: '#/profile', key: 'profile', label: 'Profile' },
-    { route: '#/publish', key: 'publish', label: 'Post', publish: true },
+    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true },
+    { route: '#/profile',  key: 'profile',  label: 'Profile' },
+    { route: '#/publish',  key: 'publish',  label: 'Post', publish: true },
   ];
 
   function renderNav(active) {
@@ -496,6 +508,11 @@
         ` aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
+        // Shipped empty and lit by class, never built and torn down: the pill is
+        // built ONCE (see below) and the dot changes state far more often than
+        // the nav changes shape. After the label so the sidebar reads
+        // icon-name-dot; the phone puts it on the glyph's corner in CSS.
+        (n.dot ? '<i class="nav-dot" aria-hidden="true"></i>' : '') +
       `</a>`;
     // Built ONCE and kept, so the links persist across renders and only their
     // aria-current flips. The four destinations ride inside a glass pill; Post
@@ -528,6 +545,11 @@
       if (composing) { pub.setAttribute('aria-hidden', 'true'); pub.tabIndex = -1; }
       else { pub.removeAttribute('aria-hidden'); pub.removeAttribute('tabindex'); }
     }
+    // Whether Updates has anything in it, restated on every navigation — which
+    // covers both directions: arriving at Updates clears it a moment later
+    // (renderUpdates stamps the ledger as seen and syncs again), and leaving any
+    // page re-asks a cache that a background pull may have grown underneath it.
+    syncNavDot();
     // …and the same two facts to the native bar, in the shell that has one. It
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
@@ -670,6 +692,14 @@
       const band = probe('background-image: var(--pill-band)');
       const colors = splitStops(band.image || '').map(toRgb).filter(Boolean);
       const ink = toRgb(probe('color: var(--pill-ink)').color || '');
+      // THE NEUTRAL, resolved the same way and read whether it is wanted or not.
+      // --mono-band is ink-side on paper and paper-side on ink, and --mono-ink
+      // is the glyph built to ride it (see tokens.css). Reading the pair here is
+      // how a black + on white and a white + on black come out of ONE branch
+      // below with no test on the live scheme anywhere in this file.
+      const mono = probe('background-image: var(--mono-band); color: var(--mono-ink)');
+      const monoStops = splitStops(mono.image || '').map(toRgb).filter(Boolean);
+      const monoInk = toRgb(mono.color || '');
       const post = NAV.find(n => n.publish);
       // The band, sorted into the one form the material can wear it in: a tint
       // for an accent, a ramp for Tria's four hues, nothing for "no colour".
@@ -690,57 +720,83 @@
          every route over everything the app draws, and it does not have to be
          the loudest thing on the screen to say what it does.
 
-         So Tria's band on the + is NO COLOUR: plain glass and `.label` ink, the
-         same + a reader who asked for no colour already gets. An ACCENT still
-         tints it, because that is the case where one colour has something to
-         say and the material can say it. `fill.ramp` is the flag rather than
-         `fill.colors` because Reduce Transparency has already turned the ramp
-         into a tint by the time it reaches here, and that tint is Tria's middle
-         stop rather than anybody's pick. */
-      const wear = fill.ramp ? { colors: [], tint: '' } : fill;
+         So Tria's band on the + is THE NEUTRAL: --mono-band tinting the glass
+         and --mono-ink riding it, which is exactly the + a reader who asked for
+         no colour already gets. An ACCENT still tints it, because that is the
+         case where one colour has something to say and the material can say it.
+         `fill.ramp` is the flag rather than `fill.colors` because Reduce
+         Transparency has already turned the ramp into a tint by the time it
+         reaches here, and that tint is Tria's middle stop rather than anybody's
+         pick.
+
+         WHAT THIS REPLACES is sending nothing at all: plain glass, `.label`
+         ink, no fill. That was right about the ramp and wrong about the button.
+         The one control that is up on every route came out as the quietest
+         thing on the screen, and the CSS fallback was painting the neutral for
+         the same reader on the same build — two chromes, one +, two answers.
+         The objection in bandFill still stands and is not this: three mid greys
+         spread across a gradient under glass are a smudge, and ONE strong
+         neutral, which is what a tint is, is not. */
+      const accent = fill.ramp ? '' : (fill.tint || '');
+      // The middle stop, which is the band's own weight — the same stop bandFill
+      // hands back for a chromatic band, picked the same way.
+      const wear = accent || monoStops[monoStops.length >> 1] || '';
       return {
         route: post ? post.route : '#/publish',
         label: post ? post.label : 'Post',
         // The drawing itself, not the name of one. See the icon note on tabSpec.
         glyph: svgIcon(post ? post.key : 'publish'),
-        colors: wear.colors,
-        tint: wear.tint,
-        /* ONLY A TINT CARRIES ITS OWN INK — here, and in controlSpec and
-           pageSpec, which both point at this note. The other two send none, and
-           empty is what native reads as `.label` — the system's ink, black on
-           light and white on dark, flipped by the system with no JS asking
-           which scheme is live. Which is right for both of them, and it is
-           right for two different reasons.
+        // Never a ramp any more: the + has exactly two states and both of them
+        // are one colour, so this is empty on every path and there is no
+        // TriaBandRamp under the disc for it to fill.
+        colors: [],
+        tint: wear,
+        /* AND THE LIT TAB'S OWN COLOUR, WHICH PARTED WAYS WITH THE +'S.
+           They were the same key for as long as the + had a bare state: a
+           reader's accent lit the tab, and everything else sent nothing and the
+           tab fell back to `liveInk`. The + is never bare now, so `tint` says
+           "neutral" where it used to say "nothing" — and a tab row inked with
+           the neutral is a row inked with the paper's opposite, which is what
+           `liveInk` already is, said twice and drifting. Only an ACCENT crosses
+           here; empty still means the tab picks its own. */
+        tabTint: accent,
+        /* THE INK, AND THE + IS THE ONE THING HERE THAT ALWAYS NAMES ONE.
 
-           "NO COLOUR" is the easy half: --pill-ink under --mono-band is
-           --mono-ink, a near-white made to ride a near-black fill, and there is
-           no fill left to ride — sending it would put a white + on clear glass
-           over white paper. It is the branch the + takes for Tria's band too
-           now, for the reason above.
+           controlSpec and pageSpec both point at this note and both still keep
+           the older rule: only a tint sends its own ink, and empty is what
+           native reads as `.label` — the system's, black on light and white on
+           dark, flipped over there with no JS asking which scheme is live. That
+           is still right for them, because what they wear when they are NOT
+           tinted is Tria's ramp, a fill the system did not draw and cannot
+           reason about. The + has no such state left. It wears an accent's tint
+           or the neutral's, so it always names an ink, and the two are named
+           from different tokens on purpose.
 
-           TRIA'S RAMP is the half that took a device to see, and it is about
-           the buttons that still wear it: the composer's Share pill, the gate's
-           submit, Share Tria, Add yours, and the toolbar's own CTA. --on-type
-           is a near-black because the WEB paints this band at --pill-alpha and
-           gets a light fill in either scheme; native does not paint it, it
-           thins it to rampAlpha and lets the material sample it, and on dark
-           paper that lands mid-tone rather than light. Measured on the + while
-           it still carried the ramp, plain paper, relative luminance: 0.49-0.73
-           in light, where near-black reads 9.6:1, and 0.155-0.207 in dark,
-           where the same near-black falls to 3.5-4.4:1 — clear of the 3:1 asked
-           of a graphical control and short of the 4.5 asked of text, and three
-           of those four page acts have text for a face. `.label` inverts with
-           the paper instead and clears 4.5 on both sides of it. The other half
-           of that number is in Swift: the ramp is thinner on dark paper, so
-           what it lands on is dark enough for a white glyph. See
-           TriaBand.rampAlpha.
+           THE NEUTRAL TAKES --mono-ink, which is the glyph --mono-band was
+           built to carry: near-white on the near-black band on paper, near-black
+           on the near-white one on ink, the pair flipping together one scheme
+           apart in tokens.css, and the button reading at 15+ either way.
+           `.label` would land the same way round and is still the wrong source
+           — it knows the PAPER and not the fill, and this fill is the paper's
+           opposite. The day a neutral is retuned in tokens.css is the day
+           `.label` would quietly stop matching it.
 
-           AN ACCENT IS NOT IN THAT BOAT and must keep --pill-ink. The system
-           draws a tint with its own idea of the material, and it comes out
-           LIGHT in both schemes: the same measurement on a lime + reads 0.64 in
-           dark mode, where near-black is 11.8:1 and white would be 1.5:1. A
-           blanket "white ink on dark" would erase every accent's glyph. */
-        ink: wear.tint ? (ink || '') : '',
+           AN ACCENT KEEPS --pill-ink and must. The system draws a tint with its
+           own idea of the material and it comes out LIGHT in both schemes: the
+           measurement on a lime + reads 0.64 relative luminance in dark mode,
+           where near-black is 11.8:1 and white would be 1.5:1. A blanket "white
+           ink on dark" would erase every accent's glyph.
+
+           WHAT WENT WITH THE RAMP is the number that used to be argued here.
+           Tria's band on the + measured 0.49-0.73 on paper and 0.155-0.207 on
+           ink, and that dark mid-tone is the one place on this bridge where
+           neither ink clears 4.5:1, which is why `.label` inverting with the
+           paper was the answer while the + still wore it. The + does not wear it
+           at all now. The figures still govern the CAPSULES that do — the
+           composer's Share pill, the gate's submit, Share Tria, Add yours, the
+           toolbar's CTA — and they are kept beside TriaBand.rampAlpha in Swift,
+           which is the other half of the same measurement. */
+        ink: (accent ? ink : monoInk) || '',
       };
     }
 
@@ -1960,6 +2016,9 @@
       call('setTabs', { tabs: tabSpec(), fab: fabSpec() }).then((res) => {
         live = true;
         stampBottom(res && res.bottom);
+        // The answer the nav already worked out, on the first frame there is
+        // somewhere to send it. See the note on setDots.
+        setDots(null);
         // The gate goes up only once the bars are real, so the web nav is never
         // hidden in the frames before native has drawn anything.
         document.documentElement.dataset.chrome = 'native';
@@ -2096,6 +2155,36 @@
       schedulePage();
     }
 
+    /* A DOT ON A DESTINATION, which is the only thing the native bar ever says
+       that is not about where you are.
+
+       It crosses as a RESOLVED COLOUR per route, and empty is "no dot" — one
+       call carrying both facts, for the same two reasons every other paint on
+       this bridge does. Native holds numbers and cannot read a custom property,
+       so --dot has to be resolved here; and a separate on/off flag beside a
+       separate colour is two payloads that can arrive a frame apart, which on
+       the one mark in the app whose whole job is to appear would read as a
+       flicker rather than as news.
+
+       `lastDots` is kept whether or not native is listening. renderNav runs on
+       the FIRST route, which is well before setTabs has resolved, so the answer
+       exists before there is anywhere to send it — start() sends this the frame
+       the bar goes live, and repaint() re-sends it when the scheme moves the
+       colour out from under it. */
+    let toldDots = '';
+    let lastDots = {};
+    function setDots(map) {
+      if (map) lastDots = map;
+      if (!live) return;
+      const ink = toRgb(probe('color: var(--dot)').color || '') || '';
+      const dots = {};
+      Object.keys(lastDots).forEach((route) => { dots[route] = lastDots[route] ? ink : ''; });
+      const signature = JSON.stringify(dots);
+      if (signature === toldDots) return;
+      toldDots = signature;
+      call('setDots', { dots }).catch(() => {});
+    }
+
     // The reader picked a colour, or their avatar resampled. Called from the one
     // place that stamps the band, so the + can't be repainted a frame apart from
     // every other thing wearing it.
@@ -2119,6 +2208,13 @@
       scheduleToolbar();
       schedulePage();
       pushPostBar();
+      /* AND THE DOT, which moves for both of this function's callers. It
+         resolves through the heart weights, so a colour pick changes it; those
+         are a PAIR one scheme apart, so sunset changes it too. Cleared first
+         because setDots is memoised on the colour it last sent, and the whole
+         point of this call is that the colour is what moved. */
+      toldDots = '';
+      setDots(null);
     }
 
     /* THE THINGS ON THESE BUTTONS THAT CHANGE WITHOUT THE READER CHANGING
@@ -2161,7 +2257,7 @@
     // nothing in the DOM that records it.
     function wantSearchFocus(wanted) { searchFocus = !!wanted; }
 
-    return { setActive, sync, repaint, captureMenu, presentMenu, discIcon,
+    return { setActive, sync, repaint, setDots, captureMenu, presentMenu, discIcon,
              postBarText, postBarHooks, searchHooks, wantSearchFocus,
              schedulePage, live: isLive };
   })();
@@ -11692,6 +11788,49 @@
      for a signal this gentle). */
   const notifSeenKey = () => `tria:updates-seen:${Store.session()}`;
 
+  /* WHETHER UPDATES HAS ANYTHING NEW IN IT — the one thing the nav is allowed
+     to say on its own.
+
+     A DOT, NEVER A COUNT, and the distinction is the whole of why this exists
+     inside an app whose standing rule is no badge anywhere. What that rule is
+     about is a NUMBER: something that climbs while you are away, that you are
+     asked to drive back to zero, and that turns an app into a chore with a
+     score. "Something happened" is a STATE. It cannot climb, there is nothing
+     to be behind on, and it clears by looking rather than by working through a
+     list. The rule as written in CLAUDE.md now says so.
+
+     It is the SAME COMPARISON the ledger's own rows make — notifItemHtml against
+     this same stamp — asked of the newest row alone, so the dot on the tab and
+     the dots in the list can never disagree about what counts as new. Reading
+     the top row rather than counting the fresh ones is not an optimisation: a
+     count is the thing being refused, and the cheapest way not to show one is
+     not to have one.
+
+     IT COSTS A LEDGER BUILD PER NAVIGATION, which is deliberate rather than
+     unnoticed. Store.notifications() walks comments, posts, likes, headcount
+     and votes; the world is a small circle's worth of rows, and the same walk
+     already runs on every Updates render and every refresh. It is not memoised
+     because the failure mode of a stale answer is not a dot arriving late, it
+     is a dot that will not CLEAR, and a mark that outlives its news is worse
+     than the scan. */
+  function updatesAreNew() {
+    if (!Store.isAuthed()) return false;
+    const all = Store.notifications();
+    const top = all.length ? (all[0]._ts || '') : '';
+    return !!top && top > (localStorage.getItem(notifSeenKey()) || '');
+  }
+
+  // Both chromes, one answer. The web dot is a class on an element that is
+  // always in the DOM; the native one is a colour sent across the bridge. Called
+  // on every navigation (renderNav), on every background pull that lands
+  // (refreshWorld) and on the visit that spends it (renderUpdates).
+  function syncNavDot() {
+    const on = updatesAreNew();
+    document.querySelectorAll('#nav .nav-dot')
+      .forEach(el => el.classList.toggle('is-on', on));
+    NativeChrome.setDots({ '#/updates': on });
+  }
+
   // A note as clean one-line plain text — for previews (Updates snippets) where
   // a rich note's headings/emphasis markup would otherwise leak in. Strips the
   // rich-note tags to their words (blocks joined by a space) and collapses
@@ -12192,6 +12331,9 @@
     // Everything has now been seen (a visit counts even under a filter) —
     // next visit, the dots move on.
     if (all.length && all[0]._ts) localStorage.setItem(notifSeenKey(), all[0]._ts);
+    // …and the tab says so on the same frame the rows do. renderNav already ran
+    // for this navigation, against the stamp the line above has just moved.
+    syncNavDot();
     // And the same is true of Notification Center: this ledger is that news, so
     // the delivered copies are spent. Nothing cleared them before, which left
     // the shade holding every notification Tria had ever sent — the running
@@ -15092,19 +15234,29 @@
       el.style.setProperty('--user-band', band);
       el.style.setProperty('--user-heart-lt', heartLt);
       el.style.setProperty('--user-heart-dk', heartDk);
-      // The glyph riding the fill. Absent for every chromatic band today,
-      // which is not an omission: every accent and the brand ramp are light
-      // fills and --pill-ink's own fallback is the near-black they want.
-      //
-      // The only source that sets it is --mono-band. An ACCENTS entry MAY
-      // carry an `ink` (ruby shipped a white one for a day, at L* 44), and the
-      // path is kept live because it is the only thing that makes a band below
-      // L* 65 legible at all — see the two-zone note in ACCENTS. If one ever
-      // comes back it has to be stamped from HERE, in the same call that sets
-      // the fill, for exactly the reason the monochrome band does: a glyph
-      // arriving a frame after its band is a + you cannot see, on every route.
-      if (ink) el.style.setProperty('--user-ink', ink);
-      else el.style.removeProperty('--user-ink');
+      /* The glyph riding the fill, and it is stamped on EVERY branch that
+         stamps a band — including the chromatic ones, where the value is the
+         same near-black --pill-ink would have fallen back to anyway.
+
+         It used to be left absent there, on the argument that the fallback
+         already said it. What that cost is the difference between "this reader
+         has no ink of their own" and "this reader has no BAND of their own",
+         which are not the same fact and now have to be told apart: the phone's
+         + reads `var(--user-ink, var(--mono-ink))` so that a reader on Tria's
+         own ramp gets the neutral (see the note beside it in app.css), and an
+         absent --user-ink under a PICKED accent would have handed that button a
+         near-white glyph to sit on a pastel disc. Stamping it always makes the
+         token total, and the fallback then means exactly one thing: nobody
+         stamped a band here.
+
+         An ACCENTS entry MAY carry an `ink` of its own (ruby shipped a white
+         one for a day, at L* 44), and that path is kept live because it is the
+         only thing that makes a band below L* 65 legible at all — see the
+         two-zone note in ACCENTS. Either way it is stamped from HERE, in the
+         same call that sets the fill, for the reason --mono-band always was: a
+         glyph arriving a frame after its band is a + you cannot see, on every
+         route. */
+      el.style.setProperty('--user-ink', ink || 'var(--on-type)');
 
       /* THE POST-TYPE MARKS GO MONOCHROME UNDER A CHOSEN COLOUR, and the split
          is not which sources are colourful — it is which ones the QUINTET is
@@ -16435,6 +16587,11 @@
     const seq = ++refreshSeq;
     const changed = await Store.refresh();
     if (seq !== refreshSeq) return;                // stale response — a newer pull won
+    // Before either bail below. A pull that brings a like on a post you are not
+    // looking at paints NOTHING — showWorld only ever repaints the three routes
+    // this function serves — and the tab is the one place that news can appear
+    // from anywhere. So the dot is answered by the pull, not by the paint.
+    syncNavDot();
     if (!changed && owedPaint !== path) return;    // nothing new, and nothing owed
     warmImages();   // new friends/posts may have brought new avatars + photos
     await showWorld(path, { force, hold, seq });

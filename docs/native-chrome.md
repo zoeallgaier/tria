@@ -131,6 +131,8 @@ learn what a "Discover filter" or a "daily" is.
 - **JS → native:** `setTabs({ tabs: [{route, label, icon}], fab })` — which also
   mounts the bars on its first call and resolves with the geometry below;
   `selectTab({route})`; `setFab({fab})`, for when the reader's accent changes;
+  `setDots({dots})`, a map of route to resolved colour where an EMPTY colour is
+  "no dot" and a route left unnamed keeps whatever it had (see "The dot");
   `setChrome({visible, fab})`, where `visible` takes the whole chrome away (the
   post page, the way `body.postbar-live` already does) and `fab` alone tucks the
   + (the composer, `.nav--compose`). `setToolbar({bar})` states the top bar
@@ -289,6 +291,11 @@ rather than us.
 accent is live, and sends the answer as a shape: a `tint`, a `colors` array, or
 neither. `TriaBand.apply` in the plugin is the whole of what Swift does with it.
 
+**`fab` also carries `tabTint`**, which is the LIT TAB's colour and is not the
+same key as the +'s own `tint`. They were one key while the + still had a bare
+state; they parted when it stopped having one. See "The + does not wear Tria's
+band".
+
 1. **A reader's ACCENT is one colour**, three stops eleven degrees apart at one
    weight (`bandFrom`). So it goes to `UIGlassEffect.tintColor` and the system
    tints its own material — refraction, specular response, Reduce Transparency,
@@ -300,7 +307,10 @@ neither. `TriaBand.apply` in the plugin is the whole of what Swift does with it.
    to be colourless, so it crosses as nothing at all and the button is plain
    glass. It also sends **no ink** — `--pill-ink` under this band is
    `--mono-ink`, a near-white built to ride a near-black fill, and there is no
-   fill left to ride. Empty is what native reads as `.label`.
+   fill left to ride. Empty is what native reads as `.label`. **The + is the
+   exception and takes this as a TINT**, which is the next section: what is a
+   smudge here is three mid greys spread across a gradient, and a single strong
+   neutral is not that.
 3. **Tria's own ramp is four hues** (spread ~179 degrees) and no single colour
    states it. That one, and only that one, stays a gradient UNDER the material:
    a `CAGradientLayer`-backed view (`TriaBandRamp`) the control's exact size and
@@ -322,13 +332,41 @@ sibling that has no ramp to show.
 
 ### The + does not wear Tria's band
 
-**It is form 2 for the brand ramp: plain glass, `.label` ink, the same + a
-reader who picked "no colour" gets.** An accent still tints it, because that is
-the case where one colour has something to say and the material can say it.
-`bandFill` reports a `ramp` flag beside the shape and `fabSpec` drops the fill
-when it is set — the flag rather than the stops, because Reduce Transparency has
-already collapsed the ramp to a tint by then and that tint is Tria's middle stop
-rather than anybody's pick.
+**It wears THE NEUTRAL instead: `--mono-band` tinting the glass, `--mono-ink`
+riding it, the same + a reader who picked "no colour" gets.** Those two are
+ink-side on paper and paper-side on ink, so one code path with no scheme test in
+it draws a black + with a white glyph in light mode and a white + with a black
+one in dark. An accent still tints it, because that is the case where one colour
+has something to say and the material can say it. `bandFill` reports a `ramp`
+flag beside the shape and `fabSpec` substitutes the neutral when it is set — the
+flag rather than the stops, because Reduce Transparency has already collapsed
+the ramp to a tint by then and that tint is Tria's middle stop rather than
+anybody's pick.
+
+**It used to send nothing at all** — plain glass, `.label` ink. That was right
+about the ramp and wrong about the button: the one control that is up on every
+route came out as the quietest thing on the screen, and the CSS fallback was
+painting the neutral for the same reader on the same build, so one + had two
+answers depending on which chrome you got. The web is in step now
+(`.nav-publish` overrides `--pill-band` / `--pill-ink` in app.css's mobile
+block, phone only — the sidebar's Post is a capsule and keeps the ramp), and
+`--user-ink` is stamped on every branch of `paintBrandBand` rather than only the
+monochrome one, so that override can tell "no band of their own" from "no ink of
+their own" and never hands a picked accent the neutral's near-white glyph.
+
+**And this is why `tabTint` is its own key.** The lit tab used to read the +'s
+`tint`: an accent lit the tab, everything else sent nothing and the tab fell
+back to `liveInk`. `tint` now says "neutral" where it used to say "nothing", and
+a tab row inked with the neutral is a row inked with the paper's opposite —
+which is what `liveInk` already is, said twice and free to drift. Only an accent
+crosses as `tabTint`.
+
+Verified on the simulator in both schemes, on real `UIGlassEffect`: the system
+renders a near-black tint as a genuinely dark disc and a near-white one as a
+genuinely light disc. It does not wash a neutral out the way the "a tint comes
+out LIGHT in both schemes" measurement on lime might suggest — that figure is
+about where an accent's own lightness lands, not about the material lifting
+what it is handed.
 
 **The reason is the shape, not the band.** A capsule is wide enough to travel
 across: a linear gradient holds its first colour everywhere before its start
@@ -499,6 +537,45 @@ does not reach the material — the button would hold whatever colour it was bui
 with for the rest of the session and a colour pick would look like it did
 nothing. `TriaBand.apply` builds a fresh `UIGlassEffect` every time and assigns
 it, which is also where `isInteractive` is set for these three families.
+
+### The dot
+
+**One mark, on Updates, and it is not a badge.** The app's standing rule is no
+COUNT anywhere — not in `aps`, not on the nav, not on a native tab — and what
+that rule refuses is a number: something that climbs while you are away and asks
+to be driven back to zero. A dot cannot climb, there is nothing to be behind on,
+and it clears by looking. Zoe's call, and CLAUDE.md now says so in those terms.
+
+`setDots({ dots: { "<route>": "<colour>" } })`, empty colour meaning no dot, so
+one call carries both the news and the ink. Two payloads can land a frame apart
+and on the one mark whose whole job is to appear that reads as a flicker rather
+than as news. The colour is resolved in `fabSpec`'s neighbourhood from `--dot`,
+like every other paint that crosses here; Swift is handed a number.
+
+Three things about the drawing:
+
+- **It is a sibling of the button's image, not part of the glyph.** `select`
+  inks the three tabs you are NOT on down to `idleInk`, and those are precisely
+  the three a dot can ever have anything to say about — the one you are looking
+  at is the one whose news you have already spent. The web hit the same wall
+  from the other side: `.nav-pill .nav-link { opacity: 0.4 }` composites the
+  whole subtree, so the dim moved down onto `.nav-pill .nav-ico`.
+- **`dots` is held, not applied and forgotten.** `setTabs` throws the row away
+  and builds every button again, and the two calls arrive in either order, so
+  whichever lands second has to find the other waiting. `paintDots` runs at the
+  end of the tabs branch for that reason; the dot view itself is found by tag
+  rather than tracked in a parallel array, so the view IS the record.
+- **6.5pt, 11pt in from the tab's top and trailing edges**, off the same 50pt
+  square `.nav-pill .nav-dot` measures off in CSS. The glyph is 28 centred, so
+  its own edge is 14 out from the middle and its diagonal corner nearer 10 —
+  which is why the mark clears every drawing in the row.
+
+The state itself is `updatesAreNew` in app.js: the newest ledger row's `_ts`
+against the same `tria:updates-seen:` stamp the ledger's own rows compare
+themselves to, so the tab and the list can never disagree about what is new.
+Reading the top row rather than counting fresh ones is not an optimisation — a
+count is the thing being refused, and the cheapest way not to show one is not to
+have one.
 
 ## What the top bar kept, and why
 

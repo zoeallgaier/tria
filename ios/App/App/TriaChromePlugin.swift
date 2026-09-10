@@ -13,7 +13,9 @@ import CoreText
 /// source of truth for what page you are on. This file is told; it never
 /// decides. It knows four routes as opaque strings and hands one back when a
 /// finger lands on it — it does not know what a Circle is, what Discover
-/// filters, or that Updates could ever carry a count. Two things disagreeing
+/// filters, or that Updates could ever carry a COUNT — `setDots` puts a mark on
+/// a destination and the mark has no number in it, which is the difference
+/// between saying something happened and keeping score. Two things disagreeing
 /// about where the reader is, one holding the history and the other holding the
 /// highlighted tab, is the bug that rule exists to make impossible.
 ///
@@ -39,6 +41,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setTabs", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "selectTab", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFab", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setDots", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setChrome", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setToolbar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "menuReady", returnType: CAPPluginReturnPromise),
@@ -87,8 +90,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// means "keep the CSS chrome".
     ///
     /// `tabs` is `[{route, label, icon}]` and `fab` is `{route, label, glyph,
-    /// colors, tint, ink}` — `tint` also becomes the lit tab's own colour, see
-    /// `tabTint`. `icon` and `glyph` are SVG MARKUP — the same drawing the
+    /// colors, tint, tabTint, ink}` — `tint` is the +'s own band and `tabTint`
+    /// is the lit tab's, which are the same colour only when the reader picked
+    /// one; see `tabTint`. `icon` and `glyph` are SVG MARKUP — the same drawing the
     /// web nav puts in the DOM, rendered here by `TriaSVG`. Markup is
     /// presentation, which is the only kind of app vocabulary allowed across
     /// this bridge: it still cannot name a single thing the app is about.
@@ -156,6 +160,30 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let fab = call.getObject("fab")
         DispatchQueue.main.async { [weak self] in
             self?.bar?.apply(tabs: nil, fab: fab)
+            call.resolve()
+        }
+    }
+
+    /// A DOT ON A DESTINATION, which is the only thing this bar ever says that
+    /// is not about where the reader is.
+    ///
+    /// `{ dots: { "<route>": "<colour>" } }`, and an EMPTY colour is "no dot" —
+    /// one call carrying both the news and the ink, because two payloads can
+    /// arrive a frame apart and on the one mark whose whole job is to appear
+    /// that reads as a flicker rather than as news. The colour is resolved over
+    /// there like every other paint that crosses here; this file is handed a
+    /// number and has no idea what it means, which is the same contract
+    /// `setTabs` keeps with a glyph.
+    ///
+    /// Routes not named are left exactly as they were, so a caller may speak
+    /// about one destination without restating the row.
+    @objc func setDots(_ call: CAPPluginCall) {
+        var dots: [String: String] = [:]
+        for (route, value) in call.getObject("dots") ?? [:] {
+            dots[route] = (value as? String) ?? ""
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.bar?.setDots(dots)
             call.resolve()
         }
     }
@@ -429,6 +457,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
 protocol TriaChromeControl: AnyObject {
     func apply(tabs: [[String: Any]]?, fab: [String: Any]?)
     func select(route: String)
+    func setDots(_ map: [String: String])
     func setVisibility(chrome: Bool, fab: Bool)
     func reservedBottom() -> CGFloat
 }
@@ -663,6 +692,16 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         static let fabSize: CGFloat = 56        // --fab-size
         static let fabIcon: CGFloat = 30        // .nav-publish .nav-ico
         static let navGap: CGFloat = 11.2       // --nav-gap: 0.7rem
+        static let dotSize: CGFloat = 6.5       // .nav-pill .nav-dot
+        /// Off the tab's own 50pt square, top and trailing, which is what the
+        /// CSS measures from too. The glyph is 28 centred, so its edge is 14 out
+        /// from the middle and its diagonal corner nearer 10; this lands the mark
+        /// just clear of every drawing in the row.
+        static let dotInset: CGFloat = 11       // .nav-pill .nav-dot top/right
+        /// A tag rather than a stored array of views, because the row is thrown
+        /// away and rebuilt whole on every `setTabs` and a parallel array would
+        /// be a second thing to keep in step with it. The view IS the record.
+        static let dotTag = 0x7D07
         static let float: CGFloat = 8           // .nav bottom: 0.5rem above the safe area
         /// Slack around the glass inside the container, so `--glass-lift` — the
         /// soft drop that makes the pill visibly float off the page — isn't
@@ -717,10 +756,23 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
     private var routes: [String] = []
     private var fabRoute = ""
     private var currentRoute = ""
-    /// The reader's own accent, off the same `fab` payload's `tint` — nil is
-    /// "no colour" (or Tria's ramp, which a tab icon declines the same way the
-    /// + does). See the note on `liveInk` above.
+    /// The reader's own accent, off the `fab` payload's `tabTint` — nil is "no
+    /// colour" and also Tria's ramp, which a tab icon declines the same way the
+    /// + does. See the note on `liveInk` above.
+    ///
+    /// IT USED TO READ `tint`, the +'s own, and the two parted when the + stopped
+    /// having a bare state: it wears the NEUTRAL now where it used to wear
+    /// nothing (see `fabSpec` in app.js), and a tab row inked with the neutral is
+    /// a row inked with the paper's opposite — which is what `liveInk` already
+    /// is, said twice in two places and free to drift.
     private var tabTint: UIColor?
+
+    /// Which destinations carry a dot, and in what colour. Kept rather than
+    /// applied and forgotten, because `setTabs` throws the whole row away and
+    /// builds it again — the dots and the tabs arrive in either order and on
+    /// their own schedules, so whichever lands second has to be able to find the
+    /// other one waiting.
+    private var dots: [String: UIColor] = [:]
     private var pillCenterX: NSLayoutConstraint?
     private var fabCenterX: NSLayoutConstraint?
 
@@ -882,6 +934,9 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
                 + 2 * Metric.pillPadX
             pillCenterX?.constant = -(Metric.fabSize + Metric.navGap) / 2
             fabCenterX?.constant = (pillWidth + Metric.navGap) / 2
+            // Every button above is new, so every dot on the old ones went with
+            // the row. This is why `dots` is held rather than applied once.
+            paintDots()
         }
         if let fabSpec {
             fabRoute = fabSpec["route"] as? String ?? fabRoute
@@ -901,8 +956,63 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
             // `setFab` alone, so re-run `select` to retint whichever tab is
             // already lit rather than waiting on a navigation to correct it —
             // the amber-+-over-rainbow-pill bug `repaint` exists to close.
-            tabTint = TriaChromeBar.color(fromHex: fabSpec["tint"] as? String ?? "")
+            tabTint = TriaChromeBar.color(fromHex: fabSpec["tabTint"] as? String ?? "")
             select(route: currentRoute)
+        }
+    }
+
+    func setDots(_ map: [String: String]) {
+        for (route, hex) in map {
+            if let colour = Self.color(fromHex: hex) { dots[route] = colour }
+            else { dots[route] = nil }          // an empty colour is "no dot"
+        }
+        paintDots()
+    }
+
+    /// One dot per destination that has news, on the glyph's top trailing
+    /// corner, measured off the same 50pt square `.nav-pill .nav-dot` measures
+    /// off in app.css so the two chromes put the mark in one place.
+    ///
+    /// IT IS NOT DIMMED WITH ITS TAB, which is the whole reason it is a sibling
+    /// of the button's image rather than part of the drawing. `select` inks the
+    /// three tabs you are not on down to `idleInk`, and those are precisely the
+    /// three a dot can ever have anything to say about — the one you are looking
+    /// at is the one whose news you have already spent. The web answers the same
+    /// problem the same way; see the note beside `.nav-pill .nav-ico`.
+    private func paintDots() {
+        for (index, view) in row.arrangedSubviews.enumerated() {
+            guard let button = view as? UIButton, index < routes.count else { continue }
+            let colour = dots[routes[index]]
+            // Spoken, not just drawn. The label is the destination's name, so
+            // VoiceOver reads "Updates, New" and the mark is not silent.
+            button.accessibilityValue = colour == nil ? nil : "New"
+            let existing = button.viewWithTag(Metric.dotTag)
+            guard let colour else {
+                existing?.removeFromSuperview()
+                continue
+            }
+            let dot: UIView
+            if let existing {
+                dot = existing
+            } else {
+                dot = UIView()
+                dot.tag = Metric.dotTag
+                dot.translatesAutoresizingMaskIntoConstraints = false
+                dot.layer.cornerRadius = Metric.dotSize / 2
+                // The button owns the tap; a dot that took touches would be a
+                // 6.5pt hole in the middle of a 50pt target.
+                dot.isUserInteractionEnabled = false
+                button.addSubview(dot)
+                NSLayoutConstraint.activate([
+                    dot.widthAnchor.constraint(equalToConstant: Metric.dotSize),
+                    dot.heightAnchor.constraint(equalToConstant: Metric.dotSize),
+                    dot.topAnchor.constraint(equalTo: button.topAnchor,
+                                             constant: Metric.dotInset),
+                    dot.trailingAnchor.constraint(equalTo: button.trailingAnchor,
+                                                  constant: -Metric.dotInset)
+                ])
+            }
+            dot.backgroundColor = colour
         }
     }
 

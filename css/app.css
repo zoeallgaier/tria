@@ -1404,6 +1404,27 @@ body.toolbar-live .view { padding-top: 1rem; }
   font-weight: 700;
 }
 
+/* THE UNREAD DOT. One mark, two placements: here it is the last thing in a
+   labelled row (icon, name, dot), and on a phone it rides the glyph's top
+   trailing corner, where the label it would have followed is display:none. Same
+   element either way — the pill is built once and only the class flips, so this
+   never costs a rebuild of the nav (see renderNav).
+
+   Shipped at opacity 0 rather than display:none so it has something to fade
+   from: news arriving under your eyes should appear rather than pop, and a
+   0-to-1 opacity is composited. --dot is the reader's own colour; the token
+   carries the argument. */
+.nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--dur-micro) var(--ease);
+}
+.nav-dot.is-on { opacity: 1; }
+
 /* Post — the one primary action. At rest a gradient OUTLINE (the type pastels
    circling the pill — a quiet arrow pointing at posting); on hover / press /
    while on the compose page it fills with the same gradient. Text contrast holds
@@ -6755,11 +6776,15 @@ button.poll-option:disabled { cursor: default; }
   white-space: nowrap;
 }
 .notif-date { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.02em; }
+/* The ledger's own unread mark, and it wears the SAME token as the one on the
+   tab. They are one signal in two places — the tab says the page has something,
+   the row says which — so a reader who picked a colour cannot end up with their
+   colour on one and page ink on the other. See --dot in tokens.css. */
 .notif-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--dot);
   opacity: 0;
   flex-shrink: 0;
 }
@@ -8098,13 +8123,34 @@ button.poll-option:disabled { cursor: default; }
      No lozenge, no lit backdrop: both are per-frame paint for a fact a dimmed
      icon answers free. Scoped to `.nav-pill .nav-link` so the FAB, which lives
      outside the pill, keeps its own full-strength presence. */
+  /* THE DIM SITS ON THE GLYPH RATHER THAN ON THE LINK, and that is about the
+     dot. Opacity composites a whole subtree, so a dot inside a link at 0.4 is a
+     dot at 0.4 — faint on exactly the three tabs it could have anything to say
+     about, since the one you are looking at is the one whose news you have just
+     spent. Nothing else changes: the label is display:none here, so the glyph IS
+     the link's visible ink and the pill reads the same as it always did. */
   .nav-pill .nav-link {
-    opacity: 0.4;
-    transition: opacity var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease);
+    position: relative;               /* the dot's containing block */
+    transition: color var(--dur-micro) var(--ease);
   }
-  .nav-pill .nav-link[aria-current="page"] {
-    color: var(--accent);
-    opacity: 1;
+  .nav-pill .nav-ico {
+    opacity: 0.4;
+    transition: opacity var(--dur-micro) var(--ease);
+  }
+  .nav-pill .nav-link[aria-current="page"] { color: var(--accent); }
+  .nav-pill .nav-link[aria-current="page"] .nav-ico { opacity: 1; }
+  /* The dot on the glyph's top trailing corner. The link is a 50px square with a
+     28px mark centred in it, so the glyph's own edge is 14px out from the middle
+     and its diagonal corner is nearer 10 — 11px in from the link's corner puts
+     the dot just clear of every mark in the row, none of which carries ink out
+     that far. It matches the native bar's own offsets; see paintDots in
+     TriaChromePlugin.swift, which measures from the same 50pt square. */
+  .nav-pill .nav-dot {
+    position: absolute;
+    top: 11px;
+    right: 11px;
+    width: 6.5px;
+    height: 6.5px;
   }
   /* Press compression lives in the shared press engine (app.js) — `scale`, so it
      never fights the FAB's own transforms. */
@@ -8130,6 +8176,30 @@ button.poll-option:disabled { cursor: default; }
     transition: opacity var(--dur-quick) var(--ease),
                 transform var(--dur-move) var(--ease);
   }
+  /* THE + TAKES THE NEUTRAL WHERE THE REST OF THE APP TAKES TRIA'S RAMP, and it
+     is the one control in the set that does.
+
+     Four hues need a capsule to travel across and a 56pt disc is not one: the
+     sweep has nowhere to go and reads as a smudge rather than as a band. That is
+     why the NATIVE + has declined the ramp since 1.4 — the argument is written
+     out in full beside fabSpec in app.js — and this is the same decision said in
+     CSS, so the fallback chrome and the real chrome are finally the same button
+     rather than two answers to one question on one build.
+
+     --mono-band is ink-side on paper and paper-side on ink and --mono-ink is the
+     glyph built to ride it, so "no colour" and Tria's own both land as a black +
+     on white and a white + on black with no scheme test in this rule. A reader
+     who PICKED a colour still gets it: --user-band is stamped and wins the
+     fallback, and --user-ink is stamped alongside it on every branch that sets a
+     band (see paintBrandBand) so this line can never hand a picked accent the
+     neutral's near-white glyph.
+
+     Scoped to the phone deliberately. The SIDEBAR's Post is a capsule, which is
+     the one shape the ramp was always right on, and it keeps it. */
+  .nav-publish {
+    --pill-band: var(--user-band, var(--mono-band));
+    --pill-ink:  var(--user-ink,  var(--mono-ink));
+  }
   .nav-publish .nav-ico { width: 30px; height: 30px; }
   /* The + wears the whole band at once, lit, and holds still.
 
@@ -8140,9 +8210,11 @@ button.poll-option:disabled { cursor: default; }
      that reads as a slight dullness on a 122px pill reads as banding on this
      disc. It travels through oklab now — see --brand-band in tokens.css.
 
-     What the band IS depends on the reader's colour source, and all three land
-     through --pill-band without this rule knowing which: Tria's own ramp,
-     an accent, or --mono-band for a reader who chose no colour at all.
+     What the band IS depends on the reader's colour source, and both answers
+     land through --pill-band without this rule knowing which: an accent, or
+     --mono-band for everyone else — which is a reader who chose no colour and a
+     reader who chose Tria's own, together, for the reason set out at the
+     --pill-band override a few rules up.
 
      The dome is GONE. The FAB takes the same glass edge, rim and float as every
      other primary act, so it belongs to that set — but its fill stays OPAQUE,
@@ -8349,7 +8421,7 @@ button.poll-option:disabled { cursor: default; }
     /* Dark paper needs the inactive icons a touch stronger than 0.4: --muted is
        already low-contrast against a dark pill, and dimming it by the light-mode
        amount pushes the three you are not on close to invisible. */
-    .nav-pill .nav-link { opacity: 0.5; }
+    .nav-pill .nav-ico { opacity: 0.5; }
     /* Same treatment as the pill: run the icon chip less transparent so it reads
        over dark content. The shadow is --glass-lift and deepens on its own. */
     .nav-dial-ico { background: color-mix(in srgb, var(--bg) 82%, transparent); }

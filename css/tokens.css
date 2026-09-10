@@ -284,6 +284,22 @@
      never green in the first place. */
   --going-ink: var(--user-heart-lt, var(--type-activity-ink));
 
+  /* THE UNREAD DOT — the nav's Updates tab, and the ledger's own rows, which
+     wear the same mark for the same reason and should never wear two colours
+     for it. It is the one thing in the app that says something happened without
+     saying how much, and it is deliberately not a number; the argument is beside
+     updatesAreNew in app.js.
+
+     It follows the rule the heart and the Going tag already follow: the reader's
+     own colour where they picked one, so the dot is theirs rather than the
+     app's. Absent --user-heart-lt it falls back to --accent (= page ink) rather
+     than to a hue, because a reader who has not chosen a colour is not making a
+     statement about the palette and a stray pastel on the chrome would be one.
+     "No colour" stamps --mono-heart, so choosing none gets a grey one and means
+     what it says. --user-heart-dk takes over in the dark block below, the same
+     one-scheme-apart pair every other accent mark leans on. */
+  --dot: var(--user-heart-lt, var(--accent));
+
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
   --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
@@ -525,6 +541,7 @@
        needs no contrast caveat: the accent at L* 74 on ink paper measures ~9.4,
        and the fallback -ink twin IS the pastel. */
     --going-ink: var(--user-heart-dk, var(--type-activity-ink));
+    --dot:       var(--user-heart-dk, var(--accent));
 
     /* Lit surfaces on dark paper: the top-white sheen barely reads on the
        near-white fills, so lean on a deeper base shade and a stronger lift. */
