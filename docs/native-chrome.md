@@ -174,8 +174,11 @@ learn what a "Discover filter" or a "daily" is.
   used to fall through to `go()`, see an unchanged hash, re-run `route()` and
   restore the scroll it had just come from. A tab that visibly did nothing. (See
   [navigation.md](navigation.md) for what the gesture is.) No second navigation
-  path either way, and native does not move its own highlight — that comes back
-  around through `selectTab` once the router has landed. `chromeMetrics` carries a new measurement. `toolbarTap`
+  path either way. The system tab bar moves its own lens under the finger —
+  that is the control, and it is what readers expect of it — and the router
+  then lands on that same route and says so through `selectTab`, which is the
+  only selection native keeps. A tab tap has no cancel path (`go` always lands),
+  so the two cannot disagree. `chromeMetrics` carries a new measurement. `toolbarTap`
   carries a control's id, and JS clicks the web element it stands for — so the
   page's own handler is still the only implementation of what that button does.
   `toolbarMenu {id, token}` is a menu asking what is in it; `toolbarPick
@@ -250,24 +253,43 @@ iOS 26 only. So:
 `TriaViewController.capacitorDidLoad` beside `TriaSettings`. `js/app.js`'s
 `NativeChrome` module is the whole web side; `css/app.css` ends with the gate.
 
-**It is not a `UITabBar`, and that is a decision rather than an oversight.**
-Tria's bar has not been a full-width tab bar since the July 2026 nav overhaul: it
-is a detached capsule of four icons with a round Post button breaking out beside
-it. Adopting `UITabBar` would have meant adopting a different design, and 1.4 is
-about handing the *material* to the system, not the layout. So the bar is a
-`UIGlassContainerEffect` view spanning the bottom with two `UIGlassEffect`
-elements nested in its `contentView` — the configuration the header calls for,
-and what makes the pair render as one glass system rather than two unrelated
-blurs that happen to be adjacent. Both elements are `isInteractive`, which is
-where the press response comes from and why no touch handler adds one.
+**It IS a `UITabBar` now — the system's own, as of 2026-09-10, Zoe's call.**
+1.4 shipped a hand-built capsule instead (a `UIGlassContainerEffect` holding a
+glass pill of four icon-only discs and the +), on the argument that Tria's
+detached capsule was a design and adopting `UITabBar` would mean adopting a
+different one. What that argument missed is that on iOS 26 the system's tab bar
+IS a detached floating capsule, and it brings everything the hand-built one had
+to fake or go without: labels under the glyphs, the selection lens that can be
+pressed and dragged from tab to tab, the system badge, Dynamic Type's large
+content viewer, and a real accessibility tree (tabs read as the system's own).
+A reader should meet the control every other app on their phone uses.
 
-What that costs, stated plainly, because it is the case the doc argued the other
-way above: the accessibility tree is built by hand (`.tabBar` on the capsule,
-`.button` + `.selected` per disc, `accessibilityLabel` off the route's own name,
-since icon-only tabs have no visible label), and the icons do not scale with
-Dynamic Type. That second one is parity rather than a regression — `.nav-ico` is
-a fixed 28px on the web too — but it is the thing a real `UITabBar` would have
-given free, and it is what to reach for if this ever needs revisiting.
+**A standalone `UITabBar` gets the floating design without a tab bar
+controller.** Built against the iOS 26 SDK, a bare `UITabBar` picks the
+floating visual provider itself — measured: a 62pt `_UITabBarPlatterView` flush
+with the top of the bar's frame, inset 21pt from its sides, with 21pt under it
+to the screen's bottom. So there was no need for `UITabBarController`, which
+would have meant re-parenting Capacitor's bridge controller and its web view
+into a child of a tab per destination. `TriaChromeBar` spans the host with
+`point(inside:)` handing everything that isn't the bar or the + back to the
+page, and lays the bar out by frame against its own `sizeThatFits`, full width
+at the bottom the way a tab bar controller would.
+
+**The + is Music's search button.** A 62pt `UIGlassEffect` disc, the platter's
+height and level with it, `edge` (the platter's own 21pt inset) from the screen
+edge, so the two ends of the row mirror each other; the bar's frame is narrowed
+by the disc and `--nav-gap` so that gap is exactly what sits between them. When
+the composer tucks the +, the frame gives the room back and the platter widens
+to the full floating width in the same spring.
+
+**The tint is the whole of the styling.** `tintColor` is the lit tab: the
+reader's accent (`tabTint`) or `liveInk`. Unselected items keep the system's
+own ink. Selection is legible without the colour because the lens carries it.
+
+**Tapping the tab you are on is reported**: `tabBar(_:didSelect:)` fires for the
+already-selected item, so `reclick` still runs (measured: a scrolled feed went
+back to the top). The lens drag ends in the same `didSelect`, so it is not a
+second path either.
 
 **The glyphs are drawn, not imported.** `TriaSVG` renders the same markup
 `ICONS` holds in app.js — see the renderer's own section below. SF Symbols were
@@ -552,23 +574,19 @@ and on the one mark whose whole job is to appear that reads as a flicker rather
 than as news. The colour is resolved in `fabSpec`'s neighbourhood from `--dot`,
 like every other paint that crosses here; Swift is handed a number.
 
-Three things about the drawing:
+Two things about the drawing:
 
-- **It is a sibling of the button's image, not part of the glyph.** `select`
-  inks the three tabs you are NOT on down to `idleInk`, and those are precisely
-  the three a dot can ever have anything to say about — the one you are looking
-  at is the one whose news you have already spent. The web hit the same wall
-  from the other side: `.nav-pill .nav-link { opacity: 0.4 }` composites the
-  whole subtree, so the dim moved down onto `.nav-pill .nav-ico`.
-- **`dots` is held, not applied and forgotten.** `setTabs` throws the row away
-  and builds every button again, and the two calls arrive in either order, so
-  whichever lands second has to find the other waiting. `paintDots` runs at the
-  end of the tabs branch for that reason; the dot view itself is found by tag
-  rather than tracked in a parallel array, so the view IS the record.
-- **6.5pt, 11pt in from the tab's top and trailing edges**, off the same 50pt
-  square `.nav-pill .nav-dot` measures off in CSS. The glyph is 28 centred, so
-  its own edge is 14 out from the middle and its diagonal corner nearer 10 —
-  which is why the mark clears every drawing in the row.
+- **It is the system's badge, EMPTY.** `badgeValue = ""` draws the tab bar's
+  own badge with no text in it — an 18pt disc on the glyph's corner, in
+  `badgeColor`, which is the resolved `--dot`. `paintDots` only ever writes
+  `""` or nil, whatever it is handed, so the count rule is kept in one line.
+  It is bigger than the 6.5pt mark the hand-built capsule drew, and that is the
+  trade for being the badge every other app's tab bar wears. (The CSS nav keeps
+  its own `.nav-pill .nav-dot`.)
+- **`dots` is held, not applied and forgotten.** `setTabs` replaces every item,
+  and the two calls arrive in either order, so whichever lands second has to
+  find the other waiting. `paintDots` runs at the end of the tabs branch for
+  that reason.
 
 The state itself is `updatesAreNew` in app.js: the newest ledger row's `_ts`
 against the same `tria:updates-seen:` stamp the ledger's own rows compare
@@ -705,9 +723,8 @@ on are kept in the comment where it stood, because the next animation on that
 class will need them: **alpha on a UIVisualEffectView is unsupported, and on a
 GLASS CONTAINER it is worse than unsupported** — the container renders its
 nested glass in a pass of its own, so `contentView.alpha` leaves the discs at
-partial strength and re-rendering every frame (`TriaChromeBar.syncVisibility`
-says exactly this, about exactly this class of view, and it was once read as
-being about the bottom bar). What DOES honour alpha is a nested glass ELEMENT,
+partial strength and re-rendering every frame (the bottom bar measured exactly
+this while it was still a glass container; see "Three traps" below). What DOES honour alpha is a nested glass ELEMENT,
 which is the fact the composer's + is animated on and the way each disc was
 faded here.
 
@@ -1372,8 +1389,9 @@ shipped. The two gestures are `UIScrollView.keyboardDismissMode` and a
 **`alpha` on the glass container does nothing you want.** Hiding the chrome for
 the post page by setting the container's `alpha` to 0 left the pill and the +
 drawn at partial strength *on top of* the comment bar — the container renders its
-nested glass in a pass of its own and its alpha is not applied to it. `isHidden`
-is the fix, and it is also the right answer: on the web these go with `display:
+nested glass in a pass of its own and its alpha is not applied to it. (That was
+the hand-built capsule; the bar is a `UITabBar` now, and still goes by
+`isHidden`.) `isHidden` is the fix, and it is also the right answer: on the web these go with `display:
 none` and no transition (`body.postbar-live .nav`), for the reason
 [navigation.md](navigation.md) gives about page changes. The + itself is a nested
 *element* and does honour alpha, so the composer's tuck keeps its fade.

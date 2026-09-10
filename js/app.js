@@ -2036,8 +2036,8 @@
               // route(): a full re-render that restores the scroll it just came
               // from, i.e. a tab that visibly did nothing.
               //
-              // Native does not move its own highlight either way — that comes
-              // back around through sync() once the router has actually landed.
+              // The system tab bar moves its lens under the finger; sync()'s
+              // selectTab is what holds it there once the router has landed.
               if (route === (location.hash || '#/').split('?')[0]) reclick(route);
               else go(route);
             });

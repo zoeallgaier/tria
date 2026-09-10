@@ -29,7 +29,11 @@ web keeps its CSS glass unchanged. Plan, contract and traps:
 
 **All three stages have landed** (`ios/App/App/TriaChromePlugin.swift`,
 `NativeChrome` in app.js, the gate at the end of app.css): the tab bar, the +,
-and the top bar's controls with the menus they drop as real `UIMenu`s. The
+and the top bar's controls with the menus they drop as real `UIMenu`s. **The tab
+bar is the system's own `UITabBar` as of 2026-09-10** (Zoe's call, replacing
+1.4's hand-built capsule): labels, the draggable selection lens and the Updates
+dot as an empty system badge all come from UIKit, and the + is a separate glass
+disc at its trailing end, where Music puts search. The
 profile's colour ring drops one too — a control on the PAGE, which the web asks
 for rather than being asked about, and which falls back to the sheet it always
 was off-app. **The post card's ••• and the repost circle beside it went back to
