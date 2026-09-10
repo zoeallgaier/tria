@@ -11045,9 +11045,17 @@
      tap. This page replaced the Friends page outright — your own
      circle roster lives on your profile, and incoming requests live on Updates,
      so nothing here is orphaned. */
+  // Per DEVICE, not per account: which shape Discover last drew in, the same
+  // shelf as musicPref and the block list. Read once at load so the tab opens
+  // however you left it instead of resetting to gallery every time.
+  const DISCOVER_VIEW_KEY = 'tria:discoverView';
+  const loadDiscoverView = () => {
+    try { return localStorage.getItem(DISCOVER_VIEW_KEY) === 'list' ? 'list' : 'gallery'; }
+    catch { return 'gallery'; }                   // private mode → the default
+  };
   let discoverQuery = '';     // live search over people + the text of every post here
   let discoverFilter = 'all'; // 'all' · 'people' (a directory of portraits) · one post type
-  let discoverView = 'gallery'; // 'gallery' (the masonry wall) · 'list' (Circle's card column)
+  let discoverView = loadDiscoverView(); // 'gallery' (the masonry wall) · 'list' (Circle's card column)
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   let discoverResizeOff = null; // drops the grid's resize listener when the view goes
   function renderDiscover() {
@@ -11719,6 +11727,7 @@
         // looking at, and this only changes how it's drawn.
         if (key === 'view') {
           discoverView = discoverView === 'gallery' ? 'list' : 'gallery';
+          try { localStorage.setItem(DISCOVER_VIEW_KEY, discoverView); } catch {}
           paintNow();
           return;
         }
