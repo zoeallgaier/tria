@@ -9374,6 +9374,215 @@
     { slug: 'vibe-check',     type: 'note',  kind: 'report',    prompt: 'What’s the vibe today, in five words or fewer?' },
   ];
 
+  /* ── THE SEASON ───────────────────────────────────────────────────────────
+     1.6's pre-holiday calendar: 109 hand-written days, Mon 2026-09-14 through
+     Thu 2026-12-31, that sit IN FRONT OF the rotation instead of replacing it.
+     `dailyOn` consults this first and falls through to DAILIES on every other
+     day, so the wheel keeps counting underneath the whole time and NOTHING
+     RESETS: on 2027-01-01 it resumes at DAILIES[157 % 70] = `petty`, exactly
+     where it would have been if 1.6 had never shipped.
+
+     WHY A SEASON AND NOT MORE ROTATION ROWS. A rotation prompt has to survive
+     coming round every ten weeks; a season prompt runs ONCE. That suspension is
+     the whole point, and it is what makes a row that names Thanksgiving or the
+     solstice possible at all. It also means the holidays the rotation would
+     otherwise have wasted get used: as it stood, Thanksgiving landed on
+     `rewatch`, Christmas Eve on `come-back` and New Year's Eve on `one-song`,
+     three errands, the worst-performing kind in the set.
+
+     BUILT FROM THE FIRST 42 OCCURRENCES, not from taste. The rules it follows,
+     with the numbers behind them, are in supabase/daily-analytics.sql (run Q11)
+     and in the plan this came from. The load-bearing ones: the picture must
+     already exist (exists-photo indexes 1.67 against must-shoot's 0.51), zero
+     errands in 109 days, no shame clauses (those index 0.50 with a
+     comments-per-answer of exactly 0.00), and no week-window superlatives.
+
+     THE PHOTOS ASK FOR A THING, NOT A POSITION. An earlier draft made all
+     sixteen Mondays "the Nth photo in your camera roll", on the evidence that
+     the two best Mondays were exactly that. The evidence was real and the
+     conclusion was wrong: five Mondays had run, each exactly once, so the data
+     could say the mechanic works and could not say anything about running it
+     sixteen times in a row. Repetition cost is invisible in a sample where
+     every row ran alone. Nine positional Mondays survive, on days where the
+     position has a payoff; the rest name what they want (a meme, a reaction
+     image, the screenshot you took to win an argument), which keeps the
+     already-exists rule and drops the sameness.
+
+     SLUG DISCIPLINE. A prompt that has already run keeps its text forever,
+     because `dailyForPost` prints the question off the slug onto answers people
+     already made. Reworded prompts take a NEW slug (`search` became
+     `last-search` with the shame clause gone). Fourteen rows below are slugs
+     that also sit unrun in DAILIES and are simply being spent here first; every
+     other slug is new, no slug appears twice, and nothing in here has ever run.
+     `reaction` was one of the fourteen until 2026-09-09, when the rotation
+     reached it, and it was swapped out for `favorites` the same day.
+
+     Unchanged by all of this: Discover's one-card budget (a season row REPLACES
+     that day's rotation entry, it never stacks beside it), no polls, no
+     activities, no hints, and `daily-` tags held out of the trending rail. */
+  // Day 48 = 2026-09-14, a Monday. The season deliberately opens on the row the
+  // rotation was going to show anyway (`screenshot`, DAILIES index 48), so day
+  // one changes nothing on screen: a client still on the old bundle shows the
+  // same question as a client on the new one, and the `?v=` self-updater gets a
+  // day of slack. Moving this moves the entire table, which is date-anchored to
+  // real holidays. If it has to slip, DROP ROWS OFF THE FRONT rather than
+  // renumbering, or every row lands on the wrong weekday and the wrong holiday.
+  const SEASON_FIRST_DAY = 48;
+
+  const SEASON = [
+    // ── Stub ──
+    { slug: 'screenshot',            type: 'photo',  kind: 'retrieval',  prompt: 'Show us your most recent screenshot.' },   // Mon Sep 14
+
+    // ── Week 1, Sep 15–21 ──
+    { slug: 'almost-said',           type: 'note',   kind: 'report',     prompt: 'What did you almost say today?' },   // Tue Sep 15
+    { slug: 'carry',                 type: 'photo',  kind: 'retrieval',  prompt: 'Show us the thing you carry everywhere.' },   // Wed Sep 16
+    { slug: 'bookmarked',            type: 'find',   kind: 'retrieval',  prompt: 'Share the oldest thing in your bookmarks.' },   // Thu Sep 17
+    { slug: 'stop',                  type: 'note',   kind: 'report',     prompt: 'What should everyone stop doing immediately?' },   // Fri Sep 18
+    { slug: 'gift-kept',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us something someone gave you that you still use.' },   // Sat Sep 19
+    { slug: 'checked-on',            type: 'note',   kind: 'report',     prompt: 'Who checked on you when they didn’t have to?' },   // Sun Sep 20
+    { slug: 'meme-sent',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us the meme you’ve sent the most.' },   // Mon Sep 21
+
+    // ── Week 2, Sep 22–28, first day of fall ──
+    { slug: 'summer-over',           type: 'note',   kind: 'report',     prompt: 'Summer’s over. What are you not going to miss?' },   // Tue Sep 22
+    { slug: 'worn-out',              type: 'photo',  kind: 'retrieval',  prompt: 'Show us the thing you’ve worn out.' },   // Wed Sep 23
+    { slug: 'sent-twice',            type: 'find',   kind: 'retrieval',  prompt: 'Share the link you’ve sent to more than one person.' },   // Thu Sep 24
+    { slug: 'rule',                  type: 'note',   kind: 'report',     prompt: 'What rule do you break on principle?' },   // Fri Sep 25
+    { slug: 'two-years',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us a photo from exactly two years ago.' },   // Sat Sep 26
+    { slug: 'owed',                  type: 'note',   kind: 'report',     prompt: 'Who do you owe a text?' },   // Sun Sep 27
+    { slug: 'favorites',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us something you put in your Favorites.' },   // Mon Sep 28
+
+    // ── Week 3, Sep 29 – Oct 5 ──
+    { slug: 'avoiding',              type: 'note',   kind: 'report',     prompt: 'What are you avoiding right now?' },   // Tue Sep 29
+    { slug: 'old-tab',               type: 'photo',  kind: 'retrieval',  prompt: 'Show us the tab you’ve had open for weeks.' },   // Wed Sep 30
+    { slug: 'sent-me',               type: 'find',   kind: 'retrieval',  prompt: 'Share the last thing someone sent you that you actually opened.' },   // Thu Oct 1
+    { slug: 'convinced',             type: 'note',   kind: 'report',     prompt: 'What are you weirdly convinced of?' },   // Fri Oct 2
+    { slug: 'photographed-twice',    type: 'photo',  kind: 'retrieval',  prompt: 'Show us something you’ve photographed more than once.' },   // Sat Oct 3
+    { slug: 'said',                  type: 'note',   kind: 'report',     prompt: 'What did someone say to you that stuck?' },   // Sun Oct 4
+    { slug: 'most-photos',           type: 'photo',  kind: 'retrieval',  prompt: 'Show us who or what has the most photos in your camera roll.' },   // Mon Oct 5
+
+    // ── Week 4, Oct 6–12 ──
+    { slug: 'free-crime',            type: 'note',   kind: 'report',     prompt: 'You get one free crime, no consequences. What is it?' },   // Tue Oct 6
+    { slug: 'note-app',              type: 'photo',  kind: 'retrieval',  prompt: 'Screenshot one line from your notes app.' },   // Wed Oct 7
+    { slug: 'still-thinking',        type: 'find',   kind: 'retrieval',  prompt: 'Share something you watched that you’re still thinking about.' },   // Thu Oct 8
+    { slug: 'worst-take',            type: 'note',   kind: 'report',     prompt: 'What’s the worst take you’ve ever had?' },   // Fri Oct 9
+    { slug: 'handwriting',           type: 'photo',  kind: 'retrieval',  prompt: 'Show us something in someone else’s handwriting.' },   // Sat Oct 10
+    { slug: 'easier',                type: 'note',   kind: 'report',     prompt: 'What got easier this year without you noticing?' },   // Sun Oct 11
+    { slug: 'funniest',              type: 'photo',  kind: 'retrieval',  prompt: 'Show us the funniest thing on your phone.' },   // Mon Oct 12
+
+    // ── Week 5, Oct 13–19 ──
+    { slug: 'nemesis',               type: 'note',   kind: 'report',     prompt: 'Who or what is your nemesis?' },   // Tue Oct 13
+    { slug: 'reflex',                type: 'photo',  kind: 'retrieval',  prompt: 'Show us the app you open without thinking.' },   // Wed Oct 14
+    { slug: 'recommended',           type: 'find',   kind: 'retrieval',  prompt: 'Share the last thing someone recommended that you actually liked.' },   // Thu Oct 15
+    { slug: 'no-reason',             type: 'note',   kind: 'report',     prompt: 'What’s a rule everyone follows for no reason?' },   // Fri Oct 16
+    { slug: 'oldest-thing',          type: 'photo',  kind: 'retrieval',  prompt: 'Show us the oldest thing you own.' },   // Sat Oct 17
+    { slug: 'forward',               type: 'note',   kind: 'report',     prompt: 'What are you quietly looking forward to?' },   // Sun Oct 18
+    { slug: 'year-ago',              type: 'photo',  kind: 'retrieval',  prompt: 'Show us the photo you took a year ago today.' },   // Mon Oct 19
+
+    // ── Week 6, Oct 20–26, Halloween run-up ──
+    { slug: 'irrational-fear',       type: 'note',   kind: 'report',     prompt: 'What are you irrationally scared of?' },   // Tue Oct 20
+    { slug: 'screenshot-kept',       type: 'photo',  kind: 'retrieval',  prompt: 'Show us a screenshot you’ve kept for months.' },   // Wed Oct 21
+    { slug: 'horror',                type: 'find',   kind: 'retrieval',  prompt: 'Share the scariest thing you’ve ever watched.' },   // Thu Oct 22
+    { slug: 'halloween-take',        type: 'note',   kind: 'report',     prompt: 'What’s the worst Halloween candy, and you’re right?' },   // Fri Oct 23
+    { slug: 'costume-old',           type: 'photo',  kind: 'retrieval',  prompt: 'Show us a photo of you in an old Halloween costume.' },   // Sat Oct 24
+    { slug: 'comfort-watch',         type: 'note',   kind: 'report',     prompt: 'What do you put on when you don’t want to think?' },   // Sun Oct 25
+    { slug: 'group-chat-meme',       type: 'photo',  kind: 'retrieval',  prompt: 'Show us the last meme someone sent you.' },   // Mon Oct 26
+
+    // ── Week 7, Oct 27 – Nov 2, Halloween, clocks back ──
+    { slug: 'haunted',               type: 'note',   kind: 'report',     prompt: 'What’s the closest you’ve come to believing in a ghost?' },   // Tue Oct 27
+    { slug: 'decoration-old',        type: 'photo',  kind: 'retrieval',  prompt: 'Show us the Halloween decoration you put up every year.' },   // Wed Oct 28
+    { slug: 'every-october',         type: 'find',   kind: 'retrieval',  prompt: 'Share the thing you watch every October.' },   // Thu Oct 29
+    { slug: 'overrated-scary',       type: 'note',   kind: 'report',     prompt: 'What horror movie is overrated, and you’ll say it?' },   // Fri Oct 30
+    { slug: 'halloween',             type: 'photo',  kind: 'retrieval',  prompt: 'Halloween. Show us yours.' },   // Sat Oct 31
+    { slug: 'extra-hour',            type: 'note',   kind: 'report',     prompt: 'You got an hour back. What did you do with it?' },   // Sun Nov 1
+    { slug: 'last-night',            type: 'photo',  kind: 'retrieval',  prompt: 'Show us the last photo you took last night.' },   // Mon Nov 2
+
+    // ── Week 8, Nov 3–9 ──
+    { slug: 'boring',                type: 'note',   kind: 'report',     prompt: 'What’s the most boring thing you did today?' },   // Tue Nov 3
+    { slug: 'last-search',           type: 'note',   kind: 'report',     prompt: 'What’s the last thing you searched?' },   // Wed Nov 4
+    { slug: 'sent-group',            type: 'find',   kind: 'retrieval',  prompt: 'Share the last thing you sent the group chat.' },   // Thu Nov 5
+    { slug: 'food-scam',             type: 'note',   kind: 'report',     prompt: 'What food is a scam?' },   // Fri Nov 6
+    { slug: 'cant-explain',          type: 'photo',  kind: 'retrieval',  prompt: 'Show us a photo in your camera roll you can’t explain.' },   // Sat Nov 7
+    { slug: 'ended-well',            type: 'note',   kind: 'report',     prompt: 'What ended better than you expected?' },   // Sun Nov 8
+    { slug: 'screenshot-argument',   type: 'photo',  kind: 'retrieval',  prompt: 'Show us a screenshot you took to prove a point.' },   // Mon Nov 9
+
+    // ── Week 9, Nov 10–16 ──
+    { slug: 'bees',                  type: 'note',   kind: 'report',     prompt: 'Would you rather have 25 bees in your mouth or one bee in your ear forever?' },   // Tue Nov 10
+    { slug: 'warmest',               type: 'photo',  kind: 'retrieval',  prompt: 'Show us the warmest thing you own.' },   // Wed Nov 11
+    { slug: 'dark-at-five',          type: 'find',   kind: 'retrieval',  prompt: 'Share what you put on when it’s dark at five.' },   // Thu Nov 12
+    { slug: 'fight-animals',         type: 'note',   kind: 'report',     prompt: 'You have to fight every animal you’ve seen in person this year. How does it go?' },   // Fri Nov 13
+    { slug: 'worn-most',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us the thing in your closet you actually wear.' },   // Sat Nov 14
+    { slug: 'small-win',             type: 'note',   kind: 'report',     prompt: 'What’s the smallest thing that went right this week?' },   // Sun Nov 15
+    { slug: 'worst-photo',           type: 'photo',  kind: 'retrieval',  prompt: 'Show us the worst photo ever taken of you.' },   // Mon Nov 16
+
+    // ── Week 10, Nov 17–23, Thanksgiving run-up ──
+    { slug: 'dreading',              type: 'note',   kind: 'report',     prompt: 'What are you quietly dreading?' },   // Tue Nov 17
+    { slug: 'family-dish',           type: 'photo',  kind: 'retrieval',  prompt: 'Show us the food only your family makes.' },   // Wed Nov 18
+    { slug: 'saved-recipe',          type: 'find',   kind: 'retrieval',  prompt: 'Share a recipe you actually make.' },   // Thu Nov 19
+    { slug: 'side-dish',             type: 'note',   kind: 'report',     prompt: 'What’s the most overrated Thanksgiving dish?' },   // Fri Nov 20
+    { slug: 'table-old',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us a photo from a holiday table you miss.' },   // Sat Nov 21
+    { slug: 'glad-didnt',            type: 'note',   kind: 'report',     prompt: 'What are you glad you didn’t do?' },   // Sun Nov 22
+    { slug: 'travel-photo',          type: 'photo',  kind: 'retrieval',  prompt: 'Show us the last photo you took away from home.' },   // Mon Nov 23
+
+    // ── Week 11, Nov 24–30, Thanksgiving ──
+    { slug: 'assigned',              type: 'note',   kind: 'report',     prompt: 'What are you in charge of bringing?' },   // Tue Nov 24
+    // Wednesday's retrieval, and the row that keeps Thanksgiving week from running
+    // four reports deep once Thursday became `thankful`.
+    { slug: 'food-photo',            type: 'photo',  kind: 'retrieval',  prompt: 'Show us the last food photo in your camera roll.' },   // Wed Nov 25
+    { slug: 'thankful',              type: 'note',   kind: 'report',     prompt: 'What are you thankful for?' },   // Thu Nov 26
+    { slug: 'leftover-take',         type: 'note',   kind: 'report',     prompt: 'What’s the correct leftover sandwich, and you’re right?' },   // Fri Nov 27
+    { slug: 'the-table',             type: 'photo',  kind: 'retrieval',  prompt: 'Show us the table.' },   // Sat Nov 28
+    { slug: 'not-the-food',          type: 'note',   kind: 'report',     prompt: 'What was the best part, and it wasn’t the food?' },   // Sun Nov 29
+    { slug: 'of-you',                type: 'photo',  kind: 'retrieval',  prompt: 'Show us a photo someone else took of you.' },   // Mon Nov 30
+
+    // ── Week 12, Dec 1–7, Hanukkah begins Dec 4 ──
+    { slug: 'not-this-year',         type: 'note',   kind: 'report',     prompt: 'It’s December. What are you not doing this year?' },   // Tue Dec 1
+    { slug: 'ornament',              type: 'photo',  kind: 'retrieval',  prompt: 'Show us the ornament with a story.' },   // Wed Dec 2
+    { slug: 'wishlist-link',         type: 'find',   kind: 'retrieval',  prompt: 'Share something on your list.' },   // Thu Dec 3
+    { slug: 'too-early',             type: 'note',   kind: 'report',     prompt: 'Is it too early for Christmas music? Defend yourself.' },   // Fri Dec 4
+    { slug: 'candles',               type: 'photo',  kind: 'retrieval',  prompt: 'Show us the light in your house tonight.' },   // Sat Dec 5
+    { slug: 'winter-ritual',         type: 'note',   kind: 'report',     prompt: 'What’s the one thing that makes winter bearable?' },   // Sun Dec 6
+    { slug: 'holiday-meme',          type: 'photo',  kind: 'retrieval',  prompt: 'Show us the meme that is December.' },   // Mon Dec 7
+
+    // ── Week 13, Dec 8–14, Hanukkah ends Dec 12 ──
+    { slug: 'list-left',             type: 'note',   kind: 'report',     prompt: 'What’s still on your list?' },   // Tue Dec 8
+    { slug: 'decorations',           type: 'photo',  kind: 'retrieval',  prompt: 'Show us the first decoration that went up.' },   // Wed Dec 9
+    { slug: 'holiday-song',          type: 'find',   kind: 'retrieval',  prompt: 'Share the holiday song you’ll defend.' },   // Thu Dec 10
+    { slug: 'christmas-movie',       type: 'note',   kind: 'report',     prompt: 'What’s the best Christmas movie, and it’s not close?' },   // Fri Dec 11
+    { slug: 'card',                  type: 'photo',  kind: 'retrieval',  prompt: 'Show us a card someone sent you.' },   // Sat Dec 12
+    { slug: 'small-win-year',        type: 'note',   kind: 'report',     prompt: 'What’s the smallest thing that went right this year?' },   // Sun Dec 13
+    { slug: 'first-of-year',         type: 'photo',  kind: 'retrieval',  prompt: 'Show us the first photo you took this year.' },   // Mon Dec 14
+
+    // ── Week 14, Dec 15–21, the retrospective week, solstice Dec 21 ──
+    { slug: 'teeth',                 type: 'note',   kind: 'report',     prompt: 'Would you rather have fingers for teeth or teeth for fingers?' },   // Tue Dec 15
+    { slug: 'played-most',           type: 'photo',  kind: 'retrieval',  prompt: 'Screenshot your most played song of the year.' },   // Wed Dec 16
+    { slug: 'watched-year',          type: 'find',   kind: 'retrieval',  prompt: 'Share the best thing you watched this year.' },   // Thu Dec 17
+    { slug: 'leave-behind',          type: 'note',   kind: 'report',     prompt: 'What trend do you want left in this year?' },   // Fri Dec 18
+    { slug: 'photo-of-year',         type: 'photo',  kind: 'retrieval',  prompt: 'Show us your photo of the year.' },   // Sat Dec 19
+    { slug: 'carried',               type: 'note',   kind: 'report',     prompt: 'Who got you through this year?' },   // Sun Dec 20
+    { slug: 'last-daylight',         type: 'photo',  kind: 'retrieval',  prompt: 'Show us the last photo you took in daylight.' },   // Mon Dec 21
+
+    // ── Week 15, Dec 22–28, Christmas ──
+    { slug: 'spending-it',           type: 'note',   kind: 'report',     prompt: 'Where are you spending it?' },   // Tue Dec 22
+    /* THE ONE PLACE THREE OF A KIND IN A ROW STANDS. Dec 23, 24, 25 and 26 are
+       four retrievals, which the rotation's own rule forbids. Every fix costs
+       more than it saves: the tree has to precede Christmas, Thursday is the
+       link day through Christmas Eve, and Dec 25 is the rule-11 photo and the
+       one Friday that does not argue. The rule exists to stop the loop feeling
+       samey, and four different acts (the tree, the music, the day, the gift)
+       do not read as one question asked four times. Deliberate, not an oversight. */
+    { slug: 'the-tree',              type: 'photo',  kind: 'retrieval',  prompt: 'Show us the tree, or whatever you’ve got instead.' },   // Wed Dec 23
+    { slug: 'playing-tonight',       type: 'find',   kind: 'retrieval',  prompt: 'Share what’s playing tonight.' },   // Thu Dec 24
+    { slug: 'christmas',             type: 'photo',  kind: 'retrieval',  prompt: 'Merry Christmas. Show us one photo from today.' },   // Fri Dec 25
+    { slug: 'what-you-got',          type: 'photo',  kind: 'retrieval',  prompt: 'Show us the best thing you got.' },   // Sat Dec 26
+    { slug: 'what-day',              type: 'note',   kind: 'report',     prompt: 'What day is it? What are you doing?' },   // Sun Dec 27
+    { slug: 'ninth-from-end',        type: 'photo',  kind: 'retrieval',  prompt: 'Show us the ninth photo from the end of your camera roll.' },   // Mon Dec 28
+
+    // ── Stub, Dec 29–31 ──
+    { slug: 'overrated-year',        type: 'note',   kind: 'report',     prompt: 'What was overrated this year?' },   // Tue Dec 29
+    { slug: 'never-posted',          type: 'photo',  kind: 'retrieval',  prompt: 'Show us the photo from this year you never posted.' },   // Wed Dec 30
+    { slug: 'song-of-year',          type: 'find',   kind: 'retrieval',  prompt: 'Share the song that was your year.' },   // Thu Dec 31
+  ];
+
   const DAY_MS = 86400000;
   const dailyEpochParts = () => DAILY_EPOCH.split('-').map(Number);
   // Whole days since the epoch, counted between local midnights rather than in raw
@@ -9398,9 +9607,13 @@
       closes: new Date(y, m - 1, dd + day + 1),
     };
   }
-  // Which prompt the wheel lands on for a given day.
+  // Which prompt the wheel lands on for a given day. The season is consulted
+  // FIRST; everywhere outside its window the rotation answers, still counting on
+  // its own epoch, which is what makes the season reversible and non-destructive.
   function dailyOn(day) {
     if (!DAILIES.length || day < 0) return null;
+    const i = day - SEASON_FIRST_DAY;
+    if (i >= 0 && i < SEASON.length) return occurrenceOf(SEASON[i], day);
     return occurrenceOf(DAILIES[day % DAILIES.length], day);
   }
   const todaysDaily = () => dailyOn(dayNumber());
@@ -9426,10 +9639,27 @@
   // The most recent run of one prompt, so a link to #/daily/<slug> keeps working
   // after its day is out: it lands on that round's answers instead of nothing.
   function lastDailyFor(slug) {
+    const today = dayNumber();
+    let best = -1;
+    // A season row ran on exactly one day and never again, so there is no walking
+    // back to do: it counts only once that day has actually opened.
+    const s = SEASON.findIndex(d => d.slug === slug);
+    if (s >= 0 && SEASON_FIRST_DAY + s <= today) best = SEASON_FIRST_DAY + s;
+    // A rotation row walks back by the cycle as it always did, but the season is
+    // longer than one cycle, so the day it lands on may be one the season took
+    // over and the prompt was never actually shown. Keep stepping back until the
+    // day is one the rotation really owned.
     const i = DAILIES.findIndex(d => d.slug === slug);
-    if (i < 0) return null;
-    const today = dayNumber(), n = DAILIES.length;
-    return dailyOn(today - (((today - i) % n) + n) % n);
+    if (i >= 0) {
+      const n = DAILIES.length;
+      for (let d = today - (((today - i) % n) + n) % n; d >= 0; d -= n) {
+        if (d < SEASON_FIRST_DAY || d >= SEASON_FIRST_DAY + SEASON.length) {
+          if (d > best) best = d;
+          break;
+        }
+      }
+    }
+    return best >= 0 ? dailyOn(best) : null;
   }
   const dailyIsOpen = (occ, now = Date.now()) =>
     !!occ && now >= +occ.opens && now < +occ.closes;
@@ -9481,7 +9711,13 @@
   function dailyForPost(post) {
     const tag = dailyTagOf(post);
     if (!tag || !post._ts) return null;
-    const d = DAILIES.find(x => 'daily-' + x.slug === tag);
+    // SEASON first: the fourteen slugs that appear in both carry identical text,
+    // except `nemesis`, which the season reworded and the rotation never ran, so
+    // season-first is the reading that keeps every answer's question right. Miss
+    // this branch and every season answer silently loses its question the moment
+    // it scrolls, which looks permanent and is the one failure worth naming.
+    const d = SEASON.find(x => 'daily-' + x.slug === tag)
+           || DAILIES.find(x => 'daily-' + x.slug === tag);
     return d ? occurrenceOf(d, dayNumber(new Date(post._ts))) : null;
   }
 
