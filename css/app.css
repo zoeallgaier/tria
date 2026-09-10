@@ -3471,9 +3471,17 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 /* ── @mentions ─────────────────────────────────────────────────────────────
    A tag renders as the friend's display name, bold in the running text (not
    dressed as a link); the picker is a quiet listbox tucked under the field. */
-/* Italic sets a tagged name apart from the author's own voice — a leading "@Name"
-   no longer reads like the byline (which is bold roman). */
-.mention { font-weight: 700; font-style: italic; color: var(--text); text-decoration: none; }
+/* COLOUR is what sets a tagged name apart from the author's own voice now, and
+   it is the reader's own: --mention-ink is their accent deepened to a weight
+   that carries body copy (see tokens.css). It replaces the italic that used to
+   do the job — the italic was there so a leading "@Name" didn't read like the
+   byline, and a coloured bold roman separates from a black bold roman further
+   than a slant did. A reader on Tria's own ramp or on "no colour" has no accent
+   to spend, so those two land on --mono-heart rather than back on page ink: an
+   off-black on paper, an off-white on ink. Lightness where the others get hue,
+   but a separation either way — a .comment-name is flat var(--text) a line
+   above, and matching it made a tagged name read as one more byline. */
+.mention { font-weight: 700; color: var(--mention-ink); text-decoration: none; }
 @media (hover: hover) { a.mention:hover { color: var(--muted); } }
 
 /* Floating autocomplete popover (mentions + location). A frosted-glass menu in

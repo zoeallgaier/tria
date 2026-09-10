@@ -300,6 +300,33 @@
      one-scheme-apart pair every other accent mark leans on. */
   --dot: var(--user-heart-lt, var(--accent));
 
+  /* A TAGGED NAME in running text — the reader's own colour a fourth time, and
+     the one place an accent lands on BODY COPY, which is exactly the case the
+     --going-ink note above warns is not licensed by the heart. It isn't: this
+     takes the mark weight and deepens it, rather than wearing it.
+
+     The heart sits at L* 53, where every accent measures ~3.46 on paper. That
+     is a fine mark and an illegible word — a mention is 16px inside a
+     sentence, so it is small text and wants 4.5, not 3. Deepening toward page
+     ink is a DERIVATION rather than a third perceptual number to keep in step:
+     the nine accents are already levelled at 53, so an even mix carries the
+     levelling with it and they land in a 0.9-point band at L* 44.0-44.9.
+     Measured worst on paper 4.59 (cyan), 4.96 on --surface, with the deepest
+     of them, ruby, at 4.62. Dark needs no deepening — --user-heart-dk is L* 74,
+     which measures 9.36 on ink paper — so only this block mixes.
+
+     THE TWO COLOURLESS SOURCES LAND TOGETHER, and not on page ink. "No colour"
+     stamps --mono-heart; Tria's own ramp stamps nothing and used to fall back
+     to var(--text) — the exact ink a comment's BYLINE wears one line above,
+     which is the one place a tagged name and a username sit adjacent, and the
+     two then read as a single run of bold names. So the fallback is
+     --mono-heart as well, and the deepening carries it the same quarter of the
+     way toward --muted: #26292d, 8.9 points of L* off the byline and 12.58 on
+     paper. QUIETER rather than louder, because a name inside a sentence is body
+     copy and the byline over it is not — and because a shade off the ink is
+     what choosing none should buy. */
+  --mention-ink: color-mix(in srgb, var(--user-heart-lt, var(--mono-heart)) 80%, var(--text));
+
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
   --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
@@ -542,6 +569,13 @@
        and the fallback -ink twin IS the pastel. */
     --going-ink: var(--user-heart-dk, var(--type-activity-ink));
     --dot:       var(--user-heart-dk, var(--accent));
+    /* Undeepened here, for the reason the hearts are: on ink paper the mark
+       weight already measures 9.36, and mixing a mention toward --text would
+       lighten it rather than deepen it. The colourless fallback is --mono-heart
+       on this side too, where the same recipe that reads as an off-black on
+       paper reads as an OFF-WHITE: #d0d3d7, 8.5 points of L* under the byline
+       and 12.69 against the page — one mix, mirrored by the scheme. */
+    --mention-ink: var(--user-heart-dk, var(--mono-heart));
 
     /* Lit surfaces on dark paper: the top-white sheen barely reads on the
        near-white fills, so lean on a deeper base shade and a stronger lift. */
