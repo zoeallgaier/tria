@@ -10069,24 +10069,40 @@
      a person typing a song, and it works on day one for every reader whichever
      service they pay.
 
-     WHERE THE METADATA COMES FROM. Two endpoints, both keyless, accountless and
-     answering CORS with `*` — so the webview calls them itself, with no server,
-     no secret, and nothing new in config.js:
+     WHERE THE METADATA COMES FROM. All of it keyless, accountless and open to
+     CORS — so the webview calls it itself, with no server, no secret, and
+     nothing new in config.js:
 
        - Apple's iTunes Search API backs the SEARCH box. One request returns the
-         canonical title, the artist, artwork and a music.apple.com link.
-       - Spotify's oEmbed backs a PASTED Spotify link. It is the only part of
-         Spotify's API that needs no token: every /v1 endpoint 401s without one,
-         and a token needs a client secret, which cannot live in a bundle
-         anybody can unzip. It returns a title and artwork and NO ARTIST, which
-         is the entire reason `artist` is optional in the stored shape.
+         canonical title, the artist, artwork and a music.apple.com link. Its
+         lookup form reads the track id off a pasted Apple Music SONG link.
+       - Each service's own oEmbed backs every other PASTE: Spotify's, Apple's
+         (the one its pages advertise in their <head>) and YouTube's, which
+         reads a music.youtube.com link as happily as a www one. oEmbed is the
+         only part of Spotify's API that needs no token: every /v1 endpoint 401s
+         without one, and a token needs a client secret, which cannot live in a
+         bundle anybody can unzip. Spotify's returns a title and artwork and NO
+         ARTIST, which is the entire reason `artist` is optional in the stored
+         shape.
 
      So search finds Apple's copy of a song and paste keeps whichever service
      the reader actually uses, and nobody is ever asked which one they're on.
-     A song that resolves to neither is still allowed: a title on its own, with
-     no art and nowhere to go, is a complete answer and the shape permits it. */
+     A song that resolves to nothing is still allowed: a title on its own, with
+     no art and nowhere to go, is a complete answer and the shape permits it.
+
+     A PASTE CAN BE A PLAYLIST OR AN ALBUM, which a search never is. The shape
+     marks it with `kind` (absent for a song), because a title alone reads as a
+     song, and because a playlist opens differently (see songLink). Albums came
+     in with playlists and not as a feature of their own: YouTube Music has no
+     album link, only a playlist link to one, so they arrived through that door
+     either way, and one service's albums working where the other two's said
+     "can't read that" would have been the stranger answer. */
   const ITUNES = 'https://itunes.apple.com';
-  const SPOTIFY_TRACK = /^https:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?track\/[A-Za-z0-9]+/i;
+  const SPOTIFY_LINK = /^https:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(track|album|playlist)\/[A-Za-z0-9]+/i;
+  // The three a pasted link can come from. A link from one of them that still
+  // won't resolve is usually a private playlist, which gets its own sentence
+  // rather than the one naming the services (see run in renderListening).
+  const MUSIC_HOST = /^https?:\/\/(?:open\.spotify\.com|(?:[a-z]+\.)?music\.apple\.com|music\.youtube\.com)\//i;
 
   // Artwork arrives at 100px from Apple, and both CDNs size in the URL PATH
   // rather than a query parameter — so a bigger copy is a string edit and not a
@@ -10106,7 +10122,7 @@
 
   // Does this song have a link to anywhere at all? Only a typed-in title
   // doesn't, and the picker says so out loud when it happens.
-  const songHasLink = (s) => !!(s.apple || s.spotify);
+  const songHasLink = (s) => !!(s.apple || s.spotify || s.youtube);
 
   /* DEDUPED BY TITLE + ARTIST, which is why the limit asks for far more than it
      shows. iTunes ranks across every RELEASE, so one song on its album, as a
@@ -10135,33 +10151,137 @@
     return out;
   }
 
+  /* Null for anything but a 200: a private playlist is a 401 or a 404, and to
+     the picker those are one answer. A THROW is caught into the same null,
+     because Spotify's oEmbed sends its 404 with no CORS header — so WebKit
+     never shows the page the status, only a TypeError indistinguishable from
+     being offline (measured in Playwright's WebKit). The most likely paste to
+     fail is a private playlist, and it deserves that sentence rather than
+     "couldn't reach the music search". An abort also lands here, and run()
+     reads the signal before it paints anything. */
+  async function getJson(url, signal) {
+    try {
+      const res = await fetch(url, { signal });
+      return res.ok ? await res.json() : null;
+    } catch { return null; }
+  }
+
   /* A pasted link, resolved as far as it can be. Returns null for one we can't
-     read, which the picker turns into a sentence naming the two we can rather
-     than a silent empty list. */
+     read, which the picker turns into a sentence rather than a silent empty
+     list. */
   async function resolveSongUrl(url, signal) {
-    if (SPOTIFY_TRACK.test(url)) {
-      const res = await fetch(
-        'https://open.spotify.com/oembed?url=' + encodeURIComponent(url), { signal });
-      if (!res.ok) return null;
-      const j = await res.json();
-      return j.title
-        ? { title: j.title, artist: '', art: j.thumbnail_url || '', apple: '', spotify: url }
+    const spotify = SPOTIFY_LINK.exec(url);
+    if (spotify) {
+      const j = await getJson(
+        'https://open.spotify.com/oembed?url=' + encodeURIComponent(url), signal);
+      const kind = spotify[1].toLowerCase();
+      return j?.title
+        ? { title: j.title, art: j.thumbnail_url || '', spotify: url,
+            kind: kind === 'track' ? '' : kind }
         : null;
     }
-    // Apple Music: the TRACK's id rides in `?i=` (the path names the album), and
-    // the same keyless Search API has a lookup form that takes it — so a pasted
-    // Apple link comes back with the artist a Spotify one can't give.
-    let id = '';
-    try {
-      const u = new URL(url);
-      if (/(^|\.)music\.apple\.com$/i.test(u.hostname)) id = u.searchParams.get('i') || '';
-    } catch { /* not a URL we can parse; falls through to null */ }
-    if (!/^\d+$/.test(id)) return null;
-    const res = await fetch(`${ITUNES}/lookup?id=${id}&entity=song`, { signal });
-    if (!res.ok) return null;
-    const j = await res.json();
-    const hit = (j.results || []).find(x => x.trackName);
-    return hit ? songOf(hit) : null;
+    let u;
+    try { u = new URL(url); } catch { return null; }
+    if (/(^|\.)music\.apple\.com$/i.test(u.hostname)) return resolveApple(u, signal);
+    if (/^music\.youtube\.com$/i.test(u.hostname)) return resolveYouTube(u, signal);
+    return null;
+  }
+
+  /* Apple names a TRACK two ways: `/song/<name>/<id>`, which its share sheet
+     hands out, and `/album/<name>/<id>?i=<track>`, the older form and the one
+     search returns. Either id goes to the lookup, which comes back with the
+     artist a Spotify paste can't give. Anything else that names an album or a
+     playlist goes to Apple's oEmbed, which doesn't know the `geo.` host a
+     marketing link sometimes carries — so it is asked about, and stores, the
+     plain one, which is also the host the Apple Music app claims. */
+  async function resolveApple(u, signal) {
+    const path = u.pathname.split('/').filter(Boolean);
+    const at = path.findIndex(p => /^(album|playlist|song)$/i.test(p));
+    const kind = at < 0 ? '' : path[at].toLowerCase();
+    const track = u.searchParams.get('i') || (kind === 'song' ? path[path.length - 1] : '');
+    if (track) {
+      if (!/^\d+$/.test(track)) return null;
+      const j = await getJson(`${ITUNES}/lookup?id=${track}&entity=song`, signal);
+      const hit = (j?.results || []).find(x => x.trackName);
+      return hit ? songOf(hit) : null;
+    }
+    if (kind !== 'album' && kind !== 'playlist') return null;
+    u.hostname = 'music.apple.com';
+    const j = await getJson(
+      'https://music.apple.com/api/oembed?url=' + encodeURIComponent(u.href), signal);
+    return j?.title
+      ? { title: j.title, artist: j.author_name || '', art: j.thumbnail_url || '',
+          apple: u.href, kind }
+      : null;
+  }
+
+  /* YouTube Music: a `v=` is a track and a `list=` on /playlist is a playlist,
+     or an album, which YouTube Music keeps as a playlist whose id starts
+     OLAK5uy_ and whose oEmbed title starts "Album - " in every language asked.
+     The stored link is rebuilt from the id alone, which drops the share
+     sheet's tracking and, on a track, the list it happened to be playing
+     from: the song is the thing, not the queue. */
+  async function resolveYouTube(u, signal) {
+    const v = u.searchParams.get('v') || '';
+    const list = u.searchParams.get('list') || '';
+    let link;
+    if (/^[\w-]{11}$/.test(v)) link = 'https://music.youtube.com/watch?v=' + v;
+    else if (u.pathname === '/playlist' && /^[\w-]+$/.test(list)) {
+      link = 'https://music.youtube.com/playlist?list=' + list;
+    } else return null;
+    const j = await getJson(
+      'https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(link), signal);
+    if (!j?.title) return null;
+    const still = /\/vi(?:_webp)?\/([\w-]{11})\//.exec(j.thumbnail_url || '');
+    const art = still ? await youtubeArt(still[1]) : '';
+    if (!v) {
+      const album = /^OLAK5uy_/.test(list);
+      return { title: album ? j.title.replace(/^Album - /, '') : j.title, art, youtube: link,
+               kind: album ? 'album' : 'playlist' };
+    }
+    // A track's channel is its artist. An art track's channel is "<Artist> -
+    // Topic" and its title is already just the song; a music video's title
+    // usually carries the artist and a label the song doesn't, and both come
+    // off, because the title is also what another reader's service searches
+    // for (see songLink).
+    const topic = /\s-\sTopic$/i.test(j.author_name || '');
+    const artist = String(j.author_name || '').replace(/\s-\sTopic$/i, '').trim();
+    return { title: topic ? j.title : videoTitle(j.title, artist), artist, art, youtube: link };
+  }
+
+  // "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)" by
+  // Rick Astley is "Never Gonna Give You Up". Only the artist's own name comes
+  // off the front, and only a bracket naming the upload rather than the song
+  // comes off the end, one at a time until none is left.
+  function videoTitle(title, artist) {
+    let t = String(title).trim();
+    if (artist && t.toLowerCase().startsWith(artist.toLowerCase() + ' - ')) {
+      t = t.slice(artist.length + 3);
+    }
+    const label = /\s*[([][^)\]]*\b(?:official|video|audio|lyrics?|visuali[sz]er|remaster(?:ed)?|4k|hd|hq)\b[^)\]]*[)\]]$/i;
+    while (label.test(t)) t = t.replace(label, '');
+    return t.trim() || String(title).trim();
+  }
+
+  /* YouTube's stills are frames of the video, 16:9, and an art track's frame
+     is its square sleeve centred on a plain field — so `cover` on a square
+     crops it back to exactly the sleeve, with no CSS of its own. The default
+     still in the oEmbed is the wrong one: it is 4:3 with the frame letterboxed
+     inside it, bars and all. maxresdefault is big enough for the rail's 132px
+     square at 3x, and it doesn't exist for every video: a missing one is a 404
+     that still decodes, as a 120x90 grey placeholder. So it is loaded once
+     here to see, and the 320px mqdefault, which every video has, stands in.
+     Checking now rather than at every render is what makes the stored `art`
+     a picture somebody can actually be shown. */
+  function youtubeArt(id) {
+    const big = `https://i.ytimg.com/vi_webp/${id}/maxresdefault.webp`;
+    const small = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth > 120 ? big : small);
+      img.onerror = () => resolve(small);
+      img.src = big;
+    });
   }
 
   /* ── Which app a song opens in ───────────────────────────────────────────────
@@ -10172,10 +10292,12 @@
      the tap did nothing, and it did nothing in the most annoying way available.
 
      So the link is chosen AT THE READING END, not the writing end. Every song
-     stores what it knows per service (`apple`, `spotify`) and this picks one.
-     When the wanted service has no exact link, it gets a SEARCH url in that
-     service instead: both domains are claimed by their apps, so the tap still
-     lands in the right app, one row short of the right track. That is a much
+     stores what it knows per service (`apple`, `spotify`, `youtube`) and this
+     picks one. When the wanted service has no exact link, it gets a SEARCH url
+     in that service instead: all three domains are claimed by their apps
+     (YouTube Music's apple-app-site-association claims every path but its
+     Premium pages), so the tap still lands in the right app, one row short of
+     the right track. That is a much
      smaller failure than the one it replaces, and it is the entire reason this
      needs no server, no secret and no Spotify developer account. (An exact
      Spotify link for a searched song is reachable — client credentials on an
@@ -10185,15 +10307,17 @@
      NOBODY IS ASKED. iOS has no default-music-app setting to read, but it will
      answer `canOpenURL("spotify://")`, and somebody who went and installed
      Spotify is telling us which service they are on more reliably than a modal
-     interrupting the tap would. Apple Music ships preinstalled, so its presence
-     says nothing and isn't asked about — the absence of Spotify is the signal.
-     The picker below exists for the one case the guess gets wrong: both
-     installed, Apple preferred. */
+     interrupting the tap would. YouTube Music is asked about the same way.
+     Apple Music ships preinstalled, so its presence says nothing and isn't
+     asked about — the absence of the other two is the signal. With both of
+     those installed Spotify wins, as the one more people pay for. The picker
+     below exists for the cases the guess gets wrong. */
   const MUSIC_KEY = 'tria:music';
   const MUSIC_CHOICES = [
     { key: '',        label: 'Automatic' },
     { key: 'apple',   label: 'Apple Music' },
     { key: 'spotify', label: 'Spotify' },
+    { key: 'youtube', label: 'YouTube Music' },
   ];
   // Per DEVICE, not per account, and never in the users table: this is a fact
   // about the phone in your hand, like the accent mirror and the block list.
@@ -10201,7 +10325,7 @@
   const musicPref = () => {
     try {
       const v = localStorage.getItem(MUSIC_KEY);
-      return v === 'apple' || v === 'spotify' ? v : '';
+      return v && MUSIC_CHOICES.some(c => c.key === v) ? v : '';
     } catch { return ''; }                      // private mode → Automatic
   };
   const setMusicPref = (v) => {
@@ -10211,24 +10335,51 @@
     } catch { /* private mode; the choice lasts the session and no longer */ }
   };
 
-  // Null until iOS answers, and false everywhere else — a browser cannot see
+  // False until iOS answers, and false everywhere else — a browser cannot see
   // what is installed, so the web is always Automatic → Apple Music.
   let spotifyInstalled = false;
-  const musicService = () => musicPref() || (spotifyInstalled ? 'spotify' : 'apple');
+  let youtubeInstalled = false;
+  const musicService = () => musicPref()
+    || (spotifyInstalled ? 'spotify' : youtubeInstalled ? 'youtube' : 'apple');
   const musicLabel = () =>
     (MUSIC_CHOICES.find(c => c.key === musicPref()) || MUSIC_CHOICES[0]).label;
 
   const MUSIC_SEARCH = {
     apple:   (q) => 'https://music.apple.com/search?term=' + encodeURIComponent(q),
     spotify: (q) => 'https://open.spotify.com/search/' + encodeURIComponent(q),
+    youtube: (q) => 'https://music.youtube.com/search?q=' + encodeURIComponent(q),
   };
 
   /* Always somewhere to go: a song has a title or it isn't stored, and a title
      is enough to search with. That is what retired the linkless square the rail
-     used to draw for a typed-in song. */
+     used to draw for a typed-in song.
+
+     EXCEPT A PLAYLIST, which is somebody's list and exists only in the service
+     it was made in. There is nothing to search for anywhere else, so it opens
+     where it was pasted whichever service the reader is on — in that app when
+     it's installed and on its web player when it isn't, which still shows the
+     list. An album is in every catalogue and is chosen like a song. */
   function songLink(s) {
+    if (s.kind === 'playlist') {
+      const own = s.apple || s.spotify || s.youtube;
+      if (own) return own;
+    }
     const want = musicService();
     return s[want] || MUSIC_SEARCH[want]([s.title, s.artist].filter(Boolean).join(' '));
+  }
+
+  /* The quiet line under a title. A song's is its artist. An album or a
+     playlist says which it is first, the way both big apps label a search
+     result ("Album · M83"), because a title alone reads as a song. A playlist
+     has no artist to name, and what is worth saying in its place is where it
+     lives, because that is where it opens for everybody (see songLink). `sep`
+     is for an aria-label, where a comma reads better aloud than a dot. */
+  function songSub(s, sep = ' · ') {
+    if (!s.kind) return s.artist || '';
+    const by = s.kind === 'playlist'
+      ? (MUSIC_CHOICES.find(c => c.key && s[c.key]) || {}).label
+      : s.artist;
+    return [s.kind === 'album' ? 'Album' : 'Playlist', by].filter(Boolean).join(sep);
   }
 
   // Asked once, on the native shell only, as early as the bridge allows. A
@@ -10238,6 +10389,8 @@
     try {
       const res = await window.Capacitor.nativePromise('TriaSettings', 'musicApps', {});
       spotifyInstalled = !!res?.spotify;
+      // Absent from a build older than the question; false is the old answer.
+      youtubeInstalled = !!res?.youtube;
     } catch { /* old build without the method; Automatic stays Apple Music */ }
   }
 
@@ -10270,8 +10423,9 @@
   function npFace(u, me) {
     const s = u.listening;
     const who = u.username === me ? 'You' : (u.name || u.username);
+    const sub = songSub(s, ', ');
     return {
-      label: `${who}: ${s.title}${s.artist ? ', ' + s.artist : ''}`,
+      label: `${who}: ${s.title}${sub ? ', ' + sub : ''}`,
       html:
         // .pin-cover is the app's cover treatment (shadow + sheen, no hairline),
         // and it rides a square only when there is a sleeve on it — an artless
@@ -10331,8 +10485,13 @@
   let songAbort = null;
   let songTimer = 0;
 
-  const LINK_HELP = 'I can read Spotify and Apple Music links. ' +
+  const LINK_HELP = 'I can read Spotify, Apple Music and YouTube Music links. ' +
     'Try the song’s name instead.';
+  // A link from one of the three that still wouldn't open. Usually a private
+  // playlist, which nobody else could open either, and sometimes an artist or a
+  // podcast, which isn't something you have on repeat.
+  const LINK_CLOSED = 'I couldn’t open that one. I can read songs, albums and ' +
+    'playlists, as long as they’re public.';
 
   /* ONE PICKER, because there is one song. It briefly had a second mode for
      filling a pin slot, back when a song pin was a COPY of a track; the pin is a
@@ -10367,7 +10526,7 @@
                 ? ` style="background-image:url('${encodeURI(now.art)}')"` : ''} aria-hidden="true"></span>` +
               `<span class="song-lines">` +
                 `<span class="song-title">${esc(now.title)}</span>` +
-                (now.artist ? `<span class="song-artist">${esc(now.artist)}</span>` : '') +
+                (songSub(now) ? `<span class="song-artist">${esc(songSub(now))}</span>` : '') +
               `</span>` +
               `<button type="button" class="song-clear" id="song-clear" aria-label="Clear">×</button>` +
             `</div>`
@@ -10415,7 +10574,7 @@
             ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
           `<span class="song-lines">` +
             `<span class="song-title">${esc(s.title)}</span>` +
-            (s.artist ? `<span class="song-artist">${esc(s.artist)}</span>`
+            (songSub(s) ? `<span class="song-artist">${esc(songSub(s))}</span>`
               : (songHasLink(s) ? '' : `<span class="song-artist">Just as you typed it</span>`)) +
           `</span>` +
         `</button>`).join('');
@@ -10439,10 +10598,11 @@
         songHits = found;
         // Never a dead end. A search that found nothing offers the words back
         // as a plain title, which the stored shape allows; a link we can't read
-        // says which two we can, because "no results" would read as "that song
-        // doesn't exist" when the truth is "that service isn't one I know".
+        // says which services we can, because "no results" would read as "that
+        // song doesn't exist" when the truth is "that service isn't one I
+        // know" — or, from one we do know, "that playlist is private".
         songState = found.length ? ''
-          : (isLink ? LINK_HELP : '');
+          : (isLink ? (MUSIC_HOST.test(q) ? LINK_CLOSED : LINK_HELP) : '');
         if (!found.length && !isLink) {
           songHits = [{ title: q.slice(0, 120), artist: '', art: '', apple: '', spotify: '' }];
         }
@@ -10556,7 +10716,7 @@
     const clip = (t) => (t.length > 46 ? t.slice(0, 46).trimEnd() + '…' : t);
     if (e.k === 'song') {
       const s = (Store.currentUser() || {}).listening;
-      return s ? clip(s.title + (s.artist ? ' · ' + s.artist : '')) : 'What you’re listening to';
+      return s ? clip(s.title + (songSub(s) ? ' · ' + songSub(s) : '')) : 'What you’re listening to';
     }
     const row = Store.posts().find(p => p.id === e.id);
     const post = row ? subjectOf(row) : null;
@@ -10606,7 +10766,7 @@
      hairline, a real drop shadow, and a sheen — one soft diagonal highlight,
      the light a sleeve catches (`.pin-cover`, the same class on a song's art
      and a photo's). Only the bloom behind the card differs, because of what
-     the picture IS. A song's art is hotlinked from Apple's or Spotify's CDN,
+     the picture IS. A song's art is hotlinked from its service's own CDN,
      so CSS may blur it but canvas may not read it (touching the pixels taints
      it) — a blurred, blown-up copy of the same artwork lies over the card's
      glass and is masked out before it reaches the words, no CORS, no second
@@ -10636,14 +10796,14 @@
           `<span class="pin-art pin-cover" ${art ? `style="${art}"` : ''} aria-hidden="true"></span>` +
           `<span class="pin-lines">` +
             `<span class="pin-title">${esc(s.title)}</span>` +
-            (s.artist ? `<span class="pin-sub">${esc(s.artist)}</span>` : '') +
+            (songSub(s) ? `<span class="pin-sub">${esc(songSub(s))}</span>` : '') +
           `</span>` +
           // target="_blank" + data-out="system" is what the outbound handler up
           // top reads to hand the link to iOS itself, which is the only way a
-          // universal link reaches Apple Music or Spotify (see songLink).
+          // universal link reaches the music app that owns it (see songLink).
           `<a class="pin-open" href="${esc(songLink(s))}" target="_blank" ` +
             `rel="noopener noreferrer" data-out="system" ` +
-            `aria-label="${esc(s.title + (s.artist ? ', ' + s.artist : ''))}"></a>` +
+            `aria-label="${esc(s.title + (songSub(s, ', ') ? ', ' + songSub(s, ', ') : ''))}"></a>` +
           more +
         `</article>`;
     }

@@ -17,28 +17,34 @@
 -- One jsonb rather than five columns, because nothing ever queries INSIDE it —
 -- it is read whole, written whole, and displayed. Shape:
 --
---   { title, artist?, art?, apple?, spotify?, at }
+--   { title, artist?, art?, apple?, spotify?, youtube?, kind?, at }
 --
 --   title   the track. The only required key.
 --   artist  absent when the source couldn't name one (Spotify's oEmbed hands
---           back a title and no artist — see resolveSpotify in app.js).
+--           back a title and no artist — see resolveSongUrl in app.js).
 --   art     album artwork, hotlinked from whichever CDN named it. Not copied
 --           into our own storage: Apple's Search API terms cover DISPLAYING
 --           artwork alongside a link to the store, and re-hosting is a
 --           different thing than displaying.
 --   apple   music.apple.com link. What a SEARCH finds, since Apple's is the
 --   spotify open.spotify.com link. What a PASTE usually carries.
---           Both optional and usually only one is present. Two keys and not
---           one, because the reader who taps a song is not the reader who set
---           it and they may be on different services — songLink (app.js) picks
---           per reader, and falls back to a search url in the wanted service.
---           Neither present is allowed: someone typed a title and nothing else.
+--   youtube music.youtube.com link. Only ever a paste.
+--           All optional and usually only one is present. A key per service
+--           and not one `url`, because the reader who taps a song is not the
+--           reader who set it and they may be on different services —
+--           songLink (app.js) picks per reader, and falls back to a search url
+--           in the wanted service. None present is allowed: someone typed a
+--           title and nothing else.
+--   kind    'album' or 'playlist'; absent for a song. Only a paste can be
+--           either. A playlist exists only in the service it was made in, so
+--           it opens there for every reader rather than being searched for.
 --   at      ISO timestamp, and it is load-bearing — see below.
 --
 -- THE DDL BELOW DID NOT CHANGE when `url` became `apple`/`spotify` on
--- 2026-09-03, which is the point of a jsonb column: the old shape and the new
--- one are the same type, rows written before the change are folded by hostname
--- on the READ (freshSong, store.js), and nothing had to be migrated twice.
+-- 2026-09-03, nor when `youtube` and `kind` joined them on 2026-09-10, which is
+-- the point of a jsonb column: the old shape and the new one are the same type,
+-- rows written before the first change are folded by hostname on the READ
+-- (freshSong, store.js), and nothing had to be migrated at all.
 --
 -- `at` EXISTS SO THE STATUS CAN STOP BEING TRUE. A self-reported status with no
 -- expiry is a lie with a long tail: a rail of songs from March says the room is

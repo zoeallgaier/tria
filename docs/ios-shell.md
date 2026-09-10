@@ -114,9 +114,9 @@ new outbound link inherits this for free; a new *internal* one must not carry
 deliberately does **not** follow a universal link into the app that owns the
 domain — it stays on the web page, which is right for reading and wrong for a
 link whose whole job is to hand you to another app. The listening rail's songs
-are exactly that: `music.apple.com` belongs to Apple Music and
-`open.spotify.com` to Spotify, and through the sheet you always get the web
-player. So an anchor may carry **`data-out="system"`**, which routes it to
+are exactly that: `music.apple.com` belongs to Apple Music, `open.spotify.com`
+to Spotify and `music.youtube.com` to YouTube Music, and through the sheet you
+always get the web player. So an anchor may carry **`data-out="system"`**, which routes it to
 `TriaSettings.openExternal` (`UIApplication.shared.open`) instead — the app when
 it's installed, the web player when it isn't. The handler falls back to the
 sheet if the plugin predates the method, so an older binary still opens the link
@@ -130,25 +130,32 @@ mechanism — whoever owns the domain gets the tap.
 
 Which puts the choice on us, because **a song's link belongs to whoever set it**
 and search can only find Apple's copy without a key. So `musicApps` asks
-`canOpenURL("spotify://")` and the web picks the link at the reading end
-(`songLink` in app.js): the wanted service's exact link if the song carries one,
-otherwise a **search URL in that service**, which still lands in the right app,
-one row short of the right track. Having installed Spotify is a better signal
-than a modal interrupting the tap, so **nobody is asked** — the picker on the
-profile editor (`Open songs in`, per-device in `localStorage`, never in the
-users table) exists only for the case the guess gets wrong.
+`canOpenURL` about `spotify://` and `youtubemusic://`, and the web picks the
+link at the reading end (`songLink` in app.js): the wanted service's exact link
+if the song carries one, otherwise a **search URL in that service**, which still
+lands in the right app, one row short of the right track. Spotify wins when both
+are installed. Having installed one is a better signal than a modal
+interrupting the tap, so **nobody is asked** — the picker on the profile editor
+(`Open songs in`, per-device in `localStorage`, never in the users table) exists
+only for the cases the guess gets wrong. A pasted **playlist** is the one
+exception to all of this: it exists only in the service it was made in, so it
+opens there for everybody.
 
 Two traps in that one call. `canOpenURL` answers **false for any scheme not in
 `LSApplicationQueriesSchemes`**, whatever is installed, so the Info.plist entry
 is load-bearing rather than boilerplate — and it fails *safe*, since a missing
-entry just means "no Spotify", which is the old behaviour. And **Apple Music is
-deliberately not queried**: it ships preinstalled, so its presence would tell us
-nothing about anybody. The absence of Spotify is the whole signal.
+entry just means "not installed", which is the old behaviour. (`youtubemusic` is
+the scheme of `com.google.ios.youtubemusic`, the bundle music.youtube.com's
+apple-app-site-association names; added 2026-09-10 and not yet confirmed on a
+phone with the app.) And **Apple Music is deliberately not queried**: it ships
+preinstalled, so its presence would tell us nothing about anybody. The absence
+of the other two is the whole signal.
 
 A third trap, for whoever tests this next: **the simulator cannot answer this
-question**. Spotify can't be installed there, so `canOpenURL` returns false and
+question**. Neither app can be installed there, so `canOpenURL` returns false and
 Automatic resolves to Apple Music every time, which looks exactly like a working
-build and exactly like a broken one. Verified on a real phone (2026-09-03).
+build and exactly like a broken one. Spotify verified on a real phone
+(2026-09-03).
 
 **Push is two transports behind one switch, because a WKWebView has no Push
 API.** Not a degraded one — absent. `PushManager` is undefined, `Notification` is

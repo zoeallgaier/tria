@@ -91,7 +91,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /// Is Spotify on this phone? Asked so that nobody has to be.
+    /// Is Spotify on this phone, or YouTube Music? Asked so that nobody has to be.
     ///
     /// A song's link belongs to whoever set it, and search can only find Apple's
     /// copy without a key — so a Spotify listener tapping somebody's song lands
@@ -108,16 +108,20 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// Apple Music is NOT queried, and its absence from the answer is the point:
     /// it ships preinstalled, so its presence tells us nothing about anybody. The
-    /// signal is Spotify or no Spotify. Anyone the guess gets wrong (both
-    /// installed, Apple preferred) has the picker on the profile editor.
+    /// signal is Spotify, YouTube Music, or neither; which one wins when both
+    /// are installed is app.js's call (`musicService`). Anyone the guess gets
+    /// wrong has the picker on the profile editor.
+    ///
+    /// `youtubemusic` is the scheme `com.google.ios.youtubemusic` registers, the
+    /// bundle its apple-app-site-association names for music.youtube.com.
     @objc func musicApps(_ call: CAPPluginCall) {
         // `canOpenURL` is main-actor work like `open` above, and a bridge call
         // arrives on Capacitor's queue.
         DispatchQueue.main.async {
-            let spotify = URL(string: "spotify://").map {
-                UIApplication.shared.canOpenURL($0)
-            } ?? false
-            call.resolve(["spotify": spotify])
+            let installed = { (scheme: String) -> Bool in
+                URL(string: scheme + "://").map { UIApplication.shared.canOpenURL($0) } ?? false
+            }
+            call.resolve(["spotify": installed("spotify"), "youtube": installed("youtubemusic")])
         }
     }
 }

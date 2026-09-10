@@ -145,13 +145,14 @@ const Store = (() => {
      every write stamps one, so its absence means malformed, and the one thing
      this feature must never do is show a song it can't date. */
   const LISTENING_TTL_MS = 7 * 86400000;
-  /* A song can carry a link PER SERVICE (`apple`, `spotify`), because the reader
-     who taps it is not the reader who set it and they may not be on the same
-     one. Rows written on the day the feature shipped carry a single `url`
-     instead, so it is sorted into the service it belongs to on the way past and
-     every reader downstream sees one shape. Nothing is rewritten in the
-     database for this: a jsonb column tolerates both, and a read-time fold is
-     cheaper and safer than a migration over a column that expires anyway. */
+  /* A song can carry a link PER SERVICE (`apple`, `spotify`, `youtube`),
+     because the reader who taps it is not the reader who set it and they may
+     not be on the same one. Rows written on the day the feature shipped carry a
+     single `url` instead, so it is sorted into the service it belongs to on the
+     way past and every reader downstream sees one shape. Nothing is rewritten
+     in the database for this: a jsonb column tolerates both, and a read-time
+     fold is cheaper and safer than a migration over a column that expires
+     anyway. */
   function freshSong(v) {
     if (!v || typeof v !== 'object' || !v.title) return null;
     const at = Date.parse(v.at || '');
@@ -1693,15 +1694,21 @@ const Store = (() => {
     const o = { title };
     const artist = clip(song.artist, 120);
     const art = httpsOnly(song.art);
-    // One key per service rather than one `url`, so a reader on the other one
-    // can be sent somewhere useful. Usually only one of the two is known: a
-    // search knows Apple's copy, a pasted link knows whichever was pasted.
+    // One key per service rather than one `url`, so a reader on another one
+    // can be sent somewhere useful. Usually only one is known: a search knows
+    // Apple's copy, a pasted link knows whichever was pasted.
     const apple = httpsOnly(song.apple);
     const spotify = httpsOnly(song.spotify);
+    const youtube = httpsOnly(song.youtube);
     if (artist) o.artist = artist;
     if (art) o.art = art;
     if (apple) o.apple = apple;
     if (spotify) o.spotify = spotify;
+    if (youtube) o.youtube = youtube;
+    // Absent for a song, which is nearly all of them. Only a PASTE can be an
+    // album or a playlist, and a playlist opens where it was made rather than
+    // in the reader's service (see songLink in app.js).
+    if (song.kind === 'album' || song.kind === 'playlist') o.kind = song.kind;
     return o;
   }
 

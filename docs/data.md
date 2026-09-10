@@ -1026,13 +1026,19 @@ it either way.
   same way a name and a bio are already public to the room. That is a deliberate
   trade for a song and it should not be quietly generalised — anything with more
   in it than a track title belongs on `posts`, behind the gates that already
-  exist. Shape is `{title, artist?, art?, apple?, spotify?, at}`, one jsonb
-  because nothing queries inside it; `artist` is optional because Spotify's
-  oEmbed (the paste path) returns a title and no artist.
+  exist. Shape is `{title, artist?, art?, apple?, spotify?, youtube?, kind?, at}`,
+  one jsonb because nothing queries inside it; `artist` is optional because
+  Spotify's oEmbed (the paste path) returns a title and no artist. `kind` is
+  `'album'` or `'playlist'` and absent for a song: only a paste can be one, and
+  the picker, the pin card and every aria-label say which (`songSub`).
 - **A link PER SERVICE, because the reader who taps is not the reader who set
-  it.** Usually only one of `apple`/`spotify` is known — search finds Apple's
-  copy, a paste keeps whichever was pasted — and `songLink` in app.js picks the
-  one the *reader's* device wants, falling back to a search URL in that service.
+  it.** Usually only one of `apple`/`spotify`/`youtube` is known — search finds
+  Apple's copy, a paste keeps whichever was pasted — and `songLink` in app.js
+  picks the one the *reader's* device wants, falling back to a search URL in that
+  service. **Except a playlist**, which exists only where it was made: it opens
+  there for everybody, and its quiet line names that service ("Playlist ·
+  Spotify") so a reader knows where a tap will land. An album is in every
+  catalogue and is chosen like a song.
   Rows written the day the feature shipped carry a single `url` instead;
   `freshSong` folds it into the service its hostname names, on the read. **That
   fold is deliberately not a migration**: jsonb tolerates both shapes, and a
@@ -1045,13 +1051,25 @@ it either way.
   whole point of the clock is that a status stops claiming to be true. A row with
   no `at` is dropped too — every write stamps one, so its absence means malformed,
   and showing a song that can't be dated is the one thing this must not do.
-- **Nothing connects to Spotify or Apple Music.** Both would need OAuth, a stored
-  refresh token and a poller, and the failure mode of all of it is a stale answer
-  indistinguishable from "not listening to anything". Metadata comes from two
-  keyless, CORS-open endpoints the webview calls directly — Apple's iTunes Search
-  API (search, artist, artwork, and an Apple Music link) and Spotify's oEmbed
-  (title and artwork for a pasted Spotify link, the only part of Spotify's API
-  needing no token). Artwork is **hotlinked, never re-hosted**: Apple's terms
+- **Nothing connects to Spotify, Apple Music or YouTube Music.** Each would need
+  OAuth, a stored refresh token and a poller, and the failure mode of all of it is
+  a stale answer indistinguishable from "not listening to anything". Metadata
+  comes from keyless, CORS-open endpoints the webview calls directly — Apple's
+  iTunes Search API (search, artist, artwork, and an Apple Music link; its lookup
+  form reads a pasted `/song/<id>` or `?i=<id>`), and each service's **oEmbed** for
+  every other paste: Spotify's (the only part of its API needing no token),
+  Apple's own at `music.apple.com/api/oembed` (the one its pages advertise, for
+  albums and playlists; it knows neither `/song/` links nor the `geo.` host), and
+  YouTube's (`www.youtube.com/oembed`, which reads a music.youtube.com link
+  directly and gives the channel, so an art track's "M83 - Topic" is its artist).
+  **Two traps, both measured in Playwright's WebKit** (2026-09-10): Spotify
+  sends its 404 for a private playlist with **no CORS header**, so the page sees
+  a TypeError rather than a status and `getJson` has to catch it into the same
+  null a 404 would be; and the still YouTube's oEmbed hands back is 4:3 with the
+  video letterboxed inside it, so `youtubeArt` swaps in the 16:9 `maxresdefault` (which
+  `cover` crops back to exactly an art track's sleeve) after checking it exists,
+  a missing one being a 404 that still decodes as a 120x90 grey placeholder.
+  Artwork is **hotlinked, never re-hosted**: Apple's terms
   cover displaying it beside a link to the store, which is not permission to copy
   it into our bucket. Full reasoning, including what a real Spotify search would
   cost, is in [1.5.md](1.5.md).
