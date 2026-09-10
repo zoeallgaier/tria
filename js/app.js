@@ -1485,50 +1485,6 @@
     // color-mix()): let the engine resolve it on a real element first.
     const cssColour = (css) => toRgb(probe('color: ' + css).color || '') || '';
 
-    /* A DISC OF ONE COLOUR, as SVG markup, for a row whose subject IS the
-       colour. The profile's colour picker paints twelve `background-image`s —
-       eleven three-stop bands and a photograph — and a menu row takes an image,
-       not a fill, so each source has to arrive here as a drawing.
-
-       It takes the band's MIDDLE stop rather than flattening the ramp, because
-       for a palette pick the middle stop IS the hex (see bandAround), the
-       colour the reader picked and would name if asked. TriaSVG draws no
-       gradients and this is not the release that teaches it to — a 22pt disc
-       has about six points of arc to spend a ramp on, which is a ramp nobody
-       can see.
-
-       `css` is anything `background-image` takes: the caller hands over a
-       gradient it already built (accentBand) or a token (var(--brand-band)),
-       and the engine resolves it here, the same way the + resolves its band. */
-    function discIcon(css, ramp) {
-      const stops = splitStops(probe('background-image: ' + css).image || '')
-        .map(toRgb).filter(Boolean);
-      if (!stops.length) return '';
-      if (!ramp || stops.length < 2) {
-        const fill = stops[Math.floor(stops.length / 2)];
-        return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${fill}"/></svg>`;
-      }
-      /* A RAMP OF DIFFERENT HUES CANNOT BE ONE DISC. Tria's own band is four
-         of the five type pastels, and its middle stop is the green one — a
-         "Tria" swatch that came out pale green sat two rows above "Lime" and
-         measured within twenty points of it, which is a picker that cannot
-         tell you what you picked. So the ramp is cut into wedges, one per
-         stop, in order, starting at twelve o'clock: every colour in the band
-         is on the disc and the row is unmistakable at 22pt.
-         Only the caller that knows its band is polychrome asks for this. The
-         nine accents are three stops around ONE hex (see bandAround), a
-         sheen rather than a ramp, and wedging them would draw seams nobody
-         can see through a disc that is honestly one colour. */
-      const arc = 360 / stops.length;
-      const at = (deg) => {
-        const rad = (deg - 90) * Math.PI / 180;
-        return `${(12 + 10 * Math.cos(rad)).toFixed(2)} ${(12 + 10 * Math.sin(rad)).toFixed(2)}`;
-      };
-      return `<svg viewBox="0 0 24 24">` + stops.map((fill, i) =>
-        `<path d="M12 12L${at(i * arc)}A10 10 0 ${arc > 180 ? 1 : 0} 1 ` +
-          `${at((i + 1) * arc)}Z" fill="${fill}"/>`).join('') + `</svg>`;
-    }
-
     /* One row, in the shape both menus cross the bridge in. The two callers
        reach it from opposite directions — a toolbar glyph's menu is already
        open and asking (describeMenu), a page control's is about to be opened
@@ -1693,8 +1649,7 @@
 
     /* The rect is the control's own and it is the only thing the placement
        listens to — there is no way to ask UIKit for a side. What that buys, and
-       what it doesn't, is written where this is called (openAccentSheet) and
-       measured in docs/native-chrome.md. */
+       what it doesn't, is measured in docs/native-chrome.md. */
     function presentMenu(anchor, { label, items, onPick }) {
       if (!live || !anchor || !items || !items.length) return false;
       const r = anchor.getBoundingClientRect();
@@ -2256,7 +2211,7 @@
     // nothing in the DOM that records it.
     function wantSearchFocus(wanted) { searchFocus = !!wanted; }
 
-    return { setActive, sync, repaint, setDots, captureMenu, presentMenu, discIcon,
+    return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, searchHooks, wantSearchFocus,
              schedulePage, live: isLive };
   })();
@@ -7362,9 +7317,10 @@
     const privacyBtn = view.querySelector('#privacy-toggle');
 
     // Three radio rows, through the system's own menu where there is one and
-    // the sheet everywhere else — the same two-tier pattern the profile colour
-    // ring uses, and for the same reason: this is a control on a PAGE, so the
-    // web asks native for a menu rather than native asking about it.
+    // the sheet everywhere else. This is a control on a PAGE, so the web asks
+    // native for a menu rather than native asking about it. (The colour ring
+    // beside it used to do the same and went back to its sheet; three words
+    // lose nothing in a menu, twelve colours did. See openAccentSheet.)
     const musicBtn = view.querySelector('#music-pick');
     const musicValEl = view.querySelector('#music-value');
     const pickMusic = (key) => {
@@ -7506,7 +7462,7 @@
     // the same reason (iOS standalone flashes a native pressed fill on a filled
     // <button>), so it needs the same keyboard pair the camera gets.
     const pfAccent = view.querySelector('#pf-accent');
-    const openAccent = () => openAccentSheet(pfAccent);
+    const openAccent = () => openAccentSheet();
     pfAccent.addEventListener('click', openAccent);
     pfAccent.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccent(); }
@@ -8717,7 +8673,7 @@
      land. So the scrim is deliberately thin (.sheet-scrim--see-through), the
      page's wash stays lit above it, the pick paints SYNCHRONOUSLY, and the
      ring you opened it from wears the current colour the whole time. */
-  function openAccentSheet(anchor) {
+  function openAccentSheet() {
     const me = Store.currentUser();
     if (!me) return;
     // No photo, no photo option — and the fallback is DEFAULT, not 'none'. With
@@ -8738,49 +8694,22 @@
 
        Each disc wears the BAND it will paint, through accentBand, so the disc
        and the button can't drift. Its middle stop is the palette hex itself;
-       the two either side only turn the hue.
-
-       `mark` is for the two rows a colour cannot be drawn for. The native menu
-       takes an IMAGE per row and TriaSVG paints no photographs, so Photo wears
-       the picture glyph and None an empty ring — which is what the web's None
-       swatch already is, a disc with no fill in it. */
-    const EMPTY_DISC = '<svg viewBox="0 0 24 24">' +
-      '<circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+       the two either side only turn the hue. */
     const sources = [
-      { key: 'default', label: 'Tria', css: 'var(--brand-band)', group: 0, ramp: true },
-      ...(me.avatar
-        ? [{ key: 'auto', label: 'Photo', css: `url(${me.avatar})`, group: 0, mark: svgIcon('image') }]
-        : []),
-      { key: 'none', label: 'None', group: 0, mark: EMPTY_DISC },
+      { key: 'default', label: 'Tria', css: 'var(--brand-band)', group: 0 },
+      ...(me.avatar ? [{ key: 'auto', label: 'Photo', css: `url(${me.avatar})`, group: 0 }] : []),
+      { key: 'none', label: 'None', group: 0 },
       ...ACCENTS.map(a => ({ key: a.key, label: a.label, css: accentBand(a.key), group: 1 })),
     ];
 
-    /* THE SYSTEM'S OWN MENU WHERE THERE IS ONE, and what that costs.
-
-       The sheet below is deliberately see-through, the pick paints
-       SYNCHRONOUSLY, and the ring you opened it from wears the current colour
-       the whole time — because a colour is the one setting whose value you
-       cannot read off a control, you have to see it land. A UIMenu dismisses on
-       the pick, so trying colours on against the live page goes with it. What
-       comes back is a real menu in the material every other menu in the app now
-       wears, and the page under it still repaints in the same frame as the tap;
-       you see the answer, you just don't get to hold the picker open while you
-       compare. That trade was made deliberately, not overlooked. */
-    // NativeChrome.live() before the map, not after: building these twelve rows
-    // means resolving twelve bands through the layout engine, and presentMenu
-    // would only turn round and refuse them on the web.
-    if (anchor && NativeChrome.live() && NativeChrome.presentMenu(anchor, {
-      label: 'Profile colour',
-      items: sources.map(src => ({
-        label: src.label,
-        icon: src.mark || (src.css ? NativeChrome.discIcon(src.css, src.ramp) : ''),
-        radio: true,
-        checked: src.key === current,
-        group: src.group,
-      })),
-      onPick: (i) => applyAccent(sources[i].key, current),
-    })) return;
-
+    /* THE SHEET IN THE APP TOO, not the system's menu. This was a UIMenu on
+       the App Store build for a while, and it was taken back out (Zoe's call,
+       2026-09-10) because the sheet shows the colours off and the menu can't:
+       a menu row is a 22pt flat disc, so a band lost its sweep, Photo became a
+       glyph instead of your photo, and the menu dismissed on the pick, so you
+       couldn't try colours on against the live page. The sheet keeps all of
+       that: big swatches wearing the real band, the photo in its disc, a
+       see-through scrim over a page that repaints as you tap. */
     // The fill goes on the DISC, not the button: every source paints
     // .swatch-disc's background-image, and a url() on the button would sit
     // behind the label with no background-size to size it.
@@ -8819,10 +8748,8 @@
     });
   }
 
-  /* THE PICK ITSELF, which both drawings of the picker run. It is the only
-     thing in here that changes anything, so it is the one thing that must not
-     exist twice: the sheet's swatch grid and the native menu's twelve rows are
-     two pictures of one list, and this is what a row MEANS. */
+  /* THE PICK ITSELF, what a swatch MEANS. It is the only thing in the
+     picker that changes anything, so it lives apart from the drawing. */
   function applyAccent(key, current) {
     // Re-picking the colour you already wear repaints nothing, so it gets no
     // buzz and no write — the same rule the filter dial keeps, and for the same

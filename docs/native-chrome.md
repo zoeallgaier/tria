@@ -60,10 +60,11 @@ to abandon it gets a bar.
 
 A MENU IS NOT CONTENT, wherever the control that drops one happens to sit. That
 line moved once, deliberately, for three page controls: the post card's •••,
-the repost circle and the profile's colour ring. As of 2026-08-30 only the
-colour ring still drops a native menu, for the reason in "A menu the page asks
-for" below — the ••• and the repost circle went back to the sheet, the same one
-every other page-owned control (with no bar to belong to) has always raised.
+the repost circle and the profile's colour ring. All three went back to the
+sheet, the same one every other page-owned control (with no bar to belong to)
+has always raised: the ••• and the repost circle on 2026-08-30, the colour ring
+on 2026-09-10. Edit profile's music pick is the page control that still drops a
+native menu, for the reason in "A menu the page asks for" below.
 
 THE COMMENT BAR IS CHROME AND IS ALSO THE ONE EXCEPTION TO "native wears the web
 control's face". Everything else here works by drawing over an element that is
@@ -847,10 +848,14 @@ completes empty. That is not tidiness; it is the failure mode.
 **As of 2026-08-30, the post card's ••• and the repost circle beside it went
 back to being a sheet — `openPostMenu` and `openRepostMenu` call `openSheet`
 directly now, the way the audience picker always has, and neither goes through
-`openAnchoredMenu` (removed) or `NativeChrome.presentMenu` any more.** The
-profile's colour ring is the one caller left that drops a menu this way, with
-its own `presentMenu` call inline (see `openAccentSheet` in app.js). The rest
-of this section describes the mechanism as it still serves that one caller; the
+`openAnchoredMenu` (removed) or `NativeChrome.presentMenu` any more.** **The
+profile's colour ring followed on 2026-09-10** (Zoe's call): a menu row is a
+22pt flat disc, so a band lost its sweep and Photo became a glyph, and the menu
+dismissed on the pick, so colours couldn't be tried on against the live page.
+The sheet shows the colours off, which is the whole job of that picker, and
+`discIcon` went with it. Edit profile's music pick is the caller left that drops
+a menu this way, with its own `presentMenu` call inline. The rest of this
+section describes the mechanism as it still serves that caller; the
 paragraphs that talk about "the two on a card" (the lost titles, the dropped
 Repost row, the double-tap ordering) describe behaviour that applied only to
 the reverted post/repost menus and no longer runs, but are left as the record

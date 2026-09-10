@@ -639,16 +639,19 @@ at an arbitrary scroll position, so a menu dropped from it would land anywhere
 between mid-screen and the 40px gutter above the nav and the same tap would
 produce a different-shaped thing every time.
 
-**That last one holds for a card WE draw, and 1.4 found the edge of it — for one
-of the three.** In the app the colour ring still drops a real `UIMenu`, and the
-system flips it, scrolls it and clips it to the safe area itself, so the "lands
-anywhere" objection, which is an objection to our positioning code, simply is
-not true of its own. The ••• and the repost circle tried the same move and went
-back: as of 2026-08-30 `openPostMenu` and `openRepostMenu` build their array and
+**That last one holds for a card WE draw, and 1.4 found the edge of it.** In
+the app the colour ring dropped a real `UIMenu` for a while, and the system
+flips it, scrolls it and clips it to the safe area itself, so the "lands
+anywhere" objection, which is an objection to our positioning code, was not
+true of its own. It went back to the sheet anyway on 2026-09-10, for a
+different reason: the sheet shows the colours off (big swatches wearing the
+real band, the photo in its disc, the page repainting under a see-through
+scrim), and a menu row is a flat 22pt disc that dismisses on the pick. The •••
+and the repost circle tried the same move and went back earlier: as of 2026-08-30 `openPostMenu` and `openRepostMenu` build their array and
 hand it straight to `openSheet`, same as the audience picker always has, with no
 native branch. See "A menu the page asks for" in
-[native-chrome.md](native-chrome.md), including what the colour picker gave up
-for it.
+[native-chrome.md](native-chrome.md), including why the colour picker came
+back.
 
 Three things about the move. `openGlyphMenu`'s items are `{label, icon?,
 danger?, run?}` — **deliberately `openSheet`'s own shape**, so a menu can move
