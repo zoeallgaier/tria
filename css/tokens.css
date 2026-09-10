@@ -194,10 +194,17 @@
 
   /* The ink that rides it, and the reason it is a token rather than --on-type
      written out six times: it is the same var(user, default) shape as the band
-     above, so the two travel together. Every accent and the brand ramp are
-     light fills and take the near-black --on-type; only the monochrome band
-     flips, and it stamps --user-ink alongside --user-band so the fill and its
-     glyph can never be applied a frame apart. */
+     above, so the two travel together. The brand ramp is a light fill and takes
+     the near-black --on-type. A reader's colour stamps TWO inks, one measured
+     per scheme (accentInk in app.js), because a palette pick is its own hex and
+     a deep one needs the near-white on ink and the near-black on paper.
+
+     --user-ink resolves from whichever is live, here and in the dark block, the
+     same one-scheme-apart pair the hearts use. Nothing stamped leaves
+     --user-ink-lt undefined, which makes --user-ink invalid, so every
+     var(--user-ink, fallback) still falls back exactly as it did when
+     --user-ink itself was the stamped property. */
+  --user-ink: var(--user-ink-lt);
   --pill-ink: var(--user-ink, var(--on-type));
 
   /* NO COLOUR, DRAWN rather than defaulted — what the picker's "None" paints.
@@ -224,27 +231,15 @@
 
   /* How solid that band sits on a primary button. This is a CONTRAST FLOOR
      wearing the clothes of a style knob, so read the note beside the CTA rule
-     in app.css before moving it: --on-type rides this fill, translucency
-     composites it against the page, and dark paper is the hard case. Measured
-     across the four brand stops and the six palette accents pinned to
-     BAND_LSTAR, the worst pair is 6.04 here, 5.45 at 0.80, 4.91 at 0.75. Ruby
-     and ocean declare deeper bands (both L* 65) and still ride THIS ink, so
-     they are what actually sets the floor now: 4.65 and 4.68 thin-on-dark. No
-     accent goes below them and none carries an ink of its own — L* 65 is where
-     --on-type gives out, which is the whole reason both stopped there. That
-     worst pair is a READER'S
-     ACCENT rather than a brand stop — the brand ramp is bright and measures
-     8.38 at its own worst, while an accent is the deepest thing this fill
-     ever carries.
-
-     THE MARGIN HERE IS WIDER THAN IT USED TO BE, and the reason is worth
-     recording: the old worst pair was a rose accent at 5.51/4.98/4.50, where
-     0.75 was a flat fail. Accents are normalised to one perceptual weight now,
-     so the palest and the deepest of them measure the same and the cliff moved
-     out of reach. 0.85 stays — it is also how SOLID a primary button reads, not
-     only how legible — but it is no longer one step from failing. What would
-     bring the cliff back is deepening BAND_LSTAR: that number and this one draw
-     on the same account. */
+     in app.css before moving it: the ink rides this fill, translucency
+     composites it against the page, and a reader's accent is the deepest thing
+     it ever carries (the brand ramp is bright and measures 8.38 at its own
+     worst). Palette picks are their own hex now, and the ink is picked per
+     scheme against the fill thinned to THIS value (accentInk in app.js), so the
+     two are one account: every accent clears 4.5 at 0.85, and the tightest are
+     ruby on paper at 4.53 and ocean on ink at 4.55. Thinner than 0.85 and those
+     two go first; a new hex has to be measured at this value too. 0.85 is also
+     how SOLID a primary button reads, not only how legible. */
   --pill-alpha: 0.85;
 
   /* Liked-heart quintet — the ink twins nudged toward their pastels so the
@@ -268,12 +263,12 @@
      the default, so a reader with no colour set sees exactly the green this tag
      has always been.
 
-     It borrows the HEART's weight rather than the -ink twin's, because the
-     accent has exactly one mark weight per scheme and a second one would be a
-     third perceptual number to keep in step for one pill. The cost is measured
-     and worth naming: the green ink is 4.62 on paper and an accent at the
-     heart's L* 53 is ~3.46-3.50, so under a picked colour this word sits below
-     AA for small text. Acceptable here because it is a redundant label -- the
+     It borrows the HEART's colour rather than a colour of its own, because the
+     accent has exactly one mark per scheme (its hex, or its `ink` twin on
+     paper) and a second would be one more value to keep in step for one pill.
+     The cost is measured and worth naming: the green ink is 4.62 on paper and a
+     palette mark on paper is 2.05 (amber) to 3.96 (ruby), so under a picked
+     colour this word sits below AA for small text. Acceptable here because it is a redundant label -- the
      host's list is ordered, everyone tagged first and everyone still to answer
      after -- and not a licence to reach for --user-heart-lt on body copy.
 
@@ -305,15 +300,14 @@
      --going-ink note above warns is not licensed by the heart. It isn't: this
      takes the mark weight and deepens it, rather than wearing it.
 
-     The heart sits at L* 53, where every accent measures ~3.46 on paper. That
-     is a fine mark and an illegible word — a mention is 16px inside a
-     sentence, so it is small text and wants 4.5, not 3. Deepening toward page
-     ink is a DERIVATION rather than a third perceptual number to keep in step:
-     the nine accents are already levelled at 53, so an even mix carries the
-     levelling with it and they land in a 0.9-point band at L* 44.0-44.9.
-     Measured worst on paper 4.59 (cyan), 4.96 on --surface, with the deepest
-     of them, ruby, at 4.62. Dark needs no deepening — --user-heart-dk is L* 74,
-     which measures 9.36 on ink paper — so only this block mixes.
+     A mark is sized for 3:1 and a mention is 16px inside a sentence, so it is
+     small text and wants 4.5. Deepening toward page ink is a DERIVATION rather
+     than one more value to keep in step. The palette's marks are each accent's
+     own hex or `ink` twin now rather than one levelled weight, so they don't
+     land together: on paper this measures 5.40 (ruby) down to 2.96 (amber),
+     and coral, amber, lime and cyan sit under 4.5 (see the ACCENTS note in
+     app.js for the twins that would clear them). Dark needs no deepening, the
+     hex on ink paper is 4.14 (ruby) or better, so only this block mixes.
 
      THE TWO COLOURLESS SOURCES LAND TOGETHER, and not on page ink. "No colour"
      stamps --mono-heart; Tria's own ramp stamps nothing and used to fall back
@@ -554,6 +548,7 @@
        --mono-band for why a neutral is the exception. */
     --mono-band: linear-gradient(115deg, #f5f6f8, #e6e8ec, #d5d8dd);
     --mono-ink:  var(--on-type);
+    --user-ink:  var(--user-ink-dk);
 
     /* Dark takes --user-heart-dk, the accent at its own pastel weight: on dark
        paper the -ink twins simply ARE the pastels (above), so an accent heart
@@ -564,13 +559,13 @@
     --heart-activity: var(--user-heart-dk, var(--type-activity-ink));
     --heart-poll:     var(--user-heart-dk, var(--type-poll-ink));
 
-    /* Dark takes the dark heart weight for the same reason the hearts do, and
-       needs no contrast caveat: the accent at L* 74 on ink paper measures ~9.4,
-       and the fallback -ink twin IS the pastel. */
+    /* Dark takes the dark heart for the same reason the hearts do, and needs
+       no contrast caveat: a palette hex on ink paper measures 4.14 (ruby) or
+       better, and the fallback -ink twin IS the pastel. */
     --going-ink: var(--user-heart-dk, var(--type-activity-ink));
     --dot:       var(--user-heart-dk, var(--accent));
-    /* Undeepened here, for the reason the hearts are: on ink paper the mark
-       weight already measures 9.36, and mixing a mention toward --text would
+    /* Undeepened here, for the reason the hearts are: on ink paper the hex
+       already measures 4.14 (ruby) or better, and mixing a mention toward --text would
        lighten it rather than deepen it. The colourless fallback is --mono-heart
        on this side too, where the same recipe that reads as an off-black on
        paper reads as an OFF-WHITE: #d0d3d7, 8.5 points of L* under the byline

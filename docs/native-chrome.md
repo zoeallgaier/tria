@@ -318,8 +318,9 @@ same key as the +'s own `tint`. They were one key while the + still had a bare
 state; they parted when it stopped having one. See "The + does not wear Tria's
 band".
 
-1. **A reader's ACCENT is one colour**, three stops eleven degrees apart at one
-   weight (`bandFrom`). So it goes to `UIGlassEffect.tintColor` and the system
+1. **A reader's ACCENT is one colour**, three stops eleven degrees apart around
+   its hex (`bandAround`), and the middle stop, the one that crosses, is the hex
+   itself. So it goes to `UIGlassEffect.tintColor` and the system
    tints its own material — refraction, specular response, Reduce Transparency,
    Increase Contrast, all of it already answered and none of it ours. Nothing is
    lost, because the band was one colour before it crossed. Measured across all
@@ -372,8 +373,9 @@ painting the neutral for the same reader on the same build, so one + had two
 answers depending on which chrome you got. The web is in step now
 (`.nav-publish` overrides `--pill-band` / `--pill-ink` in app.css's mobile
 block, phone only — the sidebar's Post is a capsule and keeps the ramp), and
-`--user-ink` is stamped on every branch of `paintBrandBand` rather than only the
-monochrome one, so that override can tell "no band of their own" from "no ink of
+the inks (`--user-ink-lt` / `--user-ink-dk`, resolved into `--user-ink` per
+scheme by tokens.css) are stamped on every branch of `paintBrandBand` rather
+than only the monochrome one, so that override can tell "no band of their own" from "no ink of
 their own" and never hands a picked accent the neutral's near-white glyph.
 
 **And this is why `tabTint` is its own key.** The lit tab used to read the +'s
@@ -1024,7 +1026,7 @@ hues, its middle stop is the green one, and a pale-green "Tria" swatch sat two
 rows above "Lime" and measured within twenty points of it — a picker that cannot
 tell you what you picked. So a polychrome band is cut into wedges, one per stop,
 from twelve o'clock. Only the caller that knows its band is polychrome asks for
-that: the nine accents are three stops derived from one hue (`bandFrom`), a
+that: the nine accents are three stops around one hex (`bandAround`), a
 sheen rather than a ramp, and wedging them would draw seams nobody can see
 through a disc that is honestly one colour.
 

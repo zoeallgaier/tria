@@ -952,8 +952,8 @@
        wants a different answer from each. This is that decision, once, for the
        + and for every other glass button wearing the same fill:
 
-       - A READER'S ACCENT is three stops eleven degrees apart at one weight
-         (bandFrom), which is one colour said three times. `UIGlassEffect`
+       - A READER'S ACCENT is three stops eleven degrees apart around its hex
+         (bandAround), which is one colour said three times. `UIGlassEffect`
          takes ONE tint colour and that is the system's own tinted glass — its
          refraction, its specular rim, its Reduce Transparency, none of it ours.
          So an accent crosses as a TINT and loses nothing by it. The trade that
@@ -1012,8 +1012,8 @@
          collapsed it to a single stop. */
       const ramp = spread > BAND_ONE_HUE;
       if (ramp && !solidGlass()) return { colors: stops, tint: '', ramp };
-      // The MIDDLE stop, which is the band's own weight: bandFrom puts the two
-      // either side a point and a half up and three down from it.
+      // The MIDDLE stop: for a palette pick that is the hex itself (bandAround),
+      // for a photo sample the band's own weight (bandFrom).
       return { colors: [], tint: stops[stops.length >> 1], ramp };
     }
 
@@ -1491,9 +1491,8 @@
        not a fill, so each source has to arrive here as a drawing.
 
        It takes the band's MIDDLE stop rather than flattening the ramp, because
-       the middle stop is the band's own weight: the two either side are a point
-       and a half up and three down from it (see bandFrom), so the one in the
-       middle is the colour the reader would name if asked. TriaSVG draws no
+       for a palette pick the middle stop IS the hex (see bandAround), the
+       colour the reader picked and would name if asked. TriaSVG draws no
        gradients and this is not the release that teaches it to — a 22pt disc
        has about six points of arc to spend a ramp on, which is a ramp nobody
        can see.
@@ -1517,7 +1516,7 @@
          stop, in order, starting at twelve o'clock: every colour in the band
          is on the disc and the row is unmistakable at 22pt.
          Only the caller that knows its band is polychrome asks for this. The
-         nine accents are three stops derived from ONE hue (see bandFrom), a
+         nine accents are three stops around ONE hex (see bandAround), a
          sheen rather than a ramp, and wedging them would draw seams nobody
          can see through a disc that is honestly one colour. */
       const arc = 360 / stops.length;
@@ -8737,12 +8736,9 @@
        the key did not. Then the nine you can name, three across and three down,
        which is also why the source row is three: the two grids line up.
 
-       Each disc wears the BAND it will paint, not the palette hex it is filed
-       under. Those two parted when accents were pinned to L* 74: "Lime" is
-       filed as #b9df7d and paints #8cc731, so a raw-hex disc was a pale swatch
-       promising a button it no longer produced. They have parted completely now
-       that three accents declare their own band, so this goes through
-       accentBand rather than rebuilding the recipe here.
+       Each disc wears the BAND it will paint, through accentBand, so the disc
+       and the button can't drift. Its middle stop is the palette hex itself;
+       the two either side only turn the hue.
 
        `mark` is for the two rows a colour cannot be drawn for. The native menu
        takes an IMAGE per row and TriaSVG paints no photographs, so Photo wears
@@ -14897,173 +14893,67 @@
   const sampleCache = new Map();
   let ambientSeq = 0;
 
-  /* THE PALETTE. Nine colours a profile can wear, five of which began as the
-     post quintet — lavender, coral, cyan, lime, rose — because those are
-     Tria's colours and a ninth family of hues invented for one control would be
-     the design system saying two different things about the same app.
+  /* THE PALETTE. Nine colours a profile can wear, and ONE HEX EACH IS THE
+     WHOLE COLOUR. Everything an accent paints reads straight off it, in both
+     schemes: the glass on every capsule and the +, the lit tab, the band's
+     middle stop (bandAround), the hearts, the dot, Going, a tagged name and the
+     profile's wash. What you pick in the ring is what the app wears.
 
-     Spending them here doesn't blunt what they mean on a post, and the reason is
-     that this surface never carried a promise to blunt: the profile glow has
-     been an ARBITRARY sampled colour since the day it shipped, free to land on
-     exactly lime or exactly rose depending on someone's jumper. The quintet's
-     meaning lives where a hue names a TYPE (a filter chip, the Publish button, a
-     daily's card), and nothing on a profile card does that.
+     IT WAS DERIVED FOR A LONG TIME, and that is what this replaces (Zoe's call,
+     2026-09-10). The band was re-pinned to a shared L* 74, with ruby, rose and
+     ocean declaring their own at 65 and 72, and the hearts to L* 53 on paper
+     and 74 on ink. That left the hex doing one job, the wash, and every swatch
+     looked duller than the button it produced. It also flattened the reds: at
+     L* 74 every red is a pink, so a ruby heart on dark paper was pink and the
+     likes read as two different colours across the schemes.
 
-     Three added, chosen to fill the gaps the quintet leaves on the hue wheel
-     rather than to be new brand colours — amber at ~40 degrees, jade at ~158,
-     ocean at ~218, which are the three widest holes between the five. They are
-     drawn at the quintet's own weight (~0.75 lightness, saturation in its range)
-     so the set reads as one family and not as five Tria colours with guests.
+     `ink` IS THE ONE EXCEPTION, and it is the quintet's own shape (--type-*
+     and --type-*-ink). A pastel is fine as a FILL on either paper and as a
+     MARK on ink, but not as a mark on light paper: lime's hex is 1.28 against
+     #edeef0, a heart you cannot see. So an accent may carry a deeper twin that
+     its marks wear on paper, meaning hearts, the dot, Going and the base a
+     mention deepens from. Dark paper always wears the hex, and nothing else
+     reads the twin.
 
-     THREE OF THEM HAVE SINCE MOVED OFF THE QUINTET, and that decoupling is the
-     point rather than a drift. A palette's job is nine choices a reader can
-     tell apart; the quintet's job is five type identities. Those are different
-     jobs, and where they disagreed the palette lost: cyan sat 20.8 degrees from
-     ocean and rose's red end came within 6.7 of coral's pink end, so two pairs
-     of swatches were painting each other's colours.
-       - cyan  #9fd6e8 -> #88e4f2   hue 194.8 -> 188, brighter and truer
-       - ocean #8fb4ea -> #5f95f2   hue 215.6 -> 218, deeper, and still BLUE
-       - rose  #ea86ae -> #ea8696   hue 336.0 -> 350, leaning red off coral
-     OCEAN'S HUE IS 218 AND NOT 228, and that took two goes. It first
-     moved to hue 228 to buy clearance from cyan, and 228 plus the arc puts the
-     last stop at 239 — where R catches G and the band turns violet, sitting on
-     lavender's doorstep. The read is that simple to check: while G leads R the
-     eye calls it blue, and it holds at every depth ocean has been drawn at:
-     the +11 stop was #9baaef with G ahead by 15 at the old L* 74 and is
-     #7990f4 with G ahead by 23 at today's L* 65. Clearance from cyan
-     is 8 degrees, which is enough because the two bands read from their
-     centres, and those are a turquoise and a blue — now a turquoise and a
-     deeper blue, which is more clearance than the number says.
+     The floors on #edeef0 are 3 for a mark and 4.5 for a mention (the mark
+     deepened 20% toward --text, see --mention-ink). As tuned:
+       mark on paper    ruby 3.96, rose 3.26, coral 2.24, amber 2.05, lime 2.60,
+                        jade 3.33, cyan 2.85, ocean 3.32, lavender 3.63
+       mention on paper ruby 5.40, rose 4.51, coral 3.21, amber 2.96, lime 3.65,
+                        jade 4.54, cyan 3.97, ocean 4.53, lavender 4.88
+     Coral, amber, lime and cyan sit under both, tuned by eye. The twin that
+     clears them is the same hue about L* 54 (coral #e15519, amber #b07614, lime
+     #608f14, cyan #128fa2); coral would need one added. On ink every hex is
+     4.14 (ruby) or better.
 
-     WHAT USED TO BE WRITTEN HERE was that ocean's depth came from SATURATION,
-     and that was making the best of a lever that doesn't reach. Under the
-     inherited recipe a hex's lightness is discarded and its saturation is
-     clamped at 0.72, so ocean's l 0.66 bought a deeper profile WASH and a
-     button identical to everyone else's — a swatch that says deep blue over a
-     #89c0ec fill. It declares its own band now, exactly as ruby does, and the
-     depth is the lightness it always wanted. See the depth note below.
+     THE BUTTON'S INK IS MEASURED PER SCHEME now rather than being one per
+     accent (see accentInk). The note that used to be here said the opaque +
+     forbade that, at 4.5. That is the floor for TEXT, and the + is a glyph,
+     which is 3. Capsules still hold 4.5 (thinned, every accent, both schemes,
+     worst ruby 4.53 on paper and ocean 4.55 on ink), and the opaque + is worst
+     at ocean on ink, 3.57. The deep hexes, ruby, ocean and lavender, take the
+     near-white on ink and the near-black on paper; the rest are near-black in
+     both.
 
-     Saturation on cyan is deliberately past the band's 0.72 clamp so it takes
-     the ceiling: at a pinned L* the only chroma left is what the clamp allows,
-     and blue needs all of it (see BAND_LSTAR). The raw hex is NOT
-     wasted on the way — the .ambient wash paints a palette pick STRAIGHT, so
-     ocean's lower lightness is what makes its profile page deeper too, and it
-     is also the only thing a hex's lightness still decides. That is what caps
-     cyan: at l 0.80 it was a lovely swatch and it took --wash-ink-soft on a
-     dark profile to 4.40, under AA. 0.74 measures 4.58, in line with lime's
-     4.65, and the BUTTON is identical either way because the band re-pins it.
-     --type-photo and --type-poll are untouched: a Photo card is still cyan and
-     a poll still rose, because a hue naming a TYPE is a different promise.
-
-     THREE ACCENTS DECLARE THEIR OWN BAND rather than inherit it, and rose and
-     ruby were the first two — one hue at two depths. The other six are pinned
-     to BAND_LSTAR, and that levelling is still what makes the set a set —
-     but it is also what made "ruby" impossible, because at L* 74 every red is a
-     pink. That is not a hue fact and it is not a saturation one: at L* 74,
-     taking saturation from 0.72 to 1.0 moves OKLCH chroma 0.096 -> 0.125 and
-     still paints #ff98aa. Pink is a LIGHTNESS fact, so depth is the only lever
-     that reaches it, and a `band` recipe is how an accent asks for one.
-
-       - ruby  L* 65. THE FLOOR, and that is the whole spec: the darkest a red
-               goes while the + stays the same near-black every other accent's
-               is. One point lighter is a redundant rose, one point darker is
-               an illegible glyph.
-       - rose  L* 72. Lightened off ruby's number, because the two hexes are
-               1.1 degrees apart and a band re-pins lightness AND chroma — at
-               a shared L* 65 they came out #f47ba5 and #f47ba6, the same
-               colour twice. See the separation note below.
-       - ocean L* 65, the same floor read in blue: the deepest a blue goes
-               while the + stays near-black.
-
-     EVERY ACCENT CARRIES THE SAME INK, and that is a decision rather than a
-     coincidence — ruby was a white-inked gemstone at L* 44 for a day. Measured
-     against --on-type on the thinned surface: 6.06 at L* 74, 5.08 at 68, 4.76
-     at 66, 4.50 at 64, 4.23 at 62. So the near-black runs out at about L* 64,
-     which is why 65 is where the two deep accents sit and why nothing in this
-     palette goes below it. Final: ruby 4.65 / 6.90 / 6.06, rose 5.69 / 8.39 /
-     7.55, ocean 4.68 / 7.08 / 6.09 (thin-on-dark, thin-on-light, opaque FAB).
-
-     GOING DEEPER MEANS LEAVING THE SET, and the gap is why. Below 65 the fill
-     has to carry a light glyph instead, and the WHITE zone does not open until
-     L* 44 — bounded from above by the OPAQUE FAB, which has no scheme to vary
-     with and so must clear against whichever ink it is handed (white does not
-     clear it until 48, nor the light thinned fill until 44). So a declared
-     band has exactly two landing zones — a deepened pastel at ~65 or a gem at
-     ~44 — and the 20 points between them cannot carry a legible glyph at all.
-     Nothing lives in the lower zone today. --user-ink is still wired end to
-     end (ACCENTS `ink` -> paintBrandBand -> --pill-ink) because it is the only
-     thing that makes that zone reachable, but no accent sets it, and the ONE
-     colour on the whole palette is what "everything is consistent" bought.
-
-     AND THERE IS NO PER-SCHEME INK TO BRIDGE THE GAP EITHER. The natural
-     per-scheme answer in it would be near-black on light paper and white on
-     dark, but the FAB is opaque and identical in both — at L* 52 it measures
-     3.85 against the near-black and 3.96 against the white, so a fill that
-     flips its glyph by scheme fails on that button in BOTH of them. One ink
-     per accent is not a simplification, it is the only thing the FAB permits.
-
-     RUBY AND ROSE ARE SEPARATED BY DEPTH ALONE, which is the corner a band
-     recipe paints you into: it re-pins lightness and clamps chroma, so two
-     accents 1.1 degrees apart have nothing else left to differ in. Seven
-     points is what that costs — #f47ba5 against #f799ba, a red-leaning pink
-     under a lighter one, adjacent in the swatch grid so they are read side by
-     side. Rose does NOT simply go to BAND_LSTAR and drop its recipe: its hex
-     is duller than the 0.85 clamp, so an inherited band paints #f0a4bf and the
-     declaration is buying chroma, not just lightness.
-
-     Ocean lands at 65, which is ruby's number and ruby's argument read in a
-     different hue: the deepest a blue goes while the + stays the near-black
-     every other accent's is. Its HEX does not move — it is doing the two jobs a declared band leaves it (the
-     .ambient wash paints it straight, heartsFrom re-pins it), it was already
-     tuned for the first, and its wash figures are the ones measured for 1.1. So
-     the button deepens and the profile page stays the blue it has been, which
-     is the hex/band parting below arriving for a third accent. Final: ocean
-     4.68 / 7.08 / 6.09 (thin-on-dark, thin-on-light, opaque FAB).
-
-     THE HEX AND THE BAND HAVE FULLY PARTED HERE, which the disc note below
-     already half-said. A declared band takes its lightness and chroma from the
-     recipe, so the hex is left doing only the two jobs the band never did: the
-     .ambient wash paints it STRAIGHT, and heartsFrom re-pins it. All three
-     hexes are therefore tuned for the WASH, not for the button — which is why
-     they look duller than the band they produce, and why none of them is 0.85
-     saturated even though all three bands are. Wash --wash-ink-soft, the ink
-     this palette is capped by: rose 5.50 / 5.38 light+dark profile, ruby 4.36
-     / 6.10. Ruby's weakest of the four wash figures is 3.90 (light publish),
-     above the 3.55 cyan has shipped since 1.1, so it is the palette's floor
-     rather than a new low. Ocean's hex is unchanged, so its wash figures are
-     the ones this palette already shipped with.
-
-     TWO THINGS THE DEPTH COSTS, both accepted. A deep band no longer matches
-     its own heart on dark paper — HEART_LSTAR_DK is BAND_LSTAR by reference
-     and stays there, and a heart re-pinned to 74 is nine points off a band at
-     65. It stays there anyway: the heart is a small mark on ink and following
-     a band down is the lime-heart bug with the colours swapped, which is a
-     worse failure than a mark a shade brighter than the button. And ruby's
-     key is NEW, so it is the one accent
-     an older client cannot read; it falls through to the photo/brand default,
-     which is a colour rather than a break. Rose keeps the key 'rose' precisely
-     because `users.accent` already holds it for everyone who picked the old
-     one, and they land on the rose above rather than on nothing — and
-     ocean keeps its key for the same reason, so an older client meeting a
-     deepened ocean simply paints the light one it already knows. */
-  /* ORDER IS THE SPECTRUM, and the grid is 3x3, so each row is a temperature.
-     Sorted by hue starting at the red end and running up the wheel — 350, 15,
-     40, 83, 158, 188, 218, 255 — which deals warm / green / cool as the three
-     rows and is the same monotonic-hue argument --brand-band's four stops
-     already answer to. Ruby and rose are 1.1 degrees apart, which is nothing,
-     so DEPTH breaks that tie and the true red leads the pink. Nothing reads
-     this array by index (the picker maps it, everything else goes through
-     accentOf on the stored KEY), so the order is presentation only. */
+     KEYS DON'T MOVE. users.accent stores the key, so a new label is free and a
+     new key strands everyone who picked the old one (an older client meeting
+     an unknown key falls back to the photo). That is why Blush is still
+     'rose'. */
+  /* ORDER IS THE SPECTRUM, and the grid is 3x3, so each row is a temperature:
+     warm, green, cool. Ruby and rose share a hue, so DEPTH breaks that tie and
+     the true red leads the pink. Nothing reads this array by index (the picker
+     maps it, everything else goes through accentOf on the stored KEY), so the
+     order is presentation only. */
   const ACCENTS = [
-    { key: 'ruby',     label: 'Ruby',     hex: '#c32842', band: { lstar: 65, sat: 0.85 } },
-    { key: 'rose',     label: 'Rose',     hex: '#ea7b8e', band: { lstar: 72, sat: 0.85 } },
-    { key: 'coral',    label: 'Coral',    hex: '#f2a58c' },   // = --type-find
-    { key: 'amber',    label: 'Amber',    hex: '#e8c07d' },
-    { key: 'lime',     label: 'Lime',     hex: '#b9df7d' },   // = --type-activity
-    { key: 'jade',     label: 'Jade',     hex: '#8fdcc0' },
-    { key: 'cyan',     label: 'Cyan',     hex: '#88e4f2' },   // truer, brighter cyan, hue 188
-    { key: 'ocean',    label: 'Ocean',    hex: '#5f95f2', band: { lstar: 65, sat: 0.85 } },
-    { key: 'lavender', label: 'Lavender', hex: '#b7a6e8' },   // = --type-note
+    { key: 'ruby',     label: 'Ruby',     hex: '#df2a48' },
+    { key: 'rose',     label: 'Blush',    hex: '#ef6b81', ink: '#eb4561' },
+    { key: 'coral',    label: 'Coral',    hex: '#fb7c46' },
+    { key: 'amber',    label: 'Amber',    hex: '#fdb435', ink: '#eb9500' },
+    { key: 'lime',     label: 'Lime',     hex: '#abe64c', ink: '#67a503' },
+    { key: 'jade',     label: 'Jade',     hex: '#54e89c', ink: '#1f9457' },
+    { key: 'cyan',     label: 'Cyan',     hex: '#52def4', ink: '#119bb0' },
+    { key: 'ocean',    label: 'Ocean',    hex: '#367df8' },
+    { key: 'lavender', label: 'Lavender', hex: '#8564e8' },
   ];
   const accentOf = (key) => ACCENTS.find(x => x.key === key) || null;
 
@@ -15200,61 +15090,26 @@
     return m ? { r: +m[1], g: +m[2], b: +m[3] } : null;
   }
 
-  /* An accent becomes a BAND, and it is renormalised on the way. That second
-     part is a contrast requirement, not a taste one.
+  /* A PHOTO COLOUR becomes a band, and it is renormalised on the way, because
+     it is an average rather than a decision. glowNorm pins a sample to HSL
+     0.55, which is right for a wash sitting behind nothing and wrong under
+     text, where a saturated blue at that weight measures 2.30 against
+     --on-type. So a sample is pinned to one PERCEPTUAL weight here, L* 74,
+     which is also the only reason the photo option can touch a button at all.
 
-     --on-type (#14171a) is the ink sitting on this fill, and the two accent
-     sources arrive at completely different weights. A palette pick is a pastel.
-     A photo sample is not — glowNorm pins it to HSL 0.55, which is right for a
-     wash sitting behind nothing and wrong under text, where a saturated blue at
-     that weight measures 2.30 against the ink, well under AA. So neither source
-     is trusted: both are pinned to one weight here, which is also the only
-     reason the photo option can touch a button at all.
+     A PALETTE PICK no longer comes through here (see ACCENTS and bandAround):
+     its hex is the colour, and the ink is measured against it rather than the
+     fill being moved to suit one ink. This number used to govern the palette
+     too, with ruby, rose and ocean declaring their own at 65 and 72.
 
-     Three stops a little either side of the chosen hue rather than one flat
-     colour, so the fill reads as an object and not as a swatch. Sixteen degrees
-     is enough to see and not enough to look like a second colour joined in. */
-  /* DEEP, and normalised PERCEPTUALLY — which is one change, because the second
-     half is what makes the first half possible.
+     L* rather than HSL lightness, because HSL is not perceptual: 0.78 lands
+     lavender at L* 71.7 and lime at L* 89.0. 74 was a settlement between a pale
+     80.5 and a deep 68. --on-type rides the fill thinned over dark paper, which
+     measures 6.01 at L* 74 across the wheel and gives out at about 64.
 
-     The band used to be pinned to HSL lightness 0.78, "the quintet's pastel
-     weight". HSL lightness is not perceptual: the same 0.78 lands lavender at
-     L* 71.7 and lime at L* 89.0, nearly white, because the eye reads green as
-     far brighter than blue at equal HSL L. So the eight accents were spread
-     over 17 points of real lightness, and the palest of them had no room to be
-     deepened at all — anything that moved lime somewhere reasonable pushed
-     lavender through the contrast floor.
-
-     Pinning L* instead lands every accent at the same visible weight, and once
-     they are level the whole set can come down together. 80.5 average to a flat
-     74 — lime moves 15 points, jade 12, cyan 9 — so a reader who picks Ocean
-     gets a blue button rather than a blue wash, which is the entire point of
-     choosing a colour.
-
-     74 IS A SETTLEMENT between two versions that both shipped for an afternoon:
-     the old pale 80.5 and a deep 68. 68 was the floor rather than the answer —
-     it read as a different app's button rather than as Tria's in a colour.
-
-     THE FLOOR IS REAL THOUGH, so here is where it is. --on-type (#14171a) rides
-     this fill and the binding surface is the thinned one on dark paper (Share,
-     Post, Save at --pill-alpha over #0e1012; the FAB is opaque and never the
-     hard case). Measured across every hue on the wheel: 6.01 at L* 74, 5.05 at
-     68, 4.62 at 65, and 4.33 — a fail — at 63. Deeper than 68 needs a lighter
-     ink, which is a second ink rule and a bigger change than it looks.
-
-     THIS NUMBER GOVERNS SIX ACCENTS RATHER THAN NINE, because ruby, rose and
-     ocean declare their own band (see ACCENTS) and a declared lstar REPLACES
-     this one. They are not exceptions to the ink rule, though — all three sit
-     at or above 65, i.e. just above where --on-type gives out, which is the
-     same cliff this paragraph measures rather than a second one. The floor
-     still binds everything that does NOT declare a band, which is the other
-     six accents and every sampled photo colour, so moving 74 is still moving
-     most of the palette.
-
-     The brand ramp deliberately does NOT follow this down (see --band-deepen in
-     tokens.css). An accent is a colour standing in FOR the brand and can be as
-     deep as it likes; the brand gradient is the app signing its own name, and
-     it reads bright. */
+     The brand ramp deliberately does NOT follow this (see --band-deepen in
+     tokens.css): the brand gradient is the app signing its own name, and it
+     reads bright. */
   const BAND_LSTAR = 74;
 
   // Relative luminance, then CIE L* from it — the same two steps every contrast
@@ -15282,73 +15137,74 @@
     return hslToRgb(h, s, (lo + hi) / 2);
   }
 
-  /* How far either side of the chosen hue the band travels — and it is 11 rather
-     than the 16 it was because 32 degrees of sweep is wider than this palette's
-     own spacing. Measured: cyan and ocean sat 20.8 degrees apart, so their bands
-     OVERLAPPED and each ended partway through the other; rose's red end and
-     coral's pink end came within 6.7. Two accents that share colours are two
-     accents a reader cannot choose between, which is the whole job of a palette.
-     The hues moved too (see ACCENTS), and at 22 degrees of span every neighbour
-     now clears: the tightest pairs are coral to amber at 22.9 and rose to coral
-     at 24.7. Widening this again re-opens both. */
+  /* How far either side of the chosen hue the band travels. 11 rather than the
+     16 it was, because 32 degrees of sweep was wider than the palette's own
+     spacing and neighbouring bands painted each other's colours. The tightest
+     pair now is coral to amber, 20.2 degrees, so their outer stops touch by
+     about two degrees; the centres are what a reader tells apart. */
   const BAND_ARC = 11;
-  /* `recipe` is an accent's optional {lstar, sat} — see ACCENTS, where ruby,
-     rose and ocean declare one. A declared value REPLACES the derivation rather than
-     capping it: the clamp is a ceiling, so `Math.min(0.85, hex's own 0.66)`
-     would quietly hand back 0.66 and paint a duller band than the one asked
-     for. Absent, which is the case for the other six and for every sampled
-     photo colour, is the behaviour that has always been here. */
-  function bandFrom(rgb, recipe) {
+  // A PHOTO sample's band: pinned to BAND_LSTAR, saturation clamped into a
+  // range that reads at that weight. The offsets are in L* too, a point and a
+  // half up one side and three down the other.
+  function bandFrom(rgb) {
     const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-    const lstar = recipe && recipe.lstar != null ? recipe.lstar : BAND_LSTAR;
-    const sat = recipe && recipe.sat != null
-      ? recipe.sat
-      : Math.max(0.42, Math.min(0.72, hsl.s));
-    // The offsets are in L* now too, so the sweep is as even as the weight is:
-    // a point and a half up one side, three down the other, which is the same
-    // gentle curve the HSL version was reaching for.
+    const sat = Math.max(0.42, Math.min(0.72, hsl.s));
     const stop = (dh, dl) => {
-      const c = atLStar((hsl.h + dh / 360 + 1) % 1, sat, lstar + dl);
+      const c = atLStar((hsl.h + dh / 360 + 1) % 1, sat, BAND_LSTAR + dl);
       return `rgb(${c.r}, ${c.g}, ${c.b})`;
     };
     return `linear-gradient(115deg, ${stop(-BAND_ARC, 1.5)}, ${stop(0, 0)}, ${stop(BAND_ARC, -3)})`;
   }
-  /* The band a palette KEY paints, recipe and all. One home for it, because the
-     picker draws these discs and paintBrandBand stamps them, and a disc that
-     previewed the underived band would be the "pale swatch promising a button
-     it no longer produces" bug the disc note below is already about. */
+  /* A PALETTE hex's band: the same three-stop shape, with the hex itself as
+     the middle stop, unmoved. The two outer stops turn the hue BAND_ARC either
+     way at the hex's own saturation and its own L* (up a point and a half,
+     down three), so the sweep reads as the hex rather than as a second colour
+     joining it. The middle stop is also what native tints the glass with
+     (bandFill), so the glass is the hex exactly. */
+  function bandAround(rgb) {
+    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    const l = lStar(rgb);
+    const side = (dh, dl) => {
+      const c = atLStar((hsl.h + dh / 360 + 1) % 1, hsl.s, l + dl);
+      return `rgb(${c.r}, ${c.g}, ${c.b})`;
+    };
+    return `linear-gradient(115deg, ${side(-BAND_ARC, 1.5)}, rgb(${rgb.r}, ${rgb.g}, ${rgb.b}), ${side(BAND_ARC, -3)})`;
+  }
+  // The band a palette KEY paints. One home, because the picker's discs and
+  // paintBrandBand both draw it and must be the same band.
   const accentBand = (key) => {
     const a = accentOf(key);
-    return a ? bandFrom(cssToRgb(a.hex), a.band) : null;
+    return a ? bandAround(cssToRgb(a.hex)) : null;
   };
 
-  /* The same accent as a LIKED HEART, which needs two answers rather than one.
-     A heart is a filled mark on the page, not a fill with ink on top, so it is
-     the opposite problem to the band: it has to be dark enough to read ON paper
-     in light mode and light enough to read on dark paper in dark mode. The type
-     hearts already answer it that way — an ink twin nudged toward its pastel in
-     light, the bare pastel in dark — so an accent heart follows the same rule
-     instead of inventing a third.
+  /* THE INK ON A PALETTE FILL, measured rather than assumed, once per scheme:
+     near-black (--on-type) or near-white, whichever reads better on the hex
+     thinned to --pill-alpha over that scheme's paper, the capsule's case and
+     the harder one. The papers and the alpha are tokens.css's (--bg, both
+     schemes; --pill-alpha); they are written out here because this runs
+     before any element exists to read them from, and change with them.
+     Measured for the shipped palette in the ACCENTS note. */
+  const INK_PAPER = { lt: '#edeef0', dk: '#0e1012' };
+  const INK_ALPHA = 0.85;
+  const INK_DARK = '#14171a', INK_LIGHT = '#f5f6f8';
+  function accentInk(rgb, paper) {
+    const p = cssToRgb(paper);
+    const fill = {
+      r: rgb.r * INK_ALPHA + p.r * (1 - INK_ALPHA),
+      g: rgb.g * INK_ALPHA + p.g * (1 - INK_ALPHA),
+      b: rgb.b * INK_ALPHA + p.b * (1 - INK_ALPHA),
+    };
+    const ratio = (c) => { const x = relLum(c) + 0.05, y = relLum(fill) + 0.05; return x > y ? x / y : y / x; };
+    return ratio(cssToRgb(INK_DARK)) >= ratio(cssToRgb(INK_LIGHT)) ? 'var(--on-type)' : INK_LIGHT;
+  }
 
-     AND IT IS PINNED IN L* FOR THE SAME REASON THE BAND IS, which is the half
-     that was actually broken. These were HSL 0.52 and 0.78, and HSL lightness
-     is not perceptual, so the eight accents landed 43 points apart on paper: a
-     lavender heart at L* 37.0 and a LIME HEART AT L* 80.2, which measures 1.3
-     against #edeef0 and is effectively invisible. Picking Lime turned your
-     likes off. Pinned instead, every accent measures 3.46-3.50 on paper and
-     9.37-9.43 on ink — inside the per-type hearts' own range either way (3.02
-     to 4.04, and 7.73 to 12.63), so an accent heart sits where a type heart
-     sits rather than somewhere the palette happened to put it.
-
-     53 in light is the per-type hearts' mean; 74 in dark is THE BAND'S OWN
-     WEIGHT, which is the cohesion worth having: on dark paper your heart and
-     your Post button are the same colour at the same weight, because they are
-     the same fact about you. Light can't join them — a mark at 74 vanishes into
-     paper, which is the bug above — so it drops to where the marks live.
-
-     Both are computed here and stamped as two properties, so tokens.css can
-     pick one per scheme and nothing in JS has to know which scheme is on or
-     listen for it changing. */
+  /* A PHOTO sample as a LIKED HEART, which needs two answers: dark enough to
+     read on paper, light enough to read on ink. Pinned in L* for the reason
+     the band is, since a sample can land anywhere: 53 on paper (the per-type
+     hearts' mean, ~3.5 against #edeef0) and 74 on ink (the band's own weight).
+     A palette pick doesn't come through here; its hearts are its hex, or its
+     `ink` twin on paper (see ACCENTS). Both answers are stamped, so tokens.css
+     picks one per scheme and no JS has to know which scheme is on. */
   const HEART_LSTAR_LT = 53;
   const HEART_LSTAR_DK = BAND_LSTAR;
   function heartsFrom(rgb) {
@@ -15373,17 +15229,17 @@
     if (key === bandKey) return;
     bandKey = key;
     const seq = ++bandSeq;
-    // One accent, three stamped properties: the button band and the two heart
-    // weights. Set and cleared together — a half-applied accent (glass in your
-    // colour, hearts still per-type) would read as a bug rather than a theme.
-    // Removing all three is how the DEFAULT source is expressed: --pill-band
+    // One accent, five stamped properties: the button band, the two heart
+    // weights and the two inks. Set and cleared together — a half-applied accent
+    // (glass in your colour, hearts still per-type) would read as a bug rather
+    // than a theme. Removing them is how the DEFAULT source is expressed: --pill-band
     // falls back to the brand ramp on its own, so there is no branch for it in
     // CSS and nothing to keep in step with tokens.css.
-    const stamp = (band, heartLt, heartDk, ink, mark) => {
+    const stamp = (band, heartLt, heartDk, inkLt, inkDk, mark) => {
       if (seq !== bandSeq) return;
       const el = document.documentElement;
       if (!band) {
-        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink', '--type-mark']
+        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk', '--type-mark']
           .forEach(p => el.style.removeProperty(p));
         /* AND TRIA'S OWN RAMP IS A REPAINT TOO, which this branch used to
            return past. Removing the properties is how the default expresses
@@ -15418,14 +15274,15 @@
          token total, and the fallback then means exactly one thing: nobody
          stamped a band here.
 
-         An ACCENTS entry MAY carry an `ink` of its own (ruby shipped a white
-         one for a day, at L* 44), and that path is kept live because it is the
-         only thing that makes a band below L* 65 legible at all — see the
-         two-zone note in ACCENTS. Either way it is stamped from HERE, in the
-         same call that sets the fill, for the reason --mono-band always was: a
-         glyph arriving a frame after its band is a + you cannot see, on every
-         route. */
-      el.style.setProperty('--user-ink', ink || 'var(--on-type)');
+         TWO OF THEM, one per scheme, the way the hearts are: a palette hex is
+         measured against each paper (accentInk), and a deep one takes the
+         near-white on ink and the near-black on paper. tokens.css resolves
+         --user-ink from whichever is live, so no JS has to know the scheme.
+         Stamped from HERE, in the same call that sets the fill, for the reason
+         --mono-band always was: a glyph arriving a frame after its band is a +
+         you cannot see, on every route. */
+      el.style.setProperty('--user-ink-lt', inkLt);
+      el.style.setProperty('--user-ink-dk', inkDk);
 
       /* THE POST-TYPE MARKS GO MONOCHROME UNDER A CHOSEN COLOUR, and the split
          is not which sources are colourful — it is which ones the QUINTET is
@@ -15466,23 +15323,24 @@
       else el.style.removeProperty('--type-mark');
 
       /* The native + wears this band too, and it is repainted HERE for the same
-         reason --user-ink is stamped in this call rather than the next one: a
+         reason the inks are stamped in this call rather than the next one: a
          fill and the chrome wearing it arriving a frame apart reads as a bug.
          Native holds resolved numbers, so it has to be told; it cannot read a
          custom property. Silent everywhere but the App Store build. */
       NativeChrome.repaint();
     };
+    // `accent` is present for a palette pick and absent for a photo sample,
+    // which is also exactly the line --type-mark wants, so it doubles as the
+    // flag. A pick is its hex everywhere (its `ink` twin for marks on paper);
+    // a sample is derived, since it is an average rather than a decision.
     const set = (rgb, accent) => {
       if (!rgb) return stamp(null);
+      if (accent) {
+        return stamp(bandAround(rgb), accent.ink || accent.hex, accent.hex,
+                     accentInk(rgb, INK_PAPER.lt), accentInk(rgb, INK_PAPER.dk), true);
+      }
       const h = heartsFrom(rgb);
-      // The heart is deliberately NOT given the accent's band recipe: it has
-      // its own two weights, and following a band down would take the
-      // dark-mode mark toward the invisible-lime bug wearing red.
-      //
-      // `accent` is present for a palette pick and absent for a photo sample,
-      // which is exactly the line --type-mark wants, so it doubles as the flag.
-      stamp(bandFrom(rgb, accent && accent.band), h.lt, h.dk,
-            accent && accent.ink, !!accent);
+      stamp(bandFrom(rgb), h.lt, h.dk, 'var(--on-type)', 'var(--on-type)', false);
     };
 
     /* THREE SOURCES, and they are three because two of them were sharing an
@@ -15499,7 +15357,7 @@
     if (!me || me.accent === 'default') return set(null);
     if (me.accent === 'none') {
       return stamp('var(--mono-band)', 'var(--mono-heart)', 'var(--mono-heart)',
-                   'var(--mono-ink)', true);
+                   'var(--mono-ink)', 'var(--mono-ink)', true);
     }
     const picked = accentOf(me.accent);
     if (picked) return set(cssToRgb(picked.hex), picked); // synchronous, lands with the tap

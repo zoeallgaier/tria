@@ -3669,8 +3669,8 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   border-radius: 50%;
   display: grid; place-items: center;
   /* Every disc is filled by an inline background-image from openAccentSheet —
-     a palette disc wears the BAND it will paint (not the hex it is filed
-     under; those parted when accents were pinned to L* 74), Default wears
+     a palette disc wears the BAND it will paint (its hex in the middle, the
+     hue turned a little either side), Default wears
      --brand-band, Photo wears the avatar. Only None has no inline fill, and it
      is drawn by the struck-through rule below. background-size/position are for
      the photo. */
@@ -7049,17 +7049,13 @@ button.poll-option:disabled { cursor: default; }
    normalised to one weight and the margin widened to 6.04, and "rose" has since
    been reused for a different colour, so the sentence was wrong twice over. One
    home for the numbers, which is what the paragraph below already asks for.
-   0.85 buys visible translucency and still clears AA in both schemes with the
-   same ink, which is why there is no scheme fork for the text — and, as of
-   2026-08-24, no per-ACCENT fork either: every one of the nine wears this same
-   near-black +, because the two deep ones stop at L* 65, exactly where it
-   gives out. A fork WOULD be needed below that, and it still could not be a
-   per-scheme one: the natural answer in the gap between the two inks is
-   near-black on light paper and white on dark, but the FAB is OPAQUE and
-   identical in both schemes, so a fill that flipped its glyph by scheme fails
-   on that button in each of them (at L* 52 it measures 3.85 against the
-   near-black and 3.96 against the white). One ink per accent is what the FAB
-   permits, not a shortcut taken for tidiness. See ACCENTS for the two zones.
+   0.85 buys visible translucency and still clears AA in both schemes. The ink
+   is --pill-ink, and for a reader's colour it is measured PER SCHEME against
+   the hex thinned to this value (accentInk in app.js, as of 2026-09-10), so a
+   deep hex carries the near-white on ink and the near-black on paper. The note
+   that used to be here said the opaque FAB forbade a per-scheme ink, holding
+   its glyph to 4.5; that is the floor for text, and a glyph's is 3. The FAB's
+   worst is 3.57 (ocean on ink). See ACCENTS for the figures.
 
    They are declared in ONE rule on purpose. Every one of them holds still, and
    one drifting while the others held would read as a bug in whichever you saw
