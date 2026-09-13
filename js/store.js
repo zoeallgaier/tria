@@ -428,7 +428,7 @@ const Store = (() => {
     state.posts = core(p, 'posts', row => mapPost(row, nameById), state.posts);
     state.comments = core(c, 'comments', row => ({
       id: row.id, postId: row.post_id, author: nameById.get(row.author),
-      text: row.body, date: dateOf(row.created_at), _ts: row.created_at,
+      text: row.body, image: row.image || null, date: dateOf(row.created_at), _ts: row.created_at,
     }), state.comments);
     state.likes = core(l, 'likes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.likes);
     // Guarded like the four above, and for the same reason: these tables exist
@@ -1384,11 +1384,14 @@ const Store = (() => {
   // ── Comments (async writes) ─────────────────────────────────────────────────
   const commentsFor = (postId) => rowsFor(state.comments, postId);
 
-  async function addComment(postId, text) {
+  // `photo` is optional: { src, dims } off the comment bar, where `src` is a
+  // data URI — a JPEG the bar already re-encoded, or a GIF's original bytes —
+  // and `dims` its pixel size, stamped into the filename like a post photo's.
+  async function addComment(postId, text, photo = null) {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
     text = String(text || '').trim();
-    if (!text) return { ok: false, error: 'Say something first.' };
+    if (!text && !photo) return { ok: false, error: 'Say something first.' };
     const post = state.posts.find(p => p.id === postId);
     if (!post) return { ok: false, error: 'That post no longer exists.' };
     // Comments open on a PUBLIC post to anyone who can see it — Discover only
@@ -1397,10 +1400,26 @@ const Store = (() => {
     if (post.author !== me && !isFriend(post.author) && post.audience !== 'public')
       return { ok: false, error: 'You can only comment on friends’ posts.' };
 
-    const { data: c, error } = await sb.from('comments')
-      .insert({ post_id: postId, author: idOf(me), body: text }).select().single();
-    if (error) return { ok: false, error: 'Couldn’t post your comment, try again.' };
-    const added = { id: c.id, postId, author: me, text, date: dateOf(c.created_at), _ts: c.created_at };
+    // The picture goes up FIRST, so the row is never written pointing at a file
+    // that isn't there. `image` is only sent when there is one: a DB without the
+    // column (add-comment-images.sql) still takes every text comment.
+    const row = { post_id: postId, author: idOf(me), body: text };
+    if (photo) {
+      try { row.image = await uploadImage(photo.src, 'comment', photo.dims); }
+      catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
+    }
+    const { data: c, error } = await sb.from('comments').insert(row).select().single();
+    if (error) {
+      if (row.image) {
+        console.warn('[tria] comment with a photo refused:', error.code, error.message);
+        // Don't leave the upload behind with nothing pointing at it.
+        const path = /\/object\/public\/media\/(.+)$/.exec(row.image);
+        if (path) sb.storage.from('media').remove([decodeURIComponent(path[1])]).catch(() => {});
+      }
+      return { ok: false, error: 'Couldn’t post your comment, try again.' };
+    }
+    const added = { id: c.id, postId, author: me, text, image: c.image || null,
+                    date: dateOf(c.created_at), _ts: c.created_at };
     write('comments', cs => upsert(cs, added, x => x.id === added.id));
     return { ok: true, comment: added };
   }
@@ -1541,7 +1560,7 @@ const Store = (() => {
       author !== me && mentionRe.test(text || '') && areFriends(author, me);
     for (const c of state.comments) {
       if (mine.has(c.postId) && c.author !== me)
-        evts.push({ kind: 'comment', postId: c.postId, user: c.author, text: c.text, _ts: c._ts || '' });
+        evts.push({ kind: 'comment', postId: c.postId, user: c.author, text: c.text, image: c.image, _ts: c._ts || '' });
       else if (mentionsMe(c.text, c.author))
         evts.push({ kind: 'mention', postId: c.postId, user: c.author, text: c.text, _ts: c._ts || '' });
     }

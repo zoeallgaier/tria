@@ -389,6 +389,16 @@ it either way.
     `#/p/<id>?pane=likers` on somebody else's post falls back to comments through
     there and stamps the attribute onto the span, which is exactly what
     `.card-comment`'s accent rule matches.
+  - **A COMMENT CAN CARRY ONE PICTURE** (`comments.image`, added by
+    `supabase/add-comment-images.sql`, run 2026-09-13). A photo is re-encoded
+    on the device to a JPEG of at most 1600px; a GIF goes up as its original
+    bytes, capped at 15 MB, so it still moves. Both upload to `media` as
+    `{uid}/comment-<ts>-WxH.ext` BEFORE the row is written, and a refused
+    insert removes the file again. `body` stays not-null (an image-only comment
+    writes `''`), and `comments_not_empty` refuses a row with neither. The
+    thread sizes the picture off the `-WxH` stamp and opens it in the lightbox.
+    The push function needed no change: an empty body already falls back to
+    "Commented on your post".
   - **`wireComments` wires the THREAD, not a composer.** It guards on the panel
     and binds the delete rows and the pane switch; the box is the bar
     (`wirePostBar`). It binds `button.card-comment`, not `.card-comment`, so it

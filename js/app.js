@@ -1820,6 +1820,8 @@
       const faceX = form.querySelector('.postbar-face-x');
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const glyphEl = send ? send.querySelector('svg') : null;
+      const pick = form.querySelector('.postbar-pick');
+      const pickSvg = pick ? pick.querySelector('svg') : null;
       return {
         live: true,
         // A THREAD OR A LIST. The only fact over there that is a branch rather
@@ -1925,6 +1927,28 @@
         initials: find || !face ? '' : face.textContent.trim(),
         avatarBg: !find && faceCS ? toRgb(faceCS.backgroundColor) || '' : '',
         avatarInk: !find && faceCS ? toRgb(faceCS.color) || '' : '',
+        /* THE PHOTO BUTTON, which the find bar hasn't got, so every figure here
+           is 0 and native draws nothing. OFFSETS, not rects: the button carries
+           a transform while it stands in the idle disc's slot, and a rect would
+           report wherever that happens to have it. So the rect is taken and the
+           transform's own translation taken back off it (offsetLeft would do
+           that too, but rounds to whole pixels, and the step is 53.6). The step
+           into the disc's slot is the disc's width plus the row's gap, so native
+           can play the same move rather than be told two positions. */
+        pickLeft: pick
+          ? pick.getBoundingClientRect().left - box.left
+            - new DOMMatrix(getComputedStyle(pick).transform).m41
+          : 0,
+        pickSize: pick ? parseFloat(getComputedStyle(pick).width) || 0 : 0,
+        pickShift: pick && send
+          ? (parseFloat(getComputedStyle(send).width) || 0) + (parseFloat(cs.columnGap) || 0)
+          : 0,
+        pickGlyph: pickSvg ? pickSvg.outerHTML : '',
+        pickGlyphSize: pickSvg ? parseFloat(getComputedStyle(pickSvg).width) || 0 : 0,
+        pickInk: pick ? toRgb(getComputedStyle(pick).color) || '' : '',
+        pickLabel: pick ? pick.getAttribute('aria-label') || '' : '',
+        // A picture is waiting in the tray, so the disc is live with no words.
+        attached: bar.classList.contains('has-photo'),
         // 3× so the 26pt circle is sharp on every screen this ships to.
         photo: find ? '' : avatarPixels(photo, Math.round((faceBox ? faceBox.width : 26) * 3)),
       };
@@ -2027,6 +2051,9 @@
             });
           // The face tapped while typing: over there the field is already empty
           // and the keyboard already down, and this is the web's copy catching up.
+          // The photo button in the native pill. See postBarHooks.pick.
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarPick' }, () => { if (postBarHooks.pick) postBarHooks.pick(); });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'postBarDiscard' }, () => {
               if (postBarHooks.discard) postBarHooks.discard();
@@ -4517,6 +4544,61 @@
     });
   }
 
+  /* A PICTURE ON A COMMENT sits under its words, at a thread's size rather than
+     a card's: it is part of somebody's reply, not a post of its own. Its box
+     comes off the -WxH stamp in the filename (the same trick a post photo uses)
+     so the thread doesn't reflow as it lands, and a tap opens it in the viewer a
+     post photo opens in. A GIF is its original bytes, so it moves by itself. */
+  function commentPhotoHtml(c, name) {
+    if (!c.image) return '';
+    const d = imageDimsFromUrl(c.image) || { w: 4, h: 3 };
+    const w = Math.round(Math.min(220 / d.w, 240 / d.h) * d.w);
+    return `<button class="comment-photo" type="button" aria-label="Open ${name}’s photo" ` +
+        `style="width:${w}px;aspect-ratio:${d.w} / ${d.h}">` +
+        `<img src="${esc(c.image)}" alt="" loading="lazy" decoding="async">` +
+      `</button>`;
+  }
+
+  /* A picture picked for a comment, made ready to upload: { src, dims }, or
+     { error } with a line for the reader. A GIF keeps its original bytes, since
+     a canvas would flatten it to one frame (see initPhotoPreview), under a
+     ceiling sized for a reply rather than a post. Anything else is decoded and
+     re-encoded as a JPEG no longer than 1600px on its long edge, which is also
+     what turns an iPhone's HEIC into something every shell can draw. */
+  const COMMENT_GIF_BYTES = 15 * 1024 * 1024;
+  async function readCommentPhoto(f) {
+    if (f.type && !/^image\//.test(f.type)) return { error: 'That isn’t a photo. Try another.' };
+    const isGif = f.type === 'image/gif';
+    if (isGif && f.size > COMMENT_GIF_BYTES) return { error: 'That GIF is over 15 MB. Try a smaller one.' };
+    const url = URL.createObjectURL(f);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      if (!iw || !ih) return { error: 'Couldn’t read that photo. Try another.' };
+      if (isGif) {
+        const src = await new Promise((ok, no) => {
+          const r = new FileReader();
+          r.onload = () => ok(r.result);
+          r.onerror = no;
+          r.readAsDataURL(f);
+        });
+        return { src, dims: { w: iw, h: ih } };
+      }
+      const scale = Math.min(1, 1600 / Math.max(iw, ih));
+      const w = Math.max(1, Math.round(iw * scale));
+      const h = Math.max(1, Math.round(ih * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      return { src: canvas.toDataURL('image/jpeg', 0.82), dims: { w, h } };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   function commentItemHtml(c) {
     const u = Store.user(c.author);
     const name = esc(u ? u.name : c.author);
@@ -4530,6 +4612,7 @@
             `<a class="comment-name" href="#/u/${esc(encodeURIComponent(c.author))}">${name}</a> ` +
             richText(c.text, c.author) +
           `</p>` +
+          commentPhotoHtml(c, name) +
           `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
         `</div>` +
         // Delete uses the same trash glyph as the post controls (right-aligned).
@@ -4675,6 +4758,11 @@
     // form in here — so this function wires the thread's own controls and
     // nothing else. Guard on the PANEL, never on a form: there is no form here
     // to find, and a `if (!form) return;` would take the delete rows with it.
+    panel.querySelectorAll('.comment-photo').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const img = btn.querySelector('img');
+        openLightbox(img.currentSrc || img.src, '', false, img);
+      }));
     panel.querySelectorAll('.comment-delete').forEach(btn =>
       btn.addEventListener('click', () => {
         openSheet({
@@ -7655,11 +7743,13 @@
     delete NativeChrome.postBarHooks.send;
     delete NativeChrome.postBarHooks.focus;
     delete NativeChrome.postBarHooks.discard;
+    delete NativeChrome.postBarHooks.pick;
     document.body.classList.remove('postbar-live', 'postbar-kb');
     const bar = postBarEl();
     if (!bar) return;
     bar.hidden = true;
     bar.innerHTML = '';
+    bar.classList.remove('has-photo', 'is-sending');
     bar.style.removeProperty('--postbar-lift');
     NativeChrome.sync();
   }
@@ -7694,6 +7784,14 @@
           `<textarea name="text" rows="1" maxlength="300" placeholder="Add a comment…" ` +
             `aria-label="Add a comment"></textarea>` +
         `</div>` +
+        // A PHOTO OR A GIF, from the camera roll. A bare mark on the bar's own
+        // glass, like the find bar's clear, because picking a picture is not the
+        // commit; the disc beside it is. It stands in the disc's slot while there
+        // is nothing to send and steps aside once there is (see .postbar-pick).
+        `<button class="postbar-pick" type="button" aria-label="Add a photo or GIF">` +
+          svgIcon('image', 'postbar-pick-ico') +
+        `</button>` +
+        `<input class="postbar-file" type="file" accept="image/*" hidden>` +
         // aria-hidden rides with the idle state (see syncSend) rather than being
         // stamped here: an empty bar has no send, and announcing one is worse
         // than hiding it.
@@ -7840,7 +7938,11 @@
     const input = bar.querySelector('textarea');
     const send  = bar.querySelector('.postbar-send');
     const face  = bar.querySelector('.postbar-face');
+    const pick  = bar.querySelector('.postbar-pick');
+    const file  = bar.querySelector('.postbar-file');
     wireMentions(input);
+    // The picture waiting to go with the words: { src, dims } off readCommentPhoto.
+    let photo = null;
 
     // One line at rest, growing to fit (like the composer and like the box this
     // replaced), so a long comment wraps into view instead of scrolling off the
@@ -7852,14 +7954,70 @@
     };
     // `disabled` blocks the empty submit; `.is-idle` is what takes the disc off
     // the screen. Both flip together so a visible send is always a live one.
+    // A picture on its own is something to send, the same as words are.
+    // `.is-empty` on the form is what moves the photo button into the disc's
+    // slot while the disc isn't there.
     const syncSend = () => {
-      const has = !!input.value.trim();
+      const has = !!input.value.trim() || !!photo;
       send.disabled = !has;
       send.classList.toggle('is-idle', !has);
       send.setAttribute('aria-hidden', String(!has));
+      form.classList.toggle('is-empty', !has);
     };
     input.addEventListener('input', () => { syncSend(); autoGrow(); });
     syncSend();
+
+    /* ── The picture ──────────────────────────────────────────────────────────
+       A chosen photo waits ABOVE the bar, in a tray hung where the mention list
+       hangs, rather than inside the pill: the pill is native in the app and a
+       thumbnail is content, and content stays web. The tray's own X takes it
+       back off; so does the face's discard, which throws the whole comment away.
+       Native only needs to know THAT there is one, because a picture with no
+       words still lights the send disc; that crosses as `attached` on the spec,
+       which is why every change here asks NativeChrome to sync. */
+    const tray = document.createElement('div');
+    tray.className = 'postbar-attach';
+    tray.hidden = true;
+    bar.appendChild(tray);
+    const setPhoto = (next) => {
+      photo = next;
+      tray.hidden = !next;
+      bar.classList.toggle('has-photo', !!next);
+      tray.innerHTML = next
+        ? `<div class="postbar-attach-chip">` +
+            `<img alt="Photo to post">` +
+            `<button class="postbar-attach-x" type="button" aria-label="Remove photo">` +
+              svgIcon('close', 'postbar-attach-ico') +
+            `</button>` +
+          `</div>`
+        : '';
+      if (next) {
+        // A data URI can run to megabytes, so it goes on the element directly
+        // rather than through a template and an escape.
+        tray.querySelector('img').src = next.src;
+        const x = tray.querySelector('.postbar-attach-x');
+        x.addEventListener('mousedown', (e) => e.preventDefault());
+        x.addEventListener('click', () => setPhoto(null));
+      }
+      syncSend();
+      NativeChrome.sync();
+    };
+    // Neither control takes focus, for the send disc's reason (see below): the
+    // caret stays in the field through the tap.
+    pick.addEventListener('mousedown', (e) => e.preventDefault());
+    pick.addEventListener('click', () => { if (!pick.disabled) file.click(); });
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      file.value = '';            // so picking the same picture again still fires
+      if (!f) return;
+      const ready = await readCommentPhoto(f).catch(() => null);
+      if (!form.isConnected) return;   // the reader left the page while it decoded
+      if (!ready || ready.error) {
+        toast((ready && ready.error) || 'Couldn’t read that photo. Try another.');
+        return;
+      }
+      setPhoto(ready);
+    });
 
     /* ── Backing out ──────────────────────────────────────────────────────────
        Two ways down off this bar, and they mean different things.
@@ -7883,6 +8041,7 @@
     };
     const discard = () => {
       input.value = '';
+      setPhoto(null);
       syncSend();
       autoGrow();
       input.blur();
@@ -7967,6 +8126,11 @@
     // debounce and every error path below are reached by the same submit a tap
     // on the web disc would have made.
     NativeChrome.postBarHooks.send = () => form.requestSubmit();
+    // Native's photo button, tapped over there. The same click the web button
+    // makes, so the picker, the checks and the tray are one path. It arrives
+    // through evaluateJavaScript, which WebKit runs as a user gesture, and that
+    // is what lets a file input open from a tap the page never saw.
+    NativeChrome.postBarHooks.pick = () => pick.click();
     // The native field's own focus, which the hidden textarea never gets. It has
     // to mean both of the things a web focus means here: walk the page to the
     // thread, and turn the face into the way out.
@@ -7976,6 +8140,7 @@
     // the web's copy of the words.
     NativeChrome.postBarHooks.discard = () => {
       input.value = '';
+      setPhoto(null);
       syncSend();
       autoGrow();
       syncFace(false);
@@ -7992,7 +8157,14 @@
       e.preventDefault();
       if (send.disabled) return;                    // empty, or a submit already in flight
       send.disabled = true;                         // debounce: no double-post on a fast double-tap
-      const res = await Store.addComment(post.id, input.value).catch(() => null);
+      // A picture has to upload before the row is written, which is long enough
+      // to see, so the tray dims and neither it nor the photo button can change
+      // what is already on its way.
+      pick.disabled = true;
+      bar.classList.add('is-sending');
+      const res = await Store.addComment(post.id, input.value, photo).catch(() => null);
+      pick.disabled = false;
+      bar.classList.remove('is-sending');
       if (res && res.ok) {
         // The like heart has buzzed on its confirmed write since the haptics
         // landed; its neighbour on the same row never did, which left the two
@@ -8000,6 +8172,7 @@
         // comment lands on the screen, not in the world.
         hapticTap('LIGHT');
         input.value = '';
+        setPhoto(null);                             // empties the tray, and tells native
         syncSend();                                 // empties the field, idles the disc
         autoGrow();
         input.blur();
@@ -8017,6 +8190,10 @@
       // mean the same thing to the person tapping, and a send disc left disabled
       // over words still sitting in the field is a control that does nothing,
       // forever, from one dropped connection.
+      //
+      // A failed picture says so. Words left in the field explain themselves; a
+      // photo that silently didn't go reads as one that did.
+      if (photo) toast((res && res.error) || 'Couldn’t post your comment, try again.');
       syncSend();
     });
 
@@ -11980,7 +12157,9 @@
     // text is empty, so the line simply doesn't appear.
     const said = (n.kind === 'comment' || n.kind === 'mention' || n.kind === 'repost')
       ? notePlain(n.text) : '';
-    const quote = esc(said.length > 90 ? said.slice(0, 90).trimEnd() + '…' : said);
+    // A comment that is only a picture has no words to quote, so it says what it is.
+    const shown = said || (n.kind === 'comment' && n.image ? 'Sent a photo.' : '');
+    const quote = esc(shown.length > 90 ? shown.slice(0, 90).trimEnd() + '…' : shown);
     // NOTE the fallthrough here is `going`, not an error — a kind added in
     // store.js without an arm in this chain renders "is going to" and nothing
     // complains. Any new kind has to land above this line.

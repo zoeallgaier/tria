@@ -3044,6 +3044,21 @@ main {
 @media (hover: hover) { .comment-name:hover { color: var(--muted); } }
 .comment-meta { font-size: 0.73rem; color: var(--muted); margin-top: 0.1rem; }
 .comment-meta .dot { opacity: 0.5; margin: 0 0.15rem; }
+/* A picture on a comment: under the words, at a reply's size. The width and the
+   aspect ratio arrive inline off the filename's -WxH stamp (commentPhotoHtml), so
+   the box is the picture's shape before a byte of it has landed, and the tint
+   underneath is what shows while it does. */
+.comment-photo {
+  display: block;
+  max-width: 100%;
+  margin-top: 0.4rem;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+.comment-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* Delete — the same trash glyph and muted→red treatment as the post delete
    control, right-aligned to the thread edge, aligned to the comment's top line. */
 .comment-delete {
@@ -3400,6 +3415,89 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .postbar-clear-ico { width: 19px; height: 19px; }
 @media (hover: hover) { .postbar-clear:hover { color: var(--text); } }
 .postbar-clear:active { color: var(--text); }
+
+/* THE PHOTO BUTTON — the clear's material for the clear's reason: picking a
+   picture is not the commit, the disc is, so this is a bare mark on the bar's
+   own glass at the disc's 44. While there is nothing to send the disc isn't
+   there, and a hole at the end of the bar reads as something missing, so the
+   button stands in the disc's slot and steps aside the moment there is. A
+   TRANSFORM, not a margin, so the field is one width in both states and native
+   measures one box (see pickShift in postBarSpec). */
+.postbar-pick {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: var(--postbar-disc);
+  height: var(--postbar-disc);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: transform var(--dur-quick) var(--ease), color var(--dur-micro) var(--ease);
+}
+.postbar-pick-ico { width: 21px; height: 21px; }
+.postbar-form.is-empty .postbar-pick { transform: translateX(calc(var(--postbar-disc) + 0.6rem)); }
+@media (hover: hover) { .postbar-pick:hover { color: var(--text); } }
+.postbar-pick:active { color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .postbar-pick { transition: color var(--dur-micro) var(--ease); }
+}
+
+/* The picture waiting to go, hung above the bar where the mention list hangs.
+   It is content, so it stays web in the app too (see the native gate below). */
+.postbar-attach {
+  position: absolute;
+  left: 2rem;
+  right: 2rem;
+  bottom: 100%;
+  max-width: var(--feed-width);
+  margin: 0 auto 0.6rem;
+  pointer-events: none;
+}
+.postbar-attach[hidden] { display: none; }
+.postbar-attach-chip {
+  position: relative;
+  display: inline-block;
+  margin-left: 0.4rem;
+  border-radius: 14px;
+  box-shadow: var(--glass-lift);
+  pointer-events: auto;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.postbar-attach-chip img {
+  display: block;
+  height: 88px;
+  width: auto;
+  max-width: 168px;
+  object-fit: cover;
+  border-radius: inherit;
+  border: var(--glass-edge);
+}
+.postbar-attach-x {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: var(--glass-edge);
+  border-radius: 50%;
+}
+/* 44 of target under 26 of mark, the face's own trick. */
+.postbar-attach-x::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; }
+.postbar-attach-ico { width: 14px; height: 14px; }
+/* On its way up: dimmed, and no longer something you can take back. */
+.postbar.is-sending .postbar-attach-chip { opacity: 0.55; }
+.postbar.is-sending .postbar-attach-x { visibility: hidden; }
+/* A mention picked while a photo waits opens above the photo, not over it. */
+.postbar.has-photo .mention-list { margin-bottom: calc(0.6rem + 88px + 0.6rem); }
 
 /* THE SEND DISC — the FAB's job on this route, so it wears the FAB's material
    in the same corner of the same screen. It is a member of the primary-act set
@@ -8299,7 +8397,8 @@ button.poll-option:disabled { cursor: default; }
   /* The keyboard's answer to that inset is `body.postbar-kb` up in the base
      block, at (0,2,0) — it beats this shorthand on specificity from anywhere in
      the file, so it does not need restating here. */
-  .postbar .mention-list { left: 0.9rem; right: 0.9rem; }
+  .postbar .mention-list,
+  .postbar .postbar-attach { left: 0.9rem; right: 0.9rem; }
 
   /* The desktop figure plus the inset, which is the only part that differs —
      `main`'s own 96px here was measured for the nav pill and the FAB, and the
@@ -9225,7 +9324,8 @@ html[data-chrome="native"] .postbar .postbar-form {
 
    The fallback is the resting bar's own height, for the frames between mounting
    and the first measurement landing. */
-html[data-chrome="native"] .postbar .mention-list {
+html[data-chrome="native"] .postbar .mention-list,
+html[data-chrome="native"] .postbar .postbar-attach {
   bottom: var(--native-postbar-lift, 96px);
 }
 

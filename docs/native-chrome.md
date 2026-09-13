@@ -1391,6 +1391,36 @@ everything downstream of `UIButton → onSend` is the submit handler that alread
 shipped. The two gestures are `UIScrollView.keyboardDismissMode` and a
 `UITapGestureRecognizer`, and they want a device.
 
+### The photo button, and the picture it leaves in a tray
+
+**A comment can carry a photo or a GIF** (2026-09-13), and the bar gained one
+control for it: `.postbar-pick`, a bare image mark between the field and the
+send disc, drawn natively as the pill's `pick` button. It wears the find bar's
+clear material for the clear's reason: picking a picture is not the commit.
+
+**It stands in the disc's slot while the disc is idle** and steps aside once
+there is something to send. On the web that is a `transform` on
+`.postbar-form.is-empty`, not a margin, so the field is ONE width in both states
+and `textWidth` stays a single measurement. Native plays the same move from two
+numbers, `pickLeft` (the untransformed box, the rect with the transform's own
+`m41` taken back off, because `offsetLeft` rounds a 53.6 step to 53) and
+`pickShift` (the disc's width plus the row's gap).
+
+**The tap crosses, the picker does not.** `postBarPick` lands on
+`postBarHooks.pick`, which clicks the web button, which clicks the hidden
+`<input type="file">`. That opens from a tap the page never saw because
+Capacitor delivers the event through `evaluateJavaScript`, which WebKit runs as a
+user gesture. **Not yet exercised with a real finger**, for the reason under
+"Getting off the keyboard": if a device ever shows the picker failing to open,
+this is the assumption to check, and the fix is a `PHPickerViewController` in
+Swift handing back a data URI.
+
+**The chosen picture waits in a web tray** (`.postbar-attach`), hung above the
+pill off `--native-postbar-lift` exactly as the mention list is. A thumbnail is
+content, and content stays web. Native only needs to know THAT one is waiting,
+because a picture with no words still lights the disc: that is `attached` on the
+spec, and every change to the tray calls `NativeChrome.sync()` to send it.
+
 ## Three traps, all of them measured
 
 **`alpha` on the glass container does nothing you want.** Hiding the chrome for

@@ -118,7 +118,10 @@ create table public.comments (
   post_id    uuid not null references public.posts(id) on delete cascade,
   author     uuid not null references public.users(id) on delete cascade,
   body       text not null,
-  created_at timestamptz not null default now()
+  image      text,                          -- a photo or GIF's Storage URL (see add-comment-images.sql)
+  created_at timestamptz not null default now(),
+  -- Words, a picture, or both. Never neither.
+  constraint comments_not_empty check (btrim(body) <> '' or image is not null)
 );
 
 -- ── Likes ───────────────────────────────────────────────────────────────────

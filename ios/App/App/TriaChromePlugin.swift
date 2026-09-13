@@ -360,6 +360,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 bar.onDiscard = { [weak self] in
                     self?.notifyListeners("postBarDiscard", data: [:])
                 }
+                bar.onPick = { [weak self] in
+                    self?.notifyListeners("postBarPick", data: [:])
+                }
                 // The web view's scroller, which is where the two ways down off
                 // the keyboard hang. Optional: without it the bar still works,
                 // it just loses tap-away and drag-away — the face is the third
@@ -2315,6 +2318,9 @@ final class TriaPostBar: UIView, TriaPostBarControl {
     /// The face was tapped while typing: the words are gone and the keyboard is
     /// down, and the web's copy has to catch up.
     var onDiscard: (() -> Void)?
+    /// The photo button was tapped. The web's file input is what opens the
+    /// picker, and the web's tray is what holds the picture.
+    var onPick: (() -> Void)?
 
     private let pill = TriaPostBarPill()
     private weak var host: UIView?
@@ -2359,6 +2365,7 @@ final class TriaPostBar: UIView, TriaPostBarControl {
         pill.onSend = { [weak self] in self?.onSend?() }
         pill.onText = { [weak self] text, caret in self?.onText?(text, caret) }
         pill.onDiscard = { [weak self] in self?.onDiscard?() }
+        pill.onPick = { [weak self] in self?.onPick?() }
         pill.onFocus = { [weak self] focused in
             self?.armDismissal(focused)
             self?.onFocus?(focused)
@@ -2539,6 +2546,9 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     /// The face tapped while typing. The field is emptied and the keyboard given
     /// back here; this is only the web being told to empty its copy.
     var onDiscard: (() -> Void)?
+    /// The photo button. A tap and nothing else: the picker, the checks and the
+    /// thumbnail are all the web's (see `postBarHooks.pick` in app.js).
+    var onPick: (() -> Void)?
 
     /// Oxygen 400 at the 16pt the field pins itself to — the iOS auto-zoom floor
     /// on the web, and here simply the size the reader is used to. Same story as
@@ -2577,6 +2587,18 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     /// pill's own blur, which is what the web draws.
     private let discRamp = TriaBandRamp()
     private let send = UIButton(type: .custom)
+    /// A PHOTO OR A GIF. A bare mark on the pill's glass, `.postbar-pick` on the
+    /// web: it stands in the disc's slot while the disc is idle and steps aside
+    /// by `pickShift` once there is something to send, the same move the web
+    /// plays with a transform. The comment bar's alone; a find bar sends a size
+    /// of 0 and it stays hidden.
+    private let pick = UIButton(type: .custom)
+    private var pickLeft: CGFloat = 0
+    private var pickSide: CGFloat = 0
+    private var pickShift: CGFloat = 0
+    /// A picture is waiting in the web's tray. It lights the disc on its own,
+    /// because a photo with no words is still a comment.
+    private var attached = false
 
     /// Every one of these is a MEASUREMENT that arrived from app.js, not a
     /// number decided here. The defaults are only what the view draws in the
@@ -2663,6 +2685,11 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
             send.bottomAnchor.constraint(equalTo: disc.bottomAnchor)
         ])
         send.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
+        pick.addTarget(self, action: #selector(pickTapped), for: .touchUpInside)
+        pick.isHidden = true
+        // Under the disc: while idle the two share a slot, and the disc is the
+        // one that has to win once it is there.
+        contentView.addSubview(pick)
         contentView.addSubview(disc)
         setIdle(true, animated: false)
     }
@@ -2702,6 +2729,10 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         discRight = TriaToolbar.number(spec["discRight"], fallback: discRight)
         discBottom = TriaToolbar.number(spec["discBottom"], fallback: discBottom)
         limit = spec["maxLength"] as? Int ?? limit
+        pickLeft = TriaToolbar.number(spec["pickLeft"], fallback: 0)
+        pickSide = TriaToolbar.number(spec["pickSize"], fallback: 0)
+        pickShift = TriaToolbar.number(spec["pickShift"], fallback: 0)
+        attached = spec["attached"] as? Bool ?? false
         // A PILL AT REST AND THE SAME CORNER AT EVERY HEIGHT. 999 on a growing
         // box is a stadium, and the object would change character as you type;
         // the web fixes the radius at the disc's own plus the padding around it,
@@ -2777,6 +2808,7 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
             faceMark.isHidden = false
             monogram.isHidden = true
             photo.isHidden = true
+            pick.isHidden = true
             applyDisc(spec, muted: muted)
             syncIdle()
             setNeedsLayout()
@@ -2810,9 +2842,35 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
             faceMark.image = TriaSVG.image(markup: mark, size: 19, ink: muted, template: false)
         }
 
+        applyPick(spec, muted: muted)
         applyDisc(spec, muted: muted)
         syncIdle()
         setNeedsLayout()
+    }
+
+    /// The photo button's mark, measured off `.postbar-pick` like every other
+    /// mark on this bar: its glyph, its size and the colour the cascade gave it.
+    private func applyPick(_ spec: [String: Any], muted: UIColor) {
+        pick.isHidden = pickSide <= 0
+        pick.accessibilityLabel = spec["pickLabel"] as? String
+        if let glyph = spec["pickGlyph"] as? String, !glyph.isEmpty {
+            let ink = (spec["pickInk"] as? String)
+                .flatMap(TriaChromeBar.color(fromHex:)) ?? muted
+            let size = TriaToolbar.number(spec["pickGlyphSize"], fallback: 21)
+            pick.setImage(TriaSVG.image(markup: glyph, size: size, ink: ink, template: false),
+                          for: .normal)
+        }
+    }
+
+    /// Where the photo button sits: its own box while the disc is live, one
+    /// `pickShift` further along, in the disc's slot, while it isn't. Hugs the
+    /// last line with the disc, because the web row is flex-end for both.
+    private func layoutPick() {
+        guard pickSide > 0 else { return }
+        let box = contentView.bounds
+        pick.bounds = CGRect(x: 0, y: 0, width: pickSide, height: pickSide)
+        pick.center = CGPoint(x: pickLeft + pickSide / 2 + (idle ? pickShift : 0),
+                              y: box.height - discBottom - pickSide / 2)
     }
 
     /* THE TRAILING END, AND IT IS ONE BLOCK FOR BOTH BARS BECAUSE IT MEASURES
@@ -2917,7 +2975,8 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     private func syncIdle() {
         let text = body
         hint.isHidden = !text.isEmpty
-        setIdle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, animated: true)
+        setIdle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !attached,
+                animated: true)
     }
 
     private func setIdle(_ wanted: Bool, animated: Bool) {
@@ -2928,6 +2987,7 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         if !animated || UIAccessibility.isReduceMotionEnabled {
             disc.alpha = wanted ? 0 : 1
             disc.transform = .identity
+            layoutPick()
             return
         }
         // The scale is the only part that is motion; the fade stays, because
@@ -2937,6 +2997,7 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
                        options: [.allowUserInteraction, .beginFromCurrentState]) {
             self.disc.alpha = wanted ? 0 : 1
             self.disc.transform = wanted ? CGAffineTransform(scaleX: 0.7, y: 0.7) : .identity
+            self.layoutPick()
         }
     }
 
@@ -2993,6 +3054,7 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         disc.center = CGPoint(x: box.width - discRight - discSide / 2,
                               y: box.height - discBottom - discSide / 2)
         disc.layer.cornerRadius = discSide / 2
+        layoutPick()
 
         // BOTH FIELDS TAKE THE SAME BOX, and only one of them is on screen. The
         // text field is pinned to a single line rather than to the pill's
@@ -3130,6 +3192,7 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     }
 
     @objc private func sendTapped() { onSend?() }
+    @objc private func pickTapped() { onPick?() }
 
     /// I have changed my mind. Empty the field, give the keyboard back, and tell
     /// the web to drop its copy of the words — in that order, so the popover the
