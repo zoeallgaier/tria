@@ -2265,8 +2265,13 @@
     // nothing in the DOM that records it.
     function wantSearchFocus(wanted) { searchFocus = !!wanted; }
 
+    // The comment bar's photo, picked in the system's own picker. Resolves
+    // { data, type } (base64), { error }, or {} for a cancel; rejects on a
+    // binary that predates it, and the caller falls back to the file input.
+    const pickPhoto = () => call('pickPhoto');
+
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
-             postBarText, postBarHooks, searchHooks, wantSearchFocus,
+             postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
              schedulePage, live: isLive };
   })();
 
@@ -8349,10 +8354,7 @@
     // caret stays in the field through the tap.
     pick.addEventListener('mousedown', (e) => e.preventDefault());
     pick.addEventListener('click', () => { if (!pick.disabled) file.click(); });
-    file.addEventListener('change', async () => {
-      const f = file.files && file.files[0];
-      file.value = '';            // so picking the same picture again still fires
-      if (!f) return;
+    const takePhoto = async (f) => {
       const ready = await readCommentPhoto(f).catch(() => null);
       if (!form.isConnected) return;   // the reader left the page while it decoded
       if (!ready || ready.error) {
@@ -8360,6 +8362,11 @@
         return;
       }
       setPhoto(ready);
+    };
+    file.addEventListener('change', () => {
+      const f = file.files && file.files[0];
+      file.value = '';            // so picking the same picture again still fires
+      if (f) takePhoto(f);
     });
 
     /* ── Backing out ──────────────────────────────────────────────────────────
@@ -8471,11 +8478,25 @@
     // debounce and every error path below are reached by the same submit a tap
     // on the web disc would have made.
     NativeChrome.postBarHooks.send = () => form.requestSubmit();
-    // Native's photo button, tapped over there. The same click the web button
-    // makes, so the picker, the checks and the tray are one path. It arrives
-    // through evaluateJavaScript, which WebKit runs as a user gesture, and that
-    // is what lets a file input open from a tap the page never saw.
-    NativeChrome.postBarHooks.pick = () => pick.click();
+    // Native's photo button, tapped over there. NOT the file input: under the
+    // native bar that made WebKit drop its own Photo Library / Take Photo menu,
+    // anchored to the hidden web bar, so it grew out of the wrong place in the
+    // wrong shape. Native opens the system photo picker straight away instead
+    // and hands the bytes back, and from there it is the file input's own path
+    // (takePhoto). A binary without pickPhoto rejects, and gets the old click.
+    NativeChrome.postBarHooks.pick = () => {
+      if (pick.disabled) return;
+      NativeChrome.pickPhoto().then((res) => {
+        if (!res || !form.isConnected || pick.disabled) return;
+        if (res.error) { toast(res.error); return; }
+        if (!res.data) return;    // cancelled
+        const bin = atob(res.data);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        takePhoto(new File([bytes], res.type === 'image/gif' ? 'photo.gif' : 'photo.jpg',
+          { type: res.type || 'image/jpeg' }));
+      }, () => pick.click());
+    };
     // The native field's own focus, which the hidden textarea never gets. It has
     // to mean both of the things a web focus means here: walk the page to the
     // thread, and turn the face into the way out.

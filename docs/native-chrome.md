@@ -1389,14 +1389,23 @@ numbers, `pickLeft` (the untransformed box, the rect with the transform's own
 `m41` taken back off, because `offsetLeft` rounds a 53.6 step to 53) and
 `pickShift` (the disc's width plus the row's gap).
 
-**The tap crosses, the picker does not.** `postBarPick` lands on
-`postBarHooks.pick`, which clicks the web button, which clicks the hidden
-`<input type="file">`. That opens from a tap the page never saw because
-Capacitor delivers the event through `evaluateJavaScript`, which WebKit runs as a
-user gesture. **Not yet exercised with a real finger**, for the reason under
-"Getting off the keyboard": if a device ever shows the picker failing to open,
-this is the assumption to check, and the fix is a `PHPickerViewController` in
-Swift handing back a data URI.
+**The tap crosses, and the picker is the system's (2026-09-14).** It used to
+be the web's: `postBarPick` clicked `.postbar-pick`, which clicked the hidden
+`<input type="file">`. On iOS that input always drops WebKit's own Photo
+Library / Take Photo / Choose File menu, and WebKit anchors it to the input's
+element, which under the native gate is the `visibility: hidden` web bar that
+doesn't ride the keyboard. So the menu grew out of the wrong place, in the wrong
+shape (a big glass circle morphing into the menu), and the page can neither move
+it nor skip it. Now `postBarHooks.pick` checks `pick.disabled` and calls
+`TriaChrome.pickPhoto`, which presents `PHPickerViewController` straight away,
+with no menu in front of it and no library permission. It resolves `{data, type}`
+as base64: a GIF as its own bytes, anything else drawn upright into a JPEG at
+most 1600pt on its long edge, which is what `readCommentPhoto` would have made of
+it anyway. The web builds a `File` and hands it to `takePhoto`, the file input's
+own path, so the checks and the tray are still one implementation. `{}` is a
+cancel, `{error}` is a toast, and a binary without the method rejects and gets
+the old click. No camera: comments pick from the roll. The composer and edit
+profile still use their file inputs, whose menu anchors on a visible web button.
 
 **The chosen picture waits in a web tray** (`.postbar-attach`), hung above the
 pill off `--native-postbar-lift` exactly as the mention list is. A thumbnail is

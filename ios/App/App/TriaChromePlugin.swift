@@ -3,6 +3,8 @@ import UIKit
 import WebKit
 import Capacitor
 import CoreText
+import PhotosUI
+import UniformTypeIdentifiers
 
 /// 1.4: Tria's bottom navigation, drawn by UIKit in the system's Liquid Glass.
 ///
@@ -49,6 +51,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "dismissMenu", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPostBar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPostBarText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pickPhoto", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPageControls", returnType: CAPPluginReturnPromise)
     ]
 
@@ -70,6 +73,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// re-rendered by a refresh under an open ••• — is dropped rather than run
     /// against the wrong post.
     private var anchorToken = 0
+    /// The comment bar's photo picker while it is up. PHPicker holds its
+    /// delegate weakly, so this is what keeps the delegate alive until the pick.
+    private var photoPicker: TriaPhotoPicker?
 
     /// The top bar's controls, built on the first `setToolbar`. Held as its own
     /// availability-free protocol for the same reason `bar` is.
@@ -317,6 +323,32 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async { [weak self] in
             self?.anchored?.dismiss()
             call.resolve()
+        }
+    }
+
+    /// The comment bar's photo button, asked for by the web after it has checked
+    /// the button is live. Straight to the system photo picker, with no menu in
+    /// front of it: a hidden `<input type="file">` makes WebKit drop its own
+    /// Photo Library / Take Photo / Choose File menu, anchored to the web bar
+    /// native has hidden, so it grew out of the wrong place in the wrong shape.
+    /// PHPicker also needs no library permission. Resolves `{data, type}` (base64
+    /// bytes), `{error}`, or `{}` for a cancel; the checks and the tray stay the
+    /// web's (`readCommentPhoto`).
+    @objc func pickPhoto(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard let root = self.bridge?.viewController else {
+                call.reject("No view controller to present the picker from.")
+                return
+            }
+            var top: UIViewController = root
+            while let shown = top.presentedViewController { top = shown }
+            let picker = TriaPhotoPicker { [weak self] result in
+                call.resolve(result)
+                DispatchQueue.main.async { self?.photoPicker = nil }
+            }
+            self.photoPicker = picker
+            picker.present(from: top)
         }
     }
 
@@ -4162,6 +4194,77 @@ final class TriaPageControls: UIView, TriaPageControlsControl {
         let local = CGRect(origin: .zero, size: band.size)
         for button in buttons.values {
             button.layout(scroll: scroll + band.minY, in: local)
+        }
+    }
+}
+
+
+/// One photo or GIF off the camera roll, for the comment bar. A GIF crosses as
+/// its own bytes so it still moves (the web keeps them, see `readCommentPhoto`);
+/// anything else is drawn upright and capped at 1600pt on its long edge before
+/// it crosses, which is what the web would have re-encoded it to anyway, and
+/// keeps a 48MP photo from travelling the bridge as base64.
+final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
+    private let done: ([String: Any]) -> Void
+    private var finished = false
+
+    init(done: @escaping ([String: Any]) -> Void) {
+        self.done = done
+    }
+
+    func present(from host: UIViewController) {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        host.present(picker, animated: true)
+    }
+
+    private func finish(_ result: [String: Any]) {
+        guard !finished else { return }
+        finished = true
+        done(result)
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider else {
+            finish([:])
+            return
+        }
+        let unreadable: [String: Any] = ["error": "Couldn’t read that photo. Try another."]
+        if provider.hasItemConformingToTypeIdentifier(UTType.gif.identifier) {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.gif.identifier) { [weak self] data, _ in
+                guard let data else { self?.finish(unreadable); return }
+                self?.finish(["data": data.base64EncodedString(), "type": "image/gif"])
+            }
+            return
+        }
+        guard provider.canLoadObject(ofClass: UIImage.self) else {
+            finish(unreadable)
+            return
+        }
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let image = object as? UIImage, image.size.width > 0, image.size.height > 0 else {
+                self?.finish(unreadable)
+                return
+            }
+            let cap: CGFloat = 1600
+            let scale = min(1, cap / max(image.size.width, image.size.height))
+            let size = CGSize(width: (image.size.width * scale).rounded(),
+                              height: (image.size.height * scale).rounded())
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            format.opaque = true
+            let drawn = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: size))
+            }
+            guard let jpeg = drawn.jpegData(compressionQuality: 0.9) else {
+                self?.finish(unreadable)
+                return
+            }
+            self?.finish(["data": jpeg.base64EncodedString(), "type": "image/jpeg"])
         }
     }
 }
