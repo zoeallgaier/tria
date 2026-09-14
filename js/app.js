@@ -688,6 +688,20 @@
       return parts.map(p => p.trim().replace(/\s+[-\d.]+(%|px|r?em)$/, ''));
     }
 
+    /* THE NEUTRAL AS ONE COLOUR, which is how the + wears "no colour" and, as
+       of 2026-09-13, how the primary acts wear it too: the composer's Share
+       pill and Add yours (on the daily card and on the bar). Plain glass with
+       `.label` read as a disabled button beside a + that was the paper's
+       opposite, so the commits follow the + rather than the reverse. The why
+       of --mono-band / --mono-ink is the ink note in fabSpec. */
+    function monoWear() {
+      const mono = probe('background-image: var(--mono-band); color: var(--mono-ink)');
+      const stops = splitStops(mono.image || '').map(toRgb).filter(Boolean);
+      return { tint: stops[stops.length >> 1] || '', ink: toRgb(mono.color || '') || '' };
+    }
+    // Which controls take it. Share Tria and the gate's submit keep plain glass.
+    const MONO_SEL = '.composer-post, .daily-answer, .toolbar-cta';
+
     function fabSpec() {
       const band = probe('background-image: var(--pill-band)');
       const colors = splitStops(band.image || '').map(toRgb).filter(Boolean);
@@ -697,9 +711,7 @@
       // is the glyph built to ride it (see tokens.css). Reading the pair here is
       // how a black + on white and a white + on black come out of ONE branch
       // below with no test on the live scheme anywhere in this file.
-      const mono = probe('background-image: var(--mono-band); color: var(--mono-ink)');
-      const monoStops = splitStops(mono.image || '').map(toRgb).filter(Boolean);
-      const monoInk = toRgb(mono.color || '');
+      const mono = monoWear();
       const post = NAV.find(n => n.publish);
       // The band, sorted into the one form the material can wear it in: a tint
       // for an accent, a ramp for Tria's four hues, nothing for "no colour".
@@ -740,7 +752,7 @@
       const accent = fill.ramp ? '' : (fill.tint || '');
       // The middle stop, which is the band's own weight — the same stop bandFill
       // hands back for a chromatic band, picked the same way.
-      const wear = accent || monoStops[monoStops.length >> 1] || '';
+      const wear = accent || mono.tint;
       return {
         route: post ? post.route : '#/publish',
         label: post ? post.label : 'Post',
@@ -796,7 +808,7 @@
            composer's Share pill, the gate's submit, Share Tria, Add yours, the
            toolbar's CTA — and they are kept beside TriaBand.rampAlpha in Swift,
            which is the other half of the same measurement. */
-        ink: (accent ? ink : monoInk) || '',
+        ink: (accent ? ink : mono.ink) || '',
       };
     }
 
@@ -1022,10 +1034,14 @@
       const styles = getComputedStyle(el);
       const cta = el.classList.contains('toolbar-cta');
       const tinted = cta || el.classList.contains('toolbar-commit');
-      const fill = tinted ? bandFill(bandStops(el)) : { colors: [], tint: '' };
+      let fill = tinted ? bandFill(bandStops(el)) : { colors: [], tint: '' };
       // Only a tint sends its own ink; a ramp and a bare control both take the
       // system's, which flips with the paper. See the ink note in fabSpec.
       const bare = !fill.tint;
+      // "No colour" on the CTA is the neutral, like the +. See monoWear.
+      const mono = tinted && bare && !fill.colors.length && el.matches(MONO_SEL)
+        ? monoWear() : null;
+      if (mono) fill = { colors: [], tint: mono.tint };
       const spec = {
         id: key,
         x: rect.left, y: rect.top, w: rect.width, h: rect.height,
@@ -1034,7 +1050,7 @@
         // washed profile sets --toolbar-ink and a tinted control takes
         // --pill-ink, and reading the element answers both without either rule
         // being restated here.
-        ink: bare ? '' : (toRgb(styles.color) || ''),
+        ink: mono ? mono.ink : bare ? '' : (toRgb(styles.color) || ''),
         // A tint, a ramp, or neither. See bandFill.
         colors: fill.colors,
         tint: fill.tint,
@@ -1285,8 +1301,11 @@
       const mark = el.querySelector('svg');
       // The same three answers the + takes, off this button's own ::before.
       // See bandFill, and the ink note in fabSpec for why a bare one sends none.
-      const fill = bandFill(bandStops(el));
+      let fill = bandFill(bandStops(el));
       const bare = !fill.tint;
+      // "No colour" on Share and Add yours is the neutral, like the +. See monoWear.
+      const mono = bare && !fill.colors.length && el.matches(MONO_SEL) ? monoWear() : null;
+      if (mono) fill = { colors: [], tint: mono.tint };
       return {
         id: el.dataset.nativePage,
         x: r.left,
@@ -1298,7 +1317,7 @@
         // Resolved colours, never token names, the same as every toolbar
         // control: a washed page and a reader's accent both land in the cascade
         // and reading the element answers both.
-        ink: bare ? '' : (toRgb(styles.color) || ''),
+        ink: mono ? mono.ink : bare ? '' : (toRgb(styles.color) || ''),
         colors: fill.colors,
         tint: fill.tint,
         // These four are set at four different sizes (1.02rem on the gate, 0.95
@@ -2014,8 +2033,8 @@
               // route(): a full re-render that restores the scroll it just came
               // from, i.e. a tab that visibly did nothing.
               //
-              // The system tab bar moves its lens under the finger; sync()'s
-              // selectTab is what holds it there once the router has landed.
+              // Native does not move its own highlight either way — that comes
+              // back around through sync() once the router has actually landed.
               if (route === (location.hash || '#/').split('?')[0]) reclick(route);
               else go(route);
             });
@@ -10632,9 +10651,9 @@
             `</div>`
           : '') +
         `<input id="song-q" class="song-input" type="search" ` +
-          `placeholder="Search a song, or paste a link" ` +
+          `placeholder="Search a song or playlist, or paste a link" ` +
           `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
-          `aria-label="Search a song, or paste a link" value="${esc(songQuery)}">` +
+          `aria-label="Search a song or playlist, or paste a link" value="${esc(songQuery)}">` +
         `<div class="song-results" id="song-results" aria-live="polite"></div>` +
       `</section>`;
 

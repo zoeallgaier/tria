@@ -29,11 +29,7 @@ web keeps its CSS glass unchanged. Plan, contract and traps:
 
 **All three stages have landed** (`ios/App/App/TriaChromePlugin.swift`,
 `NativeChrome` in app.js, the gate at the end of app.css): the tab bar, the +,
-and the top bar's controls with the menus they drop as real `UIMenu`s. **The tab
-bar is the system's own `UITabBar` as of 2026-09-10** (Zoe's call, replacing
-1.4's hand-built capsule): labels, the draggable selection lens and the Updates
-dot as an empty system badge all come from UIKit, and the + is a separate glass
-disc at its trailing end, where Music puts search. Edit
+and the top bar's controls with the menus they drop as real `UIMenu`s. Edit
 profile's music pick drops a `UIMenu` too — a control on the PAGE, which the web
 asks for rather than being asked about, and which falls back to a sheet off-app.
 **The post card's •••, the repost circle beside it (2026-08-30) and the
@@ -59,7 +55,11 @@ nothing and the button is plain glass wearing the system's `.label`. Only a tint
 carries its own ink; the other two take `.label`, which is how the same code is
 black on paper and white on ink. **The round + is the one control that turns
 Tria's ramp down** and takes it as no colour: four hues need a capsule to travel
-across, and a 56pt disc is not one. Every capsule still wears it.
+across, and a 56pt disc is not one. Every capsule still wears it. **On "no
+colour" the + , the composer's Share and Add yours (card and bar) wear the
+neutral** (`--mono-band` as a tint, `--mono-ink`, see `monoWear` in app.js), the
+paper's opposite, rather than plain glass; Share Tria and the gate's submit stay
+plain.
 
 The PIECES THAT HOLD A CARET are native too, and they are the one place native is
 more than a face: a field cannot be borrowed from a hidden element, so the
