@@ -5490,8 +5490,8 @@ button.poll-option:disabled { cursor: default; }
    feed is editorial blocks with no boxes, so a box here reads instantly as "not
    mine" without a word being spent saying so.
 
-   The material is .ptile's, quoted verbatim — fill, hairline edge, specular rim
-   and float, with the backdrop sample dropped. Same reasoning too: the bill for
+   The material is .ptile's, quoted verbatim — fill, hairline edge and specular rim,
+   with the backdrop sample and the float dropped. Same reasoning too: the bill for
    a blur is area × radius × MOVING FRAMES, and this one scrolls with the feed.
    No prefers-color-scheme block: every token below already answers the scheme in
    tokens.css, and a glass rule restating a fill or a rim is the regression the
@@ -5508,11 +5508,9 @@ button.poll-option:disabled { cursor: default; }
   border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: var(--glass-edge);
-  box-shadow: var(--glass-rim), 0 6px 18px rgba(0, 0, 0, 0.10);
-  transition: box-shadow var(--dur-quick) var(--ease);
-}
-@media (hover: hover) {
-  .card-quoted:hover { box-shadow: var(--glass-rim), 0 10px 24px rgba(0, 0, 0, 0.13); }
+  /* The rim, not the float (Zoe, 2026-09-14): the tile lies in the card rather
+     than hovering over it, so there is no drop and no hover lift. */
+  box-shadow: var(--glass-rim);
 }
 
 /* The whole tile is one target — the .daily-open trick. It sits UNDER the pad in
