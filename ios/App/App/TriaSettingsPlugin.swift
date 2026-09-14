@@ -76,12 +76,17 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     /// app has registered. The store already refuses to save anything but https
     /// (see setListeningTo); this is the second of the two checks, on the side
     /// of the bridge where the call actually happens.
+    ///
+    /// Plus webcal(s), for one caller: the profile's Subscribe to calendar,
+    /// whose link Tria builds itself (openCalendarSubscribe). Calendar owns
+    /// that scheme, so it is still a hand-off to a system app, not to whatever
+    /// an installed app registered.
     @objc func openExternal(_ call: CAPPluginCall) {
         guard let raw = call.getString("url"),
               let url = URL(string: raw),
               let scheme = url.scheme?.lowercased(),
-              scheme == "https" || scheme == "http" else {
-            call.reject("Only http(s) links can be handed to iOS.")
+              ["https", "http", "webcals", "webcal"].contains(scheme) else {
+            call.reject("Only http(s) and calendar links can be handed to iOS.")
             return
         }
         DispatchQueue.main.async {
