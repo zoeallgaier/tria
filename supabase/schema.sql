@@ -65,7 +65,9 @@ create table public.posts (
   url        text,
   note       text,
   image      text,                          -- Storage URL later (photo/video posts; video clip URL for Frames)
+  images     text[],                        -- a carousel's whole ordered set, cover first (images[1] = image); see add-carousels.sql
   tint       text,                          -- photo/poster's average colour (#rrggbb) for the colour-up settle
+  tints      text[],                        -- one average colour per carousel photo, beside `images`
   poster     text,                          -- first-frame still for a video Frame (image posts leave this null)
   location   text,                          -- where it's happening (activities)
   poll       jsonb,                          -- { q, options[] } for poll posts; expires 24h after created_at
@@ -85,11 +87,18 @@ create table public.posts (
   constraint posts_repost_shape check (
     (type = 'repost'
        and repost_of is not null
-       and url is null and image is null and poster is null
+       and url is null and image is null and images is null and poster is null
        and poll is null and location is null
        and event_date is null and event_time is null)
     or
     (type <> 'repost' and repost_of is null)
+  ),
+  -- A carousel is a photo post whose cover is also its `image` (add-carousels.sql).
+  constraint posts_images_shape check (
+    images is null
+    or (type = 'photo' and image is not null
+        and cardinality(images) between 2 and 6
+        and images[1] = image)
   )
 );
 

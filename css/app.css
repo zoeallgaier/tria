@@ -1338,12 +1338,16 @@ body.toolbar-live .view { padding-top: 1rem; }
    since the signed-in bar stopped carrying it in 1.3. It used to be 2.25rem
    here with 1.6rem restated twice on top (once for phones, once for the auth
    bar), which between them meant the 2.25 was never the size anything actually
-   drew. One number now. */
+   drew. One number now.
+   Lowercase Instrument Serif italic (Zoe, 2026-09-14), the title voice, over an
+   Oxygen slogan; it swapped with the slogan's faces. The serif draws smaller
+   than Oxygen 700 at the same size, hence the bigger number. */
 .brand-mark {
-  font-family: 'Oxygen', sans-serif;
-  font-weight: 700;
-  font-size: 1.6rem;
-  letter-spacing: -0.02em;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 2.1rem;
+  letter-spacing: -0.01em;
   line-height: 1;
   color: var(--text);
 }
@@ -4195,10 +4199,11 @@ body.gate main { padding: 0; }
    everything stays reachable (the flex `justify-content:center` clipping trap). */
 .auth-card { width: 100%; max-width: 352px; margin-block: auto; }
 .auth-brand {
-  font-family: 'Oxygen', sans-serif;
-  font-weight: 700;
-  font-size: 2.4rem;
-  letter-spacing: -0.02em;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 3rem;
+  letter-spacing: -0.01em;
   line-height: 1;
   color: var(--text);
 }
@@ -9209,6 +9214,31 @@ button.poll-option:disabled { cursor: default; }
   .about-more:hover { border-bottom-color: currentColor; }
 }
 
+/* ── The public site (signed out, web) ───────────────────────────────────────
+   The pitch pages (My Circle, Chats, Profile, Post) reuse About's column and
+   the gate's banded submit, as a link. So does About's App Store button. */
+a.guest-join { display: block; text-align: center; text-decoration: none; }
+.guest-acts { margin-top: 1.8rem; }
+.guest-acts .auth-alt { margin-top: 1rem; }
+.guest-acts .auth-alt a {
+  color: var(--accent);
+  font-weight: 700;
+  text-underline-offset: 2px;
+}
+.about-body .guest-more { margin: 0.9rem 0 0; text-align: center; font-size: 0.92rem; color: var(--muted); }
+.about-body .about-appstore { margin: 1.4rem 0 1.8rem; }
+.guest-note {
+  max-width: var(--feed-width);
+  margin: 0 auto 1.2rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+/* The type axis's inset on a wide screen only; a phone's .view already carries
+   it (stated here, below the mobile block, so it can't win there by order). */
+@media (min-width: 681px) {
+  .guest-note { padding-inline: var(--inset); }
+}
+
 /* ── Tria for business (#/business) ─────────────────────────────────────────
    A pricing page in an app that has spent every other screen avoiding the look
    of one. It stays inside the About page's editorial column and its type scale,
@@ -9343,37 +9373,10 @@ button.poll-option:disabled { cursor: default; }
 }
 .about-back a:hover { color: var(--text); }
 
-/* Install tutorial: one step list with an iPhone/Android switch (matches the
-   signed-out welcome front door), each step wearing a small icon tile that
-   resolves into focus (blur + lift on the signature ease), one after another
-   down the list — the page-transition motif in miniature. */
-/* The iPhone / Android switch above the steps — one quiet pill, two options,
-   the picked one filled. The list keeps the same three rows either way; only
-   the words and the lead icon change (see installStepsHtml in app.js). */
-.os-toggle {
-  display: flex;
-  width: max-content;
-  margin: 1.5rem 0 0;
-  padding: 2px;
-  gap: 2px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-}
-.os-opt {
-  background: none;
-  border: none;
-  border-radius: 999px;
-  padding: 0.3rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
-  transition: background-color var(--dur-micro), color var(--dur-micro);
-}
-.os-opt[aria-pressed="true"] {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-}
+/* Install tutorial: Android's home-screen steps (an iPhone gets the App Store
+   link above the folds), each step wearing a small icon tile that resolves into
+   focus (blur + lift on the signature ease), one after another down the list —
+   the page-transition motif in miniature. */
 
 .install-steps { list-style: none; padding: 0; margin: 1.4rem 0 0; }
 .install-steps li {
@@ -9490,12 +9493,11 @@ button.poll-option:disabled { cursor: default; }
 /* Gated (signed-out) About carries the same fixed header, so clear its height. */
 .view.about--front { padding-top: calc(env(safe-area-inset-top) + 5.2rem); }
 .auth-topbar-tag {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-style: italic;
+  font-family: 'Oxygen', sans-serif;
   color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 1.1;
-  margin-top: 0.12rem;
+  font-size: 0.84rem;
+  line-height: 1.2;
+  margin-top: 0.2rem;
 }
 
 @media (max-width: 680px) {

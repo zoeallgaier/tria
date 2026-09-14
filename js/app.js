@@ -3695,6 +3695,8 @@
       // to the tonal placeholder. A Frame video's `image` holds the clip URL;
       // `poster` (best-effort) holds its first-frame still.
       const isVideo = post.image && isVideoUrl(post.image);
+      // A carousel deals its photos as a deck instead of one frame (deckHtml).
+      const deck = !isVideo && post.images && post.images.length > 1;
       const d = post.image ? imageDimsFromUrl(post.image) : null;
       const img = post.image
         ? { src: isVideo ? (post.poster || null) : post.image, alt: notePlain(post.note) || post.title || 'Frame', w: d && d.w, h: d && d.h, tint: post.tint }
@@ -3738,17 +3740,19 @@
         `<div class="card-main">` +
           head +
           (foot ? `<div class="card-foot">${foot}</div>` : '') +
+          (deck ? deckHtml(post, img.alt) :
           `<figure class="photo${isVideo ? ' frame-video' : ''}" tabindex="0" role="button" aria-label="${isVideo ? 'Play frame' : 'Enlarge photo'}">` +
             `<div class="photo-frame${sized ? '' : ' photo-frame--reserve'}${cropped ? ' photo-frame--crop' : ''}"${frameStyle ? ` style="${frameStyle}"` : ''}>` +
               mediaHtml +
             `</div>` +
-          `</figure>` +
+          `</figure>`) +
           actions +
         `</div>` +
         likersPanelHtml(post, full) +
         commentsPanelHtml(post, full);
       el.dataset.sig = cardSig(el);
       if (isVideo) wireFrameVideo(el, post);
+      else if (deck) wireDeck(el, post, img.alt);
       else wirePhoto(el, img);
       wireLikes(el, post, opts);
       wireComments(el);
@@ -3789,7 +3793,9 @@
       ? `<p class="card-location">${svgIcon('cal', 'card-location-ico')}` +
           `<span>${esc(eventWhenLabel(post.eventDate, post.eventTime))}</span></p>`
       : '';
-    const locationHtml = post.type === 'activity' && post.location
+    // A place is never shown to someone signed out (the public site): a public
+    // activity asks the room, not the whole internet, where to find you.
+    const locationHtml = post.type === 'activity' && post.location && Store.isAuthed()
       ? `<p class="card-location"><a class="card-location-link" href="${esc(mapsUrl(post.location))}" ` +
           `target="_blank" rel="noopener noreferrer">${svgIcon('pin', 'card-location-ico')}` +
           `<span>${esc(post.location)}</span></a></p>`
@@ -3954,6 +3960,189 @@
       im.addEventListener('load', reveal, { once: true });
       im.addEventListener('error', landed, { once: true });
     }
+  }
+
+  /* ── The deck (a carousel in the feed) ──────────────────────────────────────
+     A carousel is dealt like a hand of cards, not laid out like a filmstrip. The
+     front photo is the same cropped, rounded frame a single Frame is; the next one
+     sits behind it a size smaller with its edge showing on the right, and the one
+     after that is a thinner edge still. That edge IS the affordance: it says
+     "there's more" without a row of dots, and when nothing peeks you're on the
+     last one, which is the whole of what the dots were ever telling you.
+
+     Swipe left and the front card leaves off to the left while the one behind it
+     grows into its seat; swipe right and the last one you passed comes back. It
+     does not loop: a deck you've been through ends, the way a thread does.
+
+     One box for the whole set, shaped off the cover (clamped between 4:5 and 3:2)
+     and every photo covers it, so a swipe never changes the card's height and the
+     feed under your thumb never moves. Nothing is lost to the crop for the same
+     reason as the 5:4 ceiling: a tap opens the lightbox, uncropped, on the photo
+     in front, and there it pages with a count and arrows, which is where the
+     readable, reachable version of a carousel belongs.
+
+     Only the cards that can be seen hold a bitmap (the one just passed, the front,
+     two behind). The rest keep their URL in data-src and load as they come
+     forward, so a six-photo post costs a feed what three do. */
+  const DECK_NEAR = 2;   // how many cards behind the front are drawn
+
+  function deckHtml(post, alt) {
+    const set = post.images;
+    const n = set.length;
+    const d = imageDimsFromUrl(set[0]);
+    const ratio = d ? Math.min(Math.max(d.w / d.h, 4 / 5), 3 / 2).toFixed(4) : '1';
+    const cards = set.map((src, i) => {
+      const tint = post.tints && post.tints[i];
+      return `<div class="deck-card" data-i="${i}"${tint ? ` style="--ph-fill:${esc(tint)}"` : ''}>` +
+          `<img ${i <= DECK_NEAR ? 'src' : 'data-src'}="${esc(src)}" alt="${esc(alt)}" ` +
+            `loading="lazy" decoding="async" draggable="false">` +
+        `</div>`;
+    }).join('');
+    return `<figure class="photo photo--deck" tabindex="0" role="button" aria-roledescription="carousel" ` +
+        `aria-label="Photo 1 of ${n}. Swipe for the next, tap to enlarge.">` +
+        `<div class="deck" style="aspect-ratio:${ratio}">${cards}</div>` +
+      `</figure>`;
+  }
+
+  // Everything is read off the figure, never the card around it: the feed diff
+  // carries an already-loaded figure across into a fresh card (see the `.photo img`
+  // carry in the feed render), and it has to keep working, and keep its place, there.
+  function wireDeck(el, post, alt) {
+    const fig = el.querySelector('.photo--deck');
+    const deck = fig && fig.querySelector('.deck');
+    if (!deck) return;
+    const cards = [...deck.querySelectorAll('.deck-card')];
+    const n = cards.length;
+    let at = 0;
+
+    // Load what's near the front and reveal each card once its bitmap decodes —
+    // the same settle a single frame does, per card.
+    const load = () => cards.forEach((c, i) => {
+      const im = c.querySelector('img');
+      if (i < at - 1 || i > at + DECK_NEAR || !im.dataset.src) return;
+      im.src = im.dataset.src;
+      im.removeAttribute('data-src');
+      revealCardImage(c, im);
+    });
+    cards.forEach(c => {
+      const im = c.querySelector('img');
+      if (im.getAttribute('src')) revealCardImage(c, im);
+    });
+
+    const peek = () => parseFloat(getComputedStyle(deck).getPropertyValue('--deck-peek')) || 22;
+    // The seat of a card `k` places behind the front (k = 0 is the front, negative
+    // is already passed). Scaled about the card's RIGHT edge, so a card behind
+    // shrinks away from the left and only its right edge shows, pushed out by `x`.
+    // `w` is the card's width, which is how far a passed card has to travel to be gone.
+    const seat = (k, w, p) => {
+      if (k < 0)  return { x: -(w + p * 2), s: 1, r: -4, o: 0 };
+      if (k === 0) return { x: 0, s: 1, r: 0, o: 1 };
+      if (k === 1) return { x: p * 0.55, s: 0.93, r: 0, o: 1 };
+      return { x: p, s: 0.86, r: 0, o: k === 2 ? 1 : 0 };
+    };
+    const mix = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, s: a.s + (b.s - a.s) * t,
+                                r: a.r + (b.r - a.r) * t, o: a.o + (b.o - a.o) * t });
+    // Lay every card out for a drag of `dx` px (0 at rest). A pull toward a card
+    // that exists carries each card part-way to its next seat; a pull past either
+    // end only leans the front card, a fifth of the finger, and comes back.
+    const lay = (dx = 0) => {
+      const w = deck.clientWidth - peek();
+      const p = peek();
+      const t = Math.max(-1, Math.min(1, dx / (w || 1)));
+      const stuck = (t < 0 && at === n - 1) || (t > 0 && at === 0);
+      cards.forEach((c, i) => {
+        const k = i - at;
+        let q = seat(k, w, p);
+        if (stuck) { if (k === 0) q = { ...q, x: dx * 0.2 }; }
+        else if (t < 0) q = mix(q, seat(k - 1, w, p), -t);
+        else if (t > 0) q = mix(q, seat(k + 1, w, p), t);
+        c.style.transform = `translateX(${q.x.toFixed(1)}px) scale(${q.s.toFixed(4)})` +
+          (q.r ? ` rotate(${q.r.toFixed(2)}deg)` : '');
+        c.style.opacity = q.o >= 0.999 ? '' : q.o.toFixed(3);
+        // The front is on top; a passed card coming back rides over it.
+        c.style.zIndex = String(k < 0 ? n + 1 : n - k);
+        c.setAttribute('aria-hidden', k === 0 ? 'false' : 'true');
+      });
+    };
+    const settle = (animate) => {
+      deck.classList.toggle('is-settling', !!animate && !prefersReduced());
+      lay(0);
+      fig.setAttribute('aria-label', `Photo ${at + 1} of ${n}. ` +
+        (at < n - 1 ? 'Swipe for the next, tap to enlarge.' : 'Tap to enlarge.'));
+      load();
+    };
+    const go = (i, animate = true) => {
+      const next = Math.max(0, Math.min(n - 1, i));
+      if (next === at) { settle(animate); return false; }
+      at = next;
+      settle(animate);
+      return true;
+    };
+    settle(false);
+
+    // The swipe. `touch-action: pan-y` (in the CSS) keeps a vertical drag the page's
+    // own scroll, untouched; only once a finger has clearly gone sideways does the
+    // deck take the pointer. A drag is never also a tap.
+    let pid = null, sx = 0, sy = 0, dx = 0, axis = null, moved = false;
+    let lastX = 0, lastT = 0, vx = 0, raf = 0;
+    deck.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      pid = e.pointerId; sx = lastX = e.clientX; sy = e.clientY; lastT = e.timeStamp;
+      dx = vx = 0; axis = null; moved = false;
+    });
+    deck.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== pid) return;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!axis) {
+        if (Math.hypot(mx, my) < 8) return;
+        axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+        if (axis === 'x') {
+          try { deck.setPointerCapture(pid); } catch { /* older engines */ }
+          deck.classList.remove('is-settling');
+        }
+      }
+      if (axis !== 'x') return;
+      e.preventDefault();
+      moved = true;
+      dx = mx;
+      if (e.timeStamp > lastT) {
+        vx = (e.clientX - lastX) / (e.timeStamp - lastT);
+        lastX = e.clientX; lastT = e.timeStamp;
+      }
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (axis === 'x') lay(dx); });
+    });
+    const lift = (e) => {
+      if (e.pointerId !== pid) return;
+      pid = null;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (axis !== 'x') return;
+      axis = null;
+      const w = deck.clientWidth - peek();
+      // A quarter of the card, or a flick, commits. Anything less goes home.
+      const step = (dx < -w * 0.25 || vx < -0.45) ? 1 : (dx > w * 0.25 || vx > 0.45) ? -1 : 0;
+      if (go(at + step)) hapticTap('LIGHT');
+    };
+    deck.addEventListener('pointerup', lift);
+    deck.addEventListener('pointercancel', lift);
+
+    const open = () => openLightbox(post.images[at], alt, false, cards[at].querySelector('img'), {
+      srcs: post.images, index: at, alt,
+      originOf: (i) => cards[i] && cards[i].querySelector('img'),
+      // Paging in the lightbox moves the deck behind it, at once, so the photo
+      // flies home to a card that is already in front and already still.
+      onIndex: (i) => go(i, false),
+    });
+    fig.addEventListener('click', (e) => {
+      if (moved) { moved = false; e.preventDefault(); return; }
+      open();
+    });
+    fig.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); go(at + 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(at - 1); }
+    });
+    // A width change (rotation, the split view) moves every seat that is in px.
+    if ('ResizeObserver' in window) new ResizeObserver(() => lay(0)).observe(deck);
   }
 
   function wirePhoto(el, img) {
@@ -6063,7 +6252,10 @@
           `<button type="button" id="auth-toggle">` +
             `${isSignup ? 'Log in' : 'Create one'}</button>` +
         `</p>` +
-        `<p class="auth-about"><a href="#/about">What is Tria?</a></p>` +
+        // On the web the public site is behind this form, so it offers the way
+        // back to it; the App Store build has nothing signed-out to look at.
+        `<p class="auth-about">${nativeShell() ? '' : `<a href="#/discover">Look around first</a> · `}` +
+          `<a href="#/about">What is Tria?</a></p>` +
       `</div></section>`;
 
     const nameInput = document.getElementById('f-name');
@@ -6732,7 +6924,7 @@
           `aria-label="Friends, tap for options" title="Friends · tap for options">` +
           svgIcon('friends') + `</button>`
       : '';
-    const moreBadge = (isSelf || !areFriends)
+    const moreBadge = (isSelf || !areFriends) && Store.isAuthed()
       ? `<button class="toolbar-btn" type="button" id="account-more" aria-haspopup="menu" aria-expanded="false" ` +
           `aria-label="${isSelf ? 'Profile options' : 'More'}" title="${isSelf ? 'Options' : 'More'}">` +
           svgIcon('dots') + `</button>`
@@ -7775,6 +7967,9 @@
       // signs in next: the path memory on a tab tap, the entry memory on a back.
       pathScroll.clear();
       scrollMemory.clear();
+      // The web keeps the public site behind the form, and its world went with
+      // the account's.
+      if (!nativeShell()) await Store.loadGuest();
       authMode = 'login';        // returning user — offer login first
       go('#/signin');
     });
@@ -7791,7 +7986,8 @@
             const res = await Store.deleteAccount();
             if (!res.ok) { toast(res.error); return; }
             authMode = 'signup';   // no account left to log back into
-            go('#/');
+            if (!nativeShell()) await Store.loadGuest();
+            go(nativeShell() ? '#/' : '#/join');
             toast('Account deleted.');
           },
         }],
@@ -7893,6 +8089,9 @@
   function mountPostBar(post, chat = null) {
     const bar = postBarEl();
     if (!bar) return;
+    // Signed out (the public site) the thread reads and nobody writes, so there
+    // is no bar and the nav keeps its place.
+    if (!Store.isAuthed()) return;
     // Same gate as the thread itself: no panel, no bar. A stranger's public post
     // is commentable (canSocial), a non-friend's circle post is not.
     if (!chat && !canSocial(post)) return;
@@ -10702,7 +10901,10 @@
   function nowPlayingEl() {
     const me = Store.session();
     const { mine, rest } = listeners();
-    const first = mine
+    // Signed out (the public site) there is no "you" to add a song for, and an
+    // empty strip with nobody in it is not a rail.
+    if (!me && !rest.length) return '';
+    const first = !me ? '' : mine
       ? `<button type="button" class="np-item np-mine" data-np="edit" ` +
           `aria-label="Change your song">${npFace(mine, me).html}</button>`
       : `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
@@ -11621,6 +11823,9 @@
     view.innerHTML =
       `<section class="view view--discover">` +
         mastheadEl('', 'Discover') +
+        (Store.isAuthed() ? '' :
+          `<p class="guest-note">You’re looking around signed out. ` +
+            `<a class="about-more" href="#/join">Make an account</a> to like, comment and add people.</p>`) +
         `<div class="discover-body" id="discover-body"></div>` +
       `</section>`;
 
@@ -16601,59 +16806,15 @@
     return `<li><span class="install-icon">${icon}</span><span>${text}</span></li>`;
   }
 
-  // Which phone the install steps speak to. Guessed once from the UA, then the
-  // small iPhone/Android toggle above the steps flips it in place — same three
-  // rows, same footprint, only the words and the lead icon change. Shared by
-  // the welcome front door and the About fold, so they can never drift apart.
-  let installOS = /Android/i.test(navigator.userAgent) ? 'android' : 'ios';
-
-  // The two platform-specific rows as [icon, text] pairs — the shared shape the
-  // first render and the in-place toggle swap both read from.
-  function installStepData() {
-    return installOS === 'android'
-      ? [[INSTALL_ICONS.menu, `Tap the <strong>three-dot menu</strong> in Chrome's toolbar.`],
-         [INSTALL_ICONS.add, `Tap <strong>Add to Home screen</strong>.`]]
-      : [[INSTALL_ICONS.share, `Tap the <strong>Share</strong> button in Safari's toolbar.`],
-         [INSTALL_ICONS.add, `Scroll down and tap <strong>Add to Home Screen</strong>.`]];
-  }
-
+  // The home-screen install is Android's alone now. An iPhone has the App Store
+  // build, so About sends it there, and the old iPhone/Android switch (Safari's
+  // Share → Add to Home Screen) went with it.
   function installStepsHtml() {
-    // The payoff tile IS the Tria app icon (the drifting pastel quintet) — the
-    // same close on either platform.
-    return installStepData().map(([icon, text]) => installStep(icon, text)).join('') +
+    // The payoff tile IS the Tria app icon (the drifting pastel quintet).
+    return installStep(INSTALL_ICONS.menu, `Tap the <strong>three-dot menu</strong> in Chrome's toolbar.`) +
+      installStep(INSTALL_ICONS.add, `Tap <strong>Add to Home screen</strong>.`) +
       `<li><span class="install-icon install-appicon"><span class="install-t">t</span></span>` +
         `<span>Tap <strong>Add</strong>. Tria is now on your home screen.</span></li>`;
-  }
-
-  function installToggleHtml() {
-    const opt = (os, label) =>
-      `<button type="button" class="os-opt" data-os="${os}" aria-pressed="${installOS === os}">${label}</button>`;
-    return `<div class="os-toggle" role="group" aria-label="Which phone?">` +
-      opt('ios', 'iPhone') + opt('android', 'Android') + `</div>`;
-  }
-
-  function wireInstallToggle(root) {
-    const wrap = root.querySelector('.os-toggle');
-    if (!wrap) return;
-    wrap.querySelectorAll('.os-opt').forEach(btn =>
-      btn.addEventListener('click', () => {
-        if (btn.dataset.os === installOS) return;
-        installOS = btn.dataset.os;
-        wrap.querySelectorAll('.os-opt').forEach(b =>
-          b.setAttribute('aria-pressed', String(b.dataset.os === installOS)));
-        // Swap only the two rows' CONTENT, never the rows themselves: rebuilding
-        // the list restarts every tile's drift animation from zero (a visible
-        // jolt mid-tap). The <li>s and their .install-icon tiles stay put, so
-        // the drift keeps breathing straight through the switch.
-        const list = root.querySelector('.install-steps');
-        if (!list) return;
-        installStepData().forEach(([icon, text], i) => {
-          const li = list.children[i];
-          if (!li) return;
-          li.querySelector('.install-icon').innerHTML = icon;
-          li.lastElementChild.innerHTML = text;
-        });
-      }));
   }
 
   function renderAbout(gated) {
@@ -16663,10 +16824,8 @@
     // welcome landing is now the primary place this content is shown). Keeps its
     // id="install" via aboutFold, so #/about?open=install still deep-links here.
     const installHtml =
-      `<p>Tria lives on the web, so there's nothing to download and no store in ` +
-        `between. Add it to your home screen and it opens full screen, just like ` +
-        `any other app on your phone.</p>` +
-      installToggleHtml() +
+      `<p>On an Android phone, Tria can live on your home screen and open full ` +
+        `screen, just like any other app. On iPhone, get it from the App Store.</p>` +
       `<ol class="install-steps">${installStepsHtml()}</ol>`;
 
     // Guidelines and FAQ collapse behind their heads (same 0fr→1fr grid tween
@@ -16823,7 +16982,12 @@
     // way out is the way in reversed. Signed out there is no bar to mount into
     // (body.gate hides .topbar outright), so the front door keeps its own brand
     // header and its own text link back to the form — both below, gated.
-    if (!gated) mountToolbar({ leading: toolbarBackEl('#/profile', 'Profile'), title: 'About Tria' });
+    // Signed out on the web About is part of the public site, so it takes the bar
+    // too, and there is no profile to go back to.
+    if (!gated) mountToolbar({
+      leading: Store.isAuthed() ? toolbarBackEl('#/profile', 'Profile') : toolbarBackEl('#/discover', 'Discover'),
+      title: 'About Tria',
+    });
 
     view.innerHTML =
       `<section class="view about${gated ? ' about--front' : ''}">` +
@@ -16843,7 +17007,12 @@
           // premise is false ("nothing to download, no store in between") and
           // pointing a user at Safari to re-install what they're already holding
           // is both silly and the sort of thing review reads as a web redirect.
-          (nativeShell() ? '' : aboutFold('install', 'Add Tria to your home screen', installHtml)) +
+          // The App Store link is browser-only for the same reason: the app is
+          // what it points at.
+          (nativeShell() ? '' :
+            `<p class="about-appstore"><a class="auth-submit publish-fill is-solid guest-join" ` +
+              `href="${APP_STORE_URL}" target="_blank" rel="noopener">Get Tria on the App Store</a></p>`) +
+          (nativeShell() ? '' : aboutFold('install', 'On Android? Add Tria to your home screen', installHtml)) +
           guidelinesHtml + privacyHtml + faqHtml +
           // The business fold is browser-only for a different reason than the
           // install one above, and it is Apple's rather than ours. Guideline
@@ -16866,8 +17035,6 @@
         btn.setAttribute('aria-expanded', String(open));
       });
     });
-
-    wireInstallToggle(view);   // the install fold's iPhone/Android switch
 
     // Deep link: #/about?open=<foldId> (the signup guidelines link) opens that
     // fold and scrolls it into view, so "Community Guidelines" lands you right on
@@ -17314,6 +17481,86 @@
      warning rather than as code: if a page transition is ever reintroduced, this
      is the bug it brings back with it, and `popstate` is NOT how to dodge it. */
 
+  /* ── The public site (signed out, web only) ──────────────────────────────────
+     1.7 stage 3. Someone who hasn't signed up gets the real app to look at, not
+     a form: the nav, Discover, anyone's public post and public profile, About.
+     What they're missing is shown as what it is. The four places that only
+     mean something with an account (My Circle, Chats, Profile, the +) are each
+     a short pitch with the way in, and every control that would WRITE sends
+     them to the form instead of failing.
+
+     The App Store build keeps its gate (nativeShell() never reaches here), and
+     RLS is the actual fence: anon reads only public posts, their comments and
+     the people behind them (supabase/public-site.sql). A public activity's
+     place is left off the card for a signed-out reader. */
+  const GUEST_GATE = new Set(['#/join', '#/signin', '#/forgot', '#/reset-password', '#/confirmed']);
+
+  function renderGuest(path, hash) {
+    if (path === '#/discover') return renderDiscover();
+    if (path.startsWith('#/p/')) {
+      const pane = new URLSearchParams(hash.split('?')[1] || '').get('pane');
+      return renderPost(decodeURIComponent(path.slice(4)), pane);
+    }
+    if (path.startsWith('#/u/')) return renderUser(decodeURIComponent(path.slice(4)));
+    if (path.startsWith('#/daily/')) return renderDaily(decodeURIComponent(path.slice(8)));
+    if (path === '#/about') return renderAbout(false);
+    if (path === '#/business') return renderBusiness(false);
+    if (path.startsWith('#/profile')) return renderGuestPitch('profile');
+    if (path === '#/updates' || path.startsWith('#/chat')) return renderGuestPitch('chats');
+    if (path === '#/publish' || path.startsWith('#/pin/') || path === '#/listening') return renderGuestPitch('post');
+    // #/, and someone's circle (#/friends/…), which is circle business too.
+    return renderGuestPitch('circle');
+  }
+
+  const APP_STORE_URL = 'https://apps.apple.com/app/id6796104809';
+
+  const GUEST_PITCH = {
+    circle: { title: 'My Circle', lede: [
+      'Your circle is the people you actually know, and this is where their posts land. Newest first, nothing ranked, nothing you didn’t ask for.',
+      'Make an account, add a few friends, and this page fills up with them.'] },
+    chats: { title: 'Chats', lede: [
+      'Message your friends, start a group, or finally plan the thing you keep saying you’ll plan.',
+      'Chats need an account. It takes about a minute.'] },
+    profile: { title: 'Profile', lede: [
+      'This is where you’d be. A photo, a bio, the song on repeat, and everything you’ve shared.',
+      'Grab your @handle before somebody else does.'] },
+    post: { title: 'Post', lede: [
+      'Notes, photos, polls, finds and plans all start here. Share them with your circle, or with everyone.',
+      'Make an account and post the first one.'] },
+  };
+
+  function renderGuestPitch(kind) {
+    const p = GUEST_PITCH[kind];
+    mountToolbar({ title: p.title });
+    view.innerHTML =
+      `<section class="view about guest-pitch">` +
+        mastheadEl('Social media made local', p.title) +
+        `<div class="about-body">` +
+          p.lede.map(t => `<p class="about-lede">${t}</p>`).join('') +
+          `<div class="guest-acts">` +
+            `<a class="auth-submit publish-fill is-solid guest-join" href="#/join">Create an account</a>` +
+            `<p class="auth-alt">Already on Tria? <a href="#/signin">Log in</a></p>` +
+            `<p class="guest-more"><a class="about-more" href="#/discover">Look around Discover</a></p>` +
+            `<p class="guest-more">On iPhone? <a class="about-more" href="${APP_STORE_URL}" ` +
+              `target="_blank" rel="noopener">Get Tria on the App Store</a></p>` +
+          `</div>` +
+        `</div>` +
+      `</section>`;
+  }
+
+  // Every control that writes, signed out. Capture phase on window, so it runs
+  // ahead of both the per-card listeners and the document-delegated ones (the
+  // repost circle, the •••), and the write never starts.
+  const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.card-attendees', '.card-cal',
+    '.card-repost', '.card-menu', '#friend', '#account-more', '.daily-answer'].join(',');
+  window.addEventListener('click', (e) => {
+    if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;
+    if (!e.target.closest(GUEST_ASKS)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    go('#/join');
+  }, true);
+
   function route() {
     // File the outgoing page's scroll BEFORE anything renders — at this moment
     // window.scrollY is still where the reader left it, and renderPage is about
@@ -17348,9 +17595,13 @@
     // Gate: no session → the setup / login screen, whatever the hash says.
     // The one exception is About, the public front door — reachable from a
     // link on the gate itself (it renders chromeless, with a way back).
-    if (!Store.isAuthed()) {
+    //
+    // That is the App Store build. On the web, signed out is the PUBLIC SITE
+    // (1.7 stage 3): the nav stands, Discover, posts and profiles read, and the
+    // gate is only the account pages themselves. See renderGuest.
+    const gatePath = (location.hash || '#/').split('?')[0];
+    if (!Store.isAuthed() && (nativeShell() || Store.isRecovering() || GUEST_GATE.has(gatePath))) {
       document.body.classList.add('gate');
-      const gatePath = (location.hash || '#/').split('?')[0];
       // The signed-out front door is the ACCOUNT FORM, in every shell. It used to
       // be an install-first welcome ("add Tria to your home screen, then sign in
       // there") built to stop people signing in twice, since a Safari session
@@ -17384,6 +17635,8 @@
         // expired or been reused, so route them to request a fresh one.
         if (gatePath === '#/forgot' || gatePath === '#/reset-password') return renderRequestReset();
         if (gatePath === '#/confirmed') return renderConfirmed();
+        if (gatePath === '#/join') return renderAuth('signup');
+        if (gatePath === '#/signin') return renderAuth('login');
         return renderAuth(authMode);
       }, () => restoreScroll(arriving));
       return;
@@ -17460,6 +17713,7 @@
     if (path !== '#/listening') { clearTimeout(songTimer); songAbort?.abort(); }
 
     renderPage(() => {
+      if (!Store.isAuthed()) { renderGuest(path, hash); return; }
       if (path.startsWith('#/u/')) {
         renderUser(decodeURIComponent(path.slice(4)));
         return;
@@ -18155,7 +18409,9 @@
 
   // Load the world from Supabase before the first render (this resolves any
   // persisted session too). On failure we still route — straight to the gate.
-  Store.init().then(() => {
+  // Signed out on the web, the public site is readable (see renderGuest), so the
+  // store reads it; the App Store build keeps its gate and reads nothing.
+  Store.init({ guest: !nativeShell() }).then(() => {
     route();
     warmImages();   // decode avatars + recent photos up front so navigation is flash-free
     // Native push housekeeping, after init because it needs the signed-in user:

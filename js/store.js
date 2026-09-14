@@ -263,6 +263,12 @@ const Store = (() => {
     if (p.note)     o.note = p.note;
     if (p.image)    o.image = p.image;
     if (p.tint)     o.tint = p.tint;   // photo/poster's average colour → colour-up in the feed
+    // A carousel's whole set, cover first. Only a real set (two or more) makes it
+    // onto the post, so `post.images` present always means "draw a deck".
+    if (Array.isArray(p.images) && p.images.length > 1) {
+      o.images = p.images;
+      if (Array.isArray(p.tints)) o.tints = p.tints;
+    }
     if (p.poster)   o.poster = p.poster;   // first-frame still for a video Frame
     if (p.location) o.location = p.location;
     if (p.poll)     o.poll = p.poll;   // { q, options[] } for poll posts
@@ -281,7 +287,10 @@ const Store = (() => {
   // Resolve any persisted session, then (if signed in) pull the whole world into
   // the cache. Called once before the first render. supabase-js persists the
   // session in localStorage, so a returning visitor stays logged in.
-  async function init() {
+  // `guest`: with no session, read what a signed-out visitor may see anyway (the
+  // public site, web only; app.js decides). RLS is what scopes it — the load is
+  // the same load, answered by anon's policies (see supabase/public-site.sql).
+  async function init({ guest = false } = {}) {
     // The OS permission read rides ALONGSIDE the world load, and boot waits for
     // it. It's a local bridge lookup with no network in it, so it costs nothing
     // next to loadWorld — and the first route paints the push UI synchronously,
@@ -294,13 +303,20 @@ const Store = (() => {
       const { data: { session } } = await sb.auth.getSession();
       // A recovery session getSession picked up from the reset link isn't a login —
       // hold it at the gate (set-new-password) instead of hydrating the world.
-      if (!recovering) await hydrate(session);
+      if (!recovering) await hydrate(session, guest);
     } finally { await primed; }
   }
 
   // Set state.session from an auth session and load (or clear) the world.
-  async function hydrate(session) {
-    if (!session) { clearWorld(); return; }
+  async function hydrate(session, guest = false) {
+    if (!session) {
+      clearWorld();
+      if (guest) await loadWorld();
+      return;
+    }
+    // Signing in over a guest's world: throw that one away first, so a public
+    // read still in the air can't land on top of the account's.
+    if (!state.session) clearWorld();
     await loadWorld();
     const me = state.users.find(u => u.id === session.user.id);
     state.session = me ? me.username : null;
@@ -432,11 +448,14 @@ const Store = (() => {
     };
     state.users = core(u, 'users', mapUser, state.users);
     const nameById = nameMap();
-    state.posts = core(p, 'posts', row => mapPost(row, nameById), state.posts);
+    // A row whose author this reader can't see is a row nothing can draw. Signed
+    // in that never happens; signed out it is every post by someone anon's users
+    // policy doesn't reach (or all of them, on a database without that policy).
+    state.posts = core(p, 'posts', row => mapPost(row, nameById), state.posts).filter(x => x.author);
     state.comments = core(c, 'comments', row => ({
       id: row.id, postId: row.post_id, author: nameById.get(row.author),
       text: row.body, image: row.image || null, date: dateOf(row.created_at), _ts: row.created_at,
-    }), state.comments);
+    }), state.comments).filter(x => x.author);
     state.likes = core(l, 'likes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.likes);
     // Guarded like the four above, and for the same reason: these tables exist
     // now, so an errored read here is a blip, not a pre-migration DB, and
@@ -935,6 +954,12 @@ const Store = (() => {
     recovering = false;
     clearWorld();
   }
+  // The public site's world, for a visitor with no session (after a sign-out or
+  // an account deletion, where init's own guest read is long gone).
+  async function loadGuest() {
+    if (state.session) return;
+    try { await loadWorld(); } catch { /* offline: the site is just empty */ }
+  }
 
   async function requestPasswordReset(email) {
     email = String(email || '').trim();
@@ -1221,6 +1246,13 @@ const Store = (() => {
     return uploadMedia(dataURI, kind, { contentType: type, ext, dims });
   }
 
+  // Best-effort removal of files a refused post already uploaded, so a failed
+  // carousel doesn't leave its photos in the bucket with nothing pointing at them.
+  function dropUploads(urls) {
+    const paths = (urls || []).map(u => /\/object\/public\/media\/(.+)$/.exec(u || '')?.[1]).filter(Boolean);
+    if (paths.length) sb.storage.from('media').remove(paths).catch(() => {});
+  }
+
   async function createPost(data, { onProgress } = {}) {
     const me = state.session;
     if (!me) return { ok: false, error: 'You need to be signed in.' };
@@ -1252,6 +1284,26 @@ const Store = (() => {
       // The poster's average colour rides along in the row (no upload) so the feed
       // settles it over its own colour. Best-effort: without it, the neutral box.
       if (data.imageTint) row.tint = data.imageTint;
+    } else if (data.images && data.images.length > 1) {
+      // A carousel: `data.images` is [{ src, dims, tint }], in the order they deal.
+      // One at a time, so a slow connection shows honest progress across the set
+      // and a failure part-way leaves the fewest files behind to clean up.
+      const set = data.images.slice(0, 6);
+      const urls = [];
+      try {
+        for (let i = 0; i < set.length; i++) {
+          urls.push(await uploadImage(set[i].src, 'photo', set[i].dims));
+          onProgress?.((i + 1) / set.length);
+        }
+      } catch {
+        dropUploads(urls);
+        return { ok: false, error: 'Couldn’t upload the photos, try again.' };
+      }
+      row.image = urls[0];     // the cover, for every reader that only knows one
+      row.images = urls;
+      const tints = set.map(s => s.tint || '');
+      if (tints[0]) row.tint = tints[0];
+      if (tints.some(Boolean)) row.tints = tints;
     } else if (data.image) {
       try { row.image = await uploadImage(data.image, 'photo', data.imageDims); }
       catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
@@ -1261,6 +1313,16 @@ const Store = (() => {
     }
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
+    if (error && row.images) {
+      // A DB without add-carousels.sql refuses the column by name. Say that rather
+      // than "try again", which would only fail the same way, and take the files back.
+      dropUploads(row.images);
+      console.warn('[tria] carousel refused:', error.code, error.message);
+      const missing = error.code === '42703' || error.code === 'PGRST204';
+      return { ok: false, error: missing
+        ? 'Carousels aren’t switched on yet. Share one photo for now.'
+        : 'Couldn’t publish, try again.' };
+    }
     if (error) return { ok: false, error: 'Couldn’t publish, try again.' };
 
     // Lock down the audience for a targeted post. If this write fails we undo the
@@ -1677,7 +1739,16 @@ const Store = (() => {
   const isMissing = (error) => !!error &&
     (error.code === 'PGRST205' || error.code === 'PGRST202' || error.code === '42P01');
 
-  function readChats() {
+  async function readChats() {
+    // A signed-out read (the public site) has no chats to be in, and anon can't
+    // call the RPC at all (a 404 in the console on every visit). Asked of the
+    // auth client rather than state.session, which a sign-in's own load hasn't
+    // set yet.
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      const none = { data: [], error: null };
+      return [none, none, none, none, none];
+    }
     return Promise.all([
       readAll('chats', ['created_at', 'id']),
       readAll('chat_members', ['chat_id', 'user_id']),
@@ -2818,7 +2889,7 @@ const Store = (() => {
     init, refresh,
     users, user, currentUser, isPrivate, friends, friendsOf, feed, discover, posts, postsBy, audienceCount, audienceOf,
     // Auth
-    session, isAuthed, signup, login, logout, deleteAccount,
+    session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,
     isRecovering, onRecovery,
     // Friends
