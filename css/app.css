@@ -533,10 +533,10 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 }
 
 /* ── Boot splash ────────────────────────────────────────────────────
-   A full-page curtain in the page's own paper, crowned by a serif t wearing
-   Tria's own brand ramp, turning. Painted from static HTML before any JS runs;
+   A full-page curtain in the page's own paper, crowned by the italic wordmark
+   wearing Tria's own brand ramp, turning. Painted from static HTML before any JS runs;
    app.js adds .splash--out after the first render and removes the node once the
-   fade lands. The t arrives the way cards do — a soft rise — plus the site's
+   fade lands. The mark arrives the way cards do — a soft rise — plus the site's
    blur-settle. */
 .splash {
   position: fixed;
@@ -559,11 +559,16 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    there is no cache of it, so the gate cannot paint its submit button in the
    last reader's colour by accident. */
 .splash-t {
-  /* Roman, not italic — the same t as the app icon's mark. */
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: clamp(7.5rem, 26vw, 12rem);
+  /* The wordmark, as .brand-mark draws it: lowercase Instrument Serif italic
+     (Zoe, 2026-09-14). It replaced the roman t. The italic's preload sits in
+     index.html beside the roman's, so the curtain doesn't paint Georgia first. */
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(5.5rem, 22vw, 9rem);
+  letter-spacing: -0.01em;
   line-height: 1;
-  padding: 0 0.15em 0.1em;          /* clip-to-text crops at the box — keep air around the glyph */
+  padding: 0 0.25em 0.12em 0.15em;  /* clip-to-text crops at the box — the italic leans past it on the right */
   background-image: linear-gradient(115deg,
     var(--splash-c1), var(--splash-c2), var(--splash-c3), var(--splash-c4));
   -webkit-background-clip: text;
@@ -597,7 +602,7 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 
    This is a repaint per frame of a text-clipped gradient, which is the cost the
    old 2s loop was removed for. It is bounded now in a way that one wasn't: one
-   glyph, one element, about a second and a half of life before the curtain is
+   wordmark, one element, about a second and a half of life before the curtain is
    dismissed and the node is removed. If boot ever needs those frames back, drop
    the second animation and the mark falls back to the band at rest. */
 @property --splash-c1 { syntax: '<color>'; inherits: false; initial-value: #b7a6e8; }

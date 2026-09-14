@@ -55,9 +55,9 @@
        The maskable additionally sits at 78% to clear Android's 80% safe
        circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=600" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=600" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=600" />
+  <link rel="icon" href="icons/icon-32.png?v=601" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=601" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=601" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -82,21 +82,22 @@
        same-origin, or the fetch is made twice. -->
   <link rel="preload" href="css/fonts/oxygen-400-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="css/fonts/instrument-serif-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="css/fonts/instrument-serif-400i-latin.woff2" as="font" type="font/woff2" crossorigin>
 
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=600" />
-  <link rel="stylesheet" href="css/app.css?v=600" />
+  <link rel="stylesheet" href="css/tokens.css?v=601" />
+  <link rel="stylesheet" href="css/app.css?v=601" />
 </head>
 
 <body>
   <!-- Boot splash: static HTML so it paints before any JS or network work.
-       The serif t wears Tria's four-stop brand ramp, turning — a full pass
-       through the colours every second. app.js fades it out once the first view
+       The italic serif wordmark wears Tria's four-stop brand ramp, turning — a
+       full pass through the colours every second. app.js fades it out once the first view
        is in (see dismissSplash). -->
   <div class="splash" id="splash" aria-hidden="true">
-    <span class="splash-t">t</span>
+    <span class="splash-t">tria</span>
   </div>
 
   <a href="#main" class="skip-link">Skip to main content</a>
@@ -173,10 +174,10 @@
        Local also PINS the version: the old src said `@2`, so any minor release
        shipped itself into production without a deploy. Update deliberately —
        drop a new file in, change this line, bump. -->
-  <script src="js/vendor/supabase-js-2.110.9.min.js?v=600"></script>
-  <script src="js/config.js?v=600"></script>
-  <script src="js/store.js?v=600"></script>
-  <script src="js/app.js?v=600"></script>
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=601"></script>
+  <script src="js/config.js?v=601"></script>
+  <script src="js/store.js?v=601"></script>
+  <script src="js/app.js?v=601"></script>
 </body>
 
 </html>
