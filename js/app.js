@@ -13904,7 +13904,9 @@
         `<div class="field">` +
           `<label for="c-date">When</label>` +
           `<div class="when-row">` +
-            `<input id="c-date" type="date" placeholder="mm/dd/yyyy">` +
+            // Not before today: a plan dated in the past is born "happened",
+            // with no RSVP and no Add to calendar, and nothing on it says why.
+            `<input id="c-date" type="date" placeholder="mm/dd/yyyy" min="${dayMT(Date.now())}">` +
             `<input id="c-time" type="time" aria-label="Time" placeholder="--:-- --">` +
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +

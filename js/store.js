@@ -2881,7 +2881,13 @@ function eventWhenLabel(dateStr, timeStr) {
   const day =
     days === 0 ? 'Today' :
     days === 1 ? 'Tomorrow' :
-    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    d.toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+      // The year, whenever it isn't this one. Without it a plan saved as 2022
+      // read "Sat, Dec 31" like it was coming up, while the app treated it as
+      // long past (and quietly offered no Add to calendar).
+      ...(dateStr.slice(0, 4) !== TODAY.slice(0, 4) ? { year: 'numeric' } : {}),
+    });
   return day + (timeStr ? ` · ${niceTime(timeStr)}` : '');
 }
 
