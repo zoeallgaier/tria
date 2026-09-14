@@ -4040,8 +4040,14 @@
       if (k === 1) return { x: p * 0.55, s: 0.93, r: 0, o: 1 };
       return { x: p, s: 0.86, r: 0, o: k === 2 ? 1 : 0 };
     };
-    const mix = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, s: a.s + (b.s - a.s) * t,
-                                r: a.r + (b.r - a.r) * t, o: a.o + (b.o - a.o) * t });
+    // A card leaving stays a solid photo for most of its way out and only fades
+    // in the last 40%; a card coming back is solid by 40% in. A linear fade had
+    // both photos half see-through across the middle of every swipe.
+    const mix = (a, b, t) => {
+      const ot = b.o < a.o ? Math.max(0, (t - 0.6) / 0.4) : Math.min(1, t / 0.4);
+      return { x: a.x + (b.x - a.x) * t, s: a.s + (b.s - a.s) * t,
+               r: a.r + (b.r - a.r) * t, o: a.o + (b.o - a.o) * ot };
+    };
     // Lay every card out for a drag of `dx` px (0 at rest). A pull toward a card
     // that exists carries each card part-way to its next seat; a pull past either
     // end only leans the front card, a fifth of the finger, and comes back.
@@ -13833,6 +13839,7 @@
   // place and a time attached, so that is what it is made of now.
   let pubType = 'note';
   let cropper = null;        // set once a still is captured/picked; .export() → data-URI
+  let stills = [];           // every picked photo, [{ api, src, im }] in deal order; cropper is stills[0].api
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
   let stopActiveCapture = null;   // teardown for the live camera/mic (getUserMedia or native preview)
   let onCaptureChange = null;     // set by the Post composer so the type indicator re-reads when a frame lands/clears
@@ -13898,17 +13905,21 @@
   // lands (the crop/trim preview takes over); "Choose another" swaps the pick.
   function frameFieldHtml() {
     return `<div class="field frame-field" hidden>` +
-        `<label for="c-file">Photo or clip</label>` +
-        `<input id="c-file" type="file" accept="image/*,video/*" hidden>` +
+        `<label for="c-file">Photos or a clip</label>` +
+        `<input id="c-file" type="file" accept="image/*,video/*" multiple hidden>` +
         // A div, not a <button>: iOS standalone PWAs paint a native pressed-state
         // fill on filled form controls that -webkit-appearance:none doesn't remove
         // (the white tap-flash). A role=button element has no native chrome to
         // paint. Keyboard activation is wired by hand below. Same for #c-replace.
         `<div class="dropzone" id="c-dropzone" role="button" tabindex="0">` +
           svgIcon('image', 'dropzone-ico') +
-          `<span class="dropzone-label">Choose a photo or clip</span>` +
+          `<span class="dropzone-label">Choose photos or a clip</span>` +
         `</div>` +
         `<div class="combo-frame">` +
+          // A carousel's tray: one thumb per photo, tap to look, × to take it out, +
+          // to add. ABOVE the preview, because a portrait preview fills the screen
+          // and anything under it is behind the tab bar the moment the pick lands.
+          `<div class="stills" id="c-stills" role="group" aria-label="Photos in this post" hidden></div>` +
           `<div class="crop crop--free" id="c-crop" hidden>` +
             `<img id="c-cropimg" alt="" draggable="false">` +
           `</div>` +
@@ -13937,7 +13948,10 @@
               `<span class="trim-hint">Scroll to choose the moment. Drag the ends to set length, up to 10 seconds.</span>` +
             `</p>` +
           `</div>` +
-          `<div class="crop-replace" id="c-replace" role="button" tabindex="0" hidden>Choose another</div>` +
+          `<div class="crop-actions">` +
+            `<div class="crop-replace" id="c-addmore" role="button" tabindex="0" hidden>Add more</div>` +
+            `<div class="crop-replace" id="c-replace" role="button" tabindex="0" hidden>Choose another</div>` +
+          `</div>` +
         `</div>` +
       `</div>`;
   }
@@ -14384,8 +14398,11 @@
     // dropzone back to visible so a later re-open shows the upload field.
     function clearFrame() {
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
-      cropper = null; videoCapture = null;
+      cropper = null; videoCapture = null; stills = [];
       fieldsEl.querySelector('#c-crop')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-stills')?.replaceChildren();
+      fieldsEl.querySelector('#c-stills')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-addmore')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-trim')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-replace')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-dropzone')?.removeAttribute('hidden');
@@ -14437,6 +14454,7 @@
       // it before replacing the DOM.
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null;
+      stills = [];
       videoCapture = null;
       onCaptureChange = null;
       wantLink = false;
@@ -14650,6 +14668,7 @@
   // anything over it can't post. Caught on the client, at pick time and pre-upload,
   // with copy that says what to do — not a generic server error.
   const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;
+  const MAX_STILLS = 6;                                 // a carousel's most photos (posts_images_shape agrees)
 
   function wireFrameCapture(root) {
     const file     = root.querySelector('#c-file');
@@ -14669,6 +14688,8 @@
     const reelPlay   = root.querySelector('#c-reelplayhead');
     const trimDur    = root.querySelector('#c-trimdur');
     const replace  = root.querySelector('#c-replace');
+    const addMore  = root.querySelector('#c-addmore');
+    const stillsEl = root.querySelector('#c-stills');
     const errEl    = () => document.getElementById('c-error');
 
     // Put a pick rejection where it can't be missed. iOS holds the user in the
@@ -14709,18 +14730,48 @@
 
     // Open the OS picker. The upload dropzone and the post-pick "Choose another"
     // button both lead here — one way in, the system does the rest.
-    const pick = () => file.click();
+    // "Add more" leads here too, and marks the pick as one that joins the set
+    // instead of replacing it. The value is cleared first so re-picking the same
+    // photo still fires `change`.
+    let appending = false;
+    const pick = () => { appending = false; file.value = ''; file.click(); };
+    const pickMore = () => { appending = true; file.value = ''; file.click(); };
     // dropzone + replace are role=button divs (see frameFieldHtml), so wire the
     // keyboard activation a native <button> would give for free.
-    const pickKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    const pickKey = (fn) => (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
     dropzone.addEventListener('click', pick);
-    dropzone.addEventListener('keydown', pickKey);
+    dropzone.addEventListener('keydown', pickKey(pick));
     replace.addEventListener('click', pick);
-    replace.addEventListener('keydown', pickKey);
+    replace.addEventListener('keydown', pickKey(pick));
+    addMore.addEventListener('click', pickMore);
+    addMore.addEventListener('keydown', pickKey(pickMore));
+
+    const trayAct = (e) => {
+      const x = e.target.closest('[data-x]');
+      if (x) {
+        e.stopPropagation();
+        const i = +x.dataset.x;
+        stills.splice(i, 1);
+        showStill(i < sel ? sel - 1 : sel);
+        return;
+      }
+      if (e.target.closest('.still-add')) { pickMore(); return; }
+      const t = e.target.closest('.still');
+      if (t) showStill(+t.dataset.i);
+    };
+    stillsEl.addEventListener('click', trayAct);
+    stillsEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trayAct(e); }
+    });
 
     file.addEventListener('change', () => {
-      const f = file.files && file.files[0];
-      if (!f) return;
+      const files = [...(file.files || [])];
+      // A cancelled "Add more" leaves the flag up; it only means anything with a set to add to.
+      const adding = appending && stills.length > 0;
+      appending = false;
+      if (!files.length) return;
+      if (adding || files.length > 1) { pickStills(files, adding); return; }
+      const f = files[0];
       if (f.type.startsWith('video/')) handleLibraryVideo(f);
       else if (f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES) {
         // GIFs upload as their original bytes (see initPhotoPreview) — no
@@ -14737,7 +14788,24 @@
     });
 
     // ── Photo → native-aspect preview ────────────────────────────────────────
-    function finishPhoto(dataUrl) {
+    // One photo is a Frame, as it always was; two to six are a carousel, and the
+    // model is the same list either way. Each still keeps its own detached <img>
+    // for export() to draw from, so the big preview is free to show whichever one
+    // was tapped in the tray. The first is the cover, and `cropper` always points
+    // at it, which is what the type inference and a single photo's submit read.
+    let sel = 0, stillsHold = 0;
+    function finishPhoto(dataUrl) { finishStills([dataUrl], false); }
+    function finishStills(srcs, adding) {
+      if (!adding) stills = [];
+      srcs.forEach(src => {
+        const im = new Image();
+        stills.push({ api: initPhotoPreview(im, src), src, im });
+      });
+      showStill(adding ? stills.length - srcs.length : 0);
+    }
+    function showStill(i) {
+      if (!stills.length) { dropStills(); return; }
+      sel = Math.max(0, Math.min(stills.length - 1, i));
       if (frameField) frameField.hidden = false;   // the surface appears now the still has landed
       if (dropzone) dropzone.hidden = true;        // the preview takes over from the upload field
       cropEl.hidden = false;
@@ -14746,21 +14814,109 @@
       try { trimVideo.pause(); } catch {}
       trimEl.hidden = true;
       replace.hidden = false;
+      replace.textContent = stills.length > 1 ? 'Start over' : 'Choose another';
+      // One photo offers "Add more" as a pill; a set has the + at the end of its tray.
+      addMore.hidden = stills.length !== 1;
       videoCapture = null;
-      cropper = initPhotoPreview(imgEl, dataUrl);
+      cropper = stills[0].api;
+      imgEl.style.transform = '';
+      imgEl.src = stills[sel].src;
+      renderTray();
       onCaptureChange?.();   // a still landed → the Post composer flips its type mark to Frame
-      // Hold Post until the preview decodes — export() reads naturalWidth, so
-      // posting early would ship a 1x1 canvas. Re-enable on load (or straight away
-      // if the browser already had it decoded).
+      // Hold Post until every still decodes — export() reads naturalWidth, so
+      // posting early would ship a 1x1 canvas. 'error' as well as 'load': a picture
+      // that never decodes used to leave Post disabled forever, which reads as the
+      // composer refusing to publish. A newer pick owns the button (stillsHold).
       const submitBtn = document.querySelector('.composer-submit');
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        const ready = () => { submitBtn.disabled = false; };
-        if (imgEl.complete && imgEl.naturalWidth) ready();
-        // 'error' as well as 'load': a picture that never decodes used to leave
-        // Post disabled forever, which reads as the composer refusing to publish.
-        else ['load', 'error'].forEach(ev => imgEl.addEventListener(ev, ready, { once: true }));
+      const pending = stills.filter(s => !(s.im.complete && s.im.naturalWidth));
+      const hold = ++stillsHold;
+      if (!submitBtn) return;
+      if (!pending.length) { submitBtn.disabled = false; return; }
+      submitBtn.disabled = true;
+      Promise.all(pending.map(s => new Promise(done => {
+        if (s.im.complete) { done(); return; }
+        s.im.addEventListener('load', done, { once: true });
+        s.im.addEventListener('error', done, { once: true });
+      }))).then(() => { if (hold === stillsHold) submitBtn.disabled = false; });
+    }
+    // The last photo taken out of the tray: back to the upload field.
+    function dropStills() {
+      stills = []; cropper = null; sel = 0; ++stillsHold;
+      cropEl.hidden = true;
+      replace.hidden = true;
+      addMore.hidden = true;
+      stillsEl.hidden = true;
+      stillsEl.replaceChildren();
+      imgEl.removeAttribute('src');
+      if (dropzone) dropzone.hidden = false;
+      onCaptureChange?.();
+      const b = document.querySelector('.composer-submit');
+      if (b) b.disabled = false;
+    }
+    // Built as nodes, not a string: each src is a whole photo as a data URI, and
+    // six of those through the HTML parser is a lot of text to parse for a thumb.
+    function renderTray() {
+      stillsEl.replaceChildren();
+      stillsEl.hidden = stills.length < 2;
+      if (stills.length < 2) return;
+      stills.forEach((s, i) => {
+        const t = document.createElement('div');
+        t.className = 'still' + (i === sel ? ' is-on' : '');
+        t.setAttribute('role', 'button');
+        t.tabIndex = 0;
+        t.dataset.i = String(i);
+        t.setAttribute('aria-pressed', String(i === sel));
+        t.setAttribute('aria-label', `Show photo ${i + 1}`);
+        const im = document.createElement('img');
+        im.alt = '';
+        im.draggable = false;
+        im.src = s.src;
+        const x = document.createElement('span');
+        x.className = 'still-x';
+        x.setAttribute('role', 'button');
+        x.tabIndex = 0;
+        x.dataset.x = String(i);
+        x.setAttribute('aria-label', `Remove photo ${i + 1}`);
+        x.innerHTML = svgIcon('close', 'still-x-ico');
+        t.append(im, x);
+        stillsEl.append(t);
+      });
+      if (stills.length >= MAX_STILLS) return;
+      const add = document.createElement('div');
+      add.className = 'still still-add';
+      add.setAttribute('role', 'button');
+      add.tabIndex = 0;
+      add.setAttribute('aria-label', 'Add more photos');
+      add.innerHTML = svgIcon('close', 'still-add-ico');   // a × turned 45° is a +
+      stillsEl.append(add);
+    }
+    // Several files at once, or anything from "Add more". A carousel is photos
+    // only, and six at most: whatever doesn't fit is left out and said so, and
+    // what does fit still lands.
+    async function pickStills(files, adding) {
+      const photos = files.filter(f => f.type.startsWith('image/')
+        && !(f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES));
+      const room = MAX_STILLS - (adding ? stills.length : 0);
+      const take = photos.slice(0, Math.max(0, room));
+      const err = errEl();
+      if (err) err.textContent = '';
+      if (!take.length) {
+        showPickError(photos.length
+          ? 'That’s six photos, which is as many as one post holds.'
+          : 'A carousel is photos only. Share a clip as its own post.');
+        return;
       }
+      const srcs = await Promise.all(take.map(f => new Promise((ok, fail) => {
+        const r = new FileReader();
+        r.onload = () => ok(r.result);
+        r.onerror = fail;
+        r.readAsDataURL(f);
+      }))).catch(() => null);
+      if (!file.isConnected) return;   // the composer went away while they read
+      if (!srcs) { showPickError('Couldn’t read those photos, try again.'); return; }
+      finishStills(srcs, adding);
+      if (photos.length < files.length) showPickError('A carousel is photos only, so the clip was left out.');
+      else if (take.length < photos.length) showPickError('One post holds six photos, so the rest were left out.');
     }
 
     // ── Video → trim reel ────────────────────────────────────────────────────
@@ -14781,6 +14937,11 @@
       if (dropzone) dropzone.hidden = true;        // the trim surface takes over from the upload field
       cropEl.hidden = true;
       cropper = null;
+      stills = [];
+      stillsEl.hidden = true;
+      stillsEl.replaceChildren();
+      addMore.hidden = true;
+      replace.textContent = 'Choose another';
       trimEl.hidden = false;
       replace.hidden = false;
 
@@ -15540,6 +15701,10 @@
           const g = await grabPosterFromBlob(vc.blob, { atSec: vc.start, maxEdge: 1280 });
           if (g.dataUrl) { data.poster = g.dataUrl; data.imageTint = await tintFromDataUrl(g.dataUrl); }
         } catch {}
+      } else if (stills.length > 1) {
+        // A carousel: every still exported in deal order, cover first. `dims` is
+        // read after export() in the same literal, which is what sets it.
+        data.images = stills.map(s => ({ src: s.api.export(), dims: s.api.dims, tint: s.api.tint() }));
       } else {
         data.image = cropper.export();
         data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
@@ -15602,6 +15767,7 @@
     // information a screen can't.
     hapticEvent('SUCCESS');
     cropper = null;
+    stills = [];
     videoCapture = null;
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // next compose opens as a plain Note until something's attached
@@ -15756,7 +15922,8 @@
   let lbOrigin = null;         // the feed <img> a photo flew out of (hidden mid-flight)
   let lbBaseRect = null;       // the lightbox img's untransformed layout box
   let lbClosing = false;       // swallow re-entry while the close flight runs
-  function openLightbox(src, alt, isVideo, originEl) {
+  let lbGallery = null;        // a carousel's { srcs, index, originOf, onIndex } while it pages
+  function openLightbox(src, alt, isVideo, originEl, gallery = null) {
     if (!lightbox) {
       lightbox = document.createElement('div');
       lightbox.className = 'lightbox';
@@ -15778,6 +15945,27 @@
     lightbox.innerHTML = isVideo
       ? `<video src="${esc(src + (win ? '#t=' + Math.max(win.start, 0.001) : ''))}" playsinline controls autoplay></video>`
       : `<img src="${esc(src)}" alt="${esc(alt || '')}">`;
+    // A carousel is the one place a count is the kind thing: the deck in the feed
+    // shows where you are with its peeking edge, and this is the mode you tapped
+    // into to have it plainly. "2 of 5" and two real buttons, so it can be driven
+    // without a swipe at all. It says where you are, never what you're behind on.
+    lbGallery = !isVideo && gallery && gallery.srcs && gallery.srcs.length > 1
+      ? { srcs: gallery.srcs, index: gallery.index || 0, originOf: gallery.originOf, onIndex: gallery.onIndex }
+      : null;
+    if (lbGallery) {
+      lightbox.insertAdjacentHTML('beforeend',
+        `<div class="lb-pager" role="group" aria-label="Photos">` +
+          `<button type="button" class="lb-step" data-step="-1" aria-label="Previous photo">${svgIcon('chevron', 'lb-step-ico')}</button>` +
+          `<span class="lb-count" aria-live="polite"></span>` +
+          `<button type="button" class="lb-step lb-step--next" data-step="1" aria-label="Next photo">${svgIcon('chevron', 'lb-step-ico')}</button>` +
+        `</div>`);
+      lightbox.querySelector('.lb-pager').addEventListener('click', (e) => {
+        e.stopPropagation();          // the pager is not the backdrop: never a close
+        const b = e.target.closest('.lb-step');
+        if (b && b.getAttribute('aria-disabled') !== 'true') pageLightbox(+b.dataset.step);
+      });
+      syncLbPager();
+    }
     // Native video controls (scrub, pause) must not bubble into the backdrop's
     // click-to-close; tapping the photo itself, though, still closes as before.
     if (isVideo) {
@@ -15880,8 +16068,96 @@
     document.removeEventListener('keydown', onKey);
     if (lightboxReturn && lightboxReturn.focus) lightboxReturn.focus();
     lightboxReturn = null;
+    lbGallery = null;
   }
-  const onKey = (e) => { if (e.key === 'Escape') closeLightbox(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') closeLightbox();
+    else if (lbGallery && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      pageLightbox(e.key === 'ArrowRight' ? 1 : -1);
+    }
+  };
+
+  // The pager's words and ends, plus a head start on the photos either side so a
+  // page lands on a decoded bitmap rather than a blank.
+  function syncLbPager() {
+    const g = lbGallery;
+    if (!g || !lightbox) return;
+    const count = lightbox.querySelector('.lb-count');
+    if (count) count.textContent = `${g.index + 1} of ${g.srcs.length}`;
+    lightbox.querySelectorAll('.lb-step').forEach(b => {
+      const i = g.index + (+b.dataset.step);
+      // aria-disabled, not `disabled`: a disabled button hands its tap to the
+      // backdrop in WebKit, and a dead arrow must not close the photo.
+      b.setAttribute('aria-disabled', String(i < 0 || i >= g.srcs.length));
+    });
+    [g.index - 1, g.index + 1].forEach(i => {
+      if (!g.srcs[i]) return;
+      const im = new Image();
+      im.decoding = 'async';
+      im.src = g.srcs[i];
+    });
+  }
+
+  // Turn a carousel's page in the lightbox. The photo leaves the way the finger
+  // was going (from wherever a drag left it), the next one arrives from the other
+  // side, and the deck in the feed moves under the veil so closing still flies
+  // the photo home to the card it belongs to — when the two shapes are close
+  // enough to fly between, the same 20% rule the open uses; otherwise it fades.
+  function pageLightbox(step, fromX = 0) {
+    const g = lbGallery;
+    const pic = lightbox && lightbox.querySelector('img');
+    const next = g ? g.index + step : -1;
+    if (!g || !pic || lbClosing || next < 0 || next >= g.srcs.length) return false;
+    g.index = next;
+    if (lbOrigin) lbOrigin.style.visibility = '';
+    lbOrigin = null;
+    lbBaseRect = null;
+    if (g.onIndex) g.onIndex(next);
+    syncLbPager();
+    hapticTap('LIGHT');
+    const w = window.visualViewport?.width || window.innerWidth;
+    const current = () => !lbClosing && g === lbGallery && g.index === next;
+    const arrive = () => {
+      if (!current()) return;
+      pic.style.transform = '';
+      pic.src = g.srcs[next];
+      let loaded = false, landed = false;
+      const home = () => {
+        if (!loaded || !landed || !current()) return;
+        const el = g.originOf && g.originOf(next);
+        if (!el || !el.isConnected) return;
+        const r0 = el.getBoundingClientRect(), r1 = pic.getBoundingClientRect();
+        if (!r0.width || !r0.height || !r1.width || !r1.height) return;
+        const shear = (r0.width / r0.height) / (r1.width / r1.height);
+        if (shear > 1.2 || shear < 0.83) return;
+        lbOrigin = el;
+        lbBaseRect = r1;
+        el.style.visibility = 'hidden';
+      };
+      if (pic.complete && pic.naturalWidth) loaded = true;
+      else pic.addEventListener('load', () => { loaded = true; home(); }, { once: true });
+      if (prefersReduced()) { landed = true; home(); return; }
+      try {
+        const a = pic.animate([
+          { transform: `translateX(${step * w * 0.35}px)`, opacity: 0 },
+          { transform: 'none', opacity: 1 },
+        ], { duration: 360, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+        a.onfinish = () => { landed = true; home(); };
+      } catch { landed = true; home(); }
+    };
+    if (prefersReduced()) { arrive(); return true; }
+    try {
+      const out = pic.animate([
+        { transform: `translateX(${fromX}px)`, opacity: 1 },
+        { transform: `translateX(${-step * w * 0.5}px)`, opacity: 0 },
+      ], { duration: 150, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+      // Arrive first, then drop the fill: the other order paints the old photo
+      // back in the middle for a frame.
+      out.onfinish = () => { arrive(); out.cancel(); };
+    } catch { arrive(); }
+    return true;
+  }
 
   // Drag to dismiss: the media follows the finger, the veil thins with distance,
   // and a real flick or a long pull lets go — closeLightbox then flies a photo
@@ -15924,6 +16200,7 @@
     const LB_MAX = 5;            // past ~5x a phone photo is bitmap, not detail
     let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, armed = false, raf = 0;
     let lastY = 0, lastT = 0, vy = 0;
+    let lastX = 0, vx = 0, axis = null;   // a carousel's drag picks sideways (page) or down (dismiss) once
     let sc = 1, tx = 0, ty = 0;      // the viewer's transform while zoomed, ours alone
     const pts = new Map();           // live pointers, so two fingers can be told from one
     let pinch = null;                // { d, s } captured when the second finger lands
@@ -16029,8 +16306,9 @@
       }
       dragging = true;
       armed = !isVideo;      // a photo is armed at once; a video waits for vertical intent
-      sx = e.clientX; sy = e.clientY; dx = dy = vy = 0;
-      lastY = e.clientY; lastT = e.timeStamp;
+      sx = e.clientX; sy = e.clientY; dx = dy = vy = vx = 0;
+      lastY = e.clientY; lastX = e.clientX; lastT = e.timeStamp;
+      axis = null;
       if (armed) { try { mover.setPointerCapture(e.pointerId); } catch { /* older engines */ } }
     });
     mover.addEventListener('pointermove', (e) => {
@@ -16053,6 +16331,12 @@
       }
       if (!dragging) return;
       dx = e.clientX - sx; dy = e.clientY - sy;
+      // A carousel: the first real move decides. Sideways turns the page, anything
+      // else is the dismiss pull a single photo has always had.
+      if (lbGallery && !isVideo && !axis) {
+        if (Math.hypot(dx, dy) < 10) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      }
       // Video: commit to the dismiss only once the pull is real and vertical-dominant.
       // A mostly-sideways move is a scrub, so bail (un-dragged) and let the controls have it.
       if (!armed) {
@@ -16062,12 +16346,20 @@
       }
       if (e.timeStamp > lastT) {      // velocity for the flick test, px/ms
         vy = (e.clientY - lastY) / (e.timeStamp - lastT);
-        lastY = e.clientY; lastT = e.timeStamp;
+        vx = (e.clientX - lastX) / (e.timeStamp - lastT);
+        lastY = e.clientY; lastX = e.clientX; lastT = e.timeStamp;
       }
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
         if (!dragging || !armed) return;
+        if (axis === 'x') {
+          // Past either end the photo only leans, a quarter of the finger.
+          const g = lbGallery;
+          const edge = g && ((dx > 0 && g.index === 0) || (dx < 0 && g.index === g.srcs.length - 1));
+          mover.style.transform = `translateX(${edge ? dx * 0.25 : dx}px)`;
+          return;
+        }
         const d = Math.hypot(dx, dy);
         mover.style.transform =
           `translate(${dx}px, ${dy}px) scale(${Math.max(0.82, 1 - d / 1400)})`;
@@ -16081,6 +16373,19 @@
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
       if (!armed) return;      // a tap or a scrub: it never became a drag, nothing to undo
       armed = false;
+      if (axis === 'x') {
+        axis = null;
+        if (Math.abs(dx) > 8) swallowClick();
+        const step = (dx < -70 || vx < -0.5) ? 1 : (dx > 70 || vx > 0.5) ? -1 : 0;
+        if (step && pageLightbox(step, dx)) return;
+        // Not far enough, or the end of the set: home, and never a close.
+        try {
+          const back = mover.animate({ transform: 'none' }, { duration: 460, easing: springEase() });
+          back.onfinish = () => { mover.style.transform = ''; back.cancel(); };
+        } catch { mover.style.transform = ''; }
+        return;
+      }
+      axis = null;
       const d = Math.hypot(dx, dy);
       // A drag was a drag: swallow the click that follows so it can't double-close
       // (or close against the user after a spring-back).
