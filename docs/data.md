@@ -57,6 +57,14 @@ that goes wrong is a save, which says "Pinned cards aren't set up on this server
 yet" rather than a generic failure. Run it and the feature is live with no
 deploy. **So the outstanding list is two: the `.p8` key and this.**
 
+**`supabase/add-chats.sql` (1.7) is written and NOT yet run** (probed
+2026-09-14: `chats`, `chat_members` and `messages` each answer `404`, against
+`headcount` answering `200`). Until it runs the Chats tab shows only its Updates
+row and a line saying chats are almost here, and the Message rows on profiles
+are not offered. It needs a second step REST can't do: **redeploy the push
+function**, whose new `messages` branch is what notifies a chat. The trigger in
+the migration fires either way; an old function simply ignores the table.
+
 The client stays tolerant of a database without `listening_to` anyway, and it's
 worth knowing what that looks like so it isn't mistaken for a bug on a fresh
 install: PostgREST omits a column that doesn't exist, so `mapUser` finds no song,

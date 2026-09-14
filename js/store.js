@@ -52,7 +52,10 @@ const Store = (() => {
   //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
   //   declines: usernames whose request I turned down (durably — see declineRequest)
   //   session: the signed-in username, or null
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, edgeTs: {}, declines: [], audience: [], blocks: [] });
+  //   chats / chatMembers / messages / messageHearts: see "Chats" below
+  //   chatsReady: whether add-chats.sql has run (the tables answered)
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+                         chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -103,6 +106,7 @@ const Store = (() => {
   // Throw the world away (sign-out, account deletion). Any load in flight is
   // answering a question that no longer has an asker.
   function clearWorld() {
+    stopLive();
     worldGen++;
     pendingWrites = [];
     state = empty();
@@ -300,6 +304,7 @@ const Store = (() => {
     await loadWorld();
     const me = state.users.find(u => u.id === session.user.id);
     state.session = me ? me.username : null;
+    startLive();
   }
 
   // Read a whole table, however big it is.
@@ -399,11 +404,13 @@ const Store = (() => {
       // (no blocks table yet → error, data null → []); the app keeps a localStorage
       // mirror so blocking still works before this migration is run.
       readAll('blocks', ['blocker', 'blocked']),
+      // Chats, members, messages and hearts, as one group (see readChats).
+      readChats(),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, h, pv, f, fd, pa, bl] = read;
+    const [u, p, c, l, h, pv, f, fd, pa, bl, ch] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -473,10 +480,14 @@ const Store = (() => {
     // Usernames I've blocked (RLS already scoped these rows to me). Empty on a
     // pre-migration DB — the localStorage mirror in app.js covers that gap.
     state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
+    applyChats(ch, nameById);
 
     // Everything written while we were waiting is newer than everything we just
     // read, so it goes back on top (see write()).
     for (const [key, fn] of pendingWrites.slice(mark)) state[key] = fn(state[key]);
+    // Signed in before add-chats.sql ran, and it has run since: this is the
+    // first pull that can open the channel.
+    startLive();
   }
 
   // Re-pull the whole world on demand (nav re-taps, the app foregrounding).
@@ -1618,6 +1629,359 @@ const Store = (() => {
     return evts.sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
   }
 
+  /* ── Chats (1.7) ────────────────────────────────────────────────────────────
+     Direct messages, groups and (from stage 2) activity chats. Every rule about
+     who may talk to whom lives in supabase/add-chats.sql; RLS hands this cache
+     only the chats I am in, so like posts, the cache IS the permission.
+
+     They load with the world and then stay LIVE on one Realtime channel while
+     signed in: a message or a heart is applied straight from the change feed,
+     and anything about membership (a new chat, someone joining, a request
+     answered) re-reads the four chat tables rather than being patched by hand.
+     Every one of those paths goes through write(), including the re-read, which
+     takes part in the journal exactly the way loadWorld does.
+
+     A pre-migration database answers these reads with an error, which leaves
+     `chatsReady` false and every list empty. The Chats page says so rather than
+     offering a new-chat button that can only fail. */
+  const isMissing = (error) => !!error &&
+    (error.code === 'PGRST205' || error.code === 'PGRST202' || error.code === '42P01');
+
+  function readChats() {
+    return Promise.all([
+      readAll('chats', ['created_at', 'id']),
+      readAll('chat_members', ['chat_id', 'user_id']),
+      readAll('messages', ['created_at', 'id']),
+      readAll('message_hearts', ['message_id', 'user_id']),
+    ]);
+  }
+  const mapMessage = (row, nameById) => ({
+    id: row.id, chatId: row.chat_id, author: nameById.get(row.author),
+    text: row.body || '', image: row.image || null, replyTo: row.reply_to || null,
+    _ts: row.created_at,
+  });
+  function applyChats([c, m, msg, hr], nameById) {
+    // One error for the group decides readiness: the four tables arrive in one
+    // migration, so either they are all there or none of them are.
+    if (c.error) {
+      if (isMissing(c.error)) state.chatsReady = false;
+      else console.warn('[tria] could not read chats, keeping the last good copy:', c.error.message || c.error);
+      return;
+    }
+    state.chatsReady = true;
+    state.chats = (c.data || []).map(row => ({
+      id: row.id, kind: row.kind, title: row.title || '', postId: row.post_id || null,
+      directKey: row.direct_key || '', createdBy: nameById.get(row.created_by) || null,
+      _ts: row.created_at, lastAt: row.last_at || row.created_at,
+    }));
+    if (!m.error) state.chatMembers = (m.data || []).map(row => ({
+      chatId: row.chat_id, user: nameById.get(row.user_id), userId: row.user_id,
+      status: row.status, muted: !!row.muted, lastReadAt: row.last_read_at || '',
+      clearedAt: row.cleared_at || '', _ts: row.joined_at,
+    }));
+    if (!msg.error) state.messages = (msg.data || []).map(row => mapMessage(row, nameById));
+    if (!hr.error) state.messageHearts = (hr.data || []).map(row => ({
+      messageId: row.message_id, user: nameById.get(row.user_id), _ts: row.created_at,
+    }));
+  }
+
+  // Only the chat tables, for a change on the channel that isn't a message.
+  // A load in its own right, so it keeps the journal's promise: a message sent
+  // while this is in the air is replayed on top of what it reads.
+  async function reloadChats() {
+    const gen = worldGen;
+    const mark = pendingWrites.length;
+    loadsInFlight++;
+    try {
+      const res = await readChats();
+      if (gen !== worldGen) return;
+      applyChats(res, nameMap());
+      for (const [key, fn] of pendingWrites.slice(mark)) state[key] = fn(state[key]);
+    } finally {
+      loadsInFlight--;
+      if (!loadsInFlight) pendingWrites = [];
+    }
+  }
+
+  // Grouped once per array, under the rule at "Derived indexes": every write
+  // replaces the array, so a new array is a new key and the old index is garbage.
+  const chatGroups = new WeakMap();
+  function groupOf(rows, key) {
+    let g = chatGroups.get(rows);
+    if (!g) {
+      g = new Map();
+      for (const r of rows) {
+        const k = r[key];
+        if (!g.has(k)) g.set(k, []);
+        g.get(k).push(r);
+      }
+      for (const list of g.values()) list.sort((a, b) => (a._ts < b._ts ? -1 : a._ts > b._ts ? 1 : 0));
+      chatGroups.set(rows, g);
+    }
+    return g;
+  }
+
+  const chatsReady = () => !!state.chatsReady;
+  const myChatRow = (chatId) =>
+    (groupOf(state.chatMembers, 'chatId').get(chatId) || []).find(m => m.user === state.session) || null;
+  // Full members only. A pending or denied row never shows as someone "in" it.
+  const chatMembers = (chatId) =>
+    (groupOf(state.chatMembers, 'chatId').get(chatId) || []).filter(m => m.status === 'member' && m.user);
+
+  // Oldest first, from the point I cleared the chat, without anyone I've blocked.
+  function messagesFor(chatId) {
+    const mine = myChatRow(chatId);
+    const from = (mine && mine.clearedAt) || '';
+    return (groupOf(state.messages, 'chatId').get(chatId) || [])
+      .filter(m => m.author && m._ts > from && !isBlocked(m.author));
+  }
+  const heartsFor = (messageId) => groupOf(state.messageHearts, 'messageId').get(messageId) || [];
+  const heartedByMe = (messageId) => heartsFor(messageId).some(h => h.user === state.session);
+
+  function chatView(c) {
+    const me = state.session;
+    const mine = myChatRow(c.id);
+    if (!mine || mine.status === 'denied') return null;
+    const members = chatMembers(c.id).map(m => m.user);
+    // A direct chat names the other person off its key, which a requester can
+    // read even while the other member row is fenced from them.
+    let other = null;
+    if (c.kind === 'direct') {
+      const myId = idOf(me);
+      const theirs = c.directKey.split(':').find(id => id && id !== myId);
+      const u = theirs && state.users.find(x => x.id === theirs);
+      other = u ? u.username : null;
+    }
+    const msgs = messagesFor(c.id);
+    const last = msgs[msgs.length - 1] || null;
+    return {
+      id: c.id, kind: c.kind, title: c.title, postId: c.postId, createdBy: c.createdBy,
+      other, members, last, status: mine.status, muted: mine.muted,
+      unread: !!last && last.author !== me && last._ts > mine.lastReadAt,
+      lastAt: last ? last._ts : (mine.clearedAt || c._ts),
+      // Deleted on my side and nothing said since: off the list until someone speaks.
+      cleared: !!mine.clearedAt && !last,
+    };
+  }
+  const newestFirst = (a, b) => (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : 0);
+  function chats() {
+    return state.chats.map(chatView)
+      .filter(v => v && v.status === 'member' && !v.cleared && !(v.other && isBlocked(v.other)))
+      .sort(newestFirst);
+  }
+  function chatRequests() {
+    return state.chats.map(chatView)
+      .filter(v => v && v.status === 'request' && v.last && !(v.other && isBlocked(v.other)))
+      .sort(newestFirst);
+  }
+  function chat(id) {
+    const c = state.chats.find(x => x.id === id);
+    return c ? chatView(c) : null;
+  }
+  // The tab's half of the dot. A muted chat never lights it; a request does.
+  const chatsAreNew = () =>
+    chats().some(c => c.unread && !c.muted) || chatRequests().some(c => c.unread);
+
+  // The words add-chats.sql raises are written for people, so they pass through.
+  function chatError(error, fallback) {
+    if (isMissing(error)) return 'Chats aren’t set up on this server yet.';
+    if (error && (error.code === '42501' || error.code === '22023') && error.message) return error.message;
+    return fallback;
+  }
+
+  async function startDirectChat(username) {
+    const other = idOf(username);
+    if (!state.session || !other) return { ok: false, error: 'You need to be signed in.' };
+    const { data, error } = await sb.rpc('start_direct_chat', { p_other: other });
+    if (error) return { ok: false, error: chatError(error, 'Couldn’t start that chat, try again.') };
+    await reloadChats();
+    return { ok: true, id: data };
+  }
+
+  async function startGroupChat(usernames, title = '') {
+    if (!state.session) return { ok: false, error: 'You need to be signed in.' };
+    const ids = usernames.map(idOf).filter(Boolean);
+    const { data, error } = await sb.rpc('start_group_chat', { p_members: ids, p_title: title || null });
+    if (error) return { ok: false, error: chatError(error, 'Couldn’t start that group, try again.') };
+    await reloadChats();
+    return { ok: true, id: data };
+  }
+
+  async function addChatMembers(chatId, usernames) {
+    const { error } = await sb.rpc('add_chat_members', { p_chat: chatId, p_members: usernames.map(idOf).filter(Boolean) });
+    if (error) return { ok: false, error: chatError(error, 'Couldn’t add them, try again.') };
+    await reloadChats();
+    return { ok: true };
+  }
+
+  async function renameChat(chatId, title) {
+    const { error } = await sb.rpc('rename_chat', { p_chat: chatId, p_title: title || '' });
+    if (error) return { ok: false, error: chatError(error, 'Couldn’t rename the group, try again.') };
+    const clean = String(title || '').trim();
+    write('chats', cs => cs.map(c => (c.id === chatId ? Object.assign({}, c, { title: clean }) : c)));
+    return { ok: true };
+  }
+
+  async function sendMessage(chatId, text, photo = null, replyTo = null) {
+    const me = state.session;
+    if (!me) return { ok: false, error: 'You need to be signed in.' };
+    text = String(text || '').trim();
+    if (!text && !photo) return { ok: false, error: 'Say something first.' };
+    const row = { chat_id: chatId, author: idOf(me), body: text };
+    if (replyTo) row.reply_to = replyTo;
+    if (photo) {
+      try { row.image = await uploadImage(photo.src, 'message', photo.dims); }
+      catch { return { ok: false, error: 'Couldn’t upload the photo, try again.' }; }
+    }
+    const { data, error } = await sb.from('messages').insert(row).select().single();
+    if (error) {
+      if (row.image) {
+        const path = /\/object\/public\/media\/(.+)$/.exec(row.image);
+        if (path) sb.storage.from('media').remove([decodeURIComponent(path[1])]).catch(() => {});
+      }
+      return { ok: false, error: chatError(error, 'Couldn’t send that, try again.') };
+    }
+    const added = mapMessage(data, nameMap());
+    write('messages', ms => upsert(ms, added, x => x.id === added.id));
+    // The insert trigger moved my own read mark to this message; say so here too.
+    write('chatMembers', ms => ms.map(x =>
+      (x.chatId === chatId && x.user === me && x.lastReadAt < added._ts
+        ? Object.assign({}, x, { lastReadAt: added._ts }) : x)));
+    return { ok: true, message: added };
+  }
+
+  async function deleteMessage(id) {
+    const { error } = await sb.from('messages').delete().eq('id', id);
+    if (error) return { ok: false, error: 'Couldn’t unsend that, try again.' };
+    write('messages', ms => ms.filter(m => m.id !== id));
+    write('messageHearts', hs => hs.filter(h => h.messageId !== id));
+    return { ok: true };
+  }
+
+  async function toggleMessageHeart(messageId) {
+    const me = state.session;
+    if (!me) return { ok: false };
+    const had = heartedByMe(messageId);
+    const row = { messageId, user: me, _ts: new Date().toISOString() };
+    const same = h => h.messageId === messageId && h.user === me;
+    write('messageHearts', hs => (had ? hs.filter(h => !same(h)) : upsert(hs, row, same)));
+    const q = had
+      ? sb.from('message_hearts').delete().eq('message_id', messageId).eq('user_id', idOf(me))
+      : sb.from('message_hearts').insert({ message_id: messageId, user_id: idOf(me) });
+    const { error } = await q;
+    if (error) {
+      write('messageHearts', hs => (had ? upsert(hs, row, same) : hs.filter(h => !same(h))));
+      return { ok: false };
+    }
+    return { ok: true, hearted: !had };
+  }
+
+  // Patch my own member row, optimistically, and put it back on a refusal.
+  async function patchMyChatRow(chatId, local, remote) {
+    const me = state.session;
+    const before = myChatRow(chatId);
+    if (!me || !before) return { ok: false };
+    const mine = x => x.chatId === chatId && x.user === me;
+    write('chatMembers', ms => ms.map(x => (mine(x) ? Object.assign({}, x, local) : x)));
+    const { error } = await sb.from('chat_members').update(remote)
+      .eq('chat_id', chatId).eq('user_id', idOf(me));
+    if (error) {
+      write('chatMembers', ms => ms.map(x => (mine(x) ? before : x)));
+      return { ok: false, error: chatError(error, 'Couldn’t save that, try again.') };
+    }
+    return { ok: true };
+  }
+
+  // Read up to the newest message. Stamped with THAT message's time rather than
+  // the device clock, so a phone running slow can't leave its own chat unread.
+  function markChatRead(chatId) {
+    const mine = myChatRow(chatId);
+    const msgs = messagesFor(chatId);
+    const last = msgs[msgs.length - 1];
+    if (!mine || !last || last._ts <= mine.lastReadAt) return Promise.resolve({ ok: true });
+    return patchMyChatRow(chatId, { lastReadAt: last._ts }, { last_read_at: last._ts });
+  }
+  const setChatMuted = (chatId, muted) =>
+    patchMyChatRow(chatId, { muted: !!muted }, { muted: !!muted });
+  const answerChatRequest = (chatId, accept) => {
+    const status = accept ? 'member' : 'denied';
+    return patchMyChatRow(chatId, { status }, { status });
+  };
+  // "Delete chat" on a direct chat: history up to now goes, for me only, and the
+  // chat leaves my list until one of us says something. The mark is the newest
+  // message's own time for markChatRead's reason.
+  function clearChat(chatId) {
+    const msgs = messagesFor(chatId);
+    const at = msgs.length ? msgs[msgs.length - 1]._ts : new Date().toISOString();
+    return patchMyChatRow(chatId, { clearedAt: at, lastReadAt: at }, { cleared_at: at, last_read_at: at });
+  }
+  async function leaveChat(chatId) {
+    const me = state.session;
+    const { error } = await sb.from('chat_members').delete()
+      .eq('chat_id', chatId).eq('user_id', idOf(me));
+    if (error) return { ok: false, error: chatError(error, 'Couldn’t leave, try again.') };
+    write('chatMembers', ms => ms.filter(x => !(x.chatId === chatId && x.user === me)));
+    return { ok: true };
+  }
+
+  /* THE CHANNEL. One per signed-in session, opened once the tables are known to
+     exist and closed on sign-out. What arrives while the app is in the
+     background is simply missed, and that is fine: coming back to the
+     foreground pulls the whole world, chats included. */
+  let liveChannel = null;
+  let chatReloadTimer = 0;
+  const chatListeners = [];
+  const onChats = (fn) => { chatListeners.push(fn); };
+  const tellChats = () => chatListeners.forEach(fn => {
+    try { fn(); } catch (e) { console.warn('[tria] chat listener failed:', e); }
+  });
+  // Several membership changes land together (a group is created as one chat
+  // row and N member rows), so they share one re-read.
+  function queueChatReload() {
+    clearTimeout(chatReloadTimer);
+    chatReloadTimer = setTimeout(() => { reloadChats().then(tellChats, () => {}); }, 250);
+  }
+  function startLive() {
+    if (liveChannel || !state.session || !state.chatsReady) return;
+    const gen = worldGen;
+    const here = () => gen === worldGen;
+    liveChannel = sb.channel('tria-chats')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ({ new: row }) => {
+        if (!here() || !row) return;
+        const m = mapMessage(row, nameMap());
+        // A chat or an author the cache hasn't met yet: re-read rather than
+        // file a message under nothing.
+        if (!m.author || !state.chats.some(c => c.id === m.chatId)) { queueChatReload(); return; }
+        write('messages', ms => upsert(ms, m, x => x.id === m.id));
+        tellChats();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, ({ old }) => {
+        if (!here() || !old || !old.id) return;
+        write('messages', ms => ms.filter(m => m.id !== old.id));
+        tellChats();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_hearts' }, ({ eventType, new: row, old }) => {
+        if (!here()) return;
+        const r = eventType === 'DELETE' ? old : row;
+        if (!r || !r.message_id) return;
+        const user = nameMap().get(r.user_id);
+        const same = h => h.messageId === r.message_id && h.user === user;
+        if (eventType === 'DELETE') write('messageHearts', hs => hs.filter(h => !same(h)));
+        else if (user) write('messageHearts', hs => upsert(hs, { messageId: r.message_id, user, _ts: r.created_at }, same));
+        tellChats();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members' }, () => { if (here()) queueChatReload(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => { if (here()) queueChatReload(); })
+      .subscribe();
+  }
+  function stopLive() {
+    clearTimeout(chatReloadTimer);
+    if (!liveChannel) return;
+    const ch = liveChannel;
+    liveChannel = null;
+    sb.removeChannel(ch).catch(() => {});
+  }
+
   // ── Profile (async writes) ──────────────────────────────────────────────────
   // Edit my row in the cache. Goes through write() like every other cache change
   // (see the top of the file), so an edit made while a load is in flight isn't
@@ -2394,6 +2758,11 @@ const Store = (() => {
     pollVotesFor, myPollVote, votePoll, pollClosed, pollClosesAt,
     // Notifications
     notifications,
+    // Chats
+    chatsReady, chats, chatRequests, chat, chatMembers, messagesFor, heartsFor, heartedByMe,
+    chatsAreNew, startDirectChat, startGroupChat, addChatMembers, renameChat,
+    sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
+    answerChatRequest, clearChat, leaveChat, onChats,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,

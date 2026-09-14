@@ -6898,6 +6898,256 @@ button.poll-option:disabled { cursor: default; }
 }
 .notif--new .notif-dot { opacity: 1; }
 
+/* ── Chats (1.7) ──────────────────────────────────────────────────────────────
+   The list is the ledger's row language exactly — flat, hairline-divided, the
+   inset carried by the row — because it is the page Updates became, and Updates
+   is its first row. A chat is bold when something in it is new, and wears the
+   same dot as the tab, in the reader's own colour. Never a number. */
+.chat-list {
+  list-style: none;
+  margin-block: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chat-list--pinned { margin-bottom: 1.1rem; }
+.chat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.8rem var(--inset);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  transition: background-color var(--dur-micro);
+}
+.chat-list li:first-child .chat-row { border-top: 1px solid var(--rule); }
+.chat-pane:not(.is-still) .chat-row { animation: rise var(--dur-slow) var(--ease) both; }
+@media (hover: hover) { .chat-row:hover { background: var(--surface); } }
+.chat-list li[hidden] { display: none; }
+.chat-avatar { width: 48px; height: 48px; flex-shrink: 0; font-size: 1.1rem; }
+.chat-glyph {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.chat-glyph svg { width: 24px; height: 24px; }
+.chat-faces { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
+.chat-faces .chat-avatar {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  font-size: 0.8rem;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.chat-faces .chat-avatar:first-child { top: 0; left: 0; }
+.chat-faces .chat-avatar:last-child:not(:first-child) { right: 0; bottom: 0; }
+.chat-row-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+.chat-row-top { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+.chat-row-name {
+  font-size: 1rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-row-muted { width: 14px; height: 14px; color: var(--muted); flex-shrink: 0; align-self: center; }
+.chat-row-when { margin-left: auto; font-size: 0.78rem; color: var(--muted); flex-shrink: 0; }
+.chat-row-preview {
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-row--new .chat-row-name { font-weight: 700; }
+.chat-row--new .chat-row-preview { color: var(--text); font-weight: 500; }
+.chat-row--new .notif-dot { opacity: 1; }
+.chat-note {
+  margin: 0 0 1rem;
+  padding: 0;                       /* on the kicker's edge, not the rows' inset */
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--muted);
+}
+
+/* New chat: a pick is a round check at the row's end, filled with the reader's
+   colour once it's on. */
+.chat-check {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule);
+  color: transparent;
+  transition: background-color var(--dur-micro), border-color var(--dur-micro);
+}
+.chat-check svg { width: 15px; height: 15px; }
+[aria-pressed="true"] > .chat-check { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.newchat-name { padding: 0 var(--inset) 1rem; }
+.newchat-name[hidden] { display: none; }
+.newchat-name-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  font-size: 16px;                  /* the floor that stops iOS zooming on focus */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-field);
+}
+
+/* A chat. The bar's clearance is body.postbar-live's, the post page's own. */
+.msg-list {
+  list-style: none;
+  max-width: var(--feed-width);
+  margin: 0 auto;
+  padding: 0.5rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+}
+.chat-head { align-self: center; margin: 1.2rem 0 0.4rem; }
+.chat-head-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text);
+}
+.chat-head-avatar { width: 64px; height: 64px; font-size: 1.4rem; }
+.chat-head-name { font-weight: 700; }
+.msg-day {
+  align-self: center;
+  margin: 1.1rem 0 0.3rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.msg-empty { align-self: center; margin: 2rem 0; font-size: 0.9rem; color: var(--muted); }
+.msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-inline: var(--inset);
+}
+.msg--run { margin-top: 3px; }
+.msg--mine { justify-content: flex-end; }
+.msg-face { width: 28px; flex-shrink: 0; }
+.msg-avatar { width: 28px; height: 28px; font-size: 0.75rem; }
+.msg-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  max-width: 76%;
+}
+.msg--mine .msg-col { align-items: flex-end; }
+.msg-name { margin-left: 0.8rem; font-size: 0.75rem; color: var(--muted); }
+.msg-bubble {
+  padding: 0.5rem 0.85rem;
+  border-radius: 18px;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Yours wear your colour, thinned onto the paper, so the two sides of a chat
+   are told apart by whose it is rather than by a second palette. */
+.msg--mine .msg-bubble { background: color-mix(in srgb, var(--accent) 26%, var(--surface)); }
+.msg-photo {
+  display: block;
+  width: min(240px, 100%);
+  max-height: 320px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 0;
+  border-radius: var(--radius-card);
+  cursor: zoom-in;
+}
+.msg-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.msg-reply {
+  max-width: 100%;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-left: 2px solid var(--rule);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-hearts {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  color: var(--dot);
+  background: var(--bg);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--rule);
+  cursor: pointer;
+}
+.msg-hearts svg { width: 13px; height: 13px; fill: currentColor; stroke: none; }
+.chat-request {
+  margin: 1rem var(--inset);
+  padding: 1rem;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+}
+.chat-request p { margin: 0 0 0.8rem; font-size: 0.95rem; }
+.chat-request-actions { display: flex; justify-content: center; gap: 0.6rem; }
+
+/* The reply chip rides the photo tray's own placement (it carries
+   .postbar-attach), and stacks above a waiting photo when there is one. */
+.postbar.has-photo .postbar-reply { margin-bottom: calc(88px + 1.2rem); }
+.postbar-reply-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin-left: 0.4rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: var(--glass-edge);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--glass-lift);
+  pointer-events: auto;
+}
+.postbar-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.postbar-reply-x {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 0;
+}
+.postbar-reply-x svg { width: 14px; height: 14px; }
+
 /* ── Friend requests on Updates — an actionable notice sitting atop the passive
    ledger. Same hairline-row language as the ledger below (and the Friends
    directory), under the site's section kicker; the only difference is the row

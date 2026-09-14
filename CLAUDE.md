@@ -20,6 +20,14 @@ The same files also serve a website; that is a byproduct, not a target. See
   `CapApp-SPM/` (CLI-managed), `verify-plugins.sh`.
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`.
 
+## 1.7 is chats, activities and the public site
+
+Zoe's answers, the calls Claude made, and the three stages:
+[docs/1.7.md](docs/1.7.md). **Chats replaced Updates as a tab**; Updates is the
+pinned first row of the chat list and still lives at `#/updates`. The message
+bar is the comment bar (`mountPostBar(null, chat)`), so it needed nothing new in
+Swift. Every rule about who may message whom is in `supabase/add-chats.sql`.
+
 ## 1.4 is the chrome going native
 
 The nav — tab bar, compose **+**, the top bar's buttons — becomes real UIKit in
@@ -111,8 +119,8 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   through `Store.pushPermission()`.
 - **No COUNT, anywhere** — not in `aps`, not on the nav, not on a native tab.
   What the rule refuses is a NUMBER: something that climbs while you are away
-  and asks to be driven back to zero. A DOT is allowed, on Updates only, and
-  it is one: it cannot climb, there is nothing to be behind on, and it clears
+  and asks to be driven back to zero. A DOT is allowed, on the Chats tab only
+  (it answers for Updates and for chats since 1.7), and it is one: it cannot climb, there is nothing to be behind on, and it clears
   by looking. Zoe's call, 2026-09-09. See `updatesAreNew` in app.js and
   `setDots` in `TriaChromePlugin.swift`; the dot wears `--dot`, the reader's
   own colour.

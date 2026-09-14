@@ -287,6 +287,39 @@ async function handle(table: string, rec: Row) {
     return;
   }
 
+  // A message in a chat (add-chats.sql). Every other member hears it, except
+  // anyone who muted the chat, denied the request, or is blocked with the
+  // author. A pending request is announced as one, so the first message from
+  // somebody new never arrives dressed as a friend's.
+  if (table === 'messages') {
+    const author = await userById(rec.author);
+    if (!author) return;
+    const { data: chat } = await supabase.from('chats')
+      .select('id,kind,title,post_id').eq('id', rec.chat_id).single();
+    if (!chat) return;
+    const { data: members } = await supabase.from('chat_members')
+      .select('user_id,status,muted').eq('chat_id', rec.chat_id);
+    const blocked = await blockedWith(rec.author);
+    let where = '';
+    if (chat.kind === 'group') where = chat.title || 'your group';
+    if (chat.kind === 'activity') {
+      const act = await postById(chat.post_id);
+      where = (act && act.title) || 'an activity chat';
+    }
+    const body = snip(rec.body) || (rec.image ? 'Sent a photo.' : '');
+    for (const m of members || []) {
+      if (m.user_id === rec.author || m.muted || m.status === 'denied' || blocked.has(m.user_id)) continue;
+      await sendTo(m.user_id, {
+        title: m.status === 'request' ? `${author.name} wants to message you`
+          : chat.kind === 'direct' ? author.name : `${author.name} in ${where}`,
+        body,
+        tag: `chat:${chat.id}`, collapse: `message:${rec.id}`,
+        url: `./#/chat/${encodeURIComponent(chat.id)}`,
+      });
+    }
+    return;
+  }
+
   if (table === 'posts') {
     const author = await userById(rec.author);
     if (!author) return;

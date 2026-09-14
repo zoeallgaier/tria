@@ -296,6 +296,12 @@
     // the character as a colour emoji, which we never want.
     extlink: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
     bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
+    // The Chats tab (1.7): a bubble with a second one peeking out behind it.
+    // Leading zeros written out, because TriaSVG draws this same markup natively.
+    chats:   '<path d="M3.5 6.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2V12a2 2 0 0 1-2 2H9.5L6 17v-3h-0.5a2 2 0 0 1-2-2z"/>' +
+             '<path d="M19 8.5h0.5a1.5 1.5 0 0 1 1.5 1.5v5.5a1.5 1.5 0 0 1-1.5 1.5H19v2.5l-3-2.5h-3.5a1.5 1.5 0 0 1-1.2-0.6"/>',
+    // New chat: one bubble with a plus in it, the Chats page's glass button.
+    newchat: '<path d="M4 6.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/><path d="M12 7.5v6"/><path d="M9 10.5h6"/>',
     // The tray — an arrow lifting out of an open box. Worn by every share
     // affordance (a post's copy-link, a profile's Share). It replaced an
     // envelope, which promised a message you compose and send; what these
@@ -496,7 +502,9 @@
   const NAV = [
     { route: '#/',         key: 'myCircle', label: 'My Circle' },
     { route: '#/discover', key: 'circle',   label: 'Discover' },
-    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true },
+    // Chats took Updates' place in 1.7. Updates is the pinned row at the top of
+    // the chat list now, and still lives at #/updates with the Chats tab lit.
+    { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
     { route: '#/publish',  key: 'publish',  label: 'Post', publish: true },
   ];
@@ -6951,6 +6959,8 @@
       openGlyphMenu(moreBtn, {
         label: 'More',
         items: [
+          ...(canMessage(u.username)
+            ? [{ label: 'Message', icon: 'comment', run: () => messageUser(u.username) }] : []),
           { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username) },
           // Block and Report each open a sheet of their own after this menu has
           // closed — a confirmation and a list of reasons, both with no control
@@ -7776,12 +7786,19 @@
   /* `post` is the SUBJECT — the original, on a repost's page — because that is
      whose thread this is (see quoteCard: the social controls act on what is being
      passed along, not on the act of passing it). */
-  function mountPostBar(post) {
+  /* `chat` makes this the MESSAGE bar (1.7): the same pill, the same native
+     TriaPostBarPill and the same photo tray, with a chat's words and a chat's
+     send. It is { submit(text, photo) → Promise<{ok}>, onSent(res), onFocus() },
+     and the post is null. Nothing in Swift knows the difference. */
+  function mountPostBar(post, chat = null) {
     const bar = postBarEl();
     if (!bar) return;
     // Same gate as the thread itself: no panel, no bar. A stranger's public post
     // is commentable (canSocial), a non-friend's circle post is not.
-    if (!canSocial(post)) return;
+    if (!chat && !canSocial(post)) return;
+    const words = chat
+      ? { place: 'Message…', label: 'Write a message', discard: 'Discard message', send: 'Send message', max: 2000 }
+      : { place: 'Add a comment…', label: 'Add a comment', discard: 'Discard comment', send: 'Post comment', max: 300 };
     const me = Store.user(Store.session());
     bar.innerHTML =
       `<form class="postbar-form" autocomplete="off">` +
@@ -7793,15 +7810,15 @@
         // stray thumb can never reach it, and it is deliberately at the
         // LEADING end, because the trailing end already means commit.
         `<button class="postbar-face" type="button" ` +
-          `aria-label="Discard comment" aria-hidden="true" disabled>` +
+          `aria-label="${words.discard}" aria-hidden="true" disabled>` +
           avatarEl(me || {}, { cls: 'postbar-avatar' }) +
           `<span class="postbar-face-x" aria-hidden="true">` +
             svgIcon('close', 'postbar-face-ico') +
           `</span>` +
         `</button>` +
         `<div class="postbar-field">` +
-          `<textarea name="text" rows="1" maxlength="300" placeholder="Add a comment…" ` +
-            `aria-label="Add a comment"></textarea>` +
+          `<textarea name="text" rows="1" maxlength="${words.max}" placeholder="${words.place}" ` +
+            `aria-label="${words.label}"></textarea>` +
         `</div>` +
         // A PHOTO OR A GIF, from the camera roll. A bare mark on the bar's own
         // glass, like the find bar's clear, because picking a picture is not the
@@ -7815,14 +7832,14 @@
         // stamped here: an empty bar has no send, and announcing one is worse
         // than hiding it.
         `<button class="postbar-send publish-fill is-solid is-idle" type="submit" ` +
-          `aria-label="Post comment" disabled>${svgIcon('arrowup', 'postbar-send-ico')}</button>` +
+          `aria-label="${words.send}" disabled>${svgIcon('arrowup', 'postbar-send-ico')}</button>` +
       `</form>`;
     bar.hidden = false;
     document.body.classList.add('postbar-live');
     // The four destinations and the + go away for the length of this page, the
     // way body.postbar-live takes them off the screen on the web.
     NativeChrome.sync();
-    wirePostBar(bar, post);
+    wirePostBar(bar, post, chat);
   }
 
   /* ── The find bar — the comment bar in its other job ───────────────────────
@@ -7952,7 +7969,7 @@
     postBarKeyboardOff = trackKeyboard(bar, input);
   }
 
-  function wirePostBar(bar, post) {
+  function wirePostBar(bar, post, chat = null) {
     const form  = bar.querySelector('.postbar-form');
     const input = bar.querySelector('textarea');
     const send  = bar.querySelector('.postbar-send');
@@ -8115,6 +8132,8 @@
     // the focus that triggers it happens in UIKit and arrives over the bridge,
     // and both routes have to mean the same thing.
     const walkToComments = () => {
+      // A chat's floor is its newest message, which is the page's own call.
+      if (chat) { if (chat.onFocus) chat.onFocus(); return; }
       const card = document.querySelector('#post-page .card');
       if (card && postPane !== 'comments') setPostPane('comments', card);
     };
@@ -8181,7 +8200,9 @@
       // what is already on its way.
       pick.disabled = true;
       bar.classList.add('is-sending');
-      const res = await Store.addComment(post.id, input.value, photo).catch(() => null);
+      const res = await (chat
+        ? chat.submit(input.value, photo)
+        : Store.addComment(post.id, input.value, photo)).catch(() => null);
       pick.disabled = false;
       bar.classList.remove('is-sending');
       if (res && res.ok) {
@@ -8194,12 +8215,15 @@
         setPhoto(null);                             // empties the tray, and tells native
         syncSend();                                 // empties the field, idles the disc
         autoGrow();
-        input.blur();
+        // A CHAT KEEPS ITS KEYBOARD. A comment is a finished sentence; a message
+        // is usually one of several, so the field stays live for the next.
+        if (!chat) input.blur();
         // The native field is a second copy of the words, so emptying the model
         // has to empty it as well. `false` also puts the native keyboard away —
         // a posted comment is a finished sentence, not an invitation to keep
         // typing into an empty field.
-        NativeChrome.postBarText('', 0, false);
+        NativeChrome.postBarText('', 0, !!chat);
+        if (chat) { if (chat.onSent) chat.onSent(res); return; }
         const fresh = rebuildPostCard('up');
         const mine = fresh && [...fresh.querySelectorAll('.comments-list > .comment')].pop();
         celebrateComment(mine, burstTypeOf(post));
@@ -8212,7 +8236,10 @@
       //
       // A failed picture says so. Words left in the field explain themselves; a
       // photo that silently didn't go reads as one that did.
-      if (photo) toast((res && res.error) || 'Couldn’t post your comment, try again.');
+      // A message that didn't go always says so: a chat has no card that would
+      // otherwise show the reader what happened.
+      if (photo || chat)
+        toast((res && res.error) || (chat ? 'Couldn’t send that, try again.' : 'Couldn’t post your comment, try again.'));
       syncSend();
     });
 
@@ -8630,6 +8657,7 @@
       '#/': 'My Circle',
       '#/discover': 'Discover',
       '#/updates': 'Updates',
+      '#/chats': 'Chats',
       '#/profile': 'Profile',
     };
     if (postOrigin.startsWith('#/u/')) {
@@ -9238,6 +9266,8 @@
         // to a friend has to live in here or it doesn't exist. Sharing was the
         // thing that didn't.
         { label: 'Share profile', icon: 'send', run: () => shareProfile(username) },
+        ...(canMessage(username)
+          ? [{ label: 'Message', icon: 'comment', run: () => messageUser(username) }] : []),
         { label: 'Remove friend', icon: 'friends', run: async () => { await Store.removeFriend(username); if (after) after(); } },
         { label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(username, after) },
         { label: 'Report', icon: 'flag', danger: true, run: () => reportUser(username) },
@@ -12112,12 +12142,24 @@
   // always in the DOM; the native one is a colour sent across the bridge. Called
   // on every navigation (renderNav), on every background pull that lands
   // (refreshWorld) and on the visit that spends it (renderUpdates).
+  // Since 1.7 the dot sits on Chats and answers for both things under it: the
+  // Updates row and any chat with something new (Store.chatsAreNew). Still one
+  // state, never a number.
   function syncNavDot() {
-    const on = updatesAreNew();
+    const on = updatesAreNew() || Store.chatsAreNew();
     document.querySelectorAll('#nav .nav-dot')
       .forEach(el => el.classList.toggle('is-on', on));
-    NativeChrome.setDots({ '#/updates': on });
+    NativeChrome.setDots({ '#/chats': on });
   }
+
+  // The open chat page's repaint, set by renderChats / renderChat and dropped by
+  // the router on every navigation. The channel calls it for every change it
+  // applies, and the dot is re-asked either way.
+  let chatLive = null;
+  Store.onChats(() => {
+    syncNavDot();
+    if (chatLive) chatLive();
+  });
 
   // A note as clean one-line plain text — for previews (Updates snippets) where
   // a rich note's headings/emphasis markup would otherwise leak in. Strips the
@@ -12437,6 +12479,614 @@
     });
   }
 
+  /* ── Chats (1.7) ─────────────────────────────────────────────────────────────
+     The tab that replaced Updates. Four pages: the list (#/chats), a chat
+     (#/chat/<id>), a new chat (#/chats/new, and ?add=<id> to add friends to a
+     group) and message requests (#/chats/requests). Updates keeps its own page
+     and is the pinned first row of the list, the way TikTok's inbox leads with
+     its activity.
+
+     The data layer and every rule behind it are Store's (see "Chats" in
+     store.js and supabase/add-chats.sql). The bar at the foot of a chat is the
+     comment bar in its third job; see mountPostBar's `chat`. */
+  const CHAT_FILTERS = [
+    { key: 'all',      label: 'All' },
+    { key: 'direct',   label: 'Direct',     ico: 'profile' },
+    { key: 'group',    label: 'Groups',     ico: 'friends' },
+    { key: 'activity', label: 'Activities', ico: 'cal' },
+  ];
+  let chatFilter = 'all';
+  // The message the next one answers, on the open chat. Reset on every arrival.
+  let chatReply = null;
+
+  // Two names, or two and "others". Never a number: see the rule on counts.
+  const listNames = (names) =>
+    names.length <= 2 ? names.join(' and ') : `${names.slice(0, 2).join(', ')} and others`;
+
+  function chatTitle(c) {
+    if (c.kind === 'direct') return c.other ? displayNameOf(c.other) : 'Chat';
+    if (c.kind === 'activity') {
+      const act = Store.posts().find(p => p.id === c.postId);
+      return (act && act.title) || 'Activity';
+    }
+    if (c.title) return c.title;
+    return listNames(c.members.filter(u => u !== Store.session()).map(displayNameOf)) || 'Group';
+  }
+
+  function chatFaceHtml(c) {
+    if (c.kind === 'direct') {
+      const u = Store.user(c.other);
+      return avatarEl(u || { name: c.other || '?' }, { cls: 'comment-avatar chat-avatar' });
+    }
+    if (c.kind === 'activity')
+      return `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('cal')}</span>`;
+    const faces = c.members.filter(u => u !== Store.session()).slice(0, 2).map(Store.user).filter(Boolean);
+    return `<span class="chat-faces" aria-hidden="true">` +
+      faces.map(u => avatarEl(u, { cls: 'comment-avatar chat-avatar' })).join('') + `</span>`;
+  }
+
+  // A time today, a date before that, in the ledger's own date words.
+  function chatWhen(ts) {
+    if (!ts) return '';
+    if (dayMT(ts) === dayMT(Date.now()))
+      return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return niceDate(dayMT(ts));
+  }
+
+  function chatPreview(c) {
+    const m = c.last;
+    if (!m) return c.kind === 'direct' ? 'Say hi.' : 'Nothing said yet.';
+    const said = m.text ? notePlain(m.text) : (m.image ? 'Sent a photo.' : '');
+    const who = m.author === Store.session() ? 'You: '
+      : c.kind === 'direct' ? '' : `${displayNameOf(m.author)}: `;
+    const line = who + said;
+    return line.length > 90 ? line.slice(0, 90).trimEnd() + '…' : line;
+  }
+
+  function chatRowHtml(c) {
+    return `<li data-key="${esc(c.id)}">` +
+      `<a class="chat-row${c.unread ? ' chat-row--new' : ''}" href="#/chat/${esc(encodeURIComponent(c.id))}">` +
+        chatFaceHtml(c) +
+        `<span class="chat-row-body">` +
+          `<span class="chat-row-top">` +
+            `<span class="chat-row-name">${esc(chatTitle(c))}</span>` +
+            (c.muted ? svgIcon('mute', 'chat-row-muted') : '') +
+            `<span class="chat-row-when">${esc(chatWhen(c.lastAt))}</span>` +
+          `</span>` +
+          `<span class="chat-row-preview">${esc(chatPreview(c))}</span>` +
+        `</span>` +
+        `<span class="notif-dot" aria-hidden="true"></span>` +
+      `</a>` +
+    `</li>`;
+  }
+
+  function chatsPaneHtml() {
+    const all = chatFilter === 'all';
+    const reqs = Store.chatRequests();
+    const updatesNew = updatesAreNew();
+    // THE PINNED ROWS. Updates leads, under All only, because it is not a chat
+    // and a filter for Groups that still showed it would be lying. Requests sits
+    // under it whenever there are any, named by who and never by how many.
+    const pinned = (all || reqs.length)
+      ? `<ul class="chat-list chat-list--pinned">` +
+          (all
+            ? `<li data-key="updates"><a class="chat-row${updatesNew ? ' chat-row--new' : ''}" href="#/updates">` +
+                `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('bell')}</span>` +
+                `<span class="chat-row-body">` +
+                  `<span class="chat-row-top"><span class="chat-row-name">Updates</span></span>` +
+                  `<span class="chat-row-preview">Likes, comments, mentions and adds</span>` +
+                `</span>` +
+                `<span class="notif-dot" aria-hidden="true"></span>` +
+              `</a></li>`
+            : '') +
+          (reqs.length
+            ? `<li data-key="requests"><a class="chat-row${reqs.some(c => c.unread) ? ' chat-row--new' : ''}" href="#/chats/requests">` +
+                `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('newchat')}</span>` +
+                `<span class="chat-row-body">` +
+                  `<span class="chat-row-top"><span class="chat-row-name">Message requests</span></span>` +
+                  `<span class="chat-row-preview">From ${esc(listNames(reqs.map(c => displayNameOf(c.other))))}</span>` +
+                `</span>` +
+                `<span class="notif-dot" aria-hidden="true"></span>` +
+              `</a></li>`
+            : '') +
+        `</ul>`
+      : '';
+    // Before add-chats.sql has run, the Updates row is the whole page.
+    if (!Store.chatsReady())
+      return pinned + `<p class="feed-empty">Chats are almost here. Your updates are right up top.</p>`;
+    const list = Store.chats().filter(c => all || c.kind === chatFilter);
+    if (list.length) return pinned + `<ul class="chat-list">${list.map(chatRowHtml).join('')}</ul>`;
+    return pinned + `<p class="feed-empty">${all
+      ? 'No chats yet. Tap the new chat button to start one.'
+      : 'Nothing here yet.'}</p>`;
+  }
+
+  function renderChats() {
+    chatLive = renderChats;
+    const pane = view.querySelector('#chats-pane');
+    const newBtn = document.getElementById('chats-new-btn');
+    // ALREADY HERE: a message landed or a pull came back. Repaint the pane in
+    // place, without the rows rising in again or the toolbar being rebuilt,
+    // unless the new chat button has to come or go with it.
+    if (pane && !!newBtn === Store.chatsReady()) {
+      pane.classList.add('is-still');
+      pane.innerHTML = chatsPaneHtml();
+      syncNavDot();
+      return;
+    }
+    mountToolbar({
+      title: 'Chats',
+      actions: filterBtnEl('chats-filter-btn', chatFilter, 'Filter chats') +
+        (Store.chatsReady()
+          ? `<a class="toolbar-btn" id="chats-new-btn" href="#/chats/new" aria-label="New chat">${svgIcon('newchat')}</a>`
+          : ''),
+    });
+    view.innerHTML =
+      `<section class="view view--chats">` +
+        mastheadEl('', 'Chats') +
+        `<div class="chat-pane" id="chats-pane">${chatsPaneHtml()}</div>` +
+      `</section>`;
+    const fresh = view.querySelector('#chats-pane');
+    fresh.querySelectorAll('.chat-row').forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
+    document.getElementById('chats-filter-btn')
+      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
+        current: chatFilter,
+        filters: CHAT_FILTERS,
+        label: 'Filter chats',
+        onPick: (key) => {
+          if (key === chatFilter) return;
+          chatFilter = key;
+          syncFilterBtn('chats-filter-btn', chatFilter);
+          fresh.classList.add('is-still');
+          fresh.innerHTML = chatsPaneHtml();
+        },
+      }));
+    syncNavDot();
+  }
+
+  function renderChatRequests() {
+    chatLive = renderChatRequests;
+    mountToolbar({ leading: toolbarBackEl('#/chats', 'Chats'), title: 'Requests' });
+    const reqs = Store.chatRequests();
+    view.innerHTML =
+      `<section class="view view--chats">` +
+        mastheadEl('', 'Requests') +
+        `<p class="chat-note">Messages from people you aren’t friends with wait here. ` +
+          `They won’t know you’ve seen them.</p>` +
+        (reqs.length
+          ? `<div class="chat-pane is-still"><ul class="chat-list">${reqs.map(chatRowHtml).join('')}</ul></div>`
+          : `<p class="feed-empty">No requests right now.</p>`) +
+      `</section>`;
+  }
+
+  // Who may I message, as the client can see it. The database decides for real
+  // (start_direct_chat); this only decides whether to offer the row.
+  function canMessage(username) {
+    if (!Store.chatsReady() || !username || username === Store.session()) return false;
+    if (Store.isBlocked(username)) return false;
+    return Store.isFriend(username)
+      || (Store.following().includes(username) && !Store.isPrivate(username));
+  }
+  async function messageUser(username) {
+    const res = await Store.startDirectChat(username).catch(() => null);
+    if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
+    go(`#/chat/${encodeURIComponent(res.id)}`);
+  }
+
+  function messageHtml(c, m, mine, run, byId) {
+    const u = Store.user(m.author);
+    const name = esc(u ? u.name : m.author);
+    const hearts = Store.heartsFor(m.id);
+    const reply = m.replyTo ? byId.get(m.replyTo) : null;
+    const replySaid = reply ? (reply.text ? notePlain(reply.text) : 'a photo') : '';
+    const dims = m.image ? imageDimsFromUrl(m.image) : null;
+    return `<li class="msg${mine ? ' msg--mine' : ''}${run ? ' msg--run' : ''}" data-id="${esc(m.id)}">` +
+      (mine ? '' : `<span class="msg-face">${run ? '' : avatarEl(u || { name: m.author }, { cls: 'comment-avatar msg-avatar' })}</span>`) +
+      `<div class="msg-col">` +
+        (!mine && !run && c.kind !== 'direct' ? `<span class="msg-name">${name}</span>` : '') +
+        (reply
+          ? `<span class="msg-reply">${esc(displayNameOf(reply.author))}: ${esc(replySaid.length > 70 ? replySaid.slice(0, 70).trimEnd() + '…' : replySaid)}</span>`
+          : m.replyTo ? `<span class="msg-reply">A message that’s gone</span>` : '') +
+        (m.image
+          ? `<button class="msg-photo" type="button" data-photo="${esc(m.image)}" aria-label="Open photo"` +
+              (dims ? ` style="aspect-ratio: ${dims.w} / ${dims.h}"` : '') + `>` +
+              `<img src="${esc(m.image)}" alt="Photo from ${name}" loading="lazy" decoding="async">` +
+            `</button>`
+          : '') +
+        (m.text
+          ? `<div class="msg-bubble" role="button" tabindex="0" aria-label="Message from ${name}, options">` +
+              richText(m.text, m.author) + `</div>`
+          : '') +
+        (hearts.length
+          ? `<span class="msg-hearts" role="img" aria-label="Hearted by ${esc(listNames(hearts.map(h => displayNameOf(h.user))))}">` +
+              svgIcon('heart') + `</span>`
+          : '') +
+      `</div>` +
+    `</li>`;
+  }
+
+  function threadHtml(c) {
+    const me = Store.session();
+    const msgs = Store.messagesFor(c.id);
+    const byId = new Map(msgs.map(m => [m.id, m]));
+    let out = '';
+    if (c.kind === 'direct' && c.other) {
+      const u = Store.user(c.other);
+      out += `<li class="chat-head">` +
+          `<a href="#/u/${esc(encodeURIComponent(c.other))}" class="chat-head-link">` +
+            avatarEl(u || { name: c.other }, { cls: 'comment-avatar chat-head-avatar' }) +
+            `<span class="chat-head-name">${esc(displayNameOf(c.other))}</span>` +
+          `</a>` +
+        `</li>`;
+    }
+    if (!msgs.length) return out + `<li class="msg-empty">${c.status === 'request' ? '' : 'Say something to start the chat.'}</li>`;
+    let day = '';
+    let prev = null;
+    for (const m of msgs) {
+      const d = dayMT(m._ts);
+      if (d !== day) { out += `<li class="msg-day">${esc(niceDate(d))}</li>`; day = d; prev = null; }
+      // A RUN is the same person within five minutes: one face, one name.
+      const run = !!prev && prev.author === m.author && Date.parse(m._ts) - Date.parse(prev._ts) < 5 * 60 * 1000;
+      out += messageHtml(c, m, m.author === me, run, byId);
+      prev = m;
+    }
+    return out;
+  }
+
+  function setChatReply(m) {
+    chatReply = m || null;
+    const bar = postBarEl();
+    if (!bar) return;
+    let tray = bar.querySelector('.postbar-reply');
+    if (!m) { if (tray) tray.remove(); return; }
+    if (!tray) {
+      // Worn as the photo tray, so it hangs over the bar by the same rules in
+      // every shell, native included. See .postbar-reply for the stacking.
+      tray = document.createElement('div');
+      tray.className = 'postbar-attach postbar-reply';
+      bar.appendChild(tray);
+    }
+    const said = m.text ? notePlain(m.text) : 'a photo';
+    tray.innerHTML =
+      `<div class="postbar-reply-chip">` +
+        `<span class="postbar-reply-text">Replying to <strong>${esc(displayNameOf(m.author))}</strong>: ` +
+          `${esc(said.length > 60 ? said.slice(0, 60).trimEnd() + '…' : said)}</span>` +
+        `<button class="postbar-reply-x" type="button" aria-label="Cancel reply">${svgIcon('close')}</button>` +
+      `</div>`;
+    const x = tray.querySelector('.postbar-reply-x');
+    x.addEventListener('mousedown', (e) => e.preventDefault());
+    x.addEventListener('click', () => setChatReply(null));
+    // Straight to the field, in whichever shell draws it.
+    const field = bar.querySelector('textarea');
+    if (field) {
+      field.focus();
+      NativeChrome.postBarText(field.value, field.value.length, true);
+    }
+  }
+
+  function reportMessage(c, m) {
+    openSheet({
+      items: REPORT_REASONS.map(reason => ({ label: reason, run: async () =>
+        reportToast(await sendReport({
+          kind: 'message', reason, chat_id: c.id, chat_kind: c.kind, message_id: m.id,
+          message_author: '@' + m.author,
+          excerpt: (m.text || '(a photo)').slice(0, 280),
+        })) })),
+    });
+  }
+
+  function openMessageMenu(chatId, messageId) {
+    const c = Store.chat(chatId);
+    const m = Store.messagesFor(chatId).find(x => x.id === messageId);
+    if (!c || !m) return;
+    const mine = m.author === Store.session();
+    const canWrite = c.status === 'member';
+    const items = [];
+    if (canWrite) items.push({
+      label: Store.heartedByMe(m.id) ? 'Remove heart' : 'Heart', icon: 'heart',
+      run: async () => {
+        const res = await Store.toggleMessageHeart(m.id).catch(() => null);
+        if (res && res.ok) hapticTap('LIGHT');
+        if (chatLive) chatLive();
+      },
+    });
+    if (canWrite) items.push({ label: 'Reply', icon: 'comment', run: () => setChatReply(m) });
+    if (m.text && navigator.clipboard) items.push({
+      label: 'Copy', icon: 'link',
+      run: () => navigator.clipboard.writeText(m.text).then(() => toast('Copied.'), () => {}),
+    });
+    if (mine) items.push({
+      label: 'Unsend', icon: 'trash', danger: true,
+      run: async () => {
+        const res = await Store.deleteMessage(m.id).catch(() => null);
+        if (!res || !res.ok) toast((res && res.error) || 'Couldn’t unsend that, try again.');
+        if (chatLive) chatLive();
+      },
+    });
+    else items.push({ label: 'Report', icon: 'flag', danger: true, run: () => reportMessage(c, m) });
+    openSheet({ items });
+  }
+
+  function openChatMenu(c) {
+    const items = [];
+    if (c.kind === 'direct' && c.other)
+      items.push({ label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(c.other)}`) });
+    if (c.kind === 'activity' && c.postId)
+      items.push({ label: 'View activity', icon: 'cal', run: () => go(postRoute(c.postId)) });
+    if (c.kind !== 'direct') items.push({
+      label: 'People', icon: 'friends',
+      run: () => openSheet({
+        title: 'In this chat',
+        items: c.members.map(u => ({ label: displayNameOf(u), icon: 'profile', run: () => go(`#/u/${encodeURIComponent(u)}`) })),
+      }),
+    });
+    if (c.kind === 'group' && c.status === 'member')
+      items.push({ label: 'Add friends', icon: 'friends', run: () => go(`#/chats/new?add=${encodeURIComponent(c.id)}`) });
+    if (c.status === 'member') items.push({
+      label: c.muted ? 'Unmute' : 'Mute', icon: c.muted ? 'sound' : 'mute',
+      run: async () => {
+        const res = await Store.setChatMuted(c.id, !c.muted).catch(() => null);
+        if (res && res.ok) toast(c.muted ? 'Unmuted.' : 'Muted. This chat won’t notify you.');
+        else toast((res && res.error) || 'Couldn’t save that, try again.');
+      },
+    });
+    if (c.kind === 'direct' && c.other) {
+      items.push({ label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(c.other, () => go('#/chats')) });
+      items.push({ label: 'Report', icon: 'flag', danger: true, run: () => reportUser(c.other) });
+    }
+    const leave = c.kind === 'direct'
+      ? { label: 'Delete chat', title: 'Delete this chat? It leaves your list, and they keep their copy.',
+          act: () => Store.clearChat(c.id) }
+      : { label: c.kind === 'group' ? 'Leave group' : 'Leave chat', title: 'Leave this chat? You can be added back.',
+          act: () => Store.leaveChat(c.id) };
+    items.push({
+      label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true,
+      run: () => openSheet({
+        title: leave.title,
+        items: [{ label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true, run: async () => {
+          const res = await leave.act().catch(() => null);
+          if (res && res.ok) go('#/chats');
+          else toast((res && res.error) || 'Couldn’t do that just now, try again.');
+        } }],
+      }),
+    });
+    openSheet({ items });
+  }
+
+  function renderChat(id) {
+    const c = Store.chat(id);
+    chatReply = null;
+    mountToolbar({
+      leading: toolbarBackEl('#/chats', 'Chats'),
+      // Not esc()'d: setToolbarTitle assigns textContent (see renderPost).
+      title: c ? chatTitle(c) : 'Chat',
+      actions: c
+        ? `<button class="toolbar-btn" type="button" id="chat-more" aria-label="Chat options">${svgIcon('dots')}</button>`
+        : '',
+    });
+    if (!c) {
+      view.innerHTML =
+        `<section class="view view--chat">` +
+          `<p class="feed-empty">This chat isn’t here any more.</p>` +
+        `</section>`;
+      return;
+    }
+    const requested = c.status === 'request';
+    view.innerHTML =
+      `<section class="view view--chat" id="chat-page">` +
+        `<h1 class="visually-hidden">${esc(chatTitle(c))}</h1>` +
+        `<ol class="msg-list" id="msg-list">${threadHtml(c)}</ol>` +
+        (requested
+          ? `<div class="chat-request">` +
+              `<p>${esc(displayNameOf(c.other))} wants to message you. They won’t know you’ve seen this unless you accept.</p>` +
+              `<div class="chat-request-actions">` +
+                `<button class="request-ignore" type="button" data-deny>Delete</button>` +
+                `<button class="request-accept" type="button" data-accept>Accept</button>` +
+              `</div>` +
+            `</div>`
+          : '') +
+      `</section>`;
+    const section = view.querySelector('#chat-page');
+    const list = section.querySelector('#msg-list');
+
+    const root = document.scrollingElement || document.documentElement;
+    const nearBottom = () => window.innerHeight + window.scrollY >= root.scrollHeight - 140;
+    const toBottom = (smooth) => window.scrollTo({ top: root.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    const read = () => {
+      if (document.visibilityState !== 'visible') return;
+      Store.markChatRead(c.id).then(syncNavDot, () => {});
+    };
+
+    // THE REPAINT: a message arrived, went, or got a heart. The thread is rebuilt
+    // and the page follows the newest message only if the reader was already at
+    // the bottom; someone scrolled back through history is left where they are.
+    const repaint = (stick) => {
+      const now = Store.chat(c.id);
+      if (!now) { go('#/chats'); return; }
+      if (now.status !== c.status) { renderChat(id); return; }   // a request answered elsewhere
+      const follow = stick || nearBottom();
+      list.innerHTML = threadHtml(now);
+      if (follow) toBottom(false);
+      read();
+    };
+    chatLive = () => repaint(false);
+
+    section.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;            // a mention, or the head's profile link
+      const photo = e.target.closest('.msg-photo');
+      if (photo) {
+        const img = photo.querySelector('img');
+        openLightbox(photo.dataset.photo, img ? img.alt : '', false, img);
+        return;
+      }
+      const hit = e.target.closest('.msg-bubble, .msg-hearts');
+      const li = hit && hit.closest('.msg');
+      if (li) openMessageMenu(c.id, li.dataset.id);
+    });
+    section.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const bubble = e.target.closest('.msg-bubble');
+      if (!bubble) return;
+      e.preventDefault();
+      openMessageMenu(c.id, bubble.closest('.msg').dataset.id);
+    });
+    document.getElementById('chat-more')?.addEventListener('click', () => {
+      const now = Store.chat(c.id);
+      if (now) openChatMenu(now);
+    });
+
+    if (requested) {
+      const accept = section.querySelector('[data-accept]');
+      const deny = section.querySelector('[data-deny]');
+      const answer = async (yes) => {
+        accept.disabled = deny.disabled = true;
+        try {
+          const res = await Store.answerChatRequest(c.id, yes).catch(() => null);
+          if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t save that, try again.'); return; }
+          hapticTap('LIGHT');
+          if (yes) renderChat(id);
+          else go('#/chats');
+        } finally {
+          accept.disabled = deny.disabled = false;
+        }
+      };
+      accept.addEventListener('click', () => answer(true));
+      deny.addEventListener('click', () => answer(false));
+    } else if (c.status === 'member') {
+      mountPostBar(null, {
+        submit: (text, photo) => Store.sendMessage(c.id, text, photo, chatReply && chatReply.id),
+        onSent: () => { setChatReply(null); repaint(true); },
+        onFocus: () => toBottom(true),
+      });
+    }
+
+    // Open on the newest message, after the router has settled the scroll.
+    requestAnimationFrame(() => requestAnimationFrame(() => toBottom(false)));
+    read();
+  }
+
+  function renderNewChat() {
+    const q = new URLSearchParams((location.hash || '').split('?')[1] || '');
+    const addTo = q.get('add');
+    const target = addTo ? Store.chat(addTo) : null;
+    if (addTo && (!target || target.kind !== 'group')) { location.replace('#/chats'); return; }
+    const already = new Set(target ? target.members : []);
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const friends = Store.friends()
+      .filter(u => !already.has(u) && !Store.isBlocked(u))
+      .map(Store.user).filter(Boolean).sort(byName);
+    // Public accounts you follow can be messaged one to one, as a request, and
+    // never put in a group: start_group_chat is friends only.
+    const follows = addTo ? [] : Store.following()
+      .filter(u => !Store.isFriend(u) && !Store.isPrivate(u) && !Store.isBlocked(u))
+      .map(Store.user).filter(Boolean).sort(byName);
+    const picked = new Set();
+
+    mountToolbar({
+      leading: toolbarBackEl(addTo ? `#/chat/${encodeURIComponent(addTo)}` : '#/chats', addTo ? 'chat' : 'Chats'),
+      title: addTo ? 'Add friends' : 'New chat',
+      actions: `<button type="button" id="nc-go" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `aria-label="${addTo ? 'Add to the group' : 'Start chat'}" disabled>${svgIcon('check')}</button>`,
+    });
+
+    const personRow = (u, attrs, tail) =>
+      `<li data-find="${esc((u.name + ' ' + u.username).toLowerCase())}">` +
+        `<button class="chat-row" type="button" ${attrs}>` +
+          avatarEl(u, { cls: 'comment-avatar chat-avatar' }) +
+          `<span class="chat-row-body">` +
+            `<span class="chat-row-top"><span class="chat-row-name">${esc(u.name)}</span></span>` +
+            `<span class="chat-row-preview">@${esc(u.username)}</span>` +
+          `</span>` +
+          tail +
+        `</button>` +
+      `</li>`;
+
+    view.innerHTML =
+      `<section class="view view--chats view--newchat">` +
+        `<h1 class="visually-hidden">${addTo ? 'Add friends' : 'New chat'}</h1>` +
+        (addTo ? '' :
+          `<div class="newchat-name" id="nc-name-wrap" hidden>` +
+            `<input id="nc-name" class="newchat-name-input" type="text" maxlength="60" ` +
+              `placeholder="Name the group (optional)" aria-label="Group name">` +
+          `</div>`) +
+        (friends.length
+          ? `<p class="requests-kicker">Friends</p>` +
+            `<div class="chat-pane is-still"><ul class="chat-list">` +
+              friends.map(u => personRow(u,
+                `data-pick="${esc(u.username)}" aria-pressed="false"`,
+                `<span class="chat-check" aria-hidden="true">${svgIcon('check')}</span>`)).join('') +
+            `</ul></div>`
+          : `<p class="feed-empty">${addTo ? 'Everyone in your circle is already here.' : 'Add some friends and you can chat with them here.'}</p>`) +
+        (follows.length
+          ? `<p class="requests-kicker">People you follow</p>` +
+            `<p class="chat-note">Your first message to them arrives as a request.</p>` +
+            `<div class="chat-pane is-still"><ul class="chat-list">` +
+              follows.map(u => personRow(u, `data-direct="${esc(u.username)}"`, '')).join('') +
+            `</ul></div>`
+          : '') +
+        `<p class="feed-empty" id="nc-none" hidden>Nobody by that name.</p>` +
+      `</section>`;
+
+    const goBtn = document.getElementById('nc-go');
+    const nameWrap = view.querySelector('#nc-name-wrap');
+    const nameInput = view.querySelector('#nc-name');
+    const sync = () => {
+      const on = picked.size > 0;
+      goBtn.disabled = !on;
+      goBtn.classList.toggle('toolbar-commit--idle', !on);
+      if (nameWrap) nameWrap.hidden = picked.size < 2;
+      NativeChrome.sync();
+    };
+
+    view.addEventListener('click', async (e) => {
+      const pick = e.target.closest('[data-pick]');
+      if (pick) {
+        const u = pick.dataset.pick;
+        if (picked.has(u)) picked.delete(u); else picked.add(u);
+        pick.setAttribute('aria-pressed', String(picked.has(u)));
+        hapticTap('LIGHT');
+        sync();
+        return;
+      }
+      const direct = e.target.closest('[data-direct]');
+      if (direct && !direct.disabled) {
+        direct.disabled = true;
+        try { await messageUser(direct.dataset.direct); }
+        finally { direct.disabled = false; }
+      }
+    });
+
+    goBtn.addEventListener('click', async () => {
+      if (goBtn.disabled || !picked.size) return;
+      goBtn.disabled = true;
+      try {
+        const people = [...picked];
+        const res = addTo ? await Store.addChatMembers(addTo, people)
+          : people.length === 1 ? await Store.startDirectChat(people[0])
+          : await Store.startGroupChat(people, nameInput ? nameInput.value : '');
+        if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
+        hapticTap('LIGHT');
+        // Replace, so backing out of the new chat lands on the list, not this picker.
+        location.replace(`#/chat/${encodeURIComponent(addTo || res.id)}`);
+      } catch {
+        toast('Couldn’t reach Tria just now. Try again in a moment.');
+      } finally {
+        goBtn.disabled = picked.size === 0;
+      }
+    });
+
+    const rows = [...view.querySelectorAll('li[data-find]')];
+    const none = view.querySelector('#nc-none');
+    if (rows.length) mountFindBar({
+      placeholder: 'Search', label: 'Search people',
+      onQuery: (term) => {
+        rows.forEach(li => { li.hidden = !!term && !li.dataset.find.includes(term); });
+        none.hidden = !term || rows.some(li => !li.hidden);
+      },
+    });
+  }
+
   function renderUpdates() {
     const all = Store.notifications();
     const lastSeen = localStorage.getItem(notifSeenKey()) || '';
@@ -12498,6 +13148,8 @@
     // First mount (or a page navigation into Updates): build the whole view.
     function mount() {
       mountToolbar({
+        // A page inside Chats since 1.7, reached from its pinned row.
+        leading: toolbarBackEl('#/chats', 'Chats'),
         title: 'Updates',
         actions: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
       });
@@ -16435,7 +17087,9 @@
     // the one route that borrows another's highlight: it is somewhere you went,
     // but it is somewhere INSIDE your profile, so that tab stays lit rather than
     // the nav going blank while you edit.
-    renderNav(path === '#/profile/edit' ? '#/profile' : path);
+    // Updates and every chat page sit inside Chats, so they keep its tab lit.
+    renderNav(path === '#/profile/edit' ? '#/profile'
+      : (path === '#/updates' || path.startsWith('#/chat')) ? '#/chats' : path);
 
     // Remember where a friend profile's back chevron should return to: the page
     // you came from. Chained profile→profile hops keep the original origin, so
@@ -16465,6 +17119,7 @@
       if (lastPath && !lastPath.startsWith('#/p/')) postOrigin = lastPath;
     }
     lastPath = path;
+    chatLive = null;   // the page that set it is going; a chat page sets its own
 
     applyAmbient(path);   // warm (Circle) / cool (Friends) / photo tint (a profile)
 
@@ -16513,6 +17168,11 @@
         renderFriends(decodeURIComponent(path.slice(10)));
         return;
       }
+      // A chat lives at #/chat/<id>, with the Chats tab lit (see renderNav above).
+      if (path.startsWith('#/chat/')) {
+        renderChat(decodeURIComponent(path.slice(7)));
+        return;
+      }
       // A daily lives at #/daily/<slug> — like a profile it highlights no nav tab,
       // because it's somewhere you went, not one of the four places you live.
       if (path.startsWith('#/daily/')) {
@@ -16532,6 +17192,9 @@
         case '#/discover': renderDiscover(); break;
         case '#/friends':  go('#/discover'); break;   // Friends folded into Discover; keep old links alive
         case '#/updates':  renderUpdates(); break;
+        case '#/chats':    renderChats(); break;
+        case '#/chats/new': renderNewChat(); break;
+        case '#/chats/requests': renderChatRequests(); break;
         case '#/profile': renderUser(Store.session()); break;
         case '#/profile/edit': renderEditProfile(); break;
         case '#/publish': renderPublish(); break;
@@ -16733,7 +17396,7 @@
   // while you're reading, wrong for a re-tap, which is already taking you to the
   // top and would only fight the scroll.
   async function refreshWorld(path, { force = false, hold = true } = {}) {
-    if (path !== '#/' && path !== '#/discover' && path !== '#/updates') return;
+    if (path !== '#/' && path !== '#/discover' && path !== '#/updates' && path !== '#/chats') return;
     if (!force && Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
@@ -16765,6 +17428,7 @@
       owedPaint = null;                                    // screen has caught up
       if (path === '#/') renderFeed();
       else if (path === '#/discover') { if (!discoverRepaint?.(force)) renderDiscover(); }
+      else if (path === '#/chats') renderChats();
       else renderUpdates();
     };
 
@@ -16941,7 +17605,7 @@
     const herePath = () => (location.hash || '#/').split('?')[0];
     const eligible = () =>
       Store.isAuthed() && !busy
-      && (herePath() === '#/' || herePath() === '#/discover' || herePath() === '#/updates')
+      && (herePath() === '#/' || herePath() === '#/discover' || herePath() === '#/updates' || herePath() === '#/chats')
       && document.body.style.overflow !== 'hidden';   // not under a lightbox/modal
     const draw = () => {
       raf = 0;
