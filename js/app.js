@@ -13031,10 +13031,13 @@
     const reply = m.replyTo ? byId.get(m.replyTo) : null;
     const replySaid = reply ? (reply.text ? notePlain(reply.text) : 'a photo') : '';
     const dims = m.image ? imageDimsFromUrl(m.image) : null;
+    const href = `#/u/${esc(encodeURIComponent(m.author))}`;
     return `<li class="msg${mine ? ' msg--mine' : ''}${run ? ' msg--run' : ''}" data-id="${esc(m.id)}">` +
-      (mine ? '' : `<span class="msg-face">${run ? '' : avatarEl(u || { name: m.author }, { cls: 'comment-avatar msg-avatar' })}</span>`) +
+      (mine ? '' : `<span class="msg-face">${run ? '' :
+        `<a class="msg-face-link" href="${href}" aria-label="${name}">` +
+          avatarEl(u || { name: m.author }, { cls: 'comment-avatar msg-avatar' }) + `</a>`}</span>`) +
       `<div class="msg-col">` +
-        (!mine && !run && c.kind !== 'direct' ? `<span class="msg-name">${name}</span>` : '') +
+        (!mine && !run && c.kind !== 'direct' ? `<a class="msg-name" href="${href}">${name}</a>` : '') +
         (reply
           ? `<span class="msg-reply">${esc(displayNameOf(reply.author))}: ${esc(replySaid.length > 70 ? replySaid.slice(0, 70).trimEnd() + '…' : replySaid)}</span>`
           : m.replyTo ? `<span class="msg-reply">A message that’s gone</span>` : '') +

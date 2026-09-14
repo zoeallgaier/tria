@@ -7145,6 +7145,7 @@ button.poll-option:disabled { cursor: default; }
 .msg--mine { justify-content: flex-end; }
 .msg-face { width: 28px; flex-shrink: 0; }
 .msg-avatar { width: 28px; height: 28px; font-size: 0.75rem; }
+.msg-face-link { display: block; }
 .msg-col {
   display: flex;
   flex-direction: column;
@@ -7154,7 +7155,7 @@ button.poll-option:disabled { cursor: default; }
   max-width: 76%;
 }
 .msg--mine .msg-col { align-items: flex-end; }
-.msg-name { margin-left: 0.8rem; font-size: 0.75rem; color: var(--muted); }
+.msg-name { margin-left: 0.8rem; font-size: 0.75rem; color: var(--muted); text-decoration: none; }
 .msg-bubble {
   padding: 0.5rem 0.85rem;
   border-radius: 18px;
