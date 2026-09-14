@@ -6910,13 +6910,15 @@ button.poll-option:disabled { cursor: default; }
   display: flex;
   flex-direction: column;
 }
-.chat-list--pinned { margin-bottom: 1.1rem; }
+/* The pinned rows run straight into the chats: one ledger, one hairline between
+   rows, and no strip of paper that reads as an empty row. */
+.chat-list--pinned + .chat-list li:first-child .chat-row { border-top: 0; }
 .chat-row {
   display: flex;
   align-items: center;
   gap: 0.85rem;
   width: 100%;
-  padding: 0.8rem var(--inset);
+  padding: 0.8rem 0;               /* on the masthead's edge, like the kickers */
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -7038,7 +7040,6 @@ button.poll-option:disabled { cursor: default; }
   align-items: flex-end;
   gap: 0.5rem;
   margin-top: 0.6rem;
-  padding-inline: var(--inset);
 }
 .msg--run { margin-top: 3px; }
 .msg--mine { justify-content: flex-end; }
