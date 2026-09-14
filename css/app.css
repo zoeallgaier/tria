@@ -5749,7 +5749,7 @@ button.poll-option:disabled { cursor: default; }
    page leaving the measure every other page shares. */
 
 /* ── Dailies — the card, and the page it opens ────────────────────────────────
-   The card is PLAIN GLASS as of 1.3, and used to be the one piece of glass in
+   The card was PLAIN GLASS from 1.3 and is a FLAT SURFACE since 1.7, and used to be the one piece of glass in
    the app that carried a hue: a fixed lavender→coral→cyan band at 115deg, which
    was itself the settlement after every prompt stopped naming a type it would
    accept (the card can't wear the one colour it's asking for when it isn't
@@ -5768,10 +5768,11 @@ button.poll-option:disabled { cursor: default; }
    buttons. (The prompt's own hue is unaffected — it was never on this card. It
    still drives the page this opens and the chip an answer wears.)
 
-   Panel-grade FILL over chrome-grade BLUR, which looks like a contradiction and
-   isn't: the card carries a serif question and needs the body, but it sits in
-   Discover's normal flow and therefore scrolls with a grid of photographs
-   re-sampling behind it. Cost follows the backdrop, not the component name.
+   Since 1.7 it wears the week-of activity card's material (.week-card): a flat
+   --surface and a --rule hairline, no blur and no lift. The glass panel and its
+   drop shadow read as an object floating over Discover; flat, it is the page's
+   headline and sits in one family with the cards on My Circle. Zoe's call,
+   2026-09-14.
 
    No `prefers-color-scheme` block any more either. There were two — one here
    and one on the bar's pill — and both existed only to walk the pigment back on
@@ -5784,7 +5785,7 @@ button.poll-option:disabled { cursor: default; }
 .daily-card {
   position: relative;
   max-width: var(--feed-width);
-  /* 2rem below, not 1.2: this is a floating panel and the trending rail under it
+  /* 2rem below, not 1.2: this is a boxed card and the trending rail under it
      is flat type, so the two need more air between them than two paragraphs
      would. At 1.2rem the card also sat closer to the strip below it than to the
      masthead above (2.6rem), which reads as the card belonging to the rail. It
@@ -5792,11 +5793,8 @@ button.poll-option:disabled { cursor: default; }
   margin: 0 auto 2rem;
   padding: 1rem 1.15rem 0.95rem;
   border-radius: var(--radius-card);
-  background: var(--glass-bg-panel);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  border: var(--glass-edge);
-  box-shadow: var(--glass-rim), var(--glass-lift);
+  background: var(--surface);
+  border: 1px solid var(--rule);
 }
 
 /* No dot before the words, and no --daily-ink either. Both were a colour naming
@@ -6131,7 +6129,8 @@ button.poll-option:disabled { cursor: default; }
    shared, and the difference is worth naming: .daily-card is one headline on
    Discover and can afford a serif question at 1.95rem, while this is a STACK of
    up to three on a page that already opened with a photograph and a name. Same
-   material, same corner, same lift; a smaller voice and a fixed height.
+   corner; a smaller voice and a fixed height. (The daily card went flat in 1.7;
+   the pins keep the glass and the lift.)
 
    THE FIXED HEIGHT IS LOAD-BEARING TWICE. It makes three cards read as a set
    rather than as three unrelated blocks, and it is what lets the drag be exact:
