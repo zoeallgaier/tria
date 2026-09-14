@@ -62,6 +62,12 @@ deploy. **So the outstanding list is two: the `.p8` key and this.**
 answered `404` that morning). Zoe redeployed the push function for its
 `messages` branch the same day.
 
+**`supabase/add-activity-chats.sql` (1.7 stage 2) is written and NOT yet run**
+(probed 2026-09-14: `calendar_tokens` answers `404`, and `headcount.status`
+answers `400` alongside a bogus-column control that also answers `400`). It
+needs add-chats.sql first, and the push function redeployed after it (the
+calendar feed and the maybe wording live there).
+
 The client stays tolerant of a database without `listening_to` anyway, and it's
 worth knowing what that looks like so it isn't mistaken for a bug on a fresh
 install: PostgREST omits a column that doesn't exist, so `mapUser` finds no song,

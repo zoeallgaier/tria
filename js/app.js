@@ -3213,6 +3213,14 @@
   // aria-expanded rides every state (the button always controls the panel);
   // aria-pressed appears only where it's actually a toggle, which is also how
   // wireGoing tells the two apart.
+  // The three answers an activity takes (1.7). The headcount on the card is
+  // still only the yeses; see Store.headcountFor.
+  const RSVP_CHOICES = [
+    { key: 'going', label: 'Going' },
+    { key: 'maybe', label: 'Maybe' },
+    { key: 'cant',  label: 'Can’t go' },
+  ];
+
   function goingControlHtml(post, full) {
     if (post.type !== 'activity') return '';
     if (!canJoin(post)) return '';
@@ -3292,16 +3300,24 @@
        somebody who had already raised a hand drops them out of `audienceOf` (it
        reads your circle as it stands now) while their headcount row survives.
        They are still coming, so they are still on the list. */
+    // Since 1.7 an answer can be a maybe or a no. The yeses lead, the maybes
+    // follow for everyone, and the noes are the host's to see.
+    const answers = Store.rsvpsFor(post.id).filter(h => !Blocks.has(h.user));
+    const maybes = answers.filter(h => h.status === 'maybe').map(h => h.user);
+    const cants = answers.filter(h => h.status === 'cant').map(h => h.user);
     let rows;
     if (host) {
-      const answered = new Set(going);
+      const answered = new Set(answers.map(h => h.user));
       const waiting = Store.audienceOf(post.id)
         .filter(u => !Blocks.has(u) && !answered.has(u))
         .sort((a, b) => sortName(a).localeCompare(sortName(b)));
       rows = going.map(user => likerItemHtml({ user }, 'Going'))
+        .concat(maybes.map(user => likerItemHtml({ user }, 'Maybe')))
+        .concat(cants.map(user => likerItemHtml({ user }, 'Can’t go')))
         .concat(waiting.map(user => likerItemHtml({ user })));
     } else {
-      rows = going.map(user => likerItemHtml({ user }));
+      rows = going.map(user => likerItemHtml({ user }))
+        .concat(maybes.map(user => likerItemHtml({ user }, 'Maybe')));
     }
 
     /* Only 'public' earns a word above the list, and only for the host. On a
@@ -3318,8 +3334,15 @@
     // down from it — the host planned around this headcount, so changing your
     // mind should cost a deliberate second tap rather than ride the same button
     // you joined with.
-    const out = !host && !isPastActivity(post) && Store.goingByMe(post.id)
-      ? `<button class="going-out" type="button">${svgIcon('notgoing')}<span>Can’t make it</span></button>`
+    // 1.7: the way back out became the three answers, and they sit ABOVE the
+    // list, because a maybe is now something you come here to say.
+    const mine = Store.myRsvp(post.id);
+    const out = !host && !isPastActivity(post)
+      ? `<div class="rsvp-choice" role="group" aria-label="Your answer">` +
+          RSVP_CHOICES.map(r =>
+            `<button class="rsvp-opt${mine === r.key ? ' is-on' : ''}" type="button" ` +
+              `data-rsvp="${r.key}" aria-pressed="${mine === r.key}">${r.label}</button>`).join('') +
+        `</div>`
       : '';
     // Two empty states, because the host's list is empty for a different reason:
     // a guest count of zero means nobody has answered OR there was nobody to ask,
@@ -3332,8 +3355,8 @@
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
             note +
-            (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty) +
             out +
+            (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty) +
           `</div>` +
         `</div>` +
       `</div>`;
@@ -3521,8 +3544,13 @@
     // while its heart and thread acted on the ORIGINAL. Now that the whole row is
     // the quote's own, there is nothing left to split.
     const menu = menuBtnHtml(post);
+    // ADD TO CALENDAR, beside the headcount since 1.7. It moved out of the •••
+    // because on an activity it is one of the two things you came to do.
+    const cal = isCalendarable(goingPost)
+      ? `<button class="card-cal" type="button" aria-label="Add to calendar" title="Add to calendar">${svgIcon('cal')}</button>`
+      : '';
 
-    if (!going && !like && !comment && !repost && !menu) return '';
+    if (!going && !cal && !like && !comment && !repost && !menu) return '';
 
     // One row for every card type now that the headcount and the RSVP are a
     // single control: social cluster on the right, the ••• menu tucked left
@@ -3531,7 +3559,7 @@
     // control they sit flush with notes and photos instead, which is most of what
     // made them read busy in the feed. The headcount leads the cluster, so
     // comment, repost and like stay the three rightmost glyphs on every card.
-    return `<div class="card-actions"><div class="card-social">${going}${comment}${repost}${like}</div>${menu}</div>`;
+    return `<div class="card-actions"><div class="card-social">${going}${cal}${comment}${repost}${like}</div>${menu}</div>`;
   }
 
   // ── Reposts ────────────────────────────────────────────────────────────────
@@ -4297,6 +4325,10 @@
   }
 
   function wireGoing(el, post, opts) {
+    // The calendar glyph beside the headcount (1.7): the same plan, taken to
+    // the phone's calendar. The subject, for a card that passes one along.
+    el.querySelector('.card-cal')?.addEventListener('click', () =>
+      downloadIcs(post.type === 'activity' ? post : (subjectOf(post) || post)));
     const btn = el.querySelector('.card-attendees');
     if (!btn) return;
     // On the post's own page the list is already drawn under this button, so the
@@ -4343,7 +4375,21 @@
       if (full) setPostPane('going', el); else go(postRoute(post, 'going'));
     });
 
-    el.querySelector('.going-out')?.addEventListener('click', flip);
+    // Going / Maybe / Can't go, on the page. Tapping the answer you already gave
+    // takes it back. The card is rebuilt the way flip rebuilds it.
+    const choices = [...el.querySelectorAll('.rsvp-opt')];
+    choices.forEach(opt => opt.addEventListener('click', async () => {
+      const next = Store.myRsvp(post.id) === opt.dataset.rsvp ? null : opt.dataset.rsvp;
+      choices.forEach(b => { b.disabled = true; });
+      const res = await Store.setRsvp(post.id, next).catch(() => null);
+      choices.forEach(b => { b.disabled = false; });   // on every path
+      if (!res || !res.ok) { toast('Couldn’t save that, try again.'); return; }
+      hapticTap(next === 'going' ? 'MEDIUM' : 'LIGHT');
+      const fresh = makeCard(post, opts);
+      fresh.style.animation = 'none';
+      el.replaceWith(fresh);
+      if (next === 'going') celebrateGoing(fresh);
+    }));
   }
 
   /* ── Haptics ────────────────────────────────────────────────────────────────
@@ -5376,11 +5422,63 @@
     else btn.removeAttribute('data-active');
   }
 
+  /* ── This week (1.7) ─────────────────────────────────────────────────────────
+     The plans you are going to in the next seven days (today included), stacked
+     on top of My Circle, soonest first. Yours to host count: a host is going.
+     Each one can be waved off, per device, and stays off; the list is short and
+     it empties itself as the days pass, so there is nothing to catch up on. */
+  const weekKey = () => `tria:week-dismissed:${Store.session()}`;
+  function weekDismissed() {
+    try { return new Set(JSON.parse(localStorage.getItem(weekKey()) || '[]')); }
+    catch { return new Set(); }
+  }
+  function paintWeekCards() {
+    const box = view.querySelector('#week-cards');
+    if (!box) return;
+    const today = dayMT(Date.now());
+    const last = new Date(today + 'T12:00:00Z');
+    last.setUTCDate(last.getUTCDate() + 6);
+    const until = last.toISOString().slice(0, 10);
+    const me = Store.session();
+    const gone = weekDismissed();
+    const when = (p) => p.eventDate + (p.eventTime || '');
+    const plans = Store.posts()
+      .filter(p => p.type === 'activity' && p.eventDate && p.eventDate >= today && p.eventDate <= until
+        && !isPastActivity(p) && !gone.has(String(p.id)) && !Blocks.has(p.author)
+        && (p.author === me || Store.myRsvp(p.id) === 'going'))
+      .sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0));
+    box.hidden = !plans.length;
+    box.innerHTML = plans.map(p => {
+      const chat = Store.chatsReady() && Store.chats().find(c => c.postId === p.id);
+      return `<div class="week-card" data-id="${esc(String(p.id))}">` +
+          `<a class="week-card-link" href="${postRoute(p)}">` +
+            `<span class="week-card-kicker">${svgIcon('cal')}${esc(eventWhenLabel(p.eventDate, p.eventTime))}</span>` +
+            `<span class="week-card-title">${esc(p.title || 'Activity')}</span>` +
+            (p.location ? `<span class="week-card-place">${svgIcon('pin')}<span>${esc(p.location)}</span></span>` : '') +
+          `</a>` +
+          (chat
+            ? `<a class="week-card-chat" href="#/chat/${esc(encodeURIComponent(chat.id))}" aria-label="Open the chat">${svgIcon('chats')}</a>`
+            : '') +
+          `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
+        `</div>`;
+    }).join('');
+    box.querySelectorAll('.week-card-x').forEach(x => x.addEventListener('click', () => {
+      const card = x.closest('.week-card');
+      const ids = weekDismissed();
+      ids.add(card.dataset.id);
+      try { localStorage.setItem(weekKey(), JSON.stringify([...ids].slice(-200))); } catch { /* private window */ }
+      hapticTap('LIGHT');
+      card.remove();
+      if (!box.children.length) box.hidden = true;
+    }));
+  }
+
   function renderHome() {
     mountToolbar({ title: 'My Circle', actions: filterBtnEl('home-filter-btn', activeFilter) });
     view.innerHTML =
       `<section class="view">` +
         mastheadEl('', 'My Circle') +
+        `<div class="week-cards" id="week-cards" hidden></div>` +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
@@ -5719,6 +5817,7 @@
   function renderFeed() {
     const feedEl = view.querySelector('#feed');
     if (!feedEl) return;
+    paintWeekCards();
     const list = Store.feed().filter(p => {
       if (Blocks.has(p.author)) return false;   // blocked authors never surface
       const s = subjectOf(p);
@@ -6948,6 +7047,7 @@
           ...(myPins().length < PIN_MAX
             ? [{ label: 'Pin to profile', icon: 'pinned', run: openPinAdd }] : []),
           { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
+          { label: 'Subscribe to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
           // one of the three, and it's where the feedback form lives, so it also
@@ -9078,8 +9178,8 @@
   function openPostMenu(post) {
     const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
-    if (isCalendarable(post))
-      items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(post) });
+    // Add to calendar left this menu in 1.7 for the card's own reaction bar
+    // (the .card-cal glyph beside the headcount).
     if (own) {
       // Pin, above the editor: it's a positive act on a finished post, and the
       // two rows below it are the ones that change or end it. The label flips
@@ -12233,6 +12333,7 @@
       // The only row here about a person rather than a post. 'back' is them
       // answering an add of yours; plain is them arriving on their own.
       n.kind === 'follow'  ? (n.back ? 'added you back' : FOLLOW_LINE) :
+                             n.kind === 'maybe' ? `might come to ${label}` :
                              `is going to ${label}`;
     // EVERY row about a post now walks to that POST, which is the whole reason
     // the page exists. It used to walk to a profile COLUMN — yours, or the
@@ -12496,6 +12597,8 @@
     { key: 'activity', label: 'Activities', ico: 'cal' },
   ];
   let chatFilter = 'all';
+  // Whether the Archived shelf is open, kept across the list's repaints.
+  let archivedOpen = false;
   // The message the next one answers, on the open chat. Reset on every arrival.
   let chatReply = null;
 
@@ -12595,7 +12698,17 @@
     if (!Store.chatsReady())
       return pinned + `<p class="feed-empty">Chats are almost here. Your updates are right up top.</p>`;
     const list = Store.chats().filter(c => all || c.kind === chatFilter);
-    if (list.length) return pinned + `<ul class="chat-list">${list.map(chatRowHtml).join('')}</ul>`;
+    // An activity's chat moves to the shelf three days after the day.
+    const current = list.filter(c => !c.archived);
+    const shelved = list.filter(c => c.archived);
+    const shelf = shelved.length
+      ? `<details class="chat-archived"${archivedOpen ? ' open' : ''}>` +
+          `<summary class="chat-archived-row">Archived</summary>` +
+          `<ul class="chat-list">${shelved.map(chatRowHtml).join('')}</ul>` +
+        `</details>`
+      : '';
+    if (current.length) return pinned + `<ul class="chat-list">${current.map(chatRowHtml).join('')}</ul>` + shelf;
+    if (shelf) return pinned + shelf;
     return pinned + `<p class="feed-empty">${all
       ? 'No chats yet. Tap the new chat button to start one.'
       : 'Nothing here yet.'}</p>`;
@@ -12628,6 +12741,10 @@
       `</section>`;
     const fresh = view.querySelector('#chats-pane');
     fresh.querySelectorAll('.chat-row').forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
+    // `toggle` doesn't bubble, so it is caught on the way down.
+    fresh.addEventListener('toggle', (e) => {
+      if (e.target.matches && e.target.matches('.chat-archived')) archivedOpen = e.target.open;
+    }, true);
     document.getElementById('chats-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: chatFilter,
@@ -12807,21 +12924,98 @@
     openSheet({ items });
   }
 
+  /* THE SUBSCRIBABLE CALENDAR (1.7). One link per person, served by the push
+     function (calendarFeed), holding everything you host or answered going or
+     maybe to. A phone subscribes once and re-fetches it on its own, so an RSVP
+     made in Tria shows up in the calendar without anyone adding anything.
+
+     webcal:// is what makes a phone offer to SUBSCRIBE rather than import once.
+     The outbound handler only takes http(s), so in the app it goes straight to
+     TriaSettings.openExternal (UIApplication.open), and on the web the browser
+     is simply pointed at it. */
+  async function openCalendarSubscribe() {
+    const res = await Store.calendarLink().catch(() => null);
+    if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t get your calendar link, try again.'); return; }
+    const webcal = res.url.replace(/^https:/, 'webcal:');
+    const open = () => {
+      if (nativeShell()) {
+        try {
+          window.Capacitor.nativePromise('TriaSettings', 'openExternal', { url: webcal })
+            .catch(() => toast('Couldn’t open Calendar. Copy the link and add it in Settings, then Calendar.'));
+          return;
+        } catch { /* no bridge; fall through */ }
+      }
+      location.href = webcal;
+    };
+    openSheet({
+      title: 'Your Tria calendar. Plans you host, or said going or maybe to, show up in your phone’s calendar and keep up as you RSVP.',
+      items: [
+        { label: 'Add to Calendar', icon: 'cal', run: open },
+        { label: 'Copy link', icon: 'link', run: () => {
+          if (!navigator.clipboard) { toast('Couldn’t copy the link.'); return; }
+          navigator.clipboard.writeText(res.url).then(() => toast('Link copied.'), () => toast('Couldn’t copy the link.'));
+        } },
+      ],
+    });
+  }
+
+  function openRsvpSheet(post) {
+    const mine = Store.myRsvp(post.id);
+    openSheet({
+      title: post.title ? `Are you going to ${post.title}?` : 'Are you going?',
+      items: RSVP_CHOICES.map(r => ({
+        label: r.label, icon: mine === r.key ? 'check' : 'blank',
+        run: async () => {
+          if (mine === r.key) return;
+          const res = await Store.setRsvp(post.id, r.key).catch(() => null);
+          if (!res || !res.ok) { toast('Couldn’t save that, try again.'); return; }
+          hapticTap(r.key === 'going' ? 'MEDIUM' : 'LIGHT');
+          toast(r.key === 'going' ? 'You’re going.' : r.key === 'maybe' ? 'Marked as maybe.' : 'Marked as can’t go.');
+        },
+      })),
+    });
+  }
+
   function openChatMenu(c) {
     const items = [];
     if (c.kind === 'direct' && c.other)
       items.push({ label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(c.other)}`) });
     if (c.kind === 'activity' && c.postId)
       items.push({ label: 'View activity', icon: 'cal', run: () => go(postRoute(c.postId)) });
+    const me = Store.session();
+    const hosting = c.kind === 'activity' && c.host === me;
+    const act = c.kind === 'activity' ? Store.posts().find(p => p.id === c.postId) : null;
+    // A guest's answer, changed from inside the plan's own chat.
+    if (act && !hosting && !isPastActivity(act) && canJoin(act))
+      items.push({ label: 'Your RSVP', icon: 'going', run: () => openRsvpSheet(act) });
     if (c.kind !== 'direct') items.push({
       label: 'People', icon: 'friends',
       run: () => openSheet({
         title: 'In this chat',
-        items: c.members.map(u => ({ label: displayNameOf(u), icon: 'profile', run: () => go(`#/u/${encodeURIComponent(u)}`) })),
+        items: c.members.map(u => ({
+          label: displayNameOf(u) + (u === c.host ? ' (host)' : ''), icon: 'profile',
+          // The host can take a guest off the activity; everyone else walks
+          // to the profile.
+          run: () => (hosting && u !== me && !c.archived)
+            ? openSheet({
+                title: displayNameOf(u),
+                items: [
+                  { label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(u)}`) },
+                  { label: 'Remove from activity', icon: 'close', danger: true, run: async () => {
+                    const res = await Store.removeChatMember(c.id, u).catch(() => null);
+                    toast(res && res.ok ? `${displayNameOf(u)} is off the guest list.`
+                      : ((res && res.error) || 'Couldn’t remove them, try again.'));
+                    if (chatLive) chatLive();
+                  } },
+                ],
+              })
+            : go(`#/u/${encodeURIComponent(u)}`),
+        })),
       }),
     });
-    if (c.kind === 'group' && c.status === 'member')
-      items.push({ label: 'Add friends', icon: 'friends', run: () => go(`#/chats/new?add=${encodeURIComponent(c.id)}`) });
+    if (c.status === 'member' && !c.archived && (c.kind === 'group' || hosting))
+      items.push({ label: hosting ? 'Invite friends' : 'Add friends', icon: 'friends',
+        run: () => go(`#/chats/new?add=${encodeURIComponent(c.id)}`) });
     if (c.status === 'member') items.push({
       label: c.muted ? 'Unmute' : 'Mute', icon: c.muted ? 'sound' : 'mute',
       run: async () => {
@@ -12885,6 +13079,7 @@
               `</div>` +
             `</div>`
           : '') +
+        (c.archived ? `<p class="chat-note chat-archived-note">This chat is archived. You can still read it.</p>` : '') +
       `</section>`;
     const section = view.querySelector('#chat-page');
     const list = section.querySelector('#msg-list');
@@ -12952,7 +13147,7 @@
       };
       accept.addEventListener('click', () => answer(true));
       deny.addEventListener('click', () => answer(false));
-    } else if (c.status === 'member') {
+    } else if (c.status === 'member' && !c.archived) {
       mountPostBar(null, {
         submit: (text, photo) => Store.sendMessage(c.id, text, photo, chatReply && chatReply.id),
         onSent: () => { setChatReply(null); repaint(true); },
@@ -12969,7 +13164,9 @@
     const q = new URLSearchParams((location.hash || '').split('?')[1] || '');
     const addTo = q.get('add');
     const target = addTo ? Store.chat(addTo) : null;
-    if (addTo && (!target || target.kind !== 'group')) { location.replace('#/chats'); return; }
+    // A group's members add friends; an activity's host invites them.
+    const hostingAct = !!target && target.kind === 'activity' && target.host === Store.session();
+    if (addTo && (!target || !(target.kind === 'group' || hostingAct))) { location.replace('#/chats'); return; }
     const already = new Set(target ? target.members : []);
     const byName = (a, b) => a.name.localeCompare(b.name);
     const friends = Store.friends()
@@ -12984,7 +13181,7 @@
 
     mountToolbar({
       leading: toolbarBackEl(addTo ? `#/chat/${encodeURIComponent(addTo)}` : '#/chats', addTo ? 'chat' : 'Chats'),
-      title: addTo ? 'Add friends' : 'New chat',
+      title: hostingAct ? 'Invite friends' : addTo ? 'Add friends' : 'New chat',
       actions: `<button type="button" id="nc-go" ` +
         `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
         `aria-label="${addTo ? 'Add to the group' : 'Start chat'}" disabled>${svgIcon('check')}</button>`,

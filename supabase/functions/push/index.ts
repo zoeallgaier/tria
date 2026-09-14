@@ -369,10 +369,14 @@ async function handle(table: string, rec: Row) {
     // A friend RSVP'd "going" to an activity you host.
     const post = await postById(rec.post_id);
     if (!post || post.author === rec.user_id) return;   // host can't RSVP self
+    // A "can't go" is not news worth a buzz; it shows on the guest list.
+    if (rec.status === 'cant') return;
     const who = await userById(rec.user_id);
     if (!who) return;
+    const maybe = rec.status === 'maybe';
     await sendTo(post.author, {
-      title: `${who.name} is in`, body: `Going to ${postLabel(post)}`,
+      title: maybe ? `${who.name} might come` : `${who.name} is in`,
+      body: `${maybe ? 'Maybe' : 'Going'} to ${postLabel(post)}`,
       // Collapsed PER PERSON, not per activity: two friends saying yes is two
       // pieces of news. The same person re-RSVPing is one.
       tag: `going:${post.id}`, collapse: `going:${post.id}:${rec.user_id}`,
@@ -583,10 +587,16 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
 
   const [blocked, heads, already] = await Promise.all([
     blockedWith(act.author as string),
-    supabase.from('headcount').select('user_id').eq('post_id', act.id),
+    supabase.from('headcount').select('user_id,status').eq('post_id', act.id),
     supabase.from('activity_reminders').select('user_id').eq('post_id', act.id).eq('stage', stage),
   ]);
-  const going = new Set((heads.data || []).map((r: Row) => r.user_id as string));
+  // A maybe gets the logistics a yes does; a "can't go" gets no reminders at all.
+  // `status` is absent on a database from before add-activity-chats.sql: going.
+  const going = new Set((heads.data || []).filter((r: Row) => (r.status || 'going') !== 'cant')
+    .map((r: Row) => r.user_id as string));
+  const cant = new Set((heads.data || []).filter((r: Row) => r.status === 'cant')
+    .map((r: Row) => r.user_id as string));
+  const yesCount = (heads.data || []).filter((r: Row) => (r.status || 'going') === 'going').length;
   const done = new Set((already.data || []).map((r: Row) => r.user_id as string));
 
   // Activities always carry a headline (submitComposer refuses one without), so
@@ -595,7 +605,7 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
   const jobs: Array<{ userId: string; payload: Row }> = [];
 
   for (const uid of new Set(invited)) {
-    if (uid === act.author || blocked.has(uid) || done.has(uid)) continue;
+    if (uid === act.author || blocked.has(uid) || done.has(uid) || cant.has(uid)) continue;
     jobs.push({
       userId: uid,
       payload: {
@@ -613,7 +623,7 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
       userId: act.author as string,
       payload: {
         title,
-        body: hostBody(act, going.size),
+        body: hostBody(act, yesCount),
         tag: `activity:${act.id}`,
         collapse: collapseKey(act.id as string, stage, act.author as string),
         url: selfPost(act.id as string),   // the recipient hosts it
@@ -662,8 +672,82 @@ async function sweepReminders() {
   return { sent };
 }
 
+// ── The calendar feed (1.7) ──────────────────────────────────────────────────
+// GET ?calendar=<token> answers text/calendar: every activity the token's owner
+// hosts, or has answered going or maybe to, from a month back onwards. A phone
+// subscribes once (webcal://…) and re-fetches on its own, which is what keeps it
+// in step as they RSVP. It rides this function because this function already
+// takes unauthenticated calls; a calendar app cannot send a key.
+const icsEsc = (s: string) => String(s || '')
+  .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsDay = (d: string) => d.replace(/-/g, '');
+function icsNextDay(d: string) {
+  const t = new Date(d + 'T12:00:00Z');
+  t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10).replace(/-/g, '');
+}
+// Floating local times, like the app's own Add to calendar: 7 PM is 7 PM
+// wherever the phone is, because that is how the host wrote it.
+function icsWhen(date: string, time: string | null) {
+  if (!time) return `DTSTART;VALUE=DATE:${icsDay(date)}\r\nDTEND;VALUE=DATE:${icsNextDay(date)}`;
+  const [h, m] = time.split(':').map(Number);
+  const start = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), h, m));
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const f = (d: Date) => d.toISOString().slice(0, 19).replace(/[-:]/g, '');
+  return `DTSTART:${f(start)}\r\nDTEND:${f(end)}`;
+}
+
+async function calendarFeed(token: string): Promise<Response> {
+  const notFound = () => new Response('Not found', { status: 404 });
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return notFound();
+  const { data: owner } = await supabase.from('calendar_tokens').select('user_id').eq('token', token).maybeSingle();
+  if (!owner) return notFound();
+  const uid = owner.user_id as string;
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const cols = 'id,author,title,location,event_date,event_time';
+
+  const { data: answers } = await supabase.from('headcount').select('post_id,status').eq('user_id', uid);
+  const maybe = new Set((answers || []).filter((r: Row) => r.status === 'maybe').map((r: Row) => r.post_id));
+  const joinedIds = (answers || []).filter((r: Row) => (r.status || 'going') !== 'cant').map((r: Row) => r.post_id);
+  const [hosted, joined, blocked] = await Promise.all([
+    supabase.from('posts').select(cols).eq('type', 'activity').eq('author', uid).gte('event_date', since),
+    joinedIds.length
+      ? supabase.from('posts').select(cols).eq('type', 'activity').in('id', joinedIds).gte('event_date', since)
+      : Promise.resolve({ data: [] as Row[] }),
+    blockedWith(uid),
+  ]);
+  const acts = new Map<string, Row>();
+  for (const a of [...(hosted.data || []), ...(joined.data || [])]) {
+    if (a.event_date && !blocked.has(a.author)) acts.set(a.id, a);
+  }
+  const hosts = new Map<string, Row | null>();
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '') + 'Z';
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tria//Calendar//EN', 'CALSCALE:GREGORIAN',
+    'X-WR-CALNAME:Tria', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'];
+  for (const a of acts.values()) {
+    if (!hosts.has(a.author)) hosts.set(a.author, await userById(a.author));
+    const host = hosts.get(a.author);
+    const mine = a.author === uid;
+    lines.push('BEGIN:VEVENT', `UID:${a.id}@tria`, `DTSTAMP:${stamp}`,
+      icsWhen(a.event_date, a.event_time || null),
+      `SUMMARY:${icsEsc((maybe.has(a.id) ? 'Maybe: ' : '') + (a.title || 'Tria activity'))}`,
+      ...(a.location ? [`LOCATION:${icsEsc(a.location)}`] : []),
+      `DESCRIPTION:${icsEsc(mine ? 'You’re hosting.' : `Hosted by ${host ? host.name : 'a friend'}.`)}`,
+      `URL:https://triaonline.com/#/p/${a.id}`,
+      'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return new Response(lines.join('\r\n') + '\r\n', {
+    headers: { 'content-type': 'text/calendar; charset=utf-8', 'cache-control': 'no-cache' },
+  });
+}
+
 Deno.serve(async (req) => {
   try {
+    if (req.method === 'GET') {
+      const token = new URL(req.url).searchParams.get('calendar');
+      return token ? await calendarFeed(token) : new Response('ok');
+    }
     const payload = await req.json();
     // The cron sweep and the database webhooks share one function and one URL;
     // only the payload says which is calling. A webhook always carries `table`.

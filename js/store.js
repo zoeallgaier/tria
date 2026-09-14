@@ -443,7 +443,9 @@ const Store = (() => {
     // blanking them empties every RSVP, every vote and every "shared with N" in
     // the app at once. On a DB that genuinely hasn't got the table the last good
     // copy is [] anyway, so tolerating the error still costs nothing.
-    state.headcount = core(h, 'headcount', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.headcount);
+    // `status` (going / maybe / cant) arrived with add-activity-chats.sql; a row
+    // from before it, or a database without the column, is a yes.
+    state.headcount = core(h, 'headcount', row => ({ postId: row.post_id, user: nameById.get(row.user_id), status: row.status || 'going', _ts: row.created_at }), state.headcount);
     state.pollVotes = core(pv, 'poll votes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), choice: row.choice, _ts: row.created_at }), state.pollVotes);
     state.audience = core(pa, 'post audience', row => ({ postId: row.post_id, userId: row.user_id }), state.audience);
     // Directed "add" edges: a row (a, b) means a has added b. A friendship is
@@ -1485,31 +1487,55 @@ const Store = (() => {
   // see the activity sees the count and the names. You can raise or lower only
   // your own hand, and — like commenting — it's a friends-only gesture. The
   // author hosts rather than RSVPs, so their own hand stays out of the list.
-  const headcountFor = (postId) => rowsFor(state.headcount, postId);
-  const goingByMe = (postId) => !!mineIn(state.headcount, postId);
+  // The HEADCOUNT is the yeses. A maybe or a "can't go" is an answer, not a
+  // head, so it is in rsvpsFor and never in the number on the card.
+  const headcountFor = (postId) => rowsFor(state.headcount, postId).filter(h => h.status === 'going');
+  const rsvpsFor = (postId) => rowsFor(state.headcount, postId);
+  const myRsvp = (postId) => { const r = mineIn(state.headcount, postId); return r ? r.status : null; };
+  const goingByMe = (postId) => myRsvp(postId) === 'going';
 
   // The one gesture deliberately NOT opened to public posts (likes, comments and
   // poll votes all were): a public activity carries a place and a time, and
   // joining it is a real-world act, not a signal. Anyone may SEE a public
   // activity; only the circle shows up to it.
-  async function toggleGoing(postId) {
+  // Answer, change your answer, or take it back (status null). Since 1.7 the
+  // answer also decides a circle or public activity's chat, which the database
+  // does on its own (add-activity-chats.sql) and the channel reports back.
+  async function setRsvp(postId, status) {
     const me = state.session;
     if (!me) return { ok: false };
     const post = state.posts.find(p => p.id === postId);
     if (!post || post.author === me || !isFriend(post.author)) return { ok: false };
     const mine = idOf(me);
-    const has = goingByMe(postId);
-    if (has) {
+    const had = mineIn(state.headcount, postId);
+    const same = x => x.postId === postId && x.user === me;
+    if (!status) {
+      if (!had) return { ok: true, status: null };
       const { error } = await sb.from('headcount').delete().eq('post_id', postId).eq('user_id', mine);
       if (error) return { ok: false };
-      write('headcount', xs => xs.filter(x => !(x.postId === postId && x.user === me)));
-    } else {
-      const { error } = await sb.from('headcount').insert({ post_id: postId, user_id: mine });
-      if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
-      const row = { postId, user: me, _ts: new Date().toISOString() };
-      write('headcount', xs => upsert(xs, row, x => x.postId === postId && x.user === me));
+      write('headcount', xs => xs.filter(x => !same(x)));
+      return { ok: true, status: null };
     }
-    return { ok: true, going: !has };
+    let error = null;
+    if (had) {
+      ({ error } = await sb.from('headcount').update({ status }).eq('post_id', postId).eq('user_id', mine));
+    } else {
+      ({ error } = await sb.from('headcount').insert({ post_id: postId, user_id: mine, status }));
+      // A database without the column still takes a plain yes.
+      if (error && error.code === '42703' && status === 'going')
+        ({ error } = await sb.from('headcount').insert({ post_id: postId, user_id: mine }));
+      if (error && /duplicate|unique/i.test(error.message)) error = null;
+    }
+    if (error) return { ok: false };
+    const row = { postId, user: me, status, _ts: had ? had._ts : new Date().toISOString() };
+    write('headcount', xs => upsert(xs, row, same));
+    return { ok: true, status };
+  }
+
+  // The card's one-tap hand: in, or back out.
+  async function toggleGoing(postId) {
+    const res = await setRsvp(postId, goingByMe(postId) ? null : 'going');
+    return res.ok ? { ok: true, going: res.status === 'going' } : { ok: false };
   }
 
   // ── Polls ────────────────────────────────────────────────────────────────────
@@ -1581,9 +1607,10 @@ const Store = (() => {
     for (const l of state.likes)
       if (mine.has(l.postId) && l.user !== me)
         evts.push({ kind: 'like', postId: l.postId, user: l.user, _ts: l._ts || '' });
+    // A yes and a maybe are news for the host; a "can't go" waits on the guest list.
     for (const h of state.headcount)
-      if (mine.has(h.postId) && h.user !== me)
-        evts.push({ kind: 'going', postId: h.postId, user: h.user, _ts: h._ts || '' });
+      if (mine.has(h.postId) && h.user !== me && h.status !== 'cant')
+        evts.push({ kind: h.status === 'maybe' ? 'maybe' : 'going', postId: h.postId, user: h.user, _ts: h._ts || '' });
     // Poll votes on MY polls (public like headcount). Updates-only, no push —
     // a vote is quieter than a comment, so it lands in the ledger but never
     // buzzes a device.
@@ -1754,8 +1781,22 @@ const Store = (() => {
     }
     const msgs = messagesFor(c.id);
     const last = msgs[msgs.length - 1] || null;
+    // An activity's chat knows its host, and goes quiet three days after the day
+    // (the same rule can_send_message enforces).
+    let host = null;
+    let archived = false;
+    if (c.kind === 'activity') {
+      const act = state.posts.find(p => p.id === c.postId);
+      host = act ? act.author : c.createdBy;
+      if (act && act.eventDate) {
+        const d = new Date(act.eventDate + 'T12:00:00Z');
+        d.setUTCDate(d.getUTCDate() + 3);
+        archived = d.toISOString().slice(0, 10) < dayMT(Date.now());
+      }
+    }
     return {
       id: c.id, kind: c.kind, title: c.title, postId: c.postId, createdBy: c.createdBy,
+      host, archived,
       other, members, last, status: mine.status, muted: mine.muted,
       unread: !!last && last.author !== me && last._ts > mine.lastReadAt,
       lastAt: last ? last._ts : (mine.clearedAt || c._ts),
@@ -1808,10 +1849,36 @@ const Store = (() => {
   }
 
   async function addChatMembers(chatId, usernames) {
-    const { error } = await sb.rpc('add_chat_members', { p_chat: chatId, p_members: usernames.map(idOf).filter(Boolean) });
+    const ids = usernames.map(idOf).filter(Boolean);
+    const { error } = await sb.rpc('add_chat_members', { p_chat: chatId, p_members: ids });
     if (error) return { ok: false, error: chatError(error, 'Couldn’t add them, try again.') };
+    // A hand-picked activity's invite list grew with its chat (see the RPC).
+    const c = state.chats.find(x => x.id === chatId);
+    const act = c && c.kind === 'activity' && state.posts.find(p => p.id === c.postId);
+    if (act && act.audience === 'list') write('audience', a => ids.reduce((acc, userId) =>
+      upsert(acc, { postId: act.id, userId }, x => x.postId === act.id && x.userId === userId), a));
     await reloadChats();
     return { ok: true };
+  }
+
+  // The host taking a guest off their activity (chat and invite list both).
+  async function removeChatMember(chatId, username) {
+    const userId = idOf(username);
+    const { error } = await sb.rpc('remove_chat_member', { p_chat: chatId, p_user: userId });
+    if (error) return { ok: false, error: chatError(error, 'Couldn’t remove them, try again.') };
+    const c = state.chats.find(x => x.id === chatId);
+    if (c && c.postId) write('audience', a => a.filter(x => !(x.postId === c.postId && x.userId === userId)));
+    write('chatMembers', ms => ms.filter(x => !(x.chatId === chatId && x.user === username)));
+    return { ok: true };
+  }
+
+  // The subscribable calendar's address (see calendarFeed in the push function).
+  async function calendarLink(reset = false) {
+    const { data, error } = await sb.rpc('calendar_token', { p_reset: !!reset });
+    if (error || !data) return { ok: false, error: isMissing(error)
+      ? 'The calendar isn’t set up on this server yet.'
+      : 'Couldn’t get your calendar link, try again.' };
+    return { ok: true, url: `${url}/functions/v1/swift-processor?calendar=${data}` };
   }
 
   async function renameChat(chatId, title) {
@@ -2753,14 +2820,14 @@ const Store = (() => {
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
     // Headcount
-    headcountFor, goingByMe, toggleGoing,
+    headcountFor, goingByMe, toggleGoing, rsvpsFor, myRsvp, setRsvp, calendarLink,
     // Polls
     pollVotesFor, myPollVote, votePoll, pollClosed, pollClosesAt,
     // Notifications
     notifications,
     // Chats
     chatsReady, chats, chatRequests, chat, chatMembers, messagesFor, heartsFor, heartedByMe,
-    chatsAreNew, startDirectChat, startGroupChat, addChatMembers, renameChat,
+    chatsAreNew, startDirectChat, startGroupChat, addChatMembers, removeChatMember, renameChat,
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,
     // Push
