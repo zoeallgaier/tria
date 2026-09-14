@@ -67,8 +67,8 @@ answered `404` that morning). Zoe redeployed the push function for its
 same day). **The push function had NOT been redeployed with it** at that probe: a
 GET with `?calendar=` came back `200 {"ok":false}` (the old handler parsing a
 body that isn't there) rather than the feed's `404 Not found` for an unknown
-token. That is the check to repeat after a deploy. Until it passes, a subscribed
-calendar gets no events.
+token. That is the check to repeat after a deploy. **Zoe redeployed later that
+day and it passes**: an unknown token now answers `404 text/plain Not found`.
 
 **The calendar link is `webcals://`, not `webcal://`.** Plain webcal is fetched
 over http; Supabase answers http with a `301` to https, and iOS calls the

@@ -7067,9 +7067,28 @@ button.poll-option:disabled { cursor: default; }
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-/* Yours wear your colour, thinned onto the paper, so the two sides of a chat
-   are told apart by whose it is rather than by a second palette. */
-.msg--mine .msg-bubble { background: color-mix(in srgb, var(--accent) 26%, var(--surface)); }
+/* YOURS WEAR YOUR COLOUR, and it is the primary acts' colour exactly: the band
+   the composer's Share and the send disc paint (--pill-band, which is your pick,
+   Tria's ramp, or the neutral for "no colour"), thinned to --pill-alpha, with the
+   ink measured to ride it. --accent is the page's own ink and was never yours,
+   which is why these used to come out grey. The band sits on a layer under the
+   words, like .publish-fill's, so the alpha thins the fill and not the text. */
+.msg--mine .msg-bubble {
+  position: relative;
+  isolation: isolate;
+  color: var(--pill-ink);
+  background: none;
+}
+.msg--mine .msg-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--pill-band);
+  opacity: var(--pill-alpha);
+}
+.msg--mine .msg-bubble a { color: inherit; }
 .msg-photo {
   display: block;
   width: min(240px, 100%);
