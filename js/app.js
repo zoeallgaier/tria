@@ -13087,6 +13087,38 @@
     return out;
   }
 
+  /* A REPAINT PATCHES THE THREAD, it does not replace it. Rebuilding the list
+     whole on every heart threw away every decoded photo: a fresh lazy <img> has
+     no height until it loads again (and a photo whose URL carries no -WxH has no
+     aspect-ratio to hold its place), so the thread shrank and grew under the
+     reader and the page jumped. Now a row whose markup is unchanged keeps its
+     node, and a row that did change (it gained a heart) keeps its old photo
+     button when the photo is the same one. */
+  function patchThread(list, html) {
+    const keyOf = (el) => el.dataset.id || `${el.className}|${el.textContent}`;
+    const old = new Map();
+    for (const el of list.children) if (!old.has(keyOf(el))) old.set(keyOf(el), el);
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    let at = list.firstElementChild;
+    for (const fresh of [...tpl.content.children]) {
+      const key = keyOf(fresh);
+      const prev = old.get(key);
+      old.delete(key);
+      let node = fresh;
+      if (prev && prev.outerHTML === fresh.outerHTML) node = prev;
+      else if (prev) {
+        const was = prev.querySelector('.msg-photo');
+        const now = fresh.querySelector('.msg-photo');
+        if (was && now && was.dataset.photo === now.dataset.photo) now.replaceWith(was);
+      }
+      if (node === at) at = at.nextElementSibling;
+      else list.insertBefore(node, at);
+    }
+    // Every row placed went in before `at`, so what is left from it on is stale.
+    while (at) { const next = at.nextElementSibling; at.remove(); at = next; }
+  }
+
   /* A heart's pop and sparkle have to finish before the thread is rebuilt under
      them, and the channel's echo of that same heart usually lands mid-burst. So a
      repaint asked for inside the window is put off to its end, once. */
@@ -13473,7 +13505,7 @@
       if (!now) { go('#/chats'); return; }
       if (now.status !== c.status) { renderChat(id); return; }   // a request answered elsewhere
       const follow = stick || nearBottom();
-      list.innerHTML = threadHtml(now);
+      patchThread(list, threadHtml(now));
       if (follow) toBottom(false);
       read();
     };
