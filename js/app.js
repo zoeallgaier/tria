@@ -13057,11 +13057,10 @@
   async function openCalendarSubscribe() {
     const res = await Store.calendarLink().catch(() => null);
     if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t get your calendar link, try again.'); return; }
-    // webcalS. Plain webcal:// is fetched over http, which Supabase answers with
-    // a redirect to https, and iOS warns that the calendar is insecure (the
-    // token in the link would also cross unencrypted on that first request).
-    // webcals:// is the same subscription over https from the start.
-    const webcal = res.url.replace(/^https:/, 'webcals:');
+    // webcal://, not webcals://. Calendar registers only webcal (iOS answers
+    // webcals with LSApplicationWorkspace error 115, nothing opens), and it
+    // hands the link to Calendar's Add Subscription sheet, which subscribes.
+    const webcal = res.url.replace(/^https:/, 'webcal:');
     const open = () => {
       if (nativeShell()) {
         try {

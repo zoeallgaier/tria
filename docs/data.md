@@ -70,9 +70,13 @@ body that isn't there) rather than the feed's `404 Not found` for an unknown
 token. That is the check to repeat after a deploy. **Zoe redeployed later that
 day and it passes**: an unknown token now answers `404 text/plain Not found`.
 
-**The calendar link is `webcals://`, not `webcal://`.** Plain webcal is fetched
-over http; Supabase answers http with a `301` to https, and iOS calls the
-subscription insecure. The link carries the project URL (already public in
+**The calendar link is `webcal://`.** `webcals://` was tried (2026-09-14) to
+dodge an "insecure" warning and opens nothing on iOS: Calendar registers only
+`webcal`, and `UIApplication.open` fails with LSApplicationWorkspace error 115.
+`webcal://` opens Calendar's Add Subscription sheet with the link filled in.
+Supabase answers plain http with a `301` to https, so if iOS ever warns that the
+subscription is insecure, that redirect is where to look. `openExternal` in
+TriaSettingsPlugin.swift takes webcal(s) for this one caller. The link carries the project URL (already public in
 config.js) and the token, a random uuid that is the whole key to one person's
 feed, which is why the profile's sheet offers Reset link.
 
