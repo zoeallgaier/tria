@@ -5474,22 +5474,14 @@ button.poll-option:disabled { cursor: default; }
   margin-bottom: 0.85rem;              /* layoutGrid reads this to balance the columns */
   overflow: hidden;                    /* the face is full-bleed; the tile clips it */
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  /* The glass-minus-blur surface: it takes the edge, the specular rim and the
-     float from the same tokens as every other floating panel, and drops only the
-     sample-and-blur (see the note above — a scrolling masonry grid is exactly
-     where per-element compositor work bills you). The rim is a box-shadow, so
-     matching the material here costs nothing. */
-  border: var(--glass-edge);
-  box-shadow: var(--glass-rim), 0 6px 18px rgba(0, 0, 0, 0.10);
-  transition: transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick) var(--ease);
+  /* The week-of activity card's material (.week-card), the same one the daily
+     card above the grid took: a flat --surface and a --rule hairline, no rim, no
+     float shadow and no lift on hover. The glass-minus-blur panel with its drop
+     shadow read as a wall of objects floating over Discover, and next to the
+     flat daily card it was two vocabularies on one page. Zoe's call, 2026-09-14. */
+  background: var(--surface);
+  border: 1px solid var(--rule);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as feed cards */
-}
-@media (hover: hover) {
-  .ptile:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--glass-rim), 0 12px 26px rgba(0, 0, 0, 0.13);
-  }
 }
 
 /* ── The quoted post ────────────────────────────────────────────────────────
@@ -6173,8 +6165,8 @@ button.poll-option:disabled { cursor: default; }
    strangers; here every tile is the same person, and repeating them down the
    page would be forty labels saying what the card at the top already said. So
    there is barely a rule to write: dropping .ptile-foot from the markup is the
-   whole design, and .ptile's own clip, hairline, lit rim and float shadow frame
-   the photograph on their own. */
+   whole design, and .ptile's own clip and hairline frame the photograph on
+   their own. */
 /* The one rule the wall needs of its own, and it's a flexbox trap rather than a
    design decision: .pgrid centres itself with `margin-inline: auto`, which is
    free inside Discover's block-level body but lands here inside #feed, a FLEX
