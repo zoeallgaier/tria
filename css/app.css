@@ -7092,6 +7092,12 @@ button.poll-option:disabled { cursor: default; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Your own reply quotes from the right, with its rule on the side your bubble is. */
+.msg--mine .msg-reply {
+  text-align: right;
+  border-left: 0;
+  border-right: 2px solid var(--rule);
+}
 .msg-hearts {
   display: grid;
   place-items: center;
@@ -7169,8 +7175,6 @@ button.poll-option:disabled { cursor: default; }
   100% { transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .msg-hearts.is-popping svg { animation: none; } }
-/* The chat in an activity's comments pane sits on the thread's own edge. */
-.msg-list--post { padding-top: 0; }
 
 /* The Archived shelf at the foot of the chat list: a quiet disclosure row. */
 /* Straight on from the rows above it, one hairline, for the pinned rows' reason. */

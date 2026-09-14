@@ -3496,14 +3496,8 @@
     const going = goingControlHtml(goingPost, full);
     const like = likeButtonHtml(post, full);
     const repost = repostBtnHtml(post);
-    // On an activity with a chat the glyph is the chat's (see activityThreadHtml).
-    const chatMode = post.type === 'activity' && Store.hasActivityChat(post.id);
-    const actChat = chatMode ? Store.activityChat(post.id) : null;
-    const n = chatMode
-      ? (actChat ? Store.messagesFor(actChat.id).length : 0)
-      : Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
-    const noun = chatMode ? ' message' : ' comment';
-    const label = `aria-label="${n ? n + noun + (n === 1 ? '' : 's') : (chatMode ? 'Chat' : 'Comments')}"`;
+    const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
+    const label = `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}"`;
     const inner = svgIcon('comment') + (n ? `<span class="card-comment-count">${n}</span>` : '');
     /* THE GLYPH OPENS THE POST, and the feed has no comment box left at all.
        The disclosure survived one round of this redesign holding just the form,
@@ -4769,9 +4763,6 @@
   function commentsPanelHtml(post, full) {
     if (!full) return '';
     if (!canSocial(post)) return '';   // friends-only: no thread on a non-friend's post
-    // AN ACTIVITY'S CONVERSATION IS ITS CHAT (1.7). One place to talk about a
-    // plan, not a comment thread and a chat saying different things beside it.
-    if (post.type === 'activity' && Store.hasActivityChat(post.id)) return activityThreadHtml(post);
     // Blocked authors' comments never render, on any post (closes the block gap
     // for threads on mutual friends' posts). The count above filters to match.
     const list = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author));
@@ -4783,22 +4774,6 @@
               : `<p class="comments-empty">No comments yet.</p>`) +
           `</div>` +
         `</div>` +
-      `</div>`;
-  }
-
-  /* The chat, in the comments' place on an activity's page. Members read it;
-     anyone else is told how to get in. It is still the post-pane called
-     'comments', so the glyph, the pane switching and the bar all hold. */
-  function activityThreadHtml(post) {
-    const c = Store.activityChat(post.id);
-    const inner = c
-      ? `<ol class="msg-list msg-list--post" id="msg-list">${threadHtml(c)}</ol>` +
-        (c.archived ? `<p class="comments-empty">This chat is archived. You can still read it.</p>` : '')
-      : `<p class="comments-empty">${canJoin(post) && !isPastActivity(post)
-          ? 'Say you’re going or maybe to join the chat.'
-          : 'Only people going can see the chat.'}</p>`;
-    return `<div class="comments-panel comments-panel--full post-pane${paneOpen('comments')}" data-pane="comments">` +
-        `<div class="comments-inner"><div class="comments-content">${inner}</div></div>` +
       `</div>`;
   }
 
@@ -8622,55 +8597,7 @@
        with a line on top and has no thread of its own to hold. It declines itself
        when canSocial does, the same gate that decides whether there is a thread
        here at all. */
-    const threadPost = isQuote(post) ? post : subj;
-    if (threadPost.type === 'activity' && Store.hasActivityChat(threadPost.id)) {
-      mountActivityChat(threadPost, section, id);
-      return;
-    }
-    mountPostBar(threadPost);
-  }
-
-  /* An activity's page with its chat as the conversation (1.7): the bar sends
-     into the chat, the thread follows the channel, and a change in whether I'm
-     IN the chat (an RSVP, a removal, the archive) re-renders the page, since
-     that changes the bar and the pane together. */
-  function mountActivityChat(act, section, routeId) {
-    const c = Store.activityChat(act.id);
-    const root = document.scrollingElement || document.documentElement;
-    const nearBottom = () => window.innerHeight + window.scrollY >= root.scrollHeight - 140;
-    const toBottom = (smooth) => window.scrollTo({ top: root.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    const read = () => {
-      if (!c || document.visibilityState !== 'visible' || postPane !== 'comments') return;
-      Store.markChatRead(c.id).then(syncNavDot, () => {});
-    };
-    const shape = (x) => (x ? `${x.id}:${x.status}:${x.archived}` : '');
-    const was = shape(c);
-    const live = () => {
-      if (holdRepaint(live)) return;
-      const now = Store.activityChat(act.id);
-      if (shape(now) !== was) { renderPost(routeId, postPane); return; }
-      const list = section.querySelector('#msg-list');
-      if (!now || !list) return;
-      const follow = nearBottom();
-      list.innerHTML = threadHtml(now);
-      if (follow) toBottom(false);
-      read();
-    };
-    chatLive = live;
-    if (!c) return;
-    wireMessages(section, c.id);
-    read();
-    if (c.status !== 'member' || c.archived) return;
-    chatReply = null;
-    mountPostBar(null, {
-      submit: (text, photo) => Store.sendMessage(c.id, text, photo, chatReply && chatReply.id),
-      onSent: () => { setChatReply(null); live(); toBottom(true); },
-      onFocus: () => {
-        const card = section.querySelector('.card');
-        if (card && postPane !== 'comments') setPostPane('comments', card);
-        toBottom(true);
-      },
-    });
+    mountPostBar(isQuote(post) ? post : subj);
   }
 
   // "Sam’s post" / "Sam’s activity" — see the note at the mountToolbar call.
@@ -9251,9 +9178,6 @@
   function openPostMenu(post) {
     const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
-    // An activity's chat is its conversation, so the chat's options live here too.
-    const actChat = post.type === 'activity' ? Store.activityChat(post.id) : null;
-    if (actChat) items.push(...chatMenuItems(actChat, true));
     // Add to calendar left this menu in 1.7 for the card's own reaction bar
     // (the .card-cal glyph beside the headcount).
     if (own) {
@@ -13133,7 +13057,11 @@
   async function openCalendarSubscribe() {
     const res = await Store.calendarLink().catch(() => null);
     if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t get your calendar link, try again.'); return; }
-    const webcal = res.url.replace(/^https:/, 'webcal:');
+    // webcalS. Plain webcal:// is fetched over http, which Supabase answers with
+    // a redirect to https, and iOS warns that the calendar is insecure (the
+    // token in the link would also cross unencrypted on that first request).
+    // webcals:// is the same subscription over https from the start.
+    const webcal = res.url.replace(/^https:/, 'webcals:');
     const open = () => {
       if (nativeShell()) {
         try {
@@ -13152,6 +13080,16 @@
           if (!navigator.clipboard) { toast('Couldn’t copy the link.'); return; }
           navigator.clipboard.writeText(res.url).then(() => toast('Link copied.'), () => toast('Couldn’t copy the link.'));
         } },
+        // The link is the key to the feed. If it ends up somewhere it shouldn't,
+        // a new one retires it for every calendar holding the old.
+        { label: 'Reset link', icon: 'close', danger: true, run: () => openSheet({
+          title: 'Reset your calendar link? Calendars using the old one stop updating, and you’ll subscribe again with the new one.',
+          items: [{ label: 'Reset link', icon: 'close', danger: true, run: async () => {
+            const fresh = await Store.calendarLink(true).catch(() => null);
+            toast(fresh && fresh.ok ? 'Done. Your old calendar link no longer works.'
+              : ((fresh && fresh.error) || 'Couldn’t reset the link, try again.'));
+          } }],
+        }) },
       ],
     });
   }
@@ -13173,19 +13111,17 @@
     });
   }
 
-  // A chat's options. `onPost` is an activity's page, whose own ••• carries them
-  // (openPostMenu): the page already shows the plan and its RSVP.
-  function chatMenuItems(c, onPost = false) {
+  function openChatMenu(c) {
     const items = [];
     if (c.kind === 'direct' && c.other)
       items.push({ label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(c.other)}`) });
-    if (c.kind === 'activity' && c.postId && !onPost)
+    if (c.kind === 'activity' && c.postId)
       items.push({ label: 'View activity', icon: 'cal', run: () => go(postRoute(c.postId)) });
     const me = Store.session();
     const hosting = c.kind === 'activity' && c.host === me;
     const act = c.kind === 'activity' ? Store.posts().find(p => p.id === c.postId) : null;
     // A guest's answer, changed from inside the plan's own chat.
-    if (act && !onPost && !hosting && !isPastActivity(act) && canJoin(act))
+    if (act && !hosting && !isPastActivity(act) && canJoin(act))
       items.push({ label: 'Your RSVP', icon: 'going', run: () => openRsvpSheet(act) });
     if (c.kind !== 'direct') items.push({
       label: 'People', icon: 'friends',
@@ -13239,26 +13175,16 @@
         title: leave.title,
         items: [{ label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true, run: async () => {
           const res = await leave.act().catch(() => null);
-          // On the activity's page the page itself follows (mountActivityChat).
-          if (res && res.ok) { if (onPost) { if (chatLive) chatLive(); } else go('#/chats'); }
+          if (res && res.ok) go('#/chats');
           else toast((res && res.error) || 'Couldn’t do that just now, try again.');
         } }],
       }),
     });
-    return items;
-  }
-
-  function openChatMenu(c) {
-    openSheet({ items: chatMenuItems(c) });
+    openSheet({ items });
   }
 
   function renderChat(id) {
     const c = Store.chat(id);
-    // An activity's chat lives on the activity's own page (see activityThreadHtml).
-    if (c && c.kind === 'activity' && c.postId && Store.posts().some(p => p.id === c.postId)) {
-      location.replace(postRoute(c.postId));
-      return;
-    }
     chatReply = null;
     mountToolbar({
       leading: toolbarBackEl('#/chats', 'Chats'),

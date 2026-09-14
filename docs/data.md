@@ -62,11 +62,19 @@ deploy. **So the outstanding list is two: the `.p8` key and this.**
 answered `404` that morning). Zoe redeployed the push function for its
 `messages` branch the same day.
 
-**`supabase/add-activity-chats.sql` (1.7 stage 2) is written and NOT yet run**
-(probed 2026-09-14: `calendar_tokens` answers `404`, and `headcount.status`
-answers `400` alongside a bogus-column control that also answers `400`). It
-needs add-chats.sql first, and the push function redeployed after it (the
-calendar feed and the maybe wording live there).
+**`supabase/add-activity-chats.sql` (1.7 stage 2) HAS been run** (probed
+2026-09-14: `calendar_tokens` answers `200`, where it answered `404` earlier the
+same day). **The push function had NOT been redeployed with it** at that probe: a
+GET with `?calendar=` came back `200 {"ok":false}` (the old handler parsing a
+body that isn't there) rather than the feed's `404 Not found` for an unknown
+token. That is the check to repeat after a deploy. Until it passes, a subscribed
+calendar gets no events.
+
+**The calendar link is `webcals://`, not `webcal://`.** Plain webcal is fetched
+over http; Supabase answers http with a `301` to https, and iOS calls the
+subscription insecure. The link carries the project URL (already public in
+config.js) and the token, a random uuid that is the whole key to one person's
+feed, which is why the profile's sheet offers Reset link.
 
 The client stays tolerant of a database without `listening_to` anyway, and it's
 worth knowing what that looks like so it isn't mistaken for a bug on a fresh

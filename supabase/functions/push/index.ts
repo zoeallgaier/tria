@@ -704,7 +704,7 @@ async function calendarFeed(token: string): Promise<Response> {
   if (!owner) return notFound();
   const uid = owner.user_id as string;
   const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const cols = 'id,author,title,location,event_date,event_time';
+  const cols = 'id,author,title,location,event_date,event_time,audience';
 
   const { data: answers } = await supabase.from('headcount').select('post_id,status').eq('user_id', uid);
   const maybe = new Set((answers || []).filter((r: Row) => r.status === 'maybe').map((r: Row) => r.post_id));
@@ -716,9 +716,24 @@ async function calendarFeed(token: string): Promise<Response> {
       : Promise.resolve({ data: [] as Row[] }),
     blockedWith(uid),
   ]);
+  // STILL YOURS TO SEE. This runs with the service key, so RLS is not asking
+  // the question: an answer row outlives being taken off a hand-picked list or
+  // unfriending the host, and the feed must not keep handing that plan out. The
+  // same three rules can_view_post applies: public, on the list, or a friend.
+  const listed = new Set(joinedIds.length
+    ? ((await supabase.from('post_audience').select('post_id').eq('user_id', uid).in('post_id', joinedIds)).data || [])
+        .map((r: Row) => r.post_id as string)
+    : []);
+  const friendOf = new Map<string, boolean>();
+  const canSee = async (a: Row) => {
+    if (a.author === uid || a.audience === 'public') return true;
+    if (a.audience === 'list') return listed.has(a.id);
+    if (!friendOf.has(a.author)) friendOf.set(a.author, await areFriends(uid, a.author));
+    return friendOf.get(a.author)!;
+  };
   const acts = new Map<string, Row>();
   for (const a of [...(hosted.data || []), ...(joined.data || [])]) {
-    if (a.event_date && !blocked.has(a.author)) acts.set(a.id, a);
+    if (a.event_date && !blocked.has(a.author) && await canSee(a)) acts.set(a.id, a);
   }
   const hosts = new Map<string, Row | null>();
   const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '') + 'Z';
