@@ -3984,7 +3984,7 @@
      Only the cards that can be seen hold a bitmap (the one just passed, the front,
      two behind). The rest keep their URL in data-src and load as they come
      forward, so a six-photo post costs a feed what three do. */
-  const DECK_NEAR = 2;   // how many cards behind the front are drawn
+  const DECK_NEAR = 2;   // how many cards behind the front hold a bitmap (one shows, one is decoding ahead)
 
   function deckHtml(post, alt) {
     const set = post.images;
@@ -4034,11 +4034,13 @@
     // is already passed). Scaled about the card's RIGHT edge, so a card behind
     // shrinks away from the left and only its right edge shows, pushed out by `x`.
     // `w` is the card's width, which is how far a passed card has to travel to be gone.
+    // Only ONE card shows behind the front (Zoe, 2026-09-14): a second sliver was
+    // clutter, and the front photo is worth the room. The rest wait in the same
+    // seat, invisible, so the next one fades up into it as a swipe carries it forward.
     const seat = (k, w, p) => {
       if (k < 0)  return { x: -(w + p * 2), s: 1, r: -4, o: 0 };
       if (k === 0) return { x: 0, s: 1, r: 0, o: 1 };
-      if (k === 1) return { x: p * 0.55, s: 0.93, r: 0, o: 1 };
-      return { x: p, s: 0.86, r: 0, o: k === 2 ? 1 : 0 };
+      return { x: p, s: 0.92, r: 0, o: k === 1 ? 1 : 0 };
     };
     // A card leaving stays a solid photo for most of its way out and only fades
     // in the last 40%; a card coming back is solid by 40% in. A linear fade had
@@ -4052,7 +4054,7 @@
     // that exists carries each card part-way to its next seat; a pull past either
     // end only leans the front card, a fifth of the finger, and comes back.
     const lay = (dx = 0) => {
-      const w = deck.clientWidth - peek();
+      const w = deck.clientWidth;
       const p = peek();
       const t = Math.max(-1, Math.min(1, dx / (w || 1)));
       const stuck = (t < 0 && at === n - 1) || (t > 0 && at === 0);
@@ -4123,7 +4125,7 @@
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
       if (axis !== 'x') return;
       axis = null;
-      const w = deck.clientWidth - peek();
+      const w = deck.clientWidth;
       // A quarter of the card, or a flick, commits. Anything less goes home.
       const step = (dx < -w * 0.25 || vx < -0.45) ? 1 : (dx > w * 0.25 || vx > 0.45) ? -1 : 0;
       if (go(at + step)) hapticTap('LIGHT');

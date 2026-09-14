@@ -3929,15 +3929,17 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 /* ── The deck: a carousel in the feed (deckHtml / wireDeck in app.js) ──────────
    One box shaped off the cover; every card covers it, so a swipe never changes
-   the post's height. Cards stack from the right: each sits `--deck-peek` short of
-   the box's right edge, and a card behind is scaled about its own right edge and
-   pushed out, so only a sliver of it shows. The outer ring in the page's own
+   the post's height. The front card is the WHOLE box, exactly where a single
+   Frame sits, so the photo is as big and as centred as any other and the last
+   card has no lopsided gap. The one card behind is scaled about its right edge
+   and pushed `--deck-peek` out past it, into the page's side inset (phone 1.15rem,
+   so the peek must stay under ~18px). The outer ring in the page's own
    colour is the gap between two cards in a hand — flat, no drop shadow, the same
    material as the frame a single photo sits in. JS writes each card's transform;
    `.is-settling` is what lets it spring there instead of snapping. */
 .photo--deck { cursor: pointer; }
 .deck {
-  --deck-peek: 22px;
+  --deck-peek: 12px;
   position: relative;
   width: 100%;
   touch-action: pan-y;          /* the page keeps the vertical scroll; sideways is ours */
@@ -3950,7 +3952,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   top: 0;
   bottom: 0;
   left: 0;
-  right: var(--deck-peek);
+  right: 0;
   border-radius: var(--radius-card);
   overflow: hidden;
   background: var(--ph-fill, var(--surface-2));
