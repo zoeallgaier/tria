@@ -169,6 +169,22 @@ end;
 $$;
 grant execute on function public.remove_chat_member(uuid, uuid) to authenticated;
 
+-- Which activities have a chat, among the ones the caller can see. An
+-- activity's page shows its chat as its conversation, and it has to know the
+-- chat exists even for someone who isn't in it yet (to say "RSVP to join")
+-- rather than falling back to comments. The chat itself stays members-only.
+create or replace function public.activity_chat_posts()
+returns setof uuid
+language sql stable security definer set search_path = public
+as $$
+  select c.post_id
+    from public.chats c
+    join public.posts p on p.id = c.post_id
+   where c.kind = 'activity'
+     and public.can_view_post(p.audience, p.author, p.id);
+$$;
+grant execute on function public.activity_chat_posts() to authenticated;
+
 -- ── 3. Calendar tokens ──────────────────────────────────────────────────────
 -- Its own table rather than a column on users, because every signed-in account
 -- can read users and a token anyone can read is not a secret.

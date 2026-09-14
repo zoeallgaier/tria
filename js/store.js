@@ -55,7 +55,7 @@ const Store = (() => {
   //   chats / chatMembers / messages / messageHearts: see "Chats" below
   //   chatsReady: whether add-chats.sql has run (the tables answered)
   const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
-                         chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false });
+                         chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [] });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -1529,6 +1529,9 @@ const Store = (() => {
     if (error) return { ok: false };
     const row = { postId, user: me, status, _ts: had ? had._ts : new Date().toISOString() };
     write('headcount', xs => upsert(xs, row, same));
+    // The answer may have put me in (or out of) the activity's chat. The channel
+    // would say so too; asking now is what makes the page follow without a wait.
+    if (state.chatsReady && state.activityChats.includes(postId)) queueChatReload();
     return { ok: true, status };
   }
 
@@ -1680,6 +1683,8 @@ const Store = (() => {
       readAll('chat_members', ['chat_id', 'user_id']),
       readAll('messages', ['created_at', 'id']),
       readAll('message_hearts', ['message_id', 'user_id']),
+      // Which activities have a chat (add-activity-chats.sql), members or not.
+      sb.rpc('activity_chat_posts'),
     ]);
   }
   const mapMessage = (row, nameById) => ({
@@ -1687,7 +1692,11 @@ const Store = (() => {
     text: row.body || '', image: row.image || null, replyTo: row.reply_to || null,
     _ts: row.created_at,
   });
-  function applyChats([c, m, msg, hr], nameById) {
+  function applyChats([c, m, msg, hr, ac], nameById) {
+    // A database from before stage 2 answers this with an error: no activity
+    // has a chat, and every activity page keeps its comments.
+    if (ac && !ac.error) state.activityChats = (ac.data || []).map(r => (typeof r === 'string' ? r : Object.values(r)[0]));
+    else if (ac && isMissing(ac.error)) state.activityChats = [];
     // One error for the group decides readiness: the four tables arrive in one
     // migration, so either they are all there or none of them are.
     if (c.error) {
@@ -1749,6 +1758,13 @@ const Store = (() => {
   }
 
   const chatsReady = () => !!state.chatsReady;
+  // Does this activity have a chat (whether or not I'm in it)?
+  const hasActivityChat = (postId) => state.activityChats.includes(postId);
+  // The activity's chat, if I'm in it: archived ones included.
+  const activityChat = (postId) => {
+    const c = state.chats.find(x => x.kind === 'activity' && x.postId === postId);
+    return c ? chatView(c) : null;
+  };
   const myChatRow = (chatId) =>
     (groupOf(state.chatMembers, 'chatId').get(chatId) || []).find(m => m.user === state.session) || null;
   // Full members only. A pending or denied row never shows as someone "in" it.
@@ -2827,6 +2843,7 @@ const Store = (() => {
     notifications,
     // Chats
     chatsReady, chats, chatRequests, chat, chatMembers, messagesFor, heartsFor, heartedByMe,
+    hasActivityChat, activityChat,
     chatsAreNew, startDirectChat, startGroupChat, addChatMembers, removeChatMember, renameChat,
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,

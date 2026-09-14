@@ -3496,8 +3496,14 @@
     const going = goingControlHtml(goingPost, full);
     const like = likeButtonHtml(post, full);
     const repost = repostBtnHtml(post);
-    const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
-    const label = `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}"`;
+    // On an activity with a chat the glyph is the chat's (see activityThreadHtml).
+    const chatMode = post.type === 'activity' && Store.hasActivityChat(post.id);
+    const actChat = chatMode ? Store.activityChat(post.id) : null;
+    const n = chatMode
+      ? (actChat ? Store.messagesFor(actChat.id).length : 0)
+      : Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
+    const noun = chatMode ? ' message' : ' comment';
+    const label = `aria-label="${n ? n + noun + (n === 1 ? '' : 's') : (chatMode ? 'Chat' : 'Comments')}"`;
     const inner = svgIcon('comment') + (n ? `<span class="card-comment-count">${n}</span>` : '');
     /* THE GLYPH OPENS THE POST, and the feed has no comment box left at all.
        The disclosure survived one round of this redesign holding just the form,
@@ -4763,6 +4769,9 @@
   function commentsPanelHtml(post, full) {
     if (!full) return '';
     if (!canSocial(post)) return '';   // friends-only: no thread on a non-friend's post
+    // AN ACTIVITY'S CONVERSATION IS ITS CHAT (1.7). One place to talk about a
+    // plan, not a comment thread and a chat saying different things beside it.
+    if (post.type === 'activity' && Store.hasActivityChat(post.id)) return activityThreadHtml(post);
     // Blocked authors' comments never render, on any post (closes the block gap
     // for threads on mutual friends' posts). The count above filters to match.
     const list = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author));
@@ -4774,6 +4783,22 @@
               : `<p class="comments-empty">No comments yet.</p>`) +
           `</div>` +
         `</div>` +
+      `</div>`;
+  }
+
+  /* The chat, in the comments' place on an activity's page. Members read it;
+     anyone else is told how to get in. It is still the post-pane called
+     'comments', so the glyph, the pane switching and the bar all hold. */
+  function activityThreadHtml(post) {
+    const c = Store.activityChat(post.id);
+    const inner = c
+      ? `<ol class="msg-list msg-list--post" id="msg-list">${threadHtml(c)}</ol>` +
+        (c.archived ? `<p class="comments-empty">This chat is archived. You can still read it.</p>` : '')
+      : `<p class="comments-empty">${canJoin(post) && !isPastActivity(post)
+          ? 'Say you’re going or maybe to join the chat.'
+          : 'Only people going can see the chat.'}</p>`;
+    return `<div class="comments-panel comments-panel--full post-pane${paneOpen('comments')}" data-pane="comments">` +
+        `<div class="comments-inner"><div class="comments-content">${inner}</div></div>` +
       `</div>`;
   }
 
@@ -8597,7 +8622,55 @@
        with a line on top and has no thread of its own to hold. It declines itself
        when canSocial does, the same gate that decides whether there is a thread
        here at all. */
-    mountPostBar(isQuote(post) ? post : subj);
+    const threadPost = isQuote(post) ? post : subj;
+    if (threadPost.type === 'activity' && Store.hasActivityChat(threadPost.id)) {
+      mountActivityChat(threadPost, section, id);
+      return;
+    }
+    mountPostBar(threadPost);
+  }
+
+  /* An activity's page with its chat as the conversation (1.7): the bar sends
+     into the chat, the thread follows the channel, and a change in whether I'm
+     IN the chat (an RSVP, a removal, the archive) re-renders the page, since
+     that changes the bar and the pane together. */
+  function mountActivityChat(act, section, routeId) {
+    const c = Store.activityChat(act.id);
+    const root = document.scrollingElement || document.documentElement;
+    const nearBottom = () => window.innerHeight + window.scrollY >= root.scrollHeight - 140;
+    const toBottom = (smooth) => window.scrollTo({ top: root.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    const read = () => {
+      if (!c || document.visibilityState !== 'visible' || postPane !== 'comments') return;
+      Store.markChatRead(c.id).then(syncNavDot, () => {});
+    };
+    const shape = (x) => (x ? `${x.id}:${x.status}:${x.archived}` : '');
+    const was = shape(c);
+    const live = () => {
+      if (holdRepaint(live)) return;
+      const now = Store.activityChat(act.id);
+      if (shape(now) !== was) { renderPost(routeId, postPane); return; }
+      const list = section.querySelector('#msg-list');
+      if (!now || !list) return;
+      const follow = nearBottom();
+      list.innerHTML = threadHtml(now);
+      if (follow) toBottom(false);
+      read();
+    };
+    chatLive = live;
+    if (!c) return;
+    wireMessages(section, c.id);
+    read();
+    if (c.status !== 'member' || c.archived) return;
+    chatReply = null;
+    mountPostBar(null, {
+      submit: (text, photo) => Store.sendMessage(c.id, text, photo, chatReply && chatReply.id),
+      onSent: () => { setChatReply(null); live(); toBottom(true); },
+      onFocus: () => {
+        const card = section.querySelector('.card');
+        if (card && postPane !== 'comments') setPostPane('comments', card);
+        toBottom(true);
+      },
+    });
   }
 
   // "Sam’s post" / "Sam’s activity" — see the note at the mountToolbar call.
@@ -9178,6 +9251,9 @@
   function openPostMenu(post) {
     const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
+    // An activity's chat is its conversation, so the chat's options live here too.
+    const actChat = post.type === 'activity' ? Store.activityChat(post.id) : null;
+    if (actChat) items.push(...chatMenuItems(actChat, true));
     // Add to calendar left this menu in 1.7 for the card's own reaction bar
     // (the .card-cal glyph beside the headcount).
     if (own) {
@@ -12850,6 +12926,127 @@
     return out;
   }
 
+  /* A heart's pop and sparkle have to finish before the thread is rebuilt under
+     them, and the channel's echo of that same heart usually lands mid-burst. So a
+     repaint asked for inside the window is put off to its end, once. */
+  let msgHoldUntil = 0;
+  let msgHoldTimer = 0;
+  function holdRepaint(fn) {
+    const wait = msgHoldUntil - Date.now();
+    if (wait <= 0) return false;
+    clearTimeout(msgHoldTimer);
+    msgHoldTimer = setTimeout(fn, wait);
+    return true;
+  }
+
+  /* DOUBLE TAP TO HEART. The mark goes on and sparkles on the frame after the
+     second tap, before the store has answered, the way a like does (wireLikes):
+     the write is one row and all but certain. A double tap only ever ADDS, the
+     way it does everywhere else people double tap; taking a heart back is in the
+     hold menu. */
+  function heartMessage(chatId, li) {
+    const c = Store.chat(chatId);
+    const col = li.querySelector('.msg-col');
+    if (!c || c.status !== 'member' || c.archived || !col) return;
+    let mark = col.querySelector('.msg-hearts');
+    if (!mark) {
+      mark = document.createElement('span');
+      mark.className = 'msg-hearts';
+      mark.setAttribute('role', 'img');
+      mark.setAttribute('aria-label', 'Hearted');
+      mark.innerHTML = svgIcon('heart');
+      col.appendChild(mark);
+    }
+    msgHoldUntil = Date.now() + 700;
+    mark.classList.remove('is-popping');
+    void mark.offsetWidth;                       // replay on a quick second double tap
+    mark.classList.add('is-popping');
+    burstSparkles(mark);
+    hapticTap('LIGHT');
+    if (Store.heartedByMe(li.dataset.id)) return;
+    Store.toggleMessageHeart(li.dataset.id).then(
+      (res) => { if ((!res || !res.ok) && chatLive) chatLive(); },
+      () => { if (chatLive) chatLive(); });
+  }
+
+  /* A message's gestures, on a chat page and on an activity's page alike:
+       · double tap a bubble or a photo → heart it
+       · hold one → its menu (heart, reply, copy, unsend or report)
+       · tap a photo → open it, once the double tap window has passed
+       · Enter or Space on a focused bubble → its menu
+     Delegated from the page, so a rebuilt thread needs no rewiring. The hold
+     replaced a single tap for the menu, which is what lets a tap answer at once
+     rather than waiting to see whether a second one is coming. */
+  function wireMessages(root, chatId) {
+    const HOLD_MS = 450;
+    const DOUBLE_MS = 300;
+    let press = null;
+    let last = { id: '', at: 0 };
+    let photoTimer = 0;
+    const targetOf = (e) => e.target.closest && e.target.closest('.msg-bubble, .msg-photo');
+
+    root.addEventListener('pointerdown', (e) => {
+      const hit = targetOf(e);
+      if (!hit) return;
+      const li = hit.closest('.msg');
+      if (press) clearTimeout(press.timer);
+      const mine = { x: e.clientX, y: e.clientY, fired: false, timer: 0 };
+      mine.timer = setTimeout(() => {
+        mine.fired = true;
+        hapticTap('LIGHT');
+        openMessageMenu(chatId, li.dataset.id);
+      }, HOLD_MS);
+      press = mine;
+    });
+    // A drag is a scroll, not a hold; lifting before the time is a tap.
+    const letGo = (e) => {
+      if (!press || press.fired) return;
+      if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
+      clearTimeout(press.timer);
+    };
+    root.addEventListener('pointermove', letGo, { passive: true });
+    root.addEventListener('pointerup', letGo);
+    root.addEventListener('pointercancel', letGo);
+
+    root.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;            // a mention, or the head's profile link
+      if (press && press.fired) { press = null; return; }   // the hold already answered
+      const heartMark = e.target.closest('.msg-hearts');
+      if (heartMark) {
+        const li = heartMark.closest('.msg');
+        if (li) openMessageMenu(chatId, li.dataset.id);
+        return;
+      }
+      const hit = targetOf(e);
+      if (!hit) return;
+      const li = hit.closest('.msg');
+      const now = Date.now();
+      if (last.id === li.dataset.id && now - last.at < DOUBLE_MS) {
+        last = { id: '', at: 0 };
+        clearTimeout(photoTimer);
+        heartMessage(chatId, li);
+        return;
+      }
+      last = { id: li.dataset.id, at: now };
+      if (hit.classList.contains('msg-photo')) {
+        clearTimeout(photoTimer);
+        photoTimer = setTimeout(() => {
+          if (!hit.isConnected) return;
+          const img = hit.querySelector('img');
+          openLightbox(hit.dataset.photo, img ? img.alt : '', false, img);
+        }, DOUBLE_MS);
+      }
+    });
+
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const bubble = e.target.closest && e.target.closest('.msg-bubble');
+      if (!bubble) return;
+      e.preventDefault();
+      openMessageMenu(chatId, bubble.closest('.msg').dataset.id);
+    });
+  }
+
   function setChatReply(m) {
     chatReply = m || null;
     const bar = postBarEl();
@@ -12976,17 +13173,19 @@
     });
   }
 
-  function openChatMenu(c) {
+  // A chat's options. `onPost` is an activity's page, whose own ••• carries them
+  // (openPostMenu): the page already shows the plan and its RSVP.
+  function chatMenuItems(c, onPost = false) {
     const items = [];
     if (c.kind === 'direct' && c.other)
       items.push({ label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(c.other)}`) });
-    if (c.kind === 'activity' && c.postId)
+    if (c.kind === 'activity' && c.postId && !onPost)
       items.push({ label: 'View activity', icon: 'cal', run: () => go(postRoute(c.postId)) });
     const me = Store.session();
     const hosting = c.kind === 'activity' && c.host === me;
     const act = c.kind === 'activity' ? Store.posts().find(p => p.id === c.postId) : null;
     // A guest's answer, changed from inside the plan's own chat.
-    if (act && !hosting && !isPastActivity(act) && canJoin(act))
+    if (act && !onPost && !hosting && !isPastActivity(act) && canJoin(act))
       items.push({ label: 'Your RSVP', icon: 'going', run: () => openRsvpSheet(act) });
     if (c.kind !== 'direct') items.push({
       label: 'People', icon: 'friends',
@@ -13033,22 +13232,33 @@
           act: () => Store.clearChat(c.id) }
       : { label: c.kind === 'group' ? 'Leave group' : 'Leave chat', title: 'Leave this chat? You can be added back.',
           act: () => Store.leaveChat(c.id) };
-    items.push({
+    // The host stays in their own activity's chat.
+    if (!hosting) items.push({
       label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true,
       run: () => openSheet({
         title: leave.title,
         items: [{ label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true, run: async () => {
           const res = await leave.act().catch(() => null);
-          if (res && res.ok) go('#/chats');
+          // On the activity's page the page itself follows (mountActivityChat).
+          if (res && res.ok) { if (onPost) { if (chatLive) chatLive(); } else go('#/chats'); }
           else toast((res && res.error) || 'Couldn’t do that just now, try again.');
         } }],
       }),
     });
-    openSheet({ items });
+    return items;
+  }
+
+  function openChatMenu(c) {
+    openSheet({ items: chatMenuItems(c) });
   }
 
   function renderChat(id) {
     const c = Store.chat(id);
+    // An activity's chat lives on the activity's own page (see activityThreadHtml).
+    if (c && c.kind === 'activity' && c.postId && Store.posts().some(p => p.id === c.postId)) {
+      location.replace(postRoute(c.postId));
+      return;
+    }
     chatReply = null;
     mountToolbar({
       leading: toolbarBackEl('#/chats', 'Chats'),
@@ -13096,6 +13306,7 @@
     // and the page follows the newest message only if the reader was already at
     // the bottom; someone scrolled back through history is left where they are.
     const repaint = (stick) => {
+      if (holdRepaint(() => repaint(stick))) return;
       const now = Store.chat(c.id);
       if (!now) { go('#/chats'); return; }
       if (now.status !== c.status) { renderChat(id); return; }   // a request answered elsewhere
@@ -13106,25 +13317,7 @@
     };
     chatLive = () => repaint(false);
 
-    section.addEventListener('click', (e) => {
-      if (e.target.closest('a')) return;            // a mention, or the head's profile link
-      const photo = e.target.closest('.msg-photo');
-      if (photo) {
-        const img = photo.querySelector('img');
-        openLightbox(photo.dataset.photo, img ? img.alt : '', false, img);
-        return;
-      }
-      const hit = e.target.closest('.msg-bubble, .msg-hearts');
-      const li = hit && hit.closest('.msg');
-      if (li) openMessageMenu(c.id, li.dataset.id);
-    });
-    section.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const bubble = e.target.closest('.msg-bubble');
-      if (!bubble) return;
-      e.preventDefault();
-      openMessageMenu(c.id, bubble.closest('.msg').dataset.id);
-    });
+    wireMessages(section, c.id);
     document.getElementById('chat-more')?.addEventListener('click', () => {
       const now = Store.chat(c.id);
       if (now) openChatMenu(now);

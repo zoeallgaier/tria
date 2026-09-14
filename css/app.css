@@ -7149,6 +7149,29 @@ button.poll-option:disabled { cursor: default; }
 }
 .postbar-reply-x svg { width: 14px; height: 14px; }
 
+/* A message takes a double tap (heart) and a hold (its menu), so the page's text
+   selection and callout stand down on it, and a tap doesn't wait on zoom. Copy
+   is in the hold menu. */
+.msg-bubble,
+.msg-photo {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+/* The heart mark carries the like's own sparkle (burstSparkles), in the dot's
+   colour, and pops in on a double tap. */
+.msg-hearts { position: relative; --burst: var(--dot); }
+.msg-hearts.is-popping svg { animation: msg-heart-pop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+@keyframes msg-heart-pop {
+  0%   { transform: scale(0.2); }
+  60%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .msg-hearts.is-popping svg { animation: none; } }
+/* The chat in an activity's comments pane sits on the thread's own edge. */
+.msg-list--post { padding-top: 0; }
+
 /* The Archived shelf at the foot of the chat list: a quiet disclosure row. */
 /* Straight on from the rows above it, one hairline, for the pinned rows' reason. */
 .chat-archived { margin-top: 0; }
