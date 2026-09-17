@@ -6189,7 +6189,7 @@
   function authHeader() {
     return `<header class="auth-topbar">` +
         `<div class="auth-topbar-brand">` +
-          `<span class="brand-mark">tria</span>` +
+          `<span class="wordmark brand-mark" role="img" aria-label="Tria"></span>` +
           `<span class="auth-topbar-tag">Social media made local</span>` +
         `</div>` +
       `</header>`;
@@ -6350,7 +6350,7 @@
   function renderRequestReset() {
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
-        `<div class="auth-brand">tria</div>` +
+        `<div class="wordmark auth-brand" role="img" aria-label="Tria"></div>` +
         `<h1 class="auth-head">Reset your password</h1>` +
         `<p class="auth-sub">Enter your email and we'll send a link to set a new one.</p>` +
         `<form id="reset-form" novalidate>` +
@@ -6393,7 +6393,7 @@
   function renderResetSent(email) {
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
-        `<div class="auth-brand">tria</div>` +
+        `<div class="wordmark auth-brand" role="img" aria-label="Tria"></div>` +
         `<h1 class="auth-head">Check your inbox</h1>` +
         `<p class="auth-sub">If ${esc(email)} has an account, a reset link is on its way. ` +
           `The link opens Tria and lets you set a new password.</p>` +
@@ -6410,7 +6410,7 @@
   function renderCheckInbox(email) {
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
-        `<div class="auth-brand">tria</div>` +
+        `<div class="wordmark auth-brand" role="img" aria-label="Tria"></div>` +
         `<h1 class="auth-head">Confirm your email</h1>` +
         `<p class="auth-sub">We sent a link to ${esc(email)}. Click it to confirm your ` +
           `account, then come back and log in.</p>` +
@@ -6431,7 +6431,7 @@
   function renderNewPassword() {
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
-        `<div class="auth-brand">tria</div>` +
+        `<div class="wordmark auth-brand" role="img" aria-label="Tria"></div>` +
         `<h1 class="auth-head">Set a new password</h1>` +
         `<p class="auth-sub">Almost there. Pick a new password and you're back in.</p>` +
         `<form id="newpass-form" novalidate>` +
@@ -6469,7 +6469,7 @@
   function renderConfirmed() {
     view.innerHTML =
       `<section class="auth"><div class="auth-card">` +
-        `<div class="auth-brand">tria</div>` +
+        `<div class="wordmark auth-brand" role="img" aria-label="Tria"></div>` +
         `<h1 class="auth-head">You're all set</h1>` +
         `<p class="auth-sub">Your email is confirmed. Log in and say hello.</p>` +
         `<button class="auth-submit publish-fill is-solid" type="button" id="confirmed-go">Log in</button>` +

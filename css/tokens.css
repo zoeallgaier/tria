@@ -168,7 +168,7 @@
      --pill-alpha over paper), all still well clear of AA. */
   --band-deepen: 20%;
   /* The four stops are named separately from the ramp they make, because the
-     boot splash rotates them through its glyph one position at a time (see
+     boot splash rotates them through its logo one position at a time (see
      splash-cycle in app.css) and needs to say each one by itself. Same rule as
      everywhere else in this block: one copy of each mix, so a stop cannot drift
      between the button that paints it and the mark that turns it. */

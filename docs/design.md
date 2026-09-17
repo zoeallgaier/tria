@@ -451,7 +451,20 @@ Six things about it are load-bearing:
 
 **The wordmark is signed-out only.** `.brand` is gone from `index.html`; the one
 place a wordmark still earns its space is `.auth-topbar` on the front door, where
-there is no page identity to show instead. It was also the only signed-in link to
+there is no page identity to show instead. (The reset and confirm cards carry it
+too, over their headline, and so does the boot splash.)
+
+**The wordmark is the logo, drawn as a mask** (Zoe, 2026-09-16).
+`icons/wordmark.svg` is `icons/SVG/TriaLogoOfficial.svg` cropped to its ink, and
+`.wordmark` in app.css uses it as a `mask` with `--brand-band` painted through
+it, rather than as an `<img>`. An image would bring its own baked colours; a mask
+reads only the shape, so the letters wear the same four tokens every primary
+button paints, and the splash can turn them. The file's own gradient ends on a
+pink-red where the band ends on orange; the band wins. Callers set a **width**
+only (a flex column stretches an auto cross size and ignores `aspect-ratio`),
+and the element is empty, so every copy that is content carries `role="img"`
+and `aria-label="Tria"`. A pending mask paints nothing in either engine, so
+there is no flash of a gradient box while the file loads. It was also the only signed-in link to
 About, so **About is a row in the ••• sheet on your own profile** — which matters
 more than a colophon would, because the feedback form is there and it is the only
 way to report a bug.
@@ -806,7 +819,7 @@ to be written out by hand in two places, the `.is-solid` fill and
 `.publish-fill::before`'s resting ring, which are the same band in two modes
 (the ring IS the fill with a mask over it), so a stop dropped from one and not
 the other made *hovering a button reshuffle its colours*. One declaration, five
-readers, nothing left to drift. The `.splash-t` boot mark is the deliberate
+readers, nothing left to drift. The boot mark (and the wordmark) is the deliberate
 exception and reads `--brand-band` directly: it paints before auth resolves, so
 there is no reader whose colour it could be wearing (see the splash below).
 
@@ -914,9 +927,12 @@ with no branch for it. Two things about it:
     53/74. Ink stays `--on-type` in both schemes for a sample.
 
 **The boot splash TURNS, and the mark is Tria's rather than the reader's.**
-`.splash-t` walks the four brand stops one position along its 115deg gradient
-every second, so the whole band passes through the glyph inside the curtain's
-own life. Two halves of that are worth keeping:
+`.splash-ramp` walks the four brand stops one position along its 115deg gradient
+every second, so the whole band passes through the logo inside the curtain's
+own life. It is **two elements** because CSS filters an element before it masks
+it: the rise's blur sits on the outer `.splash-t`, so it blurs the finished
+letters, where on the masked element itself the mask would cut them crisp again.
+Two halves of the turn are worth keeping:
 
 - **It wears no accent, deliberately.** A version reading a `--user-band` cached
   in localStorage was built and taken out. The splash is static HTML precisely
@@ -939,11 +955,11 @@ own life. Two halves of that are worth keeping:
   built from the same four, so the mark that turns them and the button that
   paints them cannot drift.
 
-It **is** the per-frame repaint of a text-clipped gradient that the old 2s loop
+It **is** the per-frame repaint of a masked gradient that the old 2s loop
 was removed for, and the cost is real. What makes it affordable is that it is
-bounded where that one wasn't: one glyph, one element, about a second and a half
+bounded where that one wasn't: one mark, one element, about a second and a half
 before `dismissSplash` removes the node. If boot ever needs those frames back,
-drop the second animation and the mark falls back to the band at rest.
+drop `.splash-ramp`'s animation and the mark falls back to the band at rest.
 
 **Share is the tray, and the tray is not in the header any more.** `ICONS.send`
 is the arrow-out-of-a-box the OS itself draws for share, not an envelope (an

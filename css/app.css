@@ -532,8 +532,32 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
   font-weight: 400;
 }
 
+/* ── The wordmark ───────────────────────────────────────────────────
+   Tria's logo (icons/wordmark.svg, cropped from icons/SVG/TriaLogoOfficial.svg)
+   used as a MASK, with the band painted through it. It is not an <img>, because
+   an image carries its own baked colours: through a mask the letters wear
+   --brand-band, the same four tokens every primary button paints, and the splash
+   can turn them.
+
+   The file's own gradient runs lavender, cyan, lime, then a pink-red, which is
+   not quite the band (the band ends on orange, see tokens.css). The mask reads
+   only the shape, so the app's stops win and the logo cannot drift from the
+   buttons.
+
+   Every caller sets a WIDTH and nothing else; the height follows from the ratio,
+   which is the viewBox's. A width rather than a height because a flex column
+   stretches an auto cross size and would ignore the ratio. The element has no
+   text, so each one that is content carries role="img" and aria-label="Tria". */
+.wordmark {
+  display: block;
+  aspect-ratio: 1650 / 1028;
+  -webkit-mask: url(../icons/wordmark.svg) center / contain no-repeat;
+          mask: url(../icons/wordmark.svg) center / contain no-repeat;
+  background: var(--brand-band);
+}
+
 /* ── Boot splash ────────────────────────────────────────────────────
-   A full-page curtain in the page's own paper, crowned by the italic wordmark
+   A full-page curtain in the page's own paper, crowned by the wordmark
    wearing Tria's own brand ramp, turning. Painted from static HTML before any JS runs;
    app.js adds .splash--out after the first render and removes the node once the
    fade lands. The mark arrives the way cards do — a soft rise — plus the site's
@@ -559,23 +583,23 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    there is no cache of it, so the gate cannot paint its submit button in the
    last reader's colour by accident. */
 .splash-t {
-  /* The wordmark, as .brand-mark draws it: lowercase Instrument Serif italic
-     (Zoe, 2026-09-14). It replaced the roman t. The italic's preload sits in
-     index.html beside the roman's, so the curtain doesn't paint Georgia first. */
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: clamp(5.5rem, 22vw, 9rem);
-  letter-spacing: -0.025em;   /* tighter than .brand-mark (Zoe, 2026-09-14); past about -0.03em the r's ear runs into the i */
-  line-height: 1;
-  padding: 0 0.3em 0.12em 0.15em;   /* clip-to-text crops at the box — the italic leans past it on the right */
+  /* The logo (Zoe, 2026-09-16), in place of the italic serif "tria" that
+     replaced the roman t. It keeps that word's width, which was 1.27 times its
+     font-size at every step of the old clamp.
+
+     TWO ELEMENTS, and the order CSS paints in is why. This outer one carries the
+     rise, blur included; the inner .splash-ramp carries the mask and the turn.
+     An element is filtered BEFORE it is masked, so a blur on the masked element
+     itself only softens a gradient that is already soft, and the mask then cuts
+     it crisp: the letters would never be blurred at all. Blurring the parent
+     blurs the finished letters, which is the settle the text version had. */
+  width: clamp(7rem, 28vw, 11.5rem);
+  animation: splash-in var(--dur-slow) var(--ease) both;
+}
+.splash-ramp {
   background-image: linear-gradient(115deg,
     var(--splash-c1), var(--splash-c2), var(--splash-c3), var(--splash-c4));
-  -webkit-background-clip: text;
-          background-clip: text;
-  color: transparent;
-  animation: splash-in var(--dur-slow) var(--ease) both,
-             splash-cycle 1s linear infinite;
+  animation: splash-cycle 1s linear infinite;
 }
 @keyframes splash-in {
   from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
@@ -584,7 +608,7 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 
 /* ── The ramp turns ─────────────────────────────────────────────────
    The four brand stops walk one position along the gradient every second, so
-   the whole band passes through the glyph inside the curtain's own life.
+   the whole band passes through the mark inside the curtain's own life.
 
    FOUR REGISTERED PROPERTIES, not a background-position slide over a widened
    gradient, and the reason is the wrap. A 115deg ramp slid HORIZONTALLY does
@@ -600,11 +624,11 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    --brand-band is built from the same four, so the mark that turns them and the
    button that paints them cannot drift apart.
 
-   This is a repaint per frame of a text-clipped gradient, which is the cost the
-   old 2s loop was removed for. It is bounded now in a way that one wasn't: one
+   This is a repaint per frame of a masked gradient, which is the cost the old
+   2s loop was removed for. It is bounded now in a way that one wasn't: one
    wordmark, one element, about a second and a half of life before the curtain is
    dismissed and the node is removed. If boot ever needs those frames back, drop
-   the second animation and the mark falls back to the band at rest. */
+   .splash-ramp's animation and the mark falls back to the band at rest. */
 @property --splash-c1 { syntax: '<color>'; inherits: false; initial-value: #b7a6e8; }
 @property --splash-c2 { syntax: '<color>'; inherits: false; initial-value: #9fd6e8; }
 @property --splash-c3 { syntax: '<color>'; inherits: false; initial-value: #b9df7d; }
@@ -624,12 +648,13 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 @media (prefers-reduced-motion: reduce) {
   .splash { transition: none; }
   .splash--out { visibility: hidden; }
-  /* Kills the rise AND the turn together, which is why the cycle rides the same
-     `animation` property rather than one of its own. The image is restated with
-     it: stopping the keyframes would otherwise leave the four stops on their
-     registered initial values (the undeepened pastels) rather than on the band
-     everything else in the app paints. */
-  .splash-t {
+  /* Kills the rise AND the turn, which live on two elements (see .splash-t), so
+     each one is stopped here. The image is restated with the turn: stopping the
+     keyframes would otherwise leave the four stops on their registered initial
+     values (the undeepened pastels) rather than on the band everything else in
+     the app paints. */
+  .splash-t { animation: none; }
+  .splash-ramp {
     background-image: var(--brand-band);
     animation: none;
   }
@@ -1344,17 +1369,15 @@ body.toolbar-live .view { padding-top: 1rem; }
    here with 1.6rem restated twice on top (once for phones, once for the auth
    bar), which between them meant the 2.25 was never the size anything actually
    drew. One number now.
-   Lowercase Instrument Serif italic (Zoe, 2026-09-14), the title voice, over an
-   Oxygen slogan; it swapped with the slogan's faces. The serif draws smaller
-   than Oxygen 700 at the same size, hence the bigger number. */
+   It is the logo now (Zoe, 2026-09-16), over the Oxygen slogan, and it wears
+   the band like the splash does, at rest: see .wordmark. The width is the ink
+   width of the italic serif "tria" it replaced, which was set at 2.1rem. The
+   margins stand in for that word's line box, which left room around the ink;
+   without them the slogan rides up against the logo and the bar comes out
+   shorter than the padding .auth and .about--front reserve for it. */
 .brand-mark {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 2.1rem;
-  letter-spacing: -0.01em;
-  line-height: 1;
-  color: var(--text);
+  width: 2.9rem;
+  margin-block: 0.1rem 0.2rem;
 }
 
 /* On desktop the pill wrapper dissolves: its links become direct flex children
@@ -4299,15 +4322,9 @@ body.gate main { padding: 0; }
    taller than the screen — so the top never gets clipped above the scroll and
    everything stays reachable (the flex `justify-content:center` clipping trap). */
 .auth-card { width: 100%; max-width: 352px; margin-block: auto; }
-.auth-brand {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 3rem;
-  letter-spacing: -0.01em;
-  line-height: 1;
-  color: var(--text);
-}
+/* The logo over a reset or confirm card, sized to the 3rem serif word it
+   replaced. See .wordmark. */
+.auth-brand { width: 4rem; }
 .auth-head {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
