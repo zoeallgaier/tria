@@ -1982,6 +1982,11 @@ main {
 .requests,
 .daily-lede,
 .daily-banner,
+.chat-pane,
+.chat-note,
+.newchat-name,
+.requests-kicker,
+.pf-form,
 .feed-empty { max-width: var(--feed-width); margin-inline: auto; }
 
 
@@ -7043,6 +7048,13 @@ button.poll-option:disabled { cursor: default; }
   transition: background-color var(--dur-micro);
 }
 .chat-list li:first-child .chat-row { border-top: 1px solid var(--rule); }
+/* A wide screen's masthead carries --inset and a phone's doesn't, so the rows
+   (and the note and the Archived row, which sit on the same edge) take it here
+   and only here: the text lands under the title, and the hover and hairlines
+   run the column's full width, which is how Updates' rows already sat. */
+@media (min-width: 681px) {
+  .chat-row, .chat-archived-row, .chat-note { padding-inline: var(--inset); }
+}
 .chat-pane:not(.is-still) .chat-row { animation: rise var(--dur-slow) var(--ease) both; }
 @media (hover: hover) { .chat-row:hover { background: var(--surface); } }
 .chat-list li[hidden] { display: none; }
@@ -7088,8 +7100,7 @@ button.poll-option:disabled { cursor: default; }
 .chat-row--new .chat-row-preview { color: var(--text); font-weight: 500; }
 .chat-row--new .notif-dot { opacity: 1; }
 .chat-note {
-  margin: 0 0 1rem;
-  padding: 0;                       /* on the kicker's edge, not the rows' inset */
+  margin-block: 0 1rem;             /* inline stays the shared column's auto */
   font-size: 0.9rem;
   font-weight: 300;
   color: var(--muted);
@@ -7319,7 +7330,7 @@ button.poll-option:disabled { cursor: default; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.9rem 0;
+  padding-block: 0.9rem;            /* inline is the rows' (see .chat-row) */
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--muted);
@@ -8508,12 +8519,14 @@ button.poll-option:disabled { cursor: default; }
 
 /* The profile editor is a PAGE (#/profile/edit), not a modal — see the note over
    renderEditProfile for the three things that were wrong with the card. What it
-   needs from CSS is a measure: a settings form is a column of short rows, and
-   the page's own --content-max (900px) would stretch every toggle row to the
-   width of a feed. 400px is the modal's old 380 plus the card padding it no
-   longer has, so every row inside keeps the proportions it was tuned at. */
+   needs from CSS is a measure, and it takes the one every page shares (the list
+   up by .masthead), with the composer's inset on a wide screen, because the post
+   editor is the same kind of page and already sat there. It used to carry its
+   own 400px, the modal's old 380 plus the card padding it no longer had, with
+   no auto margins: on a desktop that was a narrow form hard against the
+   column's left edge beside pages that were all 660 and centred. A phone never
+   saw either, since its form is the screen's width. */
 .pf-form {
-  max-width: 400px;
   /* The same air the profile page opens on. This page had NONE: with no
      masthead above it (see renderEditProfile) the form was the section's first
      child, so the avatar started at .view's padding-top and every other page's
@@ -8522,6 +8535,9 @@ button.poll-option:disabled { cursor: default; }
      the editor jumped it up the screen. One token, read by both, so the two
      can't drift. */
   padding-top: var(--identity-air);
+}
+@media (min-width: 681px) {
+  .pf-form { padding-inline: var(--inset); }
 }
 /* The one size the resting avatar and the crop frame both read, so they can't
    drift apart. A vw term because the crop frame is the working surface for a
