@@ -1554,7 +1554,6 @@ const Store = (() => {
   const headcountFor = (postId) => rowsFor(state.headcount, postId).filter(h => h.status === 'going');
   const rsvpsFor = (postId) => rowsFor(state.headcount, postId);
   const myRsvp = (postId) => { const r = mineIn(state.headcount, postId); return r ? r.status : null; };
-  const goingByMe = (postId) => myRsvp(postId) === 'going';
 
   // The one gesture deliberately NOT opened to public posts (likes, comments and
   // poll votes all were): a public activity carries a place and a time, and
@@ -1595,12 +1594,6 @@ const Store = (() => {
     // would say so too; asking now is what makes the page follow without a wait.
     if (state.chatsReady && state.activityChats.includes(postId)) queueChatReload();
     return { ok: true, status };
-  }
-
-  // The card's one-tap hand: in, or back out.
-  async function toggleGoing(postId) {
-    const res = await setRsvp(postId, goingByMe(postId) ? null : 'going');
-    return res.ok ? { ok: true, going: res.status === 'going' } : { ok: false };
   }
 
   // ── Polls ────────────────────────────────────────────────────────────────────
@@ -2907,7 +2900,7 @@ const Store = (() => {
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
     // Headcount
-    headcountFor, goingByMe, toggleGoing, rsvpsFor, myRsvp, setRsvp, calendarLink,
+    headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,
     // Polls
     pollVotesFor, myPollVote, votePoll, pollClosed, pollClosesAt,
     // Notifications

@@ -3112,7 +3112,7 @@
   // anyone may SEE it but only your circle shows up to it.
   //
   // The store guards every write behind the matching rule too — see
-  // Store.addComment / toggleLike / votePoll (open) vs toggleGoing (closed).
+  // Store.addComment / toggleLike / votePoll (open) vs setRsvp (closed).
   const canSocial = (post) =>
     post.author === Store.session() || Store.isFriend(post.author) || post.audience === 'public';
   const canJoin = (post) =>
@@ -3202,22 +3202,20 @@
     return likeToggleHtml(post);
   }
 
-  // Headcount AND RSVP, one control — activities only. The count is public
-  // (unlike likes) and YOU ARE IN IT: joining rolls the number up by one, which
-  // is the whole feedback. State lives in the glyph (a check draws onto the
-  // person) and its colour, never in a word, so this stays the same species as
-  // the comment count beside it instead of being the row's one text toggle.
+  // The headcount — activities only. The count is public (unlike likes) and YOU
+  // ARE IN IT: saying Going rolls the number up by one. State lives in the glyph
+  // (a check draws onto the person) and its colour, never in a word, so this
+  // stays the same species as the comment count beside it.
   //
-  // Three shapes, one button:
-  //   · friend, plan still ahead → a toggle. One tap puts you in; tapping again
-  //     opens the list. Backing out lives at the foot of that panel, one level
-  //     down, because an accidental un-RSVP is a genuinely bad outcome (a stray
-  //     un-like isn't).
-  //   · the host, or a plan that's already happened → plain disclosure. Same
-  //     pixels, no toggle.
-  // aria-expanded rides every state (the button always controls the panel);
-  // aria-pressed appears only where it's actually a toggle, which is also how
-  // wireGoing tells the two apart.
+  // IT SHOWS, IT NEVER ANSWERS (2026-09-16). It used to be a toggle that put you
+  // in with one tap from the feed, and once 1.7 gave an answer three values that
+  // tap was wrong two times in three: somebody who had said Maybe or Can't go
+  // tapped the glyph to see who was coming and got filed as Going. So it is the
+  // comment count's shape now, and the author's heart's:
+  //   · a feed card → a LINK to the post's page, opened on who's going,
+  //   · the page → a BUTTON that switches the section under the card to that list.
+  // The answer is given only by the three buttons at the top of that list
+  // (goingPanelHtml), or from the plan's chat (openRsvpSheet).
   // The three answers an activity takes (1.7). The headcount on the card is
   // still only the yeses; see Store.headcountFor.
   const RSVP_CHOICES = [
@@ -3230,30 +3228,33 @@
     if (post.type !== 'activity') return '';
     if (!canJoin(post)) return '';
     const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
-    const rsvpable = post.author !== Store.session() && !isPastActivity(post);
-    const going = rsvpable && Store.goingByMe(post.id);
+    const host = post.author === Store.session();
+    const mine = host ? null : Store.myRsvp(post.id);
+    // The check still marks a guest who is coming, and still only while the plan
+    // is ahead, which is how it has always read.
+    const going = mine === 'going' && !isPastActivity(post);
     // The host's tap opens the same section carrying more: their circle listed
     // under the people who said yes (see goingPanelHtml). The count on the glyph
     // is still the headcount and only the headcount — a number that quietly meant
     // "going" for everyone and "invited" for you would be the one control on the
     // card saying two things.
-    const host = post.author === Store.session();
-    const what = rsvpable && !going ? 'Count me in' : host ? 'See the guest list' : 'See who';
-    // aria-expanded only where there IS a section to expand — the post page. In
-    // a feed this button either raises your hand or walks to that page, and
-    // controls no panel either way. aria-pressed still marks the toggle case,
-    // and wireGoing still reads its presence to tell the two apart.
-    return `<button class="card-attendees${going ? ' going' : ''}" type="button" ` +
-        `${full ? `aria-expanded="${postPane === 'going'}" ` : ''}` +
-        `${rsvpable ? `aria-pressed="${going}" ` : ''}` +
-        `aria-label="${n} going${going ? ', including you' : ''}. ${what}" ` +
-        `title="${rsvpable && !going ? 'Count me in' : host ? 'Guest list' : 'Who’s going'}">` +
-        svgIcon('going') +
-        // Always present, even at 0: the headcount is a public planning number
-        // ("nobody's in yet" is real info), and the span has to exist for the
-        // odometer to roll it on the 0<->1 boundary when you join or bow out.
-        `<span class="card-attendees-count">${n}</span>` +
-      `</button>`;
+    const yours = mine === 'going' ? ', including you'
+      : mine === 'maybe' ? ', you said maybe'
+      : mine === 'cant' ? ', you said you can’t go' : '';
+    const label = `aria-label="${n} going${yours}. ${host ? 'See the guest list' : 'See who'}" ` +
+      `title="${host ? 'Guest list' : 'Who’s going'}"`;
+    const inner = svgIcon('going') +
+      // Always present, even at 0: the headcount is a public planning number
+      // ("nobody's in yet" is real info), and the span has to exist for the
+      // odometer to roll it on the 0<->1 boundary when you join or bow out.
+      `<span class="card-attendees-count">${n}</span>`;
+    const cls = `card-attendees${going ? ' going' : ''}`;
+    // An anchor in a feed for the reason the author's heart is one: the long
+    // press, the middle click and the keyboard come free. On the page there is
+    // always a list to switch to, since goingPanelHtml draws under the same gate.
+    return full
+      ? `<button class="${cls}" type="button" aria-expanded="${postPane === 'going'}" ${label}>${inner}</button>`
+      : `<a class="${cls}" href="${postRoute(post, 'going')}" ${label}>${inner}</a>`;
   }
 
   // Add-to-calendar — activities with a date only, same friends gate as the
@@ -3264,9 +3265,8 @@
     return post.type === 'activity' && post.eventDate && !isPastActivity(post) && canJoin(post);
   }
 
-  // Page only, like likersPanelHtml. `.going-out` lives down here rather than on
-  // the headcount button for the reason below (a deliberate second tap), and the
-  // page is where it now sits waiting rather than behind a disclosure.
+  // Page only, like likersPanelHtml. The answer lives down here rather than on
+  // the headcount glyph, which only shows (see goingControlHtml).
   // Sort key for a name list: the display name if we have the row, the handle if
   // the cache hasn't caught up. Never undefined, because localeCompare throws.
   const sortName = (username) => {
@@ -3335,12 +3335,8 @@
       ? `<p class="panel-note">Anyone on Tria can read this one, but only your circle can come.</p>`
       : '';
 
-    // The way back out sits under the list, the mirror of joining and one level
-    // down from it — the host planned around this headcount, so changing your
-    // mind should cost a deliberate second tap rather than ride the same button
-    // you joined with.
-    // 1.7: the way back out became the three answers, and they sit ABOVE the
-    // list, because a maybe is now something you come here to say.
+    // The three answers, ABOVE the list, and the only place on a card an answer
+    // is given: the glyph that brought you here only shows.
     const mine = Store.myRsvp(post.id);
     const out = !host && !isPastActivity(post)
       ? `<div class="rsvp-choice" role="group" aria-label="Your answer">` +
@@ -3912,7 +3908,7 @@
       likersPanelHtml(post, full) +
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
-    wireGoing(el, orig, opts);
+    wireGoing(el, orig, opts, post);
     wireLikes(el, post, opts);
     wireComments(el);
     return el;
@@ -4526,70 +4522,40 @@
     });
   }
 
-  function wireGoing(el, post, opts) {
+  // `post` is the activity; `own` is the post the card is drawn for, which is a
+  // different one on a quote (quoteCard), and the one a rebuild has to redraw.
+  function wireGoing(el, post, opts, own = post) {
     // The calendar glyph beside the headcount (1.7): the same plan, taken to
     // the phone's calendar. The subject, for a card that passes one along.
     el.querySelector('.card-cal')?.addEventListener('click', () =>
       downloadIcs(post.type === 'activity' ? post : (subjectOf(post) || post)));
-    const btn = el.querySelector('.card-attendees');
-    if (!btn) return;
-    // On the post's own page the list is already drawn under this button, so the
-    // second tap has nowhere left to go — the way back out is `.going-out` in
-    // that list, which is where it has always been.
-    const full = !!(opts && opts.full);
-
-    // Joining changes the count, the glyph, the who's-going list AND whether the
-    // way back out exists, so the card is rebuilt in place — no rise flash, same
-    // pattern as adding a comment.
-    const flip = async () => {
-      btn.disabled = true;
-      const res = await Store.toggleGoing(post.id).catch(() => null);
-      btn.disabled = false;                  // on every path, a throw included
-      if (!res || !res.ok) return;
-      // Joining is the one gesture here that commits you to a place and a time,
-      // so it's the one that gets the heavier knock. Bowing out is just a screen
-      // changing its mind.
-      hapticTap(res.going ? 'MEDIUM' : 'LIGHT');
-      // Joining lands you on the list: you see who you just joined, and the way
-      // back out is right there under them. Bowing out leaves it open too — you
-      // were already reading it.
-      const fresh = makeCard(post, opts);
-      fresh.style.animation = 'none';
-      // Roll the count in its new direction — up when you join, down when you
-      // bow out. The number moving IS the confirmation that you're in it.
-      odoTick(fresh.querySelector('.card-attendees-count'), res.going ? 'up' : 'down');
-      el.replaceWith(fresh);
-      // Joining earns the RSVP's own reward beat (see celebrateGoing).
-      if (res.going) celebrateGoing(fresh);
-    };
-
-    // Only a friend looking at a plan that hasn't happened gets a toggle;
-    // goingControlHtml marks those with aria-pressed. Everyone else's tap is
-    // purely the disclosure.
-    const rsvpable = btn.hasAttribute('aria-pressed');
-    btn.addEventListener('click', () => {
-      // RAISING YOUR HAND STAYS IN THE FEED. That is the one act on this card
-      // that lands in the real world, it is one tap today, and making it cost a
-      // navigation would be the redesign charging for the thing it was supposed
-      // to make easier. Everything else the button used to do — see who, change
-      // your mind — is reading, and reading is the page.
-      if (rsvpable && btn.getAttribute('aria-pressed') === 'false') { flip(); return; }
-      if (full) setPostPane('going', el); else go(postRoute(post, 'going'));
-    });
+    // The headcount only shows (see goingControlHtml). In a feed it is an
+    // anchor and needs nothing; on the page it switches to the list.
+    const btn = el.querySelector('button.card-attendees');
+    btn?.addEventListener('click', () => setPostPane('going', el));
 
     // Going / Maybe / Can't go, on the page. Tapping the answer you already gave
-    // takes it back. The card is rebuilt the way flip rebuilds it.
+    // takes it back. An answer can change the count, the glyph and the list, so
+    // the card is rebuilt in place — no rise flash, same pattern as a comment.
     const choices = [...el.querySelectorAll('.rsvp-opt')];
     choices.forEach(opt => opt.addEventListener('click', async () => {
-      const next = Store.myRsvp(post.id) === opt.dataset.rsvp ? null : opt.dataset.rsvp;
+      const was = Store.myRsvp(post.id);
+      const next = was === opt.dataset.rsvp ? null : opt.dataset.rsvp;
       choices.forEach(b => { b.disabled = true; });
       const res = await Store.setRsvp(post.id, next).catch(() => null);
       choices.forEach(b => { b.disabled = false; });   // on every path
       if (!res || !res.ok) { toast('Couldn’t save that, try again.'); return; }
+      // Going is the one answer that commits you to a place and a time, so it's
+      // the one that gets the heavier knock.
       hapticTap(next === 'going' ? 'MEDIUM' : 'LIGHT');
-      const fresh = makeCard(post, opts);
+      const fresh = makeCard(own, opts);
       fresh.style.animation = 'none';
+      // The count is only the yeses, so it rolls only when you cross into or out
+      // of Going. The number moving IS the confirmation that you're in it.
+      if ((was === 'going') !== (next === 'going'))
+        odoTick(fresh.querySelector('.card-attendees-count'), next === 'going' ? 'up' : 'down');
       el.replaceWith(fresh);
+      // Going earns the RSVP's own reward beat (see celebrateGoing).
       if (next === 'going') celebrateGoing(fresh);
     }));
   }
@@ -17914,7 +17880,7 @@
   // Every control that writes, signed out. Capture phase on window, so it runs
   // ahead of both the per-card listeners and the document-delegated ones (the
   // repost circle, the •••), and the write never starts.
-  const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.card-attendees', '.card-cal',
+  const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt', '.card-cal',
     '.card-repost', '.card-menu', '#friend', '#account-more', '.daily-answer'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;

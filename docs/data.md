@@ -187,8 +187,8 @@ it either way.
   feed card wears.
 
   **A FEED CARD CARRIES NO PANEL AT ALL, and all three glyphs are links.** The
-  comment glyph, and the author's heart, both open the post's page; the headcount
-  still raises your hand in place and only walks to the page for the list. The
+  comment glyph, the author's heart and the headcount all open the post's page,
+  the last two on their own list. The
   writing box survived one round of this holding just the form, on the argument
   that starting a sentence shouldn't cost a navigation. What it actually bought
   was a box you could type into while the conversation it belonged to was
@@ -317,14 +317,16 @@ it either way.
     the finger. The comment is silently not posted. `mousedown` and not
     `touchstart`: preventing that one cancels the click along with the focus.
 
-  **RAISING YOUR HAND STAYS IN THE FEED.** `canJoin` is the one act on a card
-  that lands in the real world, it is one tap, and charging a navigation for it
-  would be the redesign taxing the thing it was meant to make easier. The
-  headcount button joins when there is a hand to raise and walks to the page
-  otherwise, where the list and `.going-out` live. The heart is the same story
-  from the other side: a friend's heart is still an optimistic one-tap like in
-  the feed, and only the AUTHOR'S — which was never a like, always a disclosure —
-  became a link.
+  **THE HEADCOUNT ONLY SHOWS (2026-09-16).** It used to stay a one-tap RSVP in
+  the feed, on the argument that `canJoin` is the one act on a card that lands in
+  the real world and a navigation would tax it. 1.7 broke that: an answer has
+  three values, and a guest who had said Maybe or Can't go tapped the glyph to
+  see who was coming and was filed as Going. So it took the author's heart's
+  shape, a link in a feed (`#/p/<id>?pane=going`) and a switch on the page, and
+  Going / Maybe / Can't go at the top of that list are the only way to answer
+  from a card (the plan's chat has the other, `openRsvpSheet`). A friend's heart
+  is still an optimistic one-tap like in the feed, because a like has two
+  values and a stray one costs nothing.
 
   **THE HEART REACHED DISCOVER'S TILES IN 1.5, and it cost the tile its anchor.**
   A `.ptile` used to be one big `<a>` wrapping face and foot together. A heart is
@@ -721,8 +723,7 @@ it either way.
   **The copy splits on whether they have answered, not on the stage.** Someone
   who is going gets logistics (`Zoe’s activity, a week away, Saturday at 7:00 PM.
   My place.`); someone who hasn't gets the question, in the app's own word for it
-  (`Are you in?` — the RSVP button reads *Count me in* and the host's push reads
-  *<name> is in*). On the DAY both get logistics: by then the address is the
+  (`Are you in?` — the host's push reads *<name> is in*). On the DAY both get logistics: by then the address is the
   useful half and a third ask is pestering. The host is not in their own
   audience, so they get one line on the day and it carries the only thing a host
   needs, the count.
@@ -791,7 +792,7 @@ it either way.
     tag and the glyph that opened the list had to be one colour. **They never
     were, and can't be:** `.card-attendees.going` is a GUEST's raised hand, tags
     are drawn for the HOST alone (a guest's who's-going list carries none), and
-    a host is never `rsvpable` — so the glyph above a tagged list has always
+    a host never wears `.going` — so the glyph above a tagged list has always
     been plain ink. `.card-attendees.going` keeps its green.
 
     It borrows the HEART's weight rather than an `-ink` twin's, because an
