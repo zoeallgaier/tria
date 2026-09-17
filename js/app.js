@@ -7616,11 +7616,12 @@
           `</div>` +
           `<input id="pf-file" type="file" accept="image/*" hidden>` +
           // The crop surface: the round frame, its caption, its way back out, in
-          // a centred column on the same axis as the resting avatar it replaces
-          // and at the same size, so picking a photo fills the circle instead of
-          // moving it. Nothing floats INSIDE the circle (`overflow: hidden` plus a
-          // 50% radius clips a pill to the chord, which sliced the ends off the
-          // hint this arrangement replaced).
+          // a centred column on the same axis as the resting avatar it replaces,
+          // so picking a photo grows the circle in place instead of moving it.
+          // It is the column's width rather than the avatar's (.crop--avatar in
+          // app.css): a drag and a pinch need the room. Nothing floats INSIDE
+          // the circle (`overflow: hidden` plus a 50% radius clips a pill to the
+          // chord, which sliced the ends off the hint this arrangement replaced).
           `<div class="crop-stage" id="pf-cropstage" hidden>` +
             `<div class="crop crop--avatar" id="pf-crop">` +
               `<img id="pf-cropimg" alt="" draggable="false">` +

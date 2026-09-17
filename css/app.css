@@ -8437,9 +8437,10 @@ button.poll-option:disabled { cursor: default; }
 /* Profile editor's photo: a big centred avatar with a camera badge at its corner.
    Tapping the badge picks a file, which hides this row and reveals the inline crop
    below. */
-/* This circle and the crop frame that replaces it are the SAME SIZE on the same
-   axis (--pf-avatar, below), so picking a photo fills the circle rather than
-   moving it. Any change to one is a change to both. */
+/* This circle and the crop frame that replaces it share an axis, so picking a
+   photo grows the circle in place rather than moving it sideways. They no longer
+   share a SIZE: the crop frame is a working surface and takes the column (see
+   .crop--avatar), while this one stays --pf-avatar, below. */
 .pf-photo {
   display: flex;
   justify-content: center;
@@ -8539,9 +8540,8 @@ button.poll-option:disabled { cursor: default; }
 @media (min-width: 681px) {
   .pf-form { padding-inline: var(--inset); }
 }
-/* The one size the resting avatar and the crop frame both read, so they can't
-   drift apart. A vw term because the crop frame is the working surface for a
-   drag and a pinch on a phone, where the form is the whole screen width. */
+/* The resting avatar's size. The crop frame read it too until it was too small
+   to crop in comfortably, and has its own width now (.crop--avatar). */
 .pf-form, .pf-photo { --pf-avatar: clamp(148px, 44vw, 180px); }
 /* The editor's own "← Profile" was a <button> and not a link, because leaving it
    pops the entry instead of pushing a new one, and it needed the UA button
@@ -8603,10 +8603,25 @@ button.poll-option:disabled { cursor: default; }
   margin-bottom: 1.1rem;
 }
 /* The avatar crop is a circle (what you see is what you get — photos display
-   round), not full-width like the composer's. It's sized in vw so the frame is as
-   big as the card can spare and no bigger: it shares a row with its caption now,
-   and the whole point of that row is that the photo step fits on a phone. */
-.crop--avatar { width: var(--pf-avatar); border-radius: 50%; }
+   round), and it is BIGGER than the resting avatar it replaces. It used to read
+   the same --pf-avatar, so picking a photo filled the circle without resizing
+   anything, and that left a 171px disc on a 390pt phone as the whole surface for
+   a drag and a pinch: two fingers barely fit inside it, and every nudge moved
+   the photo a long way relative to the frame. It takes the column now, about
+   twice the diameter on a phone and four times the area, on the same centred
+   axis, so the circle grows in place rather than sliding sideways.
+   360px keeps a desktop column from turning it into a poster, and the svh term
+   keeps a short window from pushing the caption and "Choose another" off the
+   bottom. svh, not dvh: dvh moves as Safari's toolbar collapses, which would
+   refit the photo mid-drag. The first width is the fallback for a WebKit without
+   svh (iOS before 15.4), which drops the whole second declaration.
+   initCropper measures the real box and refits on resize, so nothing in app.js
+   knows or cares what size this is. */
+.crop--avatar {
+  width: min(100%, 360px);
+  width: min(100%, 360px, 56svh);
+  border-radius: 50%;
+}
 
 /* Post photos aren't cropped — the composer preview shows the whole image at its
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
