@@ -3545,13 +3545,11 @@
     // while its heart and thread acted on the ORIGINAL. Now that the whole row is
     // the quote's own, there is nothing left to split.
     const menu = menuBtnHtml(post);
-    // ADD TO CALENDAR, beside the headcount since 1.7. It moved out of the •••
-    // because on an activity it is one of the two things you came to do.
-    const cal = isCalendarable(goingPost)
-      ? `<button class="card-cal" type="button" aria-label="Add to calendar" title="Add to calendar">${svgIcon('cal')}</button>`
-      : '';
+    // No calendar glyph on this row. 1.7 put Add to calendar beside the
+    // headcount, and it went back into the ••• on 2026-09-16 (Zoe: for
+    // cleanliness), so an activity's row is the same four glyphs as the rest.
 
-    if (!going && !cal && !like && !comment && !repost && !menu) return '';
+    if (!going && !like && !comment && !repost && !menu) return '';
 
     // One row for every card type now that the headcount and the RSVP are a
     // single control: social cluster on the right, the ••• menu tucked left
@@ -3560,7 +3558,7 @@
     // control they sit flush with notes and photos instead, which is most of what
     // made them read busy in the feed. The headcount leads the cluster, so
     // comment, repost and like stay the three rightmost glyphs on every card.
-    return `<div class="card-actions"><div class="card-social">${going}${cal}${comment}${repost}${like}</div>${menu}</div>`;
+    return `<div class="card-actions"><div class="card-social">${going}${comment}${repost}${like}</div>${menu}</div>`;
   }
 
   // ── Reposts ────────────────────────────────────────────────────────────────
@@ -4525,10 +4523,6 @@
   // `post` is the activity; `own` is the post the card is drawn for, which is a
   // different one on a quote (quoteCard), and the one a rebuild has to redraw.
   function wireGoing(el, post, opts, own = post) {
-    // The calendar glyph beside the headcount (1.7): the same plan, taken to
-    // the phone's calendar. The subject, for a card that passes one along.
-    el.querySelector('.card-cal')?.addEventListener('click', () =>
-      downloadIcs(post.type === 'activity' ? post : (subjectOf(post) || post)));
     // The headcount only shows (see goingControlHtml). In a feed it is an
     // anchor and needs nothing; on the page it switches to the list.
     const btn = el.querySelector('button.card-attendees');
@@ -9373,8 +9367,12 @@
   function openPostMenu(post) {
     const own = post.author === Store.session();
     const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
-    // Add to calendar left this menu in 1.7 for the card's own reaction bar
-    // (the .card-cal glyph beside the headcount).
+    // Add to calendar, back in this menu since 2026-09-16 after a stretch in 1.7
+    // as a glyph beside the headcount. The SUBJECT, so a quote of a plan offers
+    // the plan it points at, the way its headcount does.
+    const plan = subjectOf(post);
+    if (plan && isCalendarable(plan))
+      items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(plan) });
     if (own) {
       // Pin, above the editor: it's a positive act on a finished post, and the
       // two rows below it are the ones that change or end it. The label flips
@@ -17881,7 +17879,7 @@
   // Every control that writes, signed out. Capture phase on window, so it runs
   // ahead of both the per-card listeners and the document-delegated ones (the
   // repost circle, the •••), and the write never starts.
-  const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt', '.card-cal',
+  const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt',
     '.card-repost', '.card-menu', '#friend', '#account-more', '.daily-answer'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;
