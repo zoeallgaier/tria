@@ -2772,6 +2772,12 @@
   // the toolbar, so it stays visible even while the panel is collapsed.
   function richNoteField(idp, titleVal, noteHtml, notePh, opts = {}) {
     const tools = opts.tools !== false;   // attach toggles: composer only (see the foot bar below)
+    // The headline stops being optional on an activity — it is the plan's name,
+    // and both submit paths refuse one without it — so the box says so rather
+    // than letting the reader find out at the foot of the form. The composer
+    // swaps this at runtime (the type flips under your hand, see syncType); the
+    // editor knows what it is editing at mount and passes it once.
+    const titlePh = opts.titlePh || 'Title (optional)';
     // …and the calendar toggle within that, which the daily flow drops on its own:
     // an activity answers no prompt (dailyAccepts), so a button offering one there
     // is offering a dead end.
@@ -2779,7 +2785,7 @@
     return `<div class="field field--combo field--rich">` +
         `<div class="rich-title-row">` +
           `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
-            `value="${esc(titleVal || '')}" placeholder="Title (optional)" aria-label="Title">` +
+            `value="${esc(titleVal || '')}" placeholder="${esc(titlePh)}" aria-label="Title">` +
           `<span class="rt-count" id="${idp}-note-count" aria-hidden="true"></span>` +
           `<button type="button" class="rt-btn rt-toggle" aria-expanded="false" ` +
             `aria-controls="${idp}-toolbar-panel" aria-label="Text styles">Aa</button>` +
@@ -5062,26 +5068,6 @@
         `<p class="field-hint">Optional · separate with commas.</p>` +
       `</div>`;
 
-    // Combined title + note box, mirroring the composer's field--combo so create
-    // and edit read the same. The title rides as the lead, the note beneath it.
-    // This is the FLAT one (an activity's Details), not the rich editor, so its
-    // foot bar is stated here rather than coming from richNoteField — same
-    // markup, same hairline, so the lock lands in the same place on every form
-    // Tria has whether the body above it is rich or flat.
-    const combo = (titlePh, titleAria, notePh, noteAria, rows) =>
-      `<div class="field field--combo">` +
-        `<input id="e-title" class="combo-title" type="text" maxlength="120" ` +
-          `value="${esc(post.title || '')}" placeholder="${titlePh}" aria-label="${titleAria}">` +
-        `<div class="combo-divider" aria-hidden="true"></div>` +
-        `<textarea id="e-note" class="combo-note" rows="${rows}" maxlength="180" ` +
-          `placeholder="${notePh}" aria-label="${noteAria}">${esc(post.note || '')}</textarea>` +
-        (lock
-          ? `<div class="rich-attach rich-attach--withlock" role="group" aria-label="Post options">` +
-              audienceLockHtml('e') +
-            `</div>`
-          : '') +
-      `</div>`;
-
     if (post.type === 'find') {
       // A Find shares the Note editor (headline + rich body), same as the composer,
       // then carries the link field. Keeps create and edit identical, so a formatted
@@ -5095,7 +5081,15 @@
     }
 
     if (post.type === 'activity') {
-      return combo('Picnic at the park', 'What’s the plan?', 'When to show up, what to bring.', 'Details', 2) +
+      // THE RICH EDITOR, like every other type and like the composer. This branch
+      // was the last survivor of the two-form composer: a flat 180-char textarea
+      // holding what the one form has written as the rich HTML subset since 1.3
+      // ("a plan is a note with a place and a time attached"), so editing a plan
+      // showed the reader their own <p> tags and invited them to break them.
+      // `editorPrefill` carries a legacy plain-text note across to paragraphs.
+      return richNoteField('e', post.title, editorPrefill(post.note),
+          'When to show up, what to bring.',
+          { tools: false, lock, titlePh: 'Picnic at the park' }) +
         `<div class="field">` +
           `<label for="e-location">Where</label>` +
           `<input id="e-location" type="text" maxlength="120" ` +

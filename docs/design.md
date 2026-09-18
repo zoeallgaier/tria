@@ -525,11 +525,8 @@ no switcher. Five things about it:
   `pubAudience`. The composer's foot bar therefore splits in two in the editor:
   the four attach TOOLS stay composer-only, because a post's media and its type
   are fixed once made and a button there would promise what the editor can't do,
-  while the lock crosses because who can see it is fixed by nothing. An activity
-  is drawn from the older flat `combo()` box there rather than the rich editor,
-  so its foot bar is stated in `editFieldsFor` — same markup, same hairline, so
-  the lock lands in the same place whatever the body above it is. A quote is the
-  one editable family with neither: its audience is the original's. The lock is a
+  while the lock crosses because who can see it is fixed by nothing. A quote is
+  the one editable family with neither: its audience is the original's. The lock is a
   `<button>`, so the editor's `dirty()` measures it as its own half of the
   predicate rather than through the form snapshot, and the sheet's per-tap commit
   is what re-asks the bar (see `onChange` on `wireAudienceLock`).
@@ -563,7 +560,18 @@ no switcher. Five things about it:
 - **The headline's placeholder carries the requirement.** It reads *Title
   (optional)* everywhere except an activity, where `submitComposer` refuses a
   post without one, so the box says *Picnic at the park* rather than letting the
-  reader find out at the foot of the form.
+  reader find out at the foot of the form. The composer swaps it at runtime (the
+  type flips under your hand, see `syncType`); the EDITOR knows what it is
+  editing at mount and passes it once, as `richNoteField`'s `titlePh`.
+- **EVERY EDITABLE TYPE IS THE RICH EDITOR, and the activity was the last to get
+  there** (1.8). Its branch in `editFieldsFor` still built the pre-1.3 two-form
+  composer's flat `combo()` box — a 180-char `<textarea>` — while the one form
+  has written every plan's note as the rich HTML subset since "a plan is a note
+  with a place and a time attached". So editing a plan showed the reader their
+  own `<p>` tags in a plain box, invited them to break them, and refused to let a
+  note already over 180 characters grow. `combo()` had no other caller and went
+  with it. Anything that renders a stored note has to go through the rich path or
+  `plain()`; a bare `esc()` of `post.note` is this bug.
 - **The daily flow drops the calendar toggle and its surface** (`fieldsFor`'s
   `event` option), because an activity answers no prompt (`dailyAccepts`) and a
   button offering one there is offering a dead end. A quote has no attach bar at
