@@ -520,6 +520,19 @@ no switcher. Five things about it:
   never gave. The coercion is unchanged and still stated once: **Choose people**
   with nobody chosen is My circle, because an empty allowlist is a post nobody
   can read.
+- **The same lock is the post editor's** (`editFieldsFor`, `lock: true`), at the
+  foot of the same note box, opening the same sheet against the same
+  `pubAudience`. The composer's foot bar therefore splits in two in the editor:
+  the four attach TOOLS stay composer-only, because a post's media and its type
+  are fixed once made and a button there would promise what the editor can't do,
+  while the lock crosses because who can see it is fixed by nothing. An activity
+  is drawn from the older flat `combo()` box there rather than the rich editor,
+  so its foot bar is stated in `editFieldsFor` — same markup, same hairline, so
+  the lock lands in the same place whatever the body above it is. A quote is the
+  one editable family with neither: its audience is the original's. The lock is a
+  `<button>`, so the editor's `dirty()` measures it as its own half of the
+  predicate rather than through the form snapshot, and the sheet's per-tap commit
+  is what re-asks the bar (see `onChange` on `wireAudienceLock`).
 - **A sheet is not a history entry**, so `route()` sweeps one on its way in. The
   edge-swipe used to render the next page straight through an open sheet and
   leave a panel floating over a locked body with the native chrome still stood

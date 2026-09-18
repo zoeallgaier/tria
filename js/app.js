@@ -2793,14 +2793,18 @@
         // Foot bar. Right (opts.tools): link + photo + poll + calendar toggles — each a
         // live toggle that flips the post's inferred type (link → Find, photo → Frame,
         // poll → Poll, calendar → Activity) and pops the masthead mark. Left (opts.lock):
-        // the audience lock, so who sees it and what it is share one row. Both are
-        // composer-only — wired in renderPublish (wireAttachBar + wireAudienceLock). An
-        // edit card reuses this field with NEITHER: you can't swap a post's media or its
-        // type after the fact, so offering the buttons there would only promise
-        // something the editor can't do.
+        // the audience lock, so who sees it and what it is share one row.
+        //
+        // THE TWO HALVES PART COMPANY IN THE EDITOR, and the split is the whole
+        // rule: the tools are composer-only, because you can't swap a post's
+        // media or its type after the fact and a button there would promise
+        // something the editor can't do — but WHO CAN SEE IT is not fixed by
+        // anything, so the editor takes the lock alone (tools: false, lock: true)
+        // and the bar comes up holding just it. The one editable family that
+        // still gets neither is a quote, whose audience is the original's.
         (tools || opts.lock
           ? `<div class="rich-attach${opts.lock ? ' rich-attach--withlock' : ''}" role="group" aria-label="Post options">` +
-              (opts.lock ? audienceLockHtml() : '') +
+              (opts.lock ? audienceLockHtml(idp) : '') +
               (tools
                 ? `<div class="rich-attach-tools">` +
                     `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
@@ -5031,8 +5035,22 @@
      edit exactly as it leaves any other page.
 
      The editable fields for a post, prefilled from its current values. Mirrors
-     the composer's fields (minus the photo upload — captions/tags only there). */
+     the composer's fields (minus the photo upload — captions/tags only there).
+
+     WHO CAN SEE IT IS ONE OF THEM, at the foot of the note box exactly where the
+     composer puts it, because an audience is the one thing about a posted post
+     that isn't fixed: media and type are, the words are already editable, and a
+     circle you meant to be three people is a mistake you can only make once.
+     It is the same button, the same sheet and the same `pubAudience` state the
+     composer uses — see the audience lock block, and renderPostEdit for how a
+     control with no value gets into a dirty() that measures values.
+
+     A QUOTE IS THE ONE EDITABLE FAMILY WITHOUT IT. A repost wears the original's
+     audience exactly and may not widen it (reposts.sql checks the same equality
+     on insert), so a picker here would either lie or do nothing — which is the
+     reason the composer leaves it off a quote too. */
   function editFieldsFor(post) {
+    const lock = post.type !== 'repost';
     const tagsInput =
       `<div class="field">` +
         `<label for="e-tags">Tags</label>` +
@@ -5046,6 +5064,10 @@
 
     // Combined title + note box, mirroring the composer's field--combo so create
     // and edit read the same. The title rides as the lead, the note beneath it.
+    // This is the FLAT one (an activity's Details), not the rich editor, so its
+    // foot bar is stated here rather than coming from richNoteField — same
+    // markup, same hairline, so the lock lands in the same place on every form
+    // Tria has whether the body above it is rich or flat.
     const combo = (titlePh, titleAria, notePh, noteAria, rows) =>
       `<div class="field field--combo">` +
         `<input id="e-title" class="combo-title" type="text" maxlength="120" ` +
@@ -5053,13 +5075,18 @@
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<textarea id="e-note" class="combo-note" rows="${rows}" maxlength="180" ` +
           `placeholder="${notePh}" aria-label="${noteAria}">${esc(post.note || '')}</textarea>` +
+        (lock
+          ? `<div class="rich-attach rich-attach--withlock" role="group" aria-label="Post options">` +
+              audienceLockHtml('e') +
+            `</div>`
+          : '') +
       `</div>`;
 
     if (post.type === 'find') {
       // A Find shares the Note editor (headline + rich body), same as the composer,
       // then carries the link field. Keeps create and edit identical, so a formatted
       // Find edits as rich text instead of raw markup in a flat 180-char box.
-      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false }) +
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, lock }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -5089,7 +5116,7 @@
     // optional; the image carries the post). Prefilled from the stored note (a
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
-    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false }) + tagsInput;
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, lock }) + tagsInput;
   }
 
   // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
@@ -8845,6 +8872,33 @@
       return;
     }
 
+    /* The audience is a field with no VALUE — it is a button, and its answer
+       lives in `pubAudience`, the composer's own state, because the lock and the
+       sheet are one control serving both doors. So it is seeded here, before
+       editFieldsFor reads it to draw the lock, and latched as an ANSWER rather
+       than a default: a stored audience is exactly that, and nothing in this
+       page infers a type that could move it anyway.
+
+       Only the allowlist of a 'list' post is loaded. audienceOf answers the
+       HOST'S question ("who is invited") for every mode, which on a circle post
+       is your whole circle — feeding that to the sheet would read as thirty
+       hand-picked names. A post whose rows the cache never got stays empty and,
+       because the lock has to MOVE before anything is written, saves without
+       touching the audience at all. */
+    const audEditable = post.type !== 'repost';
+    if (audEditable) {
+      const mode = post.audience || 'circle';
+      pubAudience = { mode, users: mode === 'list' ? Store.audienceOf(post.id) : [] };
+      pubAudienceTouched = true;
+    }
+    // One string for the whole answer, so a pick and an unpick that cancel out
+    // leave the check away again, the way retyping a word you deleted does.
+    const audKey = () => (pubAudience.mode === 'list'
+      ? 'list:' + [...pubAudience.users].sort().join(',')
+      : pubAudience.mode);
+    const audBase = audEditable ? audKey() : '';
+    const audDirty = () => audEditable && audKey() !== audBase;
+
     mountToolbar({
       // No href: leaving here POPS where it can, the same as the profile
       // editor's, and toolbarBackEl emits the <button> that branch was built for
@@ -8888,6 +8942,10 @@
     wireMentions(noteEl);
     if (noteEl && noteEl.isContentEditable)
       wireRichEditor(noteEl, form.querySelector('#e-note-count'));
+    // The sheet commits as you tap, so every tap has to re-ask the bar. syncAnswers
+    // is declared below and this only ever runs from a click, so the reference is
+    // live by then.
+    wireAudienceLock(form, () => syncAnswers());
 
     // Leaving POPS where it can, for the reason the profile editor's does: go()
     // always pushes, so a save that navigated forward would leave the editor
@@ -8905,7 +8963,9 @@
     const snapshot = () => Array.from(form.querySelectorAll('input, textarea, [contenteditable]'))
       .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
     const baseline = snapshot();
-    const dirty = () => snapshot() !== baseline;
+    // The lock is not in the snapshot (a <button> has no value to read), so the
+    // audience is its own half of the predicate rather than a second predicate.
+    const dirty = () => snapshot() !== baseline || audDirty();
     // One predicate, both answers. Idle hides the check with `visibility` (see
     // .toolbar-commit--idle) rather than dropping it: it keeps its slot, it stays
     // a transition target, and hidden visibility is already out of the tab order
@@ -8927,7 +8987,10 @@
       // Hands itself back on every path, rejection included — submitEdit
       // resolves whether the write landed or the error line took it.
       saveBtn.disabled = true;
-      try { await submitEdit(post.id, leave); }
+      // The audience rides in only when it MOVED. A save that never opened the
+      // sheet must not rewrite the allowlist, both because there is nothing to
+      // say and because a cache that came up short would say it wrong.
+      try { await submitEdit(post.id, leave, audDirty() ? { ...pubAudience } : null); }
       finally { saveBtn.disabled = false; }
     });
 
@@ -14082,11 +14145,15 @@
   }
 
   // ── Audience lock ─────────────────────────────────────────────────────────
-  // One flat control, shared by every composer: a lock button showing who can
-  // see this post (Anyone / My circle / N people). Tapping opens the glass sheet
-  // (openAudienceSheet). It rides the foot of the Post note (bottom-left of the
-  // attach bar) and stands as its own field on the Activity form. 'public' wears
-  // a globe; circle/list wear a padlock. Flat editorial — the composer is content.
+  // One flat control, shared by every composer AND by the post's own editor: a
+  // lock button showing who can see this post (Anyone / My circle / N people).
+  // Tapping opens the glass sheet (openAudienceSheet). It rides the foot of the
+  // note box, bottom-left of the attach bar, in both places. 'public' wears a
+  // globe; circle/list wear a padlock. Flat editorial — a form is content.
+  //
+  // Addressed by its CLASS rather than its id, because there are two prefixes
+  // now ('c-' in the composer, 'e-' in the editor) and exactly one lock on a
+  // page either way. The id stays for the debugger; nothing reads it.
   function audienceLockText() {
     if (pubAudience.mode === 'public') return 'Anyone';
     if (pubAudience.mode === 'circle') return 'My circle';
@@ -14095,18 +14162,22 @@
   function audienceLockInner() {
     const glyph = pubAudience.mode === 'public' ? 'globe' : 'lock';
     return svgIcon(glyph, 'aud-lock-ico') +
-      `<span class="aud-lock-label" id="c-audience-val">${esc(audienceLockText())}</span>`;
+      `<span class="aud-lock-label">${esc(audienceLockText())}</span>`;
   }
-  function audienceLockHtml() {
-    return `<button type="button" class="aud-lock" id="c-audience" ` +
+  function audienceLockHtml(idp) {
+    return `<button type="button" class="aud-lock" id="${idp}-audience" ` +
         `aria-label="Who can see this post">` + audienceLockInner() + `</button>`;
   }
-  function wireAudienceLock(root) {
-    const btn = root.querySelector('#c-audience');
-    if (btn) btn.addEventListener('click', () => openAudienceSheet(root));
+  // `onChange` is the editor's, and it is not optional there: the lock is a
+  // BUTTON, so it is invisible both to the form's input/change events and to the
+  // string snapshot dirty() measures. Without it the bar would sit there offering
+  // no way to save an audience you had just moved.
+  function wireAudienceLock(root, onChange) {
+    const btn = root.querySelector('.aud-lock');
+    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange));
   }
   function syncAudienceLock(scope) {
-    const btn = (scope || document).querySelector('#c-audience');
+    const btn = (scope || document).querySelector('.aud-lock');
     if (btn) btn.innerHTML = audienceLockInner();
   }
   /* ── Who can see this ─────────────────────────────────────────────────────
@@ -14138,7 +14209,7 @@
      gave. The coercion is unchanged and still stated exactly once: "Choose
      people" with nobody chosen is My circle, because an empty allowlist is a
      post that nobody can read. */
-  function openAudienceSheet(root) {
+  function openAudienceSheet(root, onChange) {
     const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
       .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
     const chosen = new Set(pubAudience.users);
@@ -14154,6 +14225,7 @@
       else pubAudience = { mode: 'circle', users: [] };
       pubAudienceTouched = true;      // an answer now, not a default
       syncAudienceLock(root);
+      onChange?.();
     };
 
     const pickRows = friends.map((f, i) =>
@@ -15885,19 +15957,26 @@
     if (fill) fill.style.width = '0%';
   }
 
-  // Save a text edit. Reads the form by type, applies the same rules as the
-  // composer (a find needs a valid link; a post needs a headline or note), then
+  // Save an edit. Reads the form by type, applies the same rules as the composer
+  // (a find needs a valid link; a post needs a headline or note), takes the
+  // audience from the caller because the lock is a button and not a field, then
   // persists and calls `done` — which is the editor page's own way out, so a
   // save leaves exactly the way a cancel does (see renderPostEdit's `leave`).
   // A post that vanished while you were typing takes the same exit rather than
   // writing into a row that isn't there.
-  async function submitEdit(id, done) {
+  async function submitEdit(id, done, audience) {
     const errEl = document.getElementById('e-error');
     const val = (elId) => (document.getElementById(elId)?.value || '').trim();
     const post = Store.posts().find(p => p.id === id);
     if (!post) { done(); return; }
 
     const data = { note: readNoteField('e-note'), tags: parseTags(val('e-tags')) };
+    // Present only when the lock moved — Store.updatePost leaves the column and
+    // the allowlist untouched for a save that omits it (see renderPostEdit).
+    if (audience) {
+      data.audience = audience.mode;
+      data.audienceUsers = audience.users;
+    }
     // The daily join tag isn't in the field (see editFieldsFor), so put it back —
     // an edit is a change to what you SAID, never a retraction of the answer.
     const carried = dailyTagOf(post);

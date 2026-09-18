@@ -507,10 +507,23 @@ it either way.
   selectors — the old Cancel/Save pair sat at the foot of a *scrolling* form,
   which is the shape that needs a native page button, and the honest fix was that
   an editor's answers belong on the bar (see
-  [native-chrome.md](native-chrome.md)). The fields themselves are unchanged and
-  still mirror the composer's (`editFieldsFor`), the form wears `.composer` to
-  say so, and **Delete is still one row down in the post's •••**, where it can't
-  be reached by aiming at Save.
+  [native-chrome.md](native-chrome.md)). The fields mirror the composer's
+  (`editFieldsFor`), the form wears `.composer` to say so, and **Delete is still
+  one row down in the post's •••**, where it can't be reached by aiming at Save.
+
+  **WHO CAN SEE IT IS ONE OF THOSE FIELDS** as of 1.8, on the same lock at the
+  foot of the same note box — media and type are fixed once a post exists, the
+  words were already editable, and an audience was the one thing about a posted
+  post that was fixed by nothing and editable nowhere. It is the one field with
+  no VALUE, though: a `<button>` is invisible both to the form's input events and
+  to the string `snapshot()` `dirty()` compares, so `renderPostEdit` seeds
+  `pubAudience` from the post before `editFieldsFor` reads it, keeps a key of
+  that seed, and folds `audDirty()` into the predicate as its own half. The
+  sheet commits per tap, so the tap is also what re-asks the bar
+  (`wireAudienceLock`'s `onChange`) — and a pick and an unpick that cancel out
+  take the check away again, the way retyping a deleted word does. `submitEdit`
+  takes the audience as an ARGUMENT rather than reading it, so a save that never
+  opened the sheet sends none and the data layer leaves the allowlist alone.
 
   `submitEdit` takes the editor's own way out as a callback, so a save leaves
   exactly the way a cancel does (popping the pushed entry where there is one).
@@ -568,6 +581,57 @@ it either way.
   list → the `post_audience` allowlist · circle → mutual friends only. `circle`
   means friends-only for EVERY account, public ones included. Any post type can
   be made public, activities included.
+
+- **AND IT IS EDITABLE AFTER POSTING**, from the post's own editor, which carries
+  the composer's lock (see [design.md](design.md) for the control). **No
+  migration**: `posts update own` has no `with check`, the `post_audience` insert
+  and delete policies are already by-author, and its read policy was written "so
+  the editor can load an existing audience" — the schema anticipated this door.
+  Five things about `Store.updatePost` that aren't guessable:
+
+  - **An omitted `audience` leaves the column AND the allowlist untouched**, and
+    that is what every save that never opened the sheet sends. The editor only
+    passes one when the lock actually MOVED, measured off a key it seeded at
+    mount. A save that rewrote the allowlist from the cache would be a save that
+    silently narrowed a post whenever a read had come up short.
+  - **THE TWO WRITES ARE ORDERED BY DIRECTION**, so a save that dies half-way is
+    never a post nobody can read. Narrowing TO a list writes the allowlist FIRST
+    (until the column flips the rows are inert, and on a post that was already a
+    list they ARE the change). Widening OFF a list writes the column FIRST and
+    drops the rows after (stray rows under `circle` or `public` are consulted by
+    nothing and are cleared the next time the lock moves). The other way round is
+    the one arrangement that bites: `list` with an empty allowlist is the post
+    silently gone for everyone but you — the state `createPost` rolls a whole
+    insert back to avoid.
+  - **`setAudienceRows` diffs against the DATABASE, not the cache**
+    (`.not('user_id','in',…)` plus an `ignoreDuplicates` upsert), so a name whose
+    row the cache never held still comes off, and the names you kept are not
+    churned. Removals land before additions for the same reason the two writes
+    are ordered: the request that can fail between them leaves the list too
+    narrow rather than too wide.
+  - **AN ACTIVITY'S CHAT HAS TO BE RECONCILED, and only when the RULE crosses.**
+    A hand-picked plan's chat is everyone invited; a circle or public plan's is
+    whoever answered going or maybe (`add-activity-chats.sql`). The
+    `post_audience` triggers keep the first rule in step by themselves, so a
+    list→list edit needs nothing — adding a name invites them to the chat and
+    removing one takes them out, exactly as the chat's own member screen does.
+    What no trigger can see is the rule itself moving, because no row says which
+    one applies: dropping an allowlist empties the chat down to the host,
+    carrying off the people who are GOING, and picking a list on a circle plan
+    leaves whoever answered in a chat for a plan they can no longer open.
+    `syncActivityChat` fixes exactly that crossing through the two host-only
+    RPCs, best effort — the visibility has already landed and a roster is the one
+    thing the host can put right by hand.
+  - **Nobody is pushed about it.** The `posts` push trigger is `after insert`
+    (`push-webhooks.sql`), so a name added to a post's audience an hour later
+    learns about it the way they learn about anything else: by looking. That is
+    the quiet-by-design answer rather than an omission — but it is also why the
+    lock is worth reaching for early rather than late.
+
+  **A poll is still the one post with no editor at all** (`renderPostEdit`
+  redirects, `openPostMenu` offers no row), so its audience can't be edited
+  either. That is the choices rule reaching one post further than it means to;
+  changing it is a product call, not a bug fix.
 - **A repost IS a post row, and its audience is checked TWICE.** One column
   (`posts.repost_of`) and a sixth value in the `type` check is the whole schema
   change (`supabase/reposts.sql`) — no table, so it inherits the feed, the

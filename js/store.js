@@ -1432,13 +1432,98 @@ const Store = (() => {
     return { ok: true };
   }
 
-  // Edit the TEXT of one of your own posts (title / url / note / tags). Type and
-  // image are fixed. An empty value clears the field; an omitted field is left.
+  // Point a post's allowlist at exactly `userIds`, expressed against the DATABASE
+  // rather than against the cache: `.not(user_id, in, ...)` drops whoever is no
+  // longer chosen even if the cache never held their row, so a partial read can't
+  // leave somebody reading a post they were just taken off.
+  //
+  // REMOVALS LAND FIRST, and that is the whole ordering argument. The one request
+  // that can fail between the two leaves the list too NARROW (someone you meant
+  // to add can't see it yet) instead of too WIDE (someone you meant to remove
+  // still can), and the caller returns the error with the editor still open on
+  // the pick, so a retry finishes it. The upsert is what lets the delete be
+  // surgical: the names you kept are still there and are not churned.
+  async function setAudienceRows(postId, userIds) {
+    let del = sb.from('post_audience').delete().eq('post_id', postId);
+    if (userIds.length) del = del.not('user_id', 'in', `(${userIds.join(',')})`);
+    const { error: derr } = await del;
+    if (derr) return { ok: false, error: 'Couldn’t set who can see it, try again.' };
+    const keep = new Set(userIds);
+    write('audience', a => a.filter(x => x.postId !== postId || keep.has(x.userId)));
+    if (!userIds.length) return { ok: true };
+    const { error } = await sb.from('post_audience')
+      .upsert(userIds.map(uid => ({ post_id: postId, user_id: uid })),
+              { onConflict: 'post_id,user_id', ignoreDuplicates: true });
+    if (error) return { ok: false, error: 'Couldn’t set who can see it, try again.' };
+    write('audience', a => a.filter(x => x.postId !== postId)
+      .concat(userIds.map(uid => ({ postId, userId: uid }))));
+    return { ok: true };
+  }
+
+  /* An activity's chat and its invite list are ONE THING (add-activity-chats.sql),
+     under two different rules: a hand-picked plan's chat is everyone invited, a
+     circle or public plan's is whoever answered going or maybe.
+
+     The post_audience triggers keep the first rule in step by themselves — put a
+     name on a 'list' plan and they join the chat, take one off and they leave —
+     so an edit that only changes WHO is picked needs nothing here. What the
+     triggers cannot see is the RULE ITSELF moving, because no row says which one
+     applies: dropping a plan's allowlist deletes every audience row and so empties
+     the chat down to the host, taking the people who are going with it, and
+     picking a list on a circle plan leaves whoever had answered sitting in a chat
+     for a plan they can no longer open.
+
+     So this reconciles the crossing, and only the crossing, through the two
+     host-only RPCs the chat's own member screen already uses. BEST EFFORT on
+     purpose: the visibility this follows has already landed, a roster is the one
+     thing the host can put right by hand in that screen, and failing the save over
+     it would be the tail wagging the dog. */
+  async function syncActivityChat(post, wasList, nowList) {
+    if (!post || post.type !== 'activity' || wasList === nowList) return;
+    const c = state.chats.find(x => x.kind === 'activity' && x.postId === post.id);
+    if (!c) return;                       // posted before the migration: no chat
+    const me = state.session;
+    // Read the roster BEFORE deciding what to do to it, and again after. The
+    // allowlist writes above have already moved it by trigger, and a cache that
+    // has been sitting since boot would work off a list the server has moved on
+    // from — which on the removing branch means quietly leaving somebody in.
+    await reloadChats();
+    if (nowList) {
+      // The allowlist is the roster now. Whoever had answered but wasn't picked
+      // comes out (remove_chat_member clears an audience row too; they have none).
+      const invited = new Set(audienceOf(post.id));
+      for (const m of chatMembers(c.id)) {
+        if (m.user === me || invited.has(m.user)) continue;
+        const { error } = await sb.rpc('remove_chat_member', { p_chat: c.id, p_user: m.userId });
+        if (error) console.warn('[tria] chat reconcile (remove):', error.message || error);
+      }
+    } else {
+      // The answers are the roster now, and the allowlist's delete trigger has
+      // just emptied the chat down to the host — so everyone going or maybe goes
+      // back in. Filtered to friends: add_chat_members refuses the whole call if
+      // one name isn't mutual, and a guest can be unfriended and still coming.
+      const ids = rsvpsFor(post.id)
+        .filter(h => (h.status === 'going' || h.status === 'maybe') && h.user !== me && isFriend(h.user))
+        .map(h => idOf(h.user)).filter(Boolean);
+      if (ids.length) {
+        const { error } = await sb.rpc('add_chat_members', { p_chat: c.id, p_members: ids });
+        if (error) console.warn('[tria] chat reconcile (add):', error.message || error);
+      }
+    }
+    await reloadChats();
+  }
+
+  // Edit one of your own posts: the TEXT (title / url / note / tags) and, since
+  // the editor grew the composer's lock, WHO CAN SEE IT. Type and image are fixed.
+  // An empty value clears the field; an omitted field is left — and an omitted
+  // `audience` leaves both the column and the allowlist entirely alone, which is
+  // what every save that didn't touch the lock sends.
   async function updatePost(id, data) {
     const me = state.session;
     const i = state.posts.findIndex(p => p.id === id);
     if (i < 0 || state.posts[i].author !== me)
       return { ok: false, error: 'That post isn’t yours to edit.' };
+    const before = state.posts[i];
     const patch = {};
     const COLS = { title: 'title', url: 'url', note: 'note', location: 'location',
                    eventDate: 'event_date', eventTime: 'event_time' };
@@ -1447,12 +1532,46 @@ const Store = (() => {
     }
     if ('tags' in data) patch.tags = data.tags || [];
 
+    // The same coercion createPost states, and it has to be stated twice because
+    // both doors write the column: "choose people" with nobody chosen is your
+    // circle, since an empty allowlist is a post only you can read.
+    let targetIds = null;
+    if ('audience' in data) {
+      targetIds = (data.audience === 'list' ? (data.audienceUsers || []) : [])
+        .map(idOf).filter(Boolean);
+      patch.audience = data.audience === 'public' ? 'public'
+        : (targetIds.length ? 'list' : 'circle');
+    }
+    const wasList = (before.audience || 'circle') === 'list';
+    const nowList = targetIds ? patch.audience === 'list' : wasList;
+
+    /* THE TWO WRITES ARE ORDERED BY DIRECTION, so a save that dies half-way is
+       never a post nobody can read.
+
+       Narrowing TO a list writes the allowlist FIRST: until the column flips the
+       rows are inert (can_view_post only consults them for 'list'), and if the
+       post was already a list they ARE the change, so a failed column write has
+       still landed the right thing. Widening OFF a list writes the column FIRST
+       and drops the rows after: a failure before the column leaves everything as
+       it was, and stray rows under 'circle' or 'public' are read by nothing and
+       are cleared the next time the lock moves.
+
+       The other way round is the one arrangement that bites: 'list' with an empty
+       allowlist is the post silently gone for everyone but you — the same state
+       createPost rolls a whole insert back to avoid. */
+    if (targetIds && nowList) {
+      const res = await setAudienceRows(id, targetIds);
+      if (!res.ok) return res;
+    }
+
     const { data: updated, error } = await sb.from('posts').update(patch).eq('id', id).select().single();
     if (error) return { ok: false, error: 'Couldn’t save, try again.' };
     const fresh = mapPost(updated, nameMap());
     // map, not upsert: if the post isn't in the world we just read it was
     // deleted somewhere else, and an edit shouldn't resurrect it.
     write('posts', ps => ps.map(p => (p.id === id ? fresh : p)));
+    if (targetIds && !nowList) await setAudienceRows(id, []);
+    if (targetIds) await syncActivityChat(fresh, wasList, nowList);
     return { ok: true, post: fresh };
   }
 
