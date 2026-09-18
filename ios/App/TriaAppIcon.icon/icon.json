@@ -23,7 +23,7 @@
           "glass" : false,
           "image-name" : "Image 3.svg",
           "name" : "Image 3",
-          "opacity" : 0.35,
+          "opacity" : 0.6,
           "position" : {
             "scale" : 2,
             "translation-in-points" : [

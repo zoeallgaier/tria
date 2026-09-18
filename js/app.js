@@ -11149,10 +11149,13 @@
      track a month after the rail had moved on. It also meant two ways to put a
      song into the app, which was one more than the app has songs.
 
-     THE PANEL IS THE DAILY CARD'S — plain glass, the
-     floating-card look, a serif line doing the talking — because both are the
-     same object in the app's grammar: one thing the page wants you to read
-     before it hands you the rest. What the pins do NOT take from the daily is
+     THE PANEL IS THE DAILY CARD'S — a flat --surface fill, a --rule hairline
+     and a serif line doing the talking — because both are the same object in
+     the app's grammar: one thing the page wants you to read before it hands
+     you the rest. It followed the daily card flat in 2026-09 rather than being
+     the last glass card in the app (see the pins block in app.css; a song's
+     bloom, the cover's drop shadow and the lifted card's own shadow all
+     stayed). What the pins do NOT take from the daily is
      its content (a prompt with a countdown belongs to a question the whole room
      got, and this is one person's choice), or its size: three headline cards
      stacked would be the wall.
@@ -11277,7 +11280,7 @@
      the picture IS. A song's art is hotlinked from its service's own CDN,
      so CSS may blur it but canvas may not read it (touching the pixels taints
      it) — a blurred, blown-up copy of the same artwork lies over the card's
-     glass and is masked out before it reaches the words, no CORS, no second
+     fill and is masked out before it reaches the words, no CORS, no second
      request, no colour column. A post's photo is our own upload, so blurring a
      full-size copy behind an 88px card is real work for a colour we already
      have: it glows from its own stored `tint` instead, one flat colour

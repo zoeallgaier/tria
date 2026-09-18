@@ -1084,8 +1084,32 @@ cards that are the page's headline the narrowest thing on it. The type inside a
 card is inset by the card's own padding — that is what a card is for; the box is
 not.
 
-**The panel stays plain glass.** A filled coloured panel is the app's one
-filled-object vocabulary and means "press this to make something", so a
+**The panel is flat, and it is the flat cards' material** — a `--surface` fill
+and a `--rule` hairline, no blur, no rim, no lift, the same as `.week-card`,
+`.daily-card` and a quote's nested tile. It was glass until 2026-09-18, which
+by then made it the last card in the app still wearing the old vocabulary; one
+page showing both read as two apps. The bill argues the same way the daily
+card's did — a blur costs area × radius × moving frames, and three of these
+scroll behind a wall of photographs.
+
+**Three things did not go flat with it**, because each was doing a job rather
+than being a finish: a song's bloom (`.pin-glow`, which paints between the fill
+and the words and so needed no change at all), the square's drop shadow, and
+the shadow a card throws while it is HELD (`.pin.is-lifted`) — that last one is
+the whole feedback of the hold-to-move gesture, the card leaving the page.
+
+**The held card's shadow is two layers, because a lift reads differently on
+paper and on ink.** The drop does the whole job on light paper and almost none
+of it on dark, a black shadow on a near-black page being a shadow nobody can
+see — and taking the glass out took `--glass-rim` with it, which turns out to
+have been the only thing saying "up" in dark mode. So a lit TOP EDGE rides in
+front of the drop, and deliberately not the four-sided rim that went: it is
+`.pin-cover`'s inset at `.pin-cover`'s value, already the app's way of drawing
+an object lying ON something. One declaration, no `prefers-color-scheme` block,
+invisible on paper where the drop is talking and legible on ink where it isn't.
+
+**The panel carries no colour of its own.** A filled coloured panel is the app's
+one filled-object vocabulary and means "press this to make something", so a
 hue-filled pin would read as an enormous button that isn't one — the same rule
 the daily card spent 1.3 learning. The type pastels survive only as the backstop
 behind a photograph that hasn't decoded, and as the mark on the picker's rows.
@@ -1122,16 +1146,20 @@ is 2px the dropped card lands out by.
 art and a photo's alike get three things a thumbnail doesn't:
 
 - **A drop shadow and a lit top edge**, no hairline. A border draws a picture
-  printed into the glass; a shadow draws it as a thing lying on it.
+  printed into the card; a shadow draws it as a thing lying on it. Flattening
+  the panel under it left this untouched on purpose — a `--surface` card is a
+  cleaner ground for the drop than a blur was.
 - **A sheen** — one soft diagonal highlight stopping at 58%, the light a glossy
   surface catches. It is a highlight, not a scrim: past 58% it would start
   greying the picture it is meant to flatter.
 - **The picture's own colour, on the card**, by two different routes. A song's
   art is hotlinked from Apple's or Spotify's CDN, so CSS may blur it but canvas
   may not read it (touching the pixels taints the canvas) — a blown-up, blurred
-  copy sits over the card's glass and is MASKED OUT before it reaches the words.
+  copy sits over the card's fill and is MASKED OUT before it reaches the words.
   The mask is not decoration — it is what lets the cover end of the card bloom
-  while a serif title stays on clean glass. A post's photo is our own upload, so
+  while a serif title stays on a clean surface. A card paints its background
+  first and its negative-z children straight after, so the bloom sits over an
+  opaque `--surface` exactly as it sat over glass. A post's photo is our own upload, so
   blurring a full-size copy behind an 88px card is real work for a colour
   already known: it glows from its stored `tint` instead, one flat colour
   computed at publish time.

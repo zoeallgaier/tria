@@ -24,8 +24,6 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
 	<!-- canOpenURL answers false for any scheme not listed here, whatever is
 	     installed. Spotify and YouTube Music are asked about so a song's link
 	     can open in the service the reader actually uses (see
@@ -36,6 +34,8 @@
 		<string>spotify</string>
 		<string>youtubemusic</string>
 	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Tria uses your camera so you can take a photo or a short video to share in a post.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -72,6 +72,8 @@
 	<array>
 		<string>arm64</string>
 	</array>
+	<key>UIStatusBarHidden</key>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

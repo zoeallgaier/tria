@@ -6273,18 +6273,29 @@ button.poll-option:disabled { cursor: default; }
    shared, and the difference is worth naming: .daily-card is one headline on
    Discover and can afford a serif question at 1.95rem, while this is a STACK of
    up to three on a page that already opened with a photograph and a name. Same
-   corner; a smaller voice and a fixed height. (The daily card went flat in 1.7;
-   the pins keep the glass and the lift.)
+   corner; a smaller voice and a fixed height.
+
+   SO THEY WENT FLAT WITH IT. The daily card, the week-of activity card and a
+   quote's nested tile all dropped the glass in 1.7 for a --surface fill and a
+   --rule hairline, and a stack of three cards on a profile is the same object
+   in the same grammar: a boxed thing sitting in a page's normal flow with a
+   wall of photographs scrolling behind it. Glass here was the last place the
+   old vocabulary survived, and one page showing both read as two apps. Zoe's
+   call, 2026-09-18. The bill argues the same way — a blur costs area × radius ×
+   MOVING FRAMES, and three of these scroll.
+
+   WHAT DID NOT GO WITH IT is anything that was doing a job. A song still
+   blooms its own artwork over the fill (.pin-glow, below), the square on the
+   leading edge keeps the drop shadow that draws it as an object lying ON the
+   card rather than printed into it (.pin-cover), and a lifted card still
+   throws a real shadow while it is up (.pin.is-lifted) — that one is the
+   gesture's whole feedback, the card leaving the page. The rest, at rest, is
+   flat.
 
    THE FIXED HEIGHT IS LOAD-BEARING TWICE. It makes three cards read as a set
    rather than as three unrelated blocks, and it is what lets the drag be exact:
    every card displaces every other by one card plus one gap, so a reorder never
-   has to measure anything but the rects it took on the lift (wirePinDrag).
-
-   Panel-grade FILL over chrome-grade BLUR, the same trade the daily card makes
-   and for the same reason — it carries text and needs the body, but it sits in
-   a profile's normal flow with a wall of photographs scrolling behind it, and
-   cost follows the backdrop rather than the component's name. */
+   has to measure anything but the rects it took on the lift (wirePinDrag). */
 .pins-host:empty { display: none; }
 
 .pins {
@@ -6320,12 +6331,15 @@ button.poll-option:disabled { cursor: default; }
   --pin-pad: 0.7rem;
   min-height: calc(var(--pin-art) + var(--pin-pad) * 2 + 2px);
   padding: var(--pin-pad) 0.8rem;
-  border: var(--glass-edge);
   border-radius: var(--radius-card);
-  background: var(--glass-bg-panel);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  box-shadow: var(--glass-rim), var(--glass-lift);
+  /* The flat cards' material (.week-card, .daily-card, .card-quoted): a
+     --surface fill and a --rule hairline, no blur, no rim, no lift. No
+     prefers-color-scheme block — both tokens answer the scheme in tokens.css,
+     which is the whole point of their being tokens. The box-shadow slot is
+     left empty rather than deleted from the transition below: .is-lifted still
+     fills it, and a shadow that eases in from nothing is the card rising. */
+  background: var(--surface);
+  border: 1px solid var(--rule);
   text-align: left;
   color: inherit;
   font: inherit;
@@ -6340,10 +6354,10 @@ button.poll-option:disabled { cursor: default; }
 
 /* Each type lends its own pastel to the SQUARE, and to nothing else: it is the
    backstop behind a photograph that hasn't decoded yet, and on the picker's
-   rows it is the whole mark. The PANEL stays plain glass — a filled coloured
-   panel is the app's one filled-object vocabulary and means "press this to make
-   something", which is the mistake the daily card spent 1.3 undoing. A song has
-   no type colour because the album cover is the colour. */
+   rows it is the whole mark. The PANEL stays the plain --surface — a filled
+   coloured panel is the app's one filled-object vocabulary and means "press
+   this to make something", which is the mistake the daily card spent 1.3
+   undoing. A song has no type colour because the album cover is the colour. */
 .pin[data-type="note"],     .pin-row[data-type="note"]     { --pin-hue: var(--type-note);     --pin-ink: var(--type-note-ink); }
 .pin[data-type="find"],     .pin-row[data-type="find"]     { --pin-hue: var(--type-find);     --pin-ink: var(--type-find-ink); }
 .pin[data-type="photo"],    .pin-row[data-type="photo"]    { --pin-hue: var(--type-photo);    --pin-ink: var(--type-photo-ink); }
@@ -6351,13 +6365,20 @@ button.poll-option:disabled { cursor: default; }
 .pin[data-type="poll"],     .pin-row[data-type="poll"]     { --pin-hue: var(--type-poll);     --pin-ink: var(--type-poll-ink); }
 
 /* ── The album's own colour ───────────────────────────────────────────────────
-   A blown-up, blurred copy of the artwork, lying over the card's glass and
+   A blown-up, blurred copy of the artwork, lying over the card's fill and
    dissolving before it reaches the words. It is the cheapest honest way to let
    a record colour its own card: the artwork is HOTLINKED from Apple's or
    Spotify's CDN, so CSS may blur it but canvas may not read it (touching the
    pixels taints the canvas), and nothing here needs a colour column, a second
    request or a sampler. The mask is not decoration — it is what keeps a serif
-   title on plain glass while the cover end of the card glows.
+   title on the plain fill while the cover end of the card glows.
+
+   THE FLATTENING LEFT IT ALONE, and the negative z-index is why it could: a
+   card paints its own background FIRST and its negative-z children straight
+   after, so the bloom that used to sit over translucent glass now sits over an
+   opaque --surface at the same strength, in front of the fill and behind the
+   words. A record colours its own card either way; that was never the glass
+   doing it.
 
    A photo post gets the same bloom from its stored `tint` instead (--flat): one
    colour we already computed at publish time, rather than blurring a full-size
@@ -6405,8 +6426,16 @@ button.poll-option:disabled { cursor: default; }
 }
 
 /* THE COVER GETS THE EXTRA, on a song's art and a photo's alike. A hairline
-   would draw it as a picture printed into the glass; a real drop shadow and a
+   would draw it as a picture printed into the card; a real drop shadow and a
    lit top edge draw it as an object lying ON it instead.
+
+   THE DROP CAME DOWN when the pin card went flat (Zoe, 2026-09-18). Not because
+   the flattening changed what it is for, but because a blurred panel was eating
+   half of it: on a clean --surface the same shadow that read as depth on glass
+   read as a smudge under the square. Softer numbers, same job. It stays ONE
+   treatment and the picker rows took the new value with the cards — forking it
+   so that a cover looks like a different object on two screens is exactly what
+   this class exists to prevent.
 
    IT IS THE APP'S COVER TREATMENT, not the pin card's: the same class rides
    Discover's rail (.np-art) and both pickers' squares (.song-art, .pin-row-art)
@@ -6421,7 +6450,7 @@ button.poll-option:disabled { cursor: default; }
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 10px 22px -8px rgba(0, 0, 0, 0.55);
+    0 7px 15px -7px rgba(0, 0, 0, 0.32);
 }
 /* Discover's rail keeps the lit edge and the sheen but not the drop (Zoe,
    2026-09-14): a row of 132px squares each casting its own shadow read heavy,
@@ -6521,7 +6550,27 @@ button.poll-option:disabled { cursor: default; }
 .pin.is-lifted {
   transition: none;
   z-index: 3;
-  box-shadow: var(--glass-rim), 0 18px 40px rgba(0, 0, 0, 0.42);
+  /* The one shadow the card still wears, and it is the gesture: flat at rest,
+     off the page while it is held.
+
+     TWO LAYERS, BECAUSE A LIFT READS DIFFERENTLY ON PAPER AND ON INK. The drop
+     does the whole job on light paper and almost none of it on dark — a black
+     shadow on a near-black page is a shadow nobody can see, and taking the
+     glass out took --glass-rim with it, which turns out to have been the only
+     thing saying "up" in dark mode. So the lit TOP EDGE comes back, and not as
+     the four-sided glass rim: it is .pin-cover's inset, at .pin-cover's value,
+     which is already the app's way of drawing an object lying ON something.
+     One declaration, no prefers-color-scheme block — it is invisible on paper
+     where the drop is doing the talking and legible on ink where it isn't,
+     which is the same trick --label plays on a native control.
+
+     The drop came down with the cover's, and for the same reason: the blur was
+     absorbing it before, and at full strength on a flat card a held pin looked
+     dropped through the page rather than lifted off it. It only has to be
+     clearly more than the nothing every other card is wearing. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 14px 32px -8px rgba(0, 0, 0, 0.30);
 }
 .pin-stack.is-reordering .pin-open { pointer-events: none; }
 
