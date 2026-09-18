@@ -578,9 +578,32 @@ it either way.
 - **Audience is per-post authoritative** (`posts.audience`, one of `public` /
   `circle` / `list`; see `supabase/post-audience-public.sql`). `can_view_post`
   decides reads from the post's own tag: public → everyone · author → self ·
-  list → the `post_audience` allowlist · circle → mutual friends only. `circle`
-  means friends-only for EVERY account, public ones included. Any post type can
-  be made public, activities included.
+  circle → mutual friends only. `circle` means friends-only for EVERY account,
+  public ones included. Any post type can be made public, activities included.
+
+- **THE ALLOWLIST IS A FLOOR, NOT A MODE** (`supabase/chat-roster.sql`, 1.8). A
+  `post_audience` row used to be read only when the audience was `list`; it is
+  now an extra grant on top of ANY audience. "On the list" always means "can read
+  it", and nothing else about the three answers changed — a `list` post is
+  unaffected (the allowlist was already its only key) and a `circle` post gains a
+  reader only where a row exists.
+
+  **It exists so a guest can bring a friend to a plan.** Adding to an activity's
+  chat was host-only, so the only people who could ever join were the host's own
+  friends, who could already read it. A guest's friend can't necessarily — they
+  are nobody to the host — so being brought writes the row, and the row is what
+  lets them open the activity for the details. Without the floor that row would
+  be inert on every plan but a hand-picked one.
+
+  Three things this touches that are easy to miss:
+  - **`can_view_post` is this schema's worst regression site**, and
+    `restore-block-gate.sql` exists because a `create or replace` once dropped
+    its `is_blocked_pair` clause. The rewrite keeps the gate OUTSIDE the `or`
+    chain and first. Read the migration's comment before touching it again.
+  - **`can_see_post` already had floor semantics**, so this makes the pair agree
+    rather than making them differ.
+  - **Nothing was backfilled and nothing needed to be**: before this, no code
+    path wrote a `post_audience` row for any audience but `list`.
 
 - **AND IT IS EDITABLE AFTER POSTING**, from the post's own editor, which carries
   the composer's lock (see [design.md](design.md) for the control). **No
@@ -622,6 +645,12 @@ it either way.
     `syncActivityChat` fixes exactly that crossing through the two host-only
     RPCs, best effort — the visibility has already landed and a roster is the one
     thing the host can put right by hand.
+  - **Widening off a list CLEARS the allowlist, brought-along guests included.**
+    Under the floor those rows are live on a circle plan, so this is the one
+    place an audience edit can take access away from somebody the host never
+    picked. It is the honest answer: the lock is what says who can see this, and
+    leaving invisible extras behind would make the control wrong. `syncActivityChat`
+    then rebuilds the chat from the going and maybe answers.
   - **Nobody is pushed about it.** The `posts` push trigger is `after insert`
     (`push-webhooks.sql`), so a name added to a post's audience an hour later
     learns about it the way they learn about anything else: by looking. That is
@@ -837,9 +866,11 @@ it either way.
   similar drawings. The list itself is the cheaper place to say it.
 
   `Store.audienceOf(postId)` is who was invited, and it is deliberately the
-  reminder sweep's rule copied into the client (see `activity-reminders.sql`):
-  the allowlist for `list`, the host's mutual friends for `circle` **and for
-  `public`**. If those two ever disagree, the people a reminder wakes up and the
+  reminder sweep's rule copied into the client (see `activity-reminders.sql`,
+  resolved in `supabase/functions/push/index.ts`): the allowlist for `list`, the
+  host's mutual friends **plus the allowlist** for `circle` and for `public`
+  — the union, since the allowlist became a floor and a brought-along guest is
+  invited without being a friend of the host's. If those two ever disagree, the people a reminder wakes up and the
   people this list names are different sets and one of them is lying to the
   host. It is **author-only**, and that is a data fact rather than a courtesy —
   RLS hands you the `post_audience` rows for posts you wrote plus your own

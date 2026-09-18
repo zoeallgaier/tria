@@ -533,6 +533,22 @@ no switcher. Five things about it:
   `<button>`, so the editor's `dirty()` measures it as its own half of the
   predicate rather than through the form snapshot, and the sheet's per-tap commit
   is what re-asks the bar (see `onChange` on `wireAudienceLock`).
+- **THE SAME CHECKLIST IS A CHAT'S ROSTER** (`openChatPeopleSheet`, 1.8), which
+  is why `pickRowHtml` is a shared function rather than two copies of one row.
+  Picking who can see a post and picking who is in its chat are the same act on
+  the same people — and on a hand-picked plan they are not even two lists, since
+  the invite list IS the chat. Two drawings would have been two faces on one
+  fact. It replaced a text-only list of names whose rows opened a SECOND sheet to
+  remove somebody, plus a whole separate PAGE to put somebody in.
+
+  It commits as you tap like its twin, but here that is a WRITE per tap, since a
+  roster has no Save to defer to: a row flips first and puts itself back if the
+  write is refused, and each row guards itself rather than the sheet freezing.
+  Rows that show a state and cannot be tapped — you, and a plan's host — are
+  `<div>`s (`.aud-pick--fixed`), not disabled buttons: a disabled control reads as
+  one that is broken, and openSheet's focus trap would have to be told to skip it.
+  The "host" and "you" tags ride the handle line (`@ann · host`), which is how two
+  more facts fit with no new CSS.
 - **A sheet is not a history entry**, so `route()` sweeps one on its way in. The
   edge-swipe used to render the next page straight through an open sheet and
   leave a panel floating over a locked body with the native chrome still stood

@@ -130,8 +130,12 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   CSS reads `html[data-shell]` rather than re-deriving it.
 - **Verify before repeating that a migration is pending.** This file records
   intent; the dashboard holds the truth, and migration state is checkable
-  read-only over PostgREST. The APNs `.p8` key is the one open item and the one
-  thing REST cannot reach.
+  read-only over PostgREST. The APNs `.p8` key is one open item and the one thing
+  REST cannot reach. **`supabase/chat-roster.sql` is the other**, and it comes
+  with a second step REST cannot see either: the push Edge Function carries its
+  own copy of the audience rule twice, so `supabase functions deploy push` has to
+  follow it or reminders and the calendar feed will name a different set of
+  people from the app's guest list.
 
 ## Copy style
 

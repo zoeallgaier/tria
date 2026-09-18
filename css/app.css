@@ -7947,7 +7947,15 @@ button.poll-option:disabled { cursor: default; }
 }
 .aud-pick[aria-checked="true"] .aud-check { background: var(--accent); border-color: var(--accent); }
 .aud-pick[aria-checked="true"] .aud-check::after { opacity: 1; }
-@media (hover: hover) { .aud-pick:hover { background: color-mix(in srgb, var(--text) 4%, transparent); } }
+@media (hover: hover) { .aud-pick:not(.aud-pick--fixed):hover { background: color-mix(in srgb, var(--text) 4%, transparent); } }
+/* A row that SHOWS its state and cannot be tapped — you in your own chat
+   (leaving is not being removed), a plan's host, and anybody a reader has no
+   standing to move (see openChatPeopleSheet). Emitted as a <div>, so there is no
+   hover, no focus ring and nothing in the sheet's focus trap to skip; the only
+   thing this has to do is stop the tick reading as an offer. The name keeps full
+   contrast — it is the CONTROL that is unavailable, not the person. */
+.aud-pick--fixed { cursor: default; }
+.aud-pick--fixed .aud-check { opacity: 0.45; }
 /* The panel's rows are in the sheet's focus trap now (openSheet traps every
    button it holds), so they need the mark the sheet's own rows wear. Same inset
    ring, for the same reason it is inset there: an outline on a row that sits on

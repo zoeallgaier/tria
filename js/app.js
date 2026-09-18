@@ -12844,8 +12844,9 @@
 
   /* ── Chats (1.7) ─────────────────────────────────────────────────────────────
      The tab that replaced Updates. Four pages: the list (#/chats), a chat
-     (#/chat/<id>), a new chat (#/chats/new, and ?add=<id> to add friends to a
-     group) and message requests (#/chats/requests). Updates keeps its own page
+     (#/chat/<id>), a new chat (#/chats/new — STARTING one; putting somebody into
+     one that exists is the roster sheet, openChatPeopleSheet) and message
+     requests (#/chats/requests). Updates keeps its own page
      and is the pinned first row of the list, the way TikTok's inbox leads with
      its activity.
 
@@ -13407,6 +13408,103 @@
     });
   }
 
+  /* ── Who is in this chat ──────────────────────────────────────
+     THE AUDIENCE PICKER, POINTED AT A ROSTER — same rows, same ticks, same
+     commit-as-you-tap. It replaces two surfaces that disagreed with each other:
+     a text-only list of names whose rows opened a SECOND sheet to remove
+     somebody, and a whole separate PAGE (`#/chats/new?add=`) to put somebody in.
+     Reading a roster and editing one were three taps apart in two different
+     shapes, for a question — who is in this — that is one question.
+
+     IT COMMITS AS YOU TAP, and here that means a write per tap rather than the
+     audience sheet's local state: a chat roster has no Save to defer to. So a
+     row flips first and puts itself back if the write is refused, and each row
+     guards itself rather than the sheet freezing (the two RPCs are independent,
+     and one slow add must not swallow a tap somewhere else).
+
+     WHO MAY DO WHAT, which is three rules and not one (chat-roster.sql):
+       · a GROUP is flat — anyone in it adds and removes anyone
+       · a PLAN's guest list is the HOST'S, so only they remove…
+       · …but ANY guest may BRING a friend, and being brought writes the
+         allowlist row that lets them open the plan for the details
+     Two rows can never be tapped: yourself (leaving is not being removed — it
+     is one row down in this menu) and a plan's host.
+
+     The list is one flat set — everyone in the chat, plus your circle — sorted
+     by name, so a tap changes a tick and never makes a row jump between
+     sections. Somebody else may have brought a person you are not friends with:
+     they are listed because they are here, and unticking them is one-way, which
+     the toast says out loud rather than a confirm step breaking the one gesture
+     this sheet has. */
+  function openChatPeopleSheet(c) {
+    const me = Store.session();
+    const host = c.kind === 'activity' ? c.host : null;
+    const live = c.status === 'member' && !c.archived;
+    // Adding is open to every member of either kind; removing is the host's on a
+    // plan and everybody's in a group.
+    const canAdd = live;
+    const canRemove = live && (c.kind === 'group' || host === me);
+
+    const inChat = new Set(c.members);
+    const people = [...new Set(c.members.concat(Store.friends()))]
+      .filter(u => !Store.isBlocked(u))
+      .map(u => Store.user(u)).filter(Boolean)
+      .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
+
+    const rows = people.map((u, i) => {
+      const on = inChat.has(u.username);
+      const pinned = u.username === me || u.username === host;
+      return pickRowHtml(u, {
+        on, i,
+        note: u.username === me ? 'you' : u.username === host ? 'host' : '',
+        fixed: pinned || (on ? !canRemove : !canAdd),
+      });
+    }).join('');
+
+    openSheet({
+      title: 'In this chat',
+      // Not "Cancel": every tap has already been taken, exactly as the audience
+      // sheet's dock says. See openSheet's `dock`.
+      dock: 'Done',
+      scrimClass: 'sheet-scrim--aud',
+      head:
+        `<div class="aud-list-wrap is-open">` +
+          `<div class="aud-list">` +
+            (rows || `<p class="aud-empty">Add some friends first.</p>`) +
+          `</div>` +
+        `</div>`,
+      wire: (scrim) => {
+        scrim.querySelectorAll('button.aud-pick').forEach(row =>
+          row.addEventListener('click', async () => {
+            if (row.dataset.busy) return;
+            const u = row.dataset.user;
+            const adding = row.getAttribute('aria-checked') !== 'true';
+            row.dataset.busy = '1';
+            row.setAttribute('aria-checked', String(adding));   // flip first
+            // Hands itself back on every path, rejection included.
+            const res = await (adding ? Store.addChatMembers(c.id, [u])
+                                      : Store.removeChatMember(c.id, u)).catch(() => null);
+            delete row.dataset.busy;
+            if (!res || !res.ok) {
+              row.setAttribute('aria-checked', String(!adding));
+              toast((res && res.error) || 'Couldn’t save that, try again.');
+              return;
+            }
+            hapticTap('LIGHT');
+            // A name you are not friends with can be taken out and not put back
+            // (add_chat_members is friends-only), so the toast says so rather
+            // than a confirm step interrupting every other tap to catch this one.
+            toast(adding
+              ? `${displayNameOf(u)} is in.`
+              : Store.isFriend(u)
+                ? `${displayNameOf(u)} is out.`
+                : `${displayNameOf(u)} is out. Only friends can be added back.`);
+            if (chatLive) chatLive();
+          }));
+      },
+    });
+  }
+
   function openChatMenu(c) {
     const items = [];
     if (c.kind === 'direct' && c.other)
@@ -13419,34 +13517,8 @@
     // A guest's answer, changed from inside the plan's own chat.
     if (act && !hosting && !isPastActivity(act) && canJoin(act))
       items.push({ label: 'Your RSVP', icon: 'going', run: () => openRsvpSheet(act) });
-    if (c.kind !== 'direct') items.push({
-      label: 'People', icon: 'friends',
-      run: () => openSheet({
-        title: 'In this chat',
-        items: c.members.map(u => ({
-          label: displayNameOf(u) + (u === c.host ? ' (host)' : ''), icon: 'profile',
-          // The host can take a guest off the activity; everyone else walks
-          // to the profile.
-          run: () => (hosting && u !== me && !c.archived)
-            ? openSheet({
-                title: displayNameOf(u),
-                items: [
-                  { label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(u)}`) },
-                  { label: 'Remove from activity', icon: 'close', danger: true, run: async () => {
-                    const res = await Store.removeChatMember(c.id, u).catch(() => null);
-                    toast(res && res.ok ? `${displayNameOf(u)} is off the guest list.`
-                      : ((res && res.error) || 'Couldn’t remove them, try again.'));
-                    if (chatLive) chatLive();
-                  } },
-                ],
-              })
-            : go(`#/u/${encodeURIComponent(u)}`),
-        })),
-      }),
-    });
-    if (c.status === 'member' && !c.archived && (c.kind === 'group' || hosting))
-      items.push({ label: hosting ? 'Invite friends' : 'Add friends', icon: 'friends',
-        run: () => go(`#/chats/new?add=${encodeURIComponent(c.id)}`) });
+    if (c.kind !== 'direct')
+      items.push({ label: 'People', icon: 'friends', run: () => openChatPeopleSheet(c) });
     if (c.status === 'member') items.push({
       label: c.muted ? 'Unmute' : 'Mute', icon: c.muted ? 'sound' : 'mute',
       run: async () => {
@@ -13575,31 +13647,31 @@
     read();
   }
 
+  /* STARTING a chat only. ADDING to one that exists used to be this same page in
+     a second mode (`?add=<id>`, reached from the chat's •••), and it is the
+     roster sheet's job now — see openChatPeopleSheet, which answers "who is in
+     this" and "put somebody in" with one list instead of a page hop away from
+     the chat you were reading. What went with the mode: `addTo`, the chat it
+     resolved, the hostingAct guard, the members-already set, the two toolbar
+     titles and the branch in the commit that called addChatMembers. */
   function renderNewChat() {
-    const q = new URLSearchParams((location.hash || '').split('?')[1] || '');
-    const addTo = q.get('add');
-    const target = addTo ? Store.chat(addTo) : null;
-    // A group's members add friends; an activity's host invites them.
-    const hostingAct = !!target && target.kind === 'activity' && target.host === Store.session();
-    if (addTo && (!target || !(target.kind === 'group' || hostingAct))) { location.replace('#/chats'); return; }
-    const already = new Set(target ? target.members : []);
     const byName = (a, b) => a.name.localeCompare(b.name);
     const friends = Store.friends()
-      .filter(u => !already.has(u) && !Store.isBlocked(u))
+      .filter(u => !Store.isBlocked(u))
       .map(Store.user).filter(Boolean).sort(byName);
     // Public accounts you follow can be messaged one to one, as a request, and
     // never put in a group: start_group_chat is friends only.
-    const follows = addTo ? [] : Store.following()
+    const follows = Store.following()
       .filter(u => !Store.isFriend(u) && !Store.isPrivate(u) && !Store.isBlocked(u))
       .map(Store.user).filter(Boolean).sort(byName);
     const picked = new Set();
 
     mountToolbar({
-      leading: toolbarBackEl(addTo ? `#/chat/${encodeURIComponent(addTo)}` : '#/chats', addTo ? 'chat' : 'Chats'),
-      title: hostingAct ? 'Invite friends' : addTo ? 'Add friends' : 'New chat',
+      leading: toolbarBackEl('#/chats', 'Chats'),
+      title: 'New chat',
       actions: `<button type="button" id="nc-go" ` +
         `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
-        `aria-label="${addTo ? 'Add to the group' : 'Start chat'}" disabled>${svgIcon('check')}</button>`,
+        `aria-label="Start chat" disabled>${svgIcon('check')}</button>`,
     });
 
     const personRow = (u, attrs, tail) =>
@@ -13616,12 +13688,11 @@
 
     view.innerHTML =
       `<section class="view view--chats view--newchat">` +
-        `<h1 class="visually-hidden">${addTo ? 'Add friends' : 'New chat'}</h1>` +
-        (addTo ? '' :
-          `<div class="newchat-name" id="nc-name-wrap" hidden>` +
-            `<input id="nc-name" class="newchat-name-input" type="text" maxlength="60" ` +
-              `placeholder="Name the group (optional)" aria-label="Group name">` +
-          `</div>`) +
+        `<h1 class="visually-hidden">New chat</h1>` +
+        `<div class="newchat-name" id="nc-name-wrap" hidden>` +
+          `<input id="nc-name" class="newchat-name-input" type="text" maxlength="60" ` +
+            `placeholder="Name the group (optional)" aria-label="Group name">` +
+        `</div>` +
         (friends.length
           ? `<p class="requests-kicker">Friends</p>` +
             `<div class="chat-pane is-still"><ul class="chat-list">` +
@@ -13629,7 +13700,7 @@
                 `data-pick="${esc(u.username)}" aria-pressed="false"`,
                 `<span class="chat-check" aria-hidden="true">${svgIcon('check')}</span>`)).join('') +
             `</ul></div>`
-          : `<p class="feed-empty">${addTo ? 'Everyone in your circle is already here.' : 'Add some friends and you can chat with them here.'}</p>`) +
+          : `<p class="feed-empty">Add some friends and you can chat with them here.</p>`) +
         (follows.length
           ? `<p class="requests-kicker">People you follow</p>` +
             `<p class="chat-note">Your first message to them arrives as a request.</p>` +
@@ -13674,13 +13745,12 @@
       goBtn.disabled = true;
       try {
         const people = [...picked];
-        const res = addTo ? await Store.addChatMembers(addTo, people)
-          : people.length === 1 ? await Store.startDirectChat(people[0])
+        const res = people.length === 1 ? await Store.startDirectChat(people[0])
           : await Store.startGroupChat(people, nameInput ? nameInput.value : '');
         if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
         hapticTap('LIGHT');
         // Replace, so backing out of the new chat lands on the list, not this picker.
-        location.replace(`#/chat/${encodeURIComponent(addTo || res.id)}`);
+        location.replace(`#/chat/${encodeURIComponent(res.id)}`);
       } catch {
         toast('Couldn’t reach Tria just now. Try again in a moment.');
       } finally {
@@ -14144,6 +14214,37 @@
       `</div>`;
   }
 
+  /* ── One row of a people checklist ────────────────────────────────────────
+     Avatar, name, @handle, tick. The AUDIENCE sheet's row and a CHAT ROSTER's
+     row are one drawing on purpose, and that is the point rather than a saving:
+     picking who can see a post and picking who is in its chat are the same act
+     on the same people, so a reader who has learned one has learned the other.
+     On a hand-picked plan they are not even two lists — the invite list IS the
+     chat (add-activity-chats.sql), so two drawings would have been two faces on
+     one fact.
+
+     `note` rides the handle line rather than taking a line or a pill of its own
+     ("@ann · host"), which is why this needed no new CSS to say two more things.
+     `fixed` is a row that shows its state and cannot be tapped — you in your own
+     chat (leaving is not being removed) and a plan's host — so it is emitted as
+     a <div>: a disabled <button> still reads as a control that isn't working,
+     and openSheet's focus trap would have to be told to skip it. */
+  function pickRowHtml(u, { on = false, i = 0, note = '', fixed = false } = {}) {
+    const inner =
+      avatarEl(u, { cls: 'aud-avatar' }) +
+      `<span class="friend-text">` +
+        `<span class="friend-name">${esc(u.name || u.username)}</span>` +
+        `<span class="friend-user">@${esc(u.username)}${note ? ' · ' + esc(note) : ''}</span>` +
+      `</span>` +
+      `<span class="aud-check" aria-hidden="true"></span>`;
+    const attrs = `class="aud-pick${fixed ? ' aud-pick--fixed' : ''}" role="checkbox" ` +
+      `aria-checked="${on}"${fixed ? ' aria-disabled="true"' : ''} ` +
+      `data-user="${esc(u.username)}" style="animation-delay:${staggerDelay(i)}"`;
+    return fixed
+      ? `<div ${attrs}>${inner}</div>`
+      : `<button type="button" ${attrs}>${inner}</button>`;
+  }
+
   // ── Audience lock ─────────────────────────────────────────────────────────
   // One flat control, shared by every composer AND by the post's own editor: a
   // lock button showing who can see this post (Anyone / My circle / N people).
@@ -14228,16 +14329,8 @@
       onChange?.();
     };
 
-    const pickRows = friends.map((f, i) =>
-      `<button type="button" class="aud-pick" role="checkbox" data-user="${esc(f.username)}" ` +
-        `aria-checked="${chosen.has(f.username)}" style="animation-delay:${staggerDelay(i)}">` +
-        avatarEl(f, { cls: 'aud-avatar' }) +
-        `<span class="friend-text">` +
-          `<span class="friend-name">${esc(f.name)}</span>` +
-          `<span class="friend-user">@${esc(f.username)}</span>` +
-        `</span>` +
-        `<span class="aud-check" aria-hidden="true"></span>` +
-      `</button>`).join('');
+    const pickRows = friends
+      .map((f, i) => pickRowHtml(f, { on: chosen.has(f.username), i })).join('');
 
     const modeBtn = (m, t, d) =>
       `<button type="button" class="aud-mode" data-mode="${m}" aria-pressed="${mode === m}">` +

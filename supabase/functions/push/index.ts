@@ -580,10 +580,18 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
   // can read it: canJoin is friends-only, so anybody else would be asked a
   // question the app will not let them answer, and a public activity's audience
   // is otherwise every account on Tria.
+  //
+  // THE ALLOWLIST IS A FLOOR, NOT A MODE (chat-roster.sql), so it is added to
+  // every audience rather than standing in for one: a guest can bring a friend
+  // into a plan's chat, and that row is both what lets them read it and what
+  // says they are coming. Keep this in step with Store.audienceOf — if the two
+  // ever disagree, the people a reminder wakes up and the people the app's guest
+  // list names are different sets and one of them is lying to the host.
+  const listedHere = ((await supabase.from('post_audience').select('user_id').eq('post_id', act.id)).data || [])
+    .map((r: Row) => r.user_id as string);
   const invited = act.audience === 'list'
-    ? ((await supabase.from('post_audience').select('user_id').eq('post_id', act.id)).data || [])
-        .map((r: Row) => r.user_id as string)
-    : await mutualFriends(act.author as string);
+    ? listedHere
+    : [...new Set([...(await mutualFriends(act.author as string)), ...listedHere])];
 
   const [blocked, heads, already] = await Promise.all([
     blockedWith(act.author as string),
@@ -719,7 +727,11 @@ async function calendarFeed(token: string): Promise<Response> {
   // STILL YOURS TO SEE. This runs with the service key, so RLS is not asking
   // the question: an answer row outlives being taken off a hand-picked list or
   // unfriending the host, and the feed must not keep handing that plan out. The
-  // same three rules can_view_post applies: public, on the list, or a friend.
+  // same rules can_view_post applies: public, on the list, or a friend — with
+  // ON THE LIST checked for every audience rather than only 'list', because the
+  // allowlist is a floor and not a mode (chat-roster.sql). A guest brought into
+  // a circle plan's chat has a row and no friendship with the host, and this is
+  // the half of the calendar feed that would otherwise drop them.
   const listed = new Set(joinedIds.length
     ? ((await supabase.from('post_audience').select('post_id').eq('user_id', uid).in('post_id', joinedIds)).data || [])
         .map((r: Row) => r.post_id as string)
@@ -727,7 +739,8 @@ async function calendarFeed(token: string): Promise<Response> {
   const friendOf = new Map<string, boolean>();
   const canSee = async (a: Row) => {
     if (a.author === uid || a.audience === 'public') return true;
-    if (a.audience === 'list') return listed.has(a.id);
+    if (listed.has(a.id)) return true;
+    if (a.audience === 'list') return false;
     if (!friendOf.has(a.author)) friendOf.set(a.author, await areFriends(uid, a.author));
     return friendOf.get(a.author)!;
   };

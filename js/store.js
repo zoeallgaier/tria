@@ -862,14 +862,21 @@ const Store = (() => {
   // many" off the allowlist alone; this answers "which people", and for the two
   // audiences that name no rows at all it has to derive the set.
   //
-  // The rule is COPIED from the reminder sweep (supabase/activity-reminders.sql),
-  // deliberately and not by coincidence: the people a reminder wakes up and the
-  // people this list names have to be the same set, or one of the two is lying to
-  // the host. So 'list' is the hand-picked allowlist, and 'circle' AND 'public'
-  // are both the author's mutual friends. Public is the case worth understanding:
-  // its audience is technically every account on Tria, but canJoin is friends-only,
-  // so anyone outside the circle would be reading about a plan the app will not let
-  // them answer. Same friends-only line, one more place.
+  // The rule is COPIED from the reminder sweep (supabase/activity-reminders.sql,
+  // resolved in supabase/functions/push/index.ts), deliberately and not by
+  // coincidence: the people a reminder wakes up and the people this list names
+  // have to be the same set, or one of the two is lying to the host. So 'list' is
+  // the hand-picked allowlist, and 'circle' AND 'public' are the author's mutual
+  // friends PLUS the allowlist. Public is the case worth understanding: its
+  // audience is technically every account on Tria, but canJoin is friends-only,
+  // so anyone outside the circle would be reading about a plan the app will not
+  // let them answer. Same friends-only line, one more place.
+  //
+  // THE ALLOWLIST IS ADDED TO EVERY AUDIENCE, not read for one of them, since
+  // chat-roster.sql made it a floor: a guest can bring a friend into a plan's
+  // chat and the row that grants them the reading is the same row that says they
+  // are invited. On a hand-picked plan the union is the allowlist anyway, which
+  // is why that arm stays written out rather than folded in.
   //
   // AUTHOR-ONLY, and that is a data fact rather than a courtesy. RLS hands you the
   // post_audience rows for posts you wrote plus your own membership rows and
@@ -879,9 +886,10 @@ const Store = (() => {
   function audienceOf(postId) {
     const post = byId(state.posts).get(postId);
     if (!post || post.author !== state.session) return [];
-    if ((post.audience || 'circle') !== 'list') return friendsOf(post.author);
     const names = nameMap();
-    return rowsFor(state.audience, postId).map(r => names.get(r.userId)).filter(Boolean);
+    const listed = rowsFor(state.audience, postId).map(r => names.get(r.userId)).filter(Boolean);
+    if ((post.audience || 'circle') === 'list') return listed;
+    return [...new Set(friendsOf(post.author).concat(listed))];
   }
 
   // ── Auth (async writes) ────────────────────────────────────────────────────
@@ -2051,11 +2059,18 @@ const Store = (() => {
     const ids = usernames.map(idOf).filter(Boolean);
     const { error } = await sb.rpc('add_chat_members', { p_chat: chatId, p_members: ids });
     if (error) return { ok: false, error: chatError(error, 'Couldn’t add them, try again.') };
-    // A hand-picked activity's invite list grew with its chat (see the RPC).
+    // A PLAN'S INVITE LIST GREW WITH ITS CHAT, whatever its audience (see the
+    // RPC). It used to be written here only for a hand-picked plan, because a
+    // hand-picked plan was the only one whose allowlist meant anything and the
+    // host was the only one who could add. chat-roster.sql changed both: any
+    // guest may bring a friend, and the row is what lets that friend open the
+    // plan for the details, since the allowlist is a floor under every audience
+    // now rather than the key to one of them.
     const c = state.chats.find(x => x.id === chatId);
     const act = c && c.kind === 'activity' && state.posts.find(p => p.id === c.postId);
-    if (act && act.audience === 'list') write('audience', a => ids.reduce((acc, userId) =>
-      upsert(acc, { postId: act.id, userId }, x => x.postId === act.id && x.userId === userId), a));
+    if (act) write('audience', a => ids.filter(userId => userId !== idOf(act.author))
+      .reduce((acc, userId) =>
+        upsert(acc, { postId: act.id, userId }, x => x.postId === act.id && x.userId === userId), a));
     await reloadChats();
     return { ok: true };
   }
