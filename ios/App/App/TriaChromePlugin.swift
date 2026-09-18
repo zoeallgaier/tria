@@ -90,6 +90,69 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// carries one. Same availability dance again.
     private var pageControls: TriaPageControlsControl?
 
+    /// The last keyboard reach handed to the web, so a notification that changes
+    /// nothing costs a compare. -1 until the first one, which is what makes the
+    /// very first `0` a real message rather than a no-op.
+    private var toldKeyboard: CGFloat = -1
+
+    /* HOW FAR THE KEYBOARD REACHES INTO THE PAGE — the one piece of geometry the
+       web view genuinely cannot see for itself in this shell, and an
+       accessibility fix rather than a chrome one.
+
+       A keyboard covers the bottom third of the screen and the page underneath
+       does not shrink: the layout viewport is the same height either way, so the
+       last screenful of every route is not scrollable to while one is up. Off
+       the app, `visualViewport` at least SAYS so and app.js does the arithmetic
+       (see trackKeyboard). Here it says nothing at all — the fields that raise
+       this keyboard are native (`TriaPostBar`, `TriaSearchField`), the keyboard
+       is positioned against the window rather than against the web view, and
+       WebKit is never told any of it happened. So a reader tapped the comment
+       bar and the thread they were answering went behind the keys with no way to
+       bring it back.
+
+       ONE OBSERVER, ON THE PLUGIN, not on the bars. Every keyboard in the app is
+       the same fact about the page, whoever raised it — our comment bar, our
+       find bar, Discover's search capsule, or a web field in the composer — and
+       the page's answer to all four is the same reserve. Putting it on the bar
+       would have meant two copies of it and would have missed the other two.
+
+       WHAT IS REPORTED is the reach BEYOND the safe area, because the foot of
+       every page already reserves that: the home indicator's strip is under the
+       keys and has nothing left to be kept clear of. An undocked or floating
+       keyboard stands on nothing and reports zero, which is correct — it isn't
+       covering the page, and the reader can move it. */
+    override public func load() {
+        let centre = NotificationCenter.default
+        centre.addObserver(self, selector: #selector(keyboardMoved),
+                           name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        centre.addObserver(self, selector: #selector(keyboardMoved),
+                           name: UIResponder.keyboardWillShowNotification, object: nil)
+        centre.addObserver(self, selector: #selector(keyboardGone),
+                           name: UIResponder.keyboardWillHideNotification, object: nil)
+    }
+
+    @objc private func keyboardMoved(_ note: Notification) {
+        guard let web = bridge?.webView,
+              let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
+                  .cgRectValue
+        else { return }
+        // The notification carries a SCREEN rect. Converting it into the web
+        // view's own coordinates is what keeps this honest on an iPad, in a
+        // split view, and under a floating keyboard — anywhere the keys do not
+        // simply span the bottom of the window.
+        let frame = web.convert(end, from: web.window)
+        let over = max(0, web.bounds.maxY - frame.minY)
+        send(keyboard: max(0, over - web.safeAreaInsets.bottom))
+    }
+
+    @objc private func keyboardGone() { send(keyboard: 0) }
+
+    private func send(keyboard inset: CGFloat) {
+        guard abs(inset - toldKeyboard) > 0.5 else { return }
+        toldKeyboard = inset
+        notifyListeners("keyboardInset", data: ["inset": inset])
+    }
+
     /// Mounts the bars (first call) or restates them (later ones — the FAB's
     /// band changes when the reader picks a colour). Resolves with the geometry
     /// the web has to reserve; rejects, loudly and harmlessly, on anything that

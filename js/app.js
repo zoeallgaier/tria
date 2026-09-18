@@ -2080,7 +2080,15 @@
             { eventName: 'postBarSend' }, () => { if (postBarHooks.send) postBarHooks.send(); });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'postBarFocus' }, (ev) => {
-              if (postBarHooks.focus) postBarHooks.focus(!!(ev && ev.focused));
+              const on = !!(ev && ev.focused);
+              /* A caret in a field of OURS, which is the licence the page needs
+                 to follow the keyboard rather than only make room for it (see
+                 setKbInset). It is set HERE rather than in the hook, because
+                 both bars raise this event and only one of them registers a
+                 focus hook — a circle's find bar sits on the keys exactly the
+                 way a comment bar does. */
+              kbFollow = on;
+              if (postBarHooks.focus) postBarHooks.focus(on);
             });
           // The face tapped while typing: over there the field is already empty
           // and the keyboard already down, and this is the web's copy catching up.
@@ -2102,6 +2110,20 @@
             { eventName: 'searchClose' }, () => { if (searchHooks.close) searchHooks.close(); });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'searchBlur' }, () => { if (searchHooks.blur) searchHooks.blur(); });
+          /* HOW FAR THE KEYBOARD REACHES INTO THE PAGE, and in this shell it is
+             the only signal there is. A keyboard raised for a NATIVE field is
+             positioned against the window and the web view is never told about
+             it — `visualViewport` reports a viewport of exactly the same height
+             with the keys up as with them down — so the arithmetic trackKeyboard
+             does off the web everywhere else measures nothing here, and the foot
+             of a thread sat under the keys with no way to scroll to it. Native
+             measures it and says so; what the page does with it is app.js's,
+             and it is the same setKbInset the web shells call. */
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'keyboardInset' }, (ev) => {
+              const inset = Number(ev && ev.inset);
+              setKbInset(Number.isFinite(inset) ? inset : 0);
+            });
           // Where the top of the pill is, so the mention list can open upward
           // out of a bar the web isn't drawing any more.
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
@@ -8601,6 +8623,78 @@
   // The smallest iPhone keyboard is over 200pt.
   const KB_FLOOR = 90;
 
+  /* ── WHAT THE KEYBOARD STANDS ON ──────────────────────────────────────────
+     The bar rides the keys in every shell — that was the whole of the fix above,
+     and it is only half the interaction. The PAGE does not move. The layout
+     viewport is the same height with a keyboard up as without one, so the last
+     ~300pt of any page is not scrollable to while one is standing on it, and on
+     the two routes where the thing you are answering is the thing at the bottom
+     — a post's comment thread, a chat — that is the reader tapping the bar and
+     watching the conversation they are replying to go behind the keys.
+
+     TWO PARTS, and they answer two different questions.
+
+     · THE RESERVE (`--kb-inset`, read by #view in app.css) is the accessibility
+       half: it makes covered content REACHABLE. Nothing in the app may be
+       permanently un-scrollable-to, and while a keyboard is up the foot of every
+       page is exactly that. It applies on every route and in every shell,
+       whatever raised the keyboard, because the guarantee is not about our bar.
+
+     · THE SHIFT is the HIG half: it makes covered content VISIBLE, by scrolling
+       the page up by the same amount the keyboard just took, so every pixel that
+       was readable a moment ago still is. It is deliberately NARROWER than the
+       reserve — only while one of Tria's own bottom bars holds the caret
+       (`kbFollow`). A web field raises its own keyboard AND gets WebKit's caret
+       reveal for free; a second scroll on top of that is two answers to one
+       question, and the caret ends up off the top.
+
+     AND THE SHIFT IS CLAMPED TO WHAT IS ACTUALLY COVERED, which is the
+     difference between this and the bug docs/native-chrome.md records as "the
+     keyboard pushes ALL the page content up". That one scrolled into the
+     overhang under a `min-height: 100dvh` page — emptiness, with the post the
+     reader was on driven off the top. `room` is measured off the END OF THE REAL
+     CONTENT against the top of the reserve, so a page whose content already
+     stops above the keyboard does not move at all, and one that is scrolled to
+     its foot moves exactly far enough to put its last line back where it was:
+     the same clearance over the bar it had at rest. */
+  let kbInset = 0;
+  /* Set while a field of OURS holds the caret — the comment bar, a chat's
+     message bar, a circle's find bar, native or web. Discover's search capsule
+     never sets it: its results are a grid with no foot to keep, so it takes the
+     reserve and stays where it is. */
+  let kbFollow = false;
+  /* The scroll position park() is holding, while it holds one. A deliberate
+     shift has to move the goalposts rather than be snapped back by them — park
+     exists to refuse the scroll WEBKIT invents, not the one we ask for. */
+  let kbPark = null;
+
+  function setKbInset(px) {
+    const next = Math.max(0, Math.round(Number(px) || 0));
+    if (next === kbInset) return;
+    const root = document.scrollingElement || document.documentElement;
+    const host = document.getElementById('view');
+    const grew = next > kbInset;
+    const was = root.scrollHeight;
+    /* The end of the REAL CONTENT, in viewport coordinates. Off the page's own
+       section rather than off #view, because #view is where the reserve is
+       applied and measuring the box we are about to inflate would count the
+       reserve as content. */
+    const end = (host && host.lastElementChild) || host;
+    const foot = end ? end.getBoundingClientRect().bottom : 0;
+    kbInset = next;
+    document.documentElement.style.setProperty('--kb-inset', next + 'px');
+    // Going down: the page shrinks back and the browser clamps a reader who was
+    // at the foot to the new one for us, which is exactly right.
+    if (!grew || !kbFollow) return;
+    const main = document.getElementById('main');
+    const rest = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+    const room = Math.max(0, foot - (window.innerHeight - rest - next));
+    const shift = Math.min(root.scrollHeight - was, room);
+    if (shift < 1) return;
+    window.scrollBy(0, shift);
+    if (kbPark !== null) kbPark += shift;
+  }
+
   function trackKeyboard(bar, input) {
     const vv = window.visualViewport;
     let lift = 0;
@@ -8617,6 +8711,13 @@
       if (Math.abs(want - lift) < 1) return;   // a compare, not a write, per scroll frame
       lift = want;
       bar.style.setProperty('--postbar-lift', lift + 'px');
+      /* And the page's own reserve, off the same measurement. `covered` is what
+         is left over the PAGE after the shell has done whatever it does — zero
+         in a shell that resizes the web view, where the viewport came down and
+         the foot of the page is reachable already, and the keyboard's full reach
+         in one that doesn't. Either way it is the number the page has to keep
+         clear, and it is guarded by the same compare. See setKbInset. */
+      setKbInset(lift);
     };
 
     /* AND THE DOCUMENT MUST NOT MOVE, which is a second bug wearing the first
@@ -8664,20 +8765,29 @@
        performs the reveal after focus resolves and again as the keyboard
        animates, and it restores the reader's own position rather than imposing
        one, so a deep thread stays where they left it. */
+    /* The position it holds is `kbPark` rather than a local, and that is the one
+       thing this had to learn: the reserve landing under the bar scrolls the
+       page ON PURPOSE (see setKbInset), and a net that could not tell our own
+       move from WebKit's would spend 24 frames undoing the fix. So the deliberate
+       shift moves the mark, and everything else still snaps back to it. */
     let hold = 0;
     const park = () => {
-      const y = window.scrollY;
+      kbPark = window.scrollY;
       cancelAnimationFrame(hold);
       let frames = 0;
       const keep = () => {
-        if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+        if (kbPark !== null && Math.abs(window.scrollY - kbPark) > 1) window.scrollTo(0, kbPark);
         if (++frames < 24) hold = requestAnimationFrame(keep);
+        else kbPark = null;
       };
       hold = requestAnimationFrame(keep);
     };
 
     const on = () => {
       baseH = Math.max(baseH, window.innerHeight);
+      // This bar holds the caret, so the page follows the keyboard rather than
+      // only making room for it. Set before park(), which the shift re-bases.
+      kbFollow = true;
       park();
       vv?.addEventListener('resize', measure);
       vv?.addEventListener('scroll', measure);
@@ -8688,12 +8798,17 @@
     };
     const off = () => {
       cancelAnimationFrame(hold);
+      kbPark = null;
       vv?.removeEventListener('resize', measure);
       vv?.removeEventListener('scroll', measure);
       window.removeEventListener('resize', measure);
       lift = 0;
       bar.style.removeProperty('--postbar-lift');
       document.body.classList.remove('postbar-kb');
+      // Cleared BEFORE the reserve goes, so a teardown can never be read as a
+      // keyboard arriving and scroll the page on the way out.
+      kbFollow = false;
+      setKbInset(0);
     };
     input.addEventListener('focus', on);
     input.addEventListener('blur', off);
@@ -13641,7 +13756,14 @@
       mountPostBar(null, {
         submit: (text, photo) => Store.sendMessage(c.id, text, photo, chatReply && chatReply.id),
         onSent: () => { setChatReply(null); repaint(true); },
-        onFocus: () => toBottom(true),
+        /* NOT SMOOTH, and that is the keyboard's doing. The reserve the keys
+           demand lands a beat after this (setKbInset) and scrolls the page by
+           what it just took; a tween still in flight when that arrives is two
+           scrolls arguing, and the one that loses is the one that was going to
+           the newest message. Instant also costs nothing to look at: the page
+           opens at the foot, so this is a no-op unless the reader walked back
+           through the history first. */
+        onFocus: () => toBottom(false),
       });
     }
 

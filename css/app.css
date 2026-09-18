@@ -1602,6 +1602,35 @@ main {
    still the positioning context in-page absolutes expect. */
 #view { position: relative; overflow-x: clip; }
 
+/* ── The software keyboard's own reserve ───────────────────────────────────
+   WHAT THE KEYBOARD STANDS ON HAS TO STAY REACHABLE. A keyboard covers the
+   bottom third of the screen and the page underneath does not shrink — the
+   layout viewport is unchanged in every shell Tria ships to — so the last
+   screenful of any page is simply not scrollable to while one is up. On a post
+   page and in a chat that is the bug you feel, because the thing you are
+   answering is the thing at the bottom: you tap the bar to reply and the
+   conversation you are replying to goes behind the keys.
+
+   `--kb-inset` is how far the keyboard reaches into the page, set by app.js
+   (setKbInset) off whichever signal the shell can actually see — the plugin's
+   own measurement in the App Store build, where a keyboard raised for a NATIVE
+   field is invisible to the web view, and `visualViewport` everywhere else.
+
+   ON #view, NOT ON `main`. Two reasons, and both are load-bearing. `main`'s foot
+   is written five times over — the desktop rule, the phone rule, the post bar's
+   reserve at both widths, and the native gate's restatement of all of them —
+   and a reserve that has to be added to five `calc()`s is a reserve that will
+   one day be missing from one of them. And `main` is `min-height: 100dvh` with
+   border-box, so padding added THERE is swallowed by the min-height on a short
+   page: the reserve would only appear where the page was already tall enough
+   not to need it. A child's padding grows `main`'s content instead, which is
+   the honest thing — a short page gains no phantom scroll (the box still fits
+   inside 100dvh) and a long one gains exactly the keyboard.
+
+   Zero when there is no keyboard, and the property is simply absent until one
+   is up, so the default page costs nothing. */
+#view { padding-bottom: var(--kb-inset, 0px); }
+
 /* A freshly mounted page carries `.enter` for one beat (SETTLE_MS in app.js) and
    it does exactly one job: photos snap in rather than fading.
 

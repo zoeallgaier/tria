@@ -83,6 +83,16 @@ to gain, and that looked at the wrong half of the bar — what makes the class
 necessary is that the bar sits ON the keys. The mention picker stays web (a list
 of friends is app vocabulary) and is the only thing that does.
 
+**And the PAGE has to answer the keyboard too** (2026-09-18). The bar rode the
+keys and the page under it did not, so the last screenful of a thread sat behind
+them with no way to scroll to it. A keyboard raised for a NATIVE field is
+invisible to the web view — `visualViewport` reports the same height either way
+— so the plugin measures it (one observer, `keyboardInset`, the reach past the
+safe area) and app.js does two different-sized things with it: a RESERVE on
+`#view` on every route, which makes covered content reachable, and a SHIFT
+clamped to what is actually covered, only while one of our own bars holds the
+caret. See "What the keyboard stands on" in [docs/native-chrome.md](docs/native-chrome.md).
+
 The top BAR's MATERIAL is native too, and it is real `UIGlassEffect`, not a
 hand-painted copy of the CSS: the copy read as fog, and the system's own scroll
 edge effect provably cannot be reached from a Capacitor webview (it draws in the

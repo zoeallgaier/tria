@@ -1374,6 +1374,90 @@ everything downstream of `UIButton → onSend` is the submit handler that alread
 shipped. The two gestures are `UIScrollView.keyboardDismissMode` and a
 `UITapGestureRecognizer`, and they want a device.
 
+### What the keyboard stands on (2026-09-18)
+
+**The bar rode the keys and the page did not**, and that was only ever half the
+interaction. A keyboard covers the bottom third of the screen; the layout
+viewport is the same height either way in every shell Tria ships to; so the last
+screenful of every route is simply not scrollable to while one is up. On the two
+routes where the thing you are answering is the thing at the bottom — a post's
+comment thread, a chat — that is the whole bug, reported as *"comments and chats
+on the bottom half get covered when I try to respond."* You tapped the bar and
+the conversation you were replying to went behind the keys, with no way to bring
+it back.
+
+**In this shell the web view is never told.** Off the app, `visualViewport` at
+least says a keyboard is there and app.js does the arithmetic (`trackKeyboard`).
+Here the fields that raise it are NATIVE, the keyboard is positioned against the
+window rather than against the web view, and WebKit never hears about it:
+`visualViewport` reports a viewport of exactly the same height with the keys up
+as with them down. So the measurement has to come from over here.
+
+**One observer, on the plugin, not on the bars.** `TriaChromePlugin.load()`
+watches `keyboardWillChangeFrame` / `WillShow` / `WillHide`, converts the
+notification's SCREEN rect into the web view's own coordinates (which is what
+keeps it honest on an iPad, in a split view and under a floating keyboard), and
+emits `keyboardInset` — guarded on a real change, so a notification that says
+nothing costs a compare. Every keyboard in the app is the same fact about the
+page whoever raised it: our comment bar, our find bar, Discover's search capsule,
+or a web field in the composer. Putting it on `TriaPostBar` would have meant two
+copies of it and would still have missed the other two.
+
+**What is reported is the reach BEYOND the safe area**, because the foot of every
+page already reserves that: the home indicator's strip is under the keys and has
+nothing left to be kept clear of. Measured on an iPhone 17 Pro: web view 874pt
+tall, `safeAreaInsets.bottom` 34 — so a 336pt keyboard reports 302.
+
+**The page's answer is two things, and they are deliberately different sizes.**
+Both live in `setKbInset` in app.js, and the web shells feed the same function
+from `trackKeyboard`.
+
+- **The reserve** (`--kb-inset`, read by `#view`) makes covered content
+  REACHABLE. That is the accessibility half and it applies on every route, in
+  every shell, whatever raised the keyboard — the guarantee is not about our bar.
+  It sits on `#view` rather than on `main` because `main`'s foot is written five
+  times over (desktop, phone, the post bar's reserve at both widths, and this
+  file's own restatement of all of them) and because `main` is `min-height:
+  100dvh` with border-box, so padding added THERE is swallowed on exactly the
+  short pages that would be embarrassed by phantom scroll.
+- **The shift** makes it VISIBLE, by scrolling the page up by what the keyboard
+  just took. It is narrower on purpose: only while one of Tria's own bottom bars
+  holds the caret (`kbFollow`, set by `postBarFocus` so both bars get it). A web
+  field raises its own keyboard AND gets WebKit's caret reveal for free, and a
+  second scroll on top of that puts the caret off the top.
+
+**And the shift is clamped to what is actually covered**, which is what keeps it
+from being the bug [Three traps](#three-traps-all-of-them-measured) and
+`trackKeyboard`'s own `park()` exist to refuse — *"the keyboard pushes ALL the
+page content up"*, a scroll into the overhang under a `min-height: 100dvh` page
+with the post the reader was on driven off the top. The room is measured off the
+END OF THE REAL CONTENT against the top of the reserve, so: a page whose content
+already stops above the keys does not move at all; a thread scrolled to its foot
+moves exactly far enough to put its last line back where it was, with the same
+clearance over the bar it had at rest; and a long page read from the top moves by
+the keyboard and no further, so every pixel that was readable still is. Measured
+in a real chat on the simulator: at the foot, `y=173 max=173 foot=736` before,
+`y=475 max=475 foot=434` after — the page grew by exactly 302 and the reader
+stayed at the foot.
+
+**`park()` had to learn the difference.** It spends 24 frames snapping the
+document back to where focus found it, which is right for the scroll WebKit
+INVENTS and wrong for the one we ask for. So it holds `kbPark` rather than a
+local, and the deliberate shift moves the mark.
+
+**A chat's `onFocus` stopped being smooth** for the same reason: the reserve
+lands a beat after it, and a tween still in flight when that arrives is two
+scrolls arguing, with the one going to the newest message losing. It costs
+nothing to look at — the page opens at the foot, so it is a no-op unless the
+reader walked back through the history first.
+
+**What is NOT covered, on purpose:** the signed-out gate. `keyboardInset` is
+registered inside `start()`'s success path, so the listener exists only where
+native chrome does — which is what keeps the two sources from flapping against
+each other on an iOS 25 device, where the CSS bar and `visualViewport` are
+already the answer. Under `body.gate` nothing native has been asked for yet, so
+the gate's two fields get WebKit's caret reveal and nothing else.
+
 ### The photo button, and the picture it leaves in a tray
 
 **A comment can carry a photo or a GIF** (2026-09-13), and the bar gained one
