@@ -1975,6 +1975,7 @@ main {
    same axis — a clean, balanced column rather than a lopsided broadsheet. */
 .masthead,
 .feed,
+.week-cards,
 .friends-list,
 .composer,
 .account,
@@ -7364,8 +7365,14 @@ button.poll-option:disabled { cursor: default; }
 .rsvp-opt.is-on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
 .rsvp-opt:disabled { opacity: 0.6; }
 
-/* This week, stacked on top of My Circle. */
-.week-cards { display: flex; flex-direction: column; gap: 0.6rem; margin: 0 0 1.4rem; }
+/* This week, stacked on top of My Circle. It rides the shared --feed-width
+   column with the feed under it (see the content-block cap above): left to fill
+   .view it ran out to 900px on a desktop, a third wider than the posts it sits
+   on, while a phone never showed the difference. The `auto` in the margin below
+   is doing that block's centring too: a shorthand this late in the file beats
+   the shared `margin-inline`, and without it the column capped but hugged the
+   left edge, off the feed's axis. */
+.week-cards { display: flex; flex-direction: column; gap: 0.6rem; margin: 0 auto 1.4rem; }
 .week-cards[hidden] { display: none; }
 .week-card {
   display: flex;
