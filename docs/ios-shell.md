@@ -329,11 +329,23 @@ to a rendered feed.
 
 **The app icon is an Icon Composer file, and the build setting has to name it.**
 `ASSETCATALOG_COMPILER_APPICON_NAME = TriaAppIcon`, not `AppIcon` — the
-`AppIcon.appiconset` still holds Xcode's default blue placeholder, and while that
+`AppIcon.appiconset` held Xcode's default blue placeholder, and while that
 setting pointed at it, the icon that would have shipped was the template. Apple
 rejects the stock Xcode icon, and it's the one thing nobody proofreads because
 everyone assumes the designer's icon is the icon. Check `CFBundlePrimaryIcon` in
-the built Info.plist, not the Xcode sidebar.
+the built Info.plist, not the Xcode sidebar. The appiconset now carries the
+wordmark tile too (2026-09-17), so the fallback nobody looks at is at least
+Tria's; the setting is still what makes the real icon ship.
+
+**The LAUNCH SCREEN is the boot splash, held still.** `LaunchScreen.storyboard`
+aspect-fills the `Splash` imageset, and that was Capacitor's blue mark on white
+until 2026-09-17 — a foreign logo on a flash nobody reviews, because it is gone
+by the time the screenshot is taken. It is now the same wordmark on the same
+paper, sized so the mark lands at the HTML splash's own `28vw` once iOS crops
+the square to the screen (13% of 2732; see `gen-icons` in
+[design.md](design.md)), and it ships a **dark** variant so a dark-mode launch
+doesn't open on a white page. The handoff is then invisible: native paints the
+band at rest, the web view's own splash starts its turn from the same stop.
 
 A **simulator run is a separate gate from the headless boot pass** and catches
 what it can't — the install-tutorial bug was a clean Chromium boot and a clean

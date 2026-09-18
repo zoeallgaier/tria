@@ -40,24 +40,27 @@
     @media (prefers-color-scheme: dark) { html { background: #0e1012; } }
   </style>
 
-  <!-- Installable web app (bookmark / add-to-home-screen). Source is
-       icons/SVG/triaiconfinal.svg, a pastel disc with the t knocked clean out of
-       it, centred at 80% of the tile on an opaque white plate.
+  <!-- Installable web app (bookmark / add-to-home-screen), and the tab's
+       favicon. Every tile is the SPLASH, baked: icons/wordmark.svg as a mask
+       with the brand band at rest painted through it, centred at 80% of the
+       tile on Tria's own paper. So the tab, the home screen, the app icon and
+       the curtain the app opens on are one picture at five sizes, and the logo
+       cannot drift between them — re-render them all from the wordmark
+       together, never one by one.
        Every icon here is opaque, and must stay that way: shipping them with a
        transparent background (tried in v=291) does NOT let iOS supply a
        light/dark plate — iOS composites apple-touch-icon transparency onto
        BLACK, so light mode got a black tile. The iOS 18 light/dark/tinted icon
        system is asset-catalog only and there is no link or manifest hook that
        reaches a web app icon, so a scheme-aware home screen icon isn't
-       available to us at all. Baked white is the whole fix. It also keeps the
-       knockout legible: the t is a hole, so it only reads as a letter when the
-       colour behind it is one we control.
-       The maskable additionally sits at 78% to clear Android's 80% safe
-       circle. -->
+       available to us at all. Baked paper is the whole fix.
+       The favicon sits a shade wider (84%) because 32px has no room to waste,
+       and the maskable narrower (66%) because a wordmark's DIAGONAL is what has
+       to clear Android's 80% safe circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=617" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=617" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=617" />
+  <link rel="icon" href="icons/icon-32.png?v=618" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=618" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=618" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -86,8 +89,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=617" />
-  <link rel="stylesheet" href="css/app.css?v=617" />
+  <link rel="stylesheet" href="css/tokens.css?v=618" />
+  <link rel="stylesheet" href="css/app.css?v=618" />
 </head>
 
 <body>
@@ -174,10 +177,10 @@
        Local also PINS the version: the old src said `@2`, so any minor release
        shipped itself into production without a deploy. Update deliberately —
        drop a new file in, change this line, bump. -->
-  <script src="js/vendor/supabase-js-2.110.9.min.js?v=617"></script>
-  <script src="js/config.js?v=617"></script>
-  <script src="js/store.js?v=617"></script>
-  <script src="js/app.js?v=617"></script>
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=618"></script>
+  <script src="js/config.js?v=618"></script>
+  <script src="js/store.js?v=618"></script>
+  <script src="js/app.js?v=618"></script>
 </body>
 
 </html>

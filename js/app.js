@@ -533,6 +533,12 @@
       // field's foot — so the + routes straight to it. dialEl/wireDial are kept
       // dormant in case we ever want a lighter fan here.
       nav.innerHTML =
+        // The rail's head, DESKTOP ONLY (.nav-brand is display:none on phones,
+        // where the nav is a floating pill with no head to put it on). It is
+        // decorative on purpose: the wordmark was the signed-in link to About
+        // until 1.3 and About is a row in the ••• sheet now, so this says the
+        // app's name and takes no taps. See .nav-brand in app.css.
+        `<div class="wordmark nav-brand" role="img" aria-label="Tria"></div>` +
         `<div class="nav-pill">` +
           NAV.filter(n => !n.publish).map(link).join('') +
         `</div>` +

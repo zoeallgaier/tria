@@ -1,19 +1,34 @@
 {
   "color-space-for-untagged-svg-colors" : "display-p3",
   "fill" : {
-    "solid" : "display-p3:0.92920,0.93164,0.94141,1.00000"
+    "solid" : "gray:1.00000,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
+          "blend-mode" : "normal",
           "image-name" : "Image 2.svg",
           "name" : "Image 2",
+          "opacity" : 1,
           "position" : {
-            "scale" : 2.3,
+            "scale" : 2.5,
             "translation-in-points" : [
-              13.75,
-              -29.8984375
+              11,
+              -35
+            ]
+          }
+        },
+        {
+          "glass" : false,
+          "image-name" : "Image 3.svg",
+          "name" : "Image 3",
+          "opacity" : 0.35,
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              -333,
+              302
             ]
           }
         }

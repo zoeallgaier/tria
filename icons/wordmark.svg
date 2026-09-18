@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1650" height="1028" viewBox="135 26 1650 1028">
-  <!-- Tria's wordmark, cropped to its ink. The source is icons/SVG/TriaLogoOfficial.svg.
+  <!-- Tria's wordmark, cropped to its ink. The source is icons/TriaLogoOfficial.svg.
        The app uses this file as a MASK (see .wordmark in css/app.css) and paints the band
        through it, so these fills only show when the file is opened on its own. -->
   <defs>

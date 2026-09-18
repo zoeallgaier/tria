@@ -533,7 +533,7 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 }
 
 /* ── The wordmark ───────────────────────────────────────────────────
-   Tria's logo (icons/wordmark.svg, cropped from icons/SVG/TriaLogoOfficial.svg)
+   Tria's logo (icons/wordmark.svg, cropped from icons/TriaLogoOfficial.svg)
    used as a MASK, with the band painted through it. It is not an <img>, because
    an image carries its own baked colours: through a mask the letters wear
    --brand-band, the same four tokens every primary button paints, and the splash
@@ -1399,11 +1399,16 @@ body.toolbar-live .view { padding-top: 1rem; }
      for the wordmark the topbar rested on the card. The wordmark went with 1.3
      and the bar moved off the card entirely, so that reserve was holding up
      nothing and the column started a third of the way down its own glass. The
-     head is the foot's size now, near enough to read as a balanced card, and
-     the extra tenth of a rem is aim: it puts the first destination's centre on
-     the same line as the toolbar's buttons across the gap, so the sidebar and
-     the page's bar start together. */
-  padding: 1.4rem 0.85rem 1.25rem;
+     head was the foot's size for the whole of 1.3 through 1.7, with a tenth of
+     a rem of aim on top: it put the first destination's centre on the same line
+     as the toolbar's buttons across the gap.
+     The wordmark is back in that head (Zoe, 2026-09-17) and INHERITS the aim
+     rather than pushing it down the column: 1.5rem here puts the MARK's centre
+     on the toolbar's own midline (the rail floats 1rem down, its glass edge is
+     a pixel, and the mark is 38px tall), which is the line the first
+     destination used to hold. The rail and the page's bar still start
+     together; the destinations simply follow the name. See .nav-brand. */
+  padding: 1.5rem 0.85rem 1.25rem;
   border-radius: var(--radius-nav);
   border: var(--glass-edge);
   background: var(--glass-bg);
@@ -1412,6 +1417,27 @@ body.toolbar-live .view { padding-top: 1rem; }
   /* Specular rim + a soft drop, so the rail visibly floats off the page — the
      same glass language as the mobile nav pill, scaled up to a sidebar. */
   box-shadow: var(--glass-rim), var(--glass-lift);
+}
+
+/* THE RAIL'S HEAD, and the one place the signed-in app says its own name
+   (Zoe, 2026-09-17). A desktop sidebar has a head to put a name on; a phone's
+   floating pill does not, which is why this is display:none down there rather
+   than resized — see the phone block. It is the same mask every other caller
+   draws, so it wears the band and cannot drift from the splash or the buttons.
+
+   3.8rem is NOT a taste number: the mark is 1650:1028, so that width makes it
+   38px tall, and 38px under the rail's 1.5rem head puts its centre on the line
+   the first destination used to hold (see .nav above). The left inset is the
+   destinations' own 0.9rem, so the name starts where the glyph column starts
+   rather than floating over it, and the margin under it is the gap a head
+   needs to stop reading as another row.
+
+   NO TAP. The wordmark was the signed-in link to About until 1.3, and About
+   moved into the ••• sheet on your own profile because the feedback form is
+   there; a link back would be a second way in that nobody maintains. */
+.nav-brand {
+  width: 3.8rem;
+  margin: 0 0 0.95rem 0.9rem;
 }
 
 .nav-link {
@@ -8820,6 +8846,13 @@ button.poll-option:disabled { cursor: default; }
     pointer-events: none;             /* the row spans the screen; only its children take taps */
   }
   .nav-pill, .nav-publish { pointer-events: auto; }
+  /* The rail's head has nowhere to go here: the nav is a pill and a round +
+     floating over the content, not a column with a top. The name is on the app
+     icon the reader tapped to get here, and on a phone the screen is the thing
+     to spend space on. Hidden rather than shrunk, and hidden in CSS rather than
+     left out of renderNav, because the breakpoint moves under a resize and the
+     nav is built once. */
+  .nav-brand { display: none; }
   .nav-pill {
     position: relative;               /* containing block for anything absolute inside */
     display: flex;

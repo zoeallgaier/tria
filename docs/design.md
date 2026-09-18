@@ -449,13 +449,23 @@ Six things about it are load-bearing:
   and restores focus inherits this; a menu whose opener and rows are both buttons
   does not, because a pointer-focused button never matched in the first place.
 
-**The wordmark is signed-out only.** `.brand` is gone from `index.html`; the one
-place a wordmark still earns its space is `.auth-topbar` on the front door, where
-there is no page identity to show instead. (The reset and confirm cards carry it
-too, over their headline, and so does the boot splash.)
+**The wordmark is signed-out, or it is the desktop rail's head.** `.brand` is
+gone from `index.html` and no page's TOP BAR carries it: a bar names the page you
+are on. It earns its space on `.auth-topbar` on the front door, where there is no
+page identity to show instead (the reset and confirm cards carry it too, over
+their headline, and so does the boot splash), and — since 2026-09-17 — at the top
+of the **desktop sidebar**, which is a column with a head rather than a bar with
+a title. `.nav-brand` is `display:none` under 681px: the phone's nav is a
+floating pill and a round **+** over the content, with nowhere to put a name, and
+the name is on the icon the reader tapped anyway. It is **decorative** (`role="img"`,
+no `href`) because the wordmark's old job as the signed-in link to About is now a
+row in the ••• sheet. Its width is aimed rather than chosen: 3.8rem makes the
+mark 38px tall, which under the rail's 1.5rem head puts its centre on the
+toolbar's own midline across the gap, the line the first destination used to
+hold.
 
 **The wordmark is the logo, drawn as a mask** (Zoe, 2026-09-16).
-`icons/wordmark.svg` is `icons/SVG/TriaLogoOfficial.svg` cropped to its ink, and
+`icons/wordmark.svg` is `icons/TriaLogoOfficial.svg` cropped to its ink, and
 `.wordmark` in app.css uses it as a `mask` with `--brand-band` painted through
 it, rather than as an `<img>`. An image would bring its own baked colours; a mask
 reads only the shape, so the letters wear the same four tokens every primary
@@ -468,6 +478,31 @@ there is no flash of a gradient box while the file loads. It was also the only s
 About, so **About is a row in the ••• sheet on your own profile** — which matters
 more than a colophon would, because the feedback form is there and it is the only
 way to report a bug.
+
+**Every BAKED mark is the splash, held still, and `gen-icons.js` is what keeps
+it that way** (2026-09-17). The favicon, the three home-screen tiles, the
+appiconset's fallback and the iOS launch screen are pixels, not a mask, because
+every slot that takes them wants a bitmap — so they are the one place the logo
+can quietly drift from the app drawing it. The script renders all of them from
+`icons/wordmark.svg` in Chromium, with the same mask and the same band at rest,
+on Tria's own paper: `node gen-icons.js`, and run it for the whole set rather
+than one tile. Three of its numbers are decisions: **80%** of the tile is the
+inset the icons have worn since v=289, **84%** for the 32px favicon because a
+wordmark has more to lose to rounding than a disc did, and **66%** for the
+Android maskable because it is a wordmark's DIAGONAL that has to clear the 80%
+safe circle (66 × 1.178 = 78). The launch screen's **13%** is not an inset at
+all; see [ios-shell.md](ios-shell.md). The band stops are written out in the
+script, since baked pixels can't read a token — keep them in step with
+`--band-*` in tokens.css, and note the ramp there is the SPLASH's (115deg,
+plain sRGB), not `--brand-band`'s oklab, which is a visibly different middle.
+
+The old icon was a pastel disc with the `t` knocked clean out of it, and the
+knockout is why those tiles were opaque: a hole only reads as a letter against a
+colour we control. **They stay opaque for a different reason** — iOS composites
+`apple-touch-icon` transparency onto BLACK (tried in v=291, light mode got a
+black tile), and the iOS 18 light/dark/tinted icon system is asset-catalog only,
+so a scheme-aware web-app icon isn't reachable from a `link` or the manifest at
+all. Paper is baked in.
 
 **There is no seg-tabs any more, and the composer is why.** `.seg-tabs` was the
 iOS segmented control — two equal segments over a sliding thumb — and it lost its
