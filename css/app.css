@@ -10079,26 +10079,31 @@ html[data-chrome="native"] .postbar .postbar-attach {
   bottom: var(--native-postbar-lift, 96px);
 }
 
-/* ── The page's own primary acts (1.4) ───────────────────────────────────────
-   The composer's Share pill, the auth gate's submit, Share Tria at the foot of
-   Discover, and the daily card's Add yours. UIKit draws these now, in real
-   Liquid Glass, over the page they sit on — see TriaPageButton in the plugin
-   and the PAGE_SEL half of NativeChrome in app.js for the whole argument,
-   including why a set that lives in SCROLLING content can be native at all.
+/* ── The page's own primary acts (1.4) ────────────────────────────
+   The auth gate's submit and Share Tria at the foot of Discover. UIKit draws
+   these now, in real Liquid Glass, over the page they sit on — see
+   TriaPageButton in the plugin and the PAGE_SEL half of NativeChrome in app.js
+   for the whole argument, including why a set that lives in SCROLLING content
+   can be native at all.
+
+   THE COMPOSER'S SHARE PILL AND THE DAILY CARD'S ADD YOURS ARE NOT HERE ANY
+   MORE (2026-09-19), and the reason is this file's material rather than the
+   plugin's tracking. Glass does not stack: a real lens over the composer's own
+   pane or over the daily card is a lens on something already blurred, and it
+   flattens where .publish-fill sitting IN the card shares the card's blur and
+   stays part of it. Those two are painted again, on every shell, and PAGE_SEL
+   carries the long version.
 
    VISIBILITY, NOT DISPLAY, for exactly the reasons the toolbar's controls
    state two hundred lines up, and one more that is sharper here. Hidden
-   visibility keeps the box in flow — and these boxes are load-bearing in a way
-   a toolbar disc's never was: the composer's pill is `margin-inline: auto` in
-   the form's own flow and the page ends under it, Share Tria is what a masonry
-   grid ends ON, and the daily's pill is right-aligned on the card's foot with
-   the count beside it. Dropping any of them from flow would collapse the page
-   the native button is measured against, which is the one measurement this
-   whole path depends on being true.
+   visibility keeps the box in flow — and these boxes are load-bearing: Share
+   Tria is what a masonry grid ends ON. Dropping one from flow would collapse
+   the page the native button is measured against, which is the one measurement
+   this whole path depends on being true.
 
    And the element underneath is still the button: a tap on the glass comes back
-   through `pageTap` and clicks it, so shareOrCopy, the composer's submit and
-   the gate's own form remain the only implementations of themselves.
+   through `pageTap` and clicks it, so shareOrCopy and the gate's own form
+   remain the only implementations of themselves.
 
    THE GATE'S OWN SUBMIT IS MATCHED HERE AND NEVER HIDDEN BY IT, which is not a
    loose end. `data-chrome` goes up on a resolved setTabs, and setTabs is asked
@@ -10109,7 +10114,5 @@ html[data-chrome="native"] .postbar .postbar-attach {
    LAST IN THE FILE, under the same rule the block above records: an attribute
    selector carries specificity, and .publish-fill's own rules are stated later
    than most of what they beat. Restated on the CTA rather than inherited. */
-html[data-chrome="native"] .composer-post,
 html[data-chrome="native"] .auth-submit,
-html[data-chrome="native"] .friends-share-copy,
-html[data-chrome="native"] .daily-answer { visibility: hidden; }
+html[data-chrome="native"] .friends-share-copy { visibility: hidden; }

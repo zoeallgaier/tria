@@ -703,8 +703,8 @@
     }
 
     /* THE NEUTRAL AS ONE COLOUR, which is how the + wears "no colour" and, as
-       of 2026-09-13, how the primary acts wear it too: the composer's Share
-       pill and Add yours (on the daily card and on the bar). Plain glass with
+       of 2026-09-13, how the primary acts wear it too — here the toolbar's own
+       Add yours, and in CSS the two that went back to it. Plain glass with
        `.label` read as a disabled button beside a + that was the paper's
        opposite, so the commits follow the + rather than the reverse. The why
        of --mono-band / --mono-ink is the ink note in fabSpec. */
@@ -713,8 +713,9 @@
       const stops = splitStops(mono.image || '').map(toRgb).filter(Boolean);
       return { tint: stops[stops.length >> 1] || '', ink: toRgb(mono.color || '') || '' };
     }
-    // Which controls take it. Share Tria and the gate's submit keep plain glass.
-    const MONO_SEL = '.composer-post, .daily-answer, .toolbar-cta';
+    // Which controls take it. Share Tria and the gate's submit keep plain glass,
+    // and since 2026-09-19 the two that are back on CSS wear it in CSS instead.
+    const MONO_SEL = '.toolbar-cta';
 
     function fabSpec() {
       const band = probe('background-image: var(--pill-band)');
@@ -819,8 +820,8 @@
            neither ink clears 4.5:1, which is why `.label` inverting with the
            paper was the answer while the + still wore it. The + does not wear it
            at all now. The figures still govern the CAPSULES that do — the
-           composer's Share pill, the gate's submit, Share Tria, Add yours, the
-           toolbar's CTA — and they are kept beside TriaBand.rampAlpha in Swift,
+           gate's submit, Share Tria, the toolbar's CTA — and the painted ones
+           answer the same figures in CSS. They are kept beside TriaBand.rampAlpha in Swift,
            which is the other half of the same measurement. */
         ink: (accent ? ink : mono.ink) || '',
       };
@@ -1258,11 +1259,10 @@
       requestAnimationFrame(() => { barQueued = false; pushToolbar(); });
     }
 
-    /* ── THE PAGE'S OWN PRIMARY ACTS ───────────────────────────────────────────
+    /* ── THE PAGE'S OWN PRIMARY ACTS ──────────────────────────────
 
-       Four buttons, named one by one rather than matched by a rule: the
-       composer's Share pill, the auth gate's submit, Share Tria at the foot of
-       Discover, and the daily card's Add yours. On the web they are
+       Two buttons, named one by one rather than matched by a rule: the auth
+       gate's submit and Share Tria at the foot of Discover. On the web they are
        `.publish-fill.is-solid` — a painted gradient with a hairline and a rim,
        which is an extremely good impression of Liquid Glass and is not it.
 
@@ -1273,7 +1273,20 @@
        The post card's ••• already crossed here for its menu, on the argument
        that a control is a control wherever it sits; this is that argument
        applied to the same kind of object. THE SET IS CLOSED. PAGE_SEL is a list
-       of four selectors, not a rule about buttons, and it stays that way.
+       of selectors, not a rule about buttons, and it stays that way.
+
+       THE TWO THAT WENT BACK TO CSS (2026-09-19). The composer's Share pill and
+       the daily card's Add yours were here and are not any more, and the reason
+       is the material rather than the tracking, which worked. GLASS DOES NOT
+       STACK: a `UIGlassEffect` is a lens on what is BEHIND it, and what is
+       behind these two is glass already — the composer's own pane and the daily
+       card. Two lenses in a line do not read as one deeper piece of glass, they
+       read as a flat patch, because the second one samples a backdrop the first
+       has already flattened. The painted `.publish-fill` sitting IN the card
+       shares the card's blur and comes out ahead of a real lens that cannot
+       borrow it. The gate's submit sits on the page's own paper and Share Tria
+       ends a masonry grid of photographs, so both of those still have something
+       to look through and both stay native.
 
        THE ONE THAT COULD NOT COME. The gate's own Create account / Log in are
        `.auth-submit` and they are matched here, but nothing native exists while
@@ -1293,12 +1306,8 @@
        than from a `scroll` event bounced out of here, which arrives late and
        coalesced. See TriaPageButton. */
     const PAGE_SEL = [
-      '.composer-post',        // the composer's Share pill
       '.auth-submit',          // the gate's submit, and Send feedback
       '.friends-share-copy',   // Share Tria, at the foot of Discover
-      '.daily-answer',         // the daily card's Add yours (NOT .toolbar-cta,
-                               // which is the same words on the bar and is
-                               // already native by the toolbar's own path)
     ].join(', ');
 
     let pageIds = 0;
@@ -1315,11 +1324,10 @@
       const mark = el.querySelector('svg');
       // The same three answers the + takes, off this button's own ::before.
       // See bandFill, and the ink note in fabSpec for why a bare one sends none.
-      let fill = bandFill(bandStops(el));
+      const fill = bandFill(bandStops(el));
       const bare = !fill.tint;
-      // "No colour" on Share and Add yours is the neutral, like the +. See monoWear.
-      const mono = bare && !fill.colors.length && el.matches(MONO_SEL) ? monoWear() : null;
-      if (mono) fill = { colors: [], tint: mono.tint };
+      // No monoWear branch here: the two that took the neutral were the two that
+      // went back to CSS, and these two have always worn plain glass.
       return {
         id: el.dataset.nativePage,
         x: r.left,
@@ -1331,12 +1339,12 @@
         // Resolved colours, never token names, the same as every toolbar
         // control: a washed page and a reader's accent both land in the cascade
         // and reading the element answers both.
-        ink: mono ? mono.ink : bare ? '' : (toRgb(styles.color) || ''),
+        ink: bare ? '' : (toRgb(styles.color) || ''),
         colors: fill.colors,
         tint: fill.tint,
-        // These four are set at four different sizes (1.02rem on the gate, 0.95
-        // on the composer's pill, 0.9 on Add yours, 0.85 on Share Tria), so the
-        // face's size is measured rather than being one constant over there.
+        // These are set at different sizes (1.02rem on the gate, 0.85 on Share
+        // Tria), so the face's size is measured rather than being one constant
+        // over there.
         font: parseFloat(styles.fontSize) || 14.4,
         disabled: !!el.disabled,
         label: el.getAttribute('aria-label') || text,
@@ -8983,10 +8991,11 @@
 
      That move also settles a 1.4 question rather than reopening it. The old
      Cancel/Save pair sat at the foot of a SCROLLING form, which is exactly the
-     kind of painted commit `PAGE_SEL` exists for — but the honest fix was not a
-     fifth selector, it was that an editor's answers belong on the bar, where
+     kind of painted commit `PAGE_SEL` exists for — but the honest fix was not
+     another selector, it was that an editor's answers belong on the bar, where
      they hold still and where the toolbar has been native since Stage 3. The set
-     stays closed at four.
+     stays closed, and it has since got smaller — see PAGE_SEL on the two that
+     went back to CSS because glass does not stack.
 
      Delete is not here. It is one row down in the post's own •••, which is where
      it has always been and where it can't be reached by aiming at Save. */

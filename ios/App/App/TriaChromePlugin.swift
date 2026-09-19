@@ -482,9 +482,11 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /// The page's own primary acts, stated whole on every change: the composer's
-    /// **Share** pill, the auth gate's submit, **Share Tria** and the daily
-    /// card's **Add yours**.
+    /// The page's own primary acts, stated whole on every change: the auth
+    /// gate's submit and **Share Tria**. The composer's **Share** pill and the
+    /// daily card's **Add yours** were here until 2026-09-19 and went back to
+    /// CSS — both sit ON glass, and a lens over a lens flattens. See `PAGE_SEL`
+    /// in app.js.
     ///
     /// These are the one set of native controls that do NOT live on a bar, and
     /// what that costs is written on `TriaPageButton`. The short version: they
@@ -3978,7 +3980,7 @@ protocol TriaPageControlsControl: AnyObject {
 ///
 /// The web element stays the model, on exactly the terms every toolbar control
 /// crosses on: it is still in the DOM, still hidden by the `data-chrome` gate,
-/// and a tap here is handed back so app.js can click it. `.composer-post`'s
+/// and a tap here is handed back so app.js can click it. `.auth-submit`'s
 /// disabled state, the label Share Tria swaps to for 1.6s after a share, the
 /// gate's own submit path — all of it is the code that already shipped.
 @available(iOS 26.0, *)
@@ -4108,11 +4110,10 @@ final class TriaPageButton: UIVisualEffectView {
 
         hasRamp = TriaBand.apply(spec, glass: self, ramp: ramp)
 
-        /* `.composer-post:disabled { opacity: 0.55 }` — the composer's pill is
-           mounted before the form has anything to publish. Dimmed and inert,
-           not removed: it is the page's anchor, and a commit that vanishes until
-           you have earned it is a page that keeps changing shape while you fill
-           it.
+        /* `.auth-submit:disabled { opacity: 0.55 }` — a submit that is awaiting
+           the network. Dimmed and inert, not removed: it is the page's anchor,
+           and a commit that vanishes while it works is a page that changes shape
+           under the finger that just pressed it.
 
            THE DIM IS THE VIEW'S ALPHA AND THE INERTNESS IS THE VIEW'S, not
            `button.isEnabled`. A UIButton driven by a configuration dims its own

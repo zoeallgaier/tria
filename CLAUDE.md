@@ -47,14 +47,17 @@ longer try a native menu at all; the colour ring because the sheet shows the
 colours off and a menu row can't. See "A menu the page asks for" in
 [docs/native-chrome.md](docs/native-chrome.md).
 
-So do the page's own PRIMARY ACTS: the composer's **Share** pill, the auth
-gate's submit, **Share Tria** and the daily card's **Add yours**. Those sit in
-content that SCROLLS, which is why they could not be native until now — each one
-crosses with its position in the document and native tracks the web view's own
-`contentOffset`, clipped to the band between the bars. "Not native, ever:
-content" still holds and always meant what a reader READS; the one button on a
-page that commits was never that. **The set is closed** — `PAGE_SEL` in app.js
-is four selectors, not a rule about buttons.
+So do the page's own PRIMARY ACTS: the auth gate's submit and **Share Tria**.
+Those sit in content that SCROLLS, which is why they could not be native until
+now — each one crosses with its position in the document and native tracks the
+web view's own `contentOffset`, clipped to the band between the bars. "Not
+native, ever: content" still holds and always meant what a reader READS; the one
+button on a page that commits was never that. **The set is closed** — `PAGE_SEL`
+in app.js is a list of selectors, not a rule about buttons, and it only gets
+shorter. **The composer's Share pill and the daily card's Add yours left it
+(2026-09-19)** and are painted CSS again on every shell: glass does not stack,
+and both of those sit ON glass, where a second lens samples a backdrop the first
+has already flattened and reads as a flat patch.
 
 **The band crosses as one of three things**, sorted off the stops themselves
 (`bandFill`): a reader's accent is one colour and tints the glass, Tria's own
@@ -64,10 +67,10 @@ carries its own ink; the other two take `.label`, which is how the same code is
 black on paper and white on ink. **The round + is the one control that turns
 Tria's ramp down** and takes it as no colour: four hues need a capsule to travel
 across, and a 56pt disc is not one. Every capsule still wears it. **On "no
-colour" the + , the composer's Share and Add yours (card and bar) wear the
-neutral** (`--mono-band` as a tint, `--mono-ink`, see `monoWear` in app.js), the
-paper's opposite, rather than plain glass; Share Tria and the gate's submit stay
-plain.
+colour" the + and Add yours on the BAR wear the neutral** (`--mono-band` as a
+tint, `--mono-ink`, see `monoWear` in app.js), the paper's opposite, rather than
+plain glass; Share Tria and the gate's submit stay plain, and the two painted
+commits wear the same neutral in CSS.
 
 The PIECES THAT HOLD A CARET are native too, and they are the one place native is
 more than a face: a field cannot be borrowed from a hidden element, so the

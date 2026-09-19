@@ -30,28 +30,30 @@ top bar's leading/trailing controls, the bottom bar in both of its jobs (a post
 page's comment bar and a circle's find bar), and Discover's search field.
 
 **Also native, and this moved the line below:** the page's own PRIMARY ACTS —
-the composer's **Share** pill, the auth gate's submit, **Share Tria** at the
-foot of Discover, and the daily card's **Add yours**. See "The page's own
-primary acts" near the end of this file for the whole argument, including what
-made a native control in SCROLLING content possible when it wasn't before.
+the auth gate's submit and **Share Tria** at the foot of Discover. The
+composer's **Share** pill and the daily card's **Add yours** were in this set
+too until 2026-09-19 and are painted CSS again, because both sit ON glass and a
+lens over a lens flattens. See "The page's own primary acts" near the end of
+this file for the whole argument, including what made a native control in
+SCROLLING content possible when it wasn't before.
 
 **Not native, ever:** content. Cards, the feed, the composer form's FIELDS, the
 post page, and the sheets that belong to a *page* rather than to a control — a
 confirmation, a list of report reasons. Tria is a web app in a webview and 1.4
 does not change that — it changes who draws the frame around it.
 
-That rule used to say "the composer form" whole, and the four buttons above are
+That rule used to say "the composer form" whole, and the buttons above are
 the correction rather than an exception to it. The rule was always about what a
 reader READS — cards, prose, fields. It was never about the one button on a page
 that COMMITS, and the post card's ••• had crossed the same line for the same
 reason for a while (see "A menu the page asks for" for where it stands now).
-**The set is closed:** `PAGE_SEL` in app.js is a list of four selectors, not a
-rule about buttons.
+**The set is closed:** `PAGE_SEL` in app.js is a list of selectors, not a rule
+about buttons — and it only ever gets shorter.
 
 It has already been tested once and held. Editing a post moved onto the post's
 own page in 1.4, and the old inline form's Cancel/Save pair was exactly the shape
 this list exists for — a painted commit at the foot of a form that SCROLLS. It is
-not a fifth selector, because an editor's two answers belong on the BAR, where
+not another selector, because an editor's two answers belong on the BAR, where
 they hold still over a scrolling form and where they are native by the toolbar's
 own path: a back chevron that becomes an X once a word has changed, and a check
 that fades in to meet it, which is the arrangement the profile editor has worn
@@ -1565,9 +1567,8 @@ boxes, which looks exactly like a renderer bug and is a build-order one.
 
 ## The page's own primary acts
 
-Four buttons that are not on a bar: the composer's **Share** pill, the auth
-gate's submit, **Share Tria** at the foot of Discover, and the daily card's
-**Add yours**. On the web they are `.publish-fill.is-solid` — the brand band
+Two buttons that are not on a bar: the auth gate's submit and **Share Tria** at
+the foot of Discover. On the web they are `.publish-fill.is-solid` — the brand band
 behind a hairline and a rim, which is a very good impression of Liquid Glass and
 is not the material. In the app they are `UIGlassEffect` wearing all three forms of the band —
 tinted for an accent, a `TriaBandRamp` under the glass for Tria's ramp, plain
@@ -1614,6 +1615,19 @@ settled answer is `bandFill` — the tint for the bands that are one colour, the
 ramp for the one that is four, and nothing for the one that is grey — and all
 three families draw it the way the + does.
 
+**The two that went back to CSS (2026-09-19).** The composer's **Share** pill
+and the daily card's **Add yours** were in this set from the start, and the
+tracking held for them. The MATERIAL did not. `UIGlassEffect` is a lens on what
+is behind it, and behind those two is glass already — the composer's own pane,
+the daily card. Two lenses in a line do not read as one deeper piece of glass:
+the second samples a backdrop the first has already flattened, so the pill lands
+as a flat patch on a surface that is doing the blurring for it. The painted
+`.publish-fill` is IN the card, shares the card's blur and comes out ahead of a
+real lens that cannot borrow it. The gate's submit sits on the page's own paper
+and Share Tria ends a masonry grid of photographs; both still have something to
+look through, so both stay native. `MONO_SEL` narrowed to `.toolbar-cta` with
+them — the CSS wears the neutral itself.
+
 **The gate's own submit is matched and never reached.** `data-chrome` goes up on
 a resolved `setTabs`, which `renderNav` asks for, and `renderNav` does not run
 while `body.gate` is up. So signed out these stay painted and the riskiest screen
@@ -1623,5 +1637,5 @@ change.
 
 **Still unverified on a device:** the scroll tracking itself. The bridge, the
 placement, the tint, the tap crossing back and a layout shift moving the button
-were all confirmed on the simulator; an actual scroll under one of these four
-was not reached there. It is the first thing to look at on a phone.
+were all confirmed on the simulator; an actual scroll under one of these was
+not reached there. It is the first thing to look at on a phone.
