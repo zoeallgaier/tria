@@ -1440,6 +1440,24 @@ in a real chat on the simulator: at the foot, `y=173 max=173 foot=736` before,
 `y=475 max=475 foot=434` after — the page grew by exactly 302 and the reader
 stayed at the foot.
 
+**The reserve is the DIFFERENCE, not the sum (2026-09-19).** The first version
+reserved the keyboard's whole reach, and Zoe's read was immediate: the thread sat
+too high. It was right about reachability and wrong about arithmetic. The page is
+not bare under its last line — `body.postbar-live main` already holds `6.5rem +
+env(safe-area-inset-bottom)` for the bar — so adding the full reach underneath
+that stacks two clearances, and the last message floats about 53pt over the bar
+where at rest it sits at half that. `setKbInset` takes `KB_TRIM` (32px) off the
+figure before setting the property, and `room` is measured against the trimmed
+reserve so the shift can never disagree with it.
+
+A FLAT number is correct on every device, which is worth keeping because it looks
+like it should not be. The part of `main`'s reserve that goes dead while a
+keyboard is up is exactly the safe-area inset (the home indicator is under the
+keys — the same fact `body.postbar-kb` acts on), and the plugin has already taken
+that same inset off the figure it reports. The two move together, so they cancel,
+and all that is left to trim is the difference between a bar standing on the
+bottom of the screen and a bar riding the keys.
+
 **`park()` had to learn the difference.** It spends 24 frames snapping the
 document back to where focus found it, which is right for the scroll WebKit
 INVENTS and wrong for the one we ask for. So it holds `kbPark` rather than a

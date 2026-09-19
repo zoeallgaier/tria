@@ -1611,10 +1611,15 @@ main {
    answering is the thing at the bottom: you tap the bar to reply and the
    conversation you are replying to goes behind the keys.
 
-   `--kb-inset` is how far the keyboard reaches into the page, set by app.js
+   `--kb-inset` is what the page still OWES the keyboard, set by app.js
    (setKbInset) off whichever signal the shell can actually see — the plugin's
    own measurement in the App Store build, where a keyboard raised for a NATIVE
    field is invisible to the web view, and `visualViewport` everywhere else.
+   Owes, not reaches: the rules below already hold 6.5rem and the safe-area
+   inset at the foot for the bar, so app.js trims that much off the keyboard's
+   figure before setting this (KB_TRIM). Reserving the full reach on top of a
+   reserve that is already there stacks two clearances and leaves the last line
+   floating a bar's height above the bar.
 
    ON #view, NOT ON `main`. Two reasons, and both are load-bearing. `main`'s foot
    is written five times over — the desktop rule, the phone rule, the post bar's

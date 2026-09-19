@@ -8668,6 +8668,23 @@
      exists to refuse the scroll WEBKIT invents, not the one we ask for. */
   let kbPark = null;
 
+  /* AND THE RESERVE COMES OFF THE KEYBOARD'S FIGURE, not on top of it. The page
+     is not bare under its last line: `body.postbar-live main` already holds
+     6.5rem plus the safe-area inset at the foot, sized for a bar standing on the
+     BOTTOM OF THE SCREEN with reading room over it. Reserving the keyboard's
+     full reach as well stacks two clearances and leaves the last message
+     floating a bar's height too high, which is what Zoe saw: about 53pt of air
+     between the thread and the bar, where at rest there is half that.
+
+     A FLAT NUMBER is right here, and the reason is worth keeping. The part of
+     `main`'s reserve that goes dead while a keyboard is up is exactly the
+     safe-area inset — the home indicator is under the keys (the same fact
+     `body.postbar-kb` acts on) — and the plugin has ALREADY taken that same
+     inset off the figure it reports. The two move together on every device, so
+     they cancel, and what is left to trim is the difference between a bar
+     resting on the screen and a bar riding the keys. */
+  const KB_TRIM = 32;
+
   function setKbInset(px) {
     const next = Math.max(0, Math.round(Number(px) || 0));
     if (next === kbInset) return;
@@ -8681,14 +8698,17 @@
        reserve as content. */
     const end = (host && host.lastElementChild) || host;
     const foot = end ? end.getBoundingClientRect().bottom : 0;
+    const reserve = next > 0 ? Math.max(0, next - KB_TRIM) : 0;
     kbInset = next;
-    document.documentElement.style.setProperty('--kb-inset', next + 'px');
+    document.documentElement.style.setProperty('--kb-inset', reserve + 'px');
     // Going down: the page shrinks back and the browser clamps a reader who was
     // at the foot to the new one for us, which is exactly right.
     if (!grew || !kbFollow) return;
     const main = document.getElementById('main');
     const rest = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
-    const room = Math.max(0, foot - (window.innerHeight - rest - next));
+    // Measured against the top of the RESERVE, so the shift lands the last line
+    // exactly where the reserve holds it and the two can never disagree.
+    const room = Math.max(0, foot - (window.innerHeight - rest - reserve));
     const shift = Math.min(root.scrollHeight - was, room);
     if (shift < 1) return;
     window.scrollBy(0, shift);
