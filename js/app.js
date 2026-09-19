@@ -2818,6 +2818,14 @@
     // an activity answers no prompt (dailyAccepts), so a button offering one there
     // is offering a dead end.
     const event = opts.event !== false;
+    // THE TAGS LIVE IN THE BOX, under a second rule. They were their own field
+    // below it, which put a row of chips between the thing you are writing and
+    // the bar that publishes it, reading as one more form to fill; in the box
+    // they are what they are, a line at the foot of the post itself, and the
+    // rule that separates them is the same one the headline already has. A quote
+    // is the one caller that passes nothing: its tags would be about somebody
+    // else's post (the same reason it gets no tools and no lock).
+    const tags = opts.tags && tagRowHtml(idp, opts.tags);
     return `<div class="field field--combo field--rich">` +
         `<div class="rich-title-row">` +
           `<input id="${idp}-title" class="combo-title" type="text" maxlength="120" ` +
@@ -2832,6 +2840,7 @@
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
+        (tags ? `<div class="combo-divider" aria-hidden="true"></div>` + tags : '') +
         // Foot bar. Right (opts.tools): link + photo + poll + calendar toggles — each a
         // live toggle that flips the post's inferred type (link → Find, photo → Frame,
         // poll → Poll, calendar → Activity) and pops the masthead mark. Left (opts.lock):
@@ -5093,27 +5102,21 @@
      reason the composer leaves it off a quote too. */
   function editFieldsFor(post) {
     const lock = post.type !== 'repost';
-    const tagsInput =
-      `<div class="field">` +
-        `<label for="e-tags">Tags</label>` +
-        `<input id="e-tags" type="text" autocapitalize="none" ` +
-          // shownTags, not post.tags: a daily answer's join tag is invisible here
-          // too, and submitEdit puts it back (otherwise editing a typo in the
-          // caption would quietly drop the post off the daily page).
-          `value="${esc(shownTags(post).join(', '))}" placeholder="garden, clay">` +
-        `<p class="field-hint">Optional · separate with commas.</p>` +
-      `</div>`;
+    // shownTags, not post.tags: a daily answer's join tag is invisible here too,
+    // and submitEdit puts it back (otherwise editing a typo in the caption would
+    // quietly drop the post off the daily page).
+    const opts = { tools: false, lock, tags: shownTags(post) };
 
     if (post.type === 'find') {
       // A Find shares the Note editor (headline + rich body), same as the composer,
       // then carries the link field. Keeps create and edit identical, so a formatted
       // Find edits as rich text instead of raw markup in a flat 180-char box.
-      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, lock }) +
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', opts) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
             `spellcheck="false" value="${esc(post.url || '')}" placeholder="https://…">` +
-        `</div>` + tagsInput;
+        `</div>`;
     }
 
     if (post.type === 'activity') {
@@ -5125,7 +5128,7 @@
       // `editorPrefill` carries a legacy plain-text note across to paragraphs.
       return richNoteField('e', post.title, editorPrefill(post.note),
           'When to show up, what to bring.',
-          { tools: false, lock, titlePh: 'Picnic at the park' }) +
+          { ...opts, titlePh: 'Picnic at the park' }) +
         `<div class="field">` +
           `<label for="e-location">Where</label>` +
           `<input id="e-location" type="text" maxlength="120" ` +
@@ -5138,7 +5141,7 @@
             `<input id="e-time" type="time" aria-label="Time" placeholder="--:-- --" value="${esc(post.eventTime || '')}">` +
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
-        `</div>` + tagsInput;
+        `</div>`;
     }
 
     // post (Note) and photo (Frame) share the rich editor — a Frame is a full post
@@ -5146,7 +5149,7 @@
     // optional; the image carries the post). Prefilled from the stored note (a
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
-    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, lock }) + tagsInput;
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh, opts);
   }
 
   // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
@@ -9083,6 +9086,7 @@
     wireWhenHints(form);
     wireLocationSuggest(form.querySelector('#e-location'));
     const noteEl = form.querySelector('#e-note');
+    wireTagField(form, 'e');
     wireMentions(noteEl);
     if (noteEl && noteEl.isContentEditable)
       wireRichEditor(noteEl, form.querySelector('#e-note-count'));
@@ -9104,7 +9108,11 @@
 
     // Dirty is measured against the fields EXACTLY as rendered, so reverting an
     // edit by hand takes the check away again and a save can never be a no-op.
-    const snapshot = () => Array.from(form.querySelectorAll('input, textarea, [contenteditable]'))
+    // .tag-entry is excluded on purpose: it is the tag field's scratch box, not
+    // one of the post's values (the hidden #e-tags input is), and a half-typed
+    // word in it must not read as an unsaved edit.
+    const snapshot = () => Array.from(form.querySelectorAll(
+        'input:not(.tag-entry), textarea, [contenteditable]'))
       .map(el => el.isContentEditable ? el.innerHTML : el.value).join('\u0000');
     const baseline = snapshot();
     // The lock is not in the snapshot (a <button> has no value to read), so the
@@ -14257,14 +14265,141 @@
     'meal prep', 'farmers market', 'polaroids',
     'houseplants', 'sports', 'side quest', 'npc moment',
   ];
-  const randomTagPlaceholder = () => {
-    const pool = [...TAG_PLACEHOLDERS];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    return pool.slice(0, 2).join(', ');
-  };
+  const randomTagPlaceholder = () =>
+    TAG_PLACEHOLDERS[Math.floor(Math.random() * TAG_PLACEHOLDERS.length)];
+
+  /* ── The tag field — chips and a + ────────────────────────────────────────
+     It was one text input and a rule you had to read: "separate with commas."
+     That asks the writer to hold a syntax while they are still choosing words,
+     and it has no state until you leave it: you can see that you typed a line,
+     not that you made four tags.
+
+     THE CAP WENT WITH IT. parseTags used to end in `.slice(0, 6)` — a ceiling
+     nothing ever said out loud, which meant a seventh tag was accepted, saved
+     over and thrown away in silence. Drawing the field as chips forced the
+     question, because a ceiling you can SEE has to be a rule you meant: either
+     the + goes grey at six and the writer is told how many words they are
+     allowed about their own post, or there is no number. Zoe's call, and it is
+     the app's own argument — a small circle keeps its own lists small, and the
+     one thing tags are is somebody's shelf. So: no cap, no count, and the + is
+     always there. (Store.createPost writes the array as it comes; the column is
+     `text[]` with no length constraint.)
+
+     So the FACE is chips and a +: tags are things that exist, one at a time, and
+     the + is one of them so that adding reads as making the next one. What the
+     field KEEPS is the line. A hidden `#<idp>-tags` input holds the same comma
+     string it always held, which is why nothing downstream changed: parseTags,
+     submitComposer, submitEdit and the post editor's dirty() snapshot all still
+     read one input's value. The chips are a view of that string and write back
+     through it.
+
+     The chip IS the remove target, whole. A × inside a pill this size is a 20px
+     hit inside a 44 and the pill around it does nothing, which trains a tap that
+     misses; here the word and the mark are one button and the label says what it
+     does. Commas still work too, typed or pasted: whatever is in the entry box
+     runs through parseTags, so "garden, clay" lands as two chips. */
+  const tagChipHtml = (t) =>
+    `<button type="button" class="tag tag--chip" data-t="${esc(t)}" ` +
+      `aria-label="Remove ${esc(t)}">${esc(t)}` +
+      `<span class="tag-x" aria-hidden="true">\u00d7</span></button>`;
+  function tagRowHtml(idp, tags) {
+    return `<div class="tagfield combo-tags">` +
+        // Hidden, and the only thing anything else reads. Never a `hidden`
+        // attribute on a text input: type=hidden keeps it out of the tab order
+        // and out of the a11y tree, and still in the editor's value snapshot.
+        `<input id="${idp}-tags" type="hidden" value="${esc(tags.join(', '))}">` +
+        // The label and what used to be the hint, one line: "Tags" alone said
+        // nothing a chip row doesn't, and "Optional." under it made two lines of
+        // furniture for a field most posts leave empty.
+        `<span class="combo-tags-label" id="${idp}-tags-label">Tags \u00b7 Optional</span>` +
+        `<div class="tagset" id="${idp}-tagset" role="group" ` +
+            `aria-labelledby="${idp}-tags-label">` +
+          tags.map(tagChipHtml).join('') +
+          `<button type="button" class="tag tag--add" id="${idp}-tagadd">` +
+            `+ Add tag</button>` +
+          `<input class="tag-entry" id="${idp}-tagentry" type="text" hidden ` +
+            `autocapitalize="none" autocomplete="off" spellcheck="false" ` +
+            `aria-label="New tag" ` +
+            `placeholder="${esc(randomTagPlaceholder())}">` +
+        `</div>` +
+      `</div>`;
+  }
+
+  // Wired once per mount, for the composer ('c') and the post editor ('e') alike.
+  function wireTagField(scope, idp) {
+    const wrap = scope.querySelector(`#${idp}-tagset`);
+    if (!wrap) return;
+    const model = scope.querySelector(`#${idp}-tags`);
+    const addBtn = wrap.querySelector(`#${idp}-tagadd`);
+    const entry = wrap.querySelector(`#${idp}-tagentry`);
+    const read = () => parseTags(model.value);
+
+    // Every change goes through here: the string first, then the chips, then the
+    // hint. The input event is dispatched by hand because a value set in script
+    // fires none, and the editor's save check is listening for one on the form.
+    const write = (tags) => {
+      // A write that changes nothing rebuilds nothing, and that is load-bearing
+      // rather than tidy: the entry box commits on blur, so tapping a chip while
+      // it is open would re-render the row out from under the tap and the click
+      // would never land on the chip you aimed at. An empty box commits to the
+      // same string it read, so with this guard the row stands still and the tap
+      // arrives.
+      const line = tags.join(', ');
+      if (line === model.value) return;
+      model.value = line;
+      model.dispatchEvent(new Event('input', { bubbles: true }));
+      wrap.querySelectorAll('.tag--chip').forEach(c => c.remove());
+      addBtn.insertAdjacentHTML('beforebegin', tags.map(tagChipHtml).join(''));
+    };
+    // The + and the entry box trade places in the same slot, so the row never
+    // changes length by more than the word being typed.
+    const openEntry = () => {
+      addBtn.hidden = true;
+      entry.hidden = false;
+      entry.focus();
+    };
+    const closeEntry = () => {
+      entry.value = '';
+      entry.hidden = true;
+      addBtn.hidden = false;
+    };
+    // `keep` is Enter and comma, which mean "and another": the box stays up so a
+    // run of tags is a run of typing. Blur and Escape put the + back.
+    const commit = (keep) => {
+      write([...new Set([...read(), ...parseTags(entry.value)])]);
+      entry.value = '';
+      if (!keep) closeEntry();
+    };
+
+    addBtn.addEventListener('click', openEntry);
+    wrap.addEventListener('click', (e) => {
+      const chip = e.target.closest('.tag--chip');
+      if (!chip) return;
+      write(read().filter(t => t !== chip.dataset.t));
+    });
+    entry.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        // Never the form's Enter: in the composer that is Share, and in the
+        // editor it is Save. Here it only ever ends a word.
+        e.preventDefault();
+        if (entry.value.trim()) commit(true); else closeEntry();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeEntry();
+        addBtn.focus();
+      } else if (e.key === 'Backspace' && !entry.value) {
+        // An empty box backspaces into the row, the way it reads: the last chip
+        // is the last thing you typed.
+        const tags = read();
+        if (tags.length) { write(tags.slice(0, -1)); e.preventDefault(); }
+      }
+    });
+    // A comma is a commit wherever it comes from, including a paste of several.
+    entry.addEventListener('input', () => {
+      if (entry.value.includes(',')) commit(true);
+    });
+    entry.addEventListener('blur', () => commit(false));
+  }
 
   // Same trick for the post composer's note field — one of a few voices picked
   // at random each time it mounts, so the empty field never feels flat.
@@ -14347,13 +14482,6 @@
 
   function fieldsFor(type, opts = {}) {
     const event = opts.event !== false;
-    const tags =
-      `<div class="field">` +
-        `<label for="c-tags">Tags</label>` +
-        `<input id="c-tags" type="text" autocapitalize="none" ` +
-          `placeholder="${randomTagPlaceholder()}">` +
-        `<p class="field-hint">Optional · separate with commas.</p>` +
-      `</div>`;
 
     // A QUOTE is the ordinary note field — headline and all, like any other post —
     // followed by the thing it is about. What it does NOT get is the attach bar,
@@ -14378,7 +14506,7 @@
     // hidden below it; an attach toggle reveals the one it names and folds the rest,
     // so the words you have already written carry across every one of those changes
     // (see applyBaseSurface in renderPublish).
-    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true, event }) +
+    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true, event, tags: [] }) +
       `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
         `<button type="button" id="c-make-find">Make it a Find</button></p>` +
       `<div class="field" id="c-link-row" hidden>` +
@@ -14388,7 +14516,7 @@
       `</div>` +
       pollFieldHtml() +
       frameFieldHtml() +
-      (event ? eventFieldHtml() : '') + tags;
+      (event ? eventFieldHtml() : '');
   }
 
   // The poll surface, shipped hidden in the Post field set — revealed when the
@@ -14897,6 +15025,7 @@
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
       wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
+      wireTagField(fieldsEl, 'c');       // a quote has no tag field; the wiring no-ops
       if (family !== 'quote') {
         wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the field set
         wireWhenHints(fieldsEl);           // …and so do the date and time inputs
@@ -16038,7 +16167,7 @@
   // would swallow someone's real tag on the way there.
   const parseTags = (str) => [...new Set(String(str || '').split(',')
     .map(t => t.trim().replace(/^#/, '').toLowerCase())
-    .filter(t => t && !DAILY_TAG_RE.test(t)))].slice(0, 6);
+    .filter(t => t && !DAILY_TAG_RE.test(t)))];
 
   async function submitComposer() {
     const errEl = document.getElementById('c-error');
@@ -16053,7 +16182,6 @@
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
     // A daily answer carries its join tag invisibly — it's the app's bookkeeping,
     // not one of the poster's words, so it never sat in the field they can see.
-    // It rides PAST the six-tag cap for the same reason: it isn't one of theirs.
     // The tag goes on only if what you made is what the prompt asked for
     // (dailyAccepts, which is also what the banner has been showing you the whole
     // time), and only once — one answer each (see myAnswer). A post that misses
