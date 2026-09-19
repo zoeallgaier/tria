@@ -12773,8 +12773,17 @@
   }
 
   // The ledger's view filter, in the shape every other page's is in: rows for
-  // the dial the toolbar's sliders button opens. Only mentions get their own
-  // row; every other kind just shows under All.
+  // the dial the toolbar's sliders button opens. Two kinds get a row of their
+  // own; the rest only ever show under All.
+  //
+  // WHY THOSE TWO and not one row per kind. A filter here is for finding the
+  // thing you have not answered yet, and a comment and a mention are the only
+  // rows on this page that are somebody TALKING to you — everything else (a
+  // like, a vote, a hand up, a repost, an add) is a tally you read and are done
+  // with, and a row for each would turn one dial into a menu of six that mostly
+  // narrow to noise. Comments are also the kind that gets buried: they are the
+  // slowest thing to arrive and the likes on the same post outnumber them, so
+  // the one you meant to reply to is the one that has been pushed down the page.
   //
   // It was a seg-tabs pair sitting inline under the nameplate until 1.3, and the
   // switch is not a re-skin — it is the whole point of the toolbar. Updates was
@@ -12785,9 +12794,43 @@
   // the same corner, through the same dial.
   const NOTIF_FILTERS = [
     { key: 'all',     label: 'All'      },
+    { key: 'comment', label: 'Comments', ico: 'comment' },
     { key: 'mention', label: 'Mentions', ico: 'at' },
   ];
+  // What an empty narrowed ledger says, by the filter that emptied it. Keyed off
+  // the same list so a filter added above cannot forget to bring its sentence.
+  const NOTIF_EMPTY = {
+    comment: 'No comments yet.',
+    mention: 'No mentions yet.',
+  };
   let notifFilter = 'all';
+
+  /* HOW MANY ROWS THE LEDGER DRAWS AT ONCE, and this is the only reason Updates
+     is fast. Every other list in the app is bounded by something a small circle
+     keeps small — your posts, your chats, your friends — and this one was bounded
+     by nothing: notifications() is DERIVED, so a row is every comment, like,
+     vote, hand-up, repost and add that has ever landed on anything you wrote, for
+     as long as the account has existed. That is roughly ten rows per post and it
+     only ever grows.
+     Measured, headless, driving #/chats → #/updates with the real store behind a
+     synthetic world: 208 rows cost 16ms of blocking script, 1,225 cost 91ms and
+     3,940 cost 349ms, on a DESKTOP — linear at about 0.09ms a row, and a phone is
+     several times that. Roughly 55% of it was building the row markup and parsing
+     it into the pane and 35% was the forced layout in renderPage's settle, which
+     is a function of how tall the document it measures is. None of it was the
+     ledger walk itself (0.2ms), the O(rows × posts) post lookup in notifItemHtml
+     (1ms) or the three notifications() builds a navigation here costs (0.2ms
+     each) — all three are real and none of them is why the page was slow. Capping
+     the 3,940-row world to 100 took it to 10.3ms.
+     A CAP, NOT A WINDOW BY AGE: a busy month is unbounded again, and the whole
+     point is that the worst case has a ceiling. `content-visibility: auto` would
+     have bought the layout half for free and it is not available to us — see the
+     tombstone over .card in app.css, where it is the documented cause of blank
+     posts on iOS. Nothing is unreachable: the foot of the list raises the cap by
+     another page (see .notif-more), and it resets on every fresh visit, so the
+     page you arrive at is always the cheap one. */
+  const NOTIF_PAGE = 100;
+  let notifShown = NOTIF_PAGE;
 
   // Incoming friend requests — the one actionable thing on an otherwise passive
   // ledger, so it sits up top with Accept / Ignore inline. Shown only under the
@@ -13930,17 +13973,24 @@
     // The panel under the tabs: incoming friend requests (All only) then the
     // ledger. Rebuilt in place on a filter switch so the segmented thumb slides
     // rather than the whole view tearing down. friendRequestsHtml reads the live
-    // notifFilter and yields '' under Mentions.
+    // notifFilter and yields '' under anything but All.
     const panelHtml = () => {
       const list = notifFilter === 'all' ? all : all.filter(n => n.kind === notifFilter);
+      // Only ever the newest page of it (see NOTIF_PAGE). The foot row asks for
+      // the next one; it is a sibling of the list rather than a row in it, so the
+      // reconcile below never mistakes it for an event.
+      const shown = list.slice(0, notifShown);
       const requestsHtml = friendRequestsHtml();
       return requestsHtml +
-        (list.length
-          ? `<ul class="notif-list">${list.map(n => notifItemHtml(n, lastSeen)).join('')}</ul>`
+        (shown.length
+          ? `<ul class="notif-list">${shown.map(n => notifItemHtml(n, lastSeen)).join('')}</ul>` +
+            (list.length > shown.length
+              ? `<button class="notif-more" type="button">Show older</button>`
+              : '')
           : requestsHtml
             ? ''   // requests are up top; don't also say "all quiet" beneath them
             : `<p class="feed-empty">${all.length
-                ? 'No mentions yet.'
+                ? (NOTIF_EMPTY[notifFilter] || 'Nothing here yet.')
                 : 'When someone adds you, likes, comments, or says they’re going, it lands here.'}</p>`);
     };
     // Answer a friend request in place. Accept adds them back (→ mutual, they
@@ -13983,6 +14033,10 @@
 
     // First mount (or a page navigation into Updates): build the whole view.
     function mount() {
+      // A fresh visit starts at the top of the ledger and at one page of it. A
+      // cap raised by tapping Show older is an answer about the list you were
+      // reading, not a setting, so it does not survive leaving the page.
+      notifShown = NOTIF_PAGE;
       mountToolbar({
         // A page inside Chats since 1.7, reached from its pinned row.
         leading: toolbarBackEl('#/chats', 'Chats'),
@@ -14003,6 +14057,19 @@
       const panel = view.querySelector('#updates-panel');
       wirePanelFull(panel);
 
+      // Show older, delegated on the PANE, which outlives every reconcile — the
+      // row itself comes and goes as the cap catches up with the ledger, and a
+      // listener bound to the button would go with it. Re-rendering through
+      // renderUpdates means the reconcile path handles it: the rows you have
+      // already read stay put, with their avatars, and only the older ones rise
+      // in underneath.
+      panel.addEventListener('click', (e) => {
+        if (!e.target.closest('.notif-more')) return;
+        notifShown += NOTIF_PAGE;
+        hapticTap('LIGHT');
+        renderUpdates();
+      });
+
       // Same contract as Circle's and Discover's: repaint only the pane, relabel
       // the button's hue in place, leave the nameplate and the scroll alone.
       // The dial itself declines to buzz for a pick that changes nothing, so the
@@ -14015,6 +14082,7 @@
           onPick: (key) => {
             if (key === notifFilter) return;
             notifFilter = key;
+            notifShown = NOTIF_PAGE;   // a different list, read from its top
             syncFilterBtn('updates-filter-btn', notifFilter);
             panel.innerHTML = panelHtml();
             wirePanelFull(panel);
@@ -14059,12 +14127,23 @@
         liveEmpty.replaceWith(wantEmpty);
       }
 
+      // Show older — the same deal as the empty state: a sibling of the list
+      // rather than one of its rows, so it is settled here and the row reconcile
+      // below never sees it. Done BEFORE the ledger because that block returns
+      // early on two of its three paths.
+      const liveMore = panel.querySelector('.notif-more');
+      const wantMore = tmp.querySelector('.notif-more');
+      if (wantMore && !liveMore) panel.appendChild(wantMore);
+      else if (liveMore && !wantMore) liveMore.remove();
+
       // Ledger — key-matched row reconcile (see makeCard's feed reconcile).
       const liveList = panel.querySelector('.notif-list');
       const wantList = tmp.querySelector('.notif-list');
       if (!wantList) { liveList?.remove(); return; }
       if (!liveList) {
-        panel.appendChild(wantList);
+        // Ahead of the foot row if one has just landed; insertBefore(_, null)
+        // is an append, which is the case where there is no foot row at all.
+        panel.insertBefore(wantList, panel.querySelector('.notif-more'));
         wantList.querySelectorAll('.notif').forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
         return;
       }

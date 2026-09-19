@@ -566,6 +566,29 @@ it either way.
   design, like a block, and cleared only if you add them yourself. Both live in
   `supabase/friend-declines.sql`; the client tolerates a DB that hasn't run it
   (unstamped edges just stay quiet, declines fall back to a localStorage mirror).
+- **The ledger is DERIVED, so it is the one list in the app with no ceiling, and
+  it draws a page at a time.** `notifications()` builds its rows out of the cache
+  rather than reading a table, which is what makes Updates free to store and
+  impossible to bound: a row is every comment, like, vote, hand up, repost and add
+  that has ever landed on anything you wrote, roughly ten per post, growing for as
+  long as the account exists. Every other list is bounded by something a small
+  circle keeps small. Drawing all of it was measurably the slowest navigation in
+  the app — headless, driving `#/chats → #/updates` with the real store behind a
+  synthetic world, 208 rows cost 16 ms of blocking script, 1,225 cost 91 ms and
+  3,940 cost 349 ms, on a **desktop**, linear at ~0.09 ms a row. It was not the
+  ledger walk (0.2 ms), nor the `O(rows × posts)` post lookup per row (1 ms), nor
+  the three `notifications()` builds a navigation here costs (0.2 ms each): ~55%
+  was building the row markup and parsing it into the pane and ~35% was the forced
+  layout in `renderPage`'s settle, both of them functions of how many rows exist.
+  So `NOTIF_PAGE` (app.js) caps what is drawn at 100, with a **Show older** capsule
+  at the foot that raises the cap by another page; the cap resets on every fresh
+  visit and on a filter switch, so the page you arrive at is always the cheap one.
+  The capped 3,940-row world costs 10.3 ms. A cap and not an age window, because a
+  busy month is unbounded again. `content-visibility: auto` would have bought the
+  layout half for free and is **not available to us** — see the tombstone over
+  `.card` in app.css, where it is the documented cause of blank posts on iOS. No
+  count ever rides the capsule: what is below the line is exactly the number this
+  app refuses.
 - **Two interaction gates, not one** (`app.js`). The split isn't cheap-vs-costly,
   it's *stays on the screen* vs *lands in the real world*. `canSocial` (likes,
   comments, **poll votes**) is open on your own post, a friend's, *or any public

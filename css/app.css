@@ -7128,6 +7128,53 @@ button.poll-option:disabled { cursor: default; }
 }
 .notif--new .notif-dot { opacity: 1; }
 
+/* The foot of the ledger, when there is more of it than one page (NOTIF_PAGE in
+   app.js). A CENTERED CAPSULE in the whitespace under the list, not a full-width
+   hairline row: a row would read as a fourteenth event, indistinguishable at a
+   glance from the thirteen above it, and the one thing on this page that is a
+   control rather than a record should not be wearing the records' clothes. So it
+   takes the app's one button shape — pill, hairline ring, the reader's own accent
+   as ink — sitting in its own air, which is also what tells you the list has
+   ENDED rather than merely paused. No count on it, ever: what is below the line
+   is exactly the kind of number this app refuses (see CLAUDE.md), and "older" is
+   the honest word for it. The list's last row draws no bottom rule, so there is
+   nothing to break. */
+.notif-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;              /* the target floor, like every other control */
+  width: fit-content;            /* a capsule hugs its label; centered on the column */
+  margin: 1.35rem auto 0.5rem;
+  padding: 0 1.3rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: opacity var(--dur-micro) var(--ease),
+              transform var(--dur-micro) var(--ease),
+              border-color var(--dur-micro) var(--ease);
+}
+/* A small chevron, drawn rather than shipped: it points the way the list grows,
+   and it is the whole of why the capsule doesn't need the word "more" in it. */
+.notif-more::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+}
+@media (hover: hover) { .notif-more:hover { border-color: var(--accent); } }
+.notif-more:active { opacity: 0.6; transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .notif-more:active { transform: none; } }
+
 /* ── Chats (1.7) ──────────────────────────────────────────────────────────────
    The list is the ledger's row language exactly — flat, hairline-divided, the
    inset carried by the row — because it is the page Updates became, and Updates
@@ -9386,6 +9433,10 @@ button.poll-option:disabled { cursor: default; }
      feed, the Friends directory, and the Updates ledger all read as one system. */
   .friends-list, .requests-list, .notif-list { margin-inline: -1.15rem; }
   .friend, .request-row, .notif { padding-inline: 1.15rem; }
+  /* .notif-more deliberately does NOT break out with them. The rows go full-bleed
+     so their hairlines and hovers run edge to edge; the capsule at the foot is the
+     one thing down there that is a shape rather than a band, and a shape that
+     touches the screen edge stops reading as one. */
   .requests-kicker { padding-inline: 0; }
 
   /* The picker lists break out with the rest of them. --inset is a desktop
