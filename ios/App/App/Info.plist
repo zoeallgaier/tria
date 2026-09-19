@@ -74,9 +74,26 @@
 	</array>
 	<key>UIStatusBarHidden</key>
 	<false/>
+	<!-- Tria is portrait, and this key is the one the app actually reads:
+	     UIDeviceFamily is 1, so every device that runs it is an iPhone and the
+	     ~ipad key below is never consulted at runtime. It is there because App
+	     Store Connect asks for it anyway. The asset catalog is built with
+	     ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES, so the bundle
+	     carries a 76x76 ~ipad icon and CFBundleIcons~ipad whatever the device
+	     family says, and the validator reads that as an app that can land on an
+	     iPad and must therefore answer for multitasking. Declaring all four for
+	     the iPad idiom satisfies it and changes nothing on a phone. Do not put
+	     the other three in the key above. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
