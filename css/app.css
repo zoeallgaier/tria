@@ -4429,90 +4429,6 @@ body.gate main { padding: 0; }
 .field input:focus,
 .field textarea:focus { outline: none; border-color: var(--accent); }
 .field-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
-
-/* ── The tag field — the feed's own chips, at the foot of the note box ─────
-   It was one text input and a rule you had to read: "separate with commas."
-   That asks the writer to hold a syntax while they are still choosing words, and
-   it has no state until you leave it: you can see that you typed a line, not
-   that you made four tags. (The six-tag cap went at the same time and for the
-   same reason; see wireTagField.)
-
-   The chip is THE CHIP: .tag exactly as the feed paints it, same face, same
-   size, same outline, because a tag being made should be the tag it is about to
-   be. Nothing here restyles it. What this block adds is the row it sits in, the
-   entry box that stands in the +'s place, and a press state on both.
-
-   AND THE ROW SITS IN THE NOTE BOX, under a second .combo-divider — see
-   richNoteField. As its own field below the box it was a row of chips standing
-   between the words and the bar that publishes them, which reads as one more
-   form to fill; inside, it is a line at the foot of the post, and the rule above
-   it is the one the headline already has. */
-.combo-tags { padding: 0.7rem 0.85rem; }
-/* The label voice every section label in Tria uses (--kicker), carrying what the
-   hint used to say on the same line: "Optional." under a chip row was a second
-   line of furniture for a field most posts leave empty. */
-.combo-tags-label {
-  display: block;
-  font-size: var(--kicker);
-  color: var(--muted);
-  letter-spacing: 0.02em;
-  margin-bottom: 0.45rem;
-}
-.tagset {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  /* The row gap is the taller one here, which is unusual and deliberate: it is
-     the budget the invisible target below spends. */
-  gap: 0.5rem 0.4rem;
-}
-/* The target, not the paint: the pill measures about 25px, as it does in a card,
-   and the ::after carries it to ~32 through the middle. NOT 44, and that is the
-   constraint rather than an oversight — a 44px box on a 25px pill reaches 9px
-   past it top and bottom, which is further than the row gap, so on a wrapped
-   row the boxes overlap and the lower chip quietly steals the bottom edge of the
-   one above it (hit-tested, not assumed). The box takes the gap and stops. */
-.tagfield .tag::after {
-  content: '';
-  position: absolute;
-  inset: -0.22rem 0;
-}
-.tagfield .tag { position: relative; cursor: pointer; }
-/* The × rides inside the pill's own text, a hair larger than the word and in the
-   muted ink the pill already wears. The WHOLE chip is the remove button: a × on
-   its own is a 12px hit inside a 32 with a dead pill around it, which teaches a
-   tap that misses. The label says what the tap does. */
-.tag-x { margin-left: 0.28rem; font-size: 0.9em; }
-.tag--chip:active { opacity: 0.55; }
-/* The + is A TAG, not a call to action: same muted ink, same hairline, nothing
-   that sets it apart from the words beside it but the glyph and the verb. It
-   wore the accent for a moment (the row's one live state, .tag.active) and the
-   hard outline read as a button that had been dropped into the row — the one
-   thing in a field of quiet pills insisting on itself, which is the opposite of
-   what the row is for. It is found by being shaped like what it makes. */
-.tag--add:active { opacity: 0.55; }
-/* The entry box stands in the +'s place, so it wears the pill rather than a
-   field's full-width box: it is one word being typed inside a row of words.
-   Everything but the live border is .tag's own geometry, restated because an
-   input inherits none of it. A stated width, about as wide as a long tag, so the
-   box does not stretch the row it stands in. */
-.tagfield .tag-entry {
-  width: 9rem;
-  max-width: 100%;
-  font-family: 'Oxygen', sans-serif;
-  font-size: 0.76rem;
-  color: var(--text);
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-pill);
-  padding: 0.16rem 0.55rem;
-}
-.tagfield .tag-entry:focus { outline: none; border-color: var(--accent); }
-.tagfield .tag-entry::placeholder { color: var(--muted); opacity: 0.6; }
-/* Both of these are told to hide from script, so the row says what hidden means
-   rather than leaving it to the UA sheet and whatever gets a display next (the
-   settlement .postbar and .friend take). */
-.tagset > [hidden] { display: none; }
 /* The Note composer's link nudge (see wireFindNudge): a hint line whose action
    reads like the auth screens' inline text buttons. */
 .find-nudge button {
@@ -4565,10 +4481,6 @@ body.gate main { padding: 0; }
   line-height: 1.5;
   min-height: 3.4rem;
 }
-/* The rich body is taller than that floor, and it got taller again when the tags
-   moved into the box beneath it: the box is the post, so the words have to keep
-   the larger share of it or the writing field reads as one band among three. */
-.field--rich .combo-note { min-height: 7rem; }
 /* A 5.5rem floor sat here for the Activity composer's flat Details textarea —
    the one .combo-note in the composer without .rich-note riding along, matched to
    the Note body so the two forms' main field read as one size. There is one form

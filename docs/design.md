@@ -303,11 +303,7 @@ the rule.
 
 **And know which controls actually take that fix, because several don't.**
 `.comment-delete` does (28px box, 44×44 live). `.tag` **does not** — a chip is
-one line of type and hit-tests **52×26**. The composer's tag row is the one place
-a chip buys anything at all, and it buys **32**, not 44: `.tagfield .tag::after`
-takes the row's own gap and stops there, because a 44px box on a 25px pill
-reaches 9px past it and on a wrapped row the lower chip starts stealing the
-bottom edge of the one above (hit-tested at 390px, both before and after). The `::after` this note used to point
+one line of type and hit-tests **52×26**. The `::after` this note used to point
 at belonged to `.filter`, the old chip row, which stopped being rendered when the
 dial replaced it in 1.3 and whose 17 rules were deleted with it. Measured live at
 390px, the controls under the floor are `.tag` (52×26), the composer's
@@ -541,23 +537,6 @@ no switcher. Five things about it:
   place and a time attached, so that is what it is made of now: the same rich
   editor every other type writes into, plus `eventFieldHtml`'s two fields
   shipped hidden beside the poll's and the frame's.
-- **Tags are chips now, and they live IN the box.** The field was one text input
-  under a rule you had to read ("separate with commas") — a syntax to hold while
-  you are still choosing words, and no state until you left it: you could see
-  that you typed a line, not that you had made four tags. It is `.tag` chips and
-  a `+ Add tag` that is one of them, under a second `.combo-divider` at the foot
-  of the note box, with the label and the old hint on one line (`Tags ·
-  Optional`). Three things follow. The chip is the feed's chip, unrestyled,
-  because a tag being made should be the tag it is about to be; the + wears the
-  same muted hairline rather than the accent, which it had for one pass and which
-  read as a button dropped into a row of quiet pills; and the whole chip is the
-  remove target, because a × on its own is a 12px hit inside a dead pill.
-  Underneath, nothing moved: a hidden `#c-tags` / `#e-tags` input still holds the
-  same comma string, so `parseTags`, both submit paths and the editor's `dirty()`
-  snapshot read exactly what they read before, and commas still work typed or
-  pasted. **The six-tag cap went with it** — drawing the row forced the question,
-  because a ceiling you can see has to be a rule you meant, and the alternative
-  was telling a writer how many words they may have about their own post.
 - **The words survive every flip.** Folding a surface leaves what's typed in it,
   and the headline and body belong to the form rather than to a type, so a
   mis-tap costs the tap back and nothing else. That is the whole reason this is
