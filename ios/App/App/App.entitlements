@@ -37,5 +37,33 @@
 	<array>
 		<string>Default</string>
 	</array>
+
+	<!-- Universal Links. This is what makes a tap on triaonline.com/p/<id> open
+	     the app at that post instead of opening Safari at the website.
+
+	     The THIRD entitlement on this file that depends on the App ID itself
+	     carrying the capability, and it fails the same silent way: automatic
+	     signing will happily add Associated Domains to the provisioning profile
+	     and cannot add it to the App ID, so the build succeeds, the link looks
+	     ordinary, and the tap lands in Safari. Enabled on com.triaonline.tria in
+	     the portal on 2026-09-22.
+
+	     `applinks:` and nothing else. The other services this key can carry
+	     (webcredentials, activitycontinuation) are not asked for, because a
+	     domain listed here is a domain the OS will fetch an association file
+	     from, and the file we serve claims four paths and no more:
+	     /p/*, /u/*, /daily/*, /i/*. The homepage, About, Business and Discover
+	     are deliberately NOT claimed, so a link to the site stays a link to the
+	     site. See .well-known/apple-app-site-association and docs/social-links.md.
+
+	     No `?mode=developer` variant. Apple's CDN already serves the real file
+	     (verified by curl against app-site-association.cdn-apple.com, which is
+	     the only honest read of what a phone will see), so the device path and
+	     the debug path are the same path. Re-run that curl whenever the
+	     association file is edited, because Apple caches it. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:triaonline.com</string>
+	</array>
 </dict>
 </plist>
