@@ -1,7 +1,14 @@
 -- ── Invites ─────────────────────────────────────────────────────────────────
--- Run once in the Supabase SQL editor. Additive: it creates two tables and some
+-- Run in the Supabase SQL editor. Additive: it creates two tables and some
 -- functions, and REPLACES handle_new_user and claim_profile (both from
 -- oauth-signin.sql) to add one call each. Nothing here drops or rewrites data.
+--
+-- SAFE TO RE-RUN, and worth knowing because the grants at the bottom were wrong
+-- the first time this was run against the live database (see the long note
+-- beside redeem_invite's revoke). Every statement is `if not exists`, `or
+-- replace`, or a `drop ... if exists` ahead of its create, so running the whole
+-- file again is the correction — there is no separate patch to hunt for and no
+-- state where half of it has landed.
 --
 -- A code is `zoe-4k2` and it lives at triaonline.com/i/zoe-4k2. Redeeming it
 -- makes the two people friends outright, which is why ZOE'S RULE IS THE WHOLE
@@ -140,7 +147,7 @@ begin
 end;
 $$;
 
-revoke all on function public.mint_invite_code(uuid) from public;
+revoke all on function public.mint_invite_code(uuid) from public, anon, authenticated;
 
 -- Your code, made on first ask. The app calls this to render the Invite page,
 -- so it must be safe to call on every visit.
@@ -170,7 +177,7 @@ begin
 end;
 $$;
 
-revoke all on function public.my_invite() from public;
+revoke all on function public.my_invite() from public, anon, authenticated;
 grant execute on function public.my_invite() to authenticated;
 
 -- Reset is the only revocation. The old code stops resolving the moment this
@@ -197,7 +204,7 @@ begin
 end;
 $$;
 
-revoke all on function public.reset_invite() from public;
+revoke all on function public.reset_invite() from public, anon, authenticated;
 grant execute on function public.reset_invite() to authenticated;
 
 -- ── 4. Reading a code, from the landing page ────────────────────────────────
@@ -224,7 +231,7 @@ as $$
   limit 1;
 $$;
 
-revoke all on function public.resolve_invite(text) from public;
+revoke all on function public.resolve_invite(text) from public, anon, authenticated;
 grant execute on function public.resolve_invite(text) to anon, authenticated;
 
 -- ── 5. Redeeming ────────────────────────────────────────────────────────────
@@ -317,12 +324,27 @@ begin
 end;
 $$;
 
--- FROM PUBLIC, not from anon and authenticated. Postgres grants EXECUTE on a
--- new function to PUBLIC automatically, and anon and authenticated inherit it
--- from there — so revoking their names off a grant they never held by name
--- leaves the function callable by exactly the people it was meant to exclude.
--- Same everywhere below: revoke from public first, then grant back by name.
-revoke all on function public.redeem_invite(uuid, text, text) from public;
+-- ALL THREE NAMES, AND IT TAKES ALL THREE. This line was wrong twice, in
+-- opposite directions, and the live database is what settled it.
+--
+-- Postgres grants EXECUTE on a new function to PUBLIC by itself, so naming only
+-- anon and authenticated revokes a grant they never held and leaves them
+-- executing through PUBLIC. That was the first version. Naming only PUBLIC
+-- fixes that and is STILL not enough, because Supabase ships
+--
+--   alter default privileges in schema public
+--     grant all on functions to anon, authenticated, service_role;
+--
+-- which hands every new function an EXPLICIT grant to those roles on top of the
+-- PUBLIC one. Revoking PUBLIC leaves the explicit pair untouched.
+--
+-- Measured, not reasoned: with only PUBLIC revoked, an anon POST to
+-- /rest/v1/rpc/redeem_invite answered 204 — it RAN — and mint_invite_code
+-- answered 500 with this file's own error string. redeem_invite takes the user
+-- id as an argument and `users read public` hands anon those ids, so that was a
+-- stranger able to force a friendship onto somebody else's account with a
+-- guessed code. Check the grant, do not derive it.
+revoke all on function public.redeem_invite(uuid, text, text) from public, anon, authenticated;
 
 -- An EXISTING account typing a code into the app, which is the other way in and
 -- the one the guardrails were really written for. Someone who already has Tria
@@ -351,7 +373,7 @@ begin
 end;
 $$;
 
-revoke all on function public.redeem_invite_code(text, text) from public;
+revoke all on function public.redeem_invite_code(text, text) from public, anon, authenticated;
 grant execute on function public.redeem_invite_code(text, text) to authenticated;
 
 -- ── 6. The three doors ──────────────────────────────────────────────────────
@@ -557,6 +579,24 @@ revoke all on all tables in schema metrics from anon, authenticated;
 --   select public.my_invite();                             → e.g. zoe-4k2
 --   select * from public.resolve_invite(public.my_invite());→ your own row
 --   select * from metrics.invites;                         → [] until someone joins
+--
+-- AND THE GRANTS, WHICH ARE THE ONLY CHECK HERE THAT FOUND A BUG. Everything
+-- else above confirms something works; this one confirms something CANNOT be
+-- reached, which is the kind that fails quietly. Run it as anon (the
+-- publishable key) and read the status code, not the body:
+--
+--   POST /rest/v1/rpc/redeem_invite   {"p_user":"<any uuid>","p_code":"x"}
+--   POST /rest/v1/rpc/mint_invite_code {"p_owner":"<any uuid>"}
+--        → both must be 404 PGRST202. A 204 or a 500 means they RAN.
+--
+--   POST /rest/v1/rpc/resolve_invite  {"p_code":"nope-xyz"}   → 200 []
+--   POST /rest/v1/rpc/my_invite       {}                      → 404 PGRST202
+--
+-- PGRST202 is the right answer for a function anon may not execute: PostgREST
+-- leaves it out of the schema cache entirely, so "you may not" and "there is no
+-- such thing" are the same sentence. That is also why a bogus control name is
+-- worth sending alongside — it proves PGRST202 is what missing looks like here
+-- and not what a stale cache looks like.
 --
 -- PostgREST will not see the new functions until its schema cache reloads. It
 -- does that on its own within a minute; `notify pgrst, 'reload schema';` is the
