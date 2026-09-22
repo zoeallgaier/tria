@@ -300,3 +300,44 @@ in order:**
 
 Neither is scoped here. Both are written down so the decision can be remade on
 what it actually costs.
+
+### Cloudflare was tried and taken out (2026-09-22)
+
+Worth recording properly, because on paper it looked free and obvious and it is
+the thing someone will suggest again.
+
+The plan was the original one: move the nameservers to Cloudflare, run a Worker
+on four routes. The money question checked out — the free tier is 100,000
+requests a day and 10ms of CPU per request, which is far more than Tria needs
+and far more than string-substituting meta tags into a page costs. Zoe added the
+domain, left every record grey, and got as far as the nameserver screen.
+
+**What stopped it was the DNS audit.** GoDaddy's zone for `triaonline.com` holds
+**21 records**, and Cloudflare's import scan silently missed three of them:
+`bounces.cloud.em`, `bounces.cloud2.em`, and `sable.cloud._domainkey`. All three
+belong to GoDaddy's email system, and the third is the DKIM key.
+
+That last one is the trap. The zone also carries a DMARC record set to
+`p=quarantine`, which instructs every receiving mail server to spam-file anything
+from the domain that fails its signature check. Moving without the DKIM record
+would have satisfied the instruction and deleted the thing that answers it:
+outgoing mail would have looked fine from this end and quietly landed in
+people's junk folders, with nothing in the app or the site to indicate why.
+
+**And it was not findable by the checks we were running.** DNS answers "do you
+have a record named X?" and never "list everything." The pre-flight check here
+verified eight records by guessing their names, found them all identical, and
+reported the zone as clean. It was not clean. What surfaced it was Zoe reading
+the GoDaddy table by eye and asking about two CNAMEs that looked odd.
+
+So the decision is not "Cloudflare is bad." It is that **the per-link preview
+card is one feature, and the thing standing between here and it is a hand-audit
+of a 21-record zone where the failure mode is invisible, delayed, and lands on
+email rather than on the app.** That is a bad trade for one card. Everything
+else on this list was already free of it.
+
+**This also re-prices option 1 above.** A CNAME on a subdomain is a smaller act
+than a nameserver move, but it is an act on the same zone, and it would want the
+same audit done first. Whoever picks this up again should start by exporting the
+full GoDaddy zone file rather than probing for record names, and should treat the
+email records as the load-bearing half of the job.
