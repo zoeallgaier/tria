@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["8L793UU9T2.com.triaonline.tria"],
+        "components": [
+          { "/": "/p/*", "comment": "A single post. Opens the app at #/p/<id>." },
+          { "/": "/u/*", "comment": "A profile. Opens the app at #/u/<name>." },
+          { "/": "/daily/*", "comment": "A daily prompt. Opens the app at #/daily/<slug>." },
+          { "/": "/i/*", "comment": "An invite code. Opens the app at #/i/<code>." }
+        ]
+      }
+    ]
+  }
+}
