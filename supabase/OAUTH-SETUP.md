@@ -45,9 +45,22 @@ Nothing about this app goes to Google. **Supabase is the OAuth client**, so
 Google never sees `tria://`, and the app needs no client id, no SDK and nothing
 in `package.json`.
 
-At <https://console.cloud.google.com>, with a project selected (make one called
-Tria if there isn't one). **The consent screen has to come first** — the Create
-Client button is refused without it.
+At <https://console.cloud.google.com>. **The project is `tria-509420`** (name
+Tria, number 763070720120, no organisation), made 2026-09-22. **The consent
+screen has to come first** — the Create Client button is refused without it.
+
+The console is mid-rename and the menus move, so go straight in. These carry the
+project, which is the other thing that is easy to get wrong here — Google is
+happy to let you configure the wrong one:
+
+| | |
+|---|---|
+| Branding (consent screen) | <https://console.cloud.google.com/auth/branding?project=tria-509420> |
+| Audience (External + publish) | <https://console.cloud.google.com/auth/audience?project=tria-509420> |
+| Clients (make the web client) | <https://console.cloud.google.com/auth/clients?project=tria-509420> |
+
+On an older console those three are one page at
+`/apis/credentials/consent` plus `/apis/credentials`.
 
 1. **APIs & Services → OAuth consent screen.** Newer consoles have renamed this
    to **Google Auth Platform**, where the same thing is split across *Branding*,
