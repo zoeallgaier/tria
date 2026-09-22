@@ -106,12 +106,40 @@ confirming under Authentication → Providers that nothing has turned it off.
 address is a different email, so it is a different person as far as matching
 goes. There is no way around that and no way to guess around it.
 
+## Checking the dashboard half without the dashboard
+
+**`/auth/v1/settings` is public and authoritative**, which makes the provider
+toggles one of the few pieces of dashboard state that is verifiable read-only —
+a better answer than "it should be on by now":
+
+```
+curl -s https://autjondbgcjctezbxliv.supabase.co/auth/v1/settings \
+  -H "apikey: $PUBLISHABLE_KEY" | python3 -m json.tool
+```
+
+`external.apple` and `external.google` are the two to read, and they are the
+project's own state rather than a guess from a failed sign-in. `/auth/v1/authorize`
+seconds it with the message the app would show:
+
+```
+curl -s "https://autjondbgcjctezbxliv.supabase.co/auth/v1/authorize?provider=google&redirect_to=tria%3A%2F%2Fauth-callback"
+```
+
+A provider that is off answers `400 validation_failed`, "Unsupported provider:
+provider is not enabled" — which is exactly the string `providerError` in
+js/store.js turns into "That way in isn't switched on yet."
+
+What neither reaches: whether the **client id and secret are the right ones**,
+whether the Services ID and bundle ID are **both** in Apple's Client IDs, and
+whether the redirect URLs are allow-listed. A provider reading `true` means it
+was switched on, not that it was switched on correctly.
+
 ## What each failure looks like
 
 | What you see | Where to look |
 |---|---|
 | "Tria can’t finish setting up new accounts right now" | step 1 |
-| "That way in isn’t switched on yet" | the provider is off (2 or 3), or the redirect URL is not allow-listed (4) |
+| "That way in isn’t switched on yet" | the provider is off (2 or 3), or the redirect URL is not allow-listed (4). `/auth/v1/settings` above says which. |
 | Apple sheet never appears, no error | Sign in with Apple is not on the **App ID** (3.1) |
 | Google's sheet opens and then hangs on the last redirect | `tria://auth-callback` missing from step 4 |
 | Web works, phone says the audience is wrong | the bundle ID is missing from Apple's Client IDs (3.4) |

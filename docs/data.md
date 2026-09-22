@@ -123,6 +123,15 @@ as controls. The `.p8` key is the one thing this cannot reach — Edge Function
 secrets aren't readable over REST, so say it's unverified rather than asserting
 it either way.
 
+**A second read-only probe arrived with provider sign-in, and it reaches
+dashboard state rather than schema state.** `GET /auth/v1/settings` is public
+and returns the project's own `external.*` map, so whether Sign in with Apple
+and Google are actually switched on is a FACT, not an inference from a failed
+tap — see `supabase/OAUTH-SETUP.md`. It stops short of whether they were
+configured *correctly*: a `true` there says the toggle is on, not that the
+client id, the secret, Apple's two Client IDs or the redirect allow list are
+right.
+
 - Login is by **email**, or by **Apple or Google** (below); username is the
   public handle. Email confirmation is off.
 
