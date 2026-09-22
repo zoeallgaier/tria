@@ -20,15 +20,6 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<!-- The scheme a provider sign-in comes back on. ASWebAuthenticationSession
-	     is handed "tria" as its callbackURLScheme (TriaAuthPlugin.webAuth) and
-	     iOS will only route a redirect to a scheme this app has DECLARED, so a
-	     missing entry here is a sheet that sits open forever with no error
-	     anywhere. The matching URL, tria://auth-callback, also has to be in the
-	     Supabase project's Redirect URLs allow list — see supabase/OAUTH-SETUP.md.
-
-	     Sign in with Apple needs none of this: it is a native sheet and never
-	     leaves the app. This is Google's road, and anyone else's later. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -44,15 +35,11 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<!-- canOpenURL answers false for any scheme not listed here, whatever is
-	     installed. Spotify and YouTube Music are asked about so a song's link
-	     can open in the service the reader actually uses (see
-	     TriaSettingsPlugin.musicApps). Apple Music is deliberately absent: it
-	     ships preinstalled, so its presence would tell us nothing about anybody. -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>spotify</string>
 		<string>youtubemusic</string>
+		<string>instagram-stories</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -94,16 +81,6 @@
 	</array>
 	<key>UIStatusBarHidden</key>
 	<false/>
-	<!-- Tria is portrait, and this key is the one the app actually reads:
-	     UIDeviceFamily is 1, so every device that runs it is an iPhone and the
-	     ~ipad key below is never consulted at runtime. It is there because App
-	     Store Connect asks for it anyway. The asset catalog is built with
-	     ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES, so the bundle
-	     carries a 76x76 ~ipad icon and CFBundleIcons~ipad whatever the device
-	     family says, and the validator reads that as an app that can land on an
-	     iPad and must therefore answer for multitasking. Declaring all four for
-	     the iPad idiom satisfies it and changes nothing on a phone. Do not put
-	     the other three in the key above. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

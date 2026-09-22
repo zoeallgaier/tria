@@ -94,10 +94,17 @@
     const n = h.length === 3 ? h.split('').map(function (c) { return c + c; }).join('') : h;
     return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
   }
+  /* Returns HEX, not `rgb(...)`. Canvas takes either and did not care, but
+     backgroundPair() hands these straight to Instagram, whose pasteboard keys
+     are documented as hex strings and which silently paints NO background for
+     anything else. One representation everywhere is cheaper than remembering
+     which consumer is fussy. */
   function mix(a, b, t) {
     const x = hexToRgb(a), y = hexToRgb(b);
-    const c = x.map(function (v, i) { return Math.round(v * (1 - t) + y[i] * t); });
-    return 'rgb(' + c.join(', ') + ')';
+    return '#' + x.map(function (v, i) {
+      const c = Math.round(v * (1 - t) + y[i] * t);
+      return (c < 16 ? '0' : '') + c.toString(16);
+    }).join('');
   }
   /* Relative luminance, so a reader's own colour can be asked whether it wants
      black type on it. The palette is pastel today and the answer is always
@@ -291,33 +298,67 @@
     const PAPER_RGB = '237, 238, 240', INK_RGB = '233, 235, 237';
     const cx = w * 0.5, cy = h * 0.34, rx = w * 1.2, ry = h * 0.78;
 
+    /* BARE leaves the canvas transparent and draws only the card, which is what
+       goes to Instagram. Their share API takes the card as a STICKER and the
+       background as two colours it gradients between itself, on a layer the
+       sender can move the sticker around on. Painting our own background into
+       the sticker would cover theirs and turn a draggable card into a flat
+       screenshot.
+
+       Still 1080x1920, deliberately, rather than cropped to the card: a sticker
+       at story dimensions is placed to fill, so the card lands exactly where the
+       layout put it, safe zones and all. A tight crop would be centred by
+       Instagram and lose that. */
+    const bare = !!spec.bare;
+    const fill = (style) => {
+      if (bare) return;
+      ctx.fillStyle = style;
+      ctx.fillRect(0, 0, w, h);
+    };
+    const lift = (rgb, alpha) => { if (!bare) wash(ctx, w, h, cx, cy, rx, ry, rgb, alpha); };
+
     if (spec.bg === 'dark') {
       paper = Object.assign({}, DARK);
-      ctx.fillStyle = DARK.page;
-      ctx.fillRect(0, 0, w, h);
-      wash(ctx, w, h, cx, cy, rx, ry, INK_RGB, 0.07);
+      fill(DARK.page);
+      lift(INK_RGB, 0.07);
       paper.shadow = 'rgba(0, 0, 0, 0.55)';
     } else if (spec.bg === 'light') {
       /* The one background with no wash at all. Light IS the plain option, and
          a lift on it just makes the paper look dirty. */
       paper = Object.assign({}, LIGHT);
-      ctx.fillStyle = LIGHT.page;
-      ctx.fillRect(0, 0, w, h);
+      fill(LIGHT.page);
       paper.shadow = 'rgba(20, 23, 26, 0.12)';
     } else if (spec.bg === 'accent') {
       paper = Object.assign({}, TRIA);
-      ctx.fillStyle = accent;
-      ctx.fillRect(0, 0, w, h);
-      wash(ctx, w, h, cx, cy, rx, ry, PAPER_RGB, 0.42);
+      fill(accent);
+      lift(PAPER_RGB, 0.42);
       paper.shadow = 'rgba(20, 23, 26, 0.2)';
     } else {
       paper = Object.assign({}, TRIA);
-      ctx.fillStyle = linearGradient(ctx, 160, w, h, bandStops(false));
-      ctx.fillRect(0, 0, w, h);
-      wash(ctx, w, h, cx, cy, rx, ry, PAPER_RGB, 0.38);
+      fill(linearGradient(ctx, 160, w, h, bandStops(false)));
+      lift(PAPER_RGB, 0.38);
       paper.shadow = 'rgba(20, 23, 26, 0.2)';
     }
     return paper;
+  }
+
+  /* THE TWO COLOURS INSTAGRAM WILL GRADIENT BETWEEN, behind the sticker. Two,
+     not four, which is their API and not a simplification made here — so Tria's
+     own ramp cannot cross over as itself and something has to choose. It takes
+     the ENDS of the ramp (lavender to peach, the order it already runs in)
+     rather than a middle pair, so the sweep behind the card reads as the whole
+     brand rather than a slice of it.
+
+     A reader's own accent is a flat field in both stops. It is one colour by
+     definition; faking a gradient out of it would invent a second colour they
+     never picked. */
+  function backgroundPair(spec) {
+    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
+    if (spec.bg === 'dark') return [DARK.page, DARK.page];
+    if (spec.bg === 'light') return [LIGHT.page, LIGHT.page];
+    if (spec.bg === 'accent') return [accent, accent];
+    const stops = bandStops(false);
+    return [stops[0], stops[stops.length - 1]];
   }
 
   /* ---- The card --------------------------------------------------------- */
@@ -547,30 +588,64 @@
      says so out loud, because a decorative QR that does not scan is worse than
      no QR at all — it is a promise the card cannot keep. */
   let encoder = null;
+  const encoderFor = () => encoder || (window.QR && window.QR.encode) || null;
+
   function drawQR(ctx, x, y, side, spec, paper) {
     const url = spec.qrUrl || spec.address || 'triaonline.com';
+    const encode = encoderFor();
+    let cells = null;
+    /* A throw here is the long-payload case and it is HANDLED, not propagated:
+       js/vendor/qr.js refuses past 106 bytes rather than emitting a code that
+       cannot be read, and a card that loses its QR is still a card. */
+    if (encode) { try { cells = encode(url); } catch (e) { cells = null; } }
+
     ctx.save();
     roundRect(ctx, x, y, side, side, Math.round(side * 0.06));
-    if (!encoder) {
+
+    if (!cells) {
       ctx.fillStyle = paper.plate;
       ctx.fill();
       ctx.fillStyle = paper.muted;
       ctx.font = sans(Math.round(side * 0.05));
       ctx.textAlign = 'center';
-      ctx.fillText('[ QR to ' + url + ' ]', x + side / 2, y + side / 2);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(url, x + side / 2, y + side / 2);
       ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
       ctx.restore();
       return y + side;
     }
+
+    /* WHITE, AND NOT THE CARD'S PAPER. Every other plate on these cards takes
+       the theme; this one cannot. A scanner is reading contrast, and Tria's
+       dark paper behind near-black modules is a code that photographs as a
+       grey square. The four-module QUIET ZONE is part of the code for the same
+       reason — it is what tells a camera where the code stops, and the spec
+       asks for four. Inset it rather than trusting the card's own padding,
+       because the card's padding is a design value and this is not. */
     ctx.fillStyle = '#ffffff';
     ctx.fill();
+    /* A hairline around the plate, because on the Light background the card is
+       pure white and a white plate on it has NO EDGE AT ALL. That is a design
+       problem (the code floats in nothing) and a reading problem: the quiet
+       zone stops being a zone when there is no boundary for it to be quiet
+       against, and a decoder pointed at the whole card finds no candidate. The
+       code decodes perfectly once cropped either way, so this is about helping
+       something find it, which is the job the quiet zone was already doing. */
+    ctx.strokeStyle = paper.plate;
+    ctx.lineWidth = Math.max(2, Math.round(side * 0.006));
+    ctx.stroke();
     ctx.clip();
-    const cells = encoder(url);
-    const q = 2, n = cells.length, unit = side / (n + q * 2);
+    const q = 4, n = cells.length, unit = side / (n + q * 2);
     ctx.fillStyle = '#14171a';
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
-        if (cells[r][c]) ctx.fillRect(x + (c + q) * unit, y + (r + q) * unit, Math.ceil(unit), Math.ceil(unit));
+        if (cells[r][c]) {
+          /* Ceil both, so neighbouring dark modules meet instead of leaving a
+             hairline of paper between them at fractional unit sizes. */
+          ctx.fillRect(x + (c + q) * unit, y + (r + q) * unit,
+                       Math.ceil(unit), Math.ceil(unit));
+        }
       }
     }
     ctx.restore();
@@ -615,7 +690,9 @@
     SIZES: SIZES,
     BACKDROPS: BACKDROPS,
     bandStops: bandStops,
-    /* The seam the QR encoder drops into. See drawQR. */
+    backgroundPair: backgroundPair,
+    /* The seam the QR encoder drops into. js/vendor/qr.js is picked up on its
+       own if it is loaded; this is for a caller that wants to supply another. */
     useEncoder: function (fn) { encoder = fn; },
   };
 })();

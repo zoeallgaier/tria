@@ -3926,6 +3926,63 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   .swatch:hover .swatch-disc { transform: none; }
 }
 
+/* ── The story card sheet ───────────────────────────────────────────────────
+   A preview and four backgrounds, sitting above the sheet's own action rows.
+
+   The preview is a 1080x1920 canvas scaled by CSS, which is the whole reason it
+   is drawn at full size rather than at preview size: the picture on screen IS
+   the picture that gets shared, so there is no second rendering path to keep in
+   step and nothing that can look right here and wrong in Instagram.
+
+   It is deliberately SMALL. A card is a thing you choose a colour for, not a
+   thing you read in a sheet — the words on it are already the words on the post
+   behind the scrim, and a preview tall enough to read them would push the
+   actions off the bottom of a short phone. */
+.cardshare { padding: 0.35rem 0.15rem 0.6rem; }
+.cardshare-art {
+  display: grid; place-items: center;
+  margin-bottom: 0.7rem;
+}
+.cardshare-art canvas {
+  display: block;
+  width: auto;
+  /* Bounded by HEIGHT, because every card here is portrait and the sheet's
+     vertical room is the scarce thing. 9:16 at this height is about 100px wide,
+     which leaves the four background pills and two rows comfortable on an SE. */
+  height: clamp(150px, 26vh, 260px);
+  border-radius: 10px;
+  box-shadow: var(--lift-2, 0 10px 30px rgba(20, 23, 26, 0.18));
+}
+.cardshare-bgs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem;
+}
+.cardshare-bg {
+  font: inherit; font-size: 0.8rem;
+  padding: 0.5rem 0.2rem;
+  border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--dur-micro), color var(--dur-micro);
+}
+/* The chosen one wears the reader's own band, the same fill every primary act
+   in the app wears, so "which background" is answered in the app's own colour
+   rather than in a grey that means nothing. */
+.cardshare-bg[aria-pressed="true"] {
+  background-image: var(--pill-band);
+  color: var(--pill-ink);
+  font-weight: 700;
+}
+.cardshare-bg:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cardshare-bg { transition: none; }
+}
+
 /* No dark-mode block here any more: fill, rim and lift are all tokens now, and
    the tokens flip themselves. Same for the mention popover and the modal card. */
 @media (prefers-reduced-motion: reduce) {
