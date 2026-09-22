@@ -182,12 +182,24 @@ whether the Services ID and bundle ID are **both** in Apple's Client IDs, and
 whether the redirect URLs are allow-listed. A provider reading `true` means it
 was switched on, not that it was switched on correctly.
 
+**Seen in the wild, 2026-09-22:** `external.apple` read `true` while
+`/authorize` answered `400 validation_failed`, "Unsupported provider: missing
+OAuth secret" — the toggle flipped and saved with the Secret Key field empty.
+Two things follow. The settings probe alone would have called that done, so read
+BOTH. And it does not mean Apple is dead on the phone: `signInWithIdToken`
+verifies the identity token against Apple's public keys and checks its `aud`
+against the Client IDs list, and never touches the OAuth secret, which exists
+for the authorization-code exchange the WEB flow does. So the same half-finished
+provider can work in the app and fail in a browser, which is not a shape most
+misconfigurations have.
+
 ## What each failure looks like
 
 | What you see | Where to look |
 |---|---|
 | "Tria can’t finish setting up new accounts right now" | step 1 |
 | "That way in isn’t switched on yet" | the provider is off (2 or 3), or the redirect URL is not allow-listed (4). `/auth/v1/settings` above says which. |
+| `settings` says `true`, `/authorize` says "missing OAuth secret" | the toggle is on and the Secret Key field is empty. Apple: the `.p8` contents from step 3.3. Google: the client secret from step 2.4. |
 | Apple sheet never appears, no error | Sign in with Apple is not on the **App ID** (3.1) |
 | Google's sheet opens and then hangs on the last redirect | `tria://auth-callback` missing from step 4 |
 | Web works, phone says the audience is wrong | the bundle ID is missing from Apple's Client IDs (3.4) |
