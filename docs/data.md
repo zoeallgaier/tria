@@ -18,6 +18,15 @@ a review, so treat it as a release blocker rather than a chore:
   side is built and verified: the toggle turns on, the token registers, the row
   lands in `push_subscriptions` with its `apns:` endpoint. The fan-out simply has
   nothing to sign with. Nobody is notified and nothing complains.
+- **Sign in with Apple / Google** (`supabase/OAUTH-SETUP.md`, added 2026-09-22)
+  — the two buttons are on the gate in every shell, and **none of the owner-side
+  setup has been done**. This one is the exception to the paragraph above: it
+  does not fail quietly. `oauth-signin.sql` un-run means the very first tap gets
+  a message naming the file; providers switched off in the dashboard, or a
+  redirect URL that isn't allow-listed, get "That way in isn't switched on yet."
+  Nothing half-lands, because the trigger's refusal rolls the `auth.users` row
+  back with it. The setup doc's last table maps each message to the step it came
+  from.
 
 **`supabase/reposts.sql` HAS been run** (confirmed 2026-08-27), and it was on
 this list as a release blocker after it had already landed — the same drift
@@ -104,7 +113,51 @@ as controls. The `.p8` key is the one thing this cannot reach — Edge Function
 secrets aren't readable over REST, so say it's unverified rather than asserting
 it either way.
 
-- Login is by **email**; username is the public handle. Email confirmation is off.
+- Login is by **email**, or by **Apple or Google** (below); username is the
+  public handle. Email confirmation is off.
+
+### The third state: a session with no profile
+
+Tria's identity is an `@handle`, `users.username` is `unique not null`, and the
+only thing that ever filled it was the signup form. Apple and Google hand back
+an email, sometimes a name, and never a handle. There is nothing to put in that
+column and no way to invent one that isn't either ugly or somebody else's, so
+the person has to pick, and picking takes a screen.
+
+So the profile row is NOT created for a provider sign-in. `handle_new_user`
+returns early when the signup metadata carries no username, and `claim_profile`
+(`supabase/oauth-signin.sql`) is the insert the handle screen makes afterwards.
+In between there is an `auth.users` row and no `public.users` row: signed in to
+Supabase, nobody in Tria. `Store.pendingProfile()` is that state, `renderClaimHandle`
+is its screen, and the route gate treats it as gated in every shell including
+the web, because the public site is for a VISITOR and somebody three fields into
+joining is not one.
+
+**A provisional handle minted by the trigger was tried first and is the wrong
+shape.** A provisional row is a real row to every reader: it has to be excluded
+from Discover, from search, from the friends list and from `username_available`,
+and each of those is a place where forgetting the flag shows a half-made
+stranger to everybody. It is also itself taken, so somebody who picks their own
+name back out of the pool is refused it.
+
+**The one trap in reading that state is the network.** "My row isn't in the
+cache" and "this session has no profile" look identical, and `readWorld` keeps
+the last good copy on a failed read — so on a dropped connection the naive check
+meets a reader of two years with *pick a username*. `usersFresh` is the fact the
+error swallows: `hydrate` only concludes a profile is missing when that load
+actually got an answer out of the `users` table.
+
+**The agreement checkbox moved with it.** App Store 1.2 and 5.1.1(i) want joining
+to be an explicit agreement to the guidelines and the privacy policy, and a
+provider tap is joining — so the checkbox is on the handle screen, which is the
+screen a first sign-in sees and a returning one never does. `#/about` stays
+reachable from behind the gate for the same reason the links there dropped
+`target="_blank"`: a dead tap on the first screen is its own rejection.
+
+**Linking.** Supabase attaches a provider identity to an existing user when the
+provider's email matches a confirmed one, so a password account and a Google tap
+on the same address are one account. Apple's Hide My Email is a different
+address and therefore a different person, and there is no way around that.
 - The Supabase service key was rotated/deleted, so **only Zoe has DB admin** —
   Claude can't run SQL or clear accounts. Migrations in `supabase/*.sql` are run
   by her in the dashboard; `schema.sql` folds them all in for fresh installs.

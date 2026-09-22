@@ -19,5 +19,23 @@
 	     profile but not to the App ID. -->
 	<key>aps-environment</key>
 	<string>development</string>
+
+	<!-- Sign in with Apple. Without this entitlement the system sheet never
+	     appears: ASAuthorizationController answers its delegate with error
+	     1000 ("The operation couldn't be completed"), which names nothing and
+	     is indistinguishable from the person cancelling.
+
+	     Like aps-environment above, it only works if the App ID itself has the
+	     capability enabled in the developer portal. Automatic signing will put
+	     it in the profile and cannot put it on the App ID, so the build
+	     succeeds, the button appears, and the tap does nothing.
+
+	     "Default" is the whole capability. The other value, "Existing", is for
+	     migrating accounts off an existing Apple-ID-backed login, which Tria
+	     has never had. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

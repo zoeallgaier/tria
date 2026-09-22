@@ -266,6 +266,41 @@ because it is about the same hand-off (which app should get the link) rather
 than because it fits the name. A method added here needs no registration change;
 only a new *class* would need a hand-written entry in `capacitorDidLoad`.
 
+**`TriaAuthPlugin` is the third such class** (2026-09-22), registered the same
+way and invisible to `verify-plugins.sh` for the same reason. Two methods:
+`appleSignIn` raises the system's Sign in with Apple sheet and hands the webview
+an identity token, and `webAuth` runs any other provider's page in
+`ASWebAuthenticationSession` and hands back the callback URL. Google is the only
+caller of the second one.
+
+Apple is native and Google is not, and the split is not taste. The browser flow
+carries Apple perfectly well — it is a Supabase provider like any other — and on
+a phone it is a web sheet asking for an Apple ID password on a device already
+signed in to one, which is the friction Sign in with Apple exists to remove and
+which review has refused. It is also **the only place Apple ever says the
+person's name**: not in the identity token, not on the second authorisation,
+once, to the native credential. That name is what the handle screen offers as a
+display name, so if it isn't read there it is gone.
+
+Google gets no native path because an SDK would buy nothing. **Supabase is the
+OAuth client, not this app**, so Google never sees `tria://` and needs to know
+nothing about this bundle; `package.json` gains no dependency.
+
+Three things it needs that no other plugin here does, and each fails silently
+without them. The **`com.apple.developer.applesignin` entitlement**, which only
+works if the App ID itself has the capability in the developer portal —
+automatic signing puts it in the profile and cannot put it on the App ID, so the
+build succeeds, the button appears, and the tap does nothing. A
+**`CFBundleURLTypes` entry for `tria`** in `Info.plist`, or iOS routes the
+callback to nobody and the browser sheet sits open forever. And the **raw nonce
+must not be the one Apple gets**: Apple signs the SHA-256 of it into the token
+and Supabase re-hashes what the client sends, so the plugin hashes for Apple and
+returns the raw string to JS. Sending the same one to both fails with a message
+about the nonce that reads like the nonce is missing.
+
+The owner-side half of all this is `supabase/OAUTH-SETUP.md`, and **none of it
+has been done yet.**
+
 Both `enablePush` callers also wrap the round trip in `try/finally`. The switch
 disables itself while it waits, and a **throw** (the Supabase write at the end is
 a bare network call that can reject) would skip the re-enable and leave the switch

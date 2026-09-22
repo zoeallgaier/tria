@@ -29,6 +29,12 @@ class TriaViewController: CAPBridgeViewController {
         // treats the CSS chrome as the default and only switches over once this
         // plugin has actually answered; see docs/native-chrome.md.
         bridge?.registerPluginInstance(TriaChromePlugin())
+        // Sign in with Apple and the browser sheet the other providers go
+        // through. Same seam, same invisibility to verify-plugins.sh, and a
+        // gentler failure than the two above: if it doesn't compile in, the two
+        // buttons on the gate reject and say so on the screen, where the email
+        // form is still sitting right underneath them. See TriaAuthPlugin.swift.
+        bridge?.registerPluginInstance(TriaAuthPlugin())
     }
 
     /// `--bg` from `css/tokens.css`, in the one form CSS can't reach: light

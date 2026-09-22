@@ -18,7 +18,8 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `js/config.js` — Supabase URL + publishable key + VAPID key (safe to commit).
 - `ios/` — the Capacitor app: `App/` (Swift, entitlements, Info.plist),
   `CapApp-SPM/` (CLI-managed), `verify-plugins.sh`.
-- `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`.
+- `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
+  + `OAUTH-SETUP.md`.
 
 ## 1.7 is chats, activities and the public site
 
@@ -27,6 +28,34 @@ Zoe's answers, the calls Claude made, and the three stages:
 pinned first row of the chat list and still lives at `#/updates`. The message
 bar is the comment bar (`mountPostBar(null, chat)`), so it needed nothing new in
 Swift. Every rule about who may message whom is in `supabase/add-chats.sql`.
+
+## Signing in is three doors now (2026-09-22)
+
+Email and password, **Continue with Apple**, **Continue with Google**. Apple and
+Google are a package and not a menu: App Store **4.8** requires a privacy-
+preserving option alongside any third-party sign-in, Sign in with Apple is it,
+so Google may not ship without Apple and neither may go out alone.
+
+**Apple is native, Google is a browser sheet**
+(`ios/App/App/TriaAuthPlugin.swift`). Apple because the web flow asks for an
+Apple ID password on a device already signed in to one, and because the native
+credential is the ONLY place Apple ever says the person's name. Google because
+Supabase is the OAuth client and not this app, so an SDK would buy nothing.
+
+**A provider sign-in makes no profile row**, and that is the whole design. Tria's
+identity is an `@handle` and neither provider has one, so `handle_new_user`
+returns early with no username in the metadata and the app lands in a THIRD
+STATE: an auth session with nobody behind it (`Store.pendingProfile()`,
+`renderClaimHandle`, `claim_profile` in `supabase/oauth-signin.sql`). Do not mint
+a provisional handle — the reasoning is at the top of that file. Note the trap
+`usersFresh` guards: a failed `users` read looks exactly like a missing profile,
+and getting it wrong meets a reader of two years with *pick a username*.
+
+**None of the owner-side setup is done.** `supabase/OAUTH-SETUP.md` is the list
+(one migration, Google Cloud, three Apple registrations, the redirect allow
+list). This is the rare backend gap that is NOT silent: an un-run migration
+names itself on the first tap, and every other misconfiguration says "That way
+in isn't switched on yet."
 
 ## 1.4 is the chrome going native
 
@@ -153,6 +182,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   the calendar feed will name a different set of people from the app's guest list.
   **The folder is `push`, the deployed slug is `swift-processor`** (PUSH-SETUP.md);
   a GET on it answers `ok` but says nothing about which revision is live.
+  **`oauth-signin.sql` is confirmed NOT run** (2026-09-22): `claim_profile` with
+  its real signature answers PGRST202 while `username_available` answers `true`
+  in the same breath, so that is the function missing and not the probe. The
+  rest of provider sign-in is dashboard state REST cannot see at all; see
+  `supabase/OAUTH-SETUP.md`.
 
 ## Copy style
 

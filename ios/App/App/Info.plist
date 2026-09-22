@@ -20,6 +20,26 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<!-- The scheme a provider sign-in comes back on. ASWebAuthenticationSession
+	     is handed "tria" as its callbackURLScheme (TriaAuthPlugin.webAuth) and
+	     iOS will only route a redirect to a scheme this app has DECLARED, so a
+	     missing entry here is a sheet that sits open forever with no error
+	     anywhere. The matching URL, tria://auth-callback, also has to be in the
+	     Supabase project's Redirect URLs allow list — see supabase/OAUTH-SETUP.md.
+
+	     Sign in with Apple needs none of this: it is a native sheet and never
+	     leaves the app. This is Google's road, and anyone else's later. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tria</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

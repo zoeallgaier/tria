@@ -6212,6 +6212,84 @@
       `</header>`;
   }
 
+  /* ── The other two doors ────────────────────────────────────────────────────
+     Apple and Google, above the email form on both of its modes, because a
+     provider knows nothing about signup versus log in: the same tap makes an
+     account the first time and opens one every time after, and asking somebody
+     to pick which of those they are doing before they tap is a question only the
+     form needs answered.
+
+     Apple is FIRST and not alphabetically. It is the one that can be tapped
+     without a browser opening (see signInWithProvider in store.js), and on the
+     phone this app actually ships to it is also the private one: Hide My Email
+     means a Tria account that never learns your address.
+
+     Nothing here is native chrome and nothing here may become it. These sit on
+     the gate, where renderNav never runs and no bar exists to borrow a control
+     into (see the note above PAGE_SEL), and PAGE_SEL is a closed list besides. */
+  const APPLE_MARK =
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">` +
+      `<path d="M17.05 12.54c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.09-2.01-3.76-2.04-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.9-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.79 1.3 10.34.86 1.25 1.89 2.65 3.24 2.6 1.3-.05 1.79-.84 3.36-.84 1.57 0 2.01.84 3.38.81 1.4-.02 2.28-1.27 3.13-2.53.99-1.45 1.4-2.85 1.42-2.92-.03-.01-2.72-1.04-2.75-4.12z"/>` +
+      `<path d="M14.6 4.84c.71-.86 1.19-2.06 1.06-3.25-1.02.04-2.26.68-3 1.54-.66.76-1.24 1.98-1.09 3.14 1.14.09 2.31-.58 3.03-1.43z"/>` +
+    `</svg>`;
+  // Google's mark is four fixed hues and stays four fixed hues in both themes:
+  // it is a trademark, not an icon, and currentColor would be a redraw of it.
+  const GOOGLE_MARK =
+    `<svg viewBox="0 0 24 24" aria-hidden="true">` +
+      `<path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3.01h3.88c2.27-2.09 3.58-5.17 3.58-8.82z"/>` +
+      `<path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.94-2.91l-3.88-3.01c-1.08.72-2.45 1.15-4.06 1.15-3.13 0-5.78-2.11-6.72-4.95H1.27v3.11A12 12 0 0 0 12 24z"/>` +
+      `<path fill="#FBBC05" d="M5.28 14.28a7.2 7.2 0 0 1 0-4.56V6.61H1.27a12 12 0 0 0 0 10.78l4.01-3.11z"/>` +
+      `<path fill="#EA4335" d="M12 4.77c1.76 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4.01 3.11C6.22 6.88 8.87 4.77 12 4.77z"/>` +
+    `</svg>`;
+
+  const providerRow = (id, mark, label) =>
+    `<button type="button" class="auth-provider" data-provider="${id}">` +
+      `<span class="auth-provider-mark auth-provider-mark--${id}">${mark}</span>` +
+      `<span class="auth-provider-label">${label}</span>` +
+    `</button>`;
+
+  const providerBlock = () =>
+    `<div class="auth-providers">` +
+      providerRow('apple', APPLE_MARK, 'Continue with Apple') +
+      providerRow('google', GOOGLE_MARK, 'Continue with Google') +
+    `</div>` +
+    `<p class="auth-or"><span>or</span></p>`;
+
+  // One handler for both buttons. The awaited call hands the pair back on every
+  // path but one: the web's is a full-page redirect, so `redirecting` leaves
+  // them disabled deliberately. There is no "back" to hand them to, and a button
+  // that re-enables while the page is leaving invites a second tap into a flow
+  // that has already gone.
+  function wireProviders(errEl) {
+    const btns = [...document.querySelectorAll('.auth-provider')];
+    btns.forEach((btn) => btn.addEventListener('click', async () => {
+      const label = btn.querySelector('.auth-provider-label');
+      const was = label.textContent;
+      errEl.textContent = '';
+      btns.forEach((b) => { b.disabled = true; });
+      label.textContent = 'Opening…';
+
+      const res = await Store.signInWithProvider(btn.dataset.provider).catch(() => null);
+      if (res && res.redirecting) return;
+      if (!res || !res.ok) {
+        // A cancel is not a failure. Backing out of the Apple sheet or closing
+        // the Google page is a decision, and it gets no red line for it.
+        if (!res || !res.cancelled)
+          errEl.textContent = (res && res.error) || 'Couldn’t reach Tria, try again.';
+        btns.forEach((b) => { b.disabled = false; });
+        label.textContent = was;
+        return;
+      }
+      go('#/');
+      // Brand new: no profile row, so there is no world to warm and no account
+      // for this device's push address to belong to yet. renderClaimHandle does
+      // both once the handle lands.
+      if (res.pending) return;
+      warmImages();
+      Store.pushResume();
+    }));
+  }
+
   function renderAuth(mode) {
     authMode = mode;
     const isSignup = mode === 'signup';
@@ -6246,6 +6324,7 @@
         authHeader() +
         `<div class="auth-card">` +
         `<h1 class="auth-head">${isSignup ? 'Create your account' : 'Welcome back'}</h1>` +
+        providerBlock() +
         `<form id="auth-form" novalidate>` +
           identityField +
           emailField +
@@ -6332,6 +6411,8 @@
       Store.pushResume();
     });
 
+    wireProviders(errEl);
+
     // Toggle signup ⇄ login through the router, so the form is rebuilt exactly
     // the way arriving on it builds it.
     document.getElementById('auth-toggle').addEventListener('click',
@@ -6357,6 +6438,106 @@
       const sent = !!(res && res.ok);
       btn.textContent = sent ? 'Sent. Check your inbox.' : 'Could not send, try again';
       if (!sent) btn.disabled = false;
+    });
+  }
+
+  /* ── The handle screen ──────────────────────────────────────────────────────
+     Signed in to Supabase, nobody in Tria yet: the third state (see hydrate in
+     store.js). Apple and Google hand back an email, sometimes a name, and never
+     an @handle, so the profile row cannot exist until this screen is answered,
+     and until it does there is nothing for the feed to be a feed OF.
+
+     It is signup's second half, so it wears signup's second half: the same
+     display-name-over-@handle combo, the same hint under it, the same agreement
+     checkbox. That checkbox is not decoration — App Store 1.2 and 5.1.1(i) want
+     joining to be an explicit agreement, and a provider tap is joining. Somebody
+     signing back IN with Apple never sees this screen at all; they agreed the
+     first time.
+
+     The way out is a sign-out and not a back. There is no earlier screen to
+     return to: the account exists at Supabase from the moment the provider
+     answered, so "not you?" has to actually end the session rather than hide it.
+
+     A person who closes the app here leaves an auth row with no profile behind,
+     and that is fine and on purpose. Signing in again lands on this exact screen
+     with the same handle still free, which is the only behaviour that doesn't
+     either lose them or squat on a name they never chose. */
+  function renderClaimHandle() {
+    const hint = Store.pendingProfile() || { email: '', name: '', username: '' };
+
+    view.innerHTML =
+      `<section class="auth">` +
+        authHeader() +
+        `<div class="auth-card">` +
+        `<h1 class="auth-head">Almost in</h1>` +
+        `<p class="auth-sub">` +
+          (hint.email ? `Signed in as ${esc(hint.email)}. ` : '') +
+          `Pick the name and @handle your friends will see.</p>` +
+        `<form id="claim-form" novalidate>` +
+          `<div class="field field--combo">` +
+            `<input id="f-name" class="combo-title" type="text" autocomplete="name" ` +
+              `maxlength="40" placeholder="Display name" aria-label="Display name" ` +
+              `value="${esc(hint.name || '')}"${hint.name ? '' : ' autofocus'}>` +
+            `<div class="combo-divider" aria-hidden="true"></div>` +
+            `<div class="combo-user">` +
+              `<span class="at" aria-hidden="true">@</span>` +
+              `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
+                `autocapitalize="none" spellcheck="false" maxlength="20" ` +
+                `placeholder="username" aria-label="Username" ` +
+                `value="${esc(hint.username || '')}"${hint.name ? ' autofocus' : ''}>` +
+            `</div>` +
+          `</div>` +
+          `<p class="field-hint field-hint--combo">Lowercase letters, numbers or _ for your @handle.</p>` +
+          `<label class="auth-agree" for="f-agree">` +
+            `<input id="f-agree" type="checkbox">` +
+            `<span>I agree to Tria's <a href="#/about?open=guidelines">Community Guidelines</a> and <a href="#/about?open=privacy">Privacy Policy</a>.</span>` +
+          `</label>` +
+          `<p class="auth-error" id="auth-error" role="alert"></p>` +
+          `<button class="auth-submit publish-fill is-solid" type="submit">Create account</button>` +
+        `</form>` +
+        `<p class="auth-alt">Not you? <button type="button" id="claim-out">Sign out</button></p>` +
+      `</div></section>`;
+
+    const errEl = document.getElementById('auth-error');
+    const submitBtn = document.querySelector('.auth-submit');
+
+    document.getElementById('claim-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.textContent = '';
+      const agree = document.getElementById('f-agree');
+      if (!agree.checked) {
+        errEl.textContent = 'Please agree to the Community Guidelines and Privacy Policy to continue.';
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating…';
+      const res = await Store.claimProfile({
+        name: document.getElementById('f-name').value,
+        username: document.getElementById('f-user').value,
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        errEl.textContent = (res && res.error) || 'Couldn’t reach Tria, try again.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create account';
+        return;
+      }
+      // Signed in for real now, so the rest of a sign-in's tail runs here — the
+      // same three lines the form's own submit ends on, and the first moment
+      // either of the last two has anything to work with.
+      go('#/');
+      warmImages();
+      Store.pushResume();
+    });
+
+    document.getElementById('claim-out').addEventListener('click', async (ev) => {
+      const el = ev.currentTarget;
+      el.disabled = true;
+      el.textContent = 'Signing out…';
+      await Store.logout().catch(() => {});
+      // Signed out on the web is the public site, which needs a world to read.
+      if (!nativeShell()) await Store.loadGuest().catch(() => {});
+      authMode = 'signup';       // they were three fields into joining
+      go('#/join');
     });
   }
 
@@ -18338,7 +18519,12 @@
     // (1.7 stage 3): the nav stands, Discover, posts and profiles read, and the
     // gate is only the account pages themselves. See renderGuest.
     const gatePath = (location.hash || '#/').split('?')[0];
-    if (!Store.isAuthed() && (nativeShell() || Store.isRecovering() || GUEST_GATE.has(gatePath))) {
+    // pendingProfile() is the third state (see hydrate in store.js): an Apple or
+    // Google session that has no profile row yet. It gates in every shell, the
+    // web included — the public site is for a VISITOR, and somebody three fields
+    // into joining is not one. Signed out is still signed out on the web.
+    if (!Store.isAuthed() && (nativeShell() || Store.isRecovering()
+                              || Store.pendingProfile() || GUEST_GATE.has(gatePath))) {
       document.body.classList.add('gate');
       // The signed-out front door is the ACCOUNT FORM, in every shell. It used to
       // be an install-first welcome ("add Tria to your home screen, then sign in
@@ -18362,6 +18548,11 @@
         // password, whatever the hash says.
         if (Store.isRecovering()) return renderNewPassword();
         if (gatePath === '#/about') return renderAbout(true);
+        // A session with no handle goes to the handle screen and nowhere else.
+        // About is the one exception, above, because the agreement checkbox on
+        // that screen links into it and a dead tap there is the same 4.2 problem
+        // target="_blank" was on the signup form.
+        if (Store.pendingProfile()) return renderClaimHandle();
         // Signed out is the NORMAL way to arrive at the pricing page — it's the
         // page you send a business owner a link to, and asking them to make an
         // account to find out what an account costs is the joke that writes

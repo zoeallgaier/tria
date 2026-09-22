@@ -220,6 +220,18 @@ create table public.blocks (
 -- When Supabase Auth inserts a new auth.users row, mirror it into public.users,
 -- reading the username + name we pass as signup metadata (options.data). Runs as
 -- SECURITY DEFINER so it can write the profile regardless of RLS.
+--
+-- It makes NO row when there is no username in the metadata, which is every
+-- Apple or Google sign-in and nothing else: those hand back an email, sometimes
+-- a name, and never a handle, so there is nothing to put in a column that is
+-- `unique not null`. The app finishes the job — an auth session with no profile
+-- is its third state, and claim_profile below is how it leaves it. See
+-- supabase/oauth-signin.sql for why no provisional handle is minted here.
+--
+-- The branch must not be a raise. This is an `after insert` trigger on
+-- auth.users, so an exception rolls the auth row back with it and GoTrue answers
+-- "Database error saving new user" — a message naming neither the column nor
+-- the trigger, which is what a null username against `not null` used to give.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -227,6 +239,10 @@ security definer
 set search_path = public
 as $$
 begin
+  if nullif(trim(coalesce(new.raw_user_meta_data->>'username', '')), '') is null then
+    return new;
+  end if;
+
   insert into public.users (id, username, name)
   values (
     new.id,
@@ -352,7 +368,8 @@ grant execute on function public.can_see_post(text, uuid, uuid) to anon, authent
 -- ── Row Level Security ────────────────────────────────────────────────────────
 -- Small friends app: any signed-in user can READ the whole world; WRITES are
 -- restricted to your own rows. (Profile INSERT happens via the trigger above,
--- which bypasses RLS, so no insert policy is needed on users.)
+-- or via claim_profile() after a provider sign-in — both SECURITY DEFINER, both
+-- bypassing RLS, so no insert policy is needed on users.)
 alter table public.users    enable row level security;
 alter table public.posts    enable row level security;
 alter table public.post_audience enable row level security;
@@ -489,6 +506,64 @@ as $$
   select not exists (select 1 from public.users where username = lower(u));
 $$;
 grant execute on function public.username_available(text) to anon, authenticated;
+
+-- ── Claiming a handle after a provider sign-in ────────────────────────────────
+-- Apple and Google make an auth.users row with no username in it, so the trigger
+-- above makes no profile and the app lands on its handle screen instead of in
+-- the feed. This is the insert that ends that state: done as the caller and for
+-- the caller only, with no id argument and therefore no id to tamper with — the
+-- same shape as delete_account() below, and the reason `users` still needs no
+-- insert policy.
+--
+-- Every rule the signup form states is re-stated here, because the form is a
+-- courtesy and this is the fence. The shape check matches the client's
+-- /^[a-z0-9_]{2,20}$/ exactly; keep the two in step or one of them is a lie.
+-- Already claimed is not an error (a double-submit, a second tab): hand back the
+-- handle that exists. Renaming is not offered here — that is "users update self"
+-- and the profile editor's job. Full reasoning: supabase/oauth-signin.sql.
+create or replace function public.claim_profile(p_username text, p_name text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid  uuid := auth.uid();
+  u    text := lower(trim(coalesce(p_username, '')));
+  n    text := trim(coalesce(p_name, ''));
+  have text;
+begin
+  if uid is null then
+    raise exception 'You need to be signed in.' using errcode = '28000';
+  end if;
+
+  select username into have from public.users where id = uid;
+  if have is not null then
+    return have;
+  end if;
+
+  if u !~ '^[a-z0-9_]{2,20}$' then
+    raise exception 'Username: 2–20 letters, numbers or _.' using errcode = '22023';
+  end if;
+
+  if exists (select 1 from public.users where username = u) then
+    raise exception 'That username is taken.' using errcode = '23505';
+  end if;
+
+  insert into public.users (id, username, name)
+  values (uid, u, coalesce(nullif(n, ''), 'Someone'));
+
+  return u;
+exception
+  -- The unique index is the real gate; the `exists` above is only the fast,
+  -- friendly one. Two people claiming the same handle in the same second get
+  -- past it, and the loser should read the same sentence as everyone else.
+  when unique_violation then
+    raise exception 'That username is taken.' using errcode = '23505';
+end;
+$$;
+revoke all on function public.claim_profile(text, text) from public;
+grant execute on function public.claim_profile(text, text) to authenticated;
 
 -- ── Delete your own account ───────────────────────────────────────────────────
 -- Leaving has to be as easy as joining, and it has to reach auth.users, which no

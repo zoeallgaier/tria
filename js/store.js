@@ -91,6 +91,9 @@ const Store = (() => {
   let loadsInFlight = 0;
   let worldGen = 0;
   let pendingWrites = [];
+  // Whether the last readWorld got a real answer out of the users table (see
+  // readWorld and hydrate). Not part of the world, so clearWorld leaves it.
+  let usersFresh = false;
   function write(key, fn) {
     state[key] = fn(state[key]);
     if (loadsInFlight) pendingWrites.push([key, fn]);
@@ -307,9 +310,44 @@ const Store = (() => {
     } finally { await primed; }
   }
 
+  /* ── The third state ────────────────────────────────────────────────────────
+     An auth session with no public.users row: signed in to Supabase, not yet
+     anybody in Tria. Apple and Google make one every time — they hand back an
+     email, sometimes a name, and never an @handle, so handle_new_user writes no
+     profile and there is nothing for state.session to be (see
+     supabase/oauth-signin.sql). The app answers it with the handle screen
+     (renderClaimHandle) and leaves it through claimProfile.
+
+     It was always reachable — a trigger that half-ran, a row deleted by hand —
+     and until now it was a login form shown to somebody already logged in, who
+     could log in again as often as they liked and never get past it. */
+  let needsProfile = null;   // {email, name} suggestions, or null
+  const pendingProfile = () => needsProfile;
+
+  // What we can fill the handle screen in with. Google sends a name and Apple
+  // sends one exactly once, at the first authorisation, and only to the native
+  // credential — never in the token — so `carry` is that one shot, passed
+  // straight down from appleNative rather than read back off the user.
+  function profileHint(user, carry) {
+    const m = user.user_metadata || {};
+    const name = String(
+      (carry && carry.name) || m.full_name || m.name ||
+      [m.given_name, m.family_name].filter(Boolean).join(' ') || ''
+    ).trim().slice(0, 40);
+    const email = String(user.email || (carry && carry.email) || '').trim();
+    // A handle to offer, off the email's local part: the letters and digits of
+    // it, lowercased, nothing else. Offered, not reserved. It is deliberately
+    // NOT checked for availability here: a field that clears itself under the
+    // person who has started typing in it is worse than a taken handle, which
+    // claimProfile already names in a sentence they can act on.
+    const guess = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+    return { email, name, username: /^[a-z0-9_]{2,20}$/.test(guess) ? guess : '' };
+  }
+
   // Set state.session from an auth session and load (or clear) the world.
-  async function hydrate(session, guest = false) {
+  async function hydrate(session, guest = false, carry = null) {
     if (!session) {
+      needsProfile = null;
       clearWorld();
       if (guest) await loadWorld();
       return;
@@ -320,6 +358,10 @@ const Store = (() => {
     await loadWorld();
     const me = state.users.find(u => u.id === session.user.id);
     state.session = me ? me.username : null;
+    // No row of my own. Only call that a missing profile if this load actually
+    // read the table — `usersFresh` is the difference between "you are new here"
+    // and "the network dropped", and they look identical from the cache.
+    needsProfile = me ? null : (usersFresh ? profileHint(session.user, carry) : null);
     startLive();
   }
 
@@ -446,6 +488,13 @@ const Store = (() => {
         res.error.message || res.error);
       return prev;
     };
+    // Did THIS load actually see the users table? `core` keeps the last good
+    // copy on an error, which is right for content and dangerous for identity:
+    // hydrate reads "my row isn't here" as "this session has no profile yet"
+    // and sends the person to the handle screen. On a dropped connection that
+    // would meet a reader of two years with "pick a username". So the flag is
+    // the fact the error swallows, and hydrate refuses to conclude without it.
+    usersFresh = !u.error;
     state.users = core(u, 'users', mapUser, state.users);
     const nameById = nameMap();
     // A row whose author this reader can't see is a row nothing can draw. Signed
@@ -960,6 +1009,7 @@ const Store = (() => {
     await releaseEndpoint();
     await sb.auth.signOut();
     recovering = false;
+    needsProfile = null;
     clearWorld();
   }
   // The public site's world, for a visitor with no session (after a sign-out or
@@ -1004,6 +1054,198 @@ const Store = (() => {
     return { ok: true };
   }
 
+  /* ── Sign in with Apple / Google ────────────────────────────────────────────
+     One door, three ways through it, and which one you get is the shell you are
+     standing in:
+
+       Apple, in the app   → the system sheet. ASAuthorization hands back an
+                             identity token and we trade it for a session with
+                             signInWithIdToken. No browser opens at all: Face ID,
+                             and you are in.
+       Google, in the app  → ASWebAuthenticationSession over Supabase's own
+                             /authorize. Google is not our OAuth client, Supabase
+                             is, so Google never sees `tria://` and the app needs
+                             no client id of its own, no SDK, and nothing in
+                             package.json. The session comes back in the callback
+                             URL's fragment and setSession takes it from there.
+       Either, on the web  → signInWithOAuth's full-page redirect, and the page
+                             leaves. Nothing after that call runs.
+
+     Apple's is the one that is worth native and not just nicer. The web flow
+     would work — Apple is a provider like any other — but it is a browser sheet
+     asking for an Apple ID password on a device already signed in to one, which
+     is the thing Sign in with Apple exists to abolish, and review has refused it
+     before. It is also the ONLY place Apple ever tells us the person's name: not
+     in the token, not on the second authorisation, once, to the native
+     credential. That name is the display name we can offer on the next screen,
+     so if it isn't caught here it is gone for good.
+
+     IMPLICIT, not PKCE, and not by preference: the client is built implicit
+     (createClient's default) and the password-recovery link is built on that
+     shape. So the callback carries #access_token, which is also why redirectTo
+     never has an app hash on it — see requestPasswordReset for the longer note
+     on the '#' collision with our own router. */
+
+  // Where Supabase sends the app back to. The scheme is declared in
+  // ios/App/App/Info.plist (CFBundleURLTypes) and this exact URL has to be in
+  // the project's Redirect URLs allow list, or Supabase drops the callback on
+  // the floor and ASWebAuthenticationSession just sits there. See OAUTH-SETUP.md.
+  const NATIVE_SCHEME = 'tria';
+  const NATIVE_REDIRECT = 'tria://auth-callback';
+
+  // Every provider path ends here, so every one of them reads the same. The
+  // dressed-up cases are the two that are somebody's *setup* rather than their
+  // mistake, and both of them are silent failures otherwise.
+  function providerError(error) {
+    const m = String((error && error.message) || error || '');
+    // The trigger refusing a null username: oauth-signin.sql has not been run.
+    // GoTrue names neither the column nor the trigger, so we have to.
+    if (/database error saving new user/i.test(m))
+      return 'Tria can’t finish setting up new accounts right now. (The database is missing supabase/oauth-signin.sql.)';
+    // The provider is off in the dashboard, or this build's redirect URL isn’t
+    // on the allow list. Both land as a 400 from /authorize.
+    if (/provider is not enabled|unsupported provider|validation_failed/i.test(m))
+      return 'That way in isn’t switched on yet.';
+    return m || 'Couldn’t reach Tria, try again.';
+  }
+
+  // Native only. Rejections carry a marker the plugin sets (see TriaAuthPlugin);
+  // a cancel is not a failure and must not paint anything red.
+  const wasCancelled = (e) => /cancell?ed/i.test(String((e && e.message) || e || ''));
+
+  /* Is TriaAuth actually in this binary?
+     ASK, don't call and hope. A bridge call to a plugin Capacitor cannot find
+     is not an error: it logs one line to the device console and RETURNS, so the
+     promise never settles, ever. Measured on the simulator, not assumed. The
+     button that awaited it would sit on "Opening…", disabled, for the life of
+     the page — the one failure the "hand yourself back on every path" rule
+     cannot catch, because there is no path.
+
+     `registerPluginInstance` does put the plugin in `Capacitor.Plugins`, so
+     `isPluginAvailable` answers truthfully for a plugin registered by hand from
+     capacitorDidLoad (also measured; it is not obvious, since nothing on the JS
+     side ever registered it). The optional call is for a Capacitor old enough
+     not to have it, where "no" is the safe answer. */
+  const nativeAuth = () => {
+    try { return !!window.Capacitor?.isPluginAvailable?.('TriaAuth'); }
+    catch { return false; }
+  };
+
+  async function signInWithProvider(provider) {
+    if (provider !== 'apple' && provider !== 'google')
+      return { ok: false, error: 'Unknown sign-in.' };
+    try {
+      if (nativeShell()) {
+        // In the app with no plugin: say so and stop. There is no web fallback
+        // to offer here — signInWithOAuth's redirect would navigate the webview
+        // off its own bundle and land it on the WEBSITE, out of the app, with
+        // no way back but a relaunch. The email form is still right underneath.
+        if (!nativeAuth())
+          return { ok: false, error: 'This version of Tria can’t sign in that way yet. Use your email below.' };
+        return provider === 'apple' ? await appleNative() : await webAuthNative(provider);
+      }
+      return await providerWeb(provider);
+    } catch (e) {
+      if (wasCancelled(e)) return { ok: false, cancelled: true };
+      return { ok: false, error: providerError(e) };
+    }
+  }
+
+  // The system sheet. The plugin makes a random nonce, gives Apple its SHA-256
+  // and gives US the raw one — which is the half signInWithIdToken wants, since
+  // the token carries only the hash and Supabase does the comparing.
+  async function appleNative() {
+    const cred = await window.Capacitor.nativePromise('TriaAuth', 'appleSignIn', {});
+    if (!cred || !cred.idToken) return { ok: false, error: 'Apple didn’t hand back a sign-in.' };
+    const { data, error } = await sb.auth.signInWithIdToken({
+      provider: 'apple', token: cred.idToken, nonce: cred.nonce,
+    });
+    if (error) return { ok: false, error: providerError(error) };
+    // The one shot at the name (see the block comment): carried into hydrate so
+    // the handle screen can offer it, and dropped after that.
+    await hydrate(data.session, false, { name: cred.name || '', email: cred.email || '' });
+    return { ok: true, pending: !!needsProfile };
+  }
+
+  // Google in the app: Supabase builds the /authorize URL, native runs it in
+  // ASWebAuthenticationSession, and the callback comes back as a URL string.
+  async function webAuthNative(provider) {
+    const { data, error } = await sb.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: NATIVE_REDIRECT, skipBrowserRedirect: true },
+    });
+    if (error || !data || !data.url) return { ok: false, error: providerError(error) };
+
+    const res = await window.Capacitor.nativePromise('TriaAuth', 'webAuth', {
+      url: data.url, scheme: NATIVE_SCHEME,
+    });
+    const back = new URL(String((res && res.url) || ''));
+    // Supabase reports a refusal in the QUERY (?error=…), a success in the
+    // FRAGMENT (#access_token=…). Read both, and read the query first — a
+    // callback that carries an error carries no tokens to be confused by.
+    const q = back.searchParams;
+    if (q.get('error') || q.get('error_description'))
+      return { ok: false, error: providerError(q.get('error_description') || q.get('error')) };
+
+    const frag = new URLSearchParams(back.hash.replace(/^#/, ''));
+    if (frag.get('error_description') || frag.get('error'))
+      return { ok: false, error: providerError(frag.get('error_description') || frag.get('error')) };
+    const access_token = frag.get('access_token');
+    const refresh_token = frag.get('refresh_token');
+    if (!access_token || !refresh_token)
+      return { ok: false, error: 'That sign-in came back empty, try again.' };
+
+    const { data: sd, error: se } = await sb.auth.setSession({ access_token, refresh_token });
+    if (se) return { ok: false, error: providerError(se) };
+    await hydrate(sd.session);
+    return { ok: true, pending: !!needsProfile };
+  }
+
+  // The web: this navigates away. `redirecting` tells the caller to leave the
+  // button spinning rather than hand it back — there is no "back" to hand it to.
+  async function providerWeb(provider) {
+    const { error } = await sb.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${location.origin}${location.pathname}` },
+    });
+    if (error) return { ok: false, error: providerError(error) };
+    return { ok: false, redirecting: true };
+  }
+
+  // Leaving the third state: the handle screen's commit. The checks here are the
+  // same three the signup form makes, in the same words, because this IS signup
+  // with the identity half moved after the password half. claim_profile re-makes
+  // all of them server-side (see supabase/oauth-signin.sql) — these are only so
+  // a typo costs no round trip.
+  async function claimProfile({ name, username }) {
+    name = String(name || '').trim();
+    username = String(username || '').trim().toLowerCase();
+    if (!name) return { ok: false, error: 'Add a display name.' };
+    if (!/^[a-z0-9_]{2,20}$/.test(username))
+      return { ok: false, error: 'Username: 2–20 letters, numbers or _.' };
+
+    try {
+      const { data: free, error } = await sb.rpc('username_available', { u: username });
+      if (!error && free === false) return { ok: false, error: 'That username is taken.' };
+    } catch { /* the RPC is the courtesy; claim_profile is the fence */ }
+
+    const { error } = await sb.rpc('claim_profile', { p_username: username, p_name: name });
+    if (error) {
+      // PGRST202 is "no function of that name and signature" — the migration
+      // hasn't been run. Say which one, or this is a dead button with a shrug.
+      if (String(error.code || '') === 'PGRST202')
+        return { ok: false, error: 'Tria can’t finish your profile right now. (The database is missing supabase/oauth-signin.sql.)' };
+      return { ok: false, error: error.message || 'Couldn’t save that, try again.' };
+    }
+
+    // The row exists now, so re-read the world as its owner: the same hydrate
+    // the password path runs, which is what fills state.session and clears
+    // needsProfile. Straight from the RPC would leave the cache one profile short.
+    const { data: { session } } = await sb.auth.getSession();
+    await hydrate(session);
+    return { ok: true };
+  }
+
   // Permanently deletes the signed-in user's account: their Storage folder
   // (avatars + post photos + videos, which sit outside the DB) and their
   // auth.users row, which cascades through public.users to every post, comment,
@@ -1045,6 +1287,7 @@ const Store = (() => {
     // asking the server to revoke its token would just 403 on the way out.
     await sb.auth.signOut({ scope: 'local' }).catch(() => {});
     recovering = false;
+    needsProfile = null;
     clearWorld();
     return { ok: true };
   }
@@ -3019,6 +3262,7 @@ const Store = (() => {
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,
     isRecovering, onRecovery,
+    signInWithProvider, pendingProfile, claimProfile,
     // Friends
     isFriend, areFriends, addFriend, removeFriend, following, followers,
     requestsSent, requestsReceived, friendStatus,

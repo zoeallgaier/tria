@@ -4939,6 +4939,74 @@ button.poll-option:disabled { cursor: default; }
 }
 .auth-agree a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 @media (hover: hover) { .auth-agree a:hover { color: var(--type-activity-ink); } }
+/* ── The other two doors: Continue with Apple / Google ──────────────────────
+   Above the email form on both of its modes. They are NOT the primary commit —
+   the gradient submit still is — so they wear the field's own frame (--surface
+   on --rule, the same box as .field input) rather than any of the accent or
+   glass treatments. Three reasons that is right and not just quiet: a second
+   filled pill above the real one turns the card into a choice between two
+   shouts; the band is the reader's colour and these two carry somebody else's
+   marks; and Apple's own guidance allows exactly this outline variant, so the
+   button is legal as drawn rather than legal by exception.
+
+   No glass here on any shell, and no native face ever. These sit on the gate,
+   where the bars do not exist to borrow a control into. */
+.auth-providers { display: grid; gap: 0.6rem; margin-top: 1.7rem; }
+.auth-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.72rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: border-color var(--dur-micro), background-color var(--dur-micro);
+}
+@media (hover: hover) {
+  .auth-provider:hover { border-color: var(--muted); background: var(--surface-2); }
+}
+.auth-provider:disabled { cursor: default; color: var(--muted); }
+/* The marks are set on the CAP HEIGHT of the label, not on its em box, so the
+   two rows line up with each other rather than each with its own glyph. Apple's
+   optical centre sits high (the leaf), hence the hair of negative top margin. */
+.auth-provider-mark {
+  display: flex;
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.auth-provider-mark svg { width: 100%; height: 100%; display: block; }
+.auth-provider-mark--apple { margin-top: -0.1em; }
+/* Google's mark is a trademark in four fixed hues: it does not take currentColor
+   and it does not dim with the button. */
+.auth-provider:disabled .auth-provider-mark--google { opacity: 0.45; }
+
+/* "or" on a hairline, between the two ways in. The rule is drawn by the
+   pseudo-elements rather than a border on the <p>, so the word sits IN the line
+   instead of above it. */
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.auth-or::before,
+.auth-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
 .auth-submit {
   width: 100%;
   margin-top: 0.5rem;
