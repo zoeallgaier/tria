@@ -7450,6 +7450,14 @@
           ...(myPins().length < PIN_MAX
             ? [{ label: 'Pin to profile', icon: 'pinned', run: openPinAdd }] : []),
           { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
+          /* The profile as a picture, and the only card in Tria that carries a
+             QR. It sits under Share profile because they are the same act at
+             two fidelities: a link you paste, and a card you hold up. Own
+             profile only — the row does not exist on anybody else's, where a
+             QR to a stranger's profile made by a third party is a different
+             thing wearing the same button. */
+          { label: storyRowLabel(), icon: 'image',
+            run: () => openStoryCardSheet(profileCardSpec(u), profileLink(u.username)) },
           { label: 'Subscribe to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
@@ -9769,10 +9777,33 @@
     };
   }
 
-  function openStoryCardSheet(post) {
+  /* YOUR OWN PROFILE, as a card, and the only card that carries a QR.
+     The code points at the PROFILE and never at the invite link — Zoe's firm
+     rule and the one thing in here that must not drift. A card is a public
+     surface by definition, an invite makes friends outright, and the two must
+     never meet. Someone who scans this lands on a profile, where adding you is
+     still a request you get to answer. */
+  function profileCardSpec(u) {
+    const accent = accentOf(u.accent);
+    const at = 'triaonline.com/u/' + u.username;
+    return {
+      kind: 'profile',
+      type: 'note',
+      author: { name: u.name, username: u.username, avatar: u.avatar || null },
+      text: u.bio || '',
+      accent: accent ? accent.hex : null,
+      address: at,
+      qrUrl: at,
+    };
+  }
+
+  /* Can this shell put a picture in the camera roll? Native only — a browser
+     has no such thing, and its Somewhere-else row already ends in a download. */
+  const canSavePhotos = () =>
+    nativeShell() && !!window.Capacitor?.isPluginAvailable?.('TriaShare');
+
+  function openStoryCardSheet(base, link) {
     if (!window.StoryCard) { toast('Cards need a newer version of Tria.'); return; }
-    const base = cardSpecFor(post);
-    const link = postLink(post);
     const pick = { bg: 'gradient' };
 
     const BACKGROUNDS = [
@@ -9803,11 +9834,15 @@
     };
 
     const items = [];
+    // extlink on Instagram because that row LEAVES Tria, which is the one thing
+    // about it a person should know before tapping.
     if (instagramOK) {
-      items.push({ label: 'Share to Instagram', icon: 'share', run: () => toInstagram() });
+      items.push({ label: 'Share to Instagram', icon: 'extlink', run: () => toInstagram() });
     }
-    items.push({ label: instagramOK ? 'Somewhere else' : 'Share picture', icon: 'send',
-                 run: () => toAnywhere() });
+    if (canSavePhotos()) {
+      items.push({ label: 'Save to Photos', icon: 'image', run: () => toPhotos() });
+    }
+    items.push({ label: 'Somewhere else', icon: 'send', run: () => toAnywhere() });
 
     openSheet({
       head,
@@ -9858,6 +9893,27 @@
         .then(() => toast('Link copied. Add it with the link sticker.'))
         .catch((e) => {
           toast(e && /instagram/i.test(e.message || '') ? 'Instagram wouldn\'t open.' : 'That didn\'t work.');
+        });
+    }
+
+    /* Straight into the camera roll. The share sheet below can already do this
+       under Save Image, and it is three taps and a decision down; this is one
+       tap and the thing people actually mean by "save".
+
+       A REFUSAL IS NOT A FAILURE, and gets its own sentence. "Couldn't save" in
+       answer to a permission prompt somebody declined is the app pretending not
+       to know why, and it leaves them with nothing to do about it. */
+    function toPhotos() {
+      draw(pick.bg)
+        .then((canvas) => window.Capacitor.nativePromise('TriaShare', 'saveToPhotos', {
+          image: canvas.toDataURL('image/png'),
+        }))
+        .then(() => toast('Saved to your photos.'))
+        .catch((e) => {
+          const denied = e && (e.code === 'NO_PERMISSION' || /permission/i.test(e.message || ''));
+          toast(denied
+            ? 'Tria needs permission to add to your photos. It is in Settings.'
+            : 'The card could not be saved.');
         });
     }
 
@@ -9960,7 +10016,8 @@
        two keep Copy link and nothing else until the renderer has a design for
        them. */
     if (own && post.type !== 'activity' && post.type !== 'poll')
-      items.push({ label: storyRowLabel(), icon: 'share', run: () => openStoryCardSheet(post) });
+      items.push({ label: storyRowLabel(), icon: 'image',
+                    run: () => openStoryCardSheet(cardSpecFor(post), postLink(post)) });
     if (own) {
       // Pin, above the editor: it's a positive act on a finished post, and the
       // two rows below it are the ones that change or end it. The label flips

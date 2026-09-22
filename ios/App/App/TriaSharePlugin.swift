@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Photos
 import Capacitor
 
 /// Handing a story card to Instagram, and nothing else.
@@ -35,7 +36,8 @@ public class TriaSharePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "TriaShare"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "canShareToInstagram", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "shareToInstagram", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "shareToInstagram", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveToPhotos", returnType: CAPPluginReturnPromise)
     ]
 
     private static let scheme = "instagram-stories://share"
@@ -105,6 +107,47 @@ public class TriaSharePlugin: CAPPlugin, CAPBridgedPlugin {
                     call.reject("Instagram wouldn't open.", "NO_INSTAGRAM")
                 }
             }
+        }
+    }
+
+    /// Straight into the camera roll, which is what "save" means to everybody
+    /// who is not a programmer. The share sheet already offers Save Image, so
+    /// this exists because going through a share sheet to save your own picture
+    /// to your own phone is three taps and a decision, and this is one tap.
+    ///
+    /// ── The Info.plist key is not optional and not a warning ────────────────
+    /// Writing to the library needs `NSPhotoLibraryAddUsageDescription`. Without
+    /// it iOS does not deny the request, it TERMINATES the app — no dialog, no
+    /// log line a person would find, just a launch-looking crash the first time
+    /// anybody taps Save. Tria already had `NSPhotoLibraryUsageDescription`,
+    /// which is the READ key for the photo picker and does not cover this.
+    ///
+    /// `.addOnly` on purpose: Tria wants to put one picture in and has no
+    /// business reading anything back out, and the prompt says so.
+    @objc func saveToPhotos(_ call: CAPPluginCall) {
+        guard let base64 = call.getString("image"),
+              let data = Data(base64Encoded: stripDataURL(base64)),
+              let image = UIImage(data: data) else {
+            call.reject("The card could not be read.")
+            return
+        }
+
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else {
+                // A refusal is an answer, not a failure. The JS side turns this
+                // one code into a sentence about Settings rather than a shrug.
+                call.reject("Tria doesn't have permission to add to your photos.", "NO_PERMISSION")
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }, completionHandler: { ok, error in
+                if ok {
+                    call.resolve(["saved": true])
+                } else {
+                    call.reject(error?.localizedDescription ?? "The card could not be saved.")
+                }
+            })
         }
     }
 

@@ -47,6 +47,8 @@
 	<string>Tria uses your camera so you can take a photo or a short video to share in a post.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Tria uses your microphone so a Frame video can have sound.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Tria saves a card of your post to your photos when you ask it to.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Tria uses your photo library so you can pick a photo or video to share in a post.</string>
 	<key>UIAppFonts</key>

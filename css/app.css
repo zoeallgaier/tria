@@ -3947,10 +3947,16 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   display: block;
   width: auto;
   /* Bounded by HEIGHT, because every card here is portrait and the sheet's
-     vertical room is the scarce thing. 9:16 at this height is about 100px wide,
-     which leaves the four background pills and two rows comfortable on an SE. */
-  height: clamp(150px, 26vh, 260px);
-  border-radius: 10px;
+     vertical room is the scarce thing. The ceiling is what it is because of what
+     has to fit UNDER it: four background pills, up to three action rows and the
+     cancel, about 290px of furniture. The sheet is BOTTOM-anchored, so a taller
+     preview never pushes Cancel off the screen — it raises the TOP, and the
+     limit is the top reaching the status bar, not the bottom. Measured with all
+     three action rows at 375x667, the shortest phone Tria supports: the panel
+     starts 77px down. The vh term is what keeps that true on a small screen
+     rather than a fixed height that looks right on a Pro Max only. */
+  height: clamp(240px, 44vh, 500px);
+  border-radius: 12px;
   box-shadow: var(--lift-2, 0 10px 30px rgba(20, 23, 26, 0.18));
 }
 .cardshare-bgs {
