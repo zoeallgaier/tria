@@ -45,15 +45,40 @@ Nothing about this app goes to Google. **Supabase is the OAuth client**, so
 Google never sees `tria://`, and the app needs no client id, no SDK and nothing
 in `package.json`.
 
-1. Google Cloud Console → APIs & Services → Credentials → **Create OAuth client
-   ID** → **Web application**.
-2. Authorised redirect URI: `https://autjondbgcjctezbxliv.supabase.co/auth/v1/callback`
-   — the Supabase callback, not Tria's.
-3. OAuth consent screen: External, app name **Tria**, support email, the
-   `email` and `profile` scopes (the defaults). Publish it, or only test users
-   can sign in.
-4. Supabase → Authentication → Providers → **Google** → on, paste the client ID
-   and secret.
+At <https://console.cloud.google.com>, with a project selected (make one called
+Tria if there isn't one). **The consent screen has to come first** — the Create
+Client button is refused without it.
+
+1. **APIs & Services → OAuth consent screen.** Newer consoles have renamed this
+   to **Google Auth Platform**, where the same thing is split across *Branding*,
+   *Audience* and *Clients*; both layouts are in the wild, so go by the words
+   rather than the path.
+   - User type / Audience: **External**
+   - App name **Tria**, a user support email, a developer contact email
+   - Scopes: leave the defaults (`openid`, `email`, `profile`). Tria asks for
+     nothing beyond a name and an address, which is also what keeps it out of
+     Google's verification queue.
+2. **Publish it.** An app left in *Testing* only admits accounts added by hand
+   to the test-user list, capped at 100, and hands out refresh tokens that
+   expire in 7 days. Publishing status → **Publish app** / **Go to production**.
+   This is the step that makes Google sign-in work for a stranger and not just
+   for you, and it does not announce itself when skipped.
+3. **Credentials → Create credentials → OAuth client ID → Web application.**
+   NOT iOS. Supabase is the OAuth client, so Google is talking to
+   `supabase.co` and has no idea this app exists; an iOS client here issues no
+   secret and Supabase's form has nowhere to put it.
+   - Name: anything, e.g. `Tria via Supabase`
+   - **Authorised redirect URIs:**
+     `https://autjondbgcjctezbxliv.supabase.co/auth/v1/callback`
+     Supabase prints this on its own Google provider page — copy it from there
+     rather than retyping it.
+   - Authorised JavaScript origins: leave empty. Nothing in this flow runs
+     Google's JS on Tria's own page.
+4. **Create.** The modal that appears carries the **Client ID** and **Client
+   secret**. The secret is shown once and is re-downloadable from the client's
+   row afterwards.
+5. Supabase → Authentication → Sign In / Providers → **Google** → on, paste
+   both, Save.
 
 ## 3. Apple
 Apple is two registrations, because the app and the website are two clients and
