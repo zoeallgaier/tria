@@ -268,10 +268,22 @@ The two problems that killed earlier canvas attempts are both addressable here:
 - **Fonts.** Oxygen is same-origin on the web and bundled in the app. Load it
   through `FontFace` and `await document.fonts.ready` before the first draw, or
   the first card renders in the fallback face and looks wrong exactly once.
-- **CORS.** Avatars and photos come from Supabase Storage, which sends CORS
-  headers, but the app's origin is `capacitor://localhost` and that has to be
-  allowed or every canvas with a photo in it taints and `toBlob` throws.
-  **Verify this before designing the templates**, not after.
+- **CORS. SETTLED 2026-09-22, and it is fine.** Avatars and photos come from
+  Supabase Storage, and the app's origin is `capacitor://localhost`, which had
+  to be allowed or every canvas with a photo in it taints and `toBlob` throws
+  rather than returning anything. Checked against the live project:
+
+  ```
+  curl -sI -H "Origin: capacitor://localhost" \
+    https://autjondbgcjctezbxliv.supabase.co/storage/v1/object/public/media/x.png
+  ```
+
+  Both the GET and the OPTIONS preflight answer `access-control-allow-origin:
+  *`. A wildcard covers a custom scheme the way it covers anything else, so
+  there is nothing to configure and nothing to keep configured. `loadImage()`
+  in storycard.js still asks for `crossOrigin` and still degrades to the empty
+  plate if a bucket ever stops saying this, because the failure is otherwise a
+  thrown SecurityError at the moment someone taps Share.
 
 Hard limits on the story size, from the spec and not negotiable:
 
@@ -287,6 +299,26 @@ goes as a sticker and the accent gradient as the background colors, which is the
 Spotify approach and the reason it feels like the sender's own. No third-party
 app may attach the link sticker, so Tria copies the link at the same moment and
 toasts: "Link copied. Add it with the link sticker."
+
+Read against Meta's own docs, 2026-09-22, and two details bite:
+
+- **The App ID is mandatory and it is a hard gate**, not a nicety: since January
+  2023 the scheme takes `?source_application=<FB App ID>` and does nothing
+  without one. It is free and needs no app review, but it belongs to a Meta
+  developer account, so it is ZOE'S to create and the one thing here that
+  cannot be built around. The ID is not a secret and can sit in `js/config.js`
+  beside the Supabase keys.
+- **The background is TWO colours, not four.** The pasteboard takes
+  `com.instagram.sharedSticker.backgroundTopColor` and `...BottomColor` and
+  interpolates between them. Tria's brand ramp has four stops, so it cannot go
+  across as itself — something has to choose two. This is the same question as
+  the gradient-default one below, arriving from the other side: a reader with
+  an accent has an obvious two (the band either side of their hex, which is
+  what `bandAround` in app.js already computes), and a reader on the brand ramp
+  does not.
+
+The sticker key is `com.instagram.sharedSticker.stickerImage`, and all three go
+on the pasteboard in one item with an expiry before the scheme is opened.
 
 Everywhere else is the ordinary share sheet: the image file plus the link, via
 `navigator.share` with files on the web, falling back to a download.
