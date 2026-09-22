@@ -20,5 +20,19 @@ if [ $# -ge 1 ]; then next=$1; else next=$((cur + 1)); fi
 # Every ?v=<cur> in the file shares one number; \b keeps us from matching a prefix.
 perl -pi -e "s/\\?v=${cur}\\b/?v=${next}/g" index.html
 
+# 404.html is a BYTE COPY of index.html, and this is the only place it is made.
+# GitHub Pages serves it for every path that isn't a real file, which is every
+# clean URL we share (/p/<id>, /u/<name>, /daily/<slug>, /i/<code>) — so the 404
+# body IS the app and a shared link boots once, at its own address, with no
+# redirect. See the <base> comment at the top of index.html.
+#
+# It is copied HERE, after the stamps are rewritten, because the two files must
+# carry the SAME ?v=. A 404.html left behind at an older stamp is the worst kind
+# of stale: the root boots the new build, every shared link boots the old one,
+# and the self-updater on those pages compares the old stamp against itself and
+# concludes it is current.
+cp index.html 404.html
+
 echo "Bumped ?v=: ${cur} -> ${next}"
 grep -n '\.css?v=\|\.js?v=' index.html
+echo "Copied index.html -> 404.html (clean-URL shell)"

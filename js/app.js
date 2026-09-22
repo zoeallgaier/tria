@@ -9369,16 +9369,22 @@
     return { href, label: labels[href] || 'Back' };
   }
 
-  // A shareable link straight to someone's profile. Uses the current origin +
-  // path when it's a real http(s) origin (so local dev and the website work
-  // wherever they're served), and falls back to the deployed site's origin
-  // otherwise — the app's own origin is Capacitor's `capacitor://localhost`,
-  // not a link anyone outside the app could open.
+  /* The root a shared link is built on. A real http(s) origin (the website,
+     local dev) uses itself; the app's own origin is Capacitor's
+     `capacitor://localhost`, which is not a link anyone outside the app could
+     open, so it falls back to the deployed site.
+
+     Always the ROOT, never location.pathname as this used to be. A shared link
+     is now a clean path (`/p/<id>`, not `/#/p/<id>`), and a clean path is only
+     resolved by the 404.html sitting at the root of the host — see the <base>
+     comment in index.html. Built from a subdirectory it would name an address
+     nothing serves. */
+  const linkBase = () =>
+    (/^https?:/.test(location.origin) ? location.origin : 'https://triaonline.com') + '/';
+
+  // A shareable link straight to someone's profile.
   function profileLink(username) {
-    const base = /^https?:/.test(location.origin)
-      ? location.origin + location.pathname
-      : 'https://triaonline.com/';
-    return `${base}#/u/${encodeURIComponent(username)}`;
+    return linkBase() + 'u/' + encodeURIComponent(username);
   }
 
   /* Handing someone a profile, from all three places that offer it: your own
@@ -9679,15 +9685,12 @@
   // link you sent someone opened an archive and then jumped. Old links still
   // work (the router redirects the query, see route). Only resolves for someone
   // who can already see that author's posts, which the DB decides, not this.
-  // Uses the current origin when it's a real http(s) one (local dev, the
-  // website), and falls back to the deployed site's origin otherwise — the
-  // app's own origin is Capacitor's `capacitor://localhost`, not a link anyone
-  // outside the app could open. Mirrors profileLink for the same reason.
+  // Shares linkBase with profileLink, and drops the `#/` off the route the app
+  // navigates by: `#/p/<id>?pane=likers` becomes `p/<id>?pane=likers`. The pane
+  // stays a query on the clean path and index.html's rewrite folds it back into
+  // the hash on the way in, so the round trip is lossless.
   function postLink(post) {
-    const base = /^https?:/.test(location.origin)
-      ? location.origin + location.pathname
-      : 'https://triaonline.com/';
-    return base + postRoute(post);
+    return linkBase() + postRoute(post).replace(/^#\//, '');
   }
 
   function copyPostLink(post) {
