@@ -583,20 +583,26 @@ revoke all on all tables in schema metrics from anon, authenticated;
 -- AND THE GRANTS, WHICH ARE THE ONLY CHECK HERE THAT FOUND A BUG. Everything
 -- else above confirms something works; this one confirms something CANNOT be
 -- reached, which is the kind that fails quietly. Run it as anon (the
--- publishable key) and read the status code, not the body:
+-- publishable key) and read the status AND the code:
 --
---   POST /rest/v1/rpc/redeem_invite   {"p_user":"<any uuid>","p_code":"x"}
---   POST /rest/v1/rpc/mint_invite_code {"p_owner":"<any uuid>"}
---        → both must be 404 PGRST202. A 204 or a 500 means they RAN.
+--   POST /rest/v1/rpc/redeem_invite      {"p_user":"<any uuid>","p_code":"x"}
+--   POST /rest/v1/rpc/mint_invite_code   {"p_owner":"<any uuid>"}
+--   POST /rest/v1/rpc/redeem_invite_code {"p_code":"x"}
+--        → 401, and the body must say 42501 "permission denied for function".
+--          A 204 or a 500 carrying one of this file's own error strings means
+--          it RAN, which is the bug this check exists to catch.
 --
---   POST /rest/v1/rpc/resolve_invite  {"p_code":"nope-xyz"}   → 200 []
---   POST /rest/v1/rpc/my_invite       {}                      → 404 PGRST202
+--   POST /rest/v1/rpc/resolve_invite     {"p_code":"nope-xyz"}  → 200 []
 --
--- PGRST202 is the right answer for a function anon may not execute: PostgREST
--- leaves it out of the schema cache entirely, so "you may not" and "there is no
--- such thing" are the same sentence. That is also why a bogus control name is
--- worth sending alongside — it proves PGRST202 is what missing looks like here
--- and not what a stale cache looks like.
+-- ARGUMENTS MATTER MORE THAN THE STATUS DOES, and this note was wrong once for
+-- exactly that reason. Posting `{}` to any of the three above answers 404
+-- PGRST202 — not because anon may not call them, but because no overload takes
+-- zero arguments, and PostgREST reports a signature it cannot match and a
+-- function that does not exist with the same code. A locked function called
+-- CORRECTLY says 42501. It is the same trap CLAUDE.md names for checking
+-- whether a migration has run, arriving from the other direction: the wrong
+-- signature answers PGRST202 whether or not the thing is there, so PGRST202
+-- proves nothing on its own and reads as "safely locked" when it is not.
 --
 -- PostgREST will not see the new functions until its schema cache reloads. It
 -- does that on its own within a minute; `notify pgrst, 'reload schema';` is the
