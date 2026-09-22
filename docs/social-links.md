@@ -108,26 +108,29 @@ Also in this stage, because they are free and need nothing:
 
 A shared link opens the app instead of Safari.
 
-**This stage is one unverified fact away from being impossible, and the test is
-cheap, so run the test first.** Apple wants
-`/.well-known/apple-app-site-association` served as `application/json`. Pages
-will serve it as `application/octet-stream` (measured, above) and there is no way
-to set a header on a static host. Reports differ on how strict Apple's ingester
-still is about this.
+**SETTLED 2026-09-22: this works, and it was the one thing that might not have.**
 
-**The test, before writing a line of Swift:** commit the file, push, wait, then
+The risk was real. Apple documents
+`/.well-known/apple-app-site-association` as `application/json`, GitHub Pages
+types an extensionless file as `application/octet-stream` (measured against
+`/CNAME`), and a static host gives you no way to set a header. Two unknowns sat
+on top of each other: whether Pages would serve a dotted directory at all, and
+whether Apple's ingester still enforces the content type.
+
+Both answered by shipping the file and asking Apple's own CDN, which is what
+devices actually read:
 
 ```
 curl -s https://app-site-association.cdn-apple.com/a/v1/triaonline.com
 ```
 
-Apple's CDN is what devices actually read. If that returns the JSON, Apple
-ingested it and the stage is alive. If it 404s, the content type was refused,
-and Universal Links are off the table while the site is on Pages. That same
-request also settles whether Pages serves a `.well-known/` directory at all,
-which is the other thing nobody should assume.
+It returns the file. **Pages serves `.well-known/` (HTTP 200), and Apple ingests
+`application/octet-stream` without complaint.** So Universal Links need no
+server, no DNS change and no paid anything, and everything left in this stage is
+ordinary app work. Re-run that curl if the file is ever edited; Apple caches it,
+and the CDN is the only honest read of what phones will see.
 
-If it lives, the rest is ordinary:
+The rest:
 
 - `applinks:triaonline.com` in [`App.entitlements`](../ios/App/App/App.entitlements).
 - The AASA's `appID` is `<TeamID>.com.triaonline.tria`. Team ID needed.
@@ -137,14 +140,15 @@ If it lives, the rest is ordinary:
   entitlement note in [ios-shell.md](ios-shell.md).
 - `@capacitor/app` installed, to catch the URL and hand it to the router.
 
-**If it dies, nothing else does.** A link without Universal Links opens Safari,
-Safari serves `404.html`, and the app boots on the web at the right page with a
-Smart App Banner offering the app. That is a worse experience, not a broken one.
+**And the fallback stays good regardless.** A link that doesn't hand over to the
+app opens Safari, Safari serves `404.html`, the app boots on the web at the right
+page, and the Smart App Banner offers the app. Worth remembering when the
+entitlement is mid-flight or a reader is on Android.
 
-**Gate:** the curl above. Then the binary gate: a plugin in `package.json` is not
-a plugin in the app, [`ios/App/verify-plugins.sh`](../ios/App/verify-plugins.sh)
-is what proves it, and the answer when it fires is DerivedData, not the Swift.
-See [ios-shell.md](ios-shell.md#L176).
+**Gate:** the binary gate. A plugin in `package.json` is not a plugin in the app,
+[`ios/App/verify-plugins.sh`](../ios/App/verify-plugins.sh) is what proves it,
+and the answer when it fires is DerivedData, not the Swift. See
+[ios-shell.md](ios-shell.md#L176).
 
 ## Stage 3 · Invites
 
