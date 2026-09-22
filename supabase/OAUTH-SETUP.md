@@ -7,12 +7,12 @@ through, and the handle screen that follows a first sign-in. These are the
 one SQL file. Do them in order; the buttons are dead until all of them are done,
 and each one fails in a different place.
 
-> **Status (2026-09-22): none of this has been done yet.** The code is written
-> and the build carries it. Until step 1 runs, the first person to tap either
-> button gets "Tria can’t finish setting up new accounts right now" and no
-> account is created (the trigger rolls the auth row back with it, so there is
-> nothing to clean up). Until steps 2–4, the tap gets "That way in isn’t
-> switched on yet."
+> **Status (2026-09-22): step 1 is done. Steps 2 to 4 are not.** The code is
+> written, the build carries it, and the database has `claim_profile` — live, it
+> answers `28000 "You need to be signed in."` to an anon caller, which is a
+> sentence that exists only in `oauth-signin.sql`. What is left is all dashboard
+> and developer-portal state, and until it is there a tap on either button gets
+> "That way in isn’t switched on yet." Nothing half-lands on the way.
 
 **Apple and Google are a package, not a menu.** App Store guideline **4.8** says
 an app offering a third-party sign-in must also offer one that limits data
@@ -20,7 +20,7 @@ collection to name and email, lets the person keep the email private, and does
 no advertising tracking. Sign in with Apple is that option. So Google may not
 ship without Apple, and if Apple ever has to come out, Google comes out with it.
 
-## 1. The database
+## 1. The database — DONE (2026-09-22)
 SQL Editor → run [`oauth-signin.sql`](oauth-signin.sql).
 
 Two things: `handle_new_user` stops trying to invent a username for a sign-in

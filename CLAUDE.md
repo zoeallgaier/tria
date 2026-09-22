@@ -51,11 +51,10 @@ a provisional handle — the reasoning is at the top of that file. Note the trap
 `usersFresh` guards: a failed `users` read looks exactly like a missing profile,
 and getting it wrong meets a reader of two years with *pick a username*.
 
-**None of the owner-side setup is done.** `supabase/OAUTH-SETUP.md` is the list
-(one migration, Google Cloud, three Apple registrations, the redirect allow
-list). This is the rare backend gap that is NOT silent: an un-run migration
-names itself on the first tap, and every other misconfiguration says "That way
-in isn't switched on yet."
+**The migration is run; the dashboard half is not.** `supabase/OAUTH-SETUP.md`
+is what is left: Google Cloud, three Apple registrations, the redirect allow
+list. This is the rare backend gap that is NOT silent, and every remaining
+misconfiguration says the same thing, "That way in isn't switched on yet."
 
 ## 1.4 is the chrome going native
 
@@ -182,10 +181,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   the calendar feed will name a different set of people from the app's guest list.
   **The folder is `push`, the deployed slug is `swift-processor`** (PUSH-SETUP.md);
   a GET on it answers `ok` but says nothing about which revision is live.
-  **`oauth-signin.sql` is confirmed NOT run** (2026-09-22): `claim_profile` with
-  its real signature answers PGRST202 while `username_available` answers `true`
-  in the same breath, so that is the function missing and not the probe. The
-  rest of provider sign-in is dashboard state REST cannot see at all; see
+  **`oauth-signin.sql` is confirmed run** (2026-09-22): live `claim_profile`
+  answers `28000 "You need to be signed in."`, a string that exists only in that
+  file, against a bogus control still answering PGRST202. `claim_profile` is the
+  LAST thing in the script, so the `handle_new_user` rewrite above it ran too.
+  The rest of provider sign-in is dashboard state REST cannot see at all; see
   `supabase/OAUTH-SETUP.md`.
 
 ## Copy style

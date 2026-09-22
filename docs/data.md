@@ -19,12 +19,12 @@ a review, so treat it as a release blocker rather than a chore:
   lands in `push_subscriptions` with its `apns:` endpoint. The fan-out simply has
   nothing to sign with. Nobody is notified and nothing complains.
 - **Sign in with Apple / Google** (`supabase/OAUTH-SETUP.md`, added 2026-09-22)
-  — the two buttons are on the gate in every shell, and **none of the owner-side
-  setup has been done**. This one is the exception to the paragraph above: it
-  does not fail quietly. `oauth-signin.sql` un-run means the very first tap gets
-  a message naming the file; providers switched off in the dashboard, or a
-  redirect URL that isn't allow-listed, get "That way in isn't switched on yet."
-  Nothing half-lands, because the trigger's refusal rolls the `auth.users` row
+  — the two buttons are on the gate in every shell, `oauth-signin.sql` **has
+  been run** (see the sweep below), and **the dashboard half has not**: the
+  providers, the Apple registrations, the redirect allow list. This one is the
+  exception to the paragraph above, in that it does not fail quietly — every
+  remaining misconfiguration says "That way in isn't switched on yet." Nothing
+  half-lands either, because a refusal at the trigger rolls the `auth.users` row
   back with it. The setup doc's last table maps each message to the step it came
   from.
 
@@ -42,6 +42,16 @@ selects `200 []`, where a table that was never created answers `404 PGRST205`.
 The `pg_cron` job in the same file is the one half of it REST cannot see (cron
 lives outside PostgREST's schema), so treat the schedule as unverified rather
 than asserting it either way — same standing as the `.p8` key.
+
+**`supabase/oauth-signin.sql` HAS been run** (confirmed 2026-09-22, the day it
+was written). `claim_profile` with its real signature answers `28000 "You need
+to be signed in."` — a sentence that exists only in that file — while a bogus
+function name alongside it still answers `PGRST202`, so that is the function
+existing rather than the probe being wrong. `claim_profile` is the LAST
+statement in the script, so `handle_new_user`'s rewrite above it ran too; that
+is the same end-of-file argument `reposts.sql` is verified by. Note which half
+this does NOT cover: the providers themselves live in the dashboard, which REST
+cannot see at all, so treat those as unverified rather than asserting them.
 
 **Sweep result, 2026-08-27: every `.sql` file in `supabase/` probes as run.**
 `friend_declines` (column `decliner`), `blocks`, `poll_votes`, `post_audience`,
