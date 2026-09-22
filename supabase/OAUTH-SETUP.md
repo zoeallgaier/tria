@@ -95,6 +95,16 @@ A redirect that is not on this list is dropped, and the app's sheet then sits
 open with nothing in it and no error anywhere. The scheme half is declared in
 `ios/App/App/Info.plist` (`CFBundleURLTypes`); the two have to agree.
 
+**Site URL, on the same screen, is not decoration.** It is where GoTrue sends
+anything whose `redirect_to` does NOT match the list above, and it is the
+fallback baked into `{{ .ConfirmationURL }}` in the password-reset email
+(`supabase/email-templates/`). It read `http://127.0.0.1:5500` on 2026-09-22 —
+a dev leftover — which means a reset link built while `https://triaonline.com/`
+was missing from the allow list pointed at a port on the reader's own machine.
+It should be `https://triaonline.com`. Nothing about provider sign-in depends on
+it, because js/store.js always passes an explicit `redirectTo`; the reset email
+is what it reaches.
+
 ## 5. Linking, and the person who already has a password
 Supabase links a provider identity to an existing user when the provider's email
 matches an existing **confirmed** email. So somebody who joined with
