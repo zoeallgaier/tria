@@ -191,7 +191,8 @@
   function paragraph(ctx, text, opt) {
     let size = opt.size;
     for (;;) {
-      ctx.font = opt.italic ? serif(size, true) : (opt.sans ? sans(size, opt.bold) : serif(size));
+      const font = opt.italic ? serif(size, true) : (opt.sans ? sans(size, opt.bold) : serif(size));
+      ctx.font = font;
       const lh = Math.round(size * opt.lineHeight);
       const lines = wrap(ctx, text, opt.maxWidth);
       if (lines.length * lh <= opt.maxHeight || size <= opt.minSize) {
@@ -204,14 +205,23 @@
           }
           lines[max - 1] = last + '…';
         }
-        return { lines: lines, size: size, lineHeight: lh, height: lines.length * lh };
+        return { lines: lines, size: size, lineHeight: lh, font: font, height: lines.length * lh };
       }
       size -= 2;
     }
   }
 
+  /* The block carries the font it was MEASURED in, and this sets it again
+     before drawing. Those were two different faces once — measuring happens in
+     layout(), drawing happens after the author row has set ctx.font to Oxygen,
+     and canvas has no notion of a style that belongs to a run of text — so
+     every body on every card came out in the handle's sans at the serif's
+     leading, which looks like a design decision until you hold it next to the
+     app. Keep the font on the block; never rely on what ctx was last told. */
   function drawParagraph(ctx, block, x, y, colour) {
+    ctx.font = block.font;
     ctx.fillStyle = colour;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     block.lines.forEach(function (line, i) {
       /* Baseline inside the line box, near enough to how a browser sets it:
@@ -273,8 +283,13 @@
     const accent = spec.accent || TYPE.note[0];
     let paper;
 
+    /* The wash's radii are CSS's `120% 78%`: WIDER than the card it sits behind,
+       on purpose, so it reads as light falling across the whole backdrop rather
+       than as a halo around the sticker. They were half this once, which put the
+       entire gradient behind the card where nobody could see it and made every
+       coloured background look flat. */
     const PAPER_RGB = '237, 238, 240', INK_RGB = '233, 235, 237';
-    const cx = w * 0.5, cy = h * 0.34, rx = w * 0.6, ry = h * 0.39;
+    const cx = w * 0.5, cy = h * 0.34, rx = w * 1.2, ry = h * 0.78;
 
     if (spec.bg === 'dark') {
       paper = Object.assign({}, DARK);
@@ -459,7 +474,9 @@
         }
         ctx.restore();
       } else if (b.type === 'qr') {
-        drawQR(ctx, x + (L.inner - b.side) / 2, y, b.side, spec, paper);
+        /* Left, with everything else. A centred code under a left-aligned name
+           reads as two cards stacked. */
+        drawQR(ctx, tx, y, b.side, spec, paper);
       }
       y += b.height + b.after;
     });
@@ -508,15 +525,18 @@
     }
     ctx.restore();
 
+    /* The name grows with the disc, so the profile card's bigger avatar does not
+       end up towering over 36px of type. */
+    const up = d > m.avatar ? 1.3 : 1;
+    const name = Math.round(m.name * up), handle = Math.round(m.handle * up);
     const nx = x + d + Math.round(m.rowGap / 2);
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = paper.ink;
-    ctx.font = sans(m.name, true);
-    ctx.fillText(author.name || '@' + (author.username || ''), nx, y + d / 2 - 4);
+    ctx.font = sans(name, true);
+    ctx.fillText(author.name || '@' + (author.username || ''), nx, y + d / 2 - Math.round(handle * 0.2));
     ctx.fillStyle = paper.muted;
-    ctx.font = sans(m.handle);
-    ctx.fillText('@' + (author.username || ''), nx, y + d / 2 + m.handle + 2);
-    return y + d;
+    ctx.font = sans(handle);
+    ctx.fillText('@' + (author.username || ''), nx, y + d / 2 + handle);
   }
 
   /* THE QR, which is the one thing on a card that has to be CORRECT rather than

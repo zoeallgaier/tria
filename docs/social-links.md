@@ -235,6 +235,34 @@ One renderer, three sizes: 1200×630, 1080×1920, 1080×1080. The Worker that wa
 going to run Satori is gone, so this renders **client-side on canvas**, in one
 function that app and web both call, so the two cannot drift.
 
+**THE RENDERER IS BUILT (2026-09-22):** [`js/storycard.js`](../js/storycard.js),
+with a bench at [`tools/storycards.html`](../tools/storycards.html) that draws
+every card at every size against every background. Nothing in app.js calls it
+yet, and no route reaches the bench — it is deliberately unwired, so the design
+can be reviewed on the real code before any of the share plumbing exists.
+
+What the build settled that the design could not:
+
+- **The card is measured, not positioned.** The artboards carried a hand-tuned
+  `top` per card. In code the card is laid out as a column, measured, and
+  centred in what Instagram leaves free, so a long post SHRINKS its own type
+  (76px down to a 40px floor, then an ellipsis) rather than pushing the address
+  under the reply bar. The photo plate is the one flexible block and takes
+  whatever the caption did not.
+- **The palette is frozen in the file**, copied from `css/tokens.css` rather
+  than read from it. A card is Tria's paper, not the sender's device: someone
+  with their phone in dark mode still sends a light card unless they pick Dark.
+  `bandStops()` carries the `--band-deepen` arithmetic so the ramp can be
+  checked against tokens.css by eye.
+- **The QR is not done and is drawn as a labelled placeholder.** It needs a
+  vendored encoder, it is shared with Stage 3's invites, and it has to be
+  checked against a phone camera rather than against my own eyes. A decorative
+  QR that does not scan is worse than no QR. `StoryCard.useEncoder()` is the
+  seam it drops into.
+- **The bench is publicly downloadable once pushed** (`triaonline.com/tools/`),
+  the same way `bump.sh` and `gen-icons.js` already are. Nothing on it is
+  private and nothing links to it.
+
 The two problems that killed earlier canvas attempts are both addressable here:
 
 - **Fonts.** Oxygen is same-origin on the web and bundled in the app. Load it

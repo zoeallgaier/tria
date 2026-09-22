@@ -14,6 +14,15 @@ www
 Tria Marketing images/
 *.af
 
+# Apple's Sign in with Apple key. Not a build artifact and not a preference: this
+# repo IS the web server, so a committed .p8 is downloadable from triaonline.com
+# by anyone who guesses the filename, and it signs the token that vouches for
+# every Apple sign-in. It also downloads exactly once from the portal, so the
+# instinct to "keep it somewhere safe" points straight at the repo. It belongs
+# in Downloads, or a password manager, and nowhere in here. See apple-secret.mjs
+# and supabase/OAUTH-SETUP.md.
+*.p8
+
 # Xcode / Capacitor build artifacts (the ios/App project itself is checked in)
 ios/App/App/public
 ios/DerivedData

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Story cards, bench</title>
+
+<!--
+  A BENCH, not a route. Nothing in the app links here and nothing here is part
+  of the app: it loads js/storycard.js and draws every card at every size so the
+  design can be looked at without waiting on an iOS build.
+
+  It needs a SERVER, not a file:// double-click — canvas will not read back a
+  card drawn with a font or an SVG loaded off the filesystem. From the repo
+  root:  python3 -m http.server 8777   then  localhost:8777/tools/storycards.html
+
+  The fonts come from css/tokens.css, which is also where the card's frozen
+  palette was copied from. Loading the real stylesheet rather than a second copy
+  of the @font-face rules is deliberate: the bench should go wrong in the same
+  way the app would if a font file were renamed.
+-->
+
+<link rel="stylesheet" href="../css/tokens.css" />
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 28px 28px 80px;
+    font-family: Oxygen, -apple-system, sans-serif;
+    background: var(--bg, #edeef0); color: var(--text, #14171a);
+  }
+  h1 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400; font-size: 2rem; margin: 0 0 4px;
+  }
+  .sub { color: var(--muted, #5c636b); font-size: 0.85rem; margin: 0 0 24px; }
+
+  .bar {
+    position: sticky; top: 0; z-index: 5; margin: 0 -28px 28px; padding: 14px 28px;
+    display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
+    background: color-mix(in srgb, var(--bg, #edeef0) 86%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    border-bottom: 1px solid var(--rule, #dadde1);
+  }
+  .grp { display: flex; gap: 6px; align-items: center; }
+  .grp > span { font-size: 0.72rem; text-transform: none; color: var(--muted, #5c636b); margin-right: 4px; }
+  button {
+    font: inherit; font-size: 0.8rem; padding: 7px 13px; border-radius: 999px;
+    border: 1px solid var(--rule, #dadde1); background: var(--surface, #f6f7f8);
+    color: inherit; cursor: pointer;
+  }
+  button[aria-pressed="true"] { background: var(--text, #14171a); color: var(--bg, #edeef0); border-color: transparent; }
+  .swatch { width: 30px; height: 30px; padding: 0; border-radius: 999px; }
+  .swatch[aria-pressed="true"] { outline: 2px solid var(--text, #14171a); outline-offset: 2px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font-size: 0.75rem; color: var(--muted, #5c636b); margin: 10px 0 0; display: flex; gap: 10px; align-items: center; }
+  .frame { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 28px rgba(20,23,26,0.16); }
+  .frame canvas { display: block; width: 100%; height: auto; }
+
+  /* Instagram's chrome, drawn OVER the card rather than into it, so the export
+     is clean and the check is still visible. Top 250, bottom 340 of 1920. */
+  .frame[data-safe="on"]::before,
+  .frame[data-safe="on"]::after {
+    content: ''; position: absolute; left: 0; right: 0; pointer-events: none;
+    background: repeating-linear-gradient(45deg, rgba(226,45,64,0.24) 0 8px, rgba(226,45,64,0.08) 8px 16px);
+    border-color: rgba(226,45,64,0.7); border-style: dashed; border-width: 0;
+  }
+  .frame[data-safe="on"]::before { top: 0; height: 13.0208%; border-bottom-width: 1.5px; }
+  .frame[data-safe="on"]::after { bottom: 0; height: 17.7083%; border-top-width: 1.5px; }
+  .frame[data-ratio="1"][data-safe="on"]::before,
+  .frame[data-ratio="1"][data-safe="on"]::after { display: none; }
+
+  .note { max-width: 46ch; font-size: 0.8rem; line-height: 1.5; color: var(--muted, #5c636b); }
+  .note b { color: var(--text, #14171a); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>Story cards</h1>
+<p class="sub">Drawn by <code>js/storycard.js</code>, the same file the app will call. Nothing here is wired into a route yet.</p>
+
+<div class="bar">
+  <div class="grp" id="bgs"><span>Background</span></div>
+  <div class="grp" id="accents"><span>Colour</span></div>
+  <div class="grp"><span>Instagram's chrome</span>
+    <button id="safe" aria-pressed="true">Show</button>
+  </div>
+  <div class="grp"><span>Photo</span>
+    <input type="file" id="pick" accept="image/*" style="font-size:0.75rem;max-width:200px" />
+  </div>
+</div>
+
+<div class="row" id="cards"></div>
+
+<p class="note" style="margin-top:40px">
+  <b>What to look at.</b> The card is centred in what Instagram leaves free, so a
+  longer post makes the type smaller rather than pushing the address under the
+  reply bar. Try the long one on the far right. The profile card's QR is a
+  placeholder on purpose, because a QR that does not scan is worse than no QR.
+</p>
+
+<script src="../js/storycard.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var state = { bg: 'gradient', accent: null, safe: true, photo: null };
+
+  var SHORT = 'I keep thinking about how the best afternoons are the ones nobody photographed.';
+  var LONG = 'I keep thinking about how the best afternoons are the ones nobody photographed. '
+    + 'We sat on the wall outside the bakery for two hours and the only record of it is that '
+    + 'my legs went numb and Dani said something about pigeons that I have already forgotten '
+    + 'the shape of. There is a version of this where I took a photo and it would be worse.';
+
+  var ZOE = { name: 'Zoe', username: 'zoe', avatar: null };
+
+  var SPECS = [
+    { label: 'Note, story', spec: { kind: 'note', size: 'story', type: 'note', author: ZOE, text: SHORT } },
+    { label: 'Photo, story', spec: { kind: 'photo', size: 'story', type: 'photo', author: ZOE, text: 'The wall outside the bakery, again.' } },
+    { label: 'Daily, story', spec: { kind: 'daily', size: 'story', type: 'activity', author: ZOE,
+        prompt: 'What actually made you laugh this week?',
+        text: 'My dad tried to explain what a podcast is to my grandmother and she asked who was paying for it.' } },
+    { label: 'Profile, story', spec: { kind: 'profile', size: 'story', type: 'find', author: ZOE,
+        text: 'Graphic designer. Mostly here for the dailies.',
+        address: 'triaonline.com/u/zoe', qrUrl: 'triaonline.com/u/zoe' } },
+    { label: 'Note, square', spec: { kind: 'note', size: 'square', type: 'note', author: ZOE, text: SHORT } },
+    { label: 'Note, link preview', spec: { kind: 'note', size: 'link', type: 'note', author: ZOE, text: SHORT } },
+    { label: 'A long one, story', spec: { kind: 'note', size: 'story', type: 'note', author: ZOE, text: LONG } },
+  ];
+
+  var LABELS = { gradient: 'Tria gradient', accent: 'Profile colour', light: 'Light', dark: 'Dark' };
+  var SWATCHES = [
+    { key: null, hex: null, label: 'No colour set' },
+    { key: 'note', hex: '#b7a6e8', label: 'Lavender' },
+    { key: 'photo', hex: '#9fd6e8', label: 'Cyan' },
+    { key: 'activity', hex: '#b9df7d', label: 'Lime' },
+    { key: 'find', hex: '#f2a58c', label: 'Peach' },
+  ];
+
+  var cards = document.getElementById('cards');
+
+  StoryCard.BACKDROPS.forEach(function (key) {
+    var b = document.createElement('button');
+    b.textContent = LABELS[key];
+    b.onclick = function () { state.bg = key; paint(); };
+    b.dataset.bg = key;
+    document.getElementById('bgs').appendChild(b);
+  });
+
+  SWATCHES.forEach(function (s) {
+    var b = document.createElement('button');
+    b.className = 'swatch';
+    b.title = s.label;
+    b.style.background = s.hex || 'linear-gradient(135deg,' + StoryCard.bandStops(false).join(',') + ')';
+    b.onclick = function () { state.accent = s.hex; paint(); };
+    b.dataset.accent = s.hex || '';
+    document.getElementById('accents').appendChild(b);
+  });
+
+  var safeBtn = document.getElementById('safe');
+  safeBtn.onclick = function () { state.safe = !state.safe; paint(); };
+
+  document.getElementById('pick').onchange = function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (state.photo) URL.revokeObjectURL(state.photo);
+    state.photo = URL.createObjectURL(f);
+    paint();
+  };
+
+  /* One figure per card, built once; paint() only swaps the canvas inside it,
+     so switching a background does not make the page jump to the top. */
+  var frames = SPECS.map(function (item) {
+    var fig = document.createElement('figure');
+    var frame = document.createElement('div');
+    frame.className = 'frame';
+    frame.dataset.ratio = item.spec.size === 'story' ? '9' : (item.spec.size === 'square' ? '1' : 'w');
+    frame.style.width = (item.spec.size === 'link' ? 360 : 300) + 'px';
+    var cap = document.createElement('figcaption');
+    var name = document.createElement('span');
+    name.textContent = item.label;
+    var dl = document.createElement('button');
+    dl.textContent = 'PNG';
+    cap.append(name, dl);
+    fig.append(frame, cap);
+    cards.appendChild(fig);
+    return { item: item, frame: frame, dl: dl };
+  });
+
+  function specOf(item) {
+    return Object.assign({}, item.spec, {
+      bg: state.bg,
+      accent: state.accent,
+      photo: state.photo,
+    });
+  }
+
+  function paint() {
+    document.querySelectorAll('[data-bg]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.bg === state.bg));
+    });
+    document.querySelectorAll('[data-accent]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.accent === (state.accent || '')));
+    });
+    safeBtn.setAttribute('aria-pressed', String(state.safe));
+    safeBtn.textContent = state.safe ? 'Hide' : 'Show';
+
+    frames.forEach(function (f) {
+      var spec = specOf(f.item);
+      f.frame.dataset.safe = state.safe && f.item.spec.size === 'story' ? 'on' : 'off';
+      StoryCard.render(spec).then(function (canvas) {
+        f.frame.replaceChildren(canvas);
+        f.dl.onclick = function () {
+          canvas.toBlob(function (blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = f.item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + state.bg + '.png';
+            a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+          });
+        };
+      });
+    });
+  }
+
+  paint();
+  window.__paint = paint;   /* the headless pass drives this */
+})();
+</script>
+</body>
+</html>

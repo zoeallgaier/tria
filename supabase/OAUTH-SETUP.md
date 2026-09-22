@@ -7,12 +7,15 @@ through, and the handle screen that follows a first sign-in. These are the
 one SQL file. Do them in order; the buttons are dead until all of them are done,
 and each one fails in a different place.
 
-> **Status (2026-09-22): step 1 is done. Steps 2 to 4 are not.** The code is
-> written, the build carries it, and the database has `claim_profile` — live, it
-> answers `28000 "You need to be signed in."` to an anon caller, which is a
-> sentence that exists only in `oauth-signin.sql`. What is left is all dashboard
-> and developer-portal state, and until it is there a tap on either button gets
-> "That way in isn’t switched on yet." Nothing half-lands on the way.
+> **Status (2026-09-22): 1, 2 and 4 are done. Step 3 (Apple) is not.**
+> The database has `claim_profile`; `/authorize?provider=google` 302s to
+> `accounts.google.com` with a `client_id` beginning `763070720120-` (the right
+> project), `redirect_uri` pointing at Supabase's callback and `redirect_to`
+> surviving as `tria://auth-callback`, which is the allow list answering too.
+> Apple is toggled on with an empty secret. Untested from here and untestable:
+> whether the Google consent screen was actually **published** — a project left
+> in Testing 302s exactly like this one and then refuses anyone not on the
+> test-user list, at Google's end, where nothing we can probe will see it.
 
 **Apple and Google are a package, not a menu.** App Store guideline **4.8** says
 an app offering a third-party sign-in must also offer one that limits data
@@ -40,7 +43,7 @@ curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/claim_profile" \
 anon caller has no `auth.uid()`). `PGRST202` means it is not. Note the argument
 names: a wrong signature answers `PGRST202` whether or not the function exists.
 
-## 2. Google
+## 2. Google — DONE (2026-09-22)
 Nothing about this app goes to Google. **Supabase is the OAuth client**, so
 Google never sees `tria://`, and the app needs no client id, no SDK and nothing
 in `package.json`.
@@ -113,13 +116,30 @@ In the Apple Developer portal:
    - Return URLs: `https://autjondbgcjctezbxliv.supabase.co/auth/v1/callback`
 3. **Keys → new key**, tick Sign in with Apple, pick the App ID, download the
    `.p8`. **It downloads once.** Note the Key ID and the Team ID (`8L793UU9T2`).
-4. Supabase → Authentication → Providers → **Apple** → on:
+4. Supabase → Authentication → Sign In / Providers → **Apple** → on:
    - Client IDs: **`com.triaonline.tria.web,com.triaonline.tria`** — the Services
      ID *and* the bundle ID, comma-separated. The bundle ID is the one the native
      token's `aud` carries, and leaving it out is the failure that looks like
      everything is configured: the browser flow works, the phone says the token
      is for the wrong audience.
-   - Secret Key, Key ID, Team ID from step 3.
+   - Secret Key: **not the `.p8`.** Apple's OAuth client secret is a **JWT**,
+     ES256-signed with that key, carrying the Team ID as issuer, the Key ID in
+     its header and the Services ID as subject. The `.p8` is what signs it. Some
+     Supabase dashboards mint it for you from the key, Key ID and Team ID; where
+     that field is a single box, it wants the finished token.
+
+     **And it expires.** Apple caps the lifetime at six months, so unlike every
+     other credential in this file, this one has to be REGENERATED or Apple
+     sign-in stops on a date nothing in the repo knows about, web first. Mint it
+     with the repo's own tool, which has no dependencies and prints the date:
+
+     ```
+     node apple-secret.mjs ~/Downloads/AuthKey_XXXXXXXXXX.p8 <KeyID>
+     ```
+
+     Keep the `.p8` out of the repo. `.gitignore` refuses `*.p8` as a backstop,
+     but the real answer is to leave it in Downloads: it is the only secret in
+     Tria's setup that is not already public by design.
 
 ## 4. Redirect URLs
 Supabase → Authentication → URL Configuration → Redirect URLs. Add both:
