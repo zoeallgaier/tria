@@ -261,7 +261,6 @@
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
-    share:   '<circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8 15.7 6.3"/><path d="M8.3 13.2 15.7 17.7"/>',
     profile: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
     publish: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
@@ -7440,23 +7439,29 @@
           // the first thing you'd want; on your OWN page it is the rarer act,
           // and it was making the reader read past it.
           { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
-          // Pinning, when there is a slot free. It is here rather than as an
-          // empty card on the page because an empty slot is furniture — see
-          // pinsSectionHtml. Absent at three: swapping one out is a decision
-          // about a particular thing, and it is offered where that thing is (a
-          // post's own •••, a pin's). Setting a song pins it without ever coming
-          // through here; this row is for pinning one you have already set, and
-          // for the deliberate trip when you haven't.
-          ...(myPins().length < PIN_MAX
-            ? [{ label: 'Pin to profile', icon: 'pinned', run: openPinAdd }] : []),
-          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username, { self: true }) },
-          /* The profile as a picture, and the only card in Tria that carries a
-             QR. It sits under Share profile because they are the same act at
-             two fidelities: a link you paste, and a card you hold up. Own
-             profile only — the row does not exist on anybody else's, where a
-             QR to a stranger's profile made by a third party is a different
-             thing wearing the same button. */
-          { label: storyRowLabel(), icon: 'image',
+          /* ONE SHARE ROW (Zoe, 2026-09-22). This menu carried two, "Share
+             profile" and the card, stacked one on the other — and they were
+             never two decisions. They are the same intent at two fidelities, a
+             link you paste and a card you hold up, which is a SHEET'S job to
+             lay out and not a menu's. So the row opens the card, and the link
+             is the last row of the sheet it opens.
+
+             The picture frame rather than the tray, and the icon is the rule
+             here rather than a preference: a row that opens a PREVIEW wears the
+             frame, a row that hands an address straight to the OS wears the
+             tray. That is why the same words on a visitor's profile, below,
+             carry a different glyph — the words are the intent and the glyph is
+             what actually happens.
+
+             OWN PROFILE ONLY, and this is the only card in Tria that carries a
+             QR. A QR to somebody else's profile, made by a third party, is a
+             different act wearing the same button.
+
+             The code points at the PROFILE and never at the invite link. A card
+             is a public surface by definition and an invite makes friends
+             outright, so the two never meet: whoever scans this lands somewhere
+             that still asks. */
+          { label: 'Share profile', icon: 'image',
             run: () => openStoryCardSheet(profileCardSpec(u), profileLink(u.username)) },
           { label: 'Subscribe to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
@@ -9395,23 +9400,33 @@
     return linkBase() + 'u/' + encodeURIComponent(username);
   }
 
-  /* Handing someone a profile, from all three places that offer it: your own
-     ••• sheet, a friend's tie menu, and a non-friend's •••. One helper because
-     the three were never going to be three different acts, and because the
-     sentence is the only thing that differs between them: your own profile is
-     an invitation, someone else's is a recommendation, and "Join me on Tria"
-     under a stranger's handle would be the app speaking in your voice about a
-     person you don't share an account with. */
-  function shareProfile(username, { self = false } = {}) {
-    const u = Store.user(username);
-    const who = u ? u.name : '@' + username;
-    shareOrCopy({
-      title: `@${username} on Tria`,
-      text: self ? 'Join me on Tria' : `${who} on Tria`,
-      url: profileLink(username),
-    }).then(result => {
+  /* Hand a link to the OS, or to the clipboard, and say which happened. This
+     is where a Share row goes when there is no card to draw for it — somebody
+     else's post, an activity, a poll, a profile that isn't yours — so the
+     system tray is still one tap from every ••• in the app. The card sheet does
+     NOT come through here: its last row copies and says so (see toLink). */
+  function handOver(payload) {
+    return shareOrCopy(payload).then(result => {
       if (result === 'cancelled') return;
       toast(result === 'copied' ? 'Link copied' : 'Shared');
+    });
+  }
+
+  /* Handing SOMEBODY ELSE'S profile on, from the two places that offer it: a
+     friend's tie menu and a non-friend's •••. Your own no longer comes through
+     here — it opens the card sheet, and the link is a row inside that — which
+     is what took the old `self` branch out with it. The sentence that branch
+     chose, "Join me on Tria", had exactly one caller and it was your own
+     profile; someone else's was always a recommendation rather than an
+     invitation, because the app does not speak in your voice about a person you
+     don't share an account with. */
+  function shareProfile(username) {
+    const u = Store.user(username);
+    const who = u ? u.name : '@' + username;
+    handOver({
+      title: `@${username} on Tria`,
+      text: `${who} on Tria`,
+      url: profileLink(username),
     });
   }
 
@@ -9701,16 +9716,13 @@
     return linkBase() + postRoute(post).replace(/^#\//, '');
   }
 
-  function copyPostLink(post) {
+  function postShare(post) {
     const author = Store.user(post.author);
-    shareOrCopy({
+    return {
       title: `${author ? author.name : post.author} on Tria`,
       text: 'A post on Tria',
       url: postLink(post),
-    }).then(result => {
-      if (result === 'cancelled') return;
-      toast(result === 'copied' ? 'Link copied' : 'Shared');
-    });
+    };
   }
 
   /* ── STORY CARDS ────────────────────────────────────────────────────────────
@@ -9728,13 +9740,28 @@
      THE LINK IS NEVER THE INVITE LINK. A card is a public surface by
      definition, so it carries the address and, on a profile card, a QR to the
      PROFILE, where adding someone is still a request. Zoe's firm rule, and the
-     one thing here that must not drift. */
+     one thing here that must not drift.
 
-  /* Is Instagram on this phone? Asked once, at boot, and not when the menu
-     opens: the answer decides a LABEL and openPostMenu builds its rows
-     synchronously, so an answer that arrives later arrives after the row it was
-     for. A row promising Instagram to somebody who hasn't got it is a row that
-     does nothing when tapped.
+     ── ONE ROW IN, THREE ROWS OUT ─────────────────────────────────────────────
+     Every ••• in the app offers exactly ONE way to hand this thing over, it is
+     spelled "Share" or "Share profile" every time, and this sheet is where that
+     row lands whenever there is a picture to be made:
+
+       post •••     →  Share         →  Save image · Instagram · Copy link
+       profile •••  →  Share profile →  Save image · Instagram · Copy link
+
+     Menus name INTENTS; the sheet names ACTS. That split is the whole design
+     and it is what killed the two stacked Share rows, the row called "Somewhere
+     else", and the label that flipped between Share link and Copy link. Where
+     there is no card to draw — somebody else's post, an activity, a poll,
+     somebody else's profile — the row keeps the same word and goes straight out
+     through handOver instead. */
+
+  /* Is Instagram on this phone? Asked once, at boot, and not when the sheet
+     opens: the answer decides whether a ROW EXISTS and openStoryCardSheet
+     builds its rows synchronously, so an answer that arrives later arrives
+     after the row it was for. A row promising Instagram to somebody who hasn't
+     got it is a row that does nothing when tapped.
 
      `canOpenURL` answers false for any scheme missing from
      LSApplicationQueriesSchemes, installed or not — so forgetting the Info.plist
@@ -9749,12 +9776,6 @@
         .catch(() => { /* an older binary without the plugin */ });
     } catch { /* same */ }
   })();
-
-  /* Two labels for one row, which is deliberate rather than indecisive. The row
-     says what will actually happen on THIS phone: Instagram when Instagram is
-     there, a plain picture when it isn't. The sheet behind it is the same sheet
-     either way; only the Instagram action is missing. */
-  const storyRowLabel = () => (instagramOK ? 'Share to Instagram' : 'Share as image');
 
   /* A post, in the shape storycard.js wants. `type` is passed through even when
      it is 'poll', which storycard has never heard of and falls back to note for
@@ -9798,10 +9819,15 @@
   }
 
   /* Can this shell put a picture in the camera roll? Native only — a browser
-     has no such thing, and its Somewhere-else row already ends in a download. */
+     has no such thing, and "save" there means a download. One row either way
+     (see toSave): what "Save image" MEANS is the same sentence on both, and
+     splitting it into two labels would be the app explaining its own plumbing. */
   const canSavePhotos = () =>
     nativeShell() && !!window.Capacitor?.isPluginAvailable?.('TriaShare');
 
+  /* A BARE LINK, not the {title, text, url} payload the ••• rows carry, because
+     nothing in this sheet hands an address to the OS: the last row copies, and
+     the Instagram row copies on its way out. */
   function openStoryCardSheet(base, link) {
     if (!window.StoryCard) { toast('Cards need a newer version of Tria.'); return; }
     const pick = { bg: 'gradient' };
@@ -9813,9 +9839,12 @@
       ['dark', 'Dark'],
     ];
 
+    // No aria-label on the frame: a bare <div> with a label and no role is not
+    // announced by anything. The label goes on the canvas, which gets role="img"
+    // the moment it is mounted (see paint).
     const head =
       `<div class="cardshare">` +
-        `<div class="cardshare-art" aria-label="A preview of the card"></div>` +
+        `<div class="cardshare-art"></div>` +
         `<div class="cardshare-bgs" role="group" aria-label="Background">` +
           BACKGROUNDS.map(([key, label]) =>
             `<button class="cardshare-bg" type="button" data-bg="${key}"` +
@@ -9833,26 +9862,61 @@
       return made;
     };
 
-    const items = [];
-    // extlink on Instagram because that row LEAVES Tria, which is the one thing
-    // about it a person should know before tapping.
-    if (instagramOK) {
-      items.push({ label: 'Share to Instagram', icon: 'extlink', run: () => toInstagram() });
-    }
-    if (canSavePhotos()) {
-      items.push({ label: 'Save to Photos', icon: 'image', run: () => toPhotos() });
-    }
-    items.push({ label: 'Somewhere else', icon: 'send', run: () => toAnywhere() });
+    /* THREE ROWS, THE SAME THREE, IN THIS ORDER (Zoe, 2026-09-22):
+
+         Save image           the picture, onto this device
+         Share to Instagram   the picture, as a sticker, off to Instagram
+         Copy link            the address, with no picture at all
+
+       The picture rows lead because the picture is the thing sitting in the
+       preview above them, and it is what a reader opened this to look at. The
+       link is the plain fallback and goes last. Instagram is absent, not
+       greyed, on a phone without it.
+
+       COPY MEANS COPY. The last row used to change its own label — "Share link"
+       where `navigator.share` exists, "Copy link" where it doesn't — which on a
+       phone meant the final row of a sheet opened ANOTHER sheet, the system
+       tray, on top of it. One sheet is the simplification. The tray did not go
+       anywhere: it is what the ••• row itself does whenever there is no card to
+       draw, and on a phone it is one tap inside the saved picture.
+
+       This sheet used to end in "Somewhere else" as well, which is not a place
+       and not an act — it was that same tray wearing a label describing the
+       rows ABOVE it.
+
+       `extlink` on Instagram because that row LEAVES Tria, which is the one
+       thing about it worth knowing before tapping. */
+    const items = [{ label: 'Save image', icon: 'image', run: () => toSave() }];
+    if (instagramOK) items.push({ label: 'Share to Instagram', icon: 'extlink', run: () => toInstagram() });
+    items.push({ label: 'Copy link', icon: 'link', run: () => toLink() });
 
     openSheet({
       head,
       items,
       wire: (scrim) => {
         const art = scrim.querySelector('.cardshare-art');
+        /* The frame RESERVES the preview's height in CSS before anything is
+           drawn (--cardshare-h), so the sheet opens at the size it will stay.
+           Without that the panel is furniture-only for a frame or two and then
+           jumps 400px taller under the finger, which is the single ugliest
+           thing this sheet did.
+
+           A LATE RENDER DOES NOT WIN. Two taps in quick succession start two
+           draws and they can land in either order, so a paint only mounts its
+           canvas if that background is still the chosen one. `isConnected`
+           alone caught the closed sheet and not this. */
         const paint = () => {
-          draw(pick.bg).then((canvas) => {
-            // A tap that landed while this was drawing wins, so check.
-            if (scrim.isConnected) art.replaceChildren(canvas);
+          const bg = pick.bg;
+          draw(bg).then((canvas) => {
+            if (!scrim.isConnected || pick.bg !== bg) return;
+            canvas.setAttribute('role', 'img');
+            canvas.setAttribute('aria-label', 'A preview of the card');
+            // Re-mounting a cached canvas re-runs the fade, which is what makes
+            // flicking through the four read as one card changing clothes
+            // rather than four cards being swapped.
+            canvas.classList.remove('is-in');
+            art.replaceChildren(canvas);
+            requestAnimationFrame(() => canvas.classList.add('is-in'));
           }).catch(() => toast('The card could not be drawn.'));
         };
         scrim.querySelectorAll('.cardshare-bg').forEach((btn) => {
@@ -9896,45 +9960,48 @@
         });
     }
 
-    /* Straight into the camera roll. The share sheet below can already do this
-       under Save Image, and it is three taps and a decision down; this is one
-       tap and the thing people actually mean by "save".
+    /* ONE ROW FOR "the picture ends up on this device", with two bodies under
+       it. In the app that is the camera roll, through the plugin, which is what
+       "save" means to everybody who is not a programmer. In a browser there is
+       no camera roll, so it is a download. The label does not change between
+       them, because the sentence a reader is thinking does not change either.
+
+       This replaces the old Save to Photos / Somewhere else pair. "Somewhere
+       else" was the system share tray under a label that named no place and no
+       act, and on a phone that tray is still one tap away inside the saved
+       picture. Zoe's call, 2026-09-22.
 
        A REFUSAL IS NOT A FAILURE, and gets its own sentence. "Couldn't save" in
        answer to a permission prompt somebody declined is the app pretending not
        to know why, and it leaves them with nothing to do about it. */
-    function toPhotos() {
-      draw(pick.bg)
-        .then((canvas) => window.Capacitor.nativePromise('TriaShare', 'saveToPhotos', {
-          image: canvas.toDataURL('image/png'),
-        }))
-        .then(() => toast('Saved to your photos.'))
-        .catch((e) => {
-          const denied = e && (e.code === 'NO_PERMISSION' || /permission/i.test(e.message || ''));
-          toast(denied
-            ? 'Tria needs permission to add to your photos. It is in Settings.'
-            : 'The card could not be saved.');
-        });
-    }
-
-    /* Everywhere that is not Instagram, which on a phone is the system share
-       sheet and therefore Messages, AirDrop, Save Image and the rest. A browser
-       without file sharing gets a download, because a card you cannot save is
-       not a card. */
-    function toAnywhere() {
+    function toSave() {
+      if (canSavePhotos()) {
+        draw(pick.bg)
+          .then((canvas) => window.Capacitor.nativePromise('TriaShare', 'saveToPhotos', {
+            image: canvas.toDataURL('image/png'),
+          }))
+          .then(() => toast('Saved to your photos.'))
+          .catch((e) => {
+            const denied = e && (e.code === 'NO_PERMISSION' || /permission/i.test(e.message || ''));
+            toast(denied
+              ? 'Tria needs permission to add to your photos. It is in Settings.'
+              : 'The card could not be saved.');
+          });
+        return;
+      }
       draw(pick.bg)
         .then((canvas) => new Promise((resolve, reject) =>
           canvas.toBlob(b => b ? resolve(b) : reject(new Error('unreadable')), 'image/png')))
-        .then((blob) => {
-          const file = new File([blob], 'tria-card.png', { type: 'image/png' });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            return navigator.share({ files: [file], text: link })
-              .then(() => 'shared', (err) => (err && err.name === 'AbortError') ? 'cancelled' : download(blob));
-          }
-          return download(blob);
-        })
-        .then((how) => { if (how !== 'cancelled') toast(how === 'shared' ? 'Shared' : 'Card saved'); })
+        .then((blob) => { download(blob); toast('Card saved.'); })
         .catch(() => toast('The card could not be saved.'));
+    }
+
+    /* The address on its own, with no picture, for the times somebody opened
+       this sheet and then decided they just wanted the link. It is the same
+       clipboard write the Instagram row makes on its way out, so "Link copied."
+       means one thing in this sheet however you got there. */
+    function toLink() {
+      copyText(link).then(ok => toast(ok ? 'Link copied.' : 'Couldn’t copy the link.'));
     }
 
     function download(blob) {
@@ -9943,7 +10010,6 @@
       a.href = url; a.download = 'tria-card.png';
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return 'saved';
     }
   }
 
@@ -9987,37 +10053,52 @@
     });
   }
 
-  // The per-post overflow (•••). Copy link for everyone; Add to calendar on
-  // upcoming activities (a sibling "send this elsewhere" action); Report only on
-  // posts that aren't yours (you can't report yourself).
+  // The per-post overflow (•••). One way to hand the post on, for everyone; Add
+  // to calendar on upcoming activities (a sibling "send this elsewhere" action);
+  // Report only on posts that aren't yours (you can't report yourself).
   //
   // NO REPOST ROW. It used to be spliced in second, from back when this menu and
   // the circle beside it both raised the same sheet from the bottom of the screen
   // and neither one was near the finger — so a second way in cost nothing.
-  // Copy link still leads: it's the row a reader wants most often, danger sits
+  // Sharing still leads: it's the row a reader wants most often, danger sits
   // at the tail, and there is no ordering trick to defend now that this rises
   // as the sheet it always was — see openSheet.
   function openPostMenu(post) {
     const own = post.author === Store.session();
-    const items = [{ label: 'Copy link', icon: 'link', run: () => copyPostLink(post) }];
+    /* ONE ROW, AND IT IS ALWAYS THE WORD SHARE (Zoe, 2026-09-22). This menu
+       used to carry Copy link AND the card stacked under it, which asked a
+       reader to choose between two ways of doing the same thing before they had
+       seen either; then it carried Share on some posts and Copy link on others,
+       which is the menu narrating its own plumbing. A menu names an INTENT. The
+       acts live one layer down, in the sheet.
+
+       So the label never moves and the destination does:
+
+         a card to draw  →  the card sheet (Save image, Instagram, Copy link)
+         no card         →  straight out to the system tray, or the clipboard
+
+       A CARD IS OWN POSTS ONLY, and not every one of those. An ACTIVITY and a
+       POLL both carry structured information the card has no place for, a date
+       and time and a set of choices, and a card that silently drops the WHEN
+       off a plan is not an incomplete card, it is a misleading one. Those two
+       go out as a link, like somebody else's post, until the renderer has a
+       design for them.
+
+       The GLYPH is what differs, and that is the rule rather than a preference:
+       a row that opens a PREVIEW wears the picture frame, a row that hands an
+       address straight to the OS wears the tray. The words are the intent, the
+       glyph is what actually happens. */
+    const cardable = own && post.type !== 'activity' && post.type !== 'poll';
+    const items = [cardable
+      ? { label: 'Share', icon: 'image',
+          run: () => openStoryCardSheet(cardSpecFor(post), postLink(post)) }
+      : { label: 'Share', icon: 'send', run: () => handOver(postShare(post)) }];
     // Add to calendar, back in this menu since 2026-09-16 after a stretch in 1.7
     // as a glyph beside the headcount. The SUBJECT, so a quote of a plan offers
     // the plan it points at, the way its headcount does.
     const plan = subjectOf(post);
     if (plan && isCalendarable(plan))
       items.push({ label: 'Add to calendar', icon: 'cal', run: () => downloadIcs(plan) });
-    /* The card, beside Copy link because it is the same act in another form,
-       and ABOVE the rows that change or end the post.
-
-       OWN POSTS ONLY (Zoe, 2026-09-22), and not every one of those. An ACTIVITY
-       and a POLL both carry structured information the card has no place for —
-       a date and time, a set of choices — and a card that silently drops the
-       WHEN off a plan is not an incomplete card, it is a misleading one. Those
-       two keep Copy link and nothing else until the renderer has a design for
-       them. */
-    if (own && post.type !== 'activity' && post.type !== 'poll')
-      items.push({ label: storyRowLabel(), icon: 'image',
-                    run: () => openStoryCardSheet(cardSpecFor(post), postLink(post)) });
     if (own) {
       // Pin, above the editor: it's a positive act on a finished post, and the
       // two rows below it are the ones that change or end it. The label flips
@@ -11939,8 +12020,8 @@
      cards, none means nothing at all, including on your own profile.
 
      Nothing here is the only way to make a pin, which is what lets it be this
-     bare: a post is pinned from its own •••, a song by being the song you set,
-     and the profile's own ••• holds the deliberate way in (see renderUser). */
+     bare: a post is pinned from its own •••, and a pin already on the wall is
+     moved or taken down from its own (see openPinMenu). */
   function pinsSectionHtml(u, ctx) {
     const items = pinsFor(u, ctx);
     if (!items.length) return '';
@@ -11977,14 +12058,27 @@
     openSheet({ items });
   }
 
-  /* The way in, from your own profile's ••• . Three rows because there are three
-     kinds of thing to pin and the ask names all three; the middle one is absent
-     for somebody who hasn't posted yet, rather than opening an empty picker.
+  /* NOTHING CALLS THIS RIGHT NOW (2026-09-22). It hung off your own profile's
+     •••, and that row came out when the menu was cut back to one share row —
+     Zoe asked for the pin row to go, and this was the whole of it.
 
-     At three pins it does not open: the row that offers it isn't drawn, because
-     every one of these three would land on a full row and the swap belongs to
-     the thing being pinned (see pinPostFromMenu), not to a menu of ways to
-     start. */
+     It is kept rather than deleted because removing the row removed a
+     capability with it, and the capability is not obviously one to lose: this
+     is the ONLY place a SONG pin has ever been created (the one commitPins with
+     `{k:'song'}` in the file), and the only way to reach #/pin/post, which is
+     how you pin something from further back than your wall's first screen.
+     Pinning a POST is untouched and lives where it belongs, on that post's own
+     ••• (see pinPostFromMenu).
+
+     So: either give song pinning a home of its own — #/listening, where you set
+     the song, is the honest one — or delete this, renderPinPost, the #/pin/
+     route and the pendingPin flow together. Half of that is worse than either.
+
+     Three rows because there are three kinds of thing to pin and the ask names
+     all three; the middle one is absent for somebody who hasn't posted yet,
+     rather than opening an empty picker. At three pins it did not open at all,
+     because every one of the three would land on a full row and the swap
+     belongs to the thing being pinned, not to a menu of ways to start. */
   function openPinAdd() {
     const me = Store.session();
     const mine = Store.postsBy(me).filter(pinnablePost);

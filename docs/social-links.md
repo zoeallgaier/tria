@@ -320,8 +320,20 @@ Read against Meta's own docs, 2026-09-22, and two details bite:
 The sticker key is `com.instagram.sharedSticker.stickerImage`, and all three go
 on the pasteboard in one item with an expiry before the scheme is opened.
 
-Everywhere else is the ordinary share sheet: the image file plus the link, via
-`navigator.share` with files on the web, falling back to a download.
+**The rest of the sheet is two rows, not a tray.** *Save image* puts the picture
+on the device — the camera roll through `saveToPhotos` in the app, a download in
+a browser, one label either way because the sentence a reader is thinking does
+not change. *Copy link* copies the address and says so. Neither one opens
+`navigator.share`, and that is deliberate: a sheet whose last row opens another
+sheet is not a simplification, and the system tray is still one tap inside the
+saved picture. The tray has one home now, the ••• row itself, for the things
+that have no card to draw.
+
+**One row in, three rows out.** Every ••• in the app offers exactly one way to
+hand a thing over and it is spelled *Share* (a post) or *Share profile* (a
+profile) every time. Menus name intents; this sheet names acts. Where there is
+no card — somebody else's post, an activity, a poll, somebody else's profile —
+the row keeps the same word and goes straight to the system tray instead.
 
 **Scope rules** are the ones in Zoe's answers. Worth noting they mostly enforce
 themselves: a card is drawn from what the client can already read, and a client
