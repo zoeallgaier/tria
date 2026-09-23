@@ -311,7 +311,10 @@ last of the layers with it.
   on the room you are standing in.
 - **The panel fills the frame it is given.** It used to shrink-wrap the code,
   which left the paper stopping in a different place from Save image and Copy
-  link for no reason a reader could see.
+  link for no reason a reader could see. Its padding is measured to the INK, so
+  the quiet zone counts as the margin it already is, and the top has a smaller
+  number of its own (0.06 against 0.11): it is the only edge with no quiet zone
+  to give back, so at the same fraction it was the biggest gap on the panel.
 
 **And Save image never saved anything in the app** (found and fixed
 2026-09-23). `TriaSharePlugin` was never registered with the bridge, so

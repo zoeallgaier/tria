@@ -257,7 +257,27 @@
          anything. Ask for CORS, and if the bucket refuses, resolve null and
          draw the plate: a card without the photo still carries the words. */
       if (cors) img.crossOrigin = 'anonymous';
-      img.onload = function () { resolve(img); };
+      /* A LOADED IMAGE WITH NO SIZE IS NOT A LOADED IMAGE (2026-09-23). It
+         happens — a refused cross-origin fetch that still fires `load`, a
+         zero-length body — and it is worse than an error, because every caller
+         here takes a non-null image as "draw this": drawCover then divides by
+         zero, hands drawImage an infinite rectangle, and the canvas spec says
+         to do nothing at all. Seen in the app as a profile card with an empty
+         ring where the face goes, and no initial either, since the fallback
+         had been skipped. Null is the honest answer and the fallbacks are
+         already written for it. */
+      img.onload = function () {
+        if (!img.naturalWidth || !img.naturalHeight) return resolve(null);
+        /* AND `load` IS NOT `READY TO DRAW`. decode() is, and it is the only
+           promise that says the pixels exist: drawImage on an image that has
+           loaded but not decoded draws nothing, throws nothing and leaves an
+           empty ring where a face goes. Twice in the simulator, on the first
+           run after an install, and not reproducible on demand — which is the
+           other reason to ask rather than to hope. */
+        if (!img.decode) return resolve(img);
+        img.decode().then(function () { resolve(img); },
+                          function () { resolve(null); });
+      };
       img.onerror = function () { resolve(null); };
       img.src = src;
     });
@@ -994,22 +1014,26 @@
        ITS PADDING IS MEASURED TO THE INK, not to the plate: the code's own
        quiet zone is four modules of white inside the side asked for, so padding
        the plate pads it twice and the code floats high with a white shelf under
-       it. The foot gives the quiet zone back; the top does not, because a
-       photograph starts where it starts.
+       it. The foot gives the quiet zone back; the top cannot, because a
+       photograph starts where it starts — which is why the top has a smaller
+       number of its own (Zoe, 2026-09-23). Set to the same fraction as the
+       others it is the biggest gap on the panel, since it is the only edge
+       paying full price, and the sheet reads as a card with a dent in the top
+       of it.
 
        Solved, floored to whole pixels per module, and then CHECKED, because the
        solve is in fractions and the drawing is in rounded pixels. The first
        guess is optimistic, since the loop only ever walks down. */
-    const PAD = 0.11;
+    const PAD = 0.11, PAD_TOP = 0.06;
     const wide = Math.round((opt.width || 0) * dpr), tall = (opt.maxHeight || 0) * dpr;
-    const room = Math.min(wide, tall / (CODE_TALL + PAD));
+    const room = Math.min(wide, tall / (CODE_TALL + PAD_TOP));
     let unit = Math.max(2, Math.floor(room / n));
     let side, parts, pad, foot;
     for (;;) {
       side = unit * n;
       parts = codeParts(side, false, dpr);   /* dpr, so the type floors are CSS pixels */
-      pad = Math.round(side * PAD);
-      foot = Math.max(0, pad - QUIET * unit);
+      pad = Math.round(side * PAD_TOP);
+      foot = Math.max(0, Math.round(side * PAD) - QUIET * unit);
       if (unit <= 2 || (side <= wide && parts.height + pad + foot <= tall)) break;
       unit -= 1;
     }
