@@ -3937,11 +3937,24 @@ body.postbar-live main { padding-bottom: 6.5rem; }
    It is deliberately SMALL. A card is a thing you choose a colour for, not a
    thing you read in a sheet — the words on it are already the words on the post
    behind the scrim, and a preview tall enough to read them would push the
-   actions off the bottom of a short phone. */
+   actions off the bottom of a short phone.
+
+   THE PROFILE SHEET PUTS A CODE IN THAT FRAME INSTEAD, and it is the one place
+   the paragraph above does not hold: a QR scaled down with the card around it
+   is 110px of picture on a screen somebody is holding out to be scanned. It
+   carries its own size in an inline style (storycard.js measures it, in whole
+   device pixels per module) and so needs nothing here but the frame it lands in.
+   See "A CODE IS NOT A PREVIEW" in app.js. */
 .cardshare { padding: 0.35rem 0.15rem 0.6rem; }
 .cardshare-art {
   display: grid; place-items: center;
   margin-bottom: 0.7rem;
+  /* RESERVED BEFORE THE FIRST DRAW, so the sheet opens at the height it keeps
+     instead of standing up under the finger a frame or two later. It is the
+     canvas ceiling below, because that is what a portrait card always comes to;
+     the code panel measures shorter than this on a narrow window and overrides
+     both this and `height` inline. */
+  min-height: clamp(240px, 44vh, 500px);
 }
 .cardshare-art canvas {
   display: block;

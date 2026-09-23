@@ -40,8 +40,12 @@
    If the type colours or --band-deepen change there, change them here too;
    BAND_STOPS carries the arithmetic that ties the two together.
 
-   NOT WIRED IN YET. Nothing in app.js calls this. tools/storycards.html is the
-   only thing that loads it, and that page is a bench, not a route. */
+   WIRED IN SINCE 2026-09-22. The ••• on your own post and on your own profile
+   both reach this through openStoryCardSheet in app.js, and the profile's sheet
+   also asks for the code on its own, at the size a camera reads it — see "THE
+   CODE AT SCAN SIZE" at the foot of this file. tools/storycards.html draws
+   every card at every size against every background, and that page is a bench,
+   not a route. */
 
 (function () {
   'use strict';
@@ -372,12 +376,15 @@
   function layout(ctx, spec, m) {
     const kind = spec.kind || 'note';
     const cardW = m.w - m.margin * 2;
-    const sidePad = kind === 'photo' ? Math.round(m.pad / 3) : m.pad;
-    const inner = cardW - sidePad * 2;
     /* On the photo card the plate runs to the card's own padding while the text
        is inset further, so the words line up with the story's other cards and
-       the picture still reads as the biggest thing on it. */
-    const textPad = kind === 'photo' ? m.pad - sidePad : 0;
+       the picture still reads as the biggest thing on it. The profile card's
+       code is a plate by the same argument and takes the same treatment: it is
+       the picture on that card. */
+    const plated = kind === 'photo' || kind === 'profile';
+    const sidePad = plated ? Math.round(m.pad / 3) : m.pad;
+    const inner = cardW - sidePad * 2;
+    const textPad = plated ? m.pad - sidePad : 0;
     const textW = inner - textPad * 2;
 
     /* Every block carries the gap that follows it, so the height measured here
@@ -419,13 +426,23 @@
                     after: caption ? m.gap : 0 });
       if (caption) blocks.push({ type: 'caption', block: caption, height: caption.height, after: 0 });
     } else if (kind === 'profile') {
-      const bio = spec.text ? paragraph(ctx, spec.text, {
-        size: Math.round(m.body * 0.62), minSize: Math.round(m.bodyMin * 0.8), lineHeight: 1.3,
-        maxWidth: textW, maxHeight: m.body * 0.62 * 1.3 * 4,
-      }) : null;
-      if (bio) blocks.push({ type: 'body', block: bio, height: bio.height, after: m.gap });
-      const side = Math.max(280, Math.min(Math.round(inner * 0.78), Math.floor(budget - spent())));
-      blocks.push({ type: 'qr', side: side, height: side, after: 0 });
+      /* THE CODE IS THE CARD (Zoe, 2026-09-22). It used to be 78% of the text
+         column, left-aligned under a bio, which is how a QR looks when it is an
+         ornament on a profile card. It is not an ornament: it is the one thing
+         on this card anybody does anything with. So it takes the plate's width
+         the way a photo does, centred in it, and the bio comes off — at 78% of
+         the column a four-line bio and a code were the same card, and the code
+         lost. Nobody is reading a bio off a picture of a card anyway; it is on
+         the profile the code opens, one scan away.
+
+         A SIZE WITH NO SAFE BAND has no vertical margin reserved for it — the
+         band IS the canvas there — so a block that takes everything left grows
+         the card to the top and bottom edges and loses its own shadow. The side
+         margin is the measure of what the card is meant to sit in, so the code
+         leaves it at the other two edges too, and the square comes out square. */
+      const room = budget - (m.safeTop ? 0 : m.margin * 2);
+      const side = Math.max(280, Math.min(inner, Math.floor(room)));
+      blocks.push({ type: 'qr', side: side, width: inner, height: side, after: 0 });
     } else {
       const body = paragraph(ctx, spec.text || '', {
         size: m.body, minSize: m.bodyMin, lineHeight: 1.2,
@@ -515,9 +532,10 @@
         }
         ctx.restore();
       } else if (b.type === 'qr') {
-        /* Left, with everything else. A centred code under a left-aligned name
-           reads as two cards stacked. */
-        drawQR(ctx, tx, y, b.side, spec, paper);
+        /* CENTRED in the plate, like the photo's. It was left-aligned with the
+           name and the address when it was a small mark under a bio, and at
+           this size that reads as a card someone printed off-centre. */
+        drawQR(ctx, x + (b.width - b.side) / 2, y, b.side, spec, paper);
       }
       y += b.height + b.after;
     });
@@ -581,23 +599,36 @@
   }
 
   /* THE QR, which is the one thing on a card that has to be CORRECT rather than
-     merely handsome, and the one thing here that is not finished. A real
-     encoder is a vendored file (js/vendor/), it is shared with invites, and it
-     has to be checked against a phone camera rather than against my own eyes.
-     Until it lands, the profile card draws the space the code will occupy and
-     says so out loud, because a decorative QR that does not scan is worse than
-     no QR at all — it is a promise the card cannot keep. */
+     merely handsome. The encoder is a vendored file (js/vendor/qr.js, byte mode,
+     level M, versions 1 to 6), it is shared with invites, and every version in
+     it was round-tripped through a real decoder rather than eyeballed. Where
+     there is no encoder on the page — an older bundle, a host that loads this
+     file on its own — the card draws the space the code would occupy and prints
+     the address in it, because a decorative QR that does not scan is worse than
+     no QR at all: it is a promise the card cannot keep.
+
+     THE QUIET ZONE is four modules, the spec's minimum, and it is part of the
+     code rather than part of the design: it is what tells a camera where the
+     code stops. It is inset from the plate rather than left to the card's own
+     padding, which is a design value and moves. */
+  const QUIET = 4;
   let encoder = null;
   const encoderFor = () => encoder || (window.QR && window.QR.encode) || null;
 
-  function drawQR(ctx, x, y, side, spec, paper) {
-    const url = spec.qrUrl || spec.address || 'triaonline.com';
+  /* The modules for a spec, or null if there is nothing to encode or nothing to
+     encode it with. A throw here is the long-payload case and it is HANDLED,
+     not propagated: js/vendor/qr.js refuses past 106 bytes rather than emitting
+     a code that cannot be read, and a card that loses its QR is still a card. */
+  function modules(spec) {
+    const url = (spec && (spec.qrUrl || spec.address)) || '';
     const encode = encoderFor();
-    let cells = null;
-    /* A throw here is the long-payload case and it is HANDLED, not propagated:
-       js/vendor/qr.js refuses past 106 bytes rather than emitting a code that
-       cannot be read, and a card that loses its QR is still a card. */
-    if (encode) { try { cells = encode(url); } catch (e) { cells = null; } }
+    if (!url || !encode) return null;
+    try { return encode(url); } catch (e) { return null; }
+  }
+
+  function drawQR(ctx, x, y, side, spec, paper, grid) {
+    const url = spec.qrUrl || spec.address || 'triaonline.com';
+    const cells = grid || modules(spec);
 
     ctx.save();
     roundRect(ctx, x, y, side, side, Math.round(side * 0.06));
@@ -619,10 +650,7 @@
     /* WHITE, AND NOT THE CARD'S PAPER. Every other plate on these cards takes
        the theme; this one cannot. A scanner is reading contrast, and Tria's
        dark paper behind near-black modules is a code that photographs as a
-       grey square. The four-module QUIET ZONE is part of the code for the same
-       reason — it is what tells a camera where the code stops, and the spec
-       asks for four. Inset it rather than trusting the card's own padding,
-       because the card's padding is a design value and this is not. */
+       grey square. */
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     /* A hairline around the plate, because on the Light background the card is
@@ -636,7 +664,7 @@
     ctx.lineWidth = Math.max(2, Math.round(side * 0.006));
     ctx.stroke();
     ctx.clip();
-    const q = 4, n = cells.length, unit = side / (n + q * 2);
+    const q = QUIET, n = cells.length, unit = side / (n + q * 2);
     ctx.fillStyle = '#14171a';
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
@@ -652,23 +680,135 @@
     return y + side;
   }
 
+  /* ── THE CODE AT SCAN SIZE ───────────────────────────────────────────────
+     Everything above this makes a PICTURE of a code. This makes a code.
+
+     The difference is the reader standing in front of you. A card previewed in
+     the share sheet is a 1080 canvas scaled to a phone's width, which puts the
+     profile card's plate at about 110 CSS pixels and its modules at four —
+     technically a QR, and a thing nobody would hold up and ask a friend to
+     scan. So the sheet draws the code at its own size instead, with the handle
+     under it, and the card stays what Save image and Instagram hand over. One
+     code, two drawings, and the sheet stops being a thumbnail of a picture
+     nobody is looking at yet.
+
+     WHOLE DEVICE PIXELS PER MODULE, which is the other half of the reason this
+     is not just a bigger preview. Scaling a canvas puts module edges on
+     fractional pixels and the browser antialiases each one into its neighbours
+     on all four sides; a camera reading contrast is the single audience that
+     cannot forgive that. So the unit is floored to whole device pixels FIRST
+     and the plate is whatever that comes to — the panel's size is derived from
+     the code, not the code fitted to a panel.
+
+     IT IS STILL THE CARD, in paper, plate, ink and type, because the four
+     background pills above it are choosing the paper of the picture that saves.
+     A panel that ignored them would leave four buttons on screen that change
+     nothing a reader can see. */
+
+  /* Fractions of the code plate, which is the only measure on this panel that
+     was not chosen: everything else is laid out around it. */
+  const PANEL = { pad: 0.09, margin: 0.05, gap: 0.06, handle: 0.085, line: 1.25 };
+  /* Panel height over plate, the sum of the fractions above, rounded up a hair
+     so the height bound below never asks for one pixel more than it can have. */
+  const PANEL_TALL = 1.46;
+  /* What is left for the plate once the card's padding and the page margin
+     around it have had theirs: 1 / (1 + 2*pad + 2*margin). */
+  const PANEL_WIDE = 1 / (1 + PANEL.pad * 2 + PANEL.margin * 2);
+
+  /* The panel's arithmetic with nothing drawn, so a caller can reserve the
+     space before the first paint rather than have the sheet jump under a
+     finger. Null means there is no code to be had, and the caller falls back to
+     the card. Sizes are DEVICE pixels; `css` is what the element wears. */
+  function codeBox(spec, opt) {
+    const grid = modules(spec || {});
+    if (!grid) return null;
+    const dpr = Math.max(1, Math.min(3, (opt && opt.dpr) || window.devicePixelRatio || 1));
+    const n = grid.length + QUIET * 2;
+    const wide = Math.floor(((opt.width || 0) * PANEL_WIDE) * dpr / n);
+    const tall = Math.floor(((opt.maxHeight || 0) / PANEL_TALL) * dpr / n);
+    const unit = Math.max(2, Math.min(wide, tall));
+    const plate = unit * n;
+    const pad = Math.round(plate * PANEL.pad);
+    const margin = Math.round(plate * PANEL.margin);
+    const gap = Math.round(plate * PANEL.gap);
+    const handle = Math.round(plate * PANEL.handle);
+    const line = Math.round(handle * PANEL.line);
+    const w = plate + (pad + margin) * 2;
+    const h = margin * 2 + pad * 2 + plate + gap + line;
+    return { grid: grid, unit: unit, plate: plate, pad: pad, margin: margin, gap: gap,
+             handle: handle, line: line, dpr: dpr, w: w, h: h,
+             css: { width: w / dpr, height: h / dpr } };
+  }
+
+  /* Draw the box codeBox measured. Async only because of the face: the handle
+     is Oxygen and a font declared `font-display: swap` has not been fetched
+     until something asks to paint with it, so an unasked panel draws its handle
+     in the system sans exactly once. */
+  function code(spec, box) {
+    if (!box) return Promise.resolve(null);
+    spec = spec || {};
+    const author = spec.author || {};
+    const handle = '@' + (author.username || '');
+    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
+
+    const canvas = document.createElement('canvas');
+    canvas.width = box.w; canvas.height = box.h;
+    canvas.style.width = box.css.width + 'px';
+    canvas.style.height = box.css.height + 'px';
+    const ctx = canvas.getContext('2d');
+
+    return face(sans(box.handle, true), handle).then(function () {
+      const paper = backdrop(ctx, Object.assign({}, spec, { accent: accent }),
+                             { w: box.w, h: box.h });
+
+      ctx.save();
+      ctx.shadowColor = paper.shadow;
+      ctx.shadowBlur = Math.round(box.plate * 0.09);
+      ctx.shadowOffsetY = Math.round(box.plate * 0.04);
+      roundRect(ctx, box.margin, box.margin, box.w - box.margin * 2, box.h - box.margin * 2,
+                Math.round(box.plate * 0.09));
+      ctx.fillStyle = paper.card;
+      ctx.fill();
+      ctx.restore();
+
+      drawQR(ctx, box.margin + box.pad, box.margin + box.pad, box.plate, spec, paper, box.grid);
+
+      /* CENTRED, where the card's own code is left-aligned. On the card a
+         centred code under a left-aligned name reads as two cards stacked; here
+         the code IS the panel and there is nothing for it to line up with. */
+      ctx.fillStyle = paper.ink;
+      ctx.font = sans(box.handle, true);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(handle, box.w / 2,
+                   box.margin + box.pad + box.plate + box.gap + box.line / 2);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      return canvas;
+    });
+  }
+
+
   /* Both families are subsetted by unicode-range and declared `font-display:
      swap`, which means the browser has not fetched a single byte until
      something asks to paint with them. `document.fonts.ready` alone is not that
      ask — it resolves happily with nothing loaded — so each face is requested
      by name AND by the text it will draw, or an accented name silently falls
      back to Times on the one card that carries it. */
-  function fonts(spec, m) {
+  function face(font, text) {
     if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    return document.fonts.load(font, text).catch(function () {})
+      .then(function () { return document.fonts.ready; });
+  }
+
+  function fonts(spec, m) {
     const text = [spec.text, spec.prompt, (spec.author || {}).name,
                   (spec.author || {}).username, spec.address].filter(Boolean).join(' ')
                  + ' triaonline.com@';
     const faces = [
       serif(m.body), serif(m.prompt, true), sans(m.name, true), sans(m.handle), sans(m.address),
     ];
-    return Promise.all(faces.map(function (f) {
-      return document.fonts.load(f, text).catch(function () {});
-    })).then(function () { return document.fonts.ready; });
+    return Promise.all(faces.map(function (f) { return face(f, text); }));
   }
 
   function toBlob(spec, type) {
@@ -687,6 +827,10 @@
   window.StoryCard = {
     render: render,
     toBlob: toBlob,
+    /* The share sheet's profile panel: measure first, then draw what was
+       measured. See "THE CODE AT SCAN SIZE". */
+    codeBox: codeBox,
+    code: code,
     SIZES: SIZES,
     BACKDROPS: BACKDROPS,
     bandStops: bandStops,

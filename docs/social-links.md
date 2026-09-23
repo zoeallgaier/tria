@@ -254,14 +254,34 @@ What the build settled that the design could not:
   with their phone in dark mode still sends a light card unless they pick Dark.
   `bandStops()` carries the `--band-deepen` arithmetic so the ramp can be
   checked against tokens.css by eye.
-- **The QR is not done and is drawn as a labelled placeholder.** It needs a
-  vendored encoder, it is shared with Stage 3's invites, and it has to be
-  checked against a phone camera rather than against my own eyes. A decorative
-  QR that does not scan is worse than no QR. `StoryCard.useEncoder()` is the
-  seam it drops into.
+- **The QR is done** (2026-09-22): [`js/vendor/qr.js`](../js/vendor/qr.js), byte
+  mode, level M, versions 1 to 6, written here rather than pulled from npm
+  because there is no build step and one file in `js/vendor/` is the whole
+  dependency story. Every version was round-tripped through a real decoder at
+  every payload length it holds. Past 106 bytes `encode()` throws and the card
+  prints the address in the plate instead, because a decorative QR that does not
+  scan is worse than no QR. `StoryCard.useEncoder()` is still there for a caller
+  that wants to supply another.
 - **The bench is publicly downloadable once pushed** (`triaonline.com/tools/`),
   the same way `bump.sh` and `gen-icons.js` already are. Nothing on it is
   private and nothing links to it.
+
+**The share sheet does not preview the profile card** (2026-09-22). Everything
+above makes a picture of a code; the sheet the profile's **Share profile** row
+opens makes a CODE. Scaled to a phone's width, the 1080 card puts 82px of code
+in a 108px plate at four pixels a module, which is a picture of a QR on the one
+screen that is being held out to be scanned. So `StoryCard.codeBox()` measures a
+panel and `StoryCard.code()` draws it: the same paper, the same white plate, the
+same handle, 208px of code on a 393pt phone, and the unit floored to WHOLE
+DEVICE PIXELS first so no module edge is antialiased into its neighbours.
+
+The pair was measured rather than eyeballed — rendered at iPhone 15 and SE
+sizes on all four backgrounds, then downscaled until Vision (the framework
+behind the camera) stopped reading them. The card preview gives out at about a
+sixth of its capture, the panel at a thirteenth. Save image and Instagram still
+hand over the card, which is why the panel wears the paper the four pills
+choose: they are choosing the picture, and a panel that ignored them would leave
+four buttons on screen that change nothing a reader can see.
 
 The two problems that killed earlier canvas attempts are both addressable here:
 

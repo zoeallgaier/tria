@@ -9805,7 +9805,11 @@
      rule and the one thing in here that must not drift. A card is a public
      surface by definition, an invite makes friends outright, and the two must
      never meet. Someone who scans this lands on a profile, where adding you is
-     still a request you get to answer. */
+     still a request you get to answer.
+
+     `qrUrl` is also what the share sheet reads to know it is holding something
+     scannable, so this is the one spec whose sheet leads with the CODE rather
+     than with a preview of the card. See "A CODE IS NOT A PREVIEW". */
   function profileCardSpec(u) {
     const accent = accentOf(u.accent);
     const at = 'triaonline.com/u/' + u.username;
@@ -9813,7 +9817,8 @@
       kind: 'profile',
       type: 'note',
       author: { name: u.name, username: u.username, avatar: u.avatar || null },
-      text: u.bio || '',
+      /* No bio: the card is the code now, and it takes the width a bio used to
+         share. See "THE CODE IS THE CARD" in storycard.js. */
       accent: accent ? accent.hex : null,
       address: at,
       qrUrl: at,
@@ -9897,29 +9902,70 @@
       items,
       wire: (scrim) => {
         const art = scrim.querySelector('.cardshare-art');
-        /* The frame RESERVES the preview's height in CSS before anything is
-           drawn (--cardshare-h), so the sheet opens at the size it will stay.
-           Without that the panel is furniture-only for a frame or two and then
-           jumps 400px taller under the finger, which is the single ugliest
-           thing this sheet did.
+        /* A CODE IS NOT A PREVIEW (Zoe, 2026-09-22). Where the thing being
+           shared carries one — your own profile, and nothing else does — the
+           frame holds the CODE, drawn at the size a camera reads it, with your
+           handle under it. It used to hold the same 1080 card the post sheet
+           shows, scaled to a phone's width: 82px of code in a 108px plate, four
+           pixels to a module, a picture of a QR on a screen somebody is holding
+           up to a friend precisely so they can scan it. The panel is 208px of
+           code on a 393pt phone, and the pair was put through Vision at
+           shrinking sizes rather than looked at — the card preview stops
+           decoding at about a fifth of its capture, the panel at a
+           thirteenth.
+
+           WHAT SAVES IS STILL THE CARD. Save image and Instagram hand over the
+           profile card, code and all, because a card is what belongs in a
+           camera roll and in a story. The panel wears the paper the pills
+           choose, so the four of them still say what the picture will look
+           like, and the code on the panel is the code on the card.
+
+           THE FRAME RESERVES ITS HEIGHT before anything is drawn — the panel's
+           in JS, since codeBox has measured it exactly by here, and the card's
+           in CSS — so the sheet opens at the size it will stay. Without that it
+           is furniture-only for a frame or two and then jumps 400px taller
+           under the finger, which is the single ugliest thing this sheet did.
 
            A LATE RENDER DOES NOT WIN. Two taps in quick succession start two
            draws and they can land in either order, so a paint only mounts its
            canvas if that background is still the chosen one. `isConnected`
            alone caught the closed sheet and not this. */
+        const box = base.qrUrl && StoryCard.codeBox
+          ? StoryCard.codeBox(base, {
+              width: art.clientWidth,
+              /* Half the window, which is more than the card preview's 44vh
+                 gets and is affordable: a panel is barely taller than it is
+                 wide, where a story card is twice that. Measured with all three
+                 action rows at 375x667, the shortest phone Tria supports. */
+              maxHeight: Math.round(window.innerHeight * 0.5),
+            })
+          : null;
+        if (box) {
+          art.style.height = box.css.height + 'px';
+          art.style.minHeight = box.css.height + 'px';   // the CSS reserve is the card's
+        }
+        /* No encoder on the page is the one way a panel cannot be had, and it
+           falls back to the card rather than to an empty frame. */
+        const drawArt = (bg) => (box
+          ? StoryCard.code(Object.assign({}, base, { bg }), box)
+          : draw(bg));
         const paint = () => {
           const bg = pick.bg;
-          draw(bg).then((canvas) => {
+          drawArt(bg).then((canvas) => {
             if (!scrim.isConnected || pick.bg !== bg) return;
             canvas.setAttribute('role', 'img');
-            canvas.setAttribute('aria-label', 'A preview of the card');
+            canvas.setAttribute('aria-label', box
+              ? `A code that opens ${base.address}. Your handle, @${base.author.username}, is under it.`
+              : 'A preview of the card');
             // Re-mounting a cached canvas re-runs the fade, which is what makes
             // flicking through the four read as one card changing clothes
-            // rather than four cards being swapped.
+            // rather than four cards being swapped. The panel is drawn fresh
+            // each time and fades for the same reason: it is cheap, and a cache
+            // keyed on a background would go stale the moment the frame moved.
             canvas.classList.remove('is-in');
             art.replaceChildren(canvas);
             requestAnimationFrame(() => canvas.classList.add('is-in'));
-          }).catch(() => toast('The card could not be drawn.'));
+          }).catch(() => toast(box ? 'The code could not be drawn.' : 'The card could not be drawn.'));
         };
         scrim.querySelectorAll('.cardshare-bg').forEach((btn) => {
           btn.addEventListener('click', () => {

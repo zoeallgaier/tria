@@ -96,8 +96,10 @@
 <p class="note" style="margin-top:40px">
   <b>What to look at.</b> The card is centred in what Instagram leaves free, so a
   longer post makes the type smaller rather than pushing the address under the
-  reply bar. Try the long one on the far right. The profile card's QR is a
-  placeholder on purpose, because a QR that does not scan is worse than no QR.
+  reply bar. Try the long one on the far right. The profile card's QR is real and
+  points at the profile, never at an invite link. The share sheet does not show
+  this card: it draws the code on its own, at the size a camera reads it, and
+  the card is what Save image and Instagram hand over.
 </p>
 
 <script src="../js/vendor/qr.js"></script>
@@ -123,7 +125,8 @@
         prompt: 'What actually made you laugh this week?',
         text: 'My dad tried to explain what a podcast is to my grandmother and she asked who was paying for it.' } },
     { label: 'Profile, story', spec: { kind: 'profile', size: 'story', type: 'find', author: ZOE,
-        text: 'Graphic designer. Mostly here for the dailies.',
+        address: 'triaonline.com/u/zoe', qrUrl: 'triaonline.com/u/zoe' } },
+    { label: 'Profile, square', spec: { kind: 'profile', size: 'square', type: 'find', author: ZOE,
         address: 'triaonline.com/u/zoe', qrUrl: 'triaonline.com/u/zoe' } },
     { label: 'Note, square', spec: { kind: 'note', size: 'square', type: 'note', author: ZOE, text: SHORT } },
     { label: 'Note, link preview', spec: { kind: 'note', size: 'link', type: 'note', author: ZOE, text: SHORT } },
