@@ -7446,12 +7446,14 @@
              lay out and not a menu's. So the row opens the card, and the link
              is the last row of the sheet it opens.
 
-             The picture frame rather than the tray, and the icon is the rule
-             here rather than a preference: a row that opens a PREVIEW wears the
-             frame, a row that hands an address straight to the OS wears the
-             tray. That is why the same words on a visitor's profile, below,
-             carry a different glyph — the words are the intent and the glyph is
-             what actually happens.
+             THE SHARE GLYPH, the same one a visitor's profile carries below
+             and the same one a post's ••• carries (Zoe, 2026-09-22). This row
+             wore the picture frame for a while, on the argument that a row
+             opening a PREVIEW should look different from one handing an address
+             to the OS — which was the menu describing its own plumbing again,
+             one layer down from the label that used to do it. The picture frame
+             belongs to Save image and to nothing else. One intent, one word,
+             one glyph.
 
              OWN PROFILE ONLY, and this is the only card in Tria that carries a
              QR. A QR to somebody else's profile, made by a third party, is a
@@ -7461,7 +7463,7 @@
              is a public surface by definition and an invite makes friends
              outright, so the two never meet: whoever scans this lands somewhere
              that still asks. */
-          { label: 'Share profile', icon: 'image',
+          { label: 'Share profile', icon: 'send',
             run: () => openStoryCardSheet(profileCardSpec(u), profileLink(u.username)) },
           { label: 'Subscribe to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
@@ -10084,15 +10086,16 @@
        go out as a link, like somebody else's post, until the renderer has a
        design for them.
 
-       The GLYPH is what differs, and that is the rule rather than a preference:
-       a row that opens a PREVIEW wears the picture frame, a row that hands an
-       address straight to the OS wears the tray. The words are the intent, the
-       glyph is what actually happens. */
+       THE GLYPH DOES NOT DIFFER EITHER (Zoe, 2026-09-22). The card branch wore
+       the picture frame for a while, so that a row opening a PREVIEW looked
+       unlike one handing an address to the OS — which is the same mistake the
+       label used to make, moved one layer down. Both branches are Share and
+       both wear the share glyph. The picture frame is Save image's alone, in
+       the sheet, where it names a picture and nothing else. */
     const cardable = own && post.type !== 'activity' && post.type !== 'poll';
-    const items = [cardable
-      ? { label: 'Share', icon: 'image',
-          run: () => openStoryCardSheet(cardSpecFor(post), postLink(post)) }
-      : { label: 'Share', icon: 'send', run: () => handOver(postShare(post)) }];
+    const items = [{ label: 'Share', icon: 'send', run: () => (cardable
+      ? openStoryCardSheet(cardSpecFor(post), postLink(post))
+      : handOver(postShare(post))) }];
     // Add to calendar, back in this menu since 2026-09-16 after a stretch in 1.7
     // as a glyph beside the headcount. The SUBJECT, so a quote of a plan offers
     // the plan it points at, the way its headcount does.

@@ -335,6 +335,12 @@ profile) every time. Menus name intents; this sheet names acts. Where there is
 no card — somebody else's post, an activity, a poll, somebody else's profile —
 the row keeps the same word and goes straight to the system tray instead.
 
+**One word, one glyph.** Every Share row wears the share mark, whichever of the
+two it leads to. The picture frame belongs to *Save image* and to nothing else,
+inside the sheet, where it names a picture. A menu row that changed its glyph to
+say which destination was behind it was the same mistake as one that changed its
+label, moved a layer down.
+
 **Scope rules** are the ones in Zoe's answers. Worth noting they mostly enforce
 themselves: a card is drawn from what the client can already read, and a client
 that cannot see a private post cannot draw one of it.
