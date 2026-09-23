@@ -237,9 +237,9 @@ function that app and web both call, so the two cannot drift.
 
 **THE RENDERER IS BUILT (2026-09-22):** [`js/storycard.js`](../js/storycard.js),
 with a bench at [`tools/storycards.html`](../tools/storycards.html) that draws
-every card at every size against every background. Nothing in app.js calls it
-yet, and no route reaches the bench — it is deliberately unwired, so the design
-can be reviewed on the real code before any of the share plumbing exists.
+every card at every size against every background. The bench is still a bench:
+no route reaches it, and it loads the same `storycard.js` the app does, so a
+design question can be answered without waiting on an iOS build.
 
 What the build settled that the design could not:
 
@@ -259,9 +259,9 @@ What the build settled that the design could not:
   because there is no build step and one file in `js/vendor/` is the whole
   dependency story. Every version was round-tripped through a real decoder at
   every payload length it holds. Past 106 bytes `encode()` throws and the card
-  prints the address in the plate instead, because a decorative QR that does not
-  scan is worse than no QR. `StoryCard.useEncoder()` is still there for a caller
-  that wants to supply another.
+  prints the address instead, because a decorative QR that does not scan is
+  worse than no QR. `StoryCard.useEncoder()` is still there for a caller that
+  wants to supply another.
 - **The bench is publicly downloadable once pushed** (`triaonline.com/tools/`),
   the same way `bump.sh` and `gen-icons.js` already are. Nothing on it is
   private and nothing links to it.
@@ -271,17 +271,43 @@ above makes a picture of a code; the sheet the profile's **Share profile** row
 opens makes a CODE. Scaled to a phone's width, the 1080 card puts 82px of code
 in a 108px plate at four pixels a module, which is a picture of a QR on the one
 screen that is being held out to be scanned. So `StoryCard.codeBox()` measures a
-panel and `StoryCard.code()` draws it: the same paper, the same white plate, the
-same handle, 208px of code on a 393pt phone, and the unit floored to WHOLE
-DEVICE PIXELS first so no module edge is antialiased into its neighbours.
+panel and `StoryCard.code()` draws it, and the unit is floored to WHOLE DEVICE
+PIXELS first so that no module edge is antialiased into its neighbours: 192px of
+code on a 393pt phone, 150px on an SE.
 
-The pair was measured rather than eyeballed — rendered at iPhone 15 and SE
-sizes on all four backgrounds, then downscaled until Vision (the framework
-behind the camera) stopped reading them. The card preview gives out at about a
-sixth of its capture, the panel at a thirteenth. Save image and Instagram still
-hand over the card, which is why the panel wears the paper the four pills
-choose: they are choosing the picture, and a panel that ignored them would leave
-four buttons on screen that change nothing a reader can see.
+**And then the card became the same drawing** (Zoe, 2026-09-22). The sheet was
+four rounded rectangles deep — sheet, background, card, white QR plate, code —
+with the only part anybody uses innermost and smallest. Two of those came off
+and both compositions are now one: a photo, a name, a handle, the code, and on
+the card the address under it, on the paper with nothing behind any of it.
+
+- **The code has no plate.** Its dark modules are drawn in `paper.ink` and its
+  light modules and quiet zone ARE the background. "White, or black where the
+  paper is light" is the same sentence as `paper.ink`, and three of the four
+  backgrounds are light, so only Dark gets a white code.
+- **The modules are rounded by neighbour.** A corner is softened only where the
+  two modules that would have met it are empty, so a run stays one solid shape
+  with rounded ends and a lone module comes out a dot. Every module is one
+  subpath of ONE path filled once, so shared edges have no seam; filling per
+  module antialiases both sides of every shared edge and leaves a grid of pale
+  hairlines through the code.
+- **The card snaps its side to a whole number of pixels per module** as well,
+  now that a module is a shape. It costs at most one module of side.
+- **The profile card ignores `bare`.** A bare card is transparent so Instagram's
+  layer shows through it; this one's light modules are that layer, and the
+  sender can change it to anything. So the profile card paints its paper and
+  goes over as a full-bleed sticker.
+
+Measured rather than eyeballed, at every step: rendered at 1080 on all four
+backgrounds and downscaled until Vision (the framework behind the camera)
+stopped reading them. All four decode down to **75px wide**, a fourteenth of the
+card, and **square modules give out at exactly the same 75px** — the floor is
+resolution, not the style or the missing plate. The panel was captured as the
+phone draws it, at iPhone 15 and SE sizes on all four backgrounds, and all eight
+decode. Save image and Instagram hand over the card, which is why the panel
+wears the paper the four pills choose: they are choosing the picture, and a
+panel that ignored them would leave four buttons on screen that change nothing a
+reader can see.
 
 The two problems that killed earlier canvas attempts are both addressable here:
 

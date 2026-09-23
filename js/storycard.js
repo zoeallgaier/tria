@@ -17,7 +17,8 @@
    can drag, resize, rotate and partly cover, and on Instagram the background is
    a separate layer underneath it that they can replace outright. A handle
    painted on the background is a handle that can vanish, so the background
-   carries nothing but colour.
+   carries nothing but colour. The profile card is the one exception, and it is
+   an exception on purpose: see "BARE DOES NOT APPLY TO THIS ONE" in render.
 
    THE SAFE BAND is the whole reason the card floats rather than fills. Roughly
    the top 250px and bottom 340px of a story are under Instagram's own chrome —
@@ -30,7 +31,7 @@
    full path. `triaonline.com/p/8f3a2b91` cannot be read off someone's screen
    and typed into a browser, so a post card carries the bare domain plus the
    handle and lets the link sticker do the linking. `triaonline.com/u/zoe` can
-   be typed, so the profile card prints it in full and puts a QR beside it.
+   be typed, so the profile card prints it in full, under the code.
 
    THE PALETTE IS FROZEN HERE rather than read from tokens.css, and that is
    deliberate. A card is Tria's paper, not the reader's device: someone with
@@ -40,12 +41,16 @@
    If the type colours or --band-deepen change there, change them here too;
    BAND_STOPS carries the arithmetic that ties the two together.
 
+   THE PROFILE CARD IS THE ONE EXCEPTION TO ALL OF THAT, and it is at the foot
+   of this file under "THE CARD IS THE CODE": no slab, no blocks, no wordmark,
+   just the person and their code on the paper. The share sheet draws the same
+   composition at the size a camera reads it.
+
    WIRED IN SINCE 2026-09-22. The ••• on your own post and on your own profile
    both reach this through openStoryCardSheet in app.js, and the profile's sheet
-   also asks for the code on its own, at the size a camera reads it — see "THE
-   CODE AT SCAN SIZE" at the foot of this file. tools/storycards.html draws
-   every card at every size against every background, and that page is a bench,
-   not a route. */
+   asks for the code on its own as well. tools/storycards.html draws every card
+   at every size against every background, and that page is a bench, not a
+   route. */
 
 (function () {
   'use strict';
@@ -378,10 +383,8 @@
     const cardW = m.w - m.margin * 2;
     /* On the photo card the plate runs to the card's own padding while the text
        is inset further, so the words line up with the story's other cards and
-       the picture still reads as the biggest thing on it. The profile card's
-       code is a plate by the same argument and takes the same treatment: it is
-       the picture on that card. */
-    const plated = kind === 'photo' || kind === 'profile';
+       the picture still reads as the biggest thing on it. */
+    const plated = kind === 'photo';
     const sidePad = plated ? Math.round(m.pad / 3) : m.pad;
     const inner = cardW - sidePad * 2;
     const textPad = plated ? m.pad - sidePad : 0;
@@ -394,7 +397,7 @@
        sits a bit low". */
     const blocks = [];
     const markH = Math.round(m.mark * 0.623);
-    const authorH = kind === 'profile' ? Math.round(m.avatar * 1.6) : m.avatar;
+    const authorH = m.avatar;
     const band = m.h - m.safeTop - m.safeBottom;
     const fixed = m.pad + authorH + m.rowGap + m.gap + markH + m.padBottom;
     const budget = band - fixed;
@@ -425,24 +428,6 @@
       blocks.push({ type: 'plate', side: side, width: inner, height: side,
                     after: caption ? m.gap : 0 });
       if (caption) blocks.push({ type: 'caption', block: caption, height: caption.height, after: 0 });
-    } else if (kind === 'profile') {
-      /* THE CODE IS THE CARD (Zoe, 2026-09-22). It used to be 78% of the text
-         column, left-aligned under a bio, which is how a QR looks when it is an
-         ornament on a profile card. It is not an ornament: it is the one thing
-         on this card anybody does anything with. So it takes the plate's width
-         the way a photo does, centred in it, and the bio comes off — at 78% of
-         the column a four-line bio and a code were the same card, and the code
-         lost. Nobody is reading a bio off a picture of a card anyway; it is on
-         the profile the code opens, one scan away.
-
-         A SIZE WITH NO SAFE BAND has no vertical margin reserved for it — the
-         band IS the canvas there — so a block that takes everything left grows
-         the card to the top and bottom edges and loses its own shadow. The side
-         margin is the measure of what the card is meant to sit in, so the code
-         leaves it at the other two edges too, and the square comes out square. */
-      const room = budget - (m.safeTop ? 0 : m.margin * 2);
-      const side = Math.max(280, Math.min(inner, Math.floor(room)));
-      blocks.push({ type: 'qr', side: side, width: inner, height: side, after: 0 });
     } else {
       const body = paragraph(ctx, spec.text || '', {
         size: m.body, minSize: m.bodyMin, lineHeight: 1.2,
@@ -472,6 +457,42 @@
 
     const author = spec.author || {};
     await fonts(spec, m);
+
+    /* THE PROFILE CARD HAS NO CARD ON IT, so it leaves before any of the
+       furniture below is measured. See "THE CARD IS THE CODE". */
+    if (spec.kind === 'profile') {
+      /* BARE DOES NOT APPLY TO THIS ONE, and it is the only place the sticker
+         rule bends. A bare card is transparent so that Instagram's own
+         background layer shows through it and the card travels as something the
+         sender can drag around. This card's LIGHT MODULES ARE THAT BACKGROUND:
+         hand Instagram a transparent one and the quiet zone becomes whichever
+         layer they put behind it, which the sender can then change to anything
+         at all, including something a near-black code has nothing to read
+         against. So the profile card paints its paper for Instagram too and
+         goes over as a full 1080x1920 sticker that covers their layer rather
+         than sitting on it. */
+      const paper = backdrop(ctx, Object.assign({}, spec, { accent: accent, bare: false }), m);
+      const band = m.h - m.safeTop - m.safeBottom;
+      /* A SIZE WITH NO SAFE BAND has no vertical room reserved for it — the band
+         IS the canvas there — so the page margin stands in for one at the top
+         and the bottom too, and the square comes out square. On a story the
+         safe band is already that margin, and the code takes all of it. */
+      const room = band - (m.safeTop ? 0 : m.margin * 2);
+      const grid = modules(spec);
+      let side = codeSide(m.w - m.margin * 2, room, true);
+      /* WHOLE PIXELS PER MODULE here as well, now that a module is a shape and
+         not a rectangle: at a fractional unit every rounded corner lands on a
+         different subpixel and the code loses dark area unevenly across itself.
+         It costs at most a module's worth of side. */
+      if (grid) side = Math.floor(side / (grid.length + QUIET * 2)) * (grid.length + QUIET * 2);
+      const p = codeParts(side, true);
+      p.grid = grid;
+      drawCode(ctx, spec, paper, p, Math.round((m.w - p.side) / 2),
+               m.safeTop + Math.round((band - p.height) / 2),
+               await loadImage(author.avatar, true));
+      return canvas;
+    }
+
     const [mark, avatar, photo] = await Promise.all([
       loadImage(WORDMARK, false),
       loadImage(author.avatar, true),
@@ -531,11 +552,6 @@
           ctx.textBaseline = 'alphabetic';
         }
         ctx.restore();
-      } else if (b.type === 'qr') {
-        /* CENTRED in the plate, like the photo's. It was left-aligned with the
-           name and the address when it was a small mark under a bio, and at
-           this size that reads as a card someone printed off-centre. */
-        drawQR(ctx, x + (b.width - b.side) / 2, y, b.side, spec, paper);
       }
       y += b.height + b.after;
     });
@@ -563,7 +579,15 @@
     return canvas;
   }
 
-  function drawAuthor(ctx, x, y, m, author, avatar, accent, paper, d) {
+  /* THE DISC, which is the one piece two compositions share: the card's
+     attribution row and the code's column both open with it.
+
+     `rim` is the code column's, and it is not decoration. A reader with no
+     photo gets their own colour in the disc, and the profile card's background
+     is that same colour on one of the four backgrounds and a ramp containing it
+     on another — on both, an unrimmed disc vanishes into the paper and the
+     initial floats. The rim is the paper the card used to be made of. */
+  function disc(ctx, x, y, d, author, avatar, accent, rim) {
     ctx.save();
     ctx.beginPath();
     ctx.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
@@ -584,10 +608,21 @@
     }
     ctx.restore();
 
-    /* The name grows with the disc, so the profile card's bigger avatar does not
-       end up towering over 36px of type. */
-    const up = d > m.avatar ? 1.3 : 1;
-    const name = Math.round(m.name * up), handle = Math.round(m.handle * up);
+    if (rim) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.lineWidth = Math.max(2, Math.round(d * 0.035));
+      ctx.arc(x + d / 2, y + d / 2, (d - ctx.lineWidth) / 2, 0, Math.PI * 2);
+      ctx.strokeStyle = rim;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawAuthor(ctx, x, y, m, author, avatar, accent, paper, d) {
+    disc(ctx, x, y, d, author, avatar, accent);
+
+    const name = m.name, handle = m.handle;
     const nx = x + d + Math.round(m.rowGap / 2);
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = paper.ink;
@@ -603,14 +638,32 @@
      level M, versions 1 to 6), it is shared with invites, and every version in
      it was round-tripped through a real decoder rather than eyeballed. Where
      there is no encoder on the page — an older bundle, a host that loads this
-     file on its own — the card draws the space the code would occupy and prints
-     the address in it, because a decorative QR that does not scan is worse than
-     no QR at all: it is a promise the card cannot keep.
+     file on its own — the address is printed in the space the code would have
+     taken, because a decorative QR that does not scan is worse than no QR at
+     all: it is a promise the card cannot keep.
 
      THE QUIET ZONE is four modules, the spec's minimum, and it is part of the
      code rather than part of the design: it is what tells a camera where the
-     code stops. It is inset from the plate rather than left to the card's own
-     padding, which is a design value and moves. */
+     code stops. It is measured INSIDE the side asked for, so anything that
+     reserves room for a code has reserved its quiet zone with it.
+
+     NO PLATE (Zoe, 2026-09-22). The code used to sit on a white slab of its
+     own, and that slab was the fourth rounded rectangle in a stack of four:
+     sheet, background, card, plate, code. Every one of those edges was drawn to
+     separate things that were not different. So the plate came off with the
+     card, and the modules are painted in THE PAPER'S OWN INK straight onto the
+     background.
+
+     WHICH MEANS THE QUIET ZONE AND THE LIGHT MODULES ARE THE BACKGROUND, and
+     that is the part that had to be measured rather than trusted: a scanner
+     reads contrast, and ours is now whatever the paper happens to be. It is
+     `paper.ink` in every case, which is the same sentence as "white, or black
+     where the paper is light", because three of the four backgrounds are light
+     — Tria's ramp is deepened pastel under a paper wash, a reader's colour is a
+     pastel under a heavier one, and Light is Light. Only Dark takes a white
+     code, and a white-on-black code is one a decoder has to be willing to
+     invert. All four, at both scales, went through Vision before this shipped;
+     the numbers are in docs/social-links.md. */
   const QUIET = 4;
   let encoder = null;
   const encoderFor = () => encoder || (window.QR && window.QR.encode) || null;
@@ -627,129 +680,247 @@
   }
 
   function drawQR(ctx, x, y, side, spec, paper, grid) {
-    const url = spec.qrUrl || spec.address || 'triaonline.com';
     const cells = grid || modules(spec);
 
     ctx.save();
-    roundRect(ctx, x, y, side, side, Math.round(side * 0.06));
-
     if (!cells) {
-      ctx.fillStyle = paper.plate;
-      ctx.fill();
       ctx.fillStyle = paper.muted;
-      ctx.font = sans(Math.round(side * 0.05));
+      ctx.font = sans(Math.round(side * 0.06));
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(url, x + side / 2, y + side / 2);
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(spec.qrUrl || spec.address || 'triaonline.com', x + side / 2, y + side / 2);
       ctx.restore();
       return y + side;
     }
 
-    /* WHITE, AND NOT THE CARD'S PAPER. Every other plate on these cards takes
-       the theme; this one cannot. A scanner is reading contrast, and Tria's
-       dark paper behind near-black modules is a code that photographs as a
-       grey square. */
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    /* A hairline around the plate, because on the Light background the card is
-       pure white and a white plate on it has NO EDGE AT ALL. That is a design
-       problem (the code floats in nothing) and a reading problem: the quiet
-       zone stops being a zone when there is no boundary for it to be quiet
-       against, and a decoder pointed at the whole card finds no candidate. The
-       code decodes perfectly once cropped either way, so this is about helping
-       something find it, which is the job the quiet zone was already doing. */
-    ctx.strokeStyle = paper.plate;
-    ctx.lineWidth = Math.max(2, Math.round(side * 0.006));
-    ctx.stroke();
-    ctx.clip();
-    const q = QUIET, n = cells.length, unit = side / (n + q * 2);
-    ctx.fillStyle = '#14171a';
+    const n = cells.length, unit = side / (n + QUIET * 2);
+    const on = function (r, c) {
+      return r >= 0 && c >= 0 && r < n && c < n && !!cells[r][c];
+    };
+    /* ROUNDED, AND ROUNDED BY NEIGHBOUR (Zoe, 2026-09-22). A corner is only
+       softened where the two modules that would have met it are empty, so a run
+       of dark modules stays one solid shape with rounded ENDS and a lone module
+       comes out a dot. The alternative — every module its own rounded dot, the
+       look most "styled" codes go for — throws away the dark area at each shared
+       edge, and dark area is the whole of what a scanner has to work with.
+
+       This shape keeps the finder patterns square-cornered on the inside and
+       soft on the outside, which leaves the 1:1:3:1:1 run a decoder scans for
+       across the middle of them exactly as long as it was. */
+    const R = unit * 0.5;
+    ctx.fillStyle = paper.ink;
+    /* ONE PATH, ONE FILL, rather than a fill per module: the rasteriser then
+       works out coverage for the union, and two modules that share an edge have
+       no seam between them at all. Filling them one at a time antialiases both
+       sides of every shared edge and leaves a grid of pale hairlines through the
+       code, which is what this used to do and what ceil() was papering over. */
+    ctx.beginPath();
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
-        if (cells[r][c]) {
-          /* Ceil both, so neighbouring dark modules meet instead of leaving a
-             hairline of paper between them at fractional unit sizes. */
-          ctx.fillRect(x + (c + q) * unit, y + (r + q) * unit,
-                       Math.ceil(unit), Math.ceil(unit));
-        }
+        if (!cells[r][c]) continue;
+        const up = on(r - 1, c), dn = on(r + 1, c), lf = on(r, c - 1), rt = on(r, c + 1);
+        modulePath(ctx, x + (c + QUIET) * unit, y + (r + QUIET) * unit, unit,
+                   (up || lf) ? 0 : R, (up || rt) ? 0 : R,
+                   (dn || rt) ? 0 : R, (dn || lf) ? 0 : R);
       }
     }
+    ctx.fill();
     ctx.restore();
     return y + side;
   }
 
-  /* ── THE CODE AT SCAN SIZE ───────────────────────────────────────────────
-     Everything above this makes a PICTURE of a code. This makes a code.
+  /* One module, as a subpath on the path already open. Four radii, any of them
+     zero, and arcTo rather than roundRect's array form because this has to draw
+     the same on an OS a year older than that. */
+  function modulePath(ctx, x, y, u, tl, tr, br, bl) {
+    ctx.moveTo(x + tl, y);
+    ctx.arcTo(x + u, y, x + u, y + u, tr);
+    ctx.arcTo(x + u, y + u, x, y + u, br);
+    ctx.arcTo(x, y + u, x, y, bl);
+    ctx.arcTo(x, y, x + u, y, tl);
+    ctx.closePath();
+  }
 
-     The difference is the reader standing in front of you. A card previewed in
-     the share sheet is a 1080 canvas scaled to a phone's width, which puts the
-     profile card's plate at about 110 CSS pixels and its modules at four —
-     technically a QR, and a thing nobody would hold up and ask a friend to
-     scan. So the sheet draws the code at its own size instead, with the handle
-     under it, and the card stays what Save image and Instagram hand over. One
-     code, two drawings, and the sheet stops being a thumbnail of a picture
-     nobody is looking at yet.
+  /* ── THE CARD IS THE CODE ────────────────────────────────────────────────
+     One composition, drawn twice: as the profile card that saves, and as the
+     panel the share sheet holds up. A disc, a name, a handle, the code, and on
+     the card the address under it. Nothing else, and nothing behind it.
 
-     WHOLE DEVICE PIXELS PER MODULE, which is the other half of the reason this
-     is not just a bigger preview. Scaling a canvas puts module edges on
-     fractional pixels and the browser antialiases each one into its neighbours
-     on all four sides; a camera reading contrast is the single audience that
-     cannot forgive that. So the unit is floored to whole device pixels FIRST
-     and the plate is whatever that comes to — the panel's size is derived from
-     the code, not the code fitted to a panel.
+     WHY IT IS NOT THE CARD LAYOUT ABOVE. Every other card is a slab of paper
+     with a column of blocks on it, because a post is a thing someone wrote and
+     the slab is what makes it a quote rather than a screenshot. A profile is
+     not a thing someone wrote. What is being shared is a way in, and the card
+     around it was one more edge between a camera and the only part of the
+     picture that does anything.
 
-     IT IS STILL THE CARD, in paper, plate, ink and type, because the four
-     background pills above it are choosing the paper of the picture that saves.
-     A panel that ignored them would leave four buttons on screen that change
-     nothing a reader can see. */
+     THE MEASURE IS THE CODE. Every size here is a fraction of the code's side,
+     so the card and the panel are the same drawing at two scales and neither
+     has a layout of its own. The code takes whichever is smaller, the width it
+     is given or what the height leaves — on a story that is the height, 822 of
+     the 880 pixels the page margin allows.
 
-  /* Fractions of the code plate, which is the only measure on this panel that
-     was not chosen: everything else is laid out around it. */
-  const PANEL = { pad: 0.09, margin: 0.05, gap: 0.06, handle: 0.085, line: 1.25 };
-  /* Panel height over plate, the sum of the fractions above, rounded up a hair
-     so the height bound below never asks for one pixel more than it can have. */
-  const PANEL_TALL = 1.46;
-  /* What is left for the plate once the card's padding and the page margin
-     around it have had theirs: 1 / (1 + 2*pad + 2*margin). */
-  const PANEL_WIDE = 1 / (1 + PANEL.pad * 2 + PANEL.margin * 2);
+     WHOLE DEVICE PIXELS PER MODULE, on the panel, and it is not a refinement. A
+     canvas scaled to a phone's width puts every module edge on a fractional
+     pixel and the browser antialiases each one into its neighbours on all four
+     sides; a camera reading contrast is the single audience that cannot forgive
+     that. So the panel's unit is floored to whole device pixels FIRST and its
+     side is whatever that comes to. The card cannot work that way — it is 1080
+     pixels wide whatever it is shown at — and does not need to: nobody scans it
+     off a screen. */
 
-  /* The panel's arithmetic with nothing drawn, so a caller can reserve the
-     space before the first paint rather than have the sheet jump under a
-     finger. Null means there is no code to be had, and the caller falls back to
-     the card. Sizes are DEVICE pixels; `css` is what the element wears. */
+  /* Fractions of the code's side. */
+  const CODE = {
+    disc: 0.17, discGap: 0.045,
+    name: 0.085, tuck: 0.018, handle: 0.06,
+    lead: 0.09, foot: 0.065, address: 0.046,
+    line: 1.2,
+  };
+  /* Column height over code side, in two parts so a caller can SOLVE for a side
+     that fits a height it has. The answer is a hair optimistic — nine roundings
+     do not add up to the sum of nine fractions — so codeSide checks it. */
+  const CODE_TALL = 1 + CODE.disc + CODE.discGap + CODE.name * CODE.line
+                      + CODE.tuck + CODE.handle * CODE.line + CODE.lead;
+  const CODE_FOOT = CODE.foot + CODE.address * CODE.line;
+
+  /* The column's parts at a given code side, in whole pixels, measured in one
+     place so the height reserved and the height drawn are the same sum in the
+     same order. They used to be two hand-kept tallies on the card and they
+     drifted by one gap.
+
+     `address` is the card's foot line, and the panel does not carry it: the
+     handle above the code is where you are, a sheet is not a thing a stranger
+     screenshots, and the line costs the panel ten per cent of the code. */
+  function codeParts(side, address) {
+    const r = function (f) { return Math.round(side * f); };
+    const p = {
+      side: side, disc: r(CODE.disc), discGap: r(CODE.discGap),
+      name: r(CODE.name), tuck: r(CODE.tuck), handle: r(CODE.handle),
+      lead: r(CODE.lead),
+      foot: address ? r(CODE.foot) : 0,
+      address: address ? r(CODE.address) : 0,
+    };
+    p.nameLine = Math.round(p.name * CODE.line);
+    p.handleLine = Math.round(p.handle * CODE.line);
+    p.addressLine = Math.round(p.address * CODE.line);
+    p.above = p.disc + p.discGap + p.nameLine + p.tuck + p.handleLine + p.lead;
+    p.below = p.foot + p.addressLine;
+    p.height = p.above + side + p.below;
+    return p;
+  }
+
+  /* The biggest code that fits a box, walked down from the arithmetic rather
+     than trusted to it. */
+  function codeSide(width, height, address) {
+    const tall = CODE_TALL + (address ? CODE_FOOT : 0);
+    let side = Math.min(width, Math.floor(height / tall));
+    while (side > 60 && codeParts(side, address).height > height) side -= 1;
+    return side;
+  }
+
+  /* Paint what codeParts measured, with the column's top-left at (x, y) and the
+     code's side taken from the parts. */
+  function drawCode(ctx, spec, paper, p, x, y, avatar) {
+    const author = spec.author || {};
+    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
+    const handle = '@' + (author.username || '');
+    const cx = x + p.side / 2;
+
+    /* WHO, above the code and centred on it. The attribution leads here for the
+       same reason it leads every other card: a code with a name under it is a
+       code first and a person second, and this one is a person. */
+    disc(ctx, cx - p.disc / 2, y, p.disc, author, avatar, accent, paper.card);
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let ty = y + p.disc + p.discGap;
+    ctx.fillStyle = paper.ink;
+    /* A name is ONE line whatever its length: it shrinks to the code's width and
+       then truncates, because a second line of name would move the code, and
+       the code's size is the one thing on this card that is not up for
+       negotiation. */
+    let size = p.name;
+    ctx.font = sans(size, true);
+    const name = author.name || handle;
+    while (size > Math.round(p.name * 0.62) && ctx.measureText(name).width > p.side) {
+      size -= Math.max(1, Math.round(p.name * 0.04));
+      ctx.font = sans(size, true);
+    }
+    ctx.fillText(oneLine(ctx, name, p.side), cx, ty + p.nameLine / 2);
+    ty += p.nameLine + p.tuck;
+    ctx.fillStyle = paper.muted;
+    ctx.font = sans(p.handle);
+    ctx.fillText(handle, cx, ty + p.handleLine / 2);
+    ctx.restore();
+
+    const qy = y + p.above;
+    drawQR(ctx, x, qy, p.side, spec, paper, p.grid);
+
+    if (p.addressLine) {
+      /* WHERE, SPELLED OUT, on the card only, and it is what the wordmark used
+         to do at the foot of this one. A card travels as a picture: the person
+         looking at it in a story cannot tap it and may not scan it, and the
+         mark told them whose app this was without telling them where to go.
+         This says both, in one line, and it can be typed. */
+      ctx.save();
+      ctx.fillStyle = paper.muted;
+      ctx.font = sans(p.address);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(spec.address || 'triaonline.com',
+                   cx, qy + p.side + p.foot + p.addressLine / 2);
+      ctx.restore();
+    }
+  }
+
+  /* One line, shrunk by the caller and truncated here if it is still too long. */
+  function oneLine(ctx, text, maxWidth) {
+    let s = String(text || '');
+    if (ctx.measureText(s).width <= maxWidth) return s;
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxWidth) s = s.slice(0, -1);
+    return s.replace(/[\s,.]+$/, '') + '…';
+  }
+
+  /* The panel's arithmetic with nothing drawn, so the sheet can reserve the
+     space before the first paint rather than stand up under a finger. Null
+     means there is no code to be had, and the caller falls back to the card.
+     Sizes are DEVICE pixels; `css` is what the element wears. */
   function codeBox(spec, opt) {
     const grid = modules(spec || {});
     if (!grid) return null;
     const dpr = Math.max(1, Math.min(3, (opt && opt.dpr) || window.devicePixelRatio || 1));
     const n = grid.length + QUIET * 2;
-    const wide = Math.floor(((opt.width || 0) * PANEL_WIDE) * dpr / n);
-    const tall = Math.floor(((opt.maxHeight || 0) / PANEL_TALL) * dpr / n);
-    const unit = Math.max(2, Math.min(wide, tall));
-    const plate = unit * n;
-    const pad = Math.round(plate * PANEL.pad);
-    const margin = Math.round(plate * PANEL.margin);
-    const gap = Math.round(plate * PANEL.gap);
-    const handle = Math.round(plate * PANEL.handle);
-    const line = Math.round(handle * PANEL.line);
-    const w = plate + (pad + margin) * 2;
-    const h = margin * 2 + pad * 2 + plate + gap + line;
-    return { grid: grid, unit: unit, plate: plate, pad: pad, margin: margin, gap: gap,
-             handle: handle, line: line, dpr: dpr, w: w, h: h,
-             css: { width: w / dpr, height: h / dpr } };
+    /* The panel's own edge, as a fraction of the code, and the last rectangle
+       left in here: it is a page margin, not a frame. */
+    const EDGE = 0.07;
+    const wide = (opt.width || 0) * dpr, tall = (opt.maxHeight || 0) * dpr;
+    /* Solved, floored to whole pixels per module, and then CHECKED, because the
+       solve is in fractions and the drawing is in rounded pixels. */
+    const room = Math.min(wide / (1 + EDGE * 2), tall / (CODE_TALL + EDGE * 2));
+    let unit = Math.max(2, Math.floor(room / n));
+    let side, parts, margin;
+    for (;;) {
+      side = unit * n;
+      parts = codeParts(side, false);
+      margin = Math.round(side * EDGE);
+      if (unit <= 2 || (side + margin * 2 <= wide && parts.height + margin * 2 <= tall)) break;
+      unit -= 1;
+    }
+    return { grid: grid, unit: unit, side: side, margin: margin, parts: parts, dpr: dpr,
+             w: side + margin * 2, h: parts.height + margin * 2,
+             css: { width: (side + margin * 2) / dpr, height: (parts.height + margin * 2) / dpr } };
   }
 
-  /* Draw the box codeBox measured. Async only because of the face: the handle
+  /* Draw the box codeBox measured. Async for the face and the avatar: the type
      is Oxygen and a font declared `font-display: swap` has not been fetched
-     until something asks to paint with it, so an unasked panel draws its handle
+     until something asks to paint with it, so an unasked panel draws its name
      in the system sans exactly once. */
   function code(spec, box) {
     if (!box) return Promise.resolve(null);
     spec = spec || {};
     const author = spec.author || {};
-    const handle = '@' + (author.username || '');
     const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
+    const text = (author.name || '') + ' @' + (author.username || '');
 
     const canvas = document.createElement('canvas');
     canvas.width = box.w; canvas.height = box.h;
@@ -757,33 +928,15 @@
     canvas.style.height = box.css.height + 'px';
     const ctx = canvas.getContext('2d');
 
-    return face(sans(box.handle, true), handle).then(function () {
+    return Promise.all([
+      face(sans(box.parts.name, true), text),
+      face(sans(box.parts.handle), text),
+      loadImage(author.avatar, true),
+    ]).then(function (got) {
       const paper = backdrop(ctx, Object.assign({}, spec, { accent: accent }),
                              { w: box.w, h: box.h });
-
-      ctx.save();
-      ctx.shadowColor = paper.shadow;
-      ctx.shadowBlur = Math.round(box.plate * 0.09);
-      ctx.shadowOffsetY = Math.round(box.plate * 0.04);
-      roundRect(ctx, box.margin, box.margin, box.w - box.margin * 2, box.h - box.margin * 2,
-                Math.round(box.plate * 0.09));
-      ctx.fillStyle = paper.card;
-      ctx.fill();
-      ctx.restore();
-
-      drawQR(ctx, box.margin + box.pad, box.margin + box.pad, box.plate, spec, paper, box.grid);
-
-      /* CENTRED, where the card's own code is left-aligned. On the card a
-         centred code under a left-aligned name reads as two cards stacked; here
-         the code IS the panel and there is nothing for it to line up with. */
-      ctx.fillStyle = paper.ink;
-      ctx.font = sans(box.handle, true);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(handle, box.w / 2,
-                   box.margin + box.pad + box.plate + box.gap + box.line / 2);
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
+      const p = Object.assign({}, box.parts, { grid: box.grid });
+      drawCode(ctx, spec, paper, p, box.margin, box.margin, got[2]);
       return canvas;
     });
   }
@@ -828,7 +981,7 @@
     render: render,
     toBlob: toBlob,
     /* The share sheet's profile panel: measure first, then draw what was
-       measured. See "THE CODE AT SCAN SIZE". */
+       measured. See "THE CARD IS THE CODE". */
     codeBox: codeBox,
     code: code,
     SIZES: SIZES,

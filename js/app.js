@@ -9817,8 +9817,9 @@
       kind: 'profile',
       type: 'note',
       author: { name: u.name, username: u.username, avatar: u.avatar || null },
-      /* No bio: the card is the code now, and it takes the width a bio used to
-         share. See "THE CODE IS THE CARD" in storycard.js. */
+      /* No bio, and no card under any of it: this one is a photo, a name, a
+         handle and a code on the paper. See "THE CARD IS THE CODE" in
+         storycard.js. */
       accent: accent ? accent.hex : null,
       address: at,
       qrUrl: at,
@@ -9905,20 +9906,18 @@
         /* A CODE IS NOT A PREVIEW (Zoe, 2026-09-22). Where the thing being
            shared carries one — your own profile, and nothing else does — the
            frame holds the CODE, drawn at the size a camera reads it, with your
-           handle under it. It used to hold the same 1080 card the post sheet
-           shows, scaled to a phone's width: 82px of code in a 108px plate, four
-           pixels to a module, a picture of a QR on a screen somebody is holding
-           up to a friend precisely so they can scan it. The panel is 208px of
-           code on a 393pt phone, and the pair was put through Vision at
-           shrinking sizes rather than looked at — the card preview stops
-           decoding at about a fifth of its capture, the panel at a
-           thirteenth.
+           photo, your name and your handle over it. It used to hold the same
+           1080 card the post sheet shows, scaled to a phone's width: 82px of
+           code in a 108px plate, four pixels to a module, a picture of a QR on
+           a screen somebody is holding up to a friend precisely so they can
+           scan it. The panel is 192px of code on a 393pt phone, every module a
+           whole number of device pixels, and it was put through Vision at
+           shrinking sizes rather than looked at.
 
-           WHAT SAVES IS STILL THE CARD. Save image and Instagram hand over the
-           profile card, code and all, because a card is what belongs in a
-           camera roll and in a story. The panel wears the paper the pills
-           choose, so the four of them still say what the picture will look
-           like, and the code on the panel is the code on the card.
+           WHAT SAVES IS STILL THE CARD, and the card is now the same drawing at
+           1080: paper, photo, name, handle, code, address. The panel wears the
+           paper the pills choose, so the four of them still say what the
+           picture will look like, and what is on screen is what saves.
 
            THE FRAME RESERVES ITS HEIGHT before anything is drawn — the panel's
            in JS, since codeBox has measured it exactly by here, and the card's
@@ -9955,7 +9954,7 @@
             if (!scrim.isConnected || pick.bg !== bg) return;
             canvas.setAttribute('role', 'img');
             canvas.setAttribute('aria-label', box
-              ? `A code that opens ${base.address}. Your handle, @${base.author.username}, is under it.`
+              ? `A code that opens ${base.address}. Your photo, your name and your handle, @${base.author.username}, are above it.`
               : 'A preview of the card');
             // Re-mounting a cached canvas re-runs the fade, which is what makes
             // flicking through the four read as one card changing clothes
@@ -9990,7 +9989,9 @@
       const cfg = window.TRIA_CONFIG || {};
       if (!cfg.metaAppId) { toast('Instagram sharing is not set up yet.'); return; }
       // BARE: transparent, so the card travels as a sticker over Instagram's own
-      // background layer. See the note in storycard.js.
+      // background layer. The profile card refuses it and paints its paper
+      // anyway, because that paper is what its code is read against. See the
+      // two notes in storycard.js.
       StoryCard.render(Object.assign({}, base, { bg: pick.bg, bare: true }))
         .then((canvas) => {
           const pair = StoryCard.backgroundPair(Object.assign({}, base, { bg: pick.bg }));
