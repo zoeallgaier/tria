@@ -18056,8 +18056,15 @@
     const set = (rgb, accent) => {
       if (!rgb) return stamp(null);
       if (accent) {
+        // accentInk's contrast math hands the three deep hexes near-white ink
+        // on ink paper (they measure better against near-black than near-white
+        // does against their own bright fill), but on the actual disc it reads
+        // as glare. Zoe's call, 2026-09-23: ruby, ocean and lavender all wear
+        // the near-black on both schemes now.
+        const inkDk = (accent.key === 'ruby' || accent.key === 'ocean' || accent.key === 'lavender')
+          ? 'var(--on-type)' : accentInk(rgb, INK_PAPER.dk);
         return stamp(bandAround(rgb), accent.ink || accent.hex, accent.hex,
-                     accentInk(rgb, INK_PAPER.lt), accentInk(rgb, INK_PAPER.dk), true);
+                     accentInk(rgb, INK_PAPER.lt), inkDk, true);
       }
       const h = heartsFrom(rgb);
       stamp(bandFrom(rgb), h.lt, h.dk, 'var(--on-type)', 'var(--on-type)', false);

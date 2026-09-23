@@ -972,8 +972,12 @@ with no branch for it. Two things about it:
     **4.5, the floor for text**; the + is a glyph, and a glyph's floor is 3.
     `accentInk` picks near-black or near-white per scheme against the hex
     thinned over that paper, so capsules hold 4.5 everywhere and the opaque +
-    is worst at **3.57** (ocean on ink). Ruby, ocean and indigo come out white
-    on ink and black on paper; the rest are near-black in both.
+    is worst at **3.57** (ocean on ink). The measurement hands ruby, ocean and
+    indigo white on ink, and **the app overrides it**: all three wear the
+    near-black on both schemes (Zoe's call, 2026-09-23), because on the actual
+    disc the near-white read as glare. Every other hex takes the measured
+    answer, which is near-black in both. The override is in the accent branch
+    of the band stamp in app.js, keyed off `accent.key` (`lavender` is Indigo).
   - **The wash was re-measured**, `--wash-ink-soft` at the bloom's peak, light
     / dark, the same method that reproduces the old ruby 4.36/6.10 and rose
     5.50/5.38 exactly: ruby 4.30/5.43, blush 6.04/5.19, coral 5.35/5.06, amber
