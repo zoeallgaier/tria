@@ -281,8 +281,32 @@ with the only part anybody uses innermost and smallest. Two of those came off
 and both compositions are now one: a photo, a name, a handle, the code, and on
 the card the address under it, on the paper with nothing behind any of it.
 
-- **The code has no plate.** Its dark modules are drawn in `paper.ink` and its
-  light modules and quiet zone ARE the background. "White, or black where the
+**And then the colour moved into the code** (Zoe, 2026-09-23), which took the
+last of the layers with it.
+
+- **The profile card has no background to pick.** The four pills are gone from
+  that sheet — not hidden, not built — and the card is drawn on Tria's paper,
+  always. One picture, the same one every time anybody sends it.
+- **The code is black, and that is the whole of it.** It wore the reader's own
+  colour for a day and the idea is recorded here because it WORKED and was
+  dropped anyway. The palette is pastel — raw, the nine run from 1.28 to one
+  (lime) up to 3.96 (ruby) against #edeef0 — so each hex was mixed a tenth at a
+  time toward the paper's ink until it cleared 4.5, the floor the app holds its
+  own text to. All nine decoded at 1080 and down to the same 75px the black one
+  does. What killed it was not scanning: lime clears 4.5 as an olive, and an
+  olive code is not the colour that reader picked. The card was spending its one
+  colour on something nobody would recognise as theirs (Zoe, 2026-09-23).
+- **The header is the profile page's own**, shrunk: `.account-head`'s ratios at
+  a 375pt page (a 128px photo, a 20.6px name in Instrument Serif, a 14.7px
+  handle, a 1.2rem gap), scaled to 0.30 of the code and centred over it as one
+  group. The two type sizes have a floor in CSS pixels, because proportion alone
+  puts the handle at eight points on a phone's sheet.
+- **The post card keeps its backgrounds**, reordered: your colour first and the
+  default, Tria's ramp last. A sender with no colour of their own opens on Tria,
+  since "Your color" would otherwise be the post type's pastel.
+
+- **The code has no plate.** Its light modules and quiet zone ARE the
+  background, and its dark ones are the reader's colour or `paper.ink`. "White, or black where the
   paper is light" is the same sentence as `paper.ink`, and three of the four
   backgrounds are light, so only Dark gets a white code.
 - **The modules are rounded by neighbour.** A corner is softened only where the

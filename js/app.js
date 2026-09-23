@@ -9811,16 +9811,15 @@
      scannable, so this is the one spec whose sheet leads with the CODE rather
      than with a preview of the card. See "A CODE IS NOT A PREVIEW". */
   function profileCardSpec(u) {
-    const accent = accentOf(u.accent);
     const at = 'triaonline.com/u/' + u.username;
     return {
       kind: 'profile',
       type: 'note',
       author: { name: u.name, username: u.username, avatar: u.avatar || null },
-      /* No bio, and no card under any of it: this one is a photo, a name, a
-         handle and a code on the paper. See "THE CARD IS THE CODE" in
-         storycard.js. */
-      accent: accent ? accent.hex : null,
+      /* No bio, no card, no background to pick and NO COLOUR AT ALL: the
+         profile's own header over a black code on Tria's paper. It carries no
+         accent because there is nothing left on it for one to paint. See "THE
+         CARD IS THE CODE" and "BLACK AND WHITE ONLY" in storycard.js. */
       address: at,
       qrUrl: at,
     };
@@ -9838,13 +9837,29 @@
      the Instagram row copies on its way out. */
   function openStoryCardSheet(base, link) {
     if (!window.StoryCard) { toast('Cards need a newer version of Tria.'); return; }
-    const pick = { bg: 'gradient' };
 
-    const BACKGROUNDS = [
-      ['gradient', 'Tria'],
+    /* THE PROFILE CARD HAS NO BACKGROUNDS TO PICK (Zoe, 2026-09-23). That card
+       has no colour on it at all now — a black code on Tria's paper with the
+       profile's own header over it — so the four pills were a row of furniture
+       between a code and the acts under it, offering a choice about a picture
+       that no longer has one to make. The card draws on paper whatever this
+       says; `pick` still exists because Save image and Instagram go through the
+       same two calls.
+
+       YOUR COLOUR LEADS ON THE OTHERS, and Tria's ramp is last (same call). A
+       post card's background is the only colour on it and it should open
+       wearing the sender's, not the house's. Where a sender has no colour of
+       their own, "Your color" is the post type's pastel — true of the pill
+       before this change and the reason the DEFAULT falls back to Tria rather
+       than opening on a colour that is nobody's. */
+    const plain = !!base.qrUrl;
+    const pick = { bg: plain ? 'light' : (base.accent ? 'accent' : 'gradient') };
+
+    const BACKGROUNDS = plain ? [] : [
       ['accent', 'Your color'],
       ['light', 'Light'],
       ['dark', 'Dark'],
+      ['gradient', 'Tria'],
     ];
 
     // No aria-label on the frame: a bare <div> with a label and no role is not
@@ -9853,11 +9868,13 @@
     const head =
       `<div class="cardshare">` +
         `<div class="cardshare-art"></div>` +
-        `<div class="cardshare-bgs" role="group" aria-label="Background">` +
-          BACKGROUNDS.map(([key, label]) =>
-            `<button class="cardshare-bg" type="button" data-bg="${key}"` +
-            ` aria-pressed="${key === pick.bg}">${esc(label)}</button>`).join('') +
-        `</div>` +
+        (BACKGROUNDS.length
+          ? `<div class="cardshare-bgs" role="group" aria-label="Background">` +
+              BACKGROUNDS.map(([key, label]) =>
+                `<button class="cardshare-bg" type="button" data-bg="${key}"` +
+                ` aria-pressed="${key === pick.bg}">${esc(label)}</button>`).join('') +
+            `</div>`
+          : '') +
       `</div>`;
 
     // Rendered once per background and held, because a person flicking through
@@ -9914,10 +9931,11 @@
            whole number of device pixels, and it was put through Vision at
            shrinking sizes rather than looked at.
 
-           WHAT SAVES IS STILL THE CARD, and the card is now the same drawing at
-           1080: paper, photo, name, handle, code, address. The panel wears the
-           paper the pills choose, so the four of them still say what the
-           picture will look like, and what is on screen is what saves.
+           WHAT SAVES IS STILL THE CARD, and the card is now the same drawing
+           at 1080: paper, photo, name, handle, code, address. There is nothing
+           to choose between them any more — one paper, no colour — so what is
+           on screen is what saves, exactly, and the row of background pills
+           came off this sheet with the last of the layers.
 
            THE FRAME RESERVES ITS HEIGHT before anything is drawn — the panel's
            in JS, since codeBox has measured it exactly by here, and the card's

@@ -470,8 +470,14 @@
          at all, including something a near-black code has nothing to read
          against. So the profile card paints its paper for Instagram too and
          goes over as a full 1080x1920 sticker that covers their layer rather
-         than sitting on it. */
-      const paper = backdrop(ctx, Object.assign({}, spec, { accent: accent, bare: false }), m);
+         than sitting on it.
+
+         AND THE PAPER IS PAPER, whatever was asked for. The four backgrounds
+         were a choice this card no longer offers (Zoe, 2026-09-23): the colour
+         on it is the reader's own and it is in the CODE, and a coloured field
+         behind a coloured code is two answers to one question. Tria's paper,
+         always, so the picture is the same one every time anybody sends it. */
+      const paper = backdrop(ctx, Object.assign({}, spec, { bg: CODE_PAPER, bare: false }), m);
       const band = m.h - m.safeTop - m.safeBottom;
       /* A SIZE WITH NO SAFE BAND has no vertical room reserved for it — the band
          IS the canvas there — so the page margin stands in for one at the top
@@ -679,6 +685,13 @@
     try { return encode(url); } catch (e) { return null; }
   }
 
+  /* BLACK AND WHITE ONLY (Zoe, 2026-09-23). The code was drawn in the reader's
+     own colour for a day, deepened until it cleared 4.5 against the paper, and
+     all nine of the palette read perfectly well. It is out because a code in a
+     pastel deepened to olive is not that reader's colour any more — it is a
+     dark green that started as lime — so the card was spending its one colour
+     on something nobody would recognise as theirs. The ink is the paper's:
+     black on paper, white on Dark. */
   function drawQR(ctx, x, y, side, spec, paper, grid) {
     const cells = grid || modules(spec);
 
@@ -768,18 +781,38 @@
      pixels wide whatever it is shown at — and does not need to: nobody scans it
      off a screen. */
 
-  /* Fractions of the code's side. */
-  const CODE = {
-    disc: 0.17, discGap: 0.045,
-    name: 0.085, tuck: 0.018, handle: 0.06,
-    lead: 0.09, foot: 0.065, address: 0.046,
-    line: 1.2,
+  /* Fractions of the code's side, and there are only three of them: the header
+     over it, the air between, and the address under it on the card. */
+  const CODE = { head: 0.30, lead: 0.09, foot: 0.065, address: 0.046, line: 1.2 };
+  /* The one paper this card is drawn on. It is Tria's own, not the device's:
+     a picture whose colours moved with the sender's system setting is a picture
+     nobody can predict, and that rule is older than this card (see the head of
+     this file). */
+  const CODE_PAPER = 'light';
+
+  /* THE HEADER IS THE PROFILE PAGE'S OWN (Zoe, 2026-09-23), shrunk. Photo left
+     in a circle with the app's hairline around it, the name beside it in
+     Instrument Serif, the handle under that in muted sans, one left axis
+     centred against the photo. The ratios are `.account-head`'s, measured off
+     css/app.css at a 375pt page: a 128px photo, a 20.6px name, a 14.7px handle,
+     a 1.2rem gap.
+
+     THE FLOORS ARE THE PANEL'S and they are the one thing the page has no
+     equivalent of. The header scales with the code, and on a phone's sheet the
+     code is a quarter of the size it is on the card — proportion alone puts the
+     handle at eight points, which is a caption on a picture rather than a line
+     of the app. So the two type sizes have a floor in CSS pixels, and only the
+     panel ever reaches it. The floors cannot change the header's HEIGHT, which
+     is the photo's: the text column is shorter than the disc either way. */
+  const HEAD = {
+    name: 0.17, handle: 0.115, gap: 0.15, tuck: 0.015, line: 1.05,
+    minName: 15, minHandle: 11,
   };
+
   /* Column height over code side, in two parts so a caller can SOLVE for a side
-     that fits a height it has. The answer is a hair optimistic — nine roundings
-     do not add up to the sum of nine fractions — so codeSide checks it. */
-  const CODE_TALL = 1 + CODE.disc + CODE.discGap + CODE.name * CODE.line
-                      + CODE.tuck + CODE.handle * CODE.line + CODE.lead;
+     that fits a height it has. The answer is a hair optimistic — the roundings
+     do not add up to the sum of the fractions — so codeSide checks it. */
+  const CODE_TALL = 1 + CODE.head + CODE.lead;
   const CODE_FOOT = CODE.foot + CODE.address * CODE.line;
 
   /* The column's parts at a given code side, in whole pixels, measured in one
@@ -788,21 +821,27 @@
      drifted by one gap.
 
      `address` is the card's foot line, and the panel does not carry it: the
-     handle above the code is where you are, a sheet is not a thing a stranger
-     screenshots, and the line costs the panel ten per cent of the code. */
-  function codeParts(side, address) {
+     handle in the header is where you are, a sheet is not a thing a stranger
+     screenshots, and the line costs the panel ten per cent of the code.
+
+     `px` is how many pixels of this canvas make one CSS pixel — the panel's
+     device ratio, and 1 on a card, which is a picture and has no such thing. */
+  function codeParts(side, address, px) {
     const r = function (f) { return Math.round(side * f); };
+    const unit = px || 1;
     const p = {
-      side: side, disc: r(CODE.disc), discGap: r(CODE.discGap),
-      name: r(CODE.name), tuck: r(CODE.tuck), handle: r(CODE.handle),
-      lead: r(CODE.lead),
+      side: side, head: r(CODE.head), lead: r(CODE.lead),
       foot: address ? r(CODE.foot) : 0,
       address: address ? r(CODE.address) : 0,
     };
-    p.nameLine = Math.round(p.name * CODE.line);
+    p.gap = Math.round(p.head * HEAD.gap);
+    p.tuck = Math.round(p.head * HEAD.tuck);
+    p.name = Math.max(Math.round(p.head * HEAD.name), Math.round(HEAD.minName * unit));
+    p.handle = Math.max(Math.round(p.head * HEAD.handle), Math.round(HEAD.minHandle * unit));
+    p.nameLine = Math.round(p.name * HEAD.line);
     p.handleLine = Math.round(p.handle * CODE.line);
     p.addressLine = Math.round(p.address * CODE.line);
-    p.above = p.disc + p.discGap + p.nameLine + p.tuck + p.handleLine + p.lead;
+    p.above = p.head + p.lead;
     p.below = p.foot + p.addressLine;
     p.height = p.above + side + p.below;
     return p;
@@ -817,40 +856,41 @@
     return side;
   }
 
-  /* Paint what codeParts measured, with the column's top-left at (x, y) and the
-     code's side taken from the parts. */
+  /* Paint what codeParts measured, with the column's top-left at (x, y). */
   function drawCode(ctx, spec, paper, p, x, y, avatar) {
     const author = spec.author || {};
-    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
     const handle = '@' + (author.username || '');
-    const cx = x + p.side / 2;
-
-    /* WHO, above the code and centred on it. The attribution leads here for the
-       same reason it leads every other card: a code with a name under it is a
-       code first and a person second, and this one is a person. */
-    disc(ctx, cx - p.disc / 2, y, p.disc, author, avatar, accent, paper.card);
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    let ty = y + p.disc + p.discGap;
-    ctx.fillStyle = paper.ink;
-    /* A name is ONE line whatever its length: it shrinks to the code's width and
-       then truncates, because a second line of name would move the code, and
-       the code's size is the one thing on this card that is not up for
-       negotiation. */
-    let size = p.name;
-    ctx.font = sans(size, true);
     const name = author.name || handle;
-    while (size > Math.round(p.name * 0.62) && ctx.measureText(name).width > p.side) {
-      size -= Math.max(1, Math.round(p.name * 0.04));
-      ctx.font = sans(size, true);
-    }
-    ctx.fillText(oneLine(ctx, name, p.side), cx, ty + p.nameLine / 2);
+
+    /* WHO, and it is the page's header rather than a card's attribution row: on
+       a card the name leads and the face is a token beside it, on a profile the
+       FACE leads. This picture is a profile. */
+    ctx.save();
+    const room = p.side - p.head - p.gap;
+    ctx.font = serif(p.name);
+    const nameW = ctx.measureText(name).width;
+    ctx.font = sans(p.handle);
+    const handleW = ctx.measureText(handle).width;
+    /* The photo and the two lines are CENTRED AS ONE GROUP over the code, which
+       is the one thing here the page does differently: on the page the header
+       shares a left axis with a feed under it, and here it sits over a centred
+       square with nothing else to line up with. */
+    const wide = Math.min(Math.max(nameW, handleW), room);
+    const hx = x + Math.round((p.side - (p.head + p.gap + wide)) / 2);
+    headshot(ctx, hx, y, p.head, author, avatar, paper);
+
+    const tx = hx + p.head + p.gap;
+    const block = p.nameLine + p.tuck + p.handleLine;
+    let ty = y + Math.round((p.head - block) / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = paper.ink;
+    ctx.font = serif(p.name);
+    ctx.fillText(oneLine(ctx, name, room), tx, ty + p.nameLine / 2);
     ty += p.nameLine + p.tuck;
     ctx.fillStyle = paper.muted;
     ctx.font = sans(p.handle);
-    ctx.fillText(handle, cx, ty + p.handleLine / 2);
+    ctx.fillText(oneLine(ctx, handle, room), tx, ty + p.handleLine / 2);
     ctx.restore();
 
     const qy = y + p.above;
@@ -868,9 +908,43 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(spec.address || 'triaonline.com',
-                   cx, qy + p.side + p.foot + p.addressLine / 2);
+                   x + p.side / 2, qy + p.side + p.foot + p.addressLine / 2);
       ctx.restore();
     }
+  }
+
+  /* `.account-photo`, copied: the circle, the hairline at 12% of the ink, and
+     the empty state, which is --surface-2 with the initial in the serif at 32%.
+     It takes no accent, unlike the post card's disc — on this card the reader's
+     colour is in the code, and a coloured disc beside it would be the same
+     claim made twice in two weights. */
+  function headshot(ctx, x, y, d, author, avatar, paper) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
+    ctx.clip();
+    if (avatar) drawCover(ctx, avatar, x, y, d, d);
+    else {
+      ctx.fillStyle = paper.plate;
+      ctx.fillRect(x, y, d, d);
+      ctx.globalAlpha = 0.32;
+      ctx.fillStyle = paper.ink;
+      ctx.font = serif(Math.round(d * 0.46));
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((author.name || author.username || '?').trim().charAt(0).toUpperCase(),
+                   x + d / 2, y + d / 2 + d * 0.02);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = paper.ink;
+    ctx.lineWidth = Math.max(1, Math.round(d * 0.008));
+    ctx.beginPath();
+    ctx.arc(x + d / 2, y + d / 2, (d - ctx.lineWidth) / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /* One line, shrunk by the caller and truncated here if it is still too long. */
@@ -890,25 +964,33 @@
     if (!grid) return null;
     const dpr = Math.max(1, Math.min(3, (opt && opt.dpr) || window.devicePixelRatio || 1));
     const n = grid.length + QUIET * 2;
-    /* The panel's own edge, as a fraction of the code, and the last rectangle
-       left in here: it is a page margin, not a frame. */
-    const EDGE = 0.07;
+    /* The panel's padding, as a fraction of the code, and it is MEASURED TO THE
+       INK: the code's own quiet zone is four modules of white inside the side
+       asked for, so padding the plate pads it twice and the code ends up
+       floating high in a panel with a white shelf under it. Three of the four
+       edges give the quiet zone back; the top has none, because a photograph
+       starts where it starts. */
+    const PAD = 0.11;
     const wide = (opt.width || 0) * dpr, tall = (opt.maxHeight || 0) * dpr;
     /* Solved, floored to whole pixels per module, and then CHECKED, because the
        solve is in fractions and the drawing is in rounded pixels. */
-    const room = Math.min(wide / (1 + EDGE * 2), tall / (CODE_TALL + EDGE * 2));
+    /* OPTIMISTIC, because the loop below only ever walks down: it assumes the
+       quiet zone swallows the side and bottom padding, which it does at every
+       size this panel is ever drawn at. */
+    const room = Math.min(wide, tall / (CODE_TALL + PAD));
     let unit = Math.max(2, Math.floor(room / n));
-    let side, parts, margin;
+    let side, parts, pad, edge;
     for (;;) {
       side = unit * n;
-      parts = codeParts(side, false);
-      margin = Math.round(side * EDGE);
-      if (unit <= 2 || (side + margin * 2 <= wide && parts.height + margin * 2 <= tall)) break;
+      parts = codeParts(side, false, dpr);   /* dpr, so the type floors are CSS pixels */
+      pad = Math.round(side * PAD);
+      edge = Math.max(0, pad - QUIET * unit);
+      if (unit <= 2 || (side + edge * 2 <= wide && parts.height + pad + edge <= tall)) break;
       unit -= 1;
     }
-    return { grid: grid, unit: unit, side: side, margin: margin, parts: parts, dpr: dpr,
-             w: side + margin * 2, h: parts.height + margin * 2,
-             css: { width: (side + margin * 2) / dpr, height: (parts.height + margin * 2) / dpr } };
+    const w = side + edge * 2, h = parts.height + pad + edge;
+    return { grid: grid, unit: unit, side: side, edge: edge, top: pad, parts: parts, dpr: dpr,
+             w: w, h: h, css: { width: w / dpr, height: h / dpr } };
   }
 
   /* Draw the box codeBox measured. Async for the face and the avatar: the type
@@ -919,7 +1001,6 @@
     if (!box) return Promise.resolve(null);
     spec = spec || {};
     const author = spec.author || {};
-    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
     const text = (author.name || '') + ' @' + (author.username || '');
 
     const canvas = document.createElement('canvas');
@@ -929,14 +1010,14 @@
     const ctx = canvas.getContext('2d');
 
     return Promise.all([
-      face(sans(box.parts.name, true), text),
+      face(serif(box.parts.name), text),
       face(sans(box.parts.handle), text),
       loadImage(author.avatar, true),
     ]).then(function (got) {
-      const paper = backdrop(ctx, Object.assign({}, spec, { accent: accent }),
+      const paper = backdrop(ctx, Object.assign({}, spec, { bg: CODE_PAPER }),
                              { w: box.w, h: box.h });
       const p = Object.assign({}, box.parts, { grid: box.grid });
-      drawCode(ctx, spec, paper, p, box.margin, box.margin, got[2]);
+      drawCode(ctx, spec, paper, p, box.edge, box.top, got[2]);
       return canvas;
     });
   }

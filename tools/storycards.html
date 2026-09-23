@@ -97,11 +97,11 @@
   <b>What to look at.</b> The card is centred in what Instagram leaves free, so a
   longer post makes the type smaller rather than pushing the address under the
   reply bar. Try the long one on the far right. The profile card is the odd one
-  out and has no card on it at all: a photo, a name, a handle and a real code,
-  drawn in the paper's own ink with no plate behind it, pointing at the profile
-  and never at an invite link. The share sheet draws that same composition at the
-  size a camera reads it, which is why the QR here is worth checking against
-  every background.
+  out: no card on it at all, and no colour either. It is the profile page's own
+  header, shrunk, over a black code on Tria's paper, and it ignores both rows of
+  controls above. The code points at the profile, never at an invite link. The
+  share sheet draws that same composition at the size a camera reads it, with no
+  background pills under it.
 </p>
 
 <script src="../js/vendor/qr.js"></script>
@@ -136,12 +136,16 @@
   ];
 
   var LABELS = { gradient: 'Tria gradient', accent: 'Profile color', light: 'Light', dark: 'Dark' };
+  /* The reader accents, as app.js stores them (ACCENTS), which is what a POST
+     card's "Your color" background paints. The profile card ignores this row
+     and the background row both: it has no colour on it. */
   var SWATCHES = [
     { key: null, hex: null, label: 'No color set' },
-    { key: 'note', hex: '#b7a6e8', label: 'Lavender' },
-    { key: 'photo', hex: '#9fd6e8', label: 'Cyan' },
-    { key: 'activity', hex: '#b9df7d', label: 'Lime' },
-    { key: 'find', hex: '#f2a58c', label: 'Peach' },
+    { key: 'ruby', hex: '#df2a48', label: 'Ruby' },
+    { key: 'amber', hex: '#fdb435', label: 'Amber' },
+    { key: 'lime', hex: '#abe64c', label: 'Lime' },
+    { key: 'cyan', hex: '#52def4', label: 'Cyan' },
+    { key: 'lavender', hex: '#8564e8', label: 'Lavender' },
   ];
 
   var cards = document.getElementById('cards');
