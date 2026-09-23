@@ -2565,7 +2565,7 @@ const Store = (() => {
     if (/accent|column|schema/i.test(error.message || '')) return { ok: true, local: true };
     patchUser(id, { accent: prev });
     setLocalAccent(id, prev);
-    return { ok: false, error: 'Couldn\u2019t save your colour.' };
+    return { ok: false, error: 'Couldn\u2019t save your color.' };
   }
 
   /* Set (or clear, with null) the signed-in user's song. Optimistic and

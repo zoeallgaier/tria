@@ -7857,7 +7857,7 @@
                 `aria-label="Change your photo" title="Change your photo">` +
                 svgIcon('camera', 'pf-photo-ico') + `</div>` +
               `<div class="pf-photo-accent" id="pf-accent" role="button" tabindex="0" ` +
-                `aria-label="Profile colour" title="Profile colour">` +
+                `aria-label="Profile color" title="Profile color">` +
                 svgIcon('tint', 'pf-accent-ico') + `</div>` +
             `</div>` +
           `</div>` +
@@ -9663,10 +9663,10 @@
     // The wash needs no preview — it repaints live on the page behind the
     // see-through scrim, which is the whole reason this is a sheet.
     const head =
-      `<div class="swatches swatches--source" role="group" aria-label="Colour source">` +
+      `<div class="swatches swatches--source" role="group" aria-label="Color source">` +
         sources.filter(x => !x.group).map(swatch).join('') +
       `</div>` +
-      `<div class="swatches" role="group" aria-label="Colours">` +
+      `<div class="swatches" role="group" aria-label="Colors">` +
         sources.filter(x => x.group).map(swatch).join('') +
       `</div>`;
 
@@ -9836,7 +9836,7 @@
 
     const BACKGROUNDS = [
       ['gradient', 'Tria'],
-      ['accent', 'Your colour'],
+      ['accent', 'Your color'],
       ['light', 'Light'],
       ['dark', 'Dark'],
     ];
