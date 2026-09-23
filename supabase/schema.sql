@@ -15,13 +15,14 @@
 -- add-likes · add-polls · add-frame-video · swap-photo-blur-for-tint ·
 -- friend-requests · activity-audience · profile-privacy · blocks ·
 -- post-audience-public · restore-block-gate · reposts · add-pronouns ·
--- add-listening-to · add-pins.
+-- add-listening-to · add-pins · add-comment-likes.
 
 drop table if exists public.blocks   cascade;
 drop table if exists public.friend_declines cascade;
 drop table if exists public.post_audience cascade;
 drop table if exists public.poll_votes cascade;
 drop table if exists public.headcount cascade;
+drop table if exists public.comment_likes cascade;
 drop table if exists public.likes    cascade;
 drop table if exists public.comments cascade;
 drop table if exists public.friends  cascade;
@@ -143,6 +144,17 @@ create table public.likes (
   user_id    uuid not null references public.users(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
+);
+
+-- ── Comment likes ───────────────────────────────────────────────────────────
+-- The same quiet signal, one level down: a nod to whoever WROTE the comment, who
+-- alone reads the full set. Everyone else reads only their own row. See
+-- add-comment-likes.sql.
+create table public.comment_likes (
+  comment_id uuid not null references public.comments(id) on delete cascade,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id)
 );
 
 -- ── Headcount ───────────────────────────────────────────────────────────────
@@ -375,6 +387,7 @@ alter table public.posts    enable row level security;
 alter table public.post_audience enable row level security;
 alter table public.comments enable row level security;
 alter table public.likes    enable row level security;
+alter table public.comment_likes enable row level security;
 alter table public.headcount enable row level security;
 alter table public.poll_votes enable row level security;
 alter table public.friends  enable row level security;
@@ -427,6 +440,19 @@ create policy "likes read own-or-owner" on public.likes for select to authentica
   );
 create policy "likes insert own" on public.likes for insert to authenticated with check (user_id = auth.uid());
 create policy "likes delete own" on public.likes for delete to authenticated using (user_id = auth.uid());
+
+-- Comment likes: the same own-or-author read, where the author is the COMMENT'S.
+-- The insert also refuses a like on your own comment (see add-comment-likes.sql).
+create policy "comment likes read own-or-author" on public.comment_likes for select to authenticated
+  using (
+    user_id = auth.uid()
+    or exists (select 1 from public.comments c where c.id = comment_id and c.author = auth.uid())
+  );
+create policy "comment likes insert own" on public.comment_likes for insert to authenticated with check (
+  user_id = auth.uid()
+  and exists (select 1 from public.comments c where c.id = comment_id and c.author <> auth.uid())
+);
+create policy "comment likes delete own" on public.comment_likes for delete to authenticated using (user_id = auth.uid());
 
 create policy "headcount read all"   on public.headcount for select to authenticated using (true);
 create policy "headcount insert own" on public.headcount for insert to authenticated with check (user_id = auth.uid());
@@ -570,7 +596,7 @@ grant execute on function public.claim_profile(text, text) to authenticated;
 -- signed-in client may touch. This SECURITY DEFINER function deletes exactly one
 -- row, the caller's own, and takes no arguments — there is no id to pass and so
 -- no id to tamper with. The delete cascades back through public.users to every
--- post, comment, like, headcount row, poll vote, friend edge, block, and push
+-- post, comment, like, comment like, headcount row, poll vote, friend edge, block, and push
 -- subscription above. Storage files (media/{uid}/…) are outside the FK graph, so
 -- the client clears them first under "media delete own" — see js/store.js.
 create or replace function public.delete_account()

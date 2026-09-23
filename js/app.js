@@ -4758,7 +4758,11 @@
   }
 
   function wireLikes(el, post, opts) {
-    const btn = el.querySelector('.card-like');
+    // Not a comment's heart: on the post page the thread lives inside this card,
+    // and its hearts wear `.card-like` too (see commentLikeHtml). The post's own
+    // heart comes first in the markup anyway; the :not says so rather than
+    // relying on the order.
+    const btn = el.querySelector('.card-like:not(.comment-like)');
     if (!btn) return;
     // The AUTHOR'S heart is never a like — you cannot like your own post — so it
     // branches before the like path rather than after it. On the post page it
@@ -4772,6 +4776,15 @@
     // Friend: toggle my own like. The count belongs to the author, not to me, so
     // there's nothing on my card to recompute — just flip the heart in place (no
     // card rebuild, no rise-flash).
+    wireHeart(btn, () => Store.toggleLike(post.id));
+  }
+
+  /* Every heart that toggles: the post's (wireLikes) and a comment's
+     (wireComments). One handler rather than two because the tap IS the design
+     system — the same optimistic flip, buzz, snap, ink and sparkles on both —
+     and a copy would drift the first time one of them was tuned. `toggle` is the
+     write; the button carries everything else. */
+  function wireHeart(btn, toggle) {
     const paint = (liked) => {
       btn.classList.toggle('liked', liked);
       btn.setAttribute('aria-pressed', String(liked));
@@ -4818,7 +4831,7 @@
       btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
       // The answer, whenever it comes. `.catch` rather than try/finally because a
       // rejected write and a refused one mean the same thing here: put it back.
-      const res = await Store.toggleLike(post.id).catch(() => null);
+      const res = await toggle().catch(() => null);
       busy = false;
       if (!res || !res.ok) paint(!liked);
     });
@@ -4879,7 +4892,46 @@
     }
   }
 
-  function commentItemHtml(c) {
+  /* THE HEART ON A COMMENT is the post's heart one level down, and it keeps
+     every rule the post's has. It is a private nod to whoever WROTE the comment:
+
+     · Somebody else's comment: a heart you can fill, with no count, in the
+       trash's own slot at the right of the row (a comment is never both yours
+       and somebody else's, so the slot is never contested). `.card-like` on
+       purpose, the way Discover's tile borrows it, so the fill, the ink flood,
+       the pop, the sparkles, the post's --burst colour and the signed-out catch
+       (GUEST_ASKS) are the card's own and cannot drift.
+     · Your own: the count as plain type beside the trash, and nothing at all
+       until there is one — tileLikeHtml's rule, for tileLikeHtml's reason (a
+       nought beside every reply you've written is a scoreboard). Not a control:
+       there is no page to send it to, and WHO lands in Updates.
+
+     `post` is the one whose thread this is, which on a bare repost's page is the
+     ORIGINAL (makeCard is drawing the original there), so the burst is its type.
+     Nothing at all before add-comment-likes.sql has run, rather than a heart that
+     springs back on every tap (Store.commentLikesReady). */
+  function commentLikeHtml(c, post) {
+    if (!Store.commentLikesReady() || !canSocial(post)) return '';
+    if (c.author === Store.session()) {
+      const n = Store.commentLikeCount(c.id);
+      if (!n) return '';
+      return `<span class="card-like comment-like comment-like--still" ` +
+          `aria-label="${n} like${n === 1 ? '' : 's'}">` +
+          svgIcon('heart') + `<span class="card-like-count">${n}</span>` +
+        `</span>`;
+    }
+    const liked = Store.commentLikedByMe(c.id);
+    return `<button class="card-like comment-like${liked ? ' liked' : ''}" type="button" ` +
+        `aria-pressed="${liked}" data-type="${burstTypeOf(post)}" data-comment="${esc(c.id)}" ` +
+        `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
+        svgIcon('heart', 'like-heart') +
+      `</button>`;
+  }
+
+  // `post` is required, and every caller passes it with an arrow: a bare
+  // `list.map(commentItemHtml)` would hand the INDEX in as the post (see the
+  // note on likerItemHtml, which shipped exactly that bug).
+  function commentItemHtml(c, post) {
     const u = Store.user(c.author);
     const name = esc(u ? u.name : c.author);
     const own = c.author === Store.session();
@@ -4895,6 +4947,7 @@
           commentPhotoHtml(c, name) +
           `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
         `</div>` +
+        commentLikeHtml(c, post) +
         // Delete uses the same trash glyph as the post controls (right-aligned).
         (own
           ? `<button class="comment-delete" type="button" data-comment="${esc(c.id)}" ` +
@@ -4977,7 +5030,7 @@
         `<div class="comments-inner">` +
           `<div class="comments-content">` +
             (list.length
-              ? `<ul class="comments-list">${list.map(commentItemHtml).join('')}</ul>`
+              ? `<ul class="comments-list">${list.map(c => commentItemHtml(c, post)).join('')}</ul>`
               : `<p class="comments-empty">No comments yet.</p>`) +
           `</div>` +
         `</div>` +
@@ -5043,6 +5096,12 @@
         const img = btn.querySelector('img');
         openLightbox(img.currentSrc || img.src, '', false, img);
       }));
+    // A comment's heart flips in place like the post's, and for the post's
+    // reason: the count belongs to the comment's author, so nothing of mine
+    // changes but the one button. No card rebuild. `button.` because your own
+    // comment's heart is a <span> count that is not a control.
+    panel.querySelectorAll('button.comment-like').forEach(btn =>
+      wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
     panel.querySelectorAll('.comment-delete').forEach(btn =>
       btn.addEventListener('click', () => {
         openSheet({
@@ -13336,7 +13395,10 @@
     // A repost joins the two kinds that quote their text, because a QUOTE carries
     // a sentence and reading it in the ledger is most of the news. A bare repost's
     // text is empty, so the line simply doesn't appear.
-    const said = (n.kind === 'comment' || n.kind === 'mention' || n.kind === 'repost')
+    // A like on your comment quotes YOUR comment, so the row says which reply it
+    // was (a picture-only reply has no words and draws no quote line).
+    const said = (n.kind === 'comment' || n.kind === 'mention' || n.kind === 'repost' ||
+                  n.kind === 'commentlike')
       ? notePlain(n.text) : '';
     // A comment that is only a picture has no words to quote, so it says what it is.
     const shown = said || (n.kind === 'comment' && n.image ? 'Sent a photo.' : '');
@@ -13347,6 +13409,7 @@
     const what =
       n.kind === 'comment' ? `commented on ${label}` :
       n.kind === 'like'    ? `liked ${label}` :
+      n.kind === 'commentlike' ? `liked your comment on ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
       n.kind === 'vote'    ? `voted in ${label}` :
       n.kind === 'repost'  ? `reposted ${label}` :
@@ -17486,7 +17549,7 @@
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
     '.seg-tab', '.sheet-item', '.sheet-cancel',
-    '.postbar-send', '.comment-delete', '.modal-actions button',
+    '.postbar-send', '.comment-delete', 'button.comment-like', '.modal-actions button',
     '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.

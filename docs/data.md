@@ -604,6 +604,34 @@ address and therefore a different person, and there is no way around that.
   wherever its chevron points, while anything else that happens up there (a
   repost, an undo) repaints the page in place rather than through the router.
 
+- **A COMMENT CAN BE LIKED (2026-09-23)**, and it is the post's like one level
+  down with every rule intact (`public.comment_likes`, added by
+  `supabase/add-comment-likes.sql`). The nod goes to whoever WROTE the comment,
+  not to the post's author: RLS hands the commenter every like on their own
+  comments and everybody else only their own row, so the count is theirs alone.
+  The insert policy also refuses a like on your own comment, which the post's
+  likes leave to the app.
+
+  On the thread it takes the TRASH'S SLOT, in the trash's 28px box with the
+  trash's 44px reach grown left (on `::before`, because `::after` is the heart's
+  ink flood). A comment is never both yours and somebody else's, so the slot is
+  never contested: on theirs a heart you can fill, on yours the count as plain
+  type just before the trash, and nothing until there is one (`tileLikeHtml`'s
+  rule, for its reason). The heart wears `.card-like` the way Discover's tile
+  does, so the fill, the ink, the pop, the sparkles, the post's `--burst` and the
+  signed-out catch in `GUEST_ASKS` are the card's own. Which means `wireLikes`
+  has to ask for `.card-like:not(.comment-like)`, because the thread lives
+  inside the post page's card. Both hearts tap through one `wireHeart`.
+
+  WHO liked your comment is an Updates row (`commentlike`, "liked your comment
+  on …", quoting the comment), not a list on the page: a comment has no page to
+  put one on, and a sheet of names would be a new pattern for a count most
+  replies never pass. Not pushed, for the reason a post like isn't.
+
+  **Nothing draws until the table answers** (`Store.commentLikesReady`): a
+  missing table (`isMissing`, PGRST205) turns the hearts off rather than showing
+  a heart that springs back on every tap, and a push to main deploys the web
+  whether or not the SQL has run.
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. A read that errors keeps its **last good copy** (`core()` in

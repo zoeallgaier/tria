@@ -3214,6 +3214,64 @@ main {
   }
 }
 
+/* The heart on a comment (commentLikeHtml). It stands in the trash's slot, in the
+   trash's box: right-aligned to the thread edge, 28px painted, on the comment's
+   top line. A comment is never both yours and somebody else's, so on theirs the
+   heart holds the slot and on yours the trash does, with your count (once there
+   is one) sitting just before it.
+
+   Everything the tap does — the liked fill, the ink flood, the pop, the burst
+   colour, the sparkles — comes from the shared .card-like rules up in the card
+   section, the way the Discover tile's heart takes them. What it has to be told
+   is its size, for the tile's reason: the ink flood is a masked block cut by
+   hand, and the pop's nudge is baked into keyframes shared with the card, so a
+   smaller heart that didn't say so would flood a 28px heart over an 18px one. */
+.comment .card-like {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-top: 0.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-micro);
+  --heart-size: 18px;
+  --like-nudge: 1px;   /* 1.5px × 18/28, the card's optical nudge in proportion */
+}
+/* The resting grey at (0,1,0), under .card-like.liked and the hover/active/focus
+   rules at (0,2,0), which is the tile's :where() trick for the tile's reason. */
+.comment :where(.card-like) { color: var(--muted); }
+.comment .card-like svg { width: var(--heart-size); height: var(--heart-size); }
+/* The trash's 44px reach, grown left from the thread edge the same way. On
+   ::before because ::after is the heart's ink flood (.card-like.is-liking::after). */
+.comment button.card-like::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+}
+/* Your own count: at the meta line's size, tight to its heart, and TYPE rather
+   than a control, so none of the hover or press ink the shared rules hand every
+   other heart. The trash after it gives up the auto margin the pair now shares. */
+.comment .card-like:has(.card-like-count) { gap: 0.2rem; padding-inline: 0.2rem; }
+.comment .card-like-count { font-size: 0.75rem; }
+.comment .comment-like--still { cursor: default; }
+.comment .comment-like--still:active { color: var(--muted); }
+@media (hover: hover) {
+  .comment .comment-like--still:hover { color: var(--muted); }
+}
+.comment-like + .comment-delete { margin-left: 0; }
+
 /* ── The comment bar ───────────────────────────────────────────────────────
    THE BOTTOM CHROME OF A POST'S PAGE. On phones it stands where the nav pill
    and the + stand everywhere else (both are hidden under body.postbar-live, in

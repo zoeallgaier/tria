@@ -190,7 +190,10 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   (2026-09-22): anon `GET /rest/v1/friends?select=a,b&limit=3` answers `[]` while
   `users` answers rows, so the policy is the missing half. Until it is run, every
   friend count on the web reads 0; the app is unaffected (it reads as
-  `authenticated`).
+  `authenticated`). **`add-comment-likes.sql` is NOT run** (2026-09-23): anon
+  `GET /rest/v1/comment_likes?select=comment_id&limit=1` answers PGRST205, and
+  `[]` once it has. Until then the comment hearts draw nothing, on purpose
+  (`Store.commentLikesReady`), and the web's boot logs that one 404.
 
 ## Copy style
 

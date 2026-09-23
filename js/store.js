@@ -48,6 +48,8 @@ const Store = (() => {
   //   users: [{id, username, name, bio, avatar?, accent?, pronouns?}]
   //   posts: [{id, author(username), type, date, tags, title?, url?, note?, image?, _ts}]
   //   comments: [{id, postId, author(username), text, date}]
+  //   commentLikes: [{commentId, user(username), _ts}] — RLS-filtered like likes
+  //   commentLikesReady: whether add-comment-likes.sql has run (the table answered)
   //   friends: symmetric adjacency map keyed by username
   //   friendCounts: how many mutual ties each username actually has (see friendCount)
   //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
@@ -55,7 +57,7 @@ const Store = (() => {
   //   session: the signed-in username, or null
   //   chats / chatMembers / messages / messageHearts: see "Chats" below
   //   chatsReady: whether add-chats.sql has run (the tables answered)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [] });
   let state = empty();
 
@@ -441,6 +443,10 @@ const Store = (() => {
       // every like on our own posts. So the cache literally can't compute a count
       // for someone else's post — the rows aren't here.
       readAll('likes', ['created_at', 'post_id', 'user_id']),
+      // The same fence one level down: my own comment likes, plus every like on
+      // a comment I wrote. A missing table (add-comment-likes.sql not run) is
+      // an answer here, not a blip; see commentLikesReady below.
+      readAll('comment_likes', ['created_at', 'comment_id', 'user_id']),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
@@ -469,7 +475,7 @@ const Store = (() => {
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, h, pv, f, fd, pa, bl, ch] = read;
+    const [u, p, c, l, cl, h, pv, f, fd, pa, bl, ch] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -507,6 +513,17 @@ const Store = (() => {
       text: row.body, image: row.image || null, date: dateOf(row.created_at), _ts: row.created_at,
     }), state.comments).filter(x => x.author);
     state.likes = core(l, 'likes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.likes);
+    // Comment likes arrive in their own migration, so a MISSING table says the
+    // hearts are not wired up yet, and the app draws none rather than a heart
+    // that silently springs back on every tap. Any other error is a blip and
+    // keeps the last good copy like everything above.
+    if (isMissing(cl.error)) state.commentLikesReady = false;
+    else {
+      if (!cl.error) state.commentLikesReady = true;
+      state.commentLikes = core(cl, 'comment likes', row => ({
+        commentId: row.comment_id, user: nameById.get(row.user_id), _ts: row.created_at,
+      }), state.commentLikes).filter(x => x.user);
+    }
     // Guarded like the four above, and for the same reason: these tables exist
     // now, so an errored read here is a blip, not a pre-migration DB, and
     // blanking them empties every RSVP, every vote and every "shared with N" in
@@ -1714,6 +1731,10 @@ const Store = (() => {
     // pull, and `visibleRepost` would be the only thing hiding them.
     write('posts', ps => ps.filter(p => p.repostOf !== id));
     write('posts', ps => ps.filter(p => p.id !== id));
+    // Read the thread's ids BEFORE the comments go: a comment like knows its
+    // comment and not its post, so this is the only moment the link exists.
+    const thread = new Set(commentsFor(id).map(c => c.id));
+    write('commentLikes', xs => xs.filter(x => !thread.has(x.commentId)));
     write('comments', cs => cs.filter(c => c.postId !== id));
     write('likes', xs => xs.filter(x => x.postId !== id));
     write('headcount', xs => xs.filter(x => x.postId !== id));
@@ -1924,7 +1945,45 @@ const Store = (() => {
     const { error } = await sb.from('comments').delete().eq('id', id);
     if (error) return { ok: false, error: 'Couldn’t delete, try again.' };
     write('comments', cs => cs.filter(c => c.id !== id));
+    write('commentLikes', xs => xs.filter(x => x.commentId !== id));
     return { ok: true };
+  }
+
+  // ── Comment likes (the same private signal, to whoever wrote the comment) ────
+  // Every rule a post like has, one level down. RLS hands me every like on a
+  // comment I wrote and only my own row on anyone else's, so the count is
+  // meaningful to the comment's author alone — not to the post's author, who
+  // owns the post and not the replies under it.
+  const commentLikesReady = () => !!state.commentLikesReady;
+  const commentLikesFor = (commentId) => groupOf(state.commentLikes, 'commentId').get(commentId) || NO_ROWS;
+  const commentLikeCount = (commentId) => commentLikesFor(commentId).length;
+  const commentLikedByMe = (commentId) => commentLikesFor(commentId).some(x => x.user === state.session);
+
+  // Toggle my like on a comment. Open to exactly the people who may comment on
+  // the post (a friend's, or any public one) and never on your own comment,
+  // which is also refused by the insert policy.
+  async function toggleCommentLike(commentId) {
+    const me = state.session;
+    if (!me || !state.commentLikesReady) return { ok: false };
+    const c = state.comments.find(x => x.id === commentId);
+    if (!c || c.author === me) return { ok: false };
+    const post = state.posts.find(p => p.id === c.postId);
+    if (!post) return { ok: false };
+    if (post.author !== me && !isFriend(post.author) && post.audience !== 'public') return { ok: false };
+    const mine = idOf(me);
+    const same = x => x.commentId === commentId && x.user === me;
+    const has = commentLikedByMe(commentId);
+    if (has) {
+      const { error } = await sb.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', mine);
+      if (error) return { ok: false };
+      write('commentLikes', xs => xs.filter(x => !same(x)));
+    } else {
+      const { error } = await sb.from('comment_likes').insert({ comment_id: commentId, user_id: mine });
+      if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
+      const row = { commentId, user: me, _ts: new Date().toISOString() };
+      write('commentLikes', xs => upsert(xs, row, same));
+    }
+    return { ok: true, liked: !has };
   }
 
   // ── Likes (a private signal to the author) ──────────────────────────────────
@@ -2082,6 +2141,17 @@ const Store = (() => {
     for (const l of state.likes)
       if (mine.has(l.postId) && l.user !== me)
         evts.push({ kind: 'like', postId: l.postId, user: l.user, _ts: l._ts || '' });
+    // Likes on MY comments, which RLS hands me in full. Filed against the post
+    // the comment sits under, so the row walks to that thread, and carrying the
+    // comment's words so the row says which of your replies it was.
+    if (state.commentLikes.length) {
+      const said = new Map(state.comments.filter(c => c.author === me).map(c => [c.id, c]));
+      for (const l of state.commentLikes) {
+        const c = said.get(l.commentId);
+        if (c && l.user !== me)
+          evts.push({ kind: 'commentlike', postId: c.postId, user: l.user, text: c.text, _ts: l._ts || '' });
+      }
+    }
     // A yes and a maybe are news for the host; a "can't go" waits on the guest list.
     for (const h of state.headcount)
       if (mine.has(h.postId) && h.user !== me && h.status !== 'cant')
@@ -3324,6 +3394,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
+    commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,
     // Polls
