@@ -493,9 +493,12 @@
       if (grid) side = Math.floor(side / (grid.length + QUIET * 2)) * (grid.length + QUIET * 2);
       const p = codeParts(side, true);
       p.grid = grid;
+      const [face, mark] = await Promise.all([
+        loadImage(author.avatar, true),
+        loadImage(WORDMARK, false),
+      ]);
       drawCode(ctx, spec, paper, p, Math.round((m.w - p.side) / 2),
-               m.safeTop + Math.round((band - p.height) / 2),
-               await loadImage(author.avatar, true));
+               m.safeTop + Math.round((band - p.height) / 2), face, mark);
       return canvas;
     }
 
@@ -783,7 +786,10 @@
 
   /* Fractions of the code's side, and there are only three of them: the header
      over it, the air between, and the address under it on the card. */
-  const CODE = { head: 0.30, lead: 0.09, foot: 0.065, address: 0.046, line: 1.2 };
+  const CODE = { head: 0.30, lead: 0.09, foot: 0.065, address: 0.046, line: 1.2,
+                 markGap: 0.05, mark: 0.125 };
+  /* icons/wordmark.svg is 1650 x 1028. */
+  const MARK_TALL = 1028 / 1650;
   /* The one paper this card is drawn on. It is Tria's own, not the device's:
      a picture whose colours moved with the sender's system setting is a picture
      nobody can predict, and that rule is older than this card (see the head of
@@ -813,7 +819,8 @@
      that fits a height it has. The answer is a hair optimistic — the roundings
      do not add up to the sum of the fractions — so codeSide checks it. */
   const CODE_TALL = 1 + CODE.head + CODE.lead;
-  const CODE_FOOT = CODE.foot + CODE.address * CODE.line;
+  const CODE_FOOT = CODE.foot + CODE.address * CODE.line
+                  + CODE.markGap + CODE.mark * MARK_TALL;
 
   /* The column's parts at a given code side, in whole pixels, measured in one
      place so the height reserved and the height drawn are the same sum in the
@@ -833,7 +840,10 @@
       side: side, head: r(CODE.head), lead: r(CODE.lead),
       foot: address ? r(CODE.foot) : 0,
       address: address ? r(CODE.address) : 0,
+      markGap: address ? r(CODE.markGap) : 0,
+      markW: address ? r(CODE.mark) : 0,
     };
+    p.markH = Math.round(p.markW * MARK_TALL);
     p.gap = Math.round(p.head * HEAD.gap);
     p.tuck = Math.round(p.head * HEAD.tuck);
     p.name = Math.max(Math.round(p.head * HEAD.name), Math.round(HEAD.minName * unit));
@@ -842,7 +852,7 @@
     p.handleLine = Math.round(p.handle * CODE.line);
     p.addressLine = Math.round(p.address * CODE.line);
     p.above = p.head + p.lead;
-    p.below = p.foot + p.addressLine;
+    p.below = p.foot + p.addressLine + p.markGap + p.markH;
     p.height = p.above + side + p.below;
     return p;
   }
@@ -857,7 +867,7 @@
   }
 
   /* Paint what codeParts measured, with the column's top-left at (x, y). */
-  function drawCode(ctx, spec, paper, p, x, y, avatar) {
+  function drawCode(ctx, spec, paper, p, x, y, avatar, mark) {
     const author = spec.author || {};
     const handle = '@' + (author.username || '');
     const name = author.name || handle;
@@ -897,11 +907,9 @@
     drawQR(ctx, x, qy, p.side, spec, paper, p.grid);
 
     if (p.addressLine) {
-      /* WHERE, SPELLED OUT, on the card only, and it is what the wordmark used
-         to do at the foot of this one. A card travels as a picture: the person
-         looking at it in a story cannot tap it and may not scan it, and the
-         mark told them whose app this was without telling them where to go.
-         This says both, in one line, and it can be typed. */
+      /* WHERE, SPELLED OUT, on the card only. A card travels as a picture: the
+         person looking at it in a story cannot tap it and may not scan it, so
+         the one thing that can be typed goes on in full. */
       ctx.save();
       ctx.fillStyle = paper.muted;
       ctx.font = sans(p.address);
@@ -910,6 +918,18 @@
       ctx.fillText(spec.address || 'triaonline.com',
                    x + p.side / 2, qy + p.side + p.foot + p.addressLine / 2);
       ctx.restore();
+
+      /* WHOSE APP, at the foot, and it is the real file — icons/wordmark.svg,
+         the same lettering the app wears. The address says where to go and the
+         mark says where you are going; a picture that travels off Tria needs
+         both, and this card is the one that travels furthest. */
+      if (mark) {
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(mark, x + Math.round((p.side - p.markW) / 2),
+                      y + p.height - p.markH, p.markW, p.markH);
+        ctx.restore();
+      }
     }
   }
 
@@ -964,32 +984,38 @@
     if (!grid) return null;
     const dpr = Math.max(1, Math.min(3, (opt && opt.dpr) || window.devicePixelRatio || 1));
     const n = grid.length + QUIET * 2;
-    /* The panel's padding, as a fraction of the code, and it is MEASURED TO THE
-       INK: the code's own quiet zone is four modules of white inside the side
-       asked for, so padding the plate pads it twice and the code ends up
-       floating high in a panel with a white shelf under it. Three of the four
-       edges give the quiet zone back; the top has none, because a photograph
-       starts where it starts. */
+    /* THE PANEL FILLS THE FRAME IT IS GIVEN (Zoe, 2026-09-23). It used to
+       shrink-wrap the code, which left a card narrower than every row under it
+       floating in the middle of the sheet: the paper stopped in a different
+       place from Save image and Copy link for no reason anybody could see. So
+       the width is the frame's, the code is centred in it, and the sheet is one
+       column of things the same width.
+
+       ITS PADDING IS MEASURED TO THE INK, not to the plate: the code's own
+       quiet zone is four modules of white inside the side asked for, so padding
+       the plate pads it twice and the code floats high with a white shelf under
+       it. The foot gives the quiet zone back; the top does not, because a
+       photograph starts where it starts.
+
+       Solved, floored to whole pixels per module, and then CHECKED, because the
+       solve is in fractions and the drawing is in rounded pixels. The first
+       guess is optimistic, since the loop only ever walks down. */
     const PAD = 0.11;
-    const wide = (opt.width || 0) * dpr, tall = (opt.maxHeight || 0) * dpr;
-    /* Solved, floored to whole pixels per module, and then CHECKED, because the
-       solve is in fractions and the drawing is in rounded pixels. */
-    /* OPTIMISTIC, because the loop below only ever walks down: it assumes the
-       quiet zone swallows the side and bottom padding, which it does at every
-       size this panel is ever drawn at. */
+    const wide = Math.round((opt.width || 0) * dpr), tall = (opt.maxHeight || 0) * dpr;
     const room = Math.min(wide, tall / (CODE_TALL + PAD));
     let unit = Math.max(2, Math.floor(room / n));
-    let side, parts, pad, edge;
+    let side, parts, pad, foot;
     for (;;) {
       side = unit * n;
       parts = codeParts(side, false, dpr);   /* dpr, so the type floors are CSS pixels */
       pad = Math.round(side * PAD);
-      edge = Math.max(0, pad - QUIET * unit);
-      if (unit <= 2 || (side + edge * 2 <= wide && parts.height + pad + edge <= tall)) break;
+      foot = Math.max(0, pad - QUIET * unit);
+      if (unit <= 2 || (side <= wide && parts.height + pad + foot <= tall)) break;
       unit -= 1;
     }
-    const w = side + edge * 2, h = parts.height + pad + edge;
-    return { grid: grid, unit: unit, side: side, edge: edge, top: pad, parts: parts, dpr: dpr,
+    const w = Math.max(wide, side), h = parts.height + pad + foot;
+    return { grid: grid, unit: unit, side: side, x: Math.round((w - side) / 2), top: pad,
+             parts: parts, dpr: dpr,
              w: w, h: h, css: { width: w / dpr, height: h / dpr } };
   }
 
@@ -1017,7 +1043,7 @@
       const paper = backdrop(ctx, Object.assign({}, spec, { bg: CODE_PAPER }),
                              { w: box.w, h: box.h });
       const p = Object.assign({}, box.parts, { grid: box.grid });
-      drawCode(ctx, spec, paper, p, box.edge, box.top, got[2]);
+      drawCode(ctx, spec, paper, p, box.x, box.top, got[2]);
       return canvas;
     });
   }

@@ -304,6 +304,22 @@ last of the layers with it.
 - **The post card keeps its backgrounds**, reordered: your colour first and the
   default, Tria's ramp last. A sender with no colour of their own opens on Tria,
   since "Your color" would otherwise be the post type's pastel.
+- **The wordmark is back on the saved card** (Zoe asked, 2026-09-23), under the
+  address at the foot: the address says where to go, the mark says whose app it
+  is, and this is the picture that travels furthest from both. It is on the CARD
+  only — the panel is Tria's own sheet inside Tria, where a Tria logo is a label
+  on the room you are standing in.
+- **The panel fills the frame it is given.** It used to shrink-wrap the code,
+  which left the paper stopping in a different place from Save image and Copy
+  link for no reason a reader could see.
+
+**And Save image never saved anything in the app** (found and fixed
+2026-09-23). `TriaSharePlugin` was never registered with the bridge, so
+`isPluginAvailable('TriaShare')` was false, Save image took the browser's
+download path — inert in a webview — and said "Card saved." The whole story is
+in [ios-shell.md](ios-shell.md); the toast now says "Saved." on both paths, and
+the fix was checked by reading the file back out of the simulator's own camera
+roll (1080x1920, decodes).
 
 - **The code has no plate.** Its light modules and quiet zone ARE the
   background, and its dark ones are the reader's colour or `paper.ink`. "White, or black where the

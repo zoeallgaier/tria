@@ -35,6 +35,18 @@ class TriaViewController: CAPBridgeViewController {
         // buttons on the gate reject and say so on the screen, where the email
         // form is still sitting right underneath them. See TriaAuthPlugin.swift.
         bridge?.registerPluginInstance(TriaAuthPlugin())
+        /* Save image and Share to Instagram, and this line was MISSING until
+           2026-09-23 while TriaSharePlugin.swift sat there compiling perfectly.
+           The class was in the binary; the bridge had simply never been told
+           about it, so `Capacitor.isPluginAvailable('TriaShare')` answered
+           false and the two rows that depend on it degraded exactly as they are
+           written to: Instagram hid itself, and Save image fell through to the
+           browser's download path, which in a webview writes nothing anywhere
+           and then says it saved. Nothing failed loudly. Nothing ever does
+           here, which is the whole point of the paragraph above and of
+           verify-plugins.sh, and neither of them covers a plugin nobody
+           registered. */
+        bridge?.registerPluginInstance(TriaSharePlugin())
     }
 
     /// `--bg` from `css/tokens.css`, in the one form CSS can't reach: light

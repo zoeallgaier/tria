@@ -266,6 +266,27 @@ because it is about the same hand-off (which app should get the link) rather
 than because it fits the name. A method added here needs no registration change;
 only a new *class* would need a hand-written entry in `capacitorDidLoad`.
 
+**`TriaSharePlugin` is the fourth such class, and it went eight days
+unregistered** (found 2026-09-23). The file compiled, the class was in the
+binary — `nm` finds it — and nobody had added the one line to
+`capacitorDidLoad`, so the bridge had never heard of it. Nothing failed:
+`Capacitor.isPluginAvailable('TriaShare')` answered false, and the two rows that
+depend on it degraded exactly as they are written to. Share to Instagram hid
+itself, which looks identical to Instagram not being installed. Save image fell
+through to the browser's download path, which in a webview writes nothing
+anywhere, and then said "Card saved."
+
+**This is the missing-push failure with a different cause and the same shape,
+and `verify-plugins.sh` cannot catch either half of it**: that script reads
+`packageClassList`, which app-target plugins are deliberately not in. What it
+proves is that a class made it into the binary; what went wrong here is a class
+that made it into the binary and was never handed over. The check for that is
+this list of four in `capacitorDidLoad`, so a new plugin's second step is the
+same sentence as its first: **write the class, register the class.** How it was
+finally found is worth copying — the app was run in the simulator with a probe
+that printed `Capacitor.PluginHeaders` on screen. The plugin that is missing is
+the one not in that list.
+
 **`TriaAuthPlugin` is the third such class** (2026-09-22), registered the same
 way and invisible to `verify-plugins.sh` for the same reason. Two methods:
 `appleSignIn` raises the system's Sign in with Apple sheet and hands the webview

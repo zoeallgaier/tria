@@ -10047,7 +10047,14 @@
           .then((canvas) => window.Capacitor.nativePromise('TriaShare', 'saveToPhotos', {
             image: canvas.toDataURL('image/png'),
           }))
-          .then(() => toast('Saved to your photos.'))
+          /* JUST "SAVED" (Zoe, 2026-09-23), on both paths and in one word. The
+             two used to say different things — "Saved to your photos." in the
+             app, "Card saved." in a browser — and the second was not even true:
+             it was the download path answering because TriaShare was never
+             registered with the bridge, so nothing was saved anywhere. One
+             word, one meaning, and it is the word a reader is already
+             thinking. */
+          .then(() => toast('Saved.'))
           .catch((e) => {
             const denied = e && (e.code === 'NO_PERMISSION' || /permission/i.test(e.message || ''));
             toast(denied
@@ -10059,7 +10066,7 @@
       draw(pick.bg)
         .then((canvas) => new Promise((resolve, reject) =>
           canvas.toBlob(b => b ? resolve(b) : reject(new Error('unreadable')), 'image/png')))
-        .then((blob) => { download(blob); toast('Card saved.'); })
+        .then((blob) => { download(blob); toast('Saved.'); })
         .catch(() => toast('The card could not be saved.'));
     }
 
