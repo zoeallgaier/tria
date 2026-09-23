@@ -7040,18 +7040,19 @@
     if (!canFilter || !filters.some(f => f.key === profileFilter)) profileFilter = 'all';
 
     // One inline metadata line on the identity's left axis: "N posts · N friends".
-    // Friend COUNT is public (same on your card and anyone else's), but WHO those
-    // friends are is circle business — so the friend stat is a tappable button only
-    // for you or a friend, plain text otherwise. A locked profile fences its feed,
-    // so its post stat is dropped (a "0 posts" would mislead) and the line carries
-    // the friend count alone (no leading dot).
+    // Friend COUNT is public (same on your card and anyone else's, and the same
+    // signed out — see Store.friendCount, which is what makes that true on the
+    // public site), but WHO those friends are is circle business — so the friend
+    // stat is a tappable button only for you or a friend, plain text otherwise.
+    // A locked profile fences its feed, so its post stat is dropped (a "0 posts"
+    // would mislead) and the line carries the friend count alone (no leading dot).
     const postNum = list.length;
     const postStat = locked ? ''
       : `<span class="account-stat">` +
           `<span class="account-stat-num">${postNum}</span> ` +
           `<span class="account-stat-label">${postNum === 1 ? 'post' : 'posts'}</span>` +
         `</span>`;
-    const fc = Store.friendsOf(u.username).length;
+    const fc = Store.friendCount(u.username);
     const canSeeFriends = (isSelf || isFriend) && fc > 0;
     const friendInner =
       `<span class="account-stat-num">${fc}</span> ` +
@@ -7070,7 +7071,10 @@
     // "un-tie" a deliberate act rather than a standing button on the page.
     const action = (isSelf || areFriends) ? ''
       : (() => {
-          // Five pre-friend states. Two are already-done and undo on tap
+          // Five pre-friend states, and a signed-out visitor takes the first of
+          // them: they are nobody's friend yet, so the card says "Add friend"
+          // like anyone else's and the tap goes to the join form.
+          // Two are already-done and undo on tap
           // ("Requested" on a private account, "Following" on a public one) —
           // muted outline. The other three are the live commit, and are the one
           // primary action on a visitor's card (Share lives in the ••• menu
@@ -17561,9 +17565,9 @@
 
      The floors on #edeef0 are 3 for a mark and 4.5 for a mention (the mark
      deepened 20% toward --text, see --mention-ink). As tuned:
-       mark on paper    ruby 3.96, rose 3.26, coral 2.24, amber 2.05, lime 2.60,
+       mark on paper    ruby 3.96, rose 3.41, coral 2.24, amber 2.05, lime 2.60,
                         jade 3.33, cyan 2.85, ocean 3.32, lavender 3.63
-       mention on paper ruby 5.40, rose 4.51, coral 3.21, amber 2.96, lime 3.65,
+       mention on paper ruby 5.40, rose 4.73, coral 3.21, amber 2.96, lime 3.65,
                         jade 4.54, cyan 3.97, ocean 4.53, lavender 4.88
      Coral, amber, lime and cyan sit under both, tuned by eye. The twin that
      clears them is the same hue about L* 54 (coral #e15519, amber #b07614, lime
@@ -17582,22 +17586,27 @@
      KEYS DON'T MOVE. users.accent stores the key, so a new label is free and a
      new key strands everyone who picked the old one (an older client meeting
      an unknown key falls back to the photo). That is why Blush is still
-     'rose'. */
+     'rose', and why Indigo (2026-09-23, was Lavender) is still 'lavender'. */
   /* ORDER IS THE SPECTRUM, and the grid is 3x3, so each row is a temperature:
-     warm, green, cool. Ruby and rose share a hue, so DEPTH breaks that tie and
-     the true red leads the pink. Nothing reads this array by index (the picker
-     maps it, everything else goes through accentOf on the stored KEY), so the
-     order is presentation only. */
+     warm, green, cool. Ruby leads rose on hue, 350 against rose's 322, and on
+     depth too. Those used to be the same hue, with depth alone breaking the
+     tie; rose moved off it twice on 2026-09-22 — first ten degrees toward
+     magenta, because at 350 it read as a light red rather than as the pink its
+     label promises, then another 18 past Barbie pink's own hue (about 328)
+     toward blue-violet, on the call that Barbie pink still wasn't pink enough.
+     Nothing reads this array by index (the picker maps it, everything else
+     goes through accentOf on the stored KEY), so the order is presentation
+     only. */
   const ACCENTS = [
     { key: 'ruby',     label: 'Ruby',     hex: '#df2a48' },
-    { key: 'rose',     label: 'Blush',    hex: '#ef6b81', ink: '#eb4561' },
+    { key: 'rose',     label: 'Blush',    hex: '#ef6bbf', ink: '#e82ba3' },
     { key: 'coral',    label: 'Coral',    hex: '#fb7c46' },
     { key: 'amber',    label: 'Amber',    hex: '#fdb435', ink: '#eb9500' },
     { key: 'lime',     label: 'Lime',     hex: '#abe64c', ink: '#67a503' },
     { key: 'jade',     label: 'Jade',     hex: '#54e89c', ink: '#1f9457' },
     { key: 'cyan',     label: 'Cyan',     hex: '#52def4', ink: '#119bb0' },
     { key: 'ocean',    label: 'Ocean',    hex: '#367df8' },
-    { key: 'lavender', label: 'Lavender', hex: '#8564e8' },
+    { key: 'lavender', label: 'Indigo',   hex: '#8564e8' },
   ];
   const accentOf = (key) => ACCENTS.find(x => x.key === key) || null;
 
@@ -17784,8 +17793,12 @@
   /* How far either side of the chosen hue the band travels. 11 rather than the
      16 it was, because 32 degrees of sweep was wider than the palette's own
      spacing and neighbouring bands painted each other's colours. The tightest
-     pair now is coral to amber, 20.2 degrees, so their outer stops touch by
-     about two degrees; the centres are what a reader tells apart. */
+     pair is coral to amber, 20.2 degrees, so their outer stops touch by about
+     two degrees; the centres are what a reader tells apart. Ruby to rose used
+     to be the tight pair instead, one hue with depth alone telling them apart
+     (bands fully overlapping); rose has moved off ruby's hue twice since, and
+     the gap between them is 28.2 degrees now, wider than coral-amber's — so
+     the note that used to single them out no longer applies to this palette. */
   const BAND_ARC = 11;
   // A PHOTO sample's band: pinned to BAND_LSTAR, saturation clamped into a
   // range that reads at that weight. The offsets are in L* too, a point and a
@@ -18897,7 +18910,8 @@
   // ahead of both the per-card listeners and the document-delegated ones (the
   // repost circle, the •••), and the write never starts.
   const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt',
-    '.card-repost', '.card-menu', '#friend', '#account-more', '.daily-answer'].join(',');
+    '.card-repost', '.card-menu', '#friend', '.friend-tie', '#account-more',
+    '.daily-answer'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;
     if (!e.target.closest(GUEST_ASKS)) return;

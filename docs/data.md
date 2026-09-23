@@ -619,6 +619,20 @@ address and therefore a different person, and there is no way around that.
   per view. Following buys exactly one thing: that account's **public** posts join
   your home feed. Their circle posts stay circle business until you're mutual, and
   the DB agrees — `can_view_post`'s circle branch needs both edges.
+- **A friend COUNT is public; the roster is not, and signed out those two pull
+  apart.** The number on a profile has to be the same number for every reader,
+  and `friendsOf().length` stopped being that on the public site: anon may read
+  the edge rows (`supabase/public-friend-counts.sql`) but not the private,
+  never-public people some of them point at, so `readWorld` can't NAME those
+  endpoints and drops them out of the adjacency map. It tallies the mutual pairs
+  on the raw ids first, before anything is dropped, and `Store.friendCount()` is
+  what reads that tally — signed out only; signed in, every edge names both of
+  its people and the roster is the count. That split is also the fence: the
+  profile's friend stat is a tappable link to the roster for you and for a
+  friend, and plain text for everyone else, so the id-only edges are never
+  rendered as people. Before the policy existed the count was **0 for every
+  account on the web**, which is the worst possible first look at an app about
+  having a few people.
 - **An add is an EVENT, and only a request is a chore.** Both halves of that were
   wrong until July 2026, and both failed the same way: a row on Updates that
   nothing could ever clear. Followers were drawn as a standing block above the

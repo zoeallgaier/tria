@@ -954,14 +954,14 @@ with no branch for it. Two things about it:
     on light paper. An accent may carry a deeper twin that its marks wear **on
     paper only**: hearts, the dot, Going, and the base a mention deepens from.
     Dark paper always wears the hex. Blush, amber, lime, jade and cyan carry
-    one; ruby, coral, ocean and lavender don't. (This `ink` used to mean the
+    one; ruby, coral, ocean and indigo don't. (This `ink` used to mean the
     button's glyph; that is `accentInk` now, measured, not declared.)
   - **Measured, and four are under.** Floors on `#edeef0`: 3 for a mark, 4.5
     for a mention (the mark deepened 20% toward `--text`).
-    Marks on paper: ruby 3.96, blush 3.26, coral **2.24**, amber **2.05**, lime
-    **2.60**, jade 3.33, cyan **2.85**, ocean 3.32, lavender 3.63.
-    Mentions on paper: ruby 5.40, blush 4.51, coral **3.21**, amber **2.96**,
-    lime **3.65**, jade 4.54, cyan **3.97**, ocean 4.53, lavender 4.88.
+    Marks on paper: ruby 3.96, blush 3.41, coral **2.24**, amber **2.05**, lime
+    **2.60**, jade 3.33, cyan **2.85**, ocean 3.32, indigo 3.63.
+    Mentions on paper: ruby 5.40, blush 4.73, coral **3.21**, amber **2.96**,
+    lime **3.65**, jade 4.54, cyan **3.97**, ocean 4.53, indigo 4.88.
     Coral, amber, lime and cyan were tuned by eye below both. The twin that
     clears them is the same hue at about L\* 54 (coral `#e15519`, amber
     `#b07614`, lime `#608f14`, cyan `#128fa2`). On ink every hex is 4.14 (ruby)
@@ -972,26 +972,37 @@ with no branch for it. Two things about it:
     **4.5, the floor for text**; the + is a glyph, and a glyph's floor is 3.
     `accentInk` picks near-black or near-white per scheme against the hex
     thinned over that paper, so capsules hold 4.5 everywhere and the opaque +
-    is worst at **3.57** (ocean on ink). Ruby, ocean and lavender come out white
+    is worst at **3.57** (ocean on ink). Ruby, ocean and indigo come out white
     on ink and black on paper; the rest are near-black in both.
   - **The wash was re-measured**, `--wash-ink-soft` at the bloom's peak, light
     / dark, the same method that reproduces the old ruby 4.36/6.10 and rose
-    5.50/5.38 exactly: ruby 4.30/5.43, blush 5.22/5.33, coral 5.35/5.06, amber
+    5.50/5.38 exactly: ruby 4.30/5.43, blush 6.04/5.19, coral 5.35/5.06, amber
     6.34/4.62, lime 7.08/4.31, jade 6.69/**4.15**, cyan 6.92/4.23, ocean
-    5.17/5.93, lavender 5.10/6.35. The brighter hexes cost a little on dark,
+    5.17/5.93, indigo 5.10/6.35. The brighter hexes cost a little on dark,
     jade most. `--wash-keep` in the dark block is the lever if that matters.
   - **`BAND_ARC` is 11°**, down from 16, because a 32° sweep was wider than the
     palette's own spacing and neighbouring bands painted each other's colours.
-    The tightest pair now is coral→amber at **20.2°**, so their outer stops
-    touch by about two degrees; the centres are what a reader tells apart.
+    The tightest pair is coral→amber at **20.2°**, so their outer stops touch
+    by about two degrees; the centres are what a reader tells apart. Ruby→blush
+    used to be the tight pair, at one point 0.1° apart — one hue, two depths,
+    bands fully overlapping. Blush has since moved off ruby's hue twice; the
+    gap is **28.2°** now, past coral→amber, so that note no longer singles this
+    pair out.
   - **Keys don't move.** `users.accent` stores the key, so a new label is free
     and a new key strands everyone who picked the old one (an older client
     meeting an unknown key falls back to the photo). That is why **Blush is
-    still `'rose'`**.
+    still `'rose'`**, and why **Indigo (2026-09-23, was Lavender) is still
+    `'lavender'`**.
   - **The swatch grid is ROYGBIV, 3×3**, sorted by hue from the red end, which
-    deals warm / green / cool as the three rows. Ruby and blush share a hue, so
-    depth breaks the tie and the true red leads the pink. **Nothing reads the
-    array by index**, so the order is presentation only.
+    deals warm / green / cool as the three rows. Ruby leads blush on hue (350°
+    against 322°) and on depth. They shared a hue until **2026-09-22**, when
+    blush moved off it twice in the same day: ten degrees toward magenta first
+    (at 350° it was a light red wearing a pink's name), then another eighteen
+    past Barbie pink's own hue (about 328°) toward blue-violet, on the call
+    that Barbie pink still wasn't pink enough. `#ef6b81`→`#ef6b97`→`#ef6bbf`,
+    twin `#eb4561`→`#ea4079`→`#e82ba3`, the twin re-deepened each time so the
+    mention floor keeps clearing (4.51→4.55→4.73). **Nothing reads the array by
+    index**, so the order is presentation only.
   - **A photo colour is still pinned**, and that is the only reason the Photo
     option can touch a button: `glowNorm` pins a sample to HSL 0.55, right
     behind a wash and wrong under text (a saturated blue measures **2.30**

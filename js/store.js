@@ -49,12 +49,13 @@ const Store = (() => {
   //   posts: [{id, author(username), type, date, tags, title?, url?, note?, image?, _ts}]
   //   comments: [{id, postId, author(username), text, date}]
   //   friends: symmetric adjacency map keyed by username
+  //   friendCounts: how many mutual ties each username actually has (see friendCount)
   //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
   //   declines: usernames whose request I turned down (durably — see declineRequest)
   //   session: the signed-in username, or null
   //   chats / chatMembers / messages / messageHearts: see "Chats" below
   //   chatsReady: whether add-chats.sql has run (the tables answered)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [] });
   let state = empty();
 
@@ -529,6 +530,26 @@ const Store = (() => {
       const fr = {};
       const ts = {};
       const link = (a, b) => { (fr[a] || (fr[a] = [])).includes(b) || fr[a].push(b); };
+      // The same graph a second time, on the raw ids, and the reason it exists
+      // is the `continue` three lines below: an edge pointing at somebody this
+      // reader can't NAME is an edge the adjacency map above cannot hold, and
+      // dropping it silently undercounts. Signed in that never happens (the
+      // users read is the whole table). Signed out it happens constantly, and a
+      // friend count that shrinks when you sign out is a number the app is
+      // getting wrong. So count the mutual pairs here, where nothing has been
+      // dropped yet, and hand them to friendCount.
+      const out = new Map();
+      for (const row of f.data || []) {
+        (out.get(row.a) || out.set(row.a, new Set()).get(row.a)).add(row.b);
+      }
+      const counts = {};
+      for (const x of state.users) {
+        const theirs = out.get(x.id);
+        let n = 0;
+        if (theirs) for (const other of theirs) if (out.get(other)?.has(x.id)) n++;
+        counts[x.username] = n;
+      }
+      state.friendCounts = counts;
       for (const row of f.data || []) {
         const a = nameById.get(row.a), b = nameById.get(row.b);
         if (!a || !b) continue;
@@ -649,6 +670,24 @@ const Store = (() => {
     return friendsOf(state.session);
   }
 
+  // How many friends someone has, which has to be the SAME number for every
+  // reader — it is the one piece of a circle that is public (the profile shows
+  // the roster itself only to you and to a friend).
+  //
+  // Signed in, every edge in the cache names both of its people, so the roster
+  // is the count. Signed out is the one case where it isn't: anon may read the
+  // edge rows, but not the private, never-public people some of them point at
+  // (supabase/public-site.sql fences users, and public-friend-counts.sql
+  // deliberately doesn't widen it), so those edges arrive as ids the cache
+  // can't name and the loop in readWorld drops them. That loop counts the
+  // mutual pairs on the RAW ids first, before anything is dropped, and this is
+  // where the number it found is used. A guest never writes, so the tally
+  // behind it can't go stale under a write(); a signed-in reader, who can,
+  // never reads it.
+  const friendCount = (username) =>
+    state.session ? friendsOf(username).length
+      : (state.friendCounts[username] ?? friendsOf(username).length);
+
   // One-way edges I've made: people I've added who haven't added me back. The
   // SAME row means two different things depending on who it points AT, so every
   // caller below splits this list on the target's privacy:
@@ -733,7 +772,15 @@ const Store = (() => {
   // 'follower'/'incoming' are the same edge pointing at a public/private ME.
   function friendStatus(username) {
     const me = state.session;
-    if (!me || username === me) return 'self';
+    // Signed out (the public site) is NOBODY, not everybody. This answered
+    // 'self' for want of a better word, and 'self' is the one answer that means
+    // "there is nothing to offer here" — so a visitor reading a public profile
+    // got the tie button with no word in it, and a row on Discover got a
+    // chevron where the Add belongs. A guest's relationship to a stranger is
+    // the same as anyone else's: none. The tap is caught on its way out and
+    // sent to the join form (GUEST_ASKS in app.js).
+    if (!me) return 'none';
+    if (username === me) return 'self';
     const iAdded = (state.friends[me] || []).includes(username);
     const theyAdded = (state.friends[username] || []).includes(me);
     if (iAdded && theyAdded) return 'friends';
@@ -3257,7 +3304,7 @@ const Store = (() => {
 
   return {
     init, refresh,
-    users, user, currentUser, isPrivate, friends, friendsOf, feed, discover, posts, postsBy, audienceCount, audienceOf,
+    users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, posts, postsBy, audienceCount, audienceOf,
     // Auth
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,

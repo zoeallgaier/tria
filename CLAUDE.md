@@ -186,7 +186,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   file, against a bogus control still answering PGRST202. `claim_profile` is the
   LAST thing in the script, so the `handle_new_user` rewrite above it ran too.
   The rest of provider sign-in is dashboard state REST cannot see at all; see
-  `supabase/OAUTH-SETUP.md`.
+  `supabase/OAUTH-SETUP.md`. **`public-friend-counts.sql` is NOT run**
+  (2026-09-22): anon `GET /rest/v1/friends?select=a,b&limit=3` answers `[]` while
+  `users` answers rows, so the policy is the missing half. Until it is run, every
+  friend count on the web reads 0; the app is unaffected (it reads as
+  `authenticated`).
 
 ## Copy style
 
