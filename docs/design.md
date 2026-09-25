@@ -707,14 +707,14 @@ and they appear on a quarter arc (184° to 88°, radius 116), because the heart
 sits at a card's bottom right and a half ring would run off the screen; it turns
 down under the toolbar and mirrors near a left edge. The angle picks, not the
 distance, so every mark is the same short drag. No words on it at all, on Zoe's
-call. **Its motion is the middle of two passes on her phone.** It shipped
-lavish (a blurred veil, the discs fluttering out on a 0.4s spring with a
-rotation) and read slow; stripped to a 100ms fade it read like a pop-up. Now the
-veil is a flat dim, because a faded backdrop blur re-blurs the page every frame
-and was the real cost, and the discs spring out of the heart on `--spring` at
-0.26s, 18ms apart and unrotated, so the last lands in about 330ms with its
-overshoot near 120ms; the lit disc grows on the same spring in 0.16s, and it
-closes in a 120ms fade that takes no taps. All transform and opacity. The finger learns where it
+call. **Nothing on it moves; it only fades**, the third pass on her phone. It
+shipped lavish (a blurred veil, the discs fluttering out on a 0.4s spring with a
+rotation) and read slow; a 100ms fade of the whole thing read like a pop-up;
+the discs springing out quickly still read a little jumpy. Now every disc sits
+where it lives and they fade in one at a time from the heart outward (0.14s
+each, 40ms apart), the lit disc answers in its bloom rather than its size, the
+held heart no longer sinks, and it closes in a 120ms fade that takes no taps.
+The veil is a flat dim: a faded backdrop blur re-blurs the page every frame. The finger learns where it
 is from a **tick** instead, the system picker haptic, once per mark reached.
 And nothing on it is selectable: the fan opens under a finger that is still
 down, and iOS's text long-press fires on whatever is under it a beat later. The colour is the post's

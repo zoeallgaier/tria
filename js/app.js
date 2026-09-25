@@ -4765,9 +4765,8 @@
      finger crosses each mark (Fan), with the system's own picker feedback, the
      way a date wheel does. Nothing is chosen until the finger lifts, but a fan
      with no words has only the tick to say which mark you are on without looking
-     under your thumb. It is a handful of calls per hold, and the fan's motion is
-     transform and opacity on a few small layers, so the frames they cross are
-     the compositor's, not the main thread's. */
+     under your thumb. It is a handful of calls per hold, and the fan only ever
+     fades, so the frames they cross are the compositor's, not the main thread's. */
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
   const hapticTick = () => haptic('selectionChanged');
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
@@ -4893,9 +4892,9 @@
     // The five bearings, in REACTIONS order. 184° is just below due left, 88°
     // just right of straight up, so the arc stays inside a card's right edge.
     const ANGLES = [184, 160, 136, 112, 88];
-    const RADIUS = 116, HOT_RADIUS = 128, DISC = 44;
+    const RADIUS = 116, DISC = 44;
     // Room the fan needs on each side of the heart before it turns around.
-    const REACH = HOT_RADIUS + DISC / 2 + 12;
+    const REACH = RADIUS + DISC / 2 + 24;
     let veil = null, fan = null, ghost = null, open = null, holding = 0;
 
     // While a heart is held or the fan is out, no text selection may start
@@ -4934,8 +4933,7 @@
       fan.addEventListener('keydown', onFanKey);
     }
 
-    // The glyph's box, taken BEFORE the press shrinks the button, so the ghost
-    // lands exactly on the heart at rest.
+    // The glyph's box, taken at the press, so the ghost lands exactly on it.
     const glyphRect = (btn) => (btn.querySelector('svg') || btn).getBoundingClientRect();
     // Where the page stops being visible at the top: the toolbar's lower edge,
     // which native chrome keeps in the DOM at its true size under the glass.
@@ -4959,16 +4957,14 @@
       fan.style.left = `${cx}px`;
       fan.style.top = `${cy}px`;
       fan.dataset.type = burstTypeOf(post);
-      // Each disc's place on the arc, at rest and lit. Worked out here rather
-      // than with CSS cos() and sin(), which WebKit only has from iOS 15.4 and
-      // this app still opens on 15.0.
+      // Each disc's place on the arc. Worked out here rather than with CSS
+      // cos() and sin(), which WebKit only has from iOS 15.4 and this app still
+      // opens on 15.0.
       const up = flip ? 1 : -1;
       fan.querySelectorAll('.rx-item').forEach((item, i) => {
         const a = ANGLES[i] * Math.PI / 180;
-        for (const [name, r] of [['', RADIUS], ['h', HOT_RADIUS]]) {
-          item.style.setProperty(`--${name}x`, `${(Math.cos(a) * r * side).toFixed(1)}px`);
-          item.style.setProperty(`--${name}y`, `${(Math.sin(a) * r * up).toFixed(1)}px`);
-        }
+        item.style.setProperty('--x', `${(Math.cos(a) * RADIUS * side).toFixed(1)}px`);
+        item.style.setProperty('--y', `${(Math.sin(a) * RADIUS * up).toFixed(1)}px`);
         const on = item.dataset.rx === mine;
         item.classList.toggle('cur', on);
         item.classList.remove('hot');
@@ -4983,7 +4979,7 @@
 
       veil.hidden = false;
       fan.hidden = false;
-      void fan.offsetWidth;                  // land the folded frame, so the discs spring from it
+      void fan.offsetWidth;                  // land the clear frame, so the fades have a start
       veil.classList.add('is-open');
       fan.classList.add('is-open');
       // Wake the picker generator now, so the first tick lands on the finger
@@ -5075,7 +5071,6 @@
       let press = null, timer = 0;
       const letGo = () => {
         clearTimeout(timer);
-        btn.classList.remove('is-holding');
         if (press) holding--;
         press = null;
       };
@@ -5087,13 +5082,11 @@
         holding++;
         press = { id: e.pointerId, x: e.clientX, y: e.clientY, opened: false, moved: false, rect: glyphRect(btn) };
         try { btn.setPointerCapture(e.pointerId); } catch { /* the drag still works uncaptured, mostly */ }
-        btn.classList.add('is-holding');
         clearTimeout(timer);
         timer = setTimeout(() => {
           if (!press) return;
           press.opened = true;
           btn._held = true;
-          btn.classList.remove('is-holding');
           show(btn, post, pick, press.rect);
         }, HOLD_MS);
       });

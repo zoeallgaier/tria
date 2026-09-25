@@ -2574,47 +2574,36 @@ main {
 /* The action row gives up the system's own long press: no callout, no text
    selection, no magnifier. It holds buttons and a count, nothing anybody means
    to select, and a hold that lands a few px off the heart would otherwise raise
-   the magnifier over the text beside it. While the hold is counting down the glyph sinks a little, so the
-   finger knows something is coming before the fan arrives, and springs back
-   when it does. The optical nudge stays in every frame, as it does in like-pop. */
+   the magnifier over the text beside it. A held heart used to sink while the
+   hold counted down; that was a transform, and the fan's third pass took every
+   transform off the gesture (see the fan below). */
 .card-actions {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
           user-select: none;
 }
-.card-like[aria-haspopup] svg { transition: transform 0.2s var(--spring); }
-.card-like.is-holding svg {
-  transform: translateY(var(--like-nudge)) scale(0.86);
-  transition: transform 0.4s linear;
-}
-
 /* ── The reaction fan (Fan in app.js) ───────────────────────────────────────
    Five 44px discs on a quarter arc around the heart that was held, over a veil
    that dims the page. It is the + speed dial's vocabulary: frosted discs you
    reach for, each blooming in a colour behind its glyph.
 
-   ITS MOTION HAS BEEN TUNED TWICE ON ZOE'S PHONE (2026-09-25), and the numbers
-   below are the middle she asked for between the two.
-     · First it shipped lavish: a blurred veil, the discs fluttering out along
-       the arc on a 0.4s spring with a rotation and a 28ms stagger, a fade out.
-       It read slow. The BLUR was the cost that mattered: fading a
-       backdrop-filter makes WebKit re-blur the whole page every frame, over a
-       feed full of photos.
-     · Then it barely moved: a flat dim, the fan fading in as one layer in
-       100ms with every disc already placed, gone in a single frame. Fast, and
-       it read as a pop-up rather than a thing growing out of the heart.
-     · Now: the blur stays gone (that was never the fun part), and the discs
-       come back out of the heart, but on the app's --spring at 0.26s with an
-       18ms stagger, so the last one lands 330ms after the first frame and the
-       overshoot peaks around 120ms: quick enough to feel snappy, curved enough
-       to feel poured. No rotation, which made them read as flung. The lit disc
-       grows on the same spring in 0.16s, so crossing marks has a little bounce
-       under the tick. It closes in a 120ms fade, the discs drawing back toward
-       the heart under it, while the pick's own ink and sparkles play on the
-       card. All of it is transform and opacity on six small layers
-       (will-change), which the compositor does without repainting anything.
-   Tune these on a phone, not in a desktop browser. What the desktop shows at
-   120Hz with no photos under it says nothing about a feed on an iPhone.
+   NOTHING ON IT MOVES, ONLY FADES: the third pass on Zoe's phone
+   (2026-09-25), and her call. How it got here, so nobody walks it back:
+     · It shipped lavish: a blurred veil, the discs fluttering out along the
+       arc on a 0.4s spring with a rotation. It read slow, and the BLUR was
+       the cost that mattered (fading a backdrop-filter makes WebKit re-blur
+       the whole page every frame, over a feed full of photos).
+     · Then a 100ms fade of the whole thing, everything placed: fast, but a
+       pop-up rather than something coming out of the heart.
+     · Then the discs springing out of the heart again, quick (0.26s): better,
+       and still a little jumpy on the phone. Any translate is five discs
+       crossing the page in one hitch-prone quarter of a second.
+     · Now every disc is already where it lives and they fade in ONE AT A TIME
+       along the arc, heart first (0.14s each, 40ms apart, the last one full at
+       300ms). That keeps the sense of the fan opening out from the heart with
+       nothing travelling. The lit disc answers in its bloom, not its size, and
+       the close is one quick fade of everything. The veil is a flat dim.
+   Tune it on a phone, never in a desktop browser.
 
    No words anywhere on it (Zoe, 2026-09-25). Each disc is named for VoiceOver.
 
@@ -2628,7 +2617,7 @@ main {
    finger, which is now the ghost heart on this layer. Selectable, it raised the
    text magnifier over the fan.
 
-   Positions come from JS as --x/--y (at rest) and --hx/--hy (lit), because the
+   Positions come from JS as --x/--y, because the
    arc turns down under the toolbar and mirrors near a left edge, and because
    CSS trig arrived in WebKit after the oldest iOS this app opens on. Above the
    toolbar and nav (101) and under the modals (250). */
@@ -2697,24 +2686,16 @@ main {
   background: none;
   color: var(--text);
   cursor: pointer;
-  /* Folded into the heart, and springing out of it along the arc. */
+  /* Always in its place on the arc. Only its opacity ever changes: in one at a
+     time from the heart outward, out all together. */
+  transform: translate(var(--x), var(--y));
   opacity: 0;
-  transform: translate(0, 0) scale(0.4);
-  will-change: transform, opacity;
-  transition:
-    transform 0.26s var(--spring) calc(var(--i) * 18ms),
-    opacity 0.12s ease-out calc(var(--i) * 18ms);
+  will-change: opacity;
+  transition: opacity 0.12s ease-in;
 }
 .rx-fan.is-open .rx-item {
   opacity: 1;
-  transform: translate(var(--x), var(--y));
-}
-/* The one under the finger pushes out along its own spoke and grows, so it
-   clears its neighbours instead of overlapping them. No stagger: it answers now. */
-.rx-fan.is-open .rx-item.hot {
-  z-index: 1;
-  transform: translate(var(--hx), var(--hy)) scale(1.22);
-  transition: transform 0.16s var(--spring), opacity 0.12s ease-out;
+  transition: opacity 0.14s ease-out calc(var(--i) * 40ms);
 }
 .rx-disc {
   position: absolute;
@@ -2733,30 +2714,28 @@ main {
   border-radius: 50%;
   background: radial-gradient(64% 64% at 50% 50%, var(--burst) 0%, transparent 66%);
   opacity: 0;
+  transition: opacity 0.1s ease-out;
 }
 /* Every glyph is centred optically in its drawing (see react_* in ICONS), so the
    disc centres the box and nothing here nudges any one of them. */
 .rx-disc svg { position: relative; width: 24px; height: 24px; }
-.rx-item.hot .rx-disc::before { opacity: 0.45; }
+.rx-item.hot .rx-disc::before { opacity: 0.6; }
 .rx-item.cur { color: var(--burst); }
 .rx-item.cur .rx-disc::before { opacity: 0.28; }
 .rx-item.cur svg { fill: currentColor; }
-@media (hover: hover) { .rx-fan.is-open .rx-item:hover .rx-disc::before { opacity: 0.45; } }
+@media (hover: hover) { .rx-fan.is-open .rx-item:hover .rx-disc::before { opacity: 0.6; } }
 .rx-item:focus-visible { outline: none; }
 .rx-item:focus-visible .rx-disc { outline: 2px solid var(--text); outline-offset: 2px; }
 
 @media (prefers-color-scheme: dark) {
   .rx-veil { background: color-mix(in srgb, var(--bg) 70%, transparent); }
   .rx-disc { background: color-mix(in srgb, var(--bg) 92%, transparent); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4); }
-  .rx-item.hot .rx-disc::before { opacity: 0.32; }
+  .rx-item.hot .rx-disc::before { opacity: 0.45; }
   .rx-item.cur .rx-disc::before { opacity: 0.2; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rx-veil, .rx-fan, .rx-veil.is-open, .rx-fan.is-open,
-  .rx-item, .rx-fan.is-open .rx-item, .rx-fan.is-open .rx-item.hot { transition: none; }
-  .rx-item,
-  .rx-fan.is-open .rx-item.hot { transform: translate(var(--x), var(--y)); }
-  .card-like.is-holding svg { transform: translateY(var(--like-nudge)); }
+  .rx-item, .rx-fan.is-open .rx-item, .rx-disc::before { transition: none; }
 }
 
 /* The mark somebody left, on the author's who-liked list, in the pill where the
