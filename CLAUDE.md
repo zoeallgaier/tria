@@ -56,6 +56,17 @@ is what is left: Google Cloud, three Apple registrations, the redirect allow
 list. This is the rare backend gap that is NOT silent, and every remaining
 misconfiguration says the same thing, "That way in isn't switched on yet."
 
+## Launch and load (2026-09-25)
+
+Three measured changes, all in [docs/views.md](docs/views.md) and
+[docs/data.md](docs/data.md): every picture is fetched at the size it is drawn
+from Supabase's image renderer (`sizedSrc`; the plan's cap falls back to
+originals), a feed builds its first screen first (`buildInSlices`) and dates
+reuse one formatter (`dayMT`), and the App Store build paints a returning
+reader's last world at once from IndexedDB while the real one loads
+(`Store.init({ keep })`, deleted on sign-out). **Bump `KEEP_V` in store.js when
+`state` changes shape.**
+
 ## Holding the heart (2026-09-25)
 
 A tap on a friend's heart is a like; HOLDING it fans out four more marks (thumbs

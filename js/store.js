@@ -308,7 +308,71 @@ const Store = (() => {
   // `guest`: with no session, read what a signed-out visitor may see anyway (the
   // public site, web only; app.js decides). RLS is what scopes it — the load is
   // the same load, answered by anon's policies (see supabase/public-site.sql).
-  async function init({ guest = false } = {}) {
+  /* ── The last world, kept on the phone ─────────────────────────────────────
+     A cold launch used to draw nothing until the whole world had come down the
+     wire: a dozen paged reads, about a second and a half on a phone (measured
+     2026-09-25), with only the splash to look at. So the App Store build keeps
+     the last world it loaded, and a launch paints from THAT at once and loads
+     the real one behind it, exactly as it always did; when the real one lands
+     the app repaints whatever changed (whenFresh, and showWorld in app.js), the
+     way a pull-to-refresh does.
+
+     IT IS YOUR CIRCLE'S POSTS SITTING ON THE DEVICE, which is why it is the
+     App Store build only (`keep`, nativeShell): the web can be somebody else's
+     computer. It is in the app's own IndexedDB, stamped with the account it
+     belongs to (a different sign-in ignores it and replaces it), and it is
+     deleted on sign-out, on account deletion, and on any launch with no
+     session. A password-reset launch never reads it.
+
+     It can be a little old: whatever changed since the last load shows for a
+     second and then moves, under the refresh ring, which is the app's word for
+     "the world is being re-pulled". Writes made meanwhile are safe for the
+     reason every write is (the journal in write()). It is saved after a load
+     has settled, off the frames the paint is using, and never blocks anything:
+     every failure here means only that the next launch waits like it used to. */
+  const KEEP_KEY = 'world';
+  const KEEP_V = 1;                    // bump when state's shape changes
+  let keepOn = false;
+  let fresh = Promise.resolve(false);  // true once a kept launch's real load changed anything
+  const whenFresh = () => fresh;
+  let keepDbP = null;
+  const keepDb = () => keepDbP || (keepDbP = new Promise((ok, no) => {
+    const r = indexedDB.open('tria-keep', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => no(r.error);
+  }).catch((err) => { keepDbP = null; throw err; }));
+  const keepTx = (mode, fn) => keepDb().then(db => new Promise((ok, no) => {
+    const q = fn(db.transaction('kv', mode).objectStore('kv'));
+    q.onsuccess = () => ok(q.result);
+    q.onerror = () => no(q.error);
+  }));
+  let keepTimer = 0;
+  function keepWorld() {
+    if (!keepOn || !state.session) return;
+    clearTimeout(keepTimer);
+    keepTimer = setTimeout(() => {
+      const uid = idOf(state.session);
+      if (!uid || loadsInFlight) return;           // a load mid-air saves when it lands
+      keepTx('readwrite', s => s.put({ v: KEEP_V, uid, at: Date.now(), state }, KEEP_KEY))
+        .catch(() => {});
+    }, 1500);
+  }
+  function forgetWorld() {
+    clearTimeout(keepTimer);
+    if (typeof indexedDB === 'undefined') return;
+    keepTx('readwrite', s => s.delete(KEEP_KEY)).catch(() => {});
+  }
+  async function keptWorld(uid) {
+    if (typeof indexedDB === 'undefined') return null;
+    try {
+      const k = await keepTx('readonly', s => s.get(KEEP_KEY));
+      return k && k.v === KEEP_V && k.uid === uid && k.state && k.state.session ? k : null;
+    } catch { return null; }
+  }
+
+  async function init({ guest = false, keep = false } = {}) {
+    keepOn = keep;
     // The OS permission read rides ALONGSIDE the world load, and boot waits for
     // it. It's a local bridge lookup with no network in it, so it costs nothing
     // next to loadWorld — and the first route paints the push UI synchronously,
@@ -321,7 +385,19 @@ const Store = (() => {
       const { data: { session } } = await sb.auth.getSession();
       // A recovery session getSession picked up from the reset link isn't a login —
       // hold it at the gate (set-new-password) instead of hydrating the world.
-      if (!recovering) await hydrate(session, guest);
+      if (recovering) return;
+      // Somebody who was here last time: paint from their kept world now, and
+      // let the real load run behind it (see "The last world" above).
+      const kept = keepOn && session ? await keptWorld(session.user.id) : null;
+      if (kept) {
+        state = Object.assign(empty(), kept.state);
+        const before = worldPrint();
+        fresh = hydrate(session, guest)
+          .then(() => worldPrint() !== before)
+          .catch(() => false);
+        return;
+      }
+      await hydrate(session, guest);
     } finally { await primed; }
   }
 
@@ -364,6 +440,7 @@ const Store = (() => {
     if (!session) {
       needsProfile = null;
       clearWorld();
+      forgetWorld();                   // nobody signed in: nobody's world stays
       if (guest) await loadWorld();
       return;
     }
@@ -378,6 +455,7 @@ const Store = (() => {
     // and "the network dropped", and they look identical from the cache.
     needsProfile = me ? null : (usersFresh ? profileHint(session.user, carry) : null);
     startLive();
+    keepWorld();
   }
 
   // Read a whole table, however big it is.
@@ -637,7 +715,9 @@ const Store = (() => {
     // Signed out while we were pulling: the world emptying isn't a change worth
     // repainting a page that's already on its way to the gate.
     if (gen !== worldGen) return false;
-    return worldPrint() !== before;
+    const changed = worldPrint() !== before;
+    if (changed) keepWorld();
+    return changed;
   }
 
   /* ── Derived indexes ────────────────────────────────────────────────────────
@@ -1099,6 +1179,7 @@ const Store = (() => {
     recovering = false;
     needsProfile = null;
     clearWorld();
+    forgetWorld();
   }
   // The public site's world, for a visitor with no session (after a sign-out or
   // an account deletion, where init's own guest read is long gone).
@@ -1377,6 +1458,7 @@ const Store = (() => {
     recovering = false;
     needsProfile = null;
     clearWorld();
+    forgetWorld();
     return { ok: true };
   }
 
@@ -3460,7 +3542,7 @@ const Store = (() => {
   }
 
   return {
-    init, refresh,
+    init, refresh, whenFresh,
     users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, posts, postsBy, audienceCount, audienceOf,
     // Auth
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,

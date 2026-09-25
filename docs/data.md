@@ -650,6 +650,23 @@ address and therefore a different person, and there is no way around that.
   like is a heart and the hold does nothing. Against a database without the
   column that probe is a 400 in the console of every load; it stops being asked
   the moment it succeeds. The SQL was run the day it was written (2026-09-25).
+- **THE LAST WORLD IS KEPT ON THE PHONE (2026-09-25)**, and a launch paints
+  from it. A cold launch used to wait on the whole world (a dozen paged reads)
+  before drawing anything; measured on the simulator, the feed appeared at about
+  5.2s, and from the kept world at about 2.5s, most of which is now the splash's
+  own 900ms hold and its fade. `Store.init({ keep })` reads it from IndexedDB
+  (`tria-keep`, one record, about 1.9 MB for Zoe's world), paints, and runs the
+  ordinary `hydrate` behind it; `Store.whenFresh()` says whether the real world
+  changed anything, and app.js repaints the four refreshable pages in place
+  through `showWorld` (under the refresh ring) or re-routes any other page onto
+  itself. It is saved 1.5s after a load settles and after any refresh that
+  changed something, never while a load is in the air.
+  **It is the App Store build only** (`keep: nativeShell()`), because it is your
+  circle's posts sitting on a device and the web can be somebody else's
+  computer. It carries the account id and is ignored by any other sign-in, and
+  `forgetWorld` deletes it on sign-out, on account deletion and on any launch
+  with no session; a password-reset launch never reads it. Bump `KEEP_V` in
+  store.js whenever `state` changes shape, or a launch paints an old shape.
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. A read that errors keeps its **last good copy** (`core()` in

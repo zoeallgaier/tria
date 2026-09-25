@@ -20049,8 +20049,12 @@
     // exactly what is about to appear.
     const onScreen = new Set(
       [...document.querySelectorAll('#feed > .card')].map(c => c.dataset.id));
+    // Capped at a first screen's worth: new posts arrive at the TOP, and since
+    // a feed is built a slice at a time (buildInSlices), "not on screen" can
+    // also mean "not built yet", which is not a reason to hold a paint for it.
     const incoming = path !== '#/' ? []
-      : Store.feed().filter(p => p.image && !onScreen.has(String(p.id))).map(cardStill).filter(Boolean);
+      : Store.feed().filter(p => p.image && !onScreen.has(String(p.id)))
+          .slice(0, FIRST_SCREEN).map(cardStill).filter(Boolean);
 
     // Wait for those to decode before anything moves. Under the ring the first
     // 200ms of it is free — the ring needs that long to drop in regardless — so
@@ -20438,9 +20442,24 @@
   // persisted session too). On failure we still route — straight to the gate.
   // Signed out on the web, the public site is readable (see renderGuest), so the
   // store reads it; the App Store build keeps its gate and reads nothing.
-  Store.init({ guest: !nativeShell() }).then(() => {
+  // `keep`: the App Store build paints a returning reader's last world at once
+  // and loads the real one behind it (see "The last world" in store.js).
+  Store.init({ guest: !nativeShell(), keep: nativeShell() }).then(() => {
     route();
     warmImages();   // decode avatars + recent photos up front so navigation is flash-free
+    // When the real world lands behind a kept one, show what changed the way a
+    // pull does: the four refreshable pages repaint in place under the ring,
+    // anything else re-routes onto itself (same page, same scroll), and a world
+    // that no longer has you in it goes back to the gate.
+    Store.whenFresh().then((changed) => {
+      if (!changed) return;
+      syncNavDot();
+      warmImages();
+      const path = (location.hash || '#/').split('?')[0];
+      if (!Store.isAuthed()) route();
+      else if (['#/', '#/discover', '#/updates', '#/chats'].includes(path)) showWorld(path, { hold: false });
+      else if (!typing()) route();
+    });
     // Native push housekeeping, after init because it needs the signed-in user:
     // read the OS permission into the cache the push UI renders from, and if push
     // is already on, re-register — APNs tokens rotate, and a stale one fails
