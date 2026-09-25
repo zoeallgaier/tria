@@ -50,6 +50,8 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   commentLikes: [{commentId, user(username), _ts}] — RLS-filtered like likes
   //   commentLikesReady: whether add-comment-likes.sql has run (the table answered)
+  //   likes: [{postId, user(username), reaction, _ts}] — reaction is which nod it was
+  //   reactionsReady: whether add-reactions.sql has run (the column answered)
   //   friends: symmetric adjacency map keyed by username
   //   friendCounts: how many mutual ties each username actually has (see friendCount)
   //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
@@ -57,7 +59,7 @@ const Store = (() => {
   //   session: the signed-in username, or null
   //   chats / chatMembers / messages / messageHearts: see "Chats" below
   //   chatsReady: whether add-chats.sql has run (the tables answered)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], reactionsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [] });
   let state = empty();
 
@@ -447,6 +449,10 @@ const Store = (() => {
       // a comment I wrote. A missing table (add-comment-likes.sql not run) is
       // an answer here, not a blip; see commentLikesReady below.
       readAll('comment_likes', ['created_at', 'comment_id', 'user_id']),
+      // Whether a like can be more than a heart yet (add-reactions.sql). Asked
+      // until the answer is yes, and then never again: a column that exists
+      // does not stop existing, and a sign-out empties the world and asks anew.
+      state.reactionsReady ? { data: [], error: null } : sb.from('likes').select('reaction').limit(1),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
@@ -475,7 +481,7 @@ const Store = (() => {
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, h, pv, f, fd, pa, bl, ch] = read;
+    const [u, p, c, l, cl, rx, h, pv, f, fd, pa, bl, ch] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -512,7 +518,15 @@ const Store = (() => {
       id: row.id, postId: row.post_id, author: nameById.get(row.author),
       text: row.body, image: row.image || null, date: dateOf(row.created_at), _ts: row.created_at,
     }), state.comments).filter(x => x.author);
-    state.likes = core(l, 'likes', row => ({ postId: row.post_id, user: nameById.get(row.user_id), _ts: row.created_at }), state.likes);
+    state.likes = core(l, 'likes', row => ({
+      postId: row.post_id, user: nameById.get(row.user_id),
+      reaction: row.reaction || 'heart', _ts: row.created_at,
+    }), state.likes);
+    // 42703 is Postgres saying the column isn't there: the migration hasn't run,
+    // and every like above read as a heart. Anything else is a blip and changes
+    // nothing, so a flaky probe can't take reactions away mid-session.
+    if (!rx.error) state.reactionsReady = true;
+    else if (rx.error.code === '42703') state.reactionsReady = false;
     // Comment likes arrive in their own migration, so a MISSING table says the
     // hearts are not wired up yet, and the app draws none rather than a heart
     // that silently springs back on every tap. Any other error is a blip and
@@ -2014,10 +2028,73 @@ const Store = (() => {
     } else {
       const { error } = await sb.from('likes').insert({ post_id: postId, user_id: mine });
       if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
-      const row = { postId, user: me, _ts: new Date().toISOString() };
+      const row = { postId, user: me, reaction: 'heart', _ts: new Date().toISOString() };
       write('likes', xs => upsert(xs, row, x => x.postId === postId && x.user === me));
     }
     return { ok: true, liked: !has };
+  }
+
+  // ── Reactions (which nod a like is) ─────────────────────────────────────────
+  // A like row says WHICH nod it was: a tap is a heart, a hold on the heart picks
+  // one of four more. Same row, same privacy, one per person, so everything
+  // above still holds and the author's count is still everybody who reacted at
+  // all. Until add-reactions.sql has run the column isn't there, every like
+  // reads as a heart, and nothing offers more (reactionsReady).
+  const REACTIONS = ['heart', 'up', 'down', 'ha', 'wow'];
+  const reactionsReady = () => !!state.reactionsReady;
+  const reactionOf = (postId) => {
+    const row = mineIn(state.likes, postId);
+    return row ? (row.reaction || 'heart') : null;
+  };
+
+  // Set my reaction to `reaction`, or take it back with null. Changing one nod
+  // for another UPDATES the row rather than replacing it, so it keeps its
+  // created_at and the author's Updates don't see a second arrival.
+  async function setReaction(postId, reaction) {
+    const me = state.session;
+    if (!me) return { ok: false };
+    const post = state.posts.find(p => p.id === postId);
+    if (!post || post.author === me) return { ok: false };
+    if (!isFriend(post.author) && post.audience !== 'public') return { ok: false };
+    if (reaction && !REACTIONS.includes(reaction)) return { ok: false };
+    if (reaction && reaction !== 'heart' && !state.reactionsReady) return { ok: false };
+    const mine = idOf(me);
+    const same = x => x.postId === postId && x.user === me;
+    const had = mineIn(state.likes, postId);
+
+    if (!reaction) {
+      if (!had) return { ok: true, reaction: null };
+      const { error } = await sb.from('likes').delete().eq('post_id', postId).eq('user_id', mine);
+      if (error) return { ok: false };
+      write('likes', xs => xs.filter(x => !same(x)));
+      return { ok: true, reaction: null };
+    }
+
+    // RLS answers an update it refuses with zero rows and a clean 200, so the
+    // row is asked for back and an empty answer is a refusal.
+    const change = async () => {
+      const { data, error } = await sb.from('likes').update({ reaction })
+        .eq('post_id', postId).eq('user_id', mine).select('post_id');
+      return !error && !!(data && data.length);
+    };
+    if (had) {
+      if ((had.reaction || 'heart') === reaction) return { ok: true, reaction };
+      if (!(await change())) return { ok: false };
+      write('likes', xs => upsert(xs, { ...had, reaction }, same));
+      return { ok: true, reaction };
+    }
+    const ins = { post_id: postId, user_id: mine };
+    if (state.reactionsReady) ins.reaction = reaction;
+    const { error } = await sb.from('likes').insert(ins);
+    if (error) {
+      // Already liked from another device, which this cache hasn't heard yet:
+      // the row is there, so this is a change of mind rather than a new nod.
+      if (!/duplicate|unique/i.test(error.message)) return { ok: false };
+      if (reaction !== 'heart' && !(await change())) return { ok: false };
+    }
+    const row = { postId, user: me, reaction, _ts: new Date().toISOString() };
+    write('likes', xs => upsert(xs, row, same));
+    return { ok: true, reaction };
   }
 
   // ── Headcount (who's in, on an activity) ────────────────────────────────────
@@ -2140,7 +2217,7 @@ const Store = (() => {
         evts.push({ kind: 'mention', postId: p.id, user: p.author, text: p.note, _ts: p._ts || '' });
     for (const l of state.likes)
       if (mine.has(l.postId) && l.user !== me)
-        evts.push({ kind: 'like', postId: l.postId, user: l.user, _ts: l._ts || '' });
+        evts.push({ kind: 'like', postId: l.postId, user: l.user, reaction: l.reaction || 'heart', _ts: l._ts || '' });
     // Likes on MY comments, which RLS hands me in full. Filed against the post
     // the comment sits under, so the row walks to that thread, and carrying the
     // comment's words so the row says which of your replies it was.
@@ -3394,6 +3471,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
+    reactionsReady, reactionOf, setReaction,
     commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,

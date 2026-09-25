@@ -2561,6 +2561,177 @@ main {
   .like-sparkles { display: none; }
 }
 
+/* The ink flood is a silhouette, and a heart that became a thumbs up has to
+   flood as a thumb. One mask per mark, each the same drawing as its glyph in
+   ICONS (optical offset included) filled solid; the grin's eyes ride along as
+   strokes so they ink with the mouth. data-rx is stamped by likeToggleHtml and
+   paintReaction, and a heart needs no rule: it is the default above. */
+.card-like[data-rx="up"]   { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(.45 -1.05)'%3E%3Cpath d='M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9zM8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+.card-like[data-rx="down"] { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(.45 1) matrix(1 0 0 -1 0 24)'%3E%3Cpath d='M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9zM8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+.card-like[data-rx="ha"]   { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(0 -.25)'%3E%3Cpath d='M5.8 12h12.4a6.2 6.2 0 0 1-12.4 0z'/%3E%3Cpath fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M4.6 8.6 7.3 6l2.7 2.6M14 8.6 16.7 6l2.7 2.6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+.card-like[data-rx="wow"]  { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(0 .7)'%3E%3Cpath d='M6.2 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM13.4 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM8.4 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4zM15.6 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+
+/* A heart that can be HELD (aria-haspopup, once add-reactions.sql has run)
+   gives up the system's own long press: no callout, no text selection, no
+   magnifier. While the hold is counting down the glyph sinks a little, so the
+   finger knows something is coming before the fan arrives, and springs back
+   when it does. The optical nudge stays in every frame, as it does in like-pop. */
+.card-like[aria-haspopup] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.card-like[aria-haspopup] svg { transition: transform 0.2s var(--spring); }
+.card-like.is-holding svg {
+  transform: translateY(var(--like-nudge)) scale(0.86);
+  transition: transform 0.4s linear;
+}
+
+/* ── The reaction fan (Fan in app.js) ───────────────────────────────────────
+   Five 44px discs on a quarter arc around the heart that was held, over a veil
+   that blurs the page. It is the + speed dial's vocabulary, on purpose: frosted
+   discs with a colour blooming behind the glyph, staggered a beat apart, because
+   these too are objects you REACH for. Never glass on glass: the veil is the one
+   blur, and the discs are tinted paper over it with no backdrop-filter of their
+   own (the same call .nav-dial-ico makes, for the same reason).
+
+   No words anywhere on it (Zoe, 2026-09-25). Each disc is named for VoiceOver.
+
+   Every mark's colour is the post's (--heart-*, which is the reader's accent
+   where they picked one): the disc under the finger blooms in it, and your
+   current mark sits filled in it, the way it sits on the card.
+
+   Positions come from JS as --x/--y (at rest) and --hx/--hy (lit), because the
+   arc turns down under the toolbar and mirrors near a left edge, and because
+   CSS trig arrived in WebKit after the oldest iOS this app opens on. Above the
+   toolbar and nav (101) and under the modals (250). */
+.rx-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  background: color-mix(in srgb, var(--bg) 34%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-soft);
+}
+.rx-veil.is-open { opacity: 1; transition: opacity var(--dur-quick) var(--ease); }
+.rx-fan {
+  position: fixed;
+  z-index: 241;
+  width: 0;
+  height: 0;
+  --burst: var(--heart-note);
+}
+.rx-fan[data-type="find"]     { --burst: var(--heart-find); }
+.rx-fan[data-type="photo"]    { --burst: var(--heart-photo); }
+.rx-fan[data-type="activity"] { --burst: var(--heart-activity); }
+.rx-fan[data-type="poll"]     { --burst: var(--heart-poll); }
+
+/* The heart the fan grew out of, redrawn over the veil in the same place and
+   the same ink, so it stays sharp while the page blurs. A tap on it puts the fan
+   away, and it reaches past the glyph to the 44px the real heart has. */
+.rx-ghost {
+  position: absolute;
+  display: block;
+  line-height: 0;
+  cursor: pointer;
+}
+.rx-ghost::after { content: ''; position: absolute; inset: -8px; }
+.rx-ghost svg { display: block; width: 100%; height: 100%; }
+.rx-ghost.liked svg { fill: currentColor; }
+.rx-fan:not(.is-open) .rx-ghost { opacity: 0; }
+
+.rx-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  /* Folded into the heart and turned a little, so opening flutters them out
+     along the arc rather than sliding them. */
+  transform: translate(0, 0) scale(0.3) rotate(-45deg);
+  transition: transform 0.16s var(--ease-soft), opacity 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.rx-fan.is-open .rx-item {
+  opacity: 1;
+  transform: translate(var(--x), var(--y)) scale(1) rotate(0deg);
+  transition:
+    transform 0.4s var(--spring) calc(var(--i) * 28ms),
+    opacity 0.18s ease calc(var(--i) * 28ms);
+}
+/* The one under the finger pushes out along its own spoke and grows, so it
+   clears its neighbours instead of overlapping them. */
+.rx-fan.is-open .rx-item.hot {
+  z-index: 1;
+  transform: translate(var(--hx), var(--hy)) scale(1.22);
+  transition: transform 0.2s var(--spring), opacity 0.1s ease;
+}
+.rx-disc {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border: var(--glass-edge);
+  box-shadow: var(--glass-lift);
+}
+.rx-disc::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(64% 64% at 50% 50%, var(--burst) 0%, transparent 66%);
+  opacity: 0;
+  transition: opacity var(--dur-micro) ease;
+}
+/* Every glyph is centred optically in its drawing (see react_* in ICONS), so the
+   disc centres the box and nothing here nudges any one of them. */
+.rx-disc svg { position: relative; width: 24px; height: 24px; }
+.rx-item.hot .rx-disc::before { opacity: 0.45; }
+.rx-item.cur { color: var(--burst); }
+.rx-item.cur .rx-disc::before { opacity: 0.28; }
+.rx-item.cur svg { fill: currentColor; }
+@media (hover: hover) { .rx-fan.is-open .rx-item:hover .rx-disc::before { opacity: 0.45; } }
+.rx-item:focus-visible { outline: none; }
+.rx-item:focus-visible .rx-disc { outline: 2px solid var(--text); outline-offset: 2px; }
+
+@media (prefers-color-scheme: dark) {
+  .rx-veil { background: color-mix(in srgb, var(--bg) 46%, transparent); }
+  .rx-disc { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+  .rx-item.hot .rx-disc::before { opacity: 0.32; }
+  .rx-item.cur .rx-disc::before { opacity: 0.2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rx-item,
+  .rx-fan.is-open .rx-item,
+  .rx-fan.is-open .rx-item.hot { transform: translate(var(--x), var(--y)); transition: opacity var(--dur-micro) ease; }
+  .card-like.is-holding svg { transform: translateY(var(--like-nudge)); }
+}
+
+/* The mark somebody left, on the author's who-liked list, in the pill where the
+   guest list writes Going or Maybe. Filled, and in the post's own colour (the
+   list stamps --burst), because it is the reaction as its giver saw it land. */
+/* Two classes, because .liker-tag sets its own ink and padding further down. */
+.liker-tag.liker-mark {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.42rem;
+  line-height: 0;
+  color: var(--burst, var(--going-ink));
+}
+.liker-mark svg { width: 15px; height: 15px; fill: currentColor; }
+
 /* Headcount + RSVP, one control (activities). Person-glyph + count, leading the
    social cluster and built like the comment count beside it — same 44px target,
    same 0.82rem bold number, growing leftward from the glyph's square. No

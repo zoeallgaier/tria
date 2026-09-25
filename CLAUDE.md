@@ -56,6 +56,20 @@ is what is left: Google Cloud, three Apple registrations, the redirect allow
 list. This is the rare backend gap that is NOT silent, and every remaining
 misconfiguration says the same thing, "That way in isn't switched on yet."
 
+## Holding the heart (2026-09-25)
+
+A tap on a friend's heart is a like; HOLDING it fans out four more marks (thumbs
+up, thumbs down, ha ha, whoa) on a quarter arc, and the one under the finger's
+bearing is the pick. Zoe approved the drawings and the fan on a canvas
+(https://claude.ai/artifact/PuR89X1b68P16TFXgFgHhN) and said **no words on it**;
+the names exist for VoiceOver and the author's Updates only. It is one private
+like row with a `reaction` column, so every like rule still holds. The code is
+`REACTIONS`, `react_*` in `ICONS`, `Fan` and `wireHeart` in app.js,
+`setReaction` in store.js; the reasoning is in [docs/data.md](docs/data.md) and
+[docs/design.md](docs/design.md). **Each mark is optically centred on the heart
+INSIDE its drawing** (a measured translate), so never nudge one in CSS: redraw,
+re-measure, and re-bake instead.
+
 ## 1.4 is the chrome going native
 
 The nav — tab bar, compose **+**, the top bar's buttons — becomes real UIKit in
@@ -193,7 +207,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `authenticated`). **`add-comment-likes.sql` is confirmed run** (2026-09-23):
   anon `GET /rest/v1/comment_likes?select=comment_id&limit=1` answered PGRST205
   before it and `[]` after. Were the table ever missing again, the comment
-  hearts draw nothing, on purpose (`Store.commentLikesReady`).
+  hearts draw nothing, on purpose (`Store.commentLikesReady`). **`add-reactions.sql` is NOT run**
+  (2026-09-25): anon `GET /rest/v1/likes?select=reaction&limit=1` answers 42703
+  "column likes.reaction does not exist" before it and `[]` after. Until it runs
+  every like is a heart and holding one does nothing (`Store.reactionsReady`),
+  and that probe is the one 400 a boot pass sees.
 
 ## Copy style
 

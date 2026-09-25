@@ -700,6 +700,30 @@ whose whole job is to get out of the way. **Don't re-converge them**, and note
 the filter dial's chrome is now all glass tokens, so it needs no dark-mode block
 beyond the scrim.
 
+**The reaction fan is the third dial, and it is the + dial's kind** (2026-09-25):
+five frosted discs you reach for, each blooming in a colour behind its glyph,
+staggered a beat apart over a veil that is the only blur. Hold a friend's heart
+and they flutter out on a quarter arc (184° to 88°, radius 116), because the
+heart sits at a card's bottom right and a half ring would run off the screen;
+it turns down under the toolbar and mirrors near a left edge. The angle picks,
+not the distance, so every mark is the same short drag. No words on it at all,
+on Zoe's call, and no buzz until the pick. The colour is the post's
+(`--heart-*`, so the reader's accent where they chose one): the lit disc blooms
+in it, and your own mark sits filled in it, in the fan and on the card.
+
+The five marks follow ONE rule: an outline at rest, filled when it is yours, the
+way the liked heart always was, which is also what lets the ink flood work on
+all of them (a mask per mark, `.card-like[data-rx]`). The grin's eyes stay
+strokes (a filled chevron is a triangle) and the whoa's dots are solid in both
+states. **They are optically centred on the heart inside their own drawings**:
+each was rendered at 10x, its optical centre taken as the midpoint of its box
+and its ink centroid, and a translate baked into the `react_*` path moves it
+onto the heart's (thumbs up rides a unit high, down a unit low, both half a unit
+right; the whoa sinks 0.7; the grin lifts a quarter). Measured after, all five
+sit within 0.05 of a unit of the heart. So the disc centres a box and the card
+row gives every mark the heart's own `--like-nudge`, and neither nudges any one
+mark. Redraw one and you re-measure it.
+
 **Every menu a toolbar glyph opens is that same card, and the card is no longer
 the filter's.** `.bar-menu` (renamed from `.filter-dial` when it stopped being
 one control's) is the panel: glass card, rows pinned under the button that

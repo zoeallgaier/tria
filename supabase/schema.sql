@@ -15,7 +15,7 @@
 -- add-likes · add-polls · add-frame-video · swap-photo-blur-for-tint ·
 -- friend-requests · activity-audience · profile-privacy · blocks ·
 -- post-audience-public · restore-block-gate · reposts · add-pronouns ·
--- add-listening-to · add-pins · add-comment-likes.
+-- add-listening-to · add-pins · add-comment-likes · add-reactions.
 
 drop table if exists public.blocks   cascade;
 drop table if exists public.friend_declines cascade;
@@ -139,10 +139,14 @@ create table public.comments (
 -- lives entirely in the SELECT policy below: only the post's author can read the
 -- full set (and so see the count / who liked). Everyone else can read only their
 -- OWN like row — enough to render their heart's filled state, never a total.
+-- `reaction` is WHICH nod it was: a tap is a heart, a hold picks one of four
+-- more (see add-reactions.sql). Still one row per person, still private.
 create table public.likes (
   post_id    uuid not null references public.posts(id) on delete cascade,
   user_id    uuid not null references public.users(id) on delete cascade,
   created_at timestamptz not null default now(),
+  reaction   text not null default 'heart'
+             constraint likes_reaction_check check (reaction in ('heart', 'up', 'down', 'ha', 'wow')),
   primary key (post_id, user_id)
 );
 
@@ -440,6 +444,10 @@ create policy "likes read own-or-owner" on public.likes for select to authentica
   );
 create policy "likes insert own" on public.likes for insert to authenticated with check (user_id = auth.uid());
 create policy "likes delete own" on public.likes for delete to authenticated using (user_id = auth.uid());
+-- Changing your reaction rewrites your own row in place, so it keeps its
+-- created_at and the author's Updates don't see a second arrival.
+create policy "likes update own" on public.likes for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Comment likes: the same own-or-author read, where the author is the COMMENT'S.
 -- The insert also refuses a like on your own comment (see add-comment-likes.sql).

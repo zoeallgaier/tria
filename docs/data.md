@@ -632,6 +632,24 @@ address and therefore a different person, and there is no way around that.
   missing table (`isMissing`, PGRST205) turns the hearts off rather than showing
   a heart that springs back on every tap, and a push to main deploys the web
   whether or not the SQL has run.
+- **A LIKE CAN BE ONE OF FIVE NODS (2026-09-25).** Tap a friend's heart and it
+  is a heart, as ever; HOLD it and a fan offers thumbs up, thumbs down, ha ha and
+  whoa, in iMessage's order. It is not a second kind of row: `likes.reaction`
+  (added by `supabase/add-reactions.sql`) says WHICH nod the one private row is,
+  so the author still reads them all, nobody else reads a total, and nothing is
+  pushed. Changing your mind UPDATES the row (the migration's one new policy,
+  `likes update own`) rather than deleting and inserting, so it keeps its
+  `created_at` and the author's Updates don't see a second arrival; the row's
+  sentence follows the mark ("gave your post a thumbs up", `REACTIONS[].did`) and
+  its `data-key` carries the reaction so a change of mind redraws it. The
+  author's who-liked list is grouped by mark in the fan's order and tags each
+  row with it, the way the host's guest list tags Going and Maybe. The owner's
+  count is still everybody who reacted at all.
+  **Nothing changes until the column answers** (`Store.reactionsReady`): the load
+  probes `likes?select=reaction` until it gets a 200, and a 42703 means every
+  like is a heart and the hold does nothing. That probe is the one 400 in the
+  console of a load against a database that hasn't run the SQL; it stops being
+  asked the moment it succeeds.
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. A read that errors keeps its **last good copy** (`core()` in

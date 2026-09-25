@@ -268,6 +268,37 @@
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
+    // THE FOUR MARKS A HELD HEART FANS OUT (see REACTIONS), drawn on the heart's
+    // own grid and stroke so the five read as one set, and each one an outline
+    // at rest that FILLS when it is yours, the way the liked heart does. The
+    // grin's eyes and the whoa's dots are the two parts that never change:
+    // `fill="none"` keeps the eyes open strokes under `.liked svg { fill }` (a
+    // filled chevron is a triangle), and the dots are solid in both states for
+    // the smudge reason myCircle's centre gives.
+    //
+    // Each sits inside a translate that CENTRES IT OPTICALLY ON THE HEART, and
+    // those numbers are measured, not tasted. Rendered at 10x, each mark's
+    // optical centre was taken as the midpoint of its box and its ink centroid,
+    // and moved onto the heart's: a thumb's weight is the fist, so thumbs up
+    // rides a unit high and down a unit low, and both come right by half a unit
+    // because the cuff is lighter than the knuckles; the whoa's wedges are
+    // top-heavy, so it sinks; the grin's mouth is bottom-heavy, so it lifts. Baked
+    // into the drawing rather than nudged in CSS, so the fan's discs, the card's
+    // row (which then gives every mark the heart's own --like-nudge), the likers
+    // list's pill and the ink-rise masks in app.css all agree without being told.
+    // Thumbs down is thumbs up turned over, not a second drawing.
+    react_up:   '<g transform="translate(.45 -1.05)">' +
+                  '<path d="M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9z"/>' +
+                  '<path d="M8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z"/></g>',
+    react_down: '<g transform="translate(.45 1) matrix(1 0 0 -1 0 24)">' +
+                  '<path d="M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9z"/>' +
+                  '<path d="M8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z"/></g>',
+    react_ha:   '<g transform="translate(0 -.25)">' +
+                  '<path fill="none" d="M4.6 8.6 7.3 6l2.7 2.6M14 8.6 16.7 6l2.7 2.6"/>' +
+                  '<path d="M5.8 12h12.4a6.2 6.2 0 0 1-12.4 0z"/></g>',
+    react_wow:  '<g transform="translate(0 .7)">' +
+                  '<path d="M6.2 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM13.4 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0z"/>' +
+                  '<path fill="currentColor" stroke="none" d="M8.4 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4zM15.6 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4z"/></g>',
     // The headcount control's glyph, both states in one drawing. The person sits
     // LEFT of centre so the check has somewhere to land — a centred figure would
     // have to jump sideways to make room, which reads as a bug. The check arm
@@ -438,6 +469,26 @@
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${ICONS[key]}</svg>`;
+
+  /* ── Reactions ─────────────────────────────────────────────────────────────
+     A tap on a friend's heart is a like, the same as it ever was. HOLDING it
+     fans out the other four (see Fan), in iMessage's order, and the like becomes
+     whichever you picked. It is still one private row per person, which the
+     author alone reads (Store.setReaction, supabase/add-reactions.sql).
+
+     The keys are the column's values and never change. `name` is not copy on
+     the screen: the fan carries no words, on Zoe's call (2026-09-25), so a name
+     is only ever read aloud, or set in a sentence in the author's Updates.
+     `did` is that sentence's verb phrase around the post's label. */
+  const REACTIONS = [
+    { key: 'heart', icon: 'heart',      name: 'Heart',       did: (w) => `liked ${w}` },
+    { key: 'up',    icon: 'react_up',   name: 'Thumbs up',   did: (w) => `gave ${w} a thumbs up` },
+    { key: 'down',  icon: 'react_down', name: 'Thumbs down', did: (w) => `gave ${w} a thumbs down` },
+    { key: 'ha',    icon: 'react_ha',   name: 'Ha ha',       did: (w) => `laughed at ${w}` },
+    { key: 'wow',   icon: 'react_wow',  name: 'Whoa',        did: (w) => `said whoa to ${w}` },
+  ];
+  // Anything unknown (a null, a row from before the column) reads as the heart.
+  const rxDef = (key) => REACTIONS.find(r => r.key === key) || REACTIONS[0];
 
   /* ── Blocking ────────────────────────────────────────────────────────────────
      A client-side block list, persisted per-device in localStorage. Blocking a
@@ -3212,13 +3263,37 @@
      liked look is a still fill on that same colour — the tap adds the one-shot
      motion. */
   function likeToggleHtml(post) {
-    const liked = Store.likedByMe(post.id);
-    return `<button class="card-like${liked ? ' liked' : ''}" type="button" aria-pressed="${liked}" ` +
-        `data-type="${burstTypeOf(post)}" ` +
-        `aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Liked' : 'Like'}">` +
-        svgIcon('heart', 'like-heart') +
+    const rx = Store.reactionOf(post.id);
+    const r = rxDef(rx);
+    // data-rx names the mark the glyph is drawing, and app.css hangs the ink
+    // flood's silhouette off it. aria-haspopup only once a hold can open anything.
+    return `<button class="card-like${rx ? ' liked' : ''}" type="button" aria-pressed="${!!rx}" ` +
+        `data-type="${burstTypeOf(post)}" data-rx="${r.key}" ` +
+        (Store.reactionsReady() ? 'aria-haspopup="menu" ' : '') +
+        `aria-label="${rx ? r.name : 'Like'}" title="${rx ? r.name : 'Like'}">` +
+        svgIcon(r.icon, 'like-heart') +
       `</button>`;
   }
+
+  // The same state painted onto a live button, attribute for attribute, so a
+  // heart flipped in place and the card rebuilt later from likeToggleHtml agree.
+  // The glyph swaps its insides rather than itself, so the classes the tap's
+  // animations hang on stay on the same element.
+  function paintReaction(btn, rx) {
+    const r = rxDef(rx);
+    btn.classList.toggle('liked', !!rx);
+    btn.setAttribute('aria-pressed', String(!!rx));
+    btn.setAttribute('aria-label', rx ? r.name : 'Like');
+    btn.setAttribute('title', rx ? r.name : 'Like');
+    if (btn.dataset.rx !== r.key) {
+      btn.dataset.rx = r.key;
+      const svg = btn.querySelector('svg.like-heart');
+      if (svg) svg.innerHTML = ICONS[r.icon];
+    }
+  }
+  // Which mark this heart is showing as MINE, read off the button itself, which
+  // is the truth the reader can see while a write is in the air.
+  const shownReaction = (btn) => btn.classList.contains('liked') ? (btn.dataset.rx || 'heart') : null;
 
   /* The same heart, in a Discover tile's foot. Two things differ from the card's,
      and both come from a tile being a place you BROWSE rather than a post you are
@@ -4417,7 +4492,10 @@
   // are the same object wherever they appear — who liked, who's going, who was
   // invited — and a second copy of this markup would drift the first time one of
   // them moved.
-  function likerItemHtml(l, tag) {
+  //
+  // `mark` is the same slot holding a drawing instead of a word: the reaction
+  // somebody left, on the author's who-liked list. Same pill, same place.
+  function likerItemHtml(l, tag, mark) {
     const u = Store.user(l.user);
     const name = esc(u ? u.name : l.user);
     return `<li class="comment liker">` +
@@ -4427,6 +4505,7 @@
         `<div class="comment-body">` +
           `<p class="comment-text"><a class="comment-name" href="#/u/${esc(encodeURIComponent(l.user))}">${name}</a>` +
             (tag ? `<span class="liker-tag">${esc(tag)}</span>` : '') +
+            (mark || '') +
           `</p>` +
         `</div>` +
       `</li>`;
@@ -4438,7 +4517,22 @@
   function likersPanelHtml(post, full) {
     if (!full) return '';
     if (post.author !== Store.session()) return '';    // only the author sees who liked
-    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
+    /* GROUPED BY MARK, the way the host's guest list is grouped by answer:
+       every heart, then every thumbs up, and so on in the fan's order, each
+       group in the order people arrived (sort is stable). Each row carries its
+       mark in the pill where that list writes Going or Maybe, filled, in the
+       post's own colour, since it is the reaction as its giver saw it land.
+       Before add-reactions.sql every like is a heart and the list is drawn as
+       it always was, untagged. */
+    const rank = new Map(REACTIONS.map((r, i) => [r.key, i]));
+    const tagged = Store.reactionsReady();
+    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user))
+      .slice().sort((a, b) => (rank.get(a.reaction) ?? 0) - (rank.get(b.reaction) ?? 0));
+    const markOf = (l) => {
+      if (!tagged) return '';
+      const r = rxDef(l.reaction);
+      return `<span class="liker-tag liker-mark" role="img" aria-label="${r.name}">${svgIcon(r.icon)}</span>`;
+    };
     /* NO LABEL over the list, and the argument that put one here is worth
        keeping because it was right about the disclosure and wrong about the
        page. It said: under a disclosure the BUTTON was the label, you tapped a
@@ -4470,7 +4564,8 @@
                  1, 2, 3 down the list: a tally nobody asked for, in the colour
                  this app reserves for who is coming to a plan. Any future call
                  site that means "no tag" has to say so with an arrow. */
-              ? `<ul class="likers-list">${list.map(l => likerItemHtml(l)).join('')}</ul>`
+              ? `<ul class="likers-list" style="--burst:var(--heart-${burstTypeOf(post)})">` +
+                  `${list.map(l => likerItemHtml(l, null, markOf(l))).join('')}</ul>`
               : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
           `</div>` +
         `</div>` +
@@ -4757,6 +4852,267 @@
     setTimeout(() => layer.remove(), 700);   // matches the .is-liking window
   }
 
+  /* ── The reaction fan ─────────────────────────────────────────────────────
+     HOLD a friend's heart and the other four marks fan out around it; drag onto
+     one and let go to pick it. A quarter arc, after una.im's and Ashley
+     Sheridan's radial menus, because the heart lives at the bottom right of
+     every card and tile: a half ring centred on it would run off the screen,
+     and a quarter swept from due left up to straight up is what fits.
+
+     THE ANGLE PICKS, NOT THE DISTANCE. Once the finger has left the heart the
+     mark nearest its bearing lights, so every mark is the same short drag away
+     and nobody has to travel the 116px to a disc to reach it. Let go in place
+     and the fan stays open for a tap (and for VoiceOver, whose double-tap-and-
+     hold lands here as a hold). A tap on the veil or the heart puts it away.
+
+     NO WORDS, on Zoe's call: the five marks carry themselves and a label under
+     the finger was one more thing to read. Each disc still has its name for
+     VoiceOver. No buzz on OPENING either, only on the pick, which is the like:
+     the rule at hapticTap (a view changing is not news) holds here too.
+
+     It lives on <body> rather than in the card, so no card's clipping or
+     stacking can reach it, over a veil that blurs the page. The heart it grew
+     from is under that veil, so a GHOST of its glyph is drawn on top in the same
+     place: the fan has to visibly come out of something.
+
+     One fan for the whole app, built on first use and reused. */
+  const Fan = (() => {
+    const HOLD_MS = 400;
+    // The five bearings, in REACTIONS order. 184° is just below due left, 88°
+    // just right of straight up, so the arc stays inside a card's right edge.
+    const ANGLES = [184, 160, 136, 112, 88];
+    const RADIUS = 116, HOT_RADIUS = 128, DISC = 44;
+    // Room the fan needs on each side of the heart before it turns around.
+    const REACH = HOT_RADIUS + DISC / 2 + 12;
+    let veil = null, fan = null, ghost = null, open = null;
+
+    function build() {
+      if (fan) return;
+      veil = document.createElement('div');
+      veil.className = 'rx-veil';
+      veil.hidden = true;
+      fan = document.createElement('div');
+      fan.className = 'rx-fan';
+      fan.setAttribute('role', 'menu');
+      fan.setAttribute('aria-label', 'Reactions');
+      fan.hidden = true;
+      fan.innerHTML = `<span class="rx-ghost" aria-hidden="true"></span>` +
+        REACTIONS.map((r, i) =>
+          `<button class="rx-item" type="button" role="menuitemradio" aria-checked="false" ` +
+            `data-rx="${r.key}" aria-label="${r.name}" style="--i:${i}">` +
+            `<span class="rx-disc">${svgIcon(r.icon)}</span>` +
+          `</button>`).join('');
+      ghost = fan.querySelector('.rx-ghost');
+      document.body.append(veil, fan);
+      veil.addEventListener('click', () => close(true));
+      ghost.addEventListener('click', () => close(true));
+      fan.querySelectorAll('.rx-item').forEach(b =>
+        b.addEventListener('click', () => choose(b.dataset.rx)));
+      // The page under an open fan doesn't move: a stray drag on the veil would
+      // scroll the heart out from under the fan it opened.
+      for (const layer of [veil, fan])
+        layer.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+      fan.addEventListener('keydown', onFanKey);
+    }
+
+    // The glyph's box, taken BEFORE the press shrinks the button, so the ghost
+    // lands exactly on the heart at rest.
+    const glyphRect = (btn) => (btn.querySelector('svg') || btn).getBoundingClientRect();
+    // Where the page stops being visible at the top: the toolbar's lower edge,
+    // which native chrome keeps in the DOM at its true size under the glass.
+    const topEdge = () => {
+      const bar = document.querySelector('.topbar');
+      return bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+    };
+
+    function show(btn, post, pick, rect) {
+      build();
+      const b = btn.getBoundingClientRect();
+      const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+      // Turn DOWN when the toolbar is in the way above, and to the RIGHT when a
+      // heart sits too near the left edge (a tile in the first column of a wide
+      // grid). Both are multipliers the CSS applies to the same arc.
+      const flip = cy - topEdge() < REACH;
+      const side = cx - REACH < 0 ? -1 : 1;
+      const mine = shownReaction(btn);
+      open = { btn, pick, cx, cy, flip, side, hot: null };
+
+      fan.style.left = `${cx}px`;
+      fan.style.top = `${cy}px`;
+      fan.dataset.type = burstTypeOf(post);
+      // Each disc's place on the arc, at rest and lit. Worked out here rather
+      // than with CSS cos() and sin(), which WebKit only has from iOS 15.4 and
+      // this app still opens on 15.0.
+      const up = flip ? 1 : -1;
+      fan.querySelectorAll('.rx-item').forEach((item, i) => {
+        const a = ANGLES[i] * Math.PI / 180;
+        for (const [name, r] of [['', RADIUS], ['h', HOT_RADIUS]]) {
+          item.style.setProperty(`--${name}x`, `${(Math.cos(a) * r * side).toFixed(1)}px`);
+          item.style.setProperty(`--${name}y`, `${(Math.sin(a) * r * up).toFixed(1)}px`);
+        }
+        const on = item.dataset.rx === mine;
+        item.classList.toggle('cur', on);
+        item.classList.remove('hot');
+        item.setAttribute('aria-checked', String(on));
+      });
+      const svg = btn.querySelector('svg');
+      ghost.innerHTML = svg ? svg.outerHTML : '';
+      ghost.classList.toggle('liked', !!mine);
+      ghost.style.cssText =
+        `left:${rect.left - cx}px;top:${rect.top - cy}px;` +
+        `width:${rect.width}px;height:${rect.height}px;color:${getComputedStyle(btn).color}`;
+
+      veil.hidden = false;
+      fan.hidden = false;
+      void fan.offsetWidth;                  // land the closed frame, so the fan springs from it
+      veil.classList.add('is-open');
+      fan.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      window.addEventListener('scroll', onAway, true);
+      window.addEventListener('resize', onAway);
+      window.addEventListener('hashchange', onAway);
+      document.addEventListener('keydown', onDocKey);
+    }
+
+    function close(refocus) {
+      if (!open) return;
+      const { btn } = open;
+      open = null;
+      veil.classList.remove('is-open');
+      fan.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+      window.removeEventListener('scroll', onAway, true);
+      window.removeEventListener('resize', onAway);
+      window.removeEventListener('hashchange', onAway);
+      document.removeEventListener('keydown', onDocKey);
+      if (refocus && fan.contains(document.activeElement)) btn.focus();
+      // Out of the accessibility tree once the collapse has played.
+      window.setTimeout(() => {
+        if (!open) { fan.hidden = true; veil.hidden = true; }
+      }, prefersReduced() ? 0 : 220);
+    }
+
+    function choose(key) {
+      if (!open) return;
+      const { pick } = open;
+      close(true);
+      pick(key);
+    }
+
+    const onAway = () => close();
+    function onDocKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(true); }
+    }
+    // Arrows walk the arc in either direction and wrap; Home and End go to its
+    // ends. Tab leaves, as it leaves any menu, and takes the fan with it.
+    function onFanKey(e) {
+      if (e.key === 'Tab') { e.preventDefault(); close(true); return; }
+      const items = [...fan.querySelectorAll('.rx-item')];
+      const at = items.indexOf(document.activeElement);
+      const to =
+        (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? (at + 1) % items.length :
+        (e.key === 'ArrowLeft' || e.key === 'ArrowDown') ? (at - 1 + items.length) % items.length :
+        e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : -1;
+      if (to < 0) return;
+      e.preventDefault();
+      items[to].focus();
+    }
+
+    // Which mark the finger points at: the nearest bearing, once it has left the
+    // heart, within half a step of the arc's ends. The multipliers undo a
+    // flipped or mirrored fan so one set of angles serves all four.
+    function markAt(x, y) {
+      const dx = (x - open.cx) * open.side;
+      const dy = (y - open.cy) * (open.flip ? -1 : 1);
+      if (Math.hypot(dx, dy) < 28) return null;
+      let a = Math.atan2(-dy, dx) * 180 / Math.PI;
+      if (a < 0) a += 360;
+      let best = 0, gap = Infinity;
+      ANGLES.forEach((t, i) => {
+        const d = Math.abs(a - t);
+        if (d < gap) { gap = d; best = i; }
+      });
+      return gap <= 26 ? REACTIONS[best].key : null;
+    }
+    function light(key) {
+      if (!open || open.hot === key) return;
+      open.hot = key;
+      fan.querySelectorAll('.rx-item').forEach(item =>
+        item.classList.toggle('hot', item.dataset.rx === key));
+    }
+
+    const canReact = () => Store.isAuthed() && Store.reactionsReady();
+    // Focus lands on your own mark if you have one, else the heart.
+    const firstMark = () => fan.querySelector('.rx-item.cur') || fan.querySelector('.rx-item');
+
+    function wire(btn, post, pick) {
+      let press = null, timer = 0;
+      const letGo = () => {
+        clearTimeout(timer);
+        btn.classList.remove('is-holding');
+        press = null;
+      };
+      btn.addEventListener('pointerdown', (e) => {
+        if (!canReact() || open) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        btn._held = false;
+        press = { id: e.pointerId, x: e.clientX, y: e.clientY, opened: false, moved: false, rect: glyphRect(btn) };
+        try { btn.setPointerCapture(e.pointerId); } catch { /* the drag still works uncaptured, mostly */ }
+        btn.classList.add('is-holding');
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!press) return;
+          press.opened = true;
+          btn._held = true;
+          btn.classList.remove('is-holding');
+          show(btn, post, pick, press.rect);
+        }, HOLD_MS);
+      });
+      btn.addEventListener('pointermove', (e) => {
+        if (!press || e.pointerId !== press.id) return;
+        const far = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+        // A finger that travels before the hold lands was scrolling, not asking.
+        if (!press.opened) { if (far > 10) letGo(); return; }
+        if (far > 8) press.moved = true;
+        if (open) light(markAt(e.clientX, e.clientY));
+      });
+      btn.addEventListener('pointerup', (e) => {
+        if (!press || e.pointerId !== press.id) return;
+        const { opened, moved } = press;
+        letGo();
+        if (!opened || !open) return;
+        if (open.hot) choose(open.hot);
+        else if (moved) close();
+        // Let go in place: the fan stays, and focus goes to it so a screen
+        // reader's next swipe is a mark rather than the rest of the page.
+        else firstMark().focus({ preventScroll: true });
+      });
+      // The system took the touch (a call, a swipe from the edge). A fan that
+      // was already open stays open for a tap; a hold that hadn't landed is off.
+      btn.addEventListener('pointercancel', (e) => {
+        if (!press || e.pointerId !== press.id) return;
+        letGo();
+        if (open) light(null);
+      });
+      // Once the fan is out, the drag is the fan's and must not scroll the page.
+      btn.addEventListener('touchmove', (e) => {
+        if (press && press.opened) e.preventDefault();
+      }, { passive: false });
+      // A long press is also the system's context menu (and the callout on iOS).
+      btn.addEventListener('contextmenu', (e) => { if (canReact()) e.preventDefault(); });
+      // From the keyboard: the arrow that points at the fan opens it.
+      btn.addEventListener('keydown', (e) => {
+        if (!canReact() || open) return;
+        if (e.key !== 'ArrowUp' && e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return;
+        e.preventDefault();
+        show(btn, post, pick, glyphRect(btn));
+        firstMark().focus({ preventScroll: true });
+      });
+    }
+
+    return { wire, close };
+  })();
+
   function wireLikes(el, post, opts) {
     // Not a comment's heart: on the post page the thread lives inside this card,
     // and its hearts wear `.card-like` too (see commentLikeHtml). The post's own
@@ -4773,24 +5129,32 @@
       return;
     }
 
-    // Friend: toggle my own like. The count belongs to the author, not to me, so
-    // there's nothing on my card to recompute — just flip the heart in place (no
-    // card rebuild, no rise-flash).
-    wireHeart(btn, () => Store.toggleLike(post.id));
+    // Friend: toggle my own like, or hold for the other four. The count belongs
+    // to the author, not to me, so there's nothing on my card to recompute —
+    // just flip the heart in place (no card rebuild, no rise-flash).
+    wireHeart(btn, null, post);
   }
 
   /* Every heart that toggles: the post's (wireLikes) and a comment's
      (wireComments). One handler rather than two because the tap IS the design
      system — the same optimistic flip, buzz, snap, ink and sparkles on both —
      and a copy would drift the first time one of them was tuned. `toggle` is the
-     write; the button carries everything else. */
-  function wireHeart(btn, toggle) {
-    const paint = (liked) => {
-      btn.classList.toggle('liked', liked);
-      btn.setAttribute('aria-pressed', String(liked));
-      btn.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
-      btn.setAttribute('title', liked ? 'Liked' : 'Like');
-    };
+     write; the button carries everything else.
+
+     A POST'S heart passes the post instead of a toggle, and its state is a
+     reaction key rather than a yes: a tap is a heart or takes back whatever is
+     there, and a hold opens the fan (Fan.wire), whose pick runs through the same
+     answer below, so a thumbs up snaps, inks and sparkles exactly as a heart
+     does. A comment's heart is a heart and nothing else. */
+  function wireHeart(btn, toggle, post) {
+    const paint = post
+      ? (rx) => paintReaction(btn, rx)
+      : (liked) => {
+          btn.classList.toggle('liked', liked);
+          btn.setAttribute('aria-pressed', String(liked));
+          btn.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
+          btn.setAttribute('title', liked ? 'Liked' : 'Like');
+        };
 
     /* THE HEART MOVES FIRST AND ASKS AFTERWARDS, and it is the only control on
        this card that can. A like is private, so the count belongs to the post's
@@ -4810,11 +5174,13 @@
        all but certain, and a receipt that arrives 300ms after the heart already
        moved is worse than no receipt. A refusal silently puts the heart back. */
     let busy = false;
-    btn.addEventListener('click', async () => {
+    // `next` is what the heart becomes and `prev` what it goes back to if the
+    // write is refused: booleans for a comment, reaction keys (or null) for a post.
+    const answer = async (next, prev, write) => {
       if (busy) return;
       busy = true;
-      const liked = !btn.classList.contains('liked');
-      paint(liked);
+      const liked = !!next;
+      paint(next);
       hapticTap('LIGHT');
       // One-shot ink stamp on LIKE: the heart snaps, the type colour floods up
       // through it, and a little cluster of y2k sparkle stars twinkles out — all
@@ -4831,9 +5197,30 @@
       btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
       // The answer, whenever it comes. `.catch` rather than try/finally because a
       // rejected write and a refused one mean the same thing here: put it back.
-      const res = await toggle().catch(() => null);
+      const res = await write().catch(() => null);
       busy = false;
-      if (!res || !res.ok) paint(!liked);
+      if (!res || !res.ok) paint(prev);
+    };
+
+    btn.addEventListener('click', () => {
+      // A hold that opened the fan ends in a click on this same button. The
+      // fan has already answered it, so the tap mustn't answer it twice.
+      if (btn._held) { btn._held = false; return; }
+      if (!post) {
+        const liked = !btn.classList.contains('liked');
+        answer(liked, !liked, toggle);
+        return;
+      }
+      const prev = shownReaction(btn);
+      const next = prev ? null : 'heart';
+      answer(next, prev, () => Store.setReaction(post.id, next));
+    });
+
+    // Picking the mark you already have takes it back, the same as a tap on it.
+    if (post) Fan.wire(btn, post, (key) => {
+      const prev = shownReaction(btn);
+      const next = prev === key ? null : key;
+      answer(next, prev, () => Store.setReaction(post.id, next));
     });
   }
 
@@ -13410,7 +13797,7 @@
     // complains. Any new kind has to land above this line.
     const what =
       n.kind === 'comment' ? `commented on ${label}` :
-      n.kind === 'like'    ? `liked ${label}` :
+      n.kind === 'like'    ? rxDef(n.reaction).did(label) :
       n.kind === 'commentlike' ? `liked your comment on ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
       n.kind === 'vote'    ? `voted in ${label}` :
@@ -13433,7 +13820,9 @@
     const fresh = n._ts && n._ts > lastSeen;
     // data-key is the row's stable identity for the reconcile in renderUpdates
     // (kind + which post + who + when) — one event, one row, across refreshes.
-    const key = esc(`${n.kind}:${n.postId || ''}:${n.user}:${n._ts || ''}`);
+    // A like's reaction is in it, because changing your mind rewrites the row
+    // in place (same person, same time) and the sentence has to follow.
+    const key = esc(`${n.kind}${n.reaction ? '-' + n.reaction : ''}:${n.postId || ''}:${n.user}:${n._ts || ''}`);
     return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
           `data-post="${esc(n.postId || '')}" data-kind="${n.kind}">` +
