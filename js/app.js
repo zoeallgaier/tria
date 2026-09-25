@@ -7128,12 +7128,12 @@
     // carries the add / requested / accept tie, unless you are already friends:
     // then the tie is the toolbar's own button (see friendBadge), which keeps
     // "un-tie" a deliberate act rather than a standing button on the page.
-    const action = (isSelf || areFriends) ? ''
+    // Signed out there is no tie at all: a guest's card offering "Add friend"
+    // promised something the tap couldn't do, and the way in is already on
+    // every pitch page.
+    const action = (isSelf || areFriends || !Store.isAuthed()) ? ''
       : (() => {
-          // Five pre-friend states, and a signed-out visitor takes the first of
-          // them: they are nobody's friend yet, so the card says "Add friend"
-          // like anyone else's and the tap goes to the join form.
-          // Two are already-done and undo on tap
+          // Five pre-friend states. Two are already-done and undo on tap
           // ("Requested" on a private account, "Following" on a public one) —
           // muted outline. The other three are the live commit, and are the one
           // primary action on a visitor's card (Share lives in the ••• menu
@@ -7335,7 +7335,9 @@
         `<p class="profile-locked-line">${soft
           ? `More from ${esc(u.name)} is for friends.`
           : `${esc(u.name)} keeps their posts for friends.`}</p>` +
-        `<p class="profile-locked-sub">Add them and, once they add you back, the rest of their posts show up here.</p>` +
+        (Store.isAuthed()
+          ? `<p class="profile-locked-sub">Add them and, once they add you back, the rest of their posts show up here.</p>`
+          : '') +
       `</div>`;
 
     /* ── The frame wall ───────────────────────────────────────────────────────
@@ -7770,7 +7772,7 @@
                       incoming: 'Accept', follower: 'Add back' };
   function tieHtml(f) {
     const s = Store.friendStatus(f.username);
-    const label = TIE_LABEL[s];
+    const label = Store.isAuthed() && TIE_LABEL[s];
     if (!label) return `<span class="friend-go" aria-hidden="true">→</span>`;
     // The compact label is for the row; the full sentence is for the reader who
     // is hearing it, where "Add" alone in a column of names says which one.
@@ -18980,7 +18982,7 @@
   // ahead of both the per-card listeners and the document-delegated ones (the
   // repost circle, the •••), and the write never starts.
   const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt',
-    '.card-repost', '.card-menu', '#friend', '.friend-tie', '#account-more',
+    '.card-repost', '.card-menu', '#account-more',
     '.daily-answer'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;

@@ -794,8 +794,8 @@ const Store = (() => {
     // "there is nothing to offer here" — so a visitor reading a public profile
     // got the tie button with no word in it, and a row on Discover got a
     // chevron where the Add belongs. A guest's relationship to a stranger is
-    // the same as anyone else's: none. The tap is caught on its way out and
-    // sent to the join form (GUEST_ASKS in app.js).
+    // the same as anyone else's: none. app.js then draws no tie for a guest at
+    // all, on the profile or on a Discover row.
     if (!me) return 'none';
     if (username === me) return 'self';
     const iAdded = (state.friends[me] || []).includes(username);
