@@ -11,8 +11,18 @@
 // The app's "now" — shared by niceDate's relative-date baseline. Real posts
 // carry real timestamps from the server; every timestamp resolves to a calendar
 // day in US Mountain time, so "today" flips at midnight in Denver, not UTC.
-const dayMT = (t) =>
-  new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
+//
+// ONE formatter, made once. toLocaleDateString with a timeZone builds a fresh
+// Intl formatter on every call, and this runs for every post and comment each
+// time the world loads: measured (2026-09-25) at 203ms of a profile's first
+// paint at a quarter CPU, the single biggest thing between the data landing and
+// anything drawing. A reused formatter answers identically (checked over ten
+// thousand timestamps, both daylight-saving edges and Denver's midnight) and
+// about fifty times faster. en-CA is what makes it YYYY-MM-DD.
+const MT_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+const dayMT = (t) => MT_DAY.format(new Date(t));
 const TODAY = dayMT(Date.now());
 
 // Password-recovery landing, captured before anything else touches the URL.
@@ -3501,6 +3511,10 @@ const Store = (() => {
 const initialOf = (name) => (name || '?').trim().charAt(0).toUpperCase();
 
 // A friendly relative-ish date: "today", "yesterday", else "Jun 28".
+// One formatter, made once. toLocaleDateString builds a fresh Intl formatter
+// on every call, and a feed calls this once per card: about 30ms of a 233-post
+// build at a quarter CPU, for the same four characters of month every time.
+const SHORT_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 function niceDate(iso) {
   const d = new Date(iso + 'T12:00:00');
   const now = new Date(TODAY + 'T12:00:00');  // app "now"
@@ -3508,7 +3522,7 @@ function niceDate(iso) {
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   if (days < 7)  return days + 'd ago';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return SHORT_DAY.format(d);
 }
 
 // An activity's when-line: "Today · 6:30 PM", "Tomorrow", else "Sat, Jul 12".

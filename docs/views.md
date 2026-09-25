@@ -86,3 +86,29 @@ swaps itself for its original (a capture-phase `error` listener), `resizeOff`
 sends the rest of the session straight to originals, and `sampleColor` retries
 its own off-page load the same way. Tria then looks exactly the same at the old
 weight until the next cycle.
+
+**A feed paints its first screen first** (2026-09-25). Measured on a 233-post
+profile at a quarter CPU, the block between the data landing and anything
+drawing was 617ms. Two things were in it, and neither was the cards' code:
+
+- **Date formatting.** `dayMT` (store.js) turns every post's and comment's
+  timestamp into a Denver calendar day, and `toLocaleDateString` with a
+  `timeZone` builds a fresh Intl formatter on every call: 203ms of that block
+  alone. One `Intl.DateTimeFormat` made once answers identically (checked over
+  ten thousand timestamps, both daylight-saving edges) about fifty times faster.
+  `niceDate` had the same habit on a smaller scale (`SHORT_DAY`). Any new date
+  label that runs per row should reuse a formatter, never call
+  `toLocale*String` with options in a loop.
+- **Building every card before painting any.** `buildInSlices` (app.js) lays
+  down the first six cards on the spot and the rest twelve to a frame after
+  the first paint, skipping the rise below the fold. `syncCards` (Circle,
+  Discover's list) and a profile's `paintPosts` both pay out through it, and
+  the debt is settled in full by anything that needs the whole page: a scroll
+  restore below the fold (`restoreScroll` calls `payCards`) and any later
+  `syncCards`. A profile column being repainted drops its debt instead
+  (`dropCards`). Per-card wiring happens as each slice lands, never as a sweep
+  afterwards, or the cards of a later slice go unwired.
+
+Together that block is now 72ms, and the first card arrives about 70ms after
+the data rather than about 620. `content-visibility` is still not the tool
+for this; see the tombstone over `.card` in app.css.

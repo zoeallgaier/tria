@@ -6529,7 +6529,63 @@
      genuinely new posts, drop posts that left, and re-render in place only the
      cards whose content truly changed. `wire` hooks up every node built here (the
      home feed and Discover wire their tag chips to different pages). */
-  function syncCards(container, list, wire) {
+  /* ── The first screen first ─────────────────────────────────────────────────
+     A feed used to be built whole before it painted: every post in the circle,
+     markup, parse, style and layout, in one block. Measured (2026-09-25, CPU at
+     a quarter speed) on a 233-post profile, that was 617ms with nothing on the
+     screen, most of it the browser parsing and laying out 6,000 nodes nobody
+     could see yet, and it grows with every post anyone makes.
+
+     So a long build lays down the first FIRST_SCREEN cards on the spot, which is
+     more than any phone shows at once, and OWES the rest: they follow a slice at
+     a time, one slice per frame after the first paint, in order, below the fold.
+     Later slices skip the rise, since they arrive where nobody is looking.
+
+     `content-visibility: auto` would have bought the layout half for free and is
+     NOT available: see the tombstone over .card in app.css (blank posts on iOS).
+
+     The debt is paid in full, at once, by anything that needs the whole page:
+     a scroll restore to a point below the fold (restoreScroll), and any later
+     syncCards (a refresh, a filter), which starts from a whole feed so its
+     positions and signatures mean what they always meant. A page that has been
+     left owes nothing. `after` is run on every card as it is placed, for the
+     state a caller paints over cards after building them (the active tag).
+
+     A profile's column builds its own cards (paintPosts) and pays out through
+     the same `buildInSlices`, so both kinds of feed share one debt. */
+  const FIRST_SCREEN = 6;
+  const CARD_SLICE = 12;
+  let cardsOwed = null;          // { finish, drop } for the one build still paying out
+  const payCards = () => { if (cardsOwed) cardsOwed.finish(); };
+  // For a container about to be emptied: its debt is void, not due.
+  const dropCards = () => { if (cardsOwed) cardsOwed.drop(); };
+
+  // `place(limit, late)` builds up to `limit` more NEW cards into `container`
+  // and says true once nothing is left; `late` is set for every slice after the
+  // first screen, for the card to skip its rise.
+  function buildInSlices(container, place) {
+    if (place(FIRST_SCREEN, false)) return;
+    let frame = 0, timer = 0;
+    const stop = () => { cancelAnimationFrame(frame); clearTimeout(timer); cardsOwed = null; };
+    const owed = {
+      finish() { stop(); if (container.isConnected) place(Infinity, true); },
+      drop: stop,
+    };
+    const slice = () => {
+      if (cardsOwed !== owed) return;
+      if (!container.isConnected) { cardsOwed = null; return; }   // the page was left
+      if (place(CARD_SLICE, true)) { cardsOwed = null; return; }
+      next();
+    };
+    // After the frame that paints, not inside it, so each slice has a frame of
+    // its own and a scroll in the meantime is never kept waiting.
+    const next = () => { frame = requestAnimationFrame(() => { timer = setTimeout(slice, 0); }); };
+    cardsOwed = owed;
+    next();
+  }
+
+  function syncCards(container, list, wire, after) {
+    payCards();
     const desired = new Set(list.map(p => String(p.id)));
     container.querySelectorAll(':scope > .card').forEach(c => {
       if (!desired.has(c.dataset.id)) c.remove();          // gone from the feed
@@ -6538,35 +6594,48 @@
     const existing = new Map();
     container.querySelectorAll(':scope > .card').forEach(c => existing.set(c.dataset.id, c));
 
-    list.forEach((p, i) => {
-      const id = String(p.id);
-      const old = existing.get(id);
-      let node;
-      if (old) {
-        const fresh = makeCard(p);
-        if (fresh.dataset.sig === old.dataset.sig) {
-          node = old;                          // unchanged — leave the live node alone
-        } else {
-          // Content changed (a new like/comment, an edit). Swap in the new render,
-          // but carry over an already-loaded photo when the image itself is the
-          // same, and don't re-run the rise — it's an update, not an arrival.
-          const oldImg = old.querySelector('.photo img');
-          const newFig = fresh.querySelector('.photo');
-          if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
-            newFig.replaceWith(oldImg.closest('.photo'));
+    let i = 0;
+    // Place cards from `i` on, until `limit` NEW ones have been built (a card
+    // already on the page costs a signature check, not a parse, and is never
+    // held back). True once the whole list is placed.
+    buildInSlices(container, (limit, late) => {
+      let made = 0;
+      for (; i < list.length; i++) {
+        const p = list[i];
+        const id = String(p.id);
+        const old = existing.get(id);
+        if (!old && made >= limit) return false;
+        let node;
+        if (old) {
+          const fresh = makeCard(p);
+          if (fresh.dataset.sig === old.dataset.sig) {
+            node = old;                          // unchanged — leave the live node alone
+          } else {
+            // Content changed (a new like/comment, an edit). Swap in the new render,
+            // but carry over an already-loaded photo when the image itself is the
+            // same, and don't re-run the rise — it's an update, not an arrival.
+            const oldImg = old.querySelector('.photo img');
+            const newFig = fresh.querySelector('.photo');
+            if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
+              newFig.replaceWith(oldImg.closest('.photo'));
+            }
+            fresh.style.animation = 'none';
+            wire(fresh);
+            old.replaceWith(fresh);
+            node = fresh;
           }
-          fresh.style.animation = 'none';
-          wire(fresh);
-          old.replaceWith(fresh);
-          node = fresh;
+        } else {
+          node = makeCard(p);                    // brand-new post — rise it in
+          if (late) node.style.animation = 'none';
+          else node.style.animationDelay = staggerDelay(i);
+          wire(node);
+          made++;
         }
-      } else {
-        node = makeCard(p);                    // brand-new post — rise it in
-        node.style.animationDelay = staggerDelay(i);
-        wire(node);
+        const ref = container.children[i] || null;   // slot it into the right position
+        if (node !== ref) container.insertBefore(node, ref);
+        if (after) after(node);
       }
-      const ref = container.children[i] || null;   // slot it into the right position
-      if (node !== ref) container.insertBefore(node, ref);
+      return true;
     });
   }
 
@@ -6626,11 +6695,11 @@
       return;
     }
 
-    syncCards(feedEl, list, wireFeedCard);
-
-    // Keep the active-tag highlight current on every chip (reused cards included).
-    feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
-      btn.classList.toggle('active', btn.dataset.tag === activeTag));
+    // Keep the active-tag highlight current on every chip (reused cards included),
+    // as each card is placed, so a card built a slice later wears it too.
+    syncCards(feedEl, list, wireFeedCard, (card) =>
+      card.querySelectorAll('.tag[data-tag]').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.tag === activeTag)));
 
     // Posted! The post you just made lands at the top of the feed — welcome it
     // with a sparkle. Consume the flag on this one pass (if a filter hid the new
@@ -7855,6 +7924,7 @@
        a discrete act (landing, picking a row) and parked on a re-deal, same
        contract as Discover's. */
     const paintPosts = (stage) => {
+      dropCards();                      // a column still paying out is about to go
       feedEl.textContent = '';
       const shown = profileFilter === 'all' ? list : list.filter(p => p.type === profileFilter);
       if (locked && !shown.length) {
@@ -7876,22 +7946,32 @@
         wireFrameFades(feedEl);
         return;
       }
-      const frag = document.createDocumentFragment();
-      shown.forEach((p, i) => {
-        const card = makeCard(p, { solo: true });
-        card.style.animationDelay = staggerDelay(i);
-        frag.appendChild(card);
-      });
-      feedEl.appendChild(frag);
       // Their public posts are shown; tell an outsider the circle holds more.
+      // Laid down first, so every slice of cards goes in ahead of it.
       if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
-      wirePosts();
+      const tail = locked ? feedEl.lastElementChild : null;
+      // The first screen now and the rest a slice a frame (see buildInSlices).
+      let i = 0;
+      buildInSlices(feedEl, (limit, late) => {
+        const frag = document.createDocumentFragment();
+        const made = [];
+        for (let n = 0; i < shown.length && n < limit; i++, n++) {
+          const card = makeCard(shown[i], { solo: true });
+          if (late) card.style.animation = 'none';
+          else card.style.animationDelay = staggerDelay(i);
+          frag.appendChild(card);
+          made.push(card);
+        }
+        feedEl.insertBefore(frag, tail);
+        made.forEach(wireTags);
+        return i >= shown.length;
+      });
     };
 
     paintPosts(true);
 
-    // Everything the post COLUMN needs hooked up. Called by paintPosts rather
-    // than once at the end of the render, because the column is now rebuilt
+    // Everything the post COLUMN needs hooked up. Called by paintPosts, card by
+    // card as they land, rather than once at the end of the render, because the column is now rebuilt
     // whenever the dial moves and its wiring has to come back with it. (The
     // frame wall needs none of it: a tile is a link and nothing else.)
     //
@@ -7899,8 +7979,9 @@
     // held it — and it is a page of its own (see renderPostEdit), so what is
     // left is the tag chips, which belong to the home feed's filter the same way
     // the post page's do.
-    function wirePosts() {
-      feedEl.querySelectorAll('.tag[data-tag]').forEach(btn =>
+    // Per card, as each slice lands, so no chip is wired twice.
+    function wireTags(card) {
+      card.querySelectorAll('.tag[data-tag]').forEach(btn =>
         btn.addEventListener('click', () => {
           activeFilter = 'all';
           activeTag = btn.dataset.tag;
@@ -19374,6 +19455,8 @@
     const filed = key ? scrollMemory.get(key) : undefined;
     const y = filed ?? (TAB_SCROLL.has(path) ? pathScroll.get(path) : undefined) ?? 0;
     if (!y) { scrollTop(false); return; }
+    // Somewhere down the page: it has to exist before it can be scrolled to.
+    payCards();
     window.scrollTo(0, y);
     const moves = ['wheel', 'touchstart', 'keydown'];
     let frames = 0, stopped = false;
