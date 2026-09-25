@@ -4726,7 +4726,9 @@
     }
     // Android web has the Vibration API; iOS Safari has never shipped it. A
     // coarse motor buzz is a poor cousin to a real impact generator, so keep it
-    // brief enough to read as punctuation rather than an alarm.
+    // brief enough to read as punctuation rather than an alarm. The selection
+    // generator's start and end only warm it up and let it go: no tick in them.
+    if (method === 'selectionStart' || method === 'selectionEnd') return;
     if (navigator.vibrate) {
       try { navigator.vibrate(method === 'notification' ? [10, 40, 10] : 8); } catch { /* ignore */ }
     }
@@ -4757,8 +4759,16 @@
      against a fixed panel, not a broken one.
 
      LIGHT for something that stays on the screen, MEDIUM for something that lands
-     in the real world — the same split as canSocial vs canJoin. */
+     in the real world — the same split as canSocial vs canJoin.
+
+     ONE EXCEPTION, on Zoe's call (2026-09-25): the reaction fan ticks as the
+     finger crosses each mark (Fan), with the system's own picker feedback, the
+     way a date wheel does. Nothing is chosen until the finger lifts, but a fan
+     with no words has only the tick to say which mark you are on without looking
+     under your thumb. It is a handful of calls per hold, and the fan was stripped
+     of its motion in the same change, so the frames they cross are still ones. */
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
+  const hapticTick = () => haptic('selectionChanged');
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
 
   /* ── Outbound links in the native shell ──────────────────────────────────────
@@ -4867,8 +4877,9 @@
 
      NO WORDS, on Zoe's call: the five marks carry themselves and a label under
      the finger was one more thing to read. Each disc still has its name for
-     VoiceOver. No buzz on OPENING either, only on the pick, which is the like:
-     the rule at hapticTap (a view changing is not news) holds here too.
+     VoiceOver. What the finger gets instead is a TICK each time a new mark
+     lights (hapticTick, the one exception to the rule at hapticTap), and the
+     pick itself buzzes like any like.
 
      It lives on <body> rather than in the card, so no card's clipping or
      stacking can reach it, over a veil that blurs the page. The heart it grew
@@ -4884,7 +4895,14 @@
     const RADIUS = 116, HOT_RADIUS = 128, DISC = 44;
     // Room the fan needs on each side of the heart before it turns around.
     const REACH = HOT_RADIUS + DISC / 2 + 12;
-    let veil = null, fan = null, ghost = null, open = null;
+    let veil = null, fan = null, ghost = null, open = null, holding = 0;
+
+    // While a heart is held or the fan is out, no text selection may start
+    // anywhere. The CSS already makes the row and the fan unselectable; this is
+    // the belt to those braces, for a finger that lands a few px off the heart.
+    document.addEventListener('selectstart', (e) => {
+      if (holding || open) e.preventDefault();
+    }, true);
 
     function build() {
       if (fan) return;
@@ -4964,9 +4982,12 @@
 
       veil.hidden = false;
       fan.hidden = false;
-      void fan.offsetWidth;                  // land the closed frame, so the fan springs from it
+      void fan.offsetWidth;                  // land the transparent frame, so the fade has a start
       veil.classList.add('is-open');
       fan.classList.add('is-open');
+      // Wake the picker generator now, so the first tick lands on the finger
+      // rather than after the Taptic Engine spins up.
+      haptic('selectionStart');
       btn.setAttribute('aria-expanded', 'true');
       window.addEventListener('scroll', onAway, true);
       window.addEventListener('resize', onAway);
@@ -4986,10 +5007,11 @@
       window.removeEventListener('hashchange', onAway);
       document.removeEventListener('keydown', onDocKey);
       if (refocus && fan.contains(document.activeElement)) btn.focus();
-      // Out of the accessibility tree once the collapse has played.
-      window.setTimeout(() => {
-        if (!open) { fan.hidden = true; veil.hidden = true; }
-      }, prefersReduced() ? 0 : 220);
+      // Gone in one frame, so the pick's ink and sparkles on the card are the
+      // only thing moving, and out of the accessibility tree with it.
+      fan.hidden = true;
+      veil.hidden = true;
+      haptic('selectionEnd');
     }
 
     function choose(key) {
@@ -5039,6 +5061,8 @@
       open.hot = key;
       fan.querySelectorAll('.rx-item').forEach(item =>
         item.classList.toggle('hot', item.dataset.rx === key));
+      // A tick for each mark the finger reaches, none for drifting off them all.
+      if (key) hapticTick();
     }
 
     const canReact = () => Store.isAuthed() && Store.reactionsReady();
@@ -5050,12 +5074,15 @@
       const letGo = () => {
         clearTimeout(timer);
         btn.classList.remove('is-holding');
+        if (press) holding--;
         press = null;
       };
       btn.addEventListener('pointerdown', (e) => {
         if (!canReact() || open) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         btn._held = false;
+        if (press) holding--;
+        holding++;
         press = { id: e.pointerId, x: e.clientX, y: e.clientY, opened: false, moved: false, rect: glyphRect(btn) };
         try { btn.setPointerCapture(e.pointerId); } catch { /* the drag still works uncaptured, mostly */ }
         btn.classList.add('is-holding');

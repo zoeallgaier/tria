@@ -62,7 +62,10 @@ A tap on a friend's heart is a like; HOLDING it fans out four more marks (thumbs
 up, thumbs down, ha ha, whoa) on a quarter arc, and the one under the finger's
 bearing is the pick. Zoe approved the drawings and the fan on a canvas
 (https://claude.ai/artifact/PuR89X1b68P16TFXgFgHhN) and said **no words on it**;
-the names exist for VoiceOver and the author's Updates only. It is one private
+the names exist for VoiceOver and the author's Updates only. It **barely
+moves** (no blur, no flutter, a 100ms fade, gone in one frame; it read slow on
+her phone) and it **ticks** with the system picker haptic as the finger crosses
+each mark, the one exception to the buzz rule at `hapticTap`. It is one private
 like row with a `reaction` column, so every like rule still holds. The code is
 `REACTIONS`, `react_*` in `ICONS`, `Fan` and `wireHeart` in app.js,
 `setReaction` in store.js; the reasoning is in [docs/data.md](docs/data.md) and
@@ -207,11 +210,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `authenticated`). **`add-comment-likes.sql` is confirmed run** (2026-09-23):
   anon `GET /rest/v1/comment_likes?select=comment_id&limit=1` answered PGRST205
   before it and `[]` after. Were the table ever missing again, the comment
-  hearts draw nothing, on purpose (`Store.commentLikesReady`). **`add-reactions.sql` is NOT run**
-  (2026-09-25): anon `GET /rest/v1/likes?select=reaction&limit=1` answers 42703
-  "column likes.reaction does not exist" before it and `[]` after. Until it runs
-  every like is a heart and holding one does nothing (`Store.reactionsReady`),
-  and that probe is the one 400 a boot pass sees.
+  hearts draw nothing, on purpose (`Store.commentLikesReady`). **`add-reactions.sql` is confirmed run**
+  (2026-09-25): anon `GET /rest/v1/likes?select=reaction&limit=1` answered 42703
+  "column likes.reaction does not exist" before it and `[]` after. Were the column
+  ever missing again, every like reads as a heart and holding one does nothing
+  (`Store.reactionsReady`), and that probe is a 400 in a boot pass's console.
 
 ## Copy style
 

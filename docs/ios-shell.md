@@ -78,6 +78,15 @@ exactly a stretch of moving frames, and it was paying that toll to say "yes, the
 thing you tapped opened" — which the thing opening had already said. The device
 log is the tell: `To Native -> Haptics impact -1` followed by `TO JS undefined`.
 
+**The one exception is the reaction fan's tick** (2026-09-25, Zoe's call):
+`hapticTick` (`selectionChanged`, bracketed by `selectionStart` when the fan
+opens, which calls `prepare()` so the first tick isn't late, and `selectionEnd`
+when it closes) fires each time the finger reaches a new mark. A fan with no
+words has only that to say which mark is under the thumb. It is a handful of
+calls per hold, and the fan lost its animation in the same change, so the
+frames those calls cross are still ones. On the web the bookends do nothing and
+a tick is the usual 8ms `vibrate`.
+
 **Putting them back was tried on 2026-08-27 and reverted the same day.** The
 argument was that the tween's first beat gives the finger nothing, so the tap
 reads as dropped — plausible, and not what was actually wrong. It went in while

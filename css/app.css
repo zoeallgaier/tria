@@ -2571,15 +2571,16 @@ main {
 .card-like[data-rx="ha"]   { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(0 -.25)'%3E%3Cpath d='M5.8 12h12.4a6.2 6.2 0 0 1-12.4 0z'/%3E%3Cpath fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M4.6 8.6 7.3 6l2.7 2.6M14 8.6 16.7 6l2.7 2.6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
 .card-like[data-rx="wow"]  { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(0 .7)'%3E%3Cpath d='M6.2 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM13.4 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM8.4 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4zM15.6 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
 
-/* A heart that can be HELD (aria-haspopup, once add-reactions.sql has run)
-   gives up the system's own long press: no callout, no text selection, no
-   magnifier. While the hold is counting down the glyph sinks a little, so the
+/* The action row gives up the system's own long press: no callout, no text
+   selection, no magnifier. It holds buttons and a count, nothing anybody means
+   to select, and a hold that lands a few px off the heart would otherwise raise
+   the magnifier over the text beside it. While the hold is counting down the glyph sinks a little, so the
    finger knows something is coming before the fan arrives, and springs back
    when it does. The optical nudge stays in every frame, as it does in like-pop. */
-.card-like[aria-haspopup] {
+.card-actions {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
-  user-select: none;
+          user-select: none;
 }
 .card-like[aria-haspopup] svg { transition: transform 0.2s var(--spring); }
 .card-like.is-holding svg {
@@ -2589,47 +2590,68 @@ main {
 
 /* ── The reaction fan (Fan in app.js) ───────────────────────────────────────
    Five 44px discs on a quarter arc around the heart that was held, over a veil
-   that blurs the page. It is the + speed dial's vocabulary, on purpose: frosted
-   discs with a colour blooming behind the glyph, staggered a beat apart, because
-   these too are objects you REACH for. Never glass on glass: the veil is the one
-   blur, and the discs are tinted paper over it with no backdrop-filter of their
-   own (the same call .nav-dial-ico makes, for the same reason).
+   that dims the page. It is the + speed dial's vocabulary: frosted discs you
+   reach for, each blooming in a colour behind its glyph.
+
+   IT HARDLY MOVES, on Zoe's report from her phone (2026-09-25) that it rendered
+   slowly. It shipped with a blurred veil, the discs fluttering out along the
+   arc a beat apart on a spring, and a fade on the way out. The veil's
+   backdrop-filter was the expensive part (fading a blur makes WebKit re-blur
+   the whole page every frame of the fade, over a feed full of photos), and the
+   five staggered springs were five more layers moving at once. Now the veil is
+   a flat dim, the fan fades in as ONE layer in 100ms with every disc already in
+   place, it closes in a single frame so the pick's own ink and sparkles on the
+   card are what you see, and the only motion left is the disc under the finger
+   growing (90ms). Don't put the flutter back without a phone to hold it
+   against. What tells the finger it is moving is the tick now (see Fan).
 
    No words anywhere on it (Zoe, 2026-09-25). Each disc is named for VoiceOver.
 
    Every mark's colour is the post's (--heart-*, which is the reader's accent
-   where they picked one): the disc under the finger blooms in it, and your
-   current mark sits filled in it, the way it sits on the card.
+   where they picked one): the lit disc blooms in it, and your current mark sits
+   filled in it, the way it sits on the card.
+
+   NOTHING ON IT IS SELECTABLE, and that is load-bearing rather than tidy. The
+   fan opens under a finger that is still down, and iOS's long-press text
+   gesture fires about a tenth of a second later on whatever is under that
+   finger, which is now the ghost heart on this layer. Selectable, it raised the
+   text magnifier over the fan.
 
    Positions come from JS as --x/--y (at rest) and --hx/--hy (lit), because the
    arc turns down under the toolbar and mirrors near a left edge, and because
    CSS trig arrived in WebKit after the oldest iOS this app opens on. Above the
    toolbar and nav (101) and under the modals (250). */
+.rx-veil,
+.rx-fan {
+  -webkit-user-select: none;
+          user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
 .rx-veil {
   position: fixed;
   inset: 0;
   z-index: 240;
-  background: color-mix(in srgb, var(--bg) 34%, transparent);
-  -webkit-backdrop-filter: blur(6px);
-          backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   opacity: 0;
-  transition: opacity 0.16s var(--ease-soft);
 }
-.rx-veil.is-open { opacity: 1; transition: opacity var(--dur-quick) var(--ease); }
 .rx-fan {
   position: fixed;
   z-index: 241;
   width: 0;
   height: 0;
+  opacity: 0;
   --burst: var(--heart-note);
 }
+.rx-veil.is-open,
+.rx-fan.is-open { opacity: 1; transition: opacity 0.1s ease-out; }
 .rx-fan[data-type="find"]     { --burst: var(--heart-find); }
 .rx-fan[data-type="photo"]    { --burst: var(--heart-photo); }
 .rx-fan[data-type="activity"] { --burst: var(--heart-activity); }
 .rx-fan[data-type="poll"]     { --burst: var(--heart-poll); }
 
 /* The heart the fan grew out of, redrawn over the veil in the same place and
-   the same ink, so it stays sharp while the page blurs. A tap on it puts the fan
+   the same ink, so it stays clear while the page dims. A tap on it puts the fan
    away, and it reaches past the glyph to the 44px the real heart has. */
 .rx-ghost {
   position: absolute;
@@ -2640,7 +2662,6 @@ main {
 .rx-ghost::after { content: ''; position: absolute; inset: -8px; }
 .rx-ghost svg { display: block; width: 100%; height: 100%; }
 .rx-ghost.liked svg { fill: currentColor; }
-.rx-fan:not(.is-open) .rx-ghost { opacity: 0; }
 
 .rx-item {
   position: absolute;
@@ -2655,26 +2676,14 @@ main {
   background: none;
   color: var(--text);
   cursor: pointer;
-  opacity: 0;
-  /* Folded into the heart and turned a little, so opening flutters them out
-     along the arc rather than sliding them. */
-  transform: translate(0, 0) scale(0.3) rotate(-45deg);
-  transition: transform 0.16s var(--ease-soft), opacity 0.12s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.rx-fan.is-open .rx-item {
-  opacity: 1;
-  transform: translate(var(--x), var(--y)) scale(1) rotate(0deg);
-  transition:
-    transform 0.4s var(--spring) calc(var(--i) * 28ms),
-    opacity 0.18s ease calc(var(--i) * 28ms);
+  transform: translate(var(--x), var(--y));
+  transition: transform 0.09s ease-out;
 }
 /* The one under the finger pushes out along its own spoke and grows, so it
    clears its neighbours instead of overlapping them. */
-.rx-fan.is-open .rx-item.hot {
+.rx-item.hot {
   z-index: 1;
   transform: translate(var(--hx), var(--hy)) scale(1.22);
-  transition: transform 0.2s var(--spring), opacity 0.1s ease;
 }
 .rx-disc {
   position: absolute;
@@ -2682,9 +2691,9 @@ main {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
   border: var(--glass-edge);
-  box-shadow: var(--glass-lift);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
 }
 .rx-disc::before {
   content: '';
@@ -2693,7 +2702,6 @@ main {
   border-radius: 50%;
   background: radial-gradient(64% 64% at 50% 50%, var(--burst) 0%, transparent 66%);
   opacity: 0;
-  transition: opacity var(--dur-micro) ease;
 }
 /* Every glyph is centred optically in its drawing (see react_* in ICONS), so the
    disc centres the box and nothing here nudges any one of them. */
@@ -2707,15 +2715,14 @@ main {
 .rx-item:focus-visible .rx-disc { outline: 2px solid var(--text); outline-offset: 2px; }
 
 @media (prefers-color-scheme: dark) {
-  .rx-veil { background: color-mix(in srgb, var(--bg) 46%, transparent); }
-  .rx-disc { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+  .rx-veil { background: color-mix(in srgb, var(--bg) 70%, transparent); }
+  .rx-disc { background: color-mix(in srgb, var(--bg) 92%, transparent); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4); }
   .rx-item.hot .rx-disc::before { opacity: 0.32; }
   .rx-item.cur .rx-disc::before { opacity: 0.2; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rx-item,
-  .rx-fan.is-open .rx-item,
-  .rx-fan.is-open .rx-item.hot { transform: translate(var(--x), var(--y)); transition: opacity var(--dur-micro) ease; }
+  .rx-veil.is-open, .rx-fan.is-open, .rx-item { transition: none; }
+  .rx-item.hot { transform: translate(var(--x), var(--y)); }
   .card-like.is-holding svg { transform: translateY(var(--like-nudge)); }
 }
 

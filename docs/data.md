@@ -647,9 +647,9 @@ address and therefore a different person, and there is no way around that.
   count is still everybody who reacted at all.
   **Nothing changes until the column answers** (`Store.reactionsReady`): the load
   probes `likes?select=reaction` until it gets a 200, and a 42703 means every
-  like is a heart and the hold does nothing. That probe is the one 400 in the
-  console of a load against a database that hasn't run the SQL; it stops being
-  asked the moment it succeeds.
+  like is a heart and the hold does nothing. Against a database without the
+  column that probe is a 400 in the console of every load; it stops being asked
+  the moment it succeeds. The SQL was run the day it was written (2026-09-25).
 - **Private likes** are enforced at the data layer: RLS hides other authors' like
   rows, so the cache can't compute someone else's count. **Headcount/RSVPs are
   public** by design. A read that errors keeps its **last good copy** (`core()` in

@@ -703,11 +703,18 @@ beyond the scrim.
 **The reaction fan is the third dial, and it is the + dial's kind** (2026-09-25):
 five frosted discs you reach for, each blooming in a colour behind its glyph,
 staggered a beat apart over a veil that is the only blur. Hold a friend's heart
-and they flutter out on a quarter arc (184° to 88°, radius 116), because the
-heart sits at a card's bottom right and a half ring would run off the screen;
-it turns down under the toolbar and mirrors near a left edge. The angle picks,
-not the distance, so every mark is the same short drag. No words on it at all,
-on Zoe's call, and no buzz until the pick. The colour is the post's
+and they appear on a quarter arc (184° to 88°, radius 116), because the heart
+sits at a card's bottom right and a half ring would run off the screen; it turns
+down under the toolbar and mirrors near a left edge. The angle picks, not the
+distance, so every mark is the same short drag. No words on it at all, on Zoe's
+call. **It hardly moves, also on her call** from the phone (it read slow): it
+shipped with a blurred veil and the discs fluttering out on a stagger of
+springs, and now the veil is a flat dim (a faded backdrop blur re-blurs the page
+every frame), the fan fades in as one layer in 100ms, it closes in a single
+frame, and the only motion is the lit disc growing. The finger learns where it
+is from a **tick** instead, the system picker haptic, once per mark reached.
+And nothing on it is selectable: the fan opens under a finger that is still
+down, and iOS's text long-press fires on whatever is under it a beat later. The colour is the post's
 (`--heart-*`, so the reader's accent where they chose one): the lit disc blooms
 in it, and your own mark sits filled in it, in the fan and on the card.
 
