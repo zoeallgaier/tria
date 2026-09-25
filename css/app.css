@@ -2593,17 +2593,28 @@ main {
    that dims the page. It is the + speed dial's vocabulary: frosted discs you
    reach for, each blooming in a colour behind its glyph.
 
-   IT HARDLY MOVES, on Zoe's report from her phone (2026-09-25) that it rendered
-   slowly. It shipped with a blurred veil, the discs fluttering out along the
-   arc a beat apart on a spring, and a fade on the way out. The veil's
-   backdrop-filter was the expensive part (fading a blur makes WebKit re-blur
-   the whole page every frame of the fade, over a feed full of photos), and the
-   five staggered springs were five more layers moving at once. Now the veil is
-   a flat dim, the fan fades in as ONE layer in 100ms with every disc already in
-   place, it closes in a single frame so the pick's own ink and sparkles on the
-   card are what you see, and the only motion left is the disc under the finger
-   growing (90ms). Don't put the flutter back without a phone to hold it
-   against. What tells the finger it is moving is the tick now (see Fan).
+   ITS MOTION HAS BEEN TUNED TWICE ON ZOE'S PHONE (2026-09-25), and the numbers
+   below are the middle she asked for between the two.
+     · First it shipped lavish: a blurred veil, the discs fluttering out along
+       the arc on a 0.4s spring with a rotation and a 28ms stagger, a fade out.
+       It read slow. The BLUR was the cost that mattered: fading a
+       backdrop-filter makes WebKit re-blur the whole page every frame, over a
+       feed full of photos.
+     · Then it barely moved: a flat dim, the fan fading in as one layer in
+       100ms with every disc already placed, gone in a single frame. Fast, and
+       it read as a pop-up rather than a thing growing out of the heart.
+     · Now: the blur stays gone (that was never the fun part), and the discs
+       come back out of the heart, but on the app's --spring at 0.26s with an
+       18ms stagger, so the last one lands 330ms after the first frame and the
+       overshoot peaks around 120ms: quick enough to feel snappy, curved enough
+       to feel poured. No rotation, which made them read as flung. The lit disc
+       grows on the same spring in 0.16s, so crossing marks has a little bounce
+       under the tick. It closes in a 120ms fade, the discs drawing back toward
+       the heart under it, while the pick's own ink and sparkles play on the
+       card. All of it is transform and opacity on six small layers
+       (will-change), which the compositor does without repainting anything.
+   Tune these on a phone, not in a desktop browser. What the desktop shows at
+   120Hz with no photos under it says nothing about a feed on an iPhone.
 
    No words anywhere on it (Zoe, 2026-09-25). Each disc is named for VoiceOver.
 
@@ -2633,18 +2644,28 @@ main {
   inset: 0;
   z-index: 240;
   background: color-mix(in srgb, var(--bg) 62%, transparent);
-  opacity: 0;
 }
 .rx-fan {
   position: fixed;
   z-index: 241;
   width: 0;
   height: 0;
-  opacity: 0;
   --burst: var(--heart-note);
 }
+/* Closed (or closing) takes no taps, so the 120ms fade out can't swallow the
+   next one. */
+.rx-veil,
+.rx-fan {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease-in;
+}
 .rx-veil.is-open,
-.rx-fan.is-open { opacity: 1; transition: opacity 0.1s ease-out; }
+.rx-fan.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.16s ease-out;
+}
 .rx-fan[data-type="find"]     { --burst: var(--heart-find); }
 .rx-fan[data-type="photo"]    { --burst: var(--heart-photo); }
 .rx-fan[data-type="activity"] { --burst: var(--heart-activity); }
@@ -2676,14 +2697,24 @@ main {
   background: none;
   color: var(--text);
   cursor: pointer;
+  /* Folded into the heart, and springing out of it along the arc. */
+  opacity: 0;
+  transform: translate(0, 0) scale(0.4);
+  will-change: transform, opacity;
+  transition:
+    transform 0.26s var(--spring) calc(var(--i) * 18ms),
+    opacity 0.12s ease-out calc(var(--i) * 18ms);
+}
+.rx-fan.is-open .rx-item {
+  opacity: 1;
   transform: translate(var(--x), var(--y));
-  transition: transform 0.09s ease-out;
 }
 /* The one under the finger pushes out along its own spoke and grows, so it
-   clears its neighbours instead of overlapping them. */
-.rx-item.hot {
+   clears its neighbours instead of overlapping them. No stagger: it answers now. */
+.rx-fan.is-open .rx-item.hot {
   z-index: 1;
   transform: translate(var(--hx), var(--hy)) scale(1.22);
+  transition: transform 0.16s var(--spring), opacity 0.12s ease-out;
 }
 .rx-disc {
   position: absolute;
@@ -2721,8 +2752,10 @@ main {
   .rx-item.cur .rx-disc::before { opacity: 0.2; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rx-veil.is-open, .rx-fan.is-open, .rx-item { transition: none; }
-  .rx-item.hot { transform: translate(var(--x), var(--y)); }
+  .rx-veil, .rx-fan, .rx-veil.is-open, .rx-fan.is-open,
+  .rx-item, .rx-fan.is-open .rx-item, .rx-fan.is-open .rx-item.hot { transition: none; }
+  .rx-item,
+  .rx-fan.is-open .rx-item.hot { transform: translate(var(--x), var(--y)); }
   .card-like.is-holding svg { transform: translateY(var(--like-nudge)); }
 }
 

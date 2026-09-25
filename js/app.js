@@ -4765,8 +4765,9 @@
      finger crosses each mark (Fan), with the system's own picker feedback, the
      way a date wheel does. Nothing is chosen until the finger lifts, but a fan
      with no words has only the tick to say which mark you are on without looking
-     under your thumb. It is a handful of calls per hold, and the fan was stripped
-     of its motion in the same change, so the frames they cross are still ones. */
+     under your thumb. It is a handful of calls per hold, and the fan's motion is
+     transform and opacity on a few small layers, so the frames they cross are
+     the compositor's, not the main thread's. */
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
   const hapticTick = () => haptic('selectionChanged');
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
@@ -4982,7 +4983,7 @@
 
       veil.hidden = false;
       fan.hidden = false;
-      void fan.offsetWidth;                  // land the transparent frame, so the fade has a start
+      void fan.offsetWidth;                  // land the folded frame, so the discs spring from it
       veil.classList.add('is-open');
       fan.classList.add('is-open');
       // Wake the picker generator now, so the first tick lands on the finger
@@ -5007,11 +5008,12 @@
       window.removeEventListener('hashchange', onAway);
       document.removeEventListener('keydown', onDocKey);
       if (refocus && fan.contains(document.activeElement)) btn.focus();
-      // Gone in one frame, so the pick's ink and sparkles on the card are the
-      // only thing moving, and out of the accessibility tree with it.
-      fan.hidden = true;
-      veil.hidden = true;
       haptic('selectionEnd');
+      // Out of the accessibility tree once the 120ms fade has played (it takes
+      // no taps meanwhile). A fan reopened inside that window keeps its layers.
+      window.setTimeout(() => {
+        if (!open) { fan.hidden = true; veil.hidden = true; }
+      }, prefersReduced() ? 0 : 130);
     }
 
     function choose(key) {

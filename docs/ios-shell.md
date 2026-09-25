@@ -83,8 +83,9 @@ log is the tell: `To Native -> Haptics impact -1` followed by `TO JS undefined`.
 opens, which calls `prepare()` so the first tick isn't late, and `selectionEnd`
 when it closes) fires each time the finger reaches a new mark. A fan with no
 words has only that to say which mark is under the thumb. It is a handful of
-calls per hold, and the fan lost its animation in the same change, so the
-frames those calls cross are still ones. On the web the bookends do nothing and
+calls per hold, and the fan's motion is transform and opacity only (its blur was
+taken out in the same change), so the frames those calls cross are the
+compositor's rather than the main thread's. On the web the bookends do nothing and
 a tick is the usual 8ms `vibrate`.
 
 **Putting them back was tried on 2026-08-27 and reverted the same day.** The
