@@ -57,3 +57,32 @@ resume after a week finds hundreds of new posts and only the first screen of the
 is about to be looked at. And the `live()` gate is **re-checked after the wait**,
 because the wait is a real gap the reader can navigate or start typing inside.
 
+
+**A picture is fetched at the size it is drawn** (2026-09-25). Every upload is
+stored once at upload size (a 512px avatar, a photo up to 1600px), and drawn as
+stored a 30px byline face decoded 512×512 and a 180px Discover tile decoded a
+whole photo: measured over a first page of Discover, 27 times the pixels the
+screen showed and 16.7 MB of downloads. `sizedSrc(url, cssPx)` in app.js now
+asks Supabase's renderer (`storage/v1/render/image`) for the drawn width at the
+screen's density, rounded up to one of five fixed widths (128, 256, 540, 720,
+1080) so pages share cached copies; WebKit gets WebP, cached a year. The same
+page is now about 1 MB and twice the pixels shown rather than 27. **Every sized
+URL carries `resize=contain`**: given only a width, the renderer keeps the
+original height and crops (its default is cover), which turned a 512px avatar
+into a 128×512 strip of the top of a head, and the photo accent sampled from it
+turned the whole app red on the first simulator run. Contain keeps the shape and
+never enlarges. Not rewritten:
+GIFs and videos, the lightbox (it opens on the sized copy the page already has
+so the flight starts at once, then swaps in the original when that has
+decoded), the share card, and Edit profile's crop. The warm-up and the refresh's
+decode wait fetch `cardStill(p)`, the exact picture a card draws; both used to
+hand a Frame's `.mov` to an image loader, which downloaded the whole clip
+(about 10 MB of that 16.7) to learn it couldn't draw it.
+
+**The renderer is on the Pro plan's allowance, and the spend cap is on**, so
+past the month's included source images Supabase restricts it rather than
+billing. That is survivable by design: the first sized image that fails to load
+swaps itself for its original (a capture-phase `error` listener), `resizeOff`
+sends the rest of the session straight to originals, and `sampleColor` retries
+its own off-page load the same way. Tria then looks exactly the same at the old
+weight until the next cycle.

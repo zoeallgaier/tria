@@ -2460,6 +2460,76 @@
     window.addEventListener('hashchange', closeDial);
   }
 
+  /* ── Right-sized images ──────────────────────────────────────────────────────
+     Every picture on Tria is stored once, at upload size: a 512px avatar, a
+     photo up to 1600px on its long edge. Drawn as they are stored, a 30px avatar
+     in a byline decoded 512x512 and a 180px Discover tile decoded a whole photo,
+     which measured out (2026-09-25) at 32 times the pixels the screen showed, on
+     average, over a first page of Discover. That is memory the phone spends and
+     main-thread decode time it pays, and it was the stutter under the reaction
+     fan and under a fast scroll.
+
+     So a picture is asked for at the size it is DRAWN, from Supabase's image
+     renderer (storage/v1/render/image), which answers WebP to WebKit and caches
+     for a year. `sizedSrc(url, cssPx)` rounds the drawn width at the screen's
+     density UP to one of a few fixed widths, so a face in a byline and a face in
+     a comment share one download. Only Supabase objects are rewritten, and never
+     a GIF (the renderer would flatten it) or a video. The lightbox, the share
+     card and Edit profile's crop keep the originals: those are the places a
+     picture is looked AT rather than past.
+
+     THE PLAN'S CAP IS THE RISK, NOT THE BILL. The renderer is billed per
+     distinct source image a month past an included allowance, and with the spend
+     cap on, going past it restricts the renderer instead of charging. So a
+     refused render is survivable by design: the first image that fails to load
+     from it swaps itself for its original, and `resizeOff` sends every later
+     picture this session straight to its original too. Tria still looks the
+     same, it just goes back to the old weight until the next cycle. */
+  const STORE_OBJECT = '/storage/v1/object/public/';
+  const STORE_RENDER = '/storage/v1/render/image/public/';
+  const SIZE_STEPS = [128, 256, 540, 720, 1080];
+  let resizeOff = false;
+  function sizedSrc(url, cssPx) {
+    if (!url || !cssPx || resizeOff || !url.includes(STORE_OBJECT)) return url || '';
+    if (/\.(gif|mp4|mov|m4v|webm)(?=$|[?#])/i.test(url)) return url;
+    const want = Math.ceil(cssPx * Math.min(3, window.devicePixelRatio || 2));
+    const w = SIZE_STEPS.find(step => step >= want) || SIZE_STEPS[SIZE_STEPS.length - 1];
+    // `resize=contain` is not optional. Given a width alone the renderer keeps
+    // the ORIGINAL HEIGHT and crops to the width (its default is cover), so a
+    // 512px avatar at width=128 came back a 128x512 strip of the top of a
+    // head, and the photo accent sampled from it turned the whole app red.
+    // Contain scales to the width and keeps the shape, and never enlarges.
+    return url.replace(STORE_OBJECT, STORE_RENDER) + (url.includes('?') ? '&' : '?') +
+      `width=${w}&quality=75&resize=contain`;
+  }
+  // The original behind a sized picture (and any other URL, unchanged).
+  const fullSrc = (url) => url && url.includes(STORE_RENDER)
+    ? url.replace(STORE_RENDER, STORE_OBJECT).replace(/[?&]width=\d+&quality=\d+&resize=contain$/, '')
+    : url;
+  // The fallback. Capture phase, because an image's error doesn't bubble.
+  document.addEventListener('error', (e) => {
+    const im = e.target;
+    if (!(im instanceof HTMLImageElement) || !im.src.includes(STORE_RENDER)) return;
+    resizeOff = true;
+    im.src = fullSrc(im.src);
+  }, true);
+
+  // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
+  // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
+  // original, since it is the picture being cropped.
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44]];
+  const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
+
+  // The picture a feed card DRAWS for a post, at the size it draws it: a
+  // Frame video's poster (never the clip: an <img> or new Image() handed a
+  // .mov downloads the whole film to find it can't show it), or the photo.
+  // What the warm-up and the refresh's decode wait fetch, so they fetch the
+  // same bytes the card is about to ask for.
+  const cardStill = (p) => {
+    const still = p && p.image ? (isVideoUrl(p.image) ? p.poster : p.image) : '';
+    return still ? sizedSrc(still, 400) : '';
+  };
+
   /* ── Cards ───────────────────────────────────────────────────────────────── */
   // Avatar — a real uploaded photo when the user has one, else the monochrome
   // initial tile. `cls` adds a size/context modifier; `forceInitial` is an escape
@@ -2475,7 +2545,7 @@
       // them pop in a frame late on every navigation (reading as a reload). Eager +
       // the warm decode cache (see warmImages) means they ride in WITH the page.
       return `<span class="${cls} avatar--photo" aria-hidden="true">` +
-          `<img src="${esc(user.avatar)}" crossorigin="anonymous" alt="" decoding="async">` +
+          `<img src="${esc(sizedSrc(user.avatar, opts.px ?? avatarPx(cls)) || user.avatar)}" crossorigin="anonymous" alt="" decoding="async">` +
         `</span>`;
     }
     const name = user ? (user.name || user.username) : '';
@@ -3753,7 +3823,7 @@
     // would need a concentric inner radius, and at this size that curve is mud.
     const media = orig.image
       ? `<span class="quoted-media">` +
-          `<img src="${esc(orig.poster || orig.image)}" alt="" loading="lazy" decoding="async"` +
+          `<img src="${esc(sizedSrc(orig.poster || orig.image, 330))}" alt="" loading="lazy" decoding="async"` +
           (orig.tint ? ` style="background:${esc(orig.tint)}"` : '') + `>` +
         `</span>`
       : '';
@@ -3847,7 +3917,7 @@
       const photoTitleHtml = post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '';
       const foot = photoTitleHtml + cardNoteHtml(post, full) + tagChips(post);
       const mediaHtml =
-        (img.src ? `<img src="${img.src}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` : '') +
+        (img.src ? `<img src="${esc(sizedSrc(img.src, 400))}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` : '') +
         (isVideo
           ? `<button type="button" class="frame-sound" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute', 'frame-sound-ico')}</button>` +
             `<span class="frame-play" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
@@ -4113,7 +4183,7 @@
     const cards = set.map((src, i) => {
       const tint = post.tints && post.tints[i];
       return `<div class="deck-card" data-i="${i}"${tint ? ` style="--ph-fill:${esc(tint)}"` : ''}>` +
-          `<img ${i <= DECK_NEAR ? 'src' : 'data-src'}="${esc(src)}" alt="${esc(alt)}" ` +
+          `<img ${i <= DECK_NEAR ? 'src' : 'data-src'}="${esc(sizedSrc(src, 400))}" alt="${esc(alt)}" ` +
             `loading="lazy" decoding="async" draggable="false">` +
         `</div>`;
     }).join('');
@@ -5257,7 +5327,7 @@
     const w = Math.round(Math.min(220 / d.w, 240 / d.h) * d.w);
     return `<button class="comment-photo" type="button" aria-label="Open ${name}’s photo" ` +
         `style="width:${w}px;aspect-ratio:${d.w} / ${d.h}">` +
-        `<img src="${esc(c.image)}" alt="" loading="lazy" decoding="async">` +
+        `<img src="${esc(sizedSrc(c.image, 220))}" alt="" loading="lazy" decoding="async">` +
       `</button>`;
   }
 
@@ -7163,7 +7233,7 @@
     const style = `aspect-ratio:${d ? frameRatio(d.w, d.h) : '1 / 1'};` +
       (p.tint ? `--ph-fill:${p.tint};` : '');
     return `<div class="ptile-face ptile-face--media" style="${style}">` +
-        (src ? `<img src="${esc(src)}" alt="${esc(label || 'Frame')}" ` +
+        (src ? `<img src="${esc(sizedSrc(src, 180))}" alt="${esc(label || 'Frame')}" ` +
                `loading="lazy" decoding="async">` : '') +
         (isVideo ? `<span class="ptile-play" aria-hidden="true">${svgIcon('play', 'ptile-play-ico')}</span>` : '') +
       `</div>`;
@@ -7286,7 +7356,7 @@
   const whoFaceEl = (u) =>
     `<div class="account-photo ptile-face ptile-face--who${u.avatar ? '' : ' account-photo--empty'}">` +
       (u.avatar
-        ? `<img src="${esc(u.avatar)}" alt="" loading="lazy" decoding="async">`
+        ? `<img src="${esc(sizedSrc(u.avatar, 180))}" alt="" loading="lazy" decoding="async">`
         : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
     `</div>`;
 
@@ -7663,7 +7733,7 @@
           `<div class="account-head">` +
             `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
               (u.avatar
-                ? `<img src="${esc(u.avatar)}" crossorigin="anonymous" alt="" decoding="async">`
+                ? `<img src="${esc(sizedSrc(u.avatar, 130))}" crossorigin="anonymous" alt="" decoding="async">`
                 : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
             `</div>` +
             // The identity column, all on one left axis: name+handle, an inline
@@ -14350,7 +14420,7 @@
         (m.image
           ? `<button class="msg-photo" type="button" data-photo="${esc(m.image)}" aria-label="Open photo"` +
               (dims ? ` style="aspect-ratio: ${dims.w} / ${dims.h}"` : '') + `>` +
-              `<img src="${esc(m.image)}" alt="Photo from ${name}" loading="lazy" decoding="async">` +
+              `<img src="${esc(sizedSrc(m.image, 240))}" alt="Photo from ${name}" loading="lazy" decoding="async">` +
             `</button>`
           : '') +
         (m.text
@@ -17444,6 +17514,7 @@
   let lbClosing = false;       // swallow re-entry while the close flight runs
   let lbGallery = null;        // a carousel's { srcs, index, originOf, onIndex } while it pages
   function openLightbox(src, alt, isVideo, originEl, gallery = null) {
+    src = fullSrc(src);           // a feed or thread <img> hands over its sized copy
     if (!lightbox) {
       lightbox = document.createElement('div');
       lightbox.className = 'lightbox';
@@ -17462,9 +17533,24 @@
     // and let wireClipWindow loop inside [start,end], so the lightbox shows the same
     // stretch the feed does (not the untrimmed original behind it).
     const win = isVideo ? clipWindowFromUrl(src) : null;
+    // Open on the sized copy the page is already showing, so the flight starts
+    // on this frame instead of waiting on a download, and trade it for the
+    // original once that has arrived and decoded (below, after the flight).
+    const shown = !isVideo && originEl ? (originEl.currentSrc || originEl.src || '') : '';
+    const first = shown && shown !== src && fullSrc(shown) === src ? shown : src;
     lightbox.innerHTML = isVideo
       ? `<video src="${esc(src + (win ? '#t=' + Math.max(win.start, 0.001) : ''))}" playsinline controls autoplay></video>`
-      : `<img src="${esc(src)}" alt="${esc(alt || '')}">`;
+      : `<img src="${esc(first)}" alt="${esc(alt || '')}">`;
+    if (first !== src) {
+      const full = new Image();
+      full.decoding = 'async';
+      full.src = src;
+      // Only if the viewer is still on this photo: a carousel may have paged.
+      full.decode().then(() => {
+        const pic = lightbox.querySelector('img');
+        if (pic && pic.getAttribute('src') === first) pic.src = src;
+      }).catch(() => {});
+    }
     // A carousel is the one place a count is the kind thing: the deck in the feed
     // shows where you are with its peeking edge, and this is the mode you tapped
     // into to have it plainly. "2 of 5" and two real buttons, so it can be driven
@@ -18186,7 +18272,13 @@
         sampleCache.set(src, out);
         resolve(out);
       };
-      img.onerror = () => resolve(null);
+      // A sized copy the renderer refused: sample the original instead (this
+      // image is off the page, so the document's fallback never sees it).
+      img.onerror = () => {
+        if (fullSrc(src) === src) { resolve(null); return; }
+        resizeOff = true;
+        sampleColor(fullSrc(src)).then(resolve);
+      };
       img.src = src;
     });
   }
@@ -18506,7 +18598,7 @@
     // colour off a photograph and there isn't one, which is not the same as
     // asking for no colour at all.
     if (!me.avatar) return set(null);
-    sampleColor(me.avatar).then(rgb => set(rgb || null));
+    sampleColor(sizedSrc(me.avatar, 40)).then(rgb => set(rgb || null));
   }
 
   // A person's colour: a palette pick if they made one, otherwise sampled from
@@ -18547,7 +18639,7 @@
     const picked = accentCss(user.accent);
     if (picked) return done(picked);
     if (!user.avatar) return done(null);                      // nothing to sample
-    sampleColor(user.avatar).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
+    sampleColor(sizedSrc(user.avatar, 40)).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
   }
 
   // Light the wash. Three callers, two modes, ONE resolved colour: a profile page,
@@ -19717,8 +19809,10 @@
     // set of pictures nobody was about to look at.
     const WARM_PHOTOS = 10;
     const run = () => {
-      Store.users().forEach(u => warm(u.avatar, true));
-      Store.posts().filter(p => p.image).slice(0, WARM_PHOTOS).forEach(p => warm(p.image, false));
+      // The sizes the byline and the feed card will ask for, or the warm copy
+      // is a different picture from the one the page draws.
+      Store.users().forEach(u => warm(sizedSrc(u.avatar, 40), true));
+      Store.posts().map(cardStill).filter(Boolean).slice(0, WARM_PHOTOS).forEach(src => warm(src, false));
     };
     ('requestIdleCallback' in window) ? requestIdleCallback(run, { timeout: 2000 }) : setTimeout(run, 400);
   }
@@ -19873,7 +19967,7 @@
     const onScreen = new Set(
       [...document.querySelectorAll('#feed > .card')].map(c => c.dataset.id));
     const incoming = path !== '#/' ? []
-      : Store.feed().filter(p => p.image && !onScreen.has(String(p.id))).map(p => p.image);
+      : Store.feed().filter(p => p.image && !onScreen.has(String(p.id))).map(cardStill).filter(Boolean);
 
     // Wait for those to decode before anything moves. Under the ring the first
     // 200ms of it is free — the ring needs that long to drop in regardless — so
