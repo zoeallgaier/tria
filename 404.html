@@ -23,18 +23,38 @@
        <base> is what makes the copy work. Every asset line below is relative,
        and served at /p/<id> they'd resolve to /p/css/app.css and 404. It also
        fixes the self-updater, which fetches 'index.html' and would otherwise
-       ask for /p/index.html and quietly never find a new build. It's a no-op at
-       the root, so index.html and 404.html can stay identical.
+       ask for /p/index.html and quietly never find a new build.
+
+       AT THE ROOT IT COMES OUT AGAIN, because there it is not the no-op it
+       looks like. <base> resolves EVERY relative URL, `#/p/<id>` included, and
+       a fragment link only stays in the same document when it resolves to the
+       document's own URL plus a hash. Two roots don't: the app's, where WebKit
+       holds the document at `capacitor://localhost` with no slash while
+       `location.pathname` answers "/", and any web root carrying a query (the
+       self-updater's `?u=`, an OAuth `?code=`). Under the base a post link
+       there resolved to `…/#/p/<id>`, a DIFFERENT document, so the first tap
+       on one after every launch reloaded the whole app: boot splash and a
+       fresh Store.init. `location.replace('#/…')` did the same, and back from
+       there swapped in the launch document from WebKit's page cache, frozen as
+       it was, rather than routing. Measured in the simulator, 2026-09-25.
+       Without the base a root resolves everything exactly as it did before
+       clean URLs, and index.html and 404.html stay identical.
 
        Runs before the stylesheets so nothing is ever requested from the wrong
        place, and replaceState rather than assignment so there's no history
        entry to go "back" into. A path we don't know lands on the app's own
-       default rather than sitting at an address that means nothing. -->
+       default rather than sitting at an address that means nothing. After the
+       rewrite a clean path's document sits at `/#/…` with no query, which is
+       exactly what the base resolves to, so there it stays. -->
   <base href="/" />
   <script>
     (function () {
       var p = location.pathname;
-      if (p === '/' || p === '/index.html') return;
+      if (p === '/' || p === '/index.html') {
+        var b = document.querySelector('base');
+        if (b) b.parentNode.removeChild(b);
+        return;
+      }
       var m = p.match(/^\/(p|u|daily|i)\/(.+?)\/?$/);
       // The query rides INSIDE the hash, because that's where the router reads
       // it from (`#/p/<id>?pane=likers`). A `?s=` source tag lands there too and
@@ -106,9 +126,9 @@
        and the maskable narrower (66%) because a wordmark's DIAGONAL is what has
        to clear Android's 80% safe circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=663" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=663" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=663" />
+  <link rel="icon" href="icons/icon-32.png?v=664" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=664" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=664" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -137,8 +157,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=663" />
-  <link rel="stylesheet" href="css/app.css?v=663" />
+  <link rel="stylesheet" href="css/tokens.css?v=664" />
+  <link rel="stylesheet" href="css/app.css?v=664" />
 </head>
 
 <body>
@@ -225,16 +245,16 @@
        Local also PINS the version: the old src said `@2`, so any minor release
        shipped itself into production without a deploy. Update deliberately —
        drop a new file in, change this line, bump. -->
-  <script src="js/vendor/supabase-js-2.110.9.min.js?v=663"></script>
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=664"></script>
   <!-- The QR encoder, before storycard.js, which picks it up off `window` if it
        is there and draws a labelled plate in its place if it isn't. Both are
        ahead of app.js because app.js reads `window.StoryCard` to decide whether
        to offer the card row at all. -->
-  <script src="js/vendor/qr.js?v=663"></script>
-  <script src="js/storycard.js?v=663"></script>
-  <script src="js/config.js?v=663"></script>
-  <script src="js/store.js?v=663"></script>
-  <script src="js/app.js?v=663"></script>
+  <script src="js/vendor/qr.js?v=664"></script>
+  <script src="js/storycard.js?v=664"></script>
+  <script src="js/config.js?v=664"></script>
+  <script src="js/store.js?v=664"></script>
+  <script src="js/app.js?v=664"></script>
 </body>
 
 </html>

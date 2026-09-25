@@ -1,5 +1,19 @@
 # Navigation, motion and scroll
 
+**Every page change is one document.** A route is a hash change and nothing
+else, and the moment one resolves to a different document the "navigation" is a
+cold boot: the splash, a whole-world `Store.init`, and a second document in the
+web view's history. That happened on every first post tap from 2026-09-22 to
+09-25. `<base href="/">` (added for clean `/p/<id>` links, see index.html) resolves
+`<a href="#/p/x">` and `location.replace('#/…')` against itself, and in the app
+the document sits at `capacitor://localhost` with no slash, although
+`location.pathname` answers `/`. So `#/p/x` became `capacitor://localhost/#/p/x`,
+a different URL. It happened on a web root carrying a query too. At the root the
+base is now removed before anything resolves against it. If the splash ever
+shows up on a tap again, check the document URL (`location.href`, not
+`pathname`) against what the link resolved to (`a.href`) first.
+`location.hash =` never had the problem, which is why the tabs kept working.
+
 **Page changes have NO transition, as of 1.2.** `renderPage` builds the
 destination and mounts it in the same task as the navigation: the new page is
 there on the next frame and the old one is gone. There is no `.page.leave`, no
