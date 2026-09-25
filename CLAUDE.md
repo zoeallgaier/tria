@@ -74,10 +74,12 @@ up, thumbs down, ha ha, whoa) on a quarter arc, and the one under the finger's
 bearing is the pick. Zoe approved the drawings and the fan on a canvas
 (https://claude.ai/artifact/PuR89X1b68P16TFXgFgHhN) and said **no words on it**;
 the names exist for VoiceOver and the author's Updates only. **Nothing on it
-moves, it only fades**: every disc is in place and they fade in one at a time
-from the heart (0.14s, 40ms apart), after three passes on her phone (lavish read
-slow, a spring still read jumpy). No blur, no transform, anywhere on the
-gesture; the history is in the fan's block in app.css. It **ticks** with the system picker haptic as the finger crosses each
+moves but the disc under the finger**: every disc is in place and they fade in
+one at a time from the heart (0.14s, 40ms apart), after three passes on her
+phone (lavish read slow, a spring still read jumpy). The lit disc then steps
+12px out along its bearing and grows a tenth, because a bloom under a fingertip
+was hard to see (her fourth pass). No blur and no other transform anywhere on
+the gesture; the history is in the fan's block in app.css. It **ticks** with the system picker haptic as the finger crosses each
 mark, the one exception to the buzz rule at `hapticTap`. It is one private
 like row with a `reaction` column, so every like rule still holds. The code is
 `REACTIONS`, `react_*` in `ICONS`, `Fan` and `wireHeart` in app.js,

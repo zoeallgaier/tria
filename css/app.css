@@ -2587,8 +2587,9 @@ main {
    that dims the page. It is the + speed dial's vocabulary: frosted discs you
    reach for, each blooming in a colour behind its glyph.
 
-   NOTHING ON IT MOVES, ONLY FADES: the third pass on Zoe's phone
-   (2026-09-25), and her call. How it got here, so nobody walks it back:
+   NOTHING ON IT MOVES BUT THE DISC UNDER THE FINGER: the third and fourth
+   passes on Zoe's phone (2026-09-25), and her call. How it got here, so nobody
+   walks it back:
      · It shipped lavish: a blurred veil, the discs fluttering out along the
        arc on a 0.4s spring with a rotation. It read slow, and the BLUR was
        the cost that mattered (fading a backdrop-filter makes WebKit re-blur
@@ -2601,8 +2602,14 @@ main {
      · Now every disc is already where it lives and they fade in ONE AT A TIME
        along the arc, heart first (0.14s each, 40ms apart, the last one full at
        300ms). That keeps the sense of the fan opening out from the heart with
-       nothing travelling. The lit disc answers in its bloom, not its size, and
-       the close is one quick fade of everything. The veil is a flat dim.
+       nothing travelling. The close is one quick fade of everything. The veil
+       is a flat dim.
+     · Then the one exception, asked for by name: the lit disc STEPS OUT 12px
+       along its own bearing and grows a tenth (0.12s). A bloom alone was hard
+       to read, because the fingertip is usually sitting on the lit disc. 12px
+       puts it at radius 128, where the approved canvas drew it. One disc going
+       a finger's width is not five crossing the page, and it follows the
+       finger rather than arriving on its own.
    Tune it on a phone, never in a desktop browser.
 
    No words anywhere on it (Zoe, 2026-09-25). Each disc is named for VoiceOver.
@@ -2686,8 +2693,9 @@ main {
   background: none;
   color: var(--text);
   cursor: pointer;
-  /* Always in its place on the arc. Only its opacity ever changes: in one at a
-     time from the heart outward, out all together. */
+  /* Always in its place on the arc. Its opacity is what changes, in one at a
+     time from the heart outward and out all together; the only thing that
+     moves is the lit one, below. */
   transform: translate(var(--x), var(--y));
   opacity: 0;
   will-change: opacity;
@@ -2695,7 +2703,16 @@ main {
 }
 .rx-fan.is-open .rx-item {
   opacity: 1;
-  transition: opacity 0.14s ease-out calc(var(--i) * 40ms);
+  transition: opacity 0.14s ease-out calc(var(--i) * 40ms), transform 0.12s ease-out;
+}
+/* The disc the finger points at steps out along its own bearing (--hx/--hy are
+   the same arc at a longer radius), clear of the fingertip. Only while open:
+   a closed fan never moves anything, so a quick reopen elsewhere can't glide
+   the discs across. Pointing is by bearing, not hit-testing, so moving the
+   disc can't change which one is lit. */
+.rx-fan.is-open .rx-item.hot {
+  z-index: 1;
+  transform: translate(var(--hx), var(--hy)) scale(1.1);
 }
 .rx-disc {
   position: absolute;

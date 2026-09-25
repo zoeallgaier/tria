@@ -707,13 +707,17 @@ and they appear on a quarter arc (184° to 88°, radius 116), because the heart
 sits at a card's bottom right and a half ring would run off the screen; it turns
 down under the toolbar and mirrors near a left edge. The angle picks, not the
 distance, so every mark is the same short drag. No words on it at all, on Zoe's
-call. **Nothing on it moves; it only fades**, the third pass on her phone. It
+call. **Nothing on it moves but the disc under the finger**, the third and
+fourth passes on her phone. It
 shipped lavish (a blurred veil, the discs fluttering out on a 0.4s spring with a
 rotation) and read slow; a 100ms fade of the whole thing read like a pop-up;
 the discs springing out quickly still read a little jumpy. Now every disc sits
 where it lives and they fade in one at a time from the heart outward (0.14s
-each, 40ms apart), the lit disc answers in its bloom rather than its size, the
-held heart no longer sinks, and it closes in a 120ms fade that takes no taps.
+each, 40ms apart), the held heart no longer sinks, and it closes in a 120ms
+fade that takes no taps. The one thing that moves is the lit disc: it steps
+12px out along its own bearing (to radius 128, where the canvas drew it) and
+grows a tenth, because a bloom under a fingertip can't be seen. Zoe asked for
+it by name; it is one disc going a finger's width, following the finger.
 The veil is a flat dim: a faded backdrop blur re-blurs the page every frame. The finger learns where it
 is from a **tick** instead, the system picker haptic, once per mark reached.
 And nothing on it is selectable: the fan opens under a finger that is still

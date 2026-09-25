@@ -4963,6 +4963,8 @@
     // just right of straight up, so the arc stays inside a card's right edge.
     const ANGLES = [184, 160, 136, 112, 88];
     const RADIUS = 116, DISC = 44;
+    // How far the lit disc steps out along its bearing, clear of the fingertip.
+    const LIFT = 12;
     // Room the fan needs on each side of the heart before it turns around.
     const REACH = RADIUS + DISC / 2 + 24;
     let veil = null, fan = null, ghost = null, open = null, holding = 0;
@@ -5033,8 +5035,11 @@
       const up = flip ? 1 : -1;
       fan.querySelectorAll('.rx-item').forEach((item, i) => {
         const a = ANGLES[i] * Math.PI / 180;
-        item.style.setProperty('--x', `${(Math.cos(a) * RADIUS * side).toFixed(1)}px`);
-        item.style.setProperty('--y', `${(Math.sin(a) * RADIUS * up).toFixed(1)}px`);
+        const x = Math.cos(a) * side, y = Math.sin(a) * up;
+        item.style.setProperty('--x', `${(x * RADIUS).toFixed(1)}px`);
+        item.style.setProperty('--y', `${(y * RADIUS).toFixed(1)}px`);
+        item.style.setProperty('--hx', `${(x * (RADIUS + LIFT)).toFixed(1)}px`);
+        item.style.setProperty('--hy', `${(y * (RADIUS + LIFT)).toFixed(1)}px`);
         const on = item.dataset.rx === mine;
         item.classList.toggle('cur', on);
         item.classList.remove('hot');
