@@ -18945,12 +18945,10 @@
   const APP_STORE_URL = 'https://apps.apple.com/app/id6796104809';
 
   const GUEST_PITCH = {
-    circle: { title: 'My Circle', lede: [
-      'Your circle is the people you actually know, and this is where their posts land. Newest first, nothing ranked, nothing you didn’t ask for.',
-      'Make an account, add a few friends, and this page fills up with them.'] },
+    circle: { title: 'My Circle', kicker: '', lede: [
+      'A chronological feed of all your friends, favorite creators, and more.'] },
     chats: { title: 'Chats', lede: [
-      'Message your friends, start a group, or finally plan the thing you keep saying you’ll plan.',
-      'Chats need an account. It takes about a minute.'] },
+      'Message your friends, start a group, or finally plan the thing you keep saying you’ll plan.'] },
     profile: { title: 'Profile', lede: [
       'This is where you’d be. A photo, a bio, the song on repeat, and everything you’ve shared.',
       'Grab your @handle before somebody else does.'] },
@@ -18964,13 +18962,13 @@
     mountToolbar({ title: p.title });
     view.innerHTML =
       `<section class="view about guest-pitch">` +
-        mastheadEl('Social media made local', p.title) +
+        mastheadEl(p.kicker === undefined ? 'Social media made local' : p.kicker, p.title) +
         `<div class="about-body">` +
           p.lede.map(t => `<p class="about-lede">${t}</p>`).join('') +
           `<div class="guest-acts">` +
             `<a class="auth-submit publish-fill is-solid guest-join" href="#/join">Create an account</a>` +
             `<p class="auth-alt">Already on Tria? <a href="#/signin">Log in</a></p>` +
-            `<p class="guest-more"><a class="about-more" href="#/discover">Look around Discover</a></p>` +
+            (kind === 'post' ? `<p class="guest-more"><a class="about-more" href="#/discover">Look around Discover</a></p>` : '') +
             `<p class="guest-more">On iPhone? <a class="about-more" href="${APP_STORE_URL}" ` +
               `target="_blank" rel="noopener">Get Tria on the App Store</a></p>` +
           `</div>` +
