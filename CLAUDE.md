@@ -62,7 +62,10 @@ Three measured changes, all in [docs/views.md](docs/views.md) and
 [docs/data.md](docs/data.md): every picture is fetched at the size it is drawn
 from Supabase's image renderer (`sizedSrc`; the plan's cap falls back to
 originals), a feed builds its first screen first (`buildInSlices`) and dates
-reuse one formatter (`dayMT`), and the App Store build paints a returning
+reuse one formatter (`dayMT`), a long feed (Circle, a profile) is **only built
+as far as it is read**, two screens ahead of the reader (`lazy`; a whole
+circle's history on the page froze the app on every like, because each
+animation made WebKit walk every card's layers), and the App Store build paints a returning
 reader's last world at once from IndexedDB while the real one loads
 (`Store.init({ keep })`, deleted on sign-out). **Bump `KEEP_V` in store.js when
 `state` changes shape.**

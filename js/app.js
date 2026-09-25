@@ -6549,48 +6549,85 @@
      `content-visibility: auto` would have bought the layout half for free and is
      NOT available: see the tombstone over .card in app.css (blank posts on iOS).
 
-     The debt is paid in full, at once, by anything that needs the whole page:
-     a scroll restore to a point below the fold (restoreScroll), and any later
-     syncCards (a refresh, a filter), which starts from a whole feed so its
-     positions and signatures mean what they always meant. A page that has been
-     left owes nothing. `after` is run on every card as it is placed, for the
-     state a caller paints over cards after building them (the active tag).
+     A LONG FEED IS ONLY BUILT AS FAR AS YOU READ (2026-09-25). The slices used
+     to run on to the very last post, so a circle with history carried all of it:
+     1,179 cards and 44,600 elements on Zoe's, about eight render layers a card.
+     Every animation that starts or stops anywhere on the page makes WebKit walk
+     that whole layer tree, and a like starts and stops several (the press, the
+     ink, the sparkles): a 3.8s freeze on the simulator, measured, and none at
+     all with the other cards taken out. So My Circle and a profile's column
+     (`lazy`) keep BUILT_AHEAD screens built past the bottom of the screen and
+     build on as the reader scrolls. Nothing on the page changes for it: the
+     same posts in the same order, never a "load more", and the build stays
+     ahead of any flick. Discover's search stacks several runs on one page, so
+     its cards are built to the end as before.
+
+     The debt is paid at once by anything that needs the page to exist: a
+     scroll restore builds down to the point it lands on (restoreScroll), and a
+     later syncCards (a refresh, a filter) takes over the same container's debt
+     and builds on from it. A page that has been left owes nothing. `after` is
+     run on every card as it is placed, for the state a caller paints over cards
+     after building them (the active tag).
 
      A profile's column builds its own cards (paintPosts) and pays out through
      the same `buildInSlices`, so both kinds of feed share one debt. */
   const FIRST_SCREEN = 6;
   const CARD_SLICE = 12;
-  let cardsOwed = null;          // { finish, drop } for the one build still paying out
+  const BUILT_AHEAD = 2;         // screens kept built below the one you're reading
+  let cardsOwed = null;          // { container, finish, fillTo, drop } for the one build still owing
   const payCards = () => { if (cardsOwed) cardsOwed.finish(); };
+  // Enough of the debt for the page to reach `y` and BUILT_AHEAD screens past it.
+  const payCardsTo = (y) => { if (cardsOwed) cardsOwed.fillTo(y); };
   // For a container about to be emptied: its debt is void, not due.
   const dropCards = () => { if (cardsOwed) cardsOwed.drop(); };
 
   // `place(limit, late)` builds up to `limit` more NEW cards into `container`
   // and says true once nothing is left; `late` is set for every slice after the
-  // first screen, for the card to skip its rise.
-  function buildInSlices(container, place) {
+  // first screen, for the card to skip its rise. `lazy` builds only while the
+  // end of the container is within BUILT_AHEAD screens of the bottom of the
+  // screen, and wakes on a scroll to check again.
+  function buildInSlices(container, place, lazy = false) {
     if (place(FIRST_SCREEN, false)) return;
     let frame = 0, timer = 0;
-    const stop = () => { cancelAnimationFrame(frame); clearTimeout(timer); cardsOwed = null; };
+    const end = () => container.getBoundingClientRect().bottom + window.scrollY;
+    const reach = (y) => y + window.innerHeight * (1 + BUILT_AHEAD);
+    const wake = () => { if (!frame && !timer) next(); };
+    const stop = () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      frame = timer = 0;
+      if (lazy) for (const ev of ['scroll', 'resize']) window.removeEventListener(ev, wake, { passive: true });
+      if (cardsOwed === owed) cardsOwed = null;
+    };
     const owed = {
+      container,
       finish() { stop(); if (container.isConnected) place(Infinity, true); },
+      fillTo(y) {
+        if (!container.isConnected) { stop(); return; }
+        while (end() < reach(y)) if (place(CARD_SLICE, true)) { stop(); return; }
+      },
       drop: stop,
     };
     const slice = () => {
-      if (cardsOwed !== owed) return;
-      if (!container.isConnected) { cardsOwed = null; return; }   // the page was left
-      if (place(CARD_SLICE, true)) { cardsOwed = null; return; }
+      frame = timer = 0;
+      // Replaced, or the page was left: let go of the scroll too.
+      if (cardsOwed !== owed || !container.isConnected) { stop(); return; }
+      if (lazy && end() >= reach(window.scrollY)) return; // far enough; a scroll wakes it
+      if (place(CARD_SLICE, true)) { stop(); return; }
       next();
     };
     // After the frame that paints, not inside it, so each slice has a frame of
     // its own and a scroll in the meantime is never kept waiting.
-    const next = () => { frame = requestAnimationFrame(() => { timer = setTimeout(slice, 0); }); };
+    const next = () => { frame = requestAnimationFrame(() => { frame = 0; timer = setTimeout(slice, 0); }); };
     cardsOwed = owed;
+    if (lazy) for (const ev of ['scroll', 'resize']) window.addEventListener(ev, wake, { passive: true });
     next();
   }
 
-  function syncCards(container, list, wire, after) {
-    payCards();
+  function syncCards(container, list, wire, after, lazy = false) {
+    // This container's unbuilt tail is built on below from the new list; any
+    // other container's is paid in full first (Discover stacks several).
+    if (cardsOwed && cardsOwed.container === container) dropCards(); else payCards();
     const desired = new Set(list.map(p => String(p.id)));
     container.querySelectorAll(':scope > .card').forEach(c => {
       if (!desired.has(c.dataset.id)) c.remove();          // gone from the feed
@@ -6598,6 +6635,12 @@
     container.querySelectorAll(':scope > :not(.card)').forEach(n => n.remove()); // stale empty-state
     const existing = new Map();
     container.querySelectorAll(':scope > .card').forEach(c => existing.set(c.dataset.id, c));
+
+    // The last card already on the page. Everything up to it is placed in the
+    // first pass whatever the limit, so a new post can't be left out of the
+    // middle of cards that are already there while a lazy build waits.
+    let lastOld = -1;
+    list.forEach((p, j) => { if (existing.has(String(p.id))) lastOld = j; });
 
     let i = 0;
     // Place cards from `i` on, until `limit` NEW ones have been built (a card
@@ -6609,7 +6652,7 @@
         const p = list[i];
         const id = String(p.id);
         const old = existing.get(id);
-        if (!old && made >= limit) return false;
+        if (!old && made >= limit && i > lastOld) return false;
         let node;
         if (old) {
           const fresh = makeCard(p);
@@ -6641,7 +6684,7 @@
         if (after) after(node);
       }
       return true;
-    });
+    }, lazy);
   }
 
   function renderFeed() {
@@ -6704,7 +6747,7 @@
     // as each card is placed, so a card built a slice later wears it too.
     syncCards(feedEl, list, wireFeedCard, (card) =>
       card.querySelectorAll('.tag[data-tag]').forEach(btn =>
-        btn.classList.toggle('active', btn.dataset.tag === activeTag)));
+        btn.classList.toggle('active', btn.dataset.tag === activeTag)), true);
 
     // Posted! The post you just made lands at the top of the feed — welcome it
     // with a sparkle. Consume the flag on this one pass (if a filter hid the new
@@ -7970,7 +8013,7 @@
         feedEl.insertBefore(frag, tail);
         made.forEach(wireTags);
         return i >= shown.length;
-      });
+      }, true);
     };
 
     paintPosts(true);
@@ -19461,7 +19504,7 @@
     const y = filed ?? (TAB_SCROLL.has(path) ? pathScroll.get(path) : undefined) ?? 0;
     if (!y) { scrollTop(false); return; }
     // Somewhere down the page: it has to exist before it can be scrolled to.
-    payCards();
+    payCardsTo(y);
     window.scrollTo(0, y);
     const moves = ['wheel', 'touchstart', 'keydown'];
     let frames = 0, stopped = false;
@@ -20054,12 +20097,16 @@
     // exactly what is about to appear.
     const onScreen = new Set(
       [...document.querySelectorAll('#feed > .card')].map(c => c.dataset.id));
-    // Capped at a first screen's worth: new posts arrive at the TOP, and since
-    // a feed is built a slice at a time (buildInSlices), "not on screen" can
-    // also mean "not built yet", which is not a reason to hold a paint for it.
-    const incoming = path !== '#/' ? []
-      : Store.feed().filter(p => p.image && !onScreen.has(String(p.id)))
-          .slice(0, FIRST_SCREEN).map(cardStill).filter(Boolean);
+    // Only posts that land ABOVE the last card built: a feed is built only as
+    // far as it's read (buildInSlices), so "not on screen" also means every
+    // older post not built yet, which is not a reason to hold a paint for it.
+    // Capped at a first screen's worth all the same.
+    const feed = path !== '#/' ? [] : Store.feed();
+    let edge = onScreen.size ? 0 : FIRST_SCREEN;     // an empty feed takes the top
+    feed.forEach((p, j) => { if (onScreen.has(String(p.id))) edge = j; });
+    const incoming = feed.slice(0, edge)
+      .filter(p => p.image && !onScreen.has(String(p.id)))
+      .slice(0, FIRST_SCREEN).map(cardStill).filter(Boolean);
 
     // Wait for those to decode before anything moves. Under the ring the first
     // 200ms of it is free — the ring needs that long to drop in regardless — so

@@ -102,13 +102,37 @@ drawing was 617ms. Two things were in it, and neither was the cards' code:
 - **Building every card before painting any.** `buildInSlices` (app.js) lays
   down the first six cards on the spot and the rest twelve to a frame after
   the first paint, skipping the rise below the fold. `syncCards` (Circle,
-  Discover's list) and a profile's `paintPosts` both pay out through it, and
-  the debt is settled in full by anything that needs the whole page: a scroll
-  restore below the fold (`restoreScroll` calls `payCards`) and any later
-  `syncCards`. A profile column being repainted drops its debt instead
-  (`dropCards`). Per-card wiring happens as each slice lands, never as a sweep
-  afterwards, or the cards of a later slice go unwired.
+  Discover's list) and a profile's `paintPosts` both pay out through it.
+  Per-card wiring happens as each slice lands, never as a sweep afterwards, or
+  the cards of a later slice go unwired.
 
 Together that block is now 72ms, and the first card arrives about 70ms after
 the data rather than about 620. `content-visibility` is still not the tool
 for this; see the tombstone over `.card` in app.css.
+
+**A long feed is only built as far as it is read** (2026-09-25, the same day).
+The slices above still ran on to the last post, so Zoe's Circle carried its
+whole history on the page: 1,179 cards, 44,600 elements, about eight render
+layers a card. Liking a post froze the app for a second or two, and the like
+was not the cause: EVERY animation that starts or stops anywhere on the page
+makes WebKit walk the whole layer tree, and a like starts and stops several
+(the press, the ink, the sparkles). Measured on the simulator, one scale on the
+heart cost a 300ms stall and a real tap up to 3.8s; the same taps with the
+other cards taken out cost nothing. So Circle and a profile's column build
+`lazy`: they keep `BUILT_AHEAD` (two) screens built below the one being read
+and build on as the reader scrolls, which put Zoe's launch at 18 cards and 778
+elements and a like at no stall at all. Nothing on the page changes for it:
+the same posts in the same order, never a "load more", and a hard flick never
+reached the unbuilt end in testing. Discover's search stacks several runs on
+one page, so its cards are still built to the end.
+
+The debt is paid by anything that needs the page to exist: a scroll restore
+builds down to where it lands (`restoreScroll` calls `payCardsTo`), and a later
+`syncCards` on the same container takes over its debt and builds on from it,
+always placing everything up to the last card already on the page so a new
+post can't go missing from the middle. A profile column being repainted drops
+its debt (`dropCards`). **Anything that looks a card up by id in a long feed
+has to allow for it not being built yet**; the one that did (the photo warm
+before a refresh paints, in `showWorld`) now only looks above the last built
+card. A like, or any small animation, is the canary for page size: if one
+starts to hitch, count the elements before blaming the animation.
