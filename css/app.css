@@ -6170,8 +6170,8 @@ button.poll-option:disabled { cursor: default; }
    (Zoe). The worse half was outside the tile: .card--song was missing from
    the text types' inset rule, so the whole post ran to the screen's edge. The title takes the quote's serif step so it reads as a headline,
    the artist the quoted byline's meta line. The whole tile is the link out
-   (songLink); the play disc at the end says so without a word, in butter,
-   because the hue is the type's only mark on the card. */
+   (songLink); the play disc at the end says so without a word, in the
+   reader's own colour (see .card-song-play). */
 .card-song {
   display: flex;
   align-items: center;
@@ -6214,8 +6214,14 @@ button.poll-option:disabled { cursor: default; }
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--type-song) 38%, transparent);
-  color: var(--type-song-ink);
+  /* The reader's own colour (Zoe, 2026-10-22), through the token the card's
+     heart already wears, so the two marks on a Music post never disagree. No
+     colour picked falls back to butter, the type's hue, as the heart does;
+     "no colour" stamps the mono grey, and the disc means what it says. A
+     wash of the mark and not the band: four hues of Tria's ramp on a 40px
+     disc is the round +'s problem, and a mark colour has no ramp. */
+  background: color-mix(in srgb, var(--heart-song) 22%, transparent);
+  color: var(--heart-song);
 }
 .card-song-play svg { width: 18px; height: 18px; margin-inline-start: 2px; }
 /* The pick box and the result rows set display, which beats [hidden]: an
