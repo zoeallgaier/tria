@@ -80,12 +80,14 @@ on a scroll up on EVERY route: `holdsHeader()` returns false, so profiles and
 dailies no longer hold theirs. My Circle wears the wordmark and Discover the
 search field in that same centred slot.
 
-**Every secondary menu is one bottom sheet**, Instagram's Create sheet being
-the reference: openSheet's panel and openBarMenu's card alike sit full width on
-the floor of the screen, grab handle, bold centred title, rows of a 26px mark
-and a label, solid `--surface`, plain dim, NO Cancel (a tap outside, Escape, or
-a pull down: `dragToClose`). A `dock` ("Done") still docks. A radio set shows a
-check, not a fade. The Create picker is that sheet's list.
+**Every secondary menu is one sheet in iOS's share-sheet shape**: openSheet's
+panel and openBarMenu's card alike FLOAT 8px in from the sides and the bottom,
+rounded 34px on all corners, with a grab handle, a bold centred title, and the
+rows in one rounded group (`.sheet-items` / `.sheet-group`) a step lighter than
+the panel (`--sheet-bg` / `--sheet-card`, stepping up from dark paper). Solid,
+plain dim, NO Cancel (a tap outside, Escape, or a pull down: `dragToClose`). A
+`dock` ("Done") is its own rounded group below. A radio set shows a check, not a
+fade. The Create picker is that sheet's list.
 
 **The CSS glass is SIMPLIFIED** (tokens.css, the `--glass-*` block): a thin
 fill, the blur, one hairline, and nothing else. No specular rim, no drop

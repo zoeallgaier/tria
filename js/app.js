@@ -6456,7 +6456,9 @@
       `<div class="bar-menu" role="menu" aria-label="${esc(label || 'Menu')}">` +
         `<span class="sheet-grab" aria-hidden="true"></span>` +
         (label ? `<p class="sheet-title" aria-hidden="true">${esc(label)}</p>` : '') +
-        rows +
+        // The rows' one rounded group, the share sheet's shape (see the sheet
+        // block in app.css). openSheet's `.sheet-items` is the same card.
+        `<div class="sheet-group">${rows}</div>` +
       `</div>`;
     document.body.appendChild(scrim);
     document.body.style.overflow = 'hidden';
