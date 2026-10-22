@@ -12790,8 +12790,7 @@
     const commit = async (btn, song) => {
       if (btn) btn.disabled = true;
       try {
-        // Setting a song hangs it on your profile too, in the same write (see
-        // Store.setListeningTo). So this lands you back where you came from:
+        // This lands you back where you came from:
         // from the rail, on the rail; from a pin, on the card that just changed.
         const res = await Store.setListeningTo(song);
         if (!res.ok) { toast(res.error); return; }
@@ -12849,7 +12848,7 @@
 
      THE SONG PIN IS THE LISTENING STATUS, not a copy of it. `{k:'song'}` carries
      no track — it is a window on `listening_to`, the same row Discover's rail
-     draws — which is why setting a song hangs it on your profile, changing it
+     draws — which is why changing the song
      changes the card, letting it expire takes the card with it, and taking the
      card off leaves the song in the rail. It was a copy for about a day, and the
      copy meant two songs to keep in step and a card that could go on naming a

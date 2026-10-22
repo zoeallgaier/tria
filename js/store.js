@@ -2929,7 +2929,8 @@ const Store = (() => {
 
   /* THE SONG AND ITS PIN MOVE TOGETHER, in one statement on one row.
 
-     Setting a song pins it, because the profile is where you would look for what
+     (2026-10-22: setting a song no longer pins it; see the note in the body.
+     What follows is the history.) Setting a song pinned it, because the profile is where you would look for what
      somebody is on and the rail is a strip of 88px squares on another page. It
      is not forced: the card comes off from its own ••• and the song stays in the
      rail, which is the whole reason the pin is a pointer rather than a copy.
@@ -2961,8 +2962,11 @@ const Store = (() => {
     const pins = u.pins || [];
     const onProfile = pins.some(e => e.k === 'song');
     let next = pins;
-    if (value && !onProfile && pins.length < PIN_MAX) next = pins.concat([{ k: 'song' }]);
-    else if (!value && onProfile) next = pins.filter(e => e.k !== 'song');
+    // No auto-pin (Zoe, 2026-10-22): sharing a song is a post now, and it
+    // lands in the feed and on Discover, so hanging it on your profile too is
+    // a third copy nobody asked for. A song pin is still yours to make; a
+    // cleared song still takes one down, a window on nothing.
+    if (!value && onProfile) next = pins.filter(e => e.k !== 'song');
     const movesPin = next !== pins && hasPinsColumn;
     const nextPins = next.length ? next : null;
 
