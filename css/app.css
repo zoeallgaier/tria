@@ -1069,6 +1069,32 @@ body.toolbar-live .view { padding-top: 1rem; }
 .toolbar-mark .wordmark { height: 100%; background: var(--text); }
 .topbar--reading .toolbar-mark { opacity: 0; }
 
+/* ── The controls go with the header (2026-10-22) ─────────────────────────────
+   Zoe: the top buttons can disappear on scroll. Through 1.7 they stayed up on
+   every route ("somewhere to go and fetch a control from is worse than the
+   strip of screen it was buying back"), and the hide-on-scroll gesture before
+   that was taken out because the bar and its material were two fades racing.
+   Neither holds now: the title, the wordmark and Discover's field already
+   leave on .topbar--reading, the tab bar folds on the same read down, and one
+   class driving all of them cannot race itself. A scroll up brings it all back.
+
+   On the two SLOTS, not the controls, because .toolbar-btn, .toolbar-commit
+   and .toolbar-cta each declare a `transition` of their own and a fade added
+   to any one would cost the others theirs. A slot holding focus stays, as the
+   field does. Native fades each disc instead (TriaToolbar.syncAway). */
+.toolbar-page,
+.toolbar-actions {
+  transition: opacity var(--dur-quick) var(--ease), visibility var(--dur-quick);
+}
+.topbar--reading .toolbar-page:not(:focus-within),
+.topbar--reading .toolbar-actions:not(:focus-within) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.topbar--edge-instant .toolbar-page,
+.topbar--edge-instant .toolbar-actions { transition: none; }
+
 /* ── One header on every page (1.8) ───────────────────────────────────────────
    Under a bar, a page's big serif nameplate is not drawn: its name is the bar's
    centred title, there from the top (syncToolbarTitle), the same on every
@@ -4699,6 +4725,24 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+/* The 1/5 counter: a plain position readout for anyone who can't read the
+   peeking edge. White on smoke like the lightbox pager; the figure's aria-label
+   already speaks it, so the badge is hidden from VoiceOver. */
+.deck-count {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 3;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 .deck-card {
   position: absolute;
