@@ -6344,11 +6344,9 @@
     // The type's own mark, the vocabulary the composer's attach bar already
     // taught (TYPE_GLYPH). The Daily wears a sun of its own: a prompt for today,
     // which no type's mark says, and it takes no pastel because it isn't a type.
-    // The name rides INSIDE the panel, where openSheet's own title floats above
-    // it over the page: over a frozen feed of photographs a line of small grey
-    // type on nothing is a line nobody can read.
+    // No visible title (Zoe's call): six tiles that say their own names need no
+    // heading. The name stays for VoiceOver, on the group and on the sheet.
     const grid =
-      `<p class="make-title">Make something</p>` +
       `<div class="make-grid" role="group" aria-label="Make something">` +
         rows.map((row, i) =>
           `<button class="make-tile" type="button" data-i="${i}"` +

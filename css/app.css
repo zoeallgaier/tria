@@ -4157,23 +4157,18 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .sheet-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
 
 /* ── The compose sheet (1.8): a share-sheet grid ──────────────────────────────
-   My Circle's compose mark raises this (openComposeDial). Four across, the way
-   the system share sheet lays out its row of apps: a round tile in the type's
+   My Circle's compose mark raises this (openComposeDial). THREE ACROSS, two
+   rows (Zoe's call): the five types and the Daily make six. Music, once its
+   column exists, is a seventh and starts a third row. A round tile in the type's
    own pastel with its mark on it in --on-type (AA on all six), and the name
    under it. The Daily isn't a type, so it takes no pastel: a quiet disc in the
    panel's own ink. Taps compress through the shared press engine, and the
    tile's focus ring is the sheet rows' own. */
-.sheet-scrim--make .sheet-items { padding: 0.9rem 0.6rem 0.9rem; }
-.make-title {
-  margin: 0 0 1rem;
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
+.sheet-scrim--make .sheet-items { padding: 1.2rem 0.6rem 1.1rem; }
 .make-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  row-gap: 1.1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  row-gap: 1.3rem;
   column-gap: 0.25rem;
 }
 .make-tile {

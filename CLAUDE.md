@@ -36,7 +36,7 @@ the foot of a page mid-scroll).
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
 trailing. The compose mark raises a SHARE-SHEET picker (`openComposeDial`, openSheet
-holding a `.make-grid`): big round tiles in each type's pastel, four across,
+holding a `.make-grid`): big round tiles in each type's pastel, three across, no visible title,
 the five types, then the Daily (a sun, no pastel) and Music. Each row presses the composer's matching
 attach button on mount (`pendingAttach`); the type is still inferred. **My
 Circle lost its filter**; profiles, Discover and Updates keep theirs. On the
