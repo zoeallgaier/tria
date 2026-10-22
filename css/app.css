@@ -767,13 +767,18 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
   inset: 0;
   z-index: -1;                      /* the bar's own background; .topbar has none */
   pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg) 84%, transparent) 0%,
-    color-mix(in srgb, var(--bg) 70%, transparent) 58%,
-    color-mix(in srgb, var(--bg) 44%, transparent) 100%);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  /* 1.8: THE DEFAULT BLUR, NOT A PAINTED BAND (Zoe: no heading backgrounds).
+     The paper ramp that used to sit here is gone; what is left is a blur with
+     a whisper of the page's own paper in it, iOS's default bar material, and a
+     soft bottom edge so the page dissolves into it instead of meeting a line.
+     The app's native header is the system's own blur shaped the same way
+     (TriaToolbarMaterial). */
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent);
+  bottom: -22px;
   transition: opacity var(--dur-quick) var(--ease);
 }
 .topbar--bare::before { opacity: 0; }
@@ -1031,6 +1036,42 @@ body.toolbar-live .view { padding-top: 1rem; }
    Keep the two numbers separate if either moves: 44 is the HIG floor and is not
    a style knob, this is. */
 .toolbar-btn svg { width: 24px; height: 24px; }
+/* JUST ICONS AT THE TOP OF A PAGE (1.8). Zoe: no glass buttons up here, only
+   at the top. With nothing under the bar yet, a disc around a glyph is a shape
+   for no reason, so a plain glyph control goes bare and wears the page's ink;
+   once content slides under the bar (.topbar--bare comes off) the disc comes
+   back to separate it. A control that commits (.toolbar-commit, .toolbar-cta)
+   keeps its fill either way. Native does the same in TriaToolbar.syncBare. */
+.toolbar-btn { transition: color var(--dur-micro), transform var(--dur-quick) var(--ease),
+  background-color var(--dur-quick) var(--ease), border-color var(--dur-quick) var(--ease); }
+.topbar--bare .toolbar-btn:not(.toolbar-commit):not(.toolbar-cta) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--toolbar-ink, var(--text));
+}
+
+/* ── The wordmark on My Circle's bar (1.8) ────────────────────────────────────
+   Centred where a title would sit, the way Instagram's logo sits on its home
+   feed: the italic Instrument Serif "tria" (icons/wordmark.svg through
+   .wordmark's mask), in the page's own ink rather than the brand ramp, because
+   a mark on every visit should be quiet. It leaves with the header while you
+   read down and is back on the way up. Native draws its own copy (markSpec in
+   app.js), so the gate hides this one in the app. */
+.toolbar-mark[hidden] { display: none; }
+.toolbar-mark {
+  position: absolute;
+  left: 50%;
+  top: var(--toolbar-mid);
+  transform: translate(-50%, -50%);
+  height: 34px;
+  pointer-events: none;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.toolbar-mark .wordmark { height: 100%; background: var(--text); }
+.topbar--reading .toolbar-mark { opacity: 0; }
 /* The bell's dot on My Circle's bar (1.8), which is the Chats tab's old dot for
    Updates moved to where Updates now is. The same mark as .nav-dot: --dot, no
    number, faded in rather than popped. On the disc's top-right shoulder, which
@@ -2112,6 +2153,137 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    overrides that used to live here died with the chips they were tuning. */
 @media (prefers-color-scheme: dark) {
   .bar-menu-scrim { background: color-mix(in srgb, var(--bg) 44%, transparent); }
+}
+
+/* ── EVERY SECONDARY MENU IS ONE SHEET (1.8) ──────────────────────────────────
+   Zoe's reference was Instagram's Create sheet, and this block makes both of
+   the app's secondary surfaces into it: openSheet's panel and openBarMenu's
+   card (a profile's filter, the profile •••, Updates' filter). One panel on
+   the floor of the screen, full width up to 560px, rounded on top only, a grab
+   handle, a bold centred title, rows of a 26px mark and a label with the
+   hairline starting where the label does, and a plain dim behind it. SOLID,
+   not glass: a sheet is the thing you are reading, and Instagram's is flat.
+   No Cancel (see openSheet); a pull down closes it (dragToClose in app.js).
+
+   It is written as overrides AFTER both blocks above, at equal specificity, so
+   the history above still reads as what each surface was. */
+.sheet-scrim,
+.bar-menu-scrim {
+  padding: 0;
+  background: color-mix(in srgb, #000 45%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.sheet,
+.bar-menu {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.55rem 0 calc(0.75rem + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border: 0;
+  border-radius: 28px 28px 0 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  /* The page doesn't take a pull on the panel for a scroll; a list that really
+     scrolls hands pan-y back (dragToClose, and .aud-list below). */
+  touch-action: none;
+  overscroll-behavior: contain;
+  transform: translateY(100%);
+  transition: transform 0.3s var(--ease-soft);
+}
+.sheet-scrim.open .sheet,
+.bar-menu-scrim.open .bar-menu { transform: none; }
+/* The bar menu's card stops being a card: no anchor, no unfold from a corner. */
+.bar-menu {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  margin: 0 auto;
+  min-width: 0;
+  overflow-y: auto;
+  opacity: 1;
+  transform-origin: 50% 100%;
+}
+.sheet-grab {
+  display: block;
+  flex-shrink: 0;
+  width: 40px;
+  height: 5px;
+  margin: 0 auto 0.85rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+}
+.sheet .sheet-title,
+.bar-menu .sheet-title {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.1rem 1rem 0.85rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.sheet-items,
+.sheet-cancel {
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.sheet-items { min-height: 0; padding: 0; overflow-y: auto; }
+.sheet-item,
+.bar-menu-item {
+  gap: 1.1rem;
+  min-height: 56px;
+  padding: 0.9rem 1.25rem;
+  font-size: 1.05rem;
+  border-radius: 0;
+}
+.sheet-item + .sheet-item::before,
+.bar-menu-item + .bar-menu-item::before {
+  left: calc(1.25rem + 26px + 1.1rem);
+  right: 0;
+}
+.sheet-ico,
+.bar-menu-ico { width: 26px; height: 26px; color: var(--text); }
+/* A docked answer ("Done"), never Cancel: a quiet full-width pill. */
+.sheet-cancel {
+  flex-shrink: 0;
+  margin: 0.6rem 1rem 0;
+  padding: 0.85rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+/* A radio set says its pick with a check at the row's end, Instagram's way,
+   and the fade it used before is off: in a flat list of full-strength rows a
+   faded one reads as disabled. */
+.bar-menu-item[role="menuitemradio"]:not(.is-on) { opacity: 1; }
+.bar-menu-item.is-on .bar-menu-label { font-weight: inherit; }
+.bar-menu-item[role="menuitemradio"].is-on::after {
+  content: "";
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* The colour picker's thin dim, which the rule above would otherwise beat: the
+   page behind it is washing in the colour being chosen. */
+.sheet-scrim.sheet-scrim--see-through { background: color-mix(in srgb, #000 13%, transparent); }
+/* The audience sheet's checklist scrolls inside the panel. */
+.aud-list { touch-action: pan-y; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .bar-menu { transform: none; transition: none; }
 }
 
 /* Masthead and every content block share one readable measure, centred on the
@@ -4156,54 +4328,6 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .sheet-cancel:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent); }
 .sheet-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
 
-/* ── The compose sheet (1.8): a share-sheet grid ──────────────────────────────
-   My Circle's compose mark raises this (openComposeDial). THREE ACROSS, two
-   rows (Zoe's call): the five types and the Daily make six. Music, once its
-   column exists, is a seventh and starts a third row. A round tile in the type's
-   own pastel with its mark on it in --on-type (AA on all six), and the name
-   under it. The Daily isn't a type, so it takes no pastel: a quiet disc in the
-   panel's own ink. Taps compress through the shared press engine, and the
-   tile's focus ring is the sheet rows' own. */
-.sheet-scrim--make .sheet-items { padding: 1.2rem 0.6rem 1.1rem; }
-.make-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  row-gap: 1.3rem;
-  column-gap: 0.25rem;
-}
-.make-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.2rem 0;
-  border: none;
-  background: none;
-  font: inherit;
-  color: var(--text);
-  cursor: pointer;
-  border-radius: var(--radius-row-lg);
-  -webkit-tap-highlight-color: transparent;
-}
-.make-disc {
-  display: grid;
-  place-items: center;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-  color: var(--text);
-}
-.make-disc svg { width: 28px; height: 28px; }
-.make-disc--note     { background: var(--type-note);     color: var(--on-type); }
-.make-disc--find     { background: var(--type-find);     color: var(--on-type); }
-.make-disc--photo    { background: var(--type-photo);    color: var(--on-type); }
-.make-disc--poll     { background: var(--type-poll);     color: var(--on-type); }
-.make-disc--activity { background: var(--type-activity); color: var(--on-type); }
-.make-disc--song     { background: var(--type-song);     color: var(--on-type); }
-.make-label { font-size: 0.8rem; line-height: 1.2; text-align: center; }
-.make-tile:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent); }
-@media (hover: hover) { .make-tile:hover .make-disc { filter: brightness(1.04); } }
 .sheet-item--danger { color: var(--type-find-ink); }
 .sheet-item--danger .sheet-ico { color: currentColor; }
 .sheet-cancel {
@@ -10582,6 +10706,7 @@ html[data-chrome="native"] body:has(.bar-menu-scrim) .topbar .toolbar-btn { visi
    app.js reads this element's rect on every push, and max-width above is where
    the clearance for the busier side's buttons is worked out. */
 html[data-chrome="native"] .topbar .toolbar-title { visibility: hidden; }
+html[data-chrome="native"] .topbar .toolbar-mark { visibility: hidden; }
 
 /* THE BAR'S MATERIAL IS NATIVE IN THE APP, and this is where it stops being
    CSS. `.topbar::before` is the scroll edge effect — a `--bg` gradient over a

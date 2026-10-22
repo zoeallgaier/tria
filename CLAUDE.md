@@ -35,9 +35,8 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises a SHARE-SHEET picker (`openComposeDial`, openSheet
-holding a `.make-grid`): big round tiles in each type's pastel, three across, no visible title,
-the five types, then the Daily (a sun, no pastel) and Music. Each row presses the composer's matching
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`): one row per
+type, then the Daily (a sun) and Music. Each row presses the composer's matching
 attach button on mount (`pendingAttach`); the type is still inferred. **My
 Circle lost its filter**; profiles, Discover and Updates keep theirs. On the
 web the phone nav simply drops its round +.
@@ -56,6 +55,24 @@ because native glass would blur a web field beneath it. Discover's filter dial
 is gone too, so it is always the gallery with every type
 (`discoverFilter`/`discoverView` are constants, a stored `tria:discoverView` is
 ignored). `TriaSearchField`/`searchSpec` have no caller now.
+
+**The top bar, cleaned up (2026-10-22).** No painted header: the native header
+is the system's default blur (`TriaToolbarMaterial`, `.systemMaterial` with a
+22pt faded bottom edge, `TriaFadeMask`), and the CSS band is a blur with a
+whisper of paper, soft-edged the same way. Plain glyph buttons are BARE at the
+top of a page (just icons) and wear their glass once content scrolls under
+(`syncBare` natively, `.topbar--bare .toolbar-btn` in CSS); tinted commits keep
+their fill. **My Circle has no nameplate**: the italic Instrument "tria"
+wordmark is centred on its bar (`mountToolbar({ mark: true })`, `#toolbar-mark`,
+drawn natively from `icons/wordmark.svg` via `markSpec`), in the page's ink,
+leaving with the header on a read down.
+
+**Every secondary menu is one bottom sheet**, Instagram's Create sheet being
+the reference: openSheet's panel and openBarMenu's card alike sit full width on
+the floor of the screen, grab handle, bold centred title, rows of a 26px mark
+and a label, solid `--surface`, plain dim, NO Cancel (a tap outside, Escape, or
+a pull down: `dragToClose`). A `dock` ("Done") still docks. A radio set shows a
+check, not a fade. The Create picker is that sheet's list.
 
 **The CSS glass is SIMPLIFIED** (tokens.css, the `--glass-*` block): a thin
 fill, the blur, one hairline, and nothing else. No specular rim, no drop

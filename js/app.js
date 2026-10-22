@@ -1251,6 +1251,33 @@
       };
     }
 
+    /* THE WORDMARK'S BOX AND DRAWING (1.8). The drawing is icons/wordmark.svg,
+       fetched once (it is in the bundle, so this is a local read) and handed
+       over as markup like every glyph on this bridge; native draws it as a
+       template in the ink the web mark would wear. Until the file has landed
+       there is no mark to send, and the fetch pushes again when it does. */
+    let markSvg = '';
+    let markAsked = false;
+    function markSpec() {
+      const el = document.querySelector('#toolbar-mark:not([hidden]) .wordmark');
+      if (!el) return null;
+      if (!markSvg) {
+        if (!markAsked) {
+          markAsked = true;
+          fetch('icons/wordmark.svg').then(r => r.text())
+            .then((t) => { markSvg = t; toldBar = ''; scheduleToolbar(); })
+            .catch(() => { markAsked = false; });
+        }
+        return null;
+      }
+      const r = el.getBoundingClientRect();
+      return {
+        svg: markSvg, x: r.left, y: r.top, w: r.width, h: r.height,
+        ink: toRgb(getComputedStyle(el).backgroundColor) || '',
+        label: el.getAttribute('aria-label') || 'Tria',
+      };
+    }
+
     function pushToolbar() {
       if (!live) return;
       const bar = document.querySelector('.topbar');
@@ -1313,6 +1340,7 @@
         // answers itself off the scroll rather than one the web has a view on.
         height: bar ? bar.getBoundingClientRect().height : 0,
         title: titleSpec(bar),
+        mark: onDuty ? markSpec() : null,
         controls,
         // Sent whether or not it is open, so the box native shrinks back INTO is
         // never a stale one. Absent from every route but Discover.
@@ -5940,6 +5968,8 @@
     document.body.classList.remove('toolbar-live', 'toolbar-field');
     const field = document.getElementById('toolbar-field');
     if (field) { field.hidden = true; field.innerHTML = ''; }
+    const mark = document.getElementById('toolbar-mark');
+    if (mark) mark.hidden = true;
     const page = document.getElementById('toolbar-page');
     const titleEl = document.getElementById('toolbar-title');
     const actions = document.getElementById('toolbar-actions');
@@ -5965,8 +5995,13 @@
   // route (native glass is a layer above every web pixel, so it would blur a web
   // field under it) and tells the stylesheet to draw the CSS bar's material
   // even under native chrome. See the gate at the end of app.css.
-  function mountToolbar({ leading = '', title = '', actions = '', field = '' } = {}) {
+  // `mark` (1.8) centres the italic "tria" wordmark on the bar, where a title
+  // would sit. My Circle is the one caller, the way Instagram's home feed wears
+  // its logo, and it takes the place of that page's big nameplate.
+  function mountToolbar({ leading = '', title = '', actions = '', field = '', mark = false } = {}) {
     document.body.classList.add('toolbar-live');
+    const markEl = document.getElementById('toolbar-mark');
+    if (markEl) markEl.hidden = !mark;
     document.body.classList.toggle('toolbar-field', !!field);
     const fieldEl = document.getElementById('toolbar-field');
     if (fieldEl) { fieldEl.hidden = !field; fieldEl.innerHTML = field; }
@@ -6315,20 +6350,17 @@
       { key: 'photo',    label: 'Frame' },
       { key: 'poll',     label: 'Poll' },
       { key: 'activity', label: 'Activity' },
-      ...(occ ? [{ key: 'daily', label: 'Daily', icon: 'daily', aria: answered ? 'See today’s Daily' : 'Answer the Daily' }] : []),
+      ...(occ ? [{ key: 'daily', label: answered ? 'Today’s Daily' : 'Answer the Daily', icon: 'daily' }] : []),
       ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
     ];
   }
 
-  /* THE PICKER IS A SHARE SHEET (1.8). It rises from the bottom like the
-     system's share sheet: a grid of big round tiles, each type in its own
-     pastel with its mark on it, the name underneath, and Cancel docked below.
-     It was a card dropped from the button for a day; a card is a list you read,
-     and this is a set you reach into, which is the share sheet's whole shape.
-     It is openSheet's own panel (scrim, focus trap, Escape, the one way out)
-     holding a grid as its `head`, so there is no second sheet to keep in step. */
+  /* THE PICKER IS A CREATE SHEET (1.8), Instagram's own shape: a bottom
+     sheet titled Create with one row per thing you can make, the type's mark
+     and its name. It was a card dropped from the button, then a share-sheet
+     grid of pastel tiles, and Zoe pointed at Instagram's sheet for the last
+     word. Each row is a shortcut into the one composer (pendingAttach). */
   function openComposeDial() {
-    const rows = composeRows();
     const occ = todaysDaily();
     const run = (row) => {
       if (row.key === 'daily') {
@@ -6341,41 +6373,25 @@
       pendingAttach = row.key === 'note' ? null : row.key;
       go('#/publish');
     };
-    // The type's own mark, the vocabulary the composer's attach bar already
-    // taught (TYPE_GLYPH). The Daily wears a sun of its own: a prompt for today,
-    // which no type's mark says, and it takes no pastel because it isn't a type.
-    // No visible title (Zoe's call): six tiles that say their own names need no
-    // heading. The name stays for VoiceOver, on the group and on the sheet.
-    const grid =
-      `<div class="make-grid" role="group" aria-label="Make something">` +
-        rows.map((row, i) =>
-          `<button class="make-tile" type="button" data-i="${i}"` +
-              `${row.aria ? ` aria-label="${esc(row.aria)}"` : ''}>` +
-            `<span class="make-disc${TYPE_GLYPH[row.key] ? ` make-disc--${row.key}` : ''}" aria-hidden="true">` +
-              svgIcon(row.icon || TYPE_GLYPH[row.key] || 'pencil') +
-            `</span>` +
-            `<span class="make-label">${esc(row.label)}</span>` +
-          `</button>`).join('') +
-      `</div>`;
     openSheet({
-      head: grid,
-      scrimClass: 'sheet-scrim--make',
-      wire: (scrim, close) => {
-        scrim.querySelector('.sheet')?.setAttribute('aria-label', 'Make something');
-        scrim.querySelectorAll('.make-tile').forEach((btn) => btn.addEventListener('click', () => {
-          const row = rows[+btn.dataset.i];
-          hapticTap('LIGHT');
-          close(() => { if (row) run(row); });
-        }));
-      },
+      title: 'Create',
+      items: composeRows().map((row) => ({
+        label: row.label,
+        // The type's own mark (TYPE_GLYPH), the vocabulary the composer's
+        // attach bar already taught; the Daily wears its sun.
+        icon: row.icon || TYPE_GLYPH[row.key] || 'pencil',
+        run: () => run(row),
+      })),
     });
   }
 
   function renderHome() {
-    mountToolbar({ title: 'My Circle', leading: composeBtnEl(), actions: updatesBtnEl() });
+    // No nameplate since 1.8: the wordmark centred on the bar is the page's
+    // name (mountToolbar's `mark`), and no small title either, because the
+    // mark never leaves.
+    mountToolbar({ leading: composeBtnEl(), actions: updatesBtnEl(), mark: true });
     view.innerHTML =
-      `<section class="view">` +
-        mastheadEl('', 'My Circle') +
+      `<section class="view view--home">` +
         `<div class="week-cards" id="week-cards" hidden></div>` +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
@@ -6431,30 +6447,19 @@
 
     const scrim = document.createElement('div');
     scrim.className = 'bar-menu-scrim';
+    // A BOTTOM SHEET SINCE 1.8, not a card dropped from the button: every
+    // secondary menu in the app is one shape now (see openSheet and the sheet
+    // block in app.css), Instagram's Create sheet being the reference. The
+    // label is its title, the grab handle says it can be pulled down.
     scrim.innerHTML =
-      `<div class="bar-menu" role="menu" aria-label="${esc(label || 'Menu')}">${rows}</div>`;
+      `<div class="bar-menu" role="menu" aria-label="${esc(label || 'Menu')}">` +
+        `<span class="sheet-grab" aria-hidden="true"></span>` +
+        (label ? `<p class="sheet-title" aria-hidden="true">${esc(label)}</p>` : '') +
+        rows +
+      `</div>`;
     document.body.appendChild(scrim);
     document.body.style.overflow = 'hidden';
-
-    // Pin the card's right edge under the button so it reads as having dropped
-    // out of it. A small extra gutter (past the button's own overhang past
-    // --inset) keeps it from hugging the screen edge. A button on the LEADING
-    // side (My Circle's compose mark) pins the card's left edge instead, or the
-    // card would hang off the screen's left side.
     const card = scrim.querySelector('.bar-menu');
-    const r = anchor.getBoundingClientRect();
-    card.style.top = (r.bottom + 10) + 'px';
-    if (r.left + r.width / 2 < window.innerWidth / 2) {
-      card.style.left = Math.max(8, r.left - 8) + 'px';
-      card.style.right = 'auto';
-      card.style.transformOrigin = 'top left';
-    } else {
-      card.style.right = Math.max(8, window.innerWidth - r.right + 8) + 'px';
-    }
-    // One card of N rows can outgrow the screen where a column of chips just ran
-    // off it unnoticed — Discover's filter is eight rows deep now. Cap it to
-    // what's actually below the button and let it scroll inside its own glass.
-    card.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 24) + 'px';
 
     const opener = anchor;
     const items = () => [...scrim.querySelectorAll('.bar-menu-item')];
@@ -6495,6 +6500,57 @@
     scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
     items().forEach(btn => btn.addEventListener('click', () => onRow(btn, close)));
     document.addEventListener('keydown', onKey);
+    dragToClose(card, card, () => close());
+  }
+
+  /* PULL A SHEET DOWN TO CLOSE IT (1.8). The grab handle on every secondary
+     sheet promises this, the system's own sheets do it, and with Cancel gone
+     from most of them it is the second way out beside a tap on the dim.
+
+     Pointer events on the panel, with `touch-action: none` on it in CSS so the
+     page does not take the gesture for a scroll. A panel whose list actually
+     scrolls hands that back (`pan-y`), so the list keeps scrolling and the pull
+     lives on the handle and title above it. A drag only starts past 6px, so a
+     tap is still a tap, and the click a drag ends on is swallowed. */
+  function dragToClose(panel, list, close) {
+    if (!panel) return;
+    if (list && list.scrollHeight > list.clientHeight + 1) list.style.touchAction = 'pan-y';
+    let startY = 0, dy = 0, dragging = false, down = false, swallow = false;
+    panel.addEventListener('pointerdown', (e) => {
+      if (e.button) return;
+      // In a scrolling list a pull belongs to the list unless it is at its top,
+      // and the audience sheet's checklist is a list that scrolls on its own.
+      if (list && list.style.touchAction === 'pan-y' && list.contains(e.target) && list.scrollTop > 0) return;
+      if (e.target.closest && e.target.closest('.aud-list')) return;
+      down = true; dragging = false; startY = e.clientY; dy = 0;
+    });
+    panel.addEventListener('pointermove', (e) => {
+      if (!down) return;
+      dy = Math.max(0, e.clientY - startY);
+      if (!dragging && dy > 6) {
+        dragging = true;
+        panel.style.transition = 'none';
+        try { panel.setPointerCapture(e.pointerId); } catch { /* already gone */ }
+      }
+      if (dragging) panel.style.transform = `translateY(${dy}px)`;
+    });
+    const end = () => {
+      if (!down) return;
+      down = false;
+      if (!dragging) return;
+      swallow = true;
+      setTimeout(() => { swallow = false; }, 0);
+      panel.style.transition = '';
+      // Far enough, or past a third of its own height: gone. Otherwise back.
+      if (dy > Math.min(110, panel.offsetHeight / 3)) {
+        close();
+      } else {
+        panel.style.transform = '';
+      }
+    };
+    panel.addEventListener('pointerup', end);
+    panel.addEventListener('pointercancel', end);
+    panel.addEventListener('click', (e) => { if (swallow) { e.stopPropagation(); e.preventDefault(); } }, true);
   }
 
   /* The filter dial: a bar menu whose rows are a RADIO SET. Data-driven off
@@ -10338,11 +10394,17 @@
         (it.icon ? svgIcon(it.icon, 'sheet-ico') : '') +
         `<span>${esc(it.label)}</span>` +
       `</button>`).join('');
+    // ONE PANEL ON THE FLOOR OF THE SCREEN (1.8), Instagram's Create sheet
+    // being the reference: grab handle, a bold centred title, the rows, and NO
+    // Cancel. A tap on the dim, Escape, or a pull down (dragToClose) is the way
+    // out. `dock` is the exception and keeps its button, because it is never
+    // Cancel: it is "Done" on a sheet whose every tap was already taken.
     scrim.innerHTML =
       `<div class="sheet" role="dialog" aria-modal="true"${title ? ` aria-label="${esc(title)}"` : ''}>` +
+        `<span class="sheet-grab" aria-hidden="true"></span>` +
         (title ? `<p class="sheet-title">${esc(title)}</p>` : '') +
         `<div class="sheet-items">${head || ''}${rows}</div>` +
-        `<button class="sheet-cancel" type="button">${esc(dock || 'Cancel')}</button>` +
+        (dock ? `<button class="sheet-cancel" type="button">${esc(dock)}</button>` : '') +
       `</div>`;
     document.body.appendChild(scrim);
     document.body.style.overflow = 'hidden';
@@ -10385,7 +10447,7 @@
     }
 
     scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
-    scrim.querySelector('.sheet-cancel').addEventListener('click', () => close());
+    scrim.querySelector('.sheet-cancel')?.addEventListener('click', () => close());
     scrim.querySelectorAll('.sheet-item').forEach(btn =>
       btn.addEventListener('click', () => {
         const it = items[+btn.dataset.i];
@@ -10399,6 +10461,7 @@
     if (wire) wire(scrim, close);
     document.addEventListener('keydown', onKey);
     sheetAway = close;
+    dragToClose(scrim.querySelector('.sheet'), scrim.querySelector('.sheet-items'), () => close());
   }
 
   /* ── Profile colour ─────────────────────────────────────────────────────────
@@ -18298,7 +18361,7 @@
      pop (the dial items) keep their CSS :active rules and stay off this list. */
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
-    '.seg-tab', '.sheet-item', '.sheet-cancel', '.make-tile',
+    '.seg-tab', '.sheet-item', '.sheet-cancel',
     '.postbar-send', '.comment-delete', 'button.comment-like', '.modal-actions button',
     '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
     // One entry covers every toolbar control (back chevron, search, •••, the

@@ -1106,23 +1106,34 @@ protocol TriaToolbarControl: AnyObject {
 @available(iOS 26.0, *)
 final class TriaToolbarMaterial: UIVisualEffectView {
 
+    /* 1.8: THE SYSTEM'S DEFAULT BLUR, and (5) on the list above. Zoe: no
+       heading backgrounds, just the default iOS blur. The glass pane read as an
+       object sitting on the page; a header is supposed to be the page going
+       soft where the chrome is. So this is `.systemMaterial`, the blur UIKit's
+       own bars have worn since iOS 13, and its bottom edge FADES (a gradient
+       mask) so the page dissolves into the header rather than stopping at a
+       line, the way an iOS 26 scroll edge does. It is still not that effect
+       (see 3): it is the material, shaped by hand.
+
+       No paper wash, no tint, no rims to push off-screen: (2) failed on a
+       painted `--bg` ramp stacked on a scrim, and nothing here paints. */
+    static let fadeDepth: CGFloat = 22
+    private let fade = TriaFadeMask()
+
     init() {
-        super.init(effect: UIGlassEffect(style: .regular))
-        // A backdrop. Every tap in this rect belongs to a disc on top of it or
-        // to the page underneath.
+        super.init(effect: UIBlurEffect(style: .systemMaterial))
+        // A backdrop. Every tap in this rect belongs to a control on top of it
+        // or to the page underneath.
         isUserInteractionEnabled = false
-        // Square, deliberately, where every other piece of glass in Tria is a
-        // capsule: this one is not an object, it is the top edge of the screen.
-        cornerConfiguration = .uniformCorners(radius: .fixed(0))
         alpha = 0
-        // Glass draws a specular rim on every edge it has, which is exactly
-        // right for a disc you can pick out with a finger and exactly wrong
-        // here: a lit rectangle over a photograph reads as a panel dropped on
-        // the page rather than as the top of the screen. First build of this had
-        // all four, bevelled corners included. So three of the four edges are
-        // pushed off-screen (see `frame(for:)`) and the only rim left is the
-        // bottom one, which is the edge a bar is supposed to have.
-        clipsToBounds = false
+        mask = fade
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        fade.frame = bounds
+        fade.solidUntil = bounds.height > 0
+            ? max(0, (bounds.height - Self.fadeDepth) / bounds.height) : 1
     }
 
     @available(*, unavailable)
@@ -1148,6 +1159,27 @@ final class TriaToolbarMaterial: UIVisualEffectView {
 ///
 /// KVO rather than the scroll delegate, because the web view's delegate is
 /// WebKit's and taking it is a way to break scrolling itself.
+/// Opaque from the top down to `solidUntil`, then to nothing at the bottom: the
+/// header's soft edge. A view rather than a bare layer because a visual effect
+/// view takes its mask as a VIEW.
+@available(iOS 26.0, *)
+final class TriaFadeMask: UIView {
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+    var solidUntil: CGFloat = 0.75 {
+        didSet {
+            (layer as? CAGradientLayer)?.locations = [0, NSNumber(value: Double(solidUntil)), 1]
+        }
+    }
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        let ramp = layer as? CAGradientLayer
+        ramp?.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
+        ramp?.locations = [0, 0.75, 1]
+    }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+}
+
 @available(iOS 26.0, *)
 final class TriaScrollWatch: NSObject {
 
@@ -1244,7 +1276,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// How far past the left, right and top edges the material is pushed, so
     /// that three of its four glass rims are off-screen. Any value past the
     /// display's corner radius will do.
-    private static let rimSlack: CGFloat = 60
     private var barHeight: CGFloat = 0
     private var watch: TriaScrollWatch?
     /// Whether this route draws a bar at all. Signed out there is none.
@@ -1253,6 +1284,13 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// rather than in the web bar it is still measured against.
     private let titleLabel = UILabel()
     private var wantsTitle = false
+    /// THE WORDMARK (1.8), centred on My Circle's bar the way Instagram's sits
+    /// on its home feed: the italic "tria" from `icons/wordmark.svg`, drawn by
+    /// `TriaSVG` in the reader's ink. Always up while its route is, unlike the
+    /// title, because it is the page's name and there is no big one to stand
+    /// in for.
+    private let markView = UIImageView()
+    private var drawnMark = ""
     /// Nothing under the bar yet, so nothing for the material to separate it
     /// from, and whether the reader is going down the page. Native's own
     /// reading of the scroll, not a flag from the web. See `TriaScrollWatch`.
@@ -1296,15 +1334,23 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         titleLabel.alpha = 0
         titleLabel.isUserInteractionEnabled = false
         contentView.addSubview(titleLabel)
+        markView.contentMode = .scaleAspectFit
+        markView.isUserInteractionEnabled = false
+        markView.isAccessibilityElement = true
+        markView.accessibilityTraits = .header
+        markView.isHidden = true
+        contentView.addSubview(markView)
         host.addSubview(material)
         host.addSubview(self)
         self.scroller = scroller
         if let scroller {
             watch = TriaScrollWatch(of: scroller) { [weak self] state in
                 guard let self, state != self.scroll else { return }
+                let crossedTop = state.atTop != self.scroll.atTop
                 self.scroll = state
                 self.syncMaterial(animated: true)
                 self.syncTitle(animated: true)
+                if crossedTop { self.syncBare(animated: true) }
             }
         }
     }
@@ -1333,6 +1379,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
                                       height: TriaToolbar.number(title["h"]))
             wantsTitle = (title["visible"] as? Bool ?? false) && !text.isEmpty
         }
+        applyMark(spec["mark"] as? [String: Any])
 
         let wanted = (spec["controls"] as? [[String: Any]]) ?? []
         var seen = Set<String>()
@@ -1352,6 +1399,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
                 controls[id] = control
             }
             control.update(spec: item)
+            control.setBare(scroll.atTop, animated: false)
             // Attached (or dropped) after the update, because whether a control
             // owns a menu can change under it: Discover's search disc is a plain
             // button, and the profile's ••• is not.
@@ -1440,11 +1488,13 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
        place, which is two animations again. Alpha is safe HERE, unlike on the
        control container — this view is one plain UIVisualEffectView, not a
        glass container rendering nested elements in a pass of its own. */
+    // The bar's own height and the fade below it. The glass pane needed its
+    // rims pushed off three sides (`rimSlack`, gone); a blur has none, so it
+    // simply spans the width.
     private func materialFrame() -> CGRect {
-        let slack = TriaToolbar.rimSlack
         let strip = max(barHeight, safeAreaInsets.top)
-        return CGRect(x: -slack, y: -slack,
-                      width: bounds.width + 2 * slack, height: strip + slack)
+        return CGRect(x: 0, y: 0, width: bounds.width,
+                      height: strip + TriaToolbarMaterial.fadeDepth)
     }
 
     private func syncMaterial(animated: Bool) {
@@ -1473,7 +1523,49 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// over: a blur on a UILabel means rasterising it into a layer every frame
     /// of the ramp, which is the cost this whole pass exists to stop paying,
     /// and at 16.8pt over a quarter of a second nobody has ever seen it.
+    /* JUST ICONS AT THE TOP OF A PAGE (1.8). Zoe: no glass buttons up here,
+       only at the top though. With nothing under the bar yet, a disc of glass
+       is a shape around a glyph for no reason, so a plain glyph control goes
+       bare; the moment content slides under it, the glass comes back to
+       separate the mark from what is passing behind. Tinted controls (Save,
+       Add yours) keep their fill, because the fill is what says they commit. */
+    private func syncBare(animated: Bool) {
+        for control in controls.values { control.setBare(scroll.atTop, animated: animated) }
+    }
+
+    private func applyMark(_ spec: [String: Any]?) {
+        guard let spec, let svg = spec["svg"] as? String, !svg.isEmpty else {
+            markView.isHidden = true
+            return
+        }
+        let w = TriaToolbar.number(spec["w"]), h = TriaToolbar.number(spec["h"])
+        markView.frame = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
+                                width: w, height: h)
+        let key = "\(w)x\(h)"
+        if key != drawnMark {
+            drawnMark = key
+            markView.image = TriaSVG.image(markup: svg, width: w, height: h)
+        }
+        markView.tintColor = TriaChromeBar.color(fromHex: spec["ink"] as? String ?? "") ?? .label
+        markView.accessibilityLabel = spec["label"] as? String
+        markView.isHidden = false
+    }
+
     private func syncTitle(animated: Bool) {
+        // The wordmark goes with the header while the reader goes DOWN, and is
+        // there at the top of the page, where there is no header yet: the
+        // Instagram home feed's logo, which leaves on the way down and is back
+        // the moment you reach up.
+        let markWanted: CGFloat = (scroll.atTop || headerUp) ? 1 : 0
+        if markView.alpha != markWanted {
+            if animated && !UIAccessibility.isReduceMotionEnabled {
+                UIView.animate(withDuration: 0.24, delay: 0,
+                               options: [.allowUserInteraction, .beginFromCurrentState,
+                                         .curveEaseOut]) { self.markView.alpha = markWanted }
+            } else {
+                markView.alpha = markWanted
+            }
+        }
         let wanted: CGFloat = (wantsTitle && headerUp) ? 1 : 0
         guard titleLabel.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
@@ -1677,6 +1769,32 @@ final class TriaToolbarButton: UIVisualEffectView {
         mark.backgroundColor = colour
     }
 
+    /// A control with nothing but a glyph on it: no band, no tint, no words.
+    /// Only these go bare at the top of a page (see `TriaToolbar.syncBare`).
+    private var plain = false
+    private var lastSpec: [String: Any] = [:]
+    private var bare = false
+
+    func setBare(_ wanted: Bool, animated: Bool) {
+        let target = wanted && plain
+        guard target != bare else { return }
+        bare = target
+        let swap = {
+            if target {
+                self.effect = nil
+            } else {
+                TriaBand.apply(self.lastSpec, glass: self, ramp: self.ramp)
+            }
+        }
+        // Setting the effect inside an animation block is how a glass element
+        // materialises and dissolves rather than popping.
+        if animated && !UIAccessibility.isReduceMotionEnabled {
+            UIView.animate(withDuration: 0.24, animations: swap)
+        } else {
+            swap()
+        }
+    }
+
     func update(spec: [String: Any]) {
         frame = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
                        width: TriaToolbar.number(spec["w"]), height: TriaToolbar.number(spec["h"]))
@@ -1729,7 +1847,11 @@ final class TriaToolbarButton: UIVisualEffectView {
             // are `.publish-fill.is-solid`, one family of primary acts. A bare
             // control sends neither colours nor a tint and gets plain glass.
             TriaBand.apply(spec, glass: self, ramp: ramp)
+            // A redraw just put the glass back; a bare control stays bare.
+            if bare { effect = nil }
         }
+        lastSpec = spec
+        plain = text.isEmpty && tint.isEmpty && band.isEmpty
 
         // A LIT FILTER IS THE GLYPH'S OWN COLOUR, and there is nothing extra to
         // draw for it. There was a dot here — 8px of the active type's pastel
@@ -3337,6 +3459,28 @@ enum TriaSVG {
     /// Whether the drawing names any colour of its own. See the note at the one
     /// caller: it is what decides between baking an ink in and handing the image
     /// over as a template for somebody else to colour.
+    /// The same drawing into a `width` × `height` canvas, scaled to fit and
+    /// centred, as a template for `tintColor`. For a mark that isn't square,
+    /// the wordmark first: `image(markup:size:)` would draw it into the top of
+    /// a square and leave the rest of the box empty.
+    static func image(markup: String, width: CGFloat, height: CGFloat) -> UIImage? {
+        let doc = parse(markup)
+        guard !doc.shapes.isEmpty, doc.box.width > 0, doc.box.height > 0,
+              width > 0, height > 0 else { return nil }
+        let scale = min(width / doc.box.width, height / doc.box.height)
+        let dx = (width - doc.box.width * scale) / 2
+        let dy = (height - doc.box.height * scale) / 2
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+        let image = renderer.image { context in
+            context.cgContext.translateBy(x: dx, y: dy)
+            context.cgContext.scaleBy(x: scale, y: scale)
+            context.cgContext.translateBy(x: -doc.box.minX, y: -doc.box.minY)
+            UIColor.black.setFill()
+            for shape in doc.shapes where shape.fill != nil { shape.path.fill() }
+        }
+        return image.withRenderingMode(.alwaysTemplate)
+    }
+
     static func carriesColour(_ markup: String) -> Bool {
         for tag in scan(markup) {
             for key in ["fill", "stroke"] where tag.attrs[key] != nil {
