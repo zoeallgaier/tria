@@ -6325,10 +6325,9 @@
      to miss things, and the bar had room for one glyph that narrows and one
      that makes. Profiles and Discover keep their dials.
 
-     The note mark opens the DIAL, which is back: the five things you can make,
-     then the Daily and Music, as one menu. Each row is a shortcut into the one
-     composer, pre-opening the attachment that makes that type (pendingAttach),
-     so the composer is still the only form there is. */
+     The note mark opens the DIAL, which is back: Post, Activity, and today's
+     Daily. Each row is a shortcut into the one composer (pendingAttach), so
+     the composer is still the only form there is. */
   function composeBtnEl() {
     return `<button class="toolbar-btn" type="button" id="home-compose-btn" ` +
         `aria-haspopup="dialog" aria-label="Make something">` +
@@ -6344,22 +6343,20 @@
       `</a>`;
   }
 
-  // The dial's rows, in the order you'd reach for them: the five types, widest
-  // to narrowest the way FILTERS reads, then the two that aren't a type you
-  // attach — the Daily, which is a prompt you answer with any of the five, and
-  // Music. Music sits last and only appears once its column exists
-  // (Store.songsReady), because a row that can only fail is worse than no row.
+  // The dial's rows: Post, Activity, and the Daily (Zoe, 2026-10-22). It
+  // listed every type (Note, Find, Frame, Poll, Activity) and Music, and that
+  // was a menu of the composer's own attach bar: a post's type is inferred from
+  // what you attach, so a Find or a Frame is a Post you put a link or a photo
+  // in. An activity is the one that is a different act (a time, a place, who
+  // is coming), so it keeps its door, and so does the Daily, which is a prompt
+  // and not a type. Music is the composer's speaker button.
   function composeRows() {
     const occ = todaysDaily();
     const answered = occ && myAnswer(occ);
     return [
-      { key: 'note',     label: 'Note' },
-      { key: 'find',     label: 'Find' },
-      { key: 'photo',    label: 'Frame' },
-      { key: 'poll',     label: 'Poll' },
+      { key: 'note',     label: 'Post' },
       { key: 'activity', label: 'Activity' },
       ...(occ ? [{ key: 'daily', label: answered ? 'Today’s Daily' : 'Answer the Daily', icon: 'daily' }] : []),
-      ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
     ];
   }
 

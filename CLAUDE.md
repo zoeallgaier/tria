@@ -35,9 +35,10 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`): one row per
-type, then the Daily (a sun) and Music. Each row presses the composer's matching
-attach button on mount (`pendingAttach`); the type is still inferred. **My
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`): Post, Activity,
+and today's Daily (a sun) (Zoe, 2026-10-22; it listed every type and Music,
+which was the attach bar again). Activity presses the composer's calendar button on
+mount (`pendingAttach`); a post's type is still inferred. **My
 Circle lost its filter**; profiles, Discover and Updates keep theirs. On the
 web the phone nav simply drops its round +.
 
