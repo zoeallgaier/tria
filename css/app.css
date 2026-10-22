@@ -1724,6 +1724,51 @@ main {
 .view--people .masthead-title,
 .view--discover .masthead-title { padding-bottom: 0.6rem; }
 
+/* ── Discover's search bar (1.8) ──────────────────────────────────────────────
+   Always there, under the nameplate: no open, no close, no X (Zoe's call). It
+   replaced the toolbar disc that grew into a glass field. A field in the page
+   is CONTENT, so it is flat, the same panel fill and hairline as the song
+   picker's field, and a capsule because a search bar is one in every app the
+   reader already knows. The masthead's 2.6rem gap moves below the bar, so the
+   bar reads as the title's and the page starts after both. */
+.view--discover .masthead { margin-bottom: 0.9rem; }
+.discover-search {
+  position: relative;
+  margin: 0 0 2rem;
+}
+.discover-search-ico {
+  position: absolute;
+  left: 0.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  color: var(--muted);
+  pointer-events: none;
+}
+.discover-search-ico svg { width: 20px; height: 20px; }
+.discover-search-field {
+  display: block;
+  width: 100%;
+  /* 44px tall: the HIG floor for the target, met by the field itself. */
+  min-height: 44px;
+  padding: 0.65rem 1rem 0.65rem 2.7rem;
+  border: var(--glass-edge);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-panel);
+  color: var(--text);
+  font: inherit;
+  /* 16px, never less: iOS zooms the page into any field set smaller. */
+  font-size: 1rem;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.discover-search-field::placeholder { color: var(--muted); opacity: 0.75; }
+.discover-search-field:focus { outline: none; border-color: var(--muted); }
+.discover-search-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* No X in the field either: WebKit draws its own on type=search. */
+.discover-search-field::-webkit-search-cancel-button,
+.discover-search-field::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+
 
 /* The New-post masthead's reactive type mark: a coloured type-icon in the same
    right-hand slot the Friends search uses. It doesn't pick the type — it reflects

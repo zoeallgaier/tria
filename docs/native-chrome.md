@@ -1152,6 +1152,14 @@ value still in flight.
 
 ## Discover's search
 
+**Retired in 1.8 (2026-10-21).** Discover's search is an ordinary web input on
+the page now, under the nameplate and always open (`.discover-search` in
+app.css), at Zoe's call: no open, no close, just a search bar. It doesn't sit on
+the keyboard, so it is the profile editor's case and needs no native caret.
+`TriaSearchField` and `searchSpec` are still in the tree and receive
+`{live: false}` on every push, since the page has no `.toolbar-search-shell`
+any more. What follows is the history.
+
 **Discover's search field went native second, and it is a change of mind.**
 
 It shipped split. At rest the glass there is the SHELL, not the button

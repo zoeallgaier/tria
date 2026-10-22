@@ -6152,36 +6152,6 @@
     { key: 'activity', label: 'Activities' },
     { key: 'song',     label: 'Music' },
   ];
-  // Discover's dial carries one row the home feed has no use for: People, which
-  // drops the posts and faces every account with its portrait, turning the grid
-  // into a directory. It leads the list, directly under the View switch, because
-  // those are the two rows that change what the page is MADE OF rather than how
-  // much of it you're shown — one swaps posts for faces, the other swaps the wall
-  // for a column. Leaving them together keeps All → the five types an unbroken
-  // ladder from widest to narrowest, which is what a radio list reads as; People
-  // sat inside that ladder before and stopped it halfway to say something about a
-  // different axis. It takes no pastel: the quintet is reserved for post types,
-  // and People isn't one.
-  const DISCOVER_FILTERS = [{ key: 'people', label: 'People', ico: 'friends' }, ...FILTERS];
-
-  /* Discover's FORMAT, which is a separate axis from its filter and therefore a
-     separate control. The dial answers "what am I looking at" and this answers
-     "how is it drawn": the masonry wall it has always been, or Circle's reading
-     column — the same cards, the same width, the same rhythm.
-
-     It rides in the dial without joining it. The two axes are independent — a
-     reader wanting only Frames, as a list, is asking two questions and a radio
-     list can only answer one — so this is an ACTION row rather than a filter
-     row: role="menuitem", no checkmark, tap and the dial closes behind it. Two
-     controls' worth of state in one panel, and the row type is what keeps them
-     from being confused for each other (see openFilterDial). It was briefly a
-     second toolbar button, which is the honest reading of "separate axis" and
-     the wrong reading of a bar that had just been cleared of everything generic.
-
-     It doesn't apply under People. That row is a directory of portraits rather
-     than a grid of posts, so there is no column form of it to switch to, and
-     the row is absent rather than sitting there inert. */
-  const DISCOVER_VIEWS = { gallery: 'grid', list: 'list' };
   let activeFilter = 'all';
   let activeTag = null;
 
@@ -6506,8 +6476,8 @@
     // to do on a pick, so the one dial drives either the home feed or Discover.
     const current = opts.current || 'all';
     const onPick = opts.onPick || (() => {});
-    // Which rows to fan. Home takes the five types; Discover adds People (see
-    // DISCOVER_FILTERS), so the dial itself stays a dumb renderer of a list.
+    // Which rows to fan: FILTERS unless the caller hands its own, so the dial
+    // itself stays a dumb renderer of a list.
     const filters = opts.filters || FILTERS;
     /* Two kinds of row can appear in here and they are not the same object.
 
@@ -13313,17 +13283,14 @@
      tap. This page replaced the Friends page outright — your own
      circle roster lives on your profile, and incoming requests live on Updates,
      so nothing here is orphaned. */
-  // Per DEVICE, not per account: which shape Discover last drew in, the same
-  // shelf as musicPref and the block list. Read once at load so the tab opens
-  // however you left it instead of resetting to gallery every time.
-  const DISCOVER_VIEW_KEY = 'tria:discoverView';
-  const loadDiscoverView = () => {
-    try { return localStorage.getItem(DISCOVER_VIEW_KEY) === 'list' ? 'list' : 'gallery'; }
-    catch { return 'gallery'; }                   // private mode → the default
-  };
   let discoverQuery = '';     // live search over people + the text of every post here
-  let discoverFilter = 'all'; // 'all' · 'people' (a directory of portraits) · one post type
-  let discoverView = loadDiscoverView(); // 'gallery' (the masonry wall) · 'list' (Circle's card column)
+  // Both FIXED since 1.8, when Discover's filter dial came out: it was the only
+  // thing that set either. They stay as names because the paint reads them and
+  // the list form and the People directory still exist in it, unreachable, should
+  // a control ever come back. A stored 'list' (tria:discoverView) is ignored on
+  // purpose: with no switch, honouring it would strand that reader in a column.
+  const discoverFilter = 'all';
+  const discoverView = 'gallery';
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   let discoverResizeOff = null; // drops the grid's resize listener when the view goes
   function renderDiscover() {
@@ -13451,36 +13418,33 @@
         `</button>` +
       `</div>`;
 
-    // Search + filter live in the toolbar's trailing slot (1.3 §4). The three
-    // elements here are ONE control, and none of them is complete alone: the
-    // wrapper holds the 44px slot in the actions row, .toolbar-search-shell is
-    // the glass that grows from that footprint into the bar, and the button on
-    // top of it is glyph and tap target only. Order matters — shell first,
-    // button second, the button riding at z-index 2 over it. Why the input
-    // can't be the shell is in app.css; it comes down to an input never being
-    // able to measure narrower than its own padding.
-    const searchAction =
-      `<div class="toolbar-search">` +
-        `<div class="toolbar-search-shell">` +
-          `<input type="search" id="discover-search" class="toolbar-search-field" ` +
-            `autocapitalize="none" autocomplete="off" spellcheck="false" tabindex="-1" ` +
-            `placeholder="Search people, tags, anything" aria-label="Search Tria">` +
-        `</div>` +
-        `<button type="button" class="toolbar-btn toolbar-search-btn" id="discover-search-toggle" ` +
-          `aria-label="Search Tria" aria-expanded="false">` +
-          `<span class="msb-ico msb-ico--search">${svgIcon('search')}</span>` +
-          `<span class="msb-ico msb-ico--close">${svgIcon('close')}</span>` +
-        `</button>` +
+    /* SEARCH IS A BAR ON THE PAGE (1.8), under the nameplate, and it is always
+       there. It was a toolbar disc that grew into a glass field (a CSS shell on
+       the web, TriaSearchField natively), with an open state, a close state and
+       an X. Zoe's call: no open, no close, just a search bar. So it is an
+       ordinary web input in the page's flow, the profile editor's situation
+       rather than the comment bar's: it doesn't sit on the keyboard, so it
+       needs no native caret. Empty is the whole grid; typing narrows it. */
+    const searchBar =
+      `<div class="discover-search" role="search">` +
+        `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
+        `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
+          `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
+          `placeholder="Search people, tags, anything" aria-label="Search Tria">` +
       `</div>`;
 
     mountToolbar({
       title: 'Discover',
-      actions: searchAction + filterBtnEl('discover-filter-btn', discoverFilter, 'Filter Discover'),
+      // Nothing trailing since 1.8: search is the bar on the page, and the
+      // filter went with it (Zoe: unneeded). Search already answers "who" and
+      // "what", which is what the dial's People row and type rows narrowed by.
+      actions: '',
     });
 
     view.innerHTML =
       `<section class="view view--discover">` +
         mastheadEl('', 'Discover') +
+        searchBar +
         (Store.isAuthed() ? '' :
           `<p class="guest-note">You’re looking around signed out. ` +
             `<a class="about-more" href="#/join">Make an account</a> to like, comment and add people.</p>`) +
@@ -13488,11 +13452,7 @@
       `</section>`;
 
     const bodyEl = view.querySelector('#discover-body');
-    // Document-scoped, not view-scoped: both now live in #toolbar-actions,
-    // outside #view entirely (same reasoning as syncFilterBtn above).
-    const bar = document.querySelector('.topbar');
-    const searchEl = document.getElementById('discover-search');
-    const toggleBtn = document.getElementById('discover-search-toggle');
+    const searchEl = view.querySelector('#discover-search');
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with it,
     // 1 = appears somewhere, 0 = no match.
@@ -13821,130 +13781,29 @@
       });
     }
 
-    // Open/close the search field. The icon fans it out over the toolbar and
-    // focuses it; tapping again (or Escape) folds it back and clears the query so
-    // the full grid returns.
-    //
-    // Neither of them touches the trending rail any more. The strip stood inside
-    // the open field for one version and now stands at the top of the page for
-    // good (see .dtags in app.css), so opening search is once again only about
-    // the field.
-    const foldSearch = () => {
-      bar.classList.remove('topbar--searching');
-      toggleBtn.setAttribute('aria-expanded', 'false');
-      toggleBtn.setAttribute('aria-label', 'Search Tria');
-      searchEl.tabIndex = -1;
-    };
-    /* AN EMPTY FIELD NO LONGER FOLDS ITSELF ON BLUR, and that is the price of
-       having put the trending rail inside it for a version. The rail has since
-       come back out to the top of the page, but the behaviour stays, because it
-       was the right one on its own merits.
-
-       The old `foldIfEmpty` collapsed an untouched field back to a disc when you
-       looked away, which was a nice manner while the field held nothing but a
-       caret. While the field held the page's index it was a bug: blur fires on
-       the PRESS, so tapping a tag folded the field and took the tag out of the
-       document under the finger that was pressing it — mouseup landed on nothing
-       and the click never happened. (Reproduced in both engines; it is the same
-       race the toggle's mousedown preventDefault above was written for, and
-       preventDefault can't reach it here because the native shell's blur arrives
-       over the bridge rather than from the DOM.)
-
-       Not folding is also the standard behaviour it should have had: a
-       UISearchController drops the keyboard when you tap away and leaves the bar
-       ACTIVE until Cancel. The X is our Cancel, it is one tap, and it is already
-       under your eye. */
-    // Focus is opt-OUT for the tag rail: tapping a tag should show you the query
-    // it just ran, not raise a keyboard over the results you asked for.
-    const openSearch = (focus = true) => {
-      // Said BEFORE the class flip, because the push that answers the flip is
-      // the one that has to carry it (see searchSpec).
-      NativeChrome.wantSearchFocus(focus);
-      bar.classList.add('topbar--searching');
-      toggleBtn.setAttribute('aria-expanded', 'true');
-      toggleBtn.setAttribute('aria-label', 'Close search');
-      searchEl.tabIndex = 0;
-      // Under native chrome the caret belongs to a UITextField in the capsule
-      // that grew out of the disc, and this input is a hidden model. Focusing it
-      // would raise the WEB VIEW'S keyboard for a field nobody can see, on top of
-      // the one the capsule is about to raise for itself.
-      if (focus && !NativeChrome.live()) searchEl.focus();
-    };
-    // Closing has to say where focus goes, and the two answers are not the same
-    // control. A keyboard close (Escape, or Enter/Space on the icon) must leave
-    // focus somewhere reachable or the next Tab starts again from the top of the
-    // document, so it lands on the button. A TAP must not, and this is the one
-    // line here with a real trap under it: focus() is a script move, the element
-    // it takes focus from is a text input, and an input always matches
-    // :focus-visible — which the spec's heuristic then passes through to whatever
-    // script focuses next. So an unconditional focus() draws the keyboard ring
-    // on a finger tap: 2px of --accent, which is var(--text), which is #e9ebed on
-    // dark paper. A white ring around the X, from touching it. (Measured on
-    // WebKit and Blink, both schemes.) It only ever showed on an open field
-    // because that is the only state where focus was in the input to begin with.
-    //
-    // The tap blurs instead of parking focus anywhere, which the field wants for
-    // its own reason: mousedown's preventDefault above keeps focus in the input
-    // through the press, and on iOS focus in a folded field is a keyboard still
-    // standing over a search that has closed. The blur handler re-folds, which is
-    // idempotent by then.
-    const closeSearch = (refocus) => {
-      if (discoverQuery) { discoverQuery = searchEl.value = ''; paintNow(); }
-      foldSearch();
-      if (refocus) toggleBtn.focus(); else searchEl.blur();
-    };
-
-    // A tag is a shortcut into search, and tapping the live one again undoes it —
-    // the rail is the only control on this page that can turn itself off, so it
-    // has to be able to.
-    //
-    // The un-press USED TO FOLD THE FIELD, which stopped being possible when the
-    // rail moved inside it: folding would take the tags away along with the query
-    // and leave nothing standing to press again. So both halves leave the field
-    // open — empty, with the whole grid back, and the other four tags still
-    // there to try. The X is still how you leave.
-    //
-    // The push is said by hand because the native field reads `input.value`
-    // (searchSpec) and a value set from script mutates nothing for watchPage to
-    // see. The repaint below usually covers it; a tag whose grid happens to sign
-    // the same would not.
+    // A tag is a shortcut into search, and tapping the live one again undoes it
+    // — the rail is the only control on this page that can turn itself off, so
+    // it has to be able to. It fills the bar rather than opening anything, and
+    // does not focus it: tapping a tag should show you the answer, not raise a
+    // keyboard over it.
     const wireTags = () => {
       bodyEl.querySelectorAll('.dtag').forEach(btn => btn.addEventListener('click', () => {
         const on = btn.getAttribute('aria-pressed') === 'true';
         discoverQuery = searchEl.value = on ? '' : btn.dataset.tag;
-        openSearch(false);
-        NativeChrome.schedulePage();
         paintNow();
       }));
     };
+    // Escape empties the bar, the one way out a keyboard reader has without an X.
+    searchEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && searchEl.value) {
+        discoverQuery = searchEl.value = '';
+        paintNow();
+      }
+      // Return is "show me", and the answer is already on the page: the
+      // keyboard going down is all that is left to do.
+      if (e.key === 'Enter') searchEl.blur();
+    });
 
-    // Keep focus on the field while the icon is pressed so its blur-to-fold can't
-    // race the toggle (mousedown default would move focus off the field first).
-    toggleBtn.addEventListener('mousedown', (e) => e.preventDefault());
-    // event.detail is the click's press count, and a button activated from the
-    // keyboard reports 0 where a pointer reports 1 — the only tell available here,
-    // since WebKit fires an ordinary click either way. That is what decides
-    // whether closing hands focus back to the icon or drops it (see closeSearch).
-    toggleBtn.addEventListener('click', (e) =>
-      bar.classList.contains('topbar--searching') ? closeSearch(e.detail === 0) : openSearch());
-    searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(true); });
-
-    /* ── The native capsule's half ────────────────────────────────────────────
-       In the App Store build on iOS 26 the shell above is drawn by UIKit and the
-       reader types into a real UITextField (see TriaSearchField). This input is
-       still the MODEL: the keystroke is written into it here and runs the same
-       `input` listener below, so the beat, the widened rebuild, the tag rail's
-       pressed state and every read of `discoverQuery` are the code that already
-       shipped. The close hook is the web's own answer to the field being left —
-       the X clears and folds — reached by calling it rather than by restating it.
-       There is no blur hook any more: nothing folds on blur in either shell (see
-       above), so the native field resigning first responder is exactly what it
-       looks like, a keyboard going down. */
-    NativeChrome.searchHooks.text = (text) => {
-      searchEl.value = text;
-      searchEl.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    NativeChrome.searchHooks.close = () => closeSearch(false);
     // Typing repaints on a short trailing beat rather than per letter. A paint
     // here is a full rebuild — search lifts the per-person cap and folds the
     // hand-addressed posts back in, so the grid it builds is roughly double the
@@ -13965,49 +13824,6 @@
     // cancel a beat still in flight, or the stale one lands on top of it.
     const paintNow = (opts) => { clearTimeout(searchTimer); paint(opts); };
     searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); });
-
-    // The filter — same dial as My Circle, on its own state, plus the People row
-    // (DISCOVER_FILTERS). A type narrows the grid to tiles FACED by that type, so
-    // picking Frame gives you a wall of photos and the people behind them, and
-    // accounts with nothing to show drop out: they have no face to match. People
-    // is the opposite move — it drops every post and faces everyone alike.
-    document.getElementById('discover-filter-btn')?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
-      current: discoverFilter,
-      filters: DISCOVER_FILTERS,
-      label: 'Filter Discover',
-      // The format switch heads the dial, above People and the ladder. It names
-      // the form it would switch TO rather than the one you're in — the same
-      // reading as every OS toggle, and the only one that works on a row you tap
-      // once.
-      //
-      // IT IS ON EVERY ROW NOW, People included. It used to be dropped there (not
-      // disabled — a row that does nothing is worse than a row that isn't there)
-      // because a directory of portraits had no column form to switch to. That
-      // stopped being true when the list learned to draw a person as a row, so
-      // the one filter that hid the switch is the one where the column reads
-      // best: a name, a handle, a line of bio and an Add, forty to a screen
-      // instead of six. Format is now genuinely a second axis — every filter has
-      // both forms — rather than a thing four of the six rows happened to have.
-      extras: [{
-        key: 'view',
-        label: discoverView === 'gallery' ? 'List' : 'Gallery',
-        ico: DISCOVER_VIEWS[discoverView === 'gallery' ? 'list' : 'gallery'],
-      }],
-      onPick: (key) => {
-        // Format, the other axis. It repaints the body and touches nothing
-        // else: the filter, the query and the scroll all belong to WHAT you're
-        // looking at, and this only changes how it's drawn.
-        if (key === 'view') {
-          discoverView = discoverView === 'gallery' ? 'list' : 'gallery';
-          try { localStorage.setItem(DISCOVER_VIEW_KEY, discoverView); } catch {}
-          paintNow();
-          return;
-        }
-        discoverFilter = key;
-        syncFilterBtn('discover-filter-btn', discoverFilter);
-        paintNow();
-      },
-    }));
 
     // A re-pull while you're standing on Discover repaints the body in place
     // instead of re-rendering the whole view (which would tear down the masthead
@@ -14050,13 +13866,7 @@
     };
 
     // Restore an in-flight query if a background refresh re-rendered the page.
-    // Symmetric on purpose: the old in-flow field was minted fresh with the
-    // masthead every render and so began clean, but .topbar OUTLIVES a render
-    // (renderDiscover can be called straight from the refresh path, without
-    // renderPage's resetToolbar), so an empty query has to actively fold a
-    // stale open state rather than merely decline to set one.
     searchEl.value = discoverQuery;
-    if (discoverQuery.trim()) openSearch(false); else foldSearch();
     paint();
   }
 

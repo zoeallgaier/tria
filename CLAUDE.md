@@ -45,6 +45,13 @@ web the phone nav simply drops its round +.
 its own dot on the bell (`.toolbar-dot`, crossed to native as a control's `dot`).
 `#/updates` lights My Circle and its back chevron goes there.
 
+**Discover's search is a plain web bar on the page** under the "Discover"
+title, always there, full content width, no open, no close, no X (Zoe's call;
+`.discover-search`). Discover's filter dial is gone with it, so the page is
+always the gallery with every type; `discoverFilter`/`discoverView` are fixed
+constants and a stored `tria:discoverView` is ignored. The native search
+capsule (`TriaSearchField`, `searchSpec`) has no caller now.
+
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
 `posts.song` jsonb in the listening status's shape, minus `at`). The listening
 status is untouched and stays a non-post. The composer's speaker button opens a
@@ -169,7 +176,7 @@ commits wear the same neutral in CSS.
 The PIECES THAT HOLD A CARET are native too, and they are the one place native is
 more than a face: a field cannot be borrowed from a hidden element, so the
 `UITextView` in a post page's COMMENT BAR, the `UITextField` in a circle's FIND
-BAR and the one in DISCOVER'S SEARCH are real, and every keystroke is written
+BAR and (until 1.8 made it a web bar) the one in DISCOVER'S SEARCH were real, and every keystroke is written
 back into the web element that is still the model. All of them needed a way DOWN
 off the keyboard built by hand (`TriaKeyboardDismisser`) — a tap on the page
 reaches a page with no focus to lose — and the comment bar's leading avatar turns
