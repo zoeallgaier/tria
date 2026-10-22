@@ -826,7 +826,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
            reason this is a controller rather than a bare `UITabBar` in a view:
            minimising is the controller's behaviour, read off the content scroll
            view of the selected tab, which is handed the web view's scroll view
-           in `select` below. Nothing here watches the scroll for it. */
+           as each page is made in `apply` below. Nothing here watches the scroll. */
         controller.tabBarMinimizeBehavior = .onScrollDown
         controller.view.backgroundColor = .clear
         // Ink for the lit tab. The system's default is its blue, which is not a
@@ -866,6 +866,13 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
                 let image = TriaSVG.image(markup: tab["icon"] as? String ?? "",
                                           size: Metric.icon, ink: .black, template: true)
                 page.tabBarItem = UITabBarItem(title: label, image: image, tag: index)
+                // The scroll the bar folds on, handed over BEFORE the page is
+                // shown. The controller registers itself as the scroll view's
+                // observer only when a page comes up; handed to a page already
+                // up (as `select` used to), it is stored and never observed,
+                // and the bar never folds. Measured in the simulator on 26.5.
+                // One web view, so all four pages hold the same one.
+                page.setContentScrollView(scroller, for: .bottom)
                 return page
             }, animated: false)
             paintDots()
@@ -910,9 +917,6 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         guard let index = routes.firstIndex(of: route),
               let pages = controller.viewControllers, index < pages.count else { return }
         if controller.selectedIndex != index { controller.selectedIndex = index }
-        // The scroll the bar folds on belongs to whichever tab is up, so it is
-        // handed over with the selection. One web view, four owners in turn.
-        pages[index].setContentScrollView(scroller, for: .bottom)
     }
 
     /* A TAP CROSSES AS A ROUTE, and the system is allowed to move its lens first.

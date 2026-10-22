@@ -264,7 +264,13 @@ it lands on a view INSIDE the tab bar (never the bar's own full-width bounds), s
 the page under it still scrolls and taps. What arrived free: the glass capsule
 and its lens, labels under the icons, Dynamic Type, the VoiceOver tab tree, and
 `tabBarMinimizeBehavior = .onScrollDown`, fed by handing the web view's scroll
-view to the selected page in `select` (`setContentScrollView(_:for: .bottom)`).
+view to every page as `apply` makes it (`setContentScrollView(_:for: .bottom)`).
+**Before the page is shown, never after**: the controller registers as the
+scroll view's observer only when a page comes up, so a scroll view handed to a
+page already up is stored and never watched. That was 1.8's first build (it was
+set in `select`), and the bar never folded. Measured on the 26.5 simulator
+(2026-10-22) with UIScrollView's private `_isScrollViewScrollObserver:`: false
+that way, true this way, and the bar folds under a faked drag.
 
 Four decisions inside it:
 
