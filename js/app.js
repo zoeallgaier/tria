@@ -6353,7 +6353,9 @@
   // what you attach, so a Find or a Frame is a Post you put a link or a photo
   // in. An activity is the one that is a different act (a time, a place, who
   // is coming), so it keeps its door, and so does the Daily, which is a prompt
-  // and not a type. Music is the composer's speaker button.
+  // and not a type. Music came back as a row (Zoe, 2026-10-22): a song is
+  // picked from a search, not typed, so the row opens the composer with the
+  // speaker button pressed, there only once posts can carry one.
   // The Daily row is always the composer with the prompt over it (Zoe), never
   // the room, so it is there only while you have an answer left to give: one
   // each, and a row that opens a page you can't post from is a dead end.
@@ -6362,6 +6364,7 @@
     return [
       { key: 'note',     label: 'Post' },
       { key: 'activity', label: 'Activity' },
+      ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
     ];
   }
@@ -12686,6 +12689,10 @@
       `</button>`;
   }
 
+  const sameSong = (a, b) => !!a && !!b &&
+    String(a.title || '').toLowerCase() === String(b.title || '').toLowerCase() &&
+    String(a.artist || '').toLowerCase() === String(b.artist || '').toLowerCase();
+
   function renderListening() {
     const me = Store.user(Store.session());
     if (!me) { go('#/discover'); return; }
@@ -12736,6 +12743,17 @@
         const res = await Store.setListeningTo(song);
         if (!res.ok) { toast(res.error); return; }
         hapticEvent('SUCCESS');
+        // A new song on repeat is news, so it also goes out as a Music post to
+        // your circle, album cover and all (Zoe, 2026-10-22). The status stays
+        // its own thing; the post is a copy that lives in the feed. Re-picking
+        // the song already up posts nothing, and a failed post never undoes
+        // the status that did save.
+        if (Store.songsReady() && !sameSong(now, song)) {
+          const { at, ...track } = song;
+          Store.createPost({ type: 'song', song: track })
+            .then(r => { if (!r?.ok) toast('Saved, but it didn’t post to your circle.'); })
+            .catch(() => toast('Saved, but it didn’t post to your circle.'));
+        }
         songQuery = ''; songHits = []; songState = '';
         go(back.href);
       } catch {
