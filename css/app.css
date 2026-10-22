@@ -1724,18 +1724,38 @@ main {
 .view--people .masthead-title,
 .view--discover .masthead-title { padding-bottom: 0.6rem; }
 
-/* ── Discover's search bar (1.8) ──────────────────────────────────────────────
-   Always there, under the nameplate: no open, no close, no X (Zoe's call). It
-   replaced the toolbar disc that grew into a glass field. A field in the page
-   is CONTENT, so it is flat, the same panel fill and hairline as the song
-   picker's field, and a capsule because a search bar is one in every app the
-   reader already knows. The masthead's 2.6rem gap moves below the bar, so the
-   bar reads as the title's and the page starts after both. */
-.view--discover .masthead { margin-bottom: 0.9rem; }
-.discover-search {
-  position: relative;
-  margin: 0 0 2rem;
+/* ── Discover's search, in the header (1.8) ───────────────────────────────────
+   Discover has no nameplate. The bar at the top holds one search field, always
+   open: no open, no close, no X (Zoe's calls). It is mounted in the bar's own
+   field slot (.toolbar-field, mountToolbar's `field`) and fills the row from
+   edge to edge of the content, where the cards below it start and stop.
+
+   IT GOES WITH THE HEADER. Reading down, the material leaves (.topbar--reading)
+   and the field leaves with it; scroll up and both come back. The one exception
+   is a field holding the caret, which stays put while you type, because a
+   field fading out from under your thumb mid-word is a bug however principled
+   the rule that did it. At the very top the material is absent (.topbar--bare)
+   and the field sits on the page with nothing behind it, which is where the
+   title used to be. */
+.toolbar-field[hidden] { display: none; }
+.toolbar-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
 }
+.topbar--reading .toolbar-field:not(:focus-within) {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+.topbar--edge-instant .toolbar-field { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-field { transition: opacity var(--dur-quick) var(--ease); }
+  .topbar--reading .toolbar-field:not(:focus-within) { transform: none; }
+}
+/* The page starts under the bar, with the gap the nameplate used to leave. */
+body.toolbar-field .view--discover { padding-top: 0.5rem; }
+.discover-search { position: relative; }
 .discover-search-ico {
   position: absolute;
   left: 0.95rem;
@@ -10544,6 +10564,11 @@ html[data-chrome="native"] .topbar .toolbar-title { visibility: hidden; }
    thing that answers to the scroll is the material, which is native here and
    `.topbar--bare` off-app. */
 html[data-chrome="native"] .topbar::before { content: none; }
+/* EXCEPT ON A ROUTE WHOSE BAR HOLDS A WEB FIELD (1.8, Discover's search). Native
+   stands its toolbar down there (pushToolbar sends it off duty), because native
+   glass is above every web pixel and would blur the field under it, so the CSS
+   bar draws its own material again. Restated with the gate, per the note above. */
+html[data-chrome="native"] body.toolbar-field .topbar::before { content: ''; }
 
 /* AND THE STATUS BAR SCRIM GOES WITH IT, in the app only.
 

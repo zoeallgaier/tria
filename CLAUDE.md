@@ -45,12 +45,16 @@ web the phone nav simply drops its round +.
 its own dot on the bell (`.toolbar-dot`, crossed to native as a control's `dot`).
 `#/updates` lights My Circle and its back chevron goes there.
 
-**Discover's search is a plain web bar on the page** under the "Discover"
-title, always there, full content width, no open, no close, no X (Zoe's call;
-`.discover-search`). Discover's filter dial is gone with it, so the page is
-always the gallery with every type; `discoverFilter`/`discoverView` are fixed
-constants and a stored `tria:discoverView` is ignored. The native search
-capsule (`TriaSearchField`, `searchSpec`) has no caller now.
+**Discover has no title; its search field IS the header.** One web field,
+always open, no X (`mountToolbar({ field })`, `#toolbar-field`,
+`.discover-search`), at full content width. It leaves with the header on a read
+down and comes back on a scroll up, except while it holds the caret. On that one
+route the web draws the whole bar in every shell: `body.toolbar-field` sends the
+native toolbar off duty and re-enables the CSS material under the native gate,
+because native glass would blur a web field beneath it. Discover's filter dial
+is gone too, so it is always the gallery with every type
+(`discoverFilter`/`discoverView` are constants, a stored `tria:discoverView` is
+ignored). `TriaSearchField`/`searchSpec` have no caller now.
 
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
 `posts.song` jsonb in the listening status's shape, minus `at`). The listening

@@ -1152,10 +1152,14 @@ value still in flight.
 
 ## Discover's search
 
-**Retired in 1.8 (2026-10-21).** Discover's search is an ordinary web input on
-the page now, under the nameplate and always open (`.discover-search` in
-app.css), at Zoe's call: no open, no close, just a search bar. It doesn't sit on
-the keyboard, so it is the profile editor's case and needs no native caret.
+**Retired in 1.8 (2026-10-21).** Discover has no nameplate, and its search is
+an ordinary web input that IS the header: always open, no X, mounted in the
+bar's field slot (`mountToolbar({ field })`), leaving with the header on a read
+down. Zoe's calls. On that route the web draws the whole bar in every shell:
+`body.toolbar-field` puts the native toolbar off duty in `pushToolbar` and the
+gate's exception brings the CSS material back, because native glass is a layer
+above every web pixel and would blur the field. It doesn't sit on the keyboard,
+so it needs no native caret.
 `TriaSearchField` and `searchSpec` are still in the tree and receive
 `{live: false}` on every push, since the page has no `.toolbar-search-shell`
 any more. What follows is the history.

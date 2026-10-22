@@ -1250,8 +1250,11 @@
       // body.toolbar-live means "this bar is a page's own" — false under the
       // gate and in the frames between boot and the first route landing, both
       // of which want no bar rather than an empty one.
+      // A route whose bar holds a web field (mountToolbar's `field`) is drawn
+      // by the web whole, so native stands down there: off duty, nothing up.
       const onDuty = !!bar && !gated && !overlaid()
-        && document.body.classList.contains('toolbar-live');
+        && document.body.classList.contains('toolbar-live')
+        && !document.body.classList.contains('toolbar-field');
 
       // `visible` used to be a second answer here, onDuty minus the bar's own
       // hide-on-scroll, and it went across as its own flag so native could fade
@@ -5926,7 +5929,9 @@
      an empty one with a material on it, which is what the class buys (see
      body.toolbar-live in app.css). */
   function resetToolbar() {
-    document.body.classList.remove('toolbar-live');
+    document.body.classList.remove('toolbar-live', 'toolbar-field');
+    const field = document.getElementById('toolbar-field');
+    if (field) { field.hidden = true; field.innerHTML = ''; }
     const page = document.getElementById('toolbar-page');
     const titleEl = document.getElementById('toolbar-title');
     const actions = document.getElementById('toolbar-actions');
@@ -5946,8 +5951,17 @@
   // own `actions` param) — `title` is plain text (textContent, not innerHTML),
   // since it's read back by AT-adjacent tooling less carefully than markup and
   // a page name is never anything but text anyway.
-  function mountToolbar({ leading = '', title = '', actions = '' } = {}) {
+  // `field` (1.8) is a page's own field IN the bar, filling the row between the
+  // two sides. Discover's search is the one caller. It is web in every shell:
+  // body.toolbar-field tells NativeChrome to stand its toolbar down on this
+  // route (native glass is a layer above every web pixel, so it would blur a web
+  // field under it) and tells the stylesheet to draw the CSS bar's material
+  // even under native chrome. See the gate at the end of app.css.
+  function mountToolbar({ leading = '', title = '', actions = '', field = '' } = {}) {
     document.body.classList.add('toolbar-live');
+    document.body.classList.toggle('toolbar-field', !!field);
+    const fieldEl = document.getElementById('toolbar-field');
+    if (fieldEl) { fieldEl.hidden = !field; fieldEl.innerHTML = field; }
     const page = document.getElementById('toolbar-page');
     const titleEl = document.getElementById('toolbar-title');
     const actionsEl = document.getElementById('toolbar-actions');
@@ -13418,13 +13432,15 @@
         `</button>` +
       `</div>`;
 
-    /* SEARCH IS A BAR ON THE PAGE (1.8), under the nameplate, and it is always
-       there. It was a toolbar disc that grew into a glass field (a CSS shell on
-       the web, TriaSearchField natively), with an open state, a close state and
-       an X. Zoe's call: no open, no close, just a search bar. So it is an
-       ordinary web input in the page's flow, the profile editor's situation
-       rather than the comment bar's: it doesn't sit on the keyboard, so it
-       needs no native caret. Empty is the whole grid; typing narrows it. */
+    /* SEARCH IS THE HEADER (1.8). Discover has no nameplate: the bar at the top
+       holds one search field, always open, and it comes and goes with the
+       header itself, away while you read down and back the moment you scroll
+       up. It was a toolbar disc that grew into a glass field (a CSS shell on
+       the web, TriaSearchField natively) with an open state, a close state and
+       an X, and then briefly a bar on the page under the title. Zoe's calls,
+       both: no open, no close, just a search bar, and it lives in the header.
+       It is web in every shell (see mountToolbar's `field`). Empty is the
+       whole grid; typing narrows it. */
     const searchBar =
       `<div class="discover-search" role="search">` +
         `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
@@ -13434,7 +13450,9 @@
       `</div>`;
 
     mountToolbar({
-      title: 'Discover',
+      // No small title either: the field IS the header, and the tab bar
+      // already says where you are.
+      field: searchBar,
       // Nothing trailing since 1.8: search is the bar on the page, and the
       // filter went with it (Zoe: unneeded). Search already answers "who" and
       // "what", which is what the dial's People row and type rows narrowed by.
@@ -13443,8 +13461,6 @@
 
     view.innerHTML =
       `<section class="view view--discover">` +
-        mastheadEl('', 'Discover') +
-        searchBar +
         (Store.isAuthed() ? '' :
           `<p class="guest-note">You’re looking around signed out. ` +
             `<a class="about-more" href="#/join">Make an account</a> to like, comment and add people.</p>`) +
@@ -13452,7 +13468,8 @@
       `</section>`;
 
     const bodyEl = view.querySelector('#discover-body');
-    const searchEl = view.querySelector('#discover-search');
+    // Document-scoped: the field lives in the bar, outside #view.
+    const searchEl = document.getElementById('discover-search');
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with it,
     // 1 = appears somewhere, 0 = no match.
