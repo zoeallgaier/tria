@@ -2282,7 +2282,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    below it (see .comments-panel). Text entries (post / find): content inset to
    match the photo text column; the type reads from the colored tag, not a rule. */
 .card--note .card-main, .card--find .card-main, .card--activity .card-main,
-.card--poll .card-main, .card--quote .card-main {
+.card--poll .card-main, .card--quote .card-main, .card--song .card-main {
   padding: 0.35rem var(--inset);
 }
 
@@ -6161,36 +6161,66 @@ button.poll-option:disabled { cursor: default; }
 }
 .song-clear:disabled { opacity: 0.5; cursor: default; }
 
-/* ── A music post's track, on its card (1.8) ──────────────────────────────────
-   The current-song box from the picker, laid into a card: one record, stated,
-   so it keeps that box's hairline and panel fill and the pinned card's 88px
-   sleeve. The whole row is the link out (songLink); the play mark at the end
-   says so without a word, and wears the type's ink like a Find's arrow wears
-   nothing, because here the hue IS the type's only mark on the card. */
+/* ── A music post's track, on its card (1.8, refined 2026-10-22) ─────────────
+   Drawn as the quoted post's tile (.card-quoted), not the picker's glass box:
+   a record on a card is an object set INTO the post, the same kind of thing a
+   quote is, so it wears the same flat material (--surface, one --rule
+   hairline), the same 0.9rem above, and the same pad. The first pass used the
+   picker's 0.4rem pad, which suits a list row and read as cramped on a card
+   (Zoe). The worse half was outside the tile: .card--song was missing from
+   the text types' inset rule, so the whole post ran to the screen's edge. The title takes the quote's serif step so it reads as a headline,
+   the artist the quoted byline's meta line. The whole tile is the link out
+   (songLink); the play disc at the end says so without a word, in butter,
+   because the hue is the type's only mark on the card. */
 .card-song {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin: 0.6rem 0 0.75rem;
-  padding: 0.4rem;
-  border: var(--glass-edge);
+  gap: 0.9rem;
+  margin: 0.9rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
   border-radius: var(--radius-card);
-  background: var(--glass-bg-panel);
+  background: var(--surface);
   color: inherit;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-micro);
 }
-.card-song .song-art { width: 88px; height: 88px; }
-.card-song .song-title { font-weight: 700; }
+.card-song:active { transform: scale(0.985); }
+.card-song + * { margin-top: 0.9rem; }
+/* Concentric with the tile: 14 - 0.75rem lands near the art's own 8. */
+.card-song .song-art {
+  width: 76px;
+  height: 76px;
+  border-radius: var(--radius-img);
+}
+.card-song .song-lines { gap: 0.2rem; flex: 1 1 auto; }
+.card-song .song-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.24rem;
+  line-height: 1.16;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.card-song .song-artist { font-size: 0.8rem; letter-spacing: 0.02em; }
 .card-song-play {
-  margin-inline-start: auto;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   width: 2.5rem;
   height: 2.5rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--type-song) 38%, transparent);
   color: var(--type-song-ink);
 }
-.card-song-play svg { width: 22px; height: 22px; }
+.card-song-play svg { width: 18px; height: 18px; margin-inline-start: 2px; }
+/* The pick box and the result rows set display, which beats [hidden]: an
+   empty box sat in the composer before any song was picked. */
+.song-now[hidden] { display: none; }
 /* On the composer the surface is a field, so the current-pick box drops the page
    gutter the picker page centres it in. */
 .song-field .song-now,
@@ -10206,7 +10236,8 @@ button.poll-option:disabled { cursor: default; }
      line sits centered between entries. */
   .feed { margin-inline: -1.15rem; gap: 0.9rem; }
   .card--note .card-main, .card--find .card-main, .card--activity .card-main,
-  .card--poll .card-main, .card--quote .card-main { padding-inline: 1.15rem; }
+  .card--poll .card-main, .card--quote .card-main,
+  .card--song .card-main { padding-inline: 1.15rem; }
   .card--photo .card-actions { padding-inline: 1.15rem; }
   /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
   /* The page's own inset at phone width, matching .card-main's 1.15rem above.

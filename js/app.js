@@ -12591,7 +12591,55 @@
   /* The rail. Your own square is always drawn, even empty, because it is the
      only way into the feature — a strip that hides itself until somebody has
      used it can never have a first user. */
+  /* ON REPEAT IS THE MUSIC YOU POST (Zoe, 2026-10-22). Posting a song and
+     having it on repeat are one act, so once posts can carry a song the rail
+     is a condensed read of the Music posts in the world: each person's newest
+     one from the last week, newest first, a square that opens the post (where
+     it can be liked and talked about, which a status never could). The + is
+     always first, because it is the way in and the rail must be able to have
+     a first user. Without add-song-posts.sql the rail is the old listening
+     status, untouched (statusRailEl). */
+  const ON_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
+  function songPostsOnRepeat() {
+    const cut = Date.now() - ON_REPEAT_MS;
+    const seen = new Set();
+    const out = [];
+    for (const p of Store.posts()) {   // newest first
+      if (p.type !== 'song' || !p.song || !p.author || seen.has(p.author)) continue;
+      if (Date.parse(p._ts || 0) < cut) break;
+      if (Blocks.has(p.author)) continue;
+      const u = Store.user(p.author);
+      if (!u) continue;
+      seen.add(p.author);
+      out.push({ u, post: p });
+    }
+    return out;
+  }
+
   function nowPlayingEl() {
+    if (!Store.songsReady()) return statusRailEl();
+    const me = Store.session();
+    const items = songPostsOnRepeat();
+    if (!me && !items.length) return '';
+    const add = !me ? '' :
+      `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
+          `aria-label="Share a song">` +
+        `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
+        `<span class="np-song">Share a song</span>` +
+        `<span class="np-who">You</span>` +
+      `</button>`;
+    const square = ({ u, post }) => {
+      const f = npFace({ ...u, listening: post.song }, me);
+      return `<a class="np-item" href="#/p/${encodeURIComponent(post.id)}" ` +
+        `aria-label="${esc(f.label)}">${f.html}</a>`;
+    };
+    return `<section class="nowplaying" aria-label="What people have on repeat">` +
+        `<p class="np-kicker">On repeat</p>` +
+        `<div class="np-strip">${add}${items.map(square).join('')}</div>` +
+      `</section>`;
+  }
+
+  function statusRailEl() {
     const me = Store.session();
     const { mine, rest } = listeners();
     // Signed out (the public site) there is no "you" to add a song for, and an
@@ -12645,7 +12693,16 @@
      and a chevron that always says Discover would walk you off the page you came
      from. */
   let songBack = '#/discover';
-  function goListening(from) { songBack = from || '#/discover'; go('#/listening'); }
+  // ONE DOOR FOR MUSIC (Zoe, 2026-10-22): once posts can carry a song, setting
+  // one IS posting one, so every way in (Discover's +, a profile's song pin)
+  // opens the composer with its song search up, and Share sets the status too
+  // (see submitComposer). This page stays only for a server without
+  // add-song-posts.sql, where the composer has no song surface to open.
+  function goListening(from) {
+    songBack = from || '#/discover';
+    if (Store.songsReady()) { pendingAttach = 'song'; go('#/publish'); return; }
+    go('#/listening');
+  }
 
   /* ONE QUESTION TO THE MUSIC SEARCH, asked by both pickers: this page and the
      composer's song surface (1.8). A link is resolved, words are searched, and
@@ -12688,10 +12745,6 @@
         `</span>` +
       `</button>`;
   }
-
-  const sameSong = (a, b) => !!a && !!b &&
-    String(a.title || '').toLowerCase() === String(b.title || '').toLowerCase() &&
-    String(a.artist || '').toLowerCase() === String(b.artist || '').toLowerCase();
 
   function renderListening() {
     const me = Store.user(Store.session());
@@ -12743,17 +12796,6 @@
         const res = await Store.setListeningTo(song);
         if (!res.ok) { toast(res.error); return; }
         hapticEvent('SUCCESS');
-        // A new song on repeat is news, so it also goes out as a Music post to
-        // your circle, album cover and all (Zoe, 2026-10-22). The status stays
-        // its own thing; the post is a copy that lives in the feed. Re-picking
-        // the song already up posts nothing, and a failed post never undoes
-        // the status that did save.
-        if (Store.songsReady() && !sameSong(now, song)) {
-          const { at, ...track } = song;
-          Store.createPost({ type: 'song', song: track })
-            .then(r => { if (!r?.ok) toast('Saved, but it didn’t post to your circle.'); })
-            .catch(() => toast('Saved, but it didn’t post to your circle.'));
-        }
         songQuery = ''; songHits = []; songState = '';
         go(back.href);
       } catch {
@@ -13847,8 +13889,9 @@
       });
       bodyEl.querySelector('.daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
-      // Everyone else's square is a link the outbound handler already covers;
-      // only my own needs wiring, and it goes to the picker.
+      // Every other square is a plain link (a post, or the song itself on a
+      // server without song posts); only the + needs wiring, and it opens the
+      // composer's song search (goListening).
       bodyEl.querySelector('[data-np="edit"]')
         ?.addEventListener('click', () => goListening('#/discover'));
       // The share ask ends the page, so it follows the two views that ARE the
@@ -17691,6 +17734,13 @@
     stills = [];
     videoCapture = null;
     composeSong = null;
+    // A song you share is the song you have on repeat (Zoe, 2026-10-22): one
+    // act, so Discover's rail and your profile's pin follow the post. Not for
+    // a hand-picked audience, because the status is seen by your whole circle
+    // and would tell them what the post kept from them. Best effort and
+    // silent: the post is what you asked for, and it is already out.
+    if (data.type === 'song' && data.song && res.post.audience !== 'list')
+      Store.setListeningTo(data.song).catch(() => {});
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // next compose opens as a plain Note until something's attached
     // An answer goes home to its question: the point of answering is seeing what

@@ -105,8 +105,13 @@ day and Zoe asked for the blur back. The token names stayed so every rule
 simplified untouched.
 
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
-`posts.song` jsonb in the listening status's shape, minus `at`). The listening
-status is untouched and stays a non-post. The composer's speaker button opens a
+`posts.song` jsonb in the listening status's shape, minus `at`). **Posting a song
+IS having it on repeat** (Zoe, 2026-10-22): the Create sheet has a Music row,
+every way in (Discover's +, a profile's song pin) opens the composer's song
+search (`goListening`), Share also sets the listening status (not for a
+hand-picked audience), and Discover's On repeat rail is each person's newest
+Music post from the last week, opening the post (`songPostsOnRepeat`).
+`#/listening` survives only as the fallback without the column. The composer's speaker button opens a
 song search (`lookUpSongs`, shared with `#/listening`), the card draws the track
 as a row linking out (`songTileHtml`), and its hue is butter (`--type-song`).
 Everything Music is hidden until `Store.songsReady` sees the column.
@@ -325,10 +330,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   "column likes.reaction does not exist" before it and `[]` after. Were the column
   ever missing again, every like reads as a heart and holding one does nothing
   (`Store.reactionsReady`), and that probe is a 400 in a boot pass's console.
-  **`add-song-posts.sql` is NOT run** (2026-10-21): anon
-  `GET /rest/v1/posts?select=song&limit=1` answers 42703 "column posts.song does
-  not exist". Until it runs, `Store.songsReady` is false, no Music row or song
-  button shows, and that probe is the one 400 in a boot pass's console.
+  **`add-song-posts.sql` is confirmed run** (2026-10-22): anon
+  `GET /rest/v1/posts?select=song&limit=1` answered 42703 before it and
+  `[{"song":null}]` after. Were the column ever missing again,
+  `Store.songsReady` is false, no Music row or song button shows, and
+  Discover's On repeat falls back to the old listening status.
 
 ## Copy style
 
