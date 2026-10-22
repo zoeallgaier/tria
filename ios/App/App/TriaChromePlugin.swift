@@ -1278,18 +1278,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// The header — the material behind the bar and the small title on it — is
     /// one object in two views, and this is the single answer both wear.
     private var headerUp: Bool { !scroll.atTop && (holdHeader || !scroll.reading) }
-    /// The discs, on the wordmark's rule: up at the top of a page and whenever
-    /// the header is, gone on a read down (Zoe, 2026-10-22: the top buttons can
-    /// disappear on scroll). The web's copy is `.topbar--reading` on the two
-    /// control slots in app.css.
-    private var controlsUp: Bool { scroll.atTop || headerUp }
-
-    /// Each disc fades on its own, never `contentView`: alpha on a glass
-    /// container leaves its nested glass half-drawn (see the note above
-    /// `materialFrame`). A nested glass element honours alpha.
-    private func syncAway(animated: Bool) {
-        for control in controls.values { control.setAway(!controlsUp, animated: animated) }
-    }
 
     /// A menu the system is presenting right now and whose rows have not arrived
     /// yet. See `attachMenu` for why they arrive late.
@@ -1335,7 +1323,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
                 self.scroll = state
                 self.syncMaterial(animated: true)
                 self.syncTitle(animated: true)
-                self.syncAway(animated: true)
                 if crossedTop { self.syncBare(animated: true) }
             }
         }
@@ -1384,7 +1371,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
                 contentView.insertSubview(control.ramp, belowSubview: control)
                 controls[id] = control
             }
-            control.setAway(!controlsUp, animated: false)
             control.update(spec: item)
             control.setBare(scroll.atTop, animated: false)
             // Attached (or dropped) after the update, because whether a control
@@ -1424,12 +1410,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         material.frame = materialFrame()
     }
 
-    /* SINCE 2026-10-22 THE DISCS LEAVE ON A READ DOWN AGAIN, on the header's
-       rule and not a gesture of their own (`controlsUp`, `syncAway`): Zoe's
-       call, once the title, wordmark and tab bar all left on the same read
-       down. What follows is the history, and its two facts still hold.
-
-       THE BAR NO LONGER HIDES ON A SCROLL DOWN, and this is where that used to
+    /* THE BAR NO LONGER HIDES ON A SCROLL DOWN, and this is where that used to
        be. `setShown` faded every disc, the search capsule and the title out
        together when `.topbar--hidden` went on, and `visible` crossed the bridge
        on every push to drive it.
@@ -1861,29 +1842,11 @@ final class TriaToolbarButton: UIVisualEffectView {
         // reserve is settled once at mount. Same here.
         paintDot(TriaChromeBar.color(fromHex: spec["dot"] as? String ?? ""))
 
-        idle = spec["hidden"] as? Bool ?? false
-        settle(animated: true)
-    }
-
-    /// Two reasons a disc is not showing, kept apart so neither undoes the
-    /// other: `idle` is the page's (the editor's unearned Save, which also
-    /// shrinks), `away` is the scroll's (the header has left on a read down,
-    /// see `TriaToolbar.syncAway`), which only fades.
-    private var idle = false
-    private var away = false
-
-    func setAway(_ wanted: Bool, animated: Bool) {
-        guard wanted != away else { return }
-        away = wanted
-        settle(animated: animated)
-    }
-
-    private func settle(animated: Bool) {
-        let gone = idle || away
-        isUserInteractionEnabled = !gone
-        let apply = {
-            self.alpha = gone ? 0 : 1
-            self.transform = self.idle ? CGAffineTransform(scaleX: 0.82, y: 0.82) : .identity
+        let hidden = spec["hidden"] as? Bool ?? false
+        isUserInteractionEnabled = !hidden
+        let settle = {
+            self.alpha = hidden ? 0 : 1
+            self.transform = hidden ? CGAffineTransform(scaleX: 0.82, y: 0.82) : .identity
             // The ramp is a sibling and none of the above reaches it. Inside the
             // same block, or the colour hangs in the air behind a Save that has
             // already faded out.
@@ -1891,16 +1854,16 @@ final class TriaToolbarButton: UIVisualEffectView {
             self.ramp.transform = self.transform
         }
         if UIAccessibility.isReduceMotionEnabled {
-            alpha = gone ? 0 : 1
+            alpha = hidden ? 0 : 1
             transform = .identity
             ramp.alpha = alpha
             ramp.transform = .identity
-        } else if animated && alpha != (gone ? 0 : 1) {
+        } else if alpha != (hidden ? 0 : 1) {
             UIView.animate(withDuration: 0.24, delay: 0,
                            options: [.allowUserInteraction, .beginFromCurrentState],
-                           animations: apply)
+                           animations: settle)
         } else {
-            apply()
+            settle()
         }
     }
 }

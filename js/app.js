@@ -4271,8 +4271,7 @@
     }).join('');
     return `<figure class="photo photo--deck" tabindex="0" role="button" aria-roledescription="carousel" ` +
         `aria-label="Photo 1 of ${n}. Swipe for the next, tap to enlarge.">` +
-        `<div class="deck" style="aspect-ratio:${ratio}">${cards}` +
-        `<span class="deck-count" aria-hidden="true">1/${n}</span></div>` +
+        `<div class="deck" style="aspect-ratio:${ratio}">${cards}</div>` +
       `</figure>`;
   }
 
@@ -4349,8 +4348,6 @@
       lay(0);
       fig.setAttribute('aria-label', `Photo ${at + 1} of ${n}. ` +
         (at < n - 1 ? 'Swipe for the next, tap to enlarge.' : 'Tap to enlarge.'));
-      const ct = deck.querySelector('.deck-count');
-      if (ct) ct.textContent = `${at + 1}/${n}`;
       load();
     };
     const go = (i, animate = true) => {
@@ -6083,10 +6080,6 @@
     }
   }
   /* ── The header stands down while you read DOWN ────────────────────────────
-     2026-10-22: the CONTROLS go with it now (Zoe: the top buttons can
-     disappear on scroll), in CSS off this same `.topbar--reading` and natively
-     in TriaToolbar.syncAway. The paragraphs below are from when they stayed.
-
      The bar's CONTROLS are up on every route and stay up (see the scroll
      watcher at the bottom of this file). Its HEADER — the material behind it
      and the small title on it — is the half that comes and goes, and as of now
@@ -20378,10 +20371,6 @@
      title, once the page's big one has scrolled up behind it. Both are read one
      rAF per scroll rather than per frame, and a crossfade starting a beat late
      is invisible — unlike a layer whose position is recomputed from the scroll.
-
-     (Superseded 2026-10-22: the controls leave with the header again, on the
-     header's one rule rather than a gesture of their own. See the header's
-     note above syncToolbarReading.)
 
      THE BAR NO LONGER TUCKS AWAY, and this is the note for why the machinery
      that used to live here is gone. Through 1.3 a thumb going down slid it out

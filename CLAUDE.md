@@ -78,9 +78,7 @@ which is content). The page's name is the bar's centred title, up from the
 first frame (`syncToolbarTitle`'s `past` is always true; natively the title
 follows the wordmark's rule, `atTop || headerUp`). A profile's bar says the
 `@handle`, the card says the name. The header leaves on a read down and is back
-on a scroll up on EVERY route, and **the bar's buttons go with it** (Zoe,
-2026-10-22; `.topbar--reading` on the two control slots in CSS,
-`TriaToolbar.syncAway` natively, each disc faded on its own): `holdsHeader()` returns false, so profiles and
+on a scroll up on EVERY route: `holdsHeader()` returns false, so profiles and
 dailies no longer hold theirs. My Circle wears the wordmark and Discover the
 search field in that same centred slot.
 
