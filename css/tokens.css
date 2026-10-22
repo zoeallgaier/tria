@@ -330,6 +330,14 @@
   --radius:      3px;     /* small radius — focus rings, incidental corners */
   --radius-pill: 999px;   /* fully rounded — pills, tags, buttons */
   --radius-img:  8px;      /* soft radius — small containers, chips */
+  /* ALBUM ART rounds much further than a photo does (Zoe, 2026-10-22: "round
+     the edges much more of all album art, that'd be cuter"). A FRACTION of the
+     square's own width, so a 48px search hit and an 88px pin wear the same
+     shape at different sizes; --radius-art is the corner itself, and a box
+     holding a cover at a known size and pad reads --art-round to stay
+     concentric with it (see .card-song, .song-now, .pin--song). */
+  --art-round:  0.26;
+  --radius-art: calc(var(--art-round) * 100%);
   /* The rest of the corner scale, tokenised so the ladder is enforced not
      remembered (see the design system note in CLAUDE.md). */
   --radius-field: 12px;   /* composer + edit inputs and their grouped rows */

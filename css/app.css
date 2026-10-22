@@ -5907,140 +5907,6 @@ button.poll-option:disabled { cursor: default; }
    would play its entrance again because the phone turned. */
 .pgrid--settled .ptile { animation: none; }
 
-/* ── On repeat — the listening rail ───────────────────────────────────────────
-   Discover's other strip, UNDER the day's card and above the grid, and built to
-   the same rules as the trending tags: flat editorial rather than glass (it's
-   contents, not something floating above content), one line that scrolls
-   sideways rather than wrapping, and the label in the page's ordinary caption
-   voice.
-
-   It opened the page for a day. The card took the top back on 2026-09-04 and
-   the reason is the one this page keeps relearning: the card is the only thing
-   on Discover with a DEADLINE, it is the same question for everybody, and it is
-   the page's headline. The rail is ambient — it will still be there tonight.
-   See "Discover's first screen" in design.md for what each fixture costs.
-
-   SQUARES, not the round faces the daily card uses. A face would say "these are
-   people", which the grid below already says about the same people; the square
-   says "these are records", and the album art is the only thing on the page
-   doing that job. 88px is the smallest a piece of cover art can be and still be
-   a picture instead of a swatch — under about 80 the art stops reading and the
-   rail turns into a row of coloured tiles. This rail is where the record IS the
-   page's content rather than a detail beside it, so it takes 132px — 1.5× the
-   pin card's own 88 — and is the one place cover art gets to be that big.
-
-   Two lines under each square, both clamped to the square's own width: the song
-   in the body face, the person in the muted caption. Song first, because the
-   rail is about what is being played; you find out who after you've been
-   interested. */
-.nowplaying {
-  max-width: var(--feed-width);
-  /* 2rem below, matching .daily-card's own 2rem above the rail — the same
-     balance argument runs the other way too. At 1.1rem the rail sat more than
-     half again closer to what follows it than to the card above, which read
-     as the rail belonging to the grid — and in list view it read worse, since
-     a people run's opening hairline (.friends-list's border-top) landed right
-     where the gap ran out, with nothing between the rail and a rule. */
-  margin: 0 auto 2rem;
-  padding-inline: var(--inset);
-}
-.np-kicker { margin: 0 0 0.5rem; }
-.np-strip {
-  display: flex;
-  gap: 0.7rem;
-  overflow-x: auto;
-  /* Keeps the swipe INSIDE the rail: without it, running out of squares hands
-     the gesture on, and in the installed app the thing waiting to catch a
-     horizontal swipe is the back navigation. Same reasoning as .dtags-rail,
-     touch-action left alone so a finger here can still scroll the page. */
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  /* The squares carry no vertical padding of their own, so the rail's own box
-     is exactly its content and nothing is clipped by the overflow. */
-  padding-block: 0.1rem;
-}
-.np-strip::-webkit-scrollbar { display: none; }
-
-.np-item {
-  flex: 0 0 auto;
-  width: 132px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  /* Squares are their own tap targets and they're 88px wide by ~120 tall, so
-     there's no 44pt problem to solve here and no padding to take back. */
-  padding: 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  text-decoration: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-/* .np-item--flat is gone with the linkless square it dressed. A song with no
-   service link used to draw a plain <div>, since a tap target that does nothing
-   is worse than none; songLink now sends a typed-in title to a search for
-   itself, so there is no such square left to style. */
-
-.np-art {
-  width: 132px;
-  height: 132px;
-  border-radius: var(--radius-img);
-  background: var(--glass-bg-panel);
-  background-size: cover;
-  background-position: center;
-  /* The hairline is the EMPTY square's dress, not the artwork's. It was never
-     the full --glass-rim (a lit perimeter wants a fill under it, and there is
-     none here, just the cover) and now it doesn't reach a cover at all: a square
-     holding art takes .pin-cover with the pins' squares, which drops the border
-     for a shadow and a sheen. What keeps it is the + slot and a song whose art
-     never loaded — an outline where a sleeve would be. */
-  border: var(--glass-edge);
-}
-/* The empty own-slot: a + on the same square, so the rail's first item is the
-   same object whether or not it's holding anything. */
-.np-art--add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.6rem;
-  font-weight: 300;
-  line-height: 1;
-  color: var(--muted);
-}
-/* ONE LINE EACH, and the title's is a measurement rather than a preference. It
-   clamped to two, which made the strip's height a fact about your friends'
-   taste: 165px when every title fits one line, 181 the moment any single one
-   wraps — and this strip is what stands between the daily card and the grid, so
-   one long song title in your circle moved where the page's actual contents
-   begin. It broke the rail's own baseline too, since a wrapped title pushes only
-   ITS name down and the row of names stops being a row (measured with six
-   squares up: five names at y=478, one at 494).
-
-   The argument for two lines was that a song title is a sentence often enough
-   that one line loses the half that distinguishes it. True, and two lines of
-   0.82rem in an 88px column lose it as well — about twenty characters either
-   way. The square above is what identifies the record, which is the same
-   argument that made these squares and not faces; the words underneath NAME it,
-   and a name is allowed to end in an ellipsis. */
-.np-song {
-  font-size: 0.82rem;
-  line-height: 1.25;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.np-who {
-  font-size: var(--kicker);
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
    would sit on top of a sheet's results). The field and the rows are the
@@ -6103,12 +5969,14 @@ button.poll-option:disabled { cursor: default; }
    square marooned in the middle of it. The padding is one number on all four
    sides now, and the square is what sets the height — the card is the artwork
    plus its pad, which is the arrangement the pinned cards already use.
-   Concentric corners (the tokens note): 14 - 0.4rem lands on the square's 8. */
+   Concentric corners: its corner is the rounder sleeve's (--art-round) plus
+   the 0.4rem pad. */
 .song-now {
   margin-bottom: 1rem;
   padding: 0.4rem;
   border: var(--glass-edge);
-  border-radius: var(--radius-card);
+  /* Concentric with the rounder sleeve (--art-round): its corner plus the pad. */
+  border-radius: calc(88px * var(--art-round) + 0.4rem);
   background: var(--glass-bg-panel);
 }
 /* 48px in a RESULT ROW, which is a list being scanned: a rail of 88s is what
@@ -6120,7 +5988,7 @@ button.poll-option:disabled { cursor: default; }
   flex: 0 0 auto;
   width: 48px;
   height: 48px;
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-art);
   background: var(--glass-bg-panel);
   background-size: cover;
   background-position: center;
@@ -6188,11 +6056,14 @@ button.poll-option:disabled { cursor: default; }
 }
 .card-song:active { transform: scale(0.985); }
 .card-song + * { margin-top: 0.9rem; }
-/* Concentric with the tile: 14 - 0.75rem lands near the art's own 8. */
+/* Concentric with the tile: the tile's corner is the art's (a fraction of its
+   76px) plus the 0.75rem pad between them, so the rounder sleeve and the card
+   it sits in curve together. */
+.card-song { border-radius: calc(76px * var(--art-round) + 0.75rem); }
 .card-song .song-art {
   width: 76px;
   height: 76px;
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-art);
 }
 .card-song .song-lines { gap: 0.2rem; flex: 1 1 auto; }
 .card-song .song-title {
@@ -6233,150 +6104,20 @@ button.poll-option:disabled { cursor: default; }
 .song-field .song-results { max-width: none; }
 .song-field .song-now { margin-bottom: 0.6rem; }
 
-/* ── Trending tags — the one index on Discover (rule 7 in renderDiscover) ─────
-   Flat editorial, NOT glass. It's a contents strip for the page below it, and
-   the material rule reserves frosted glass for what floats ABOVE content.
-
-   Five words separated by hairlines, not five chips: pills would make this a
-   filter bar, and a filter bar at the top of Discover competes with the actual
-   filter already sitting in the masthead. The tag is set in the serif because
-   it's the only word on the row doing display work; the count stays in Oxygen at
-   caption size so it reads as an annotation rather than a score. It's the one
-   number allowed anywhere on this page (tiles carry none, on purpose). */
-.dtags {
-  /* THE RAIL STANDS AT THE TOP OF THE PAGE, ALWAYS. It spent 1.5 hidden inside
-     the open search field, on the argument that an index isn't content and
-     shouldn't cost the grid 68px of the first screen. That argument was right
-     about the measurement and wrong about the reader: a strip nobody can see
-     until they tap search is a strip nobody discovers, and the five words are
-     the cheapest thing on Discover to read. Standing at the top they are what
-     the room is talking about, which is worth the height.
-
-     So no `display: none` and no class gate. It leads the body above the daily
-     card, on the same type axis as the masthead: the rail is TYPE and the grid
-     is media, and this page follows the feed's rule that text lines up with the
-     nameplate while media reaches the edge of the measure. Mobile zeroes the
-     inset again (see the mobile block), where .view already supplies it. */
-  max-width: var(--feed-width);
-  /* 1.4rem of air under the tags, less the tag's own bottom padding below. */
-  margin: 0 auto 0.64rem;
-  padding-inline: var(--inset);
-}
-/* Discover's two section labels — this one and the daily card's kicker — set
-   together because they sat about 40px apart on the page, and still do on the
-   one screen that shows both (an open field over an empty query). They
-   were tracked micro-caps at two different sizes until 1.3, which was a
-   harmonisation of the wrong thing: the question was never whether TRENDING and
-   TODAY'S DAILY agreed with each other, it was whether either of them should be
-   shouting. A label is small print about the thing under it, and on this page
-   the things under them are a serif question and a rail of tags — both of which
-   the caps were competing with rather than introducing.
-
-   So both are the label voice the composer already speaks (`Tags`, above its
-   field): --kicker, weight 400, sentence case, the muted ink. Nothing in the app
-   is uppercase any more, and nothing new should be — a caps subheading is the
-   page announcing its own furniture, and Tria's pages are quieter than that.
-   The daily's OWN page takes the identical treatment through .masthead-kicker. */
-.dtags-cap,
-.np-kicker,
+/* Discover's labels: the daily card's kicker and the captions over its two
+   sections (Circles, and People in a search). The label voice the composer
+   already speaks (`Tags`, above its field): --kicker, weight 400, sentence
+   case, the muted ink. Nothing in the app is uppercase, and nothing new should
+   be. The trending tags and the On repeat rail that shared this rule came off
+   Discover with its post grid in 1.9. */
+.discover-kicker,
 .daily-kicker {
   font-size: var(--kicker);
   font-weight: 400;
   letter-spacing: 0.02em;
   color: var(--muted);
 }
-.dtags-cap {
-  /* Likewise: the 0.35rem gap to the tags, less the rail's top padding. The
-     padding is a tap target (see .dtag), not spacing, so it's taken back here
-     rather than allowed to push the strip open. */
-  margin: 0 0 -0.41rem;
-}
-/* One line that scrolls sideways rather than wrapping — a tag list that reflows
-   onto a second row on a phone starts fighting the grid for the top of the page.
-   No visible scrollbar: the last tag clipping at the edge is the affordance.
-   overscroll-behavior-x keeps the swipe INSIDE the rail: without it, running out
-   of tags hands the gesture on, and in an installed iOS app the thing waiting to
-   catch a horizontal swipe is the back navigation. touch-action stays `auto` on
-   purpose (unlike .reel, which owns its drag) so a finger that lands on the rail
-   can still scroll the page down. */
-.dtags-rail {
-  display: flex;
-  align-items: baseline;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.dtags-rail::-webkit-scrollbar { display: none; }
-/* A tag is one line of type, about 23px tall — half Apple's 44pt tap floor. The
-   .filter chips solve that with an invisible ::after extender, but that trick
-   can't work in here: `overflow-x: auto` on the rail forces overflow-y to auto
-   as well, so anything reaching past the line would be clipped (and could even
-   open a vertical scrollbar inside the strip). So the padding is REAL, and the
-   spacing it would otherwise add is taken back on .dtags above. */
-.dtag {
-  flex: 0 0 auto;
-  position: relative;               /* anchors the hairline divider */
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  margin-right: 0.8rem;
-  padding: 0.76rem 0.8rem 0.76rem 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  transition: opacity 0.18s var(--ease-soft);
-}
-/* The divider is drawn, not a border, so it stays the height of the WORD while
-   the button around it grows to a thumb. A border-right would have stretched to
-   44px and turned a hairline into a rule. */
-.dtag::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 50%;
-  width: 1px;
-  height: 1.15rem;
-  transform: translateY(-50%);
-  background: var(--rule);
-}
-.dtag:last-child { margin-right: 0; padding-right: 0; }
-.dtag:last-child::after { content: none; }
-.dtag:active { opacity: 0.55; }
-.dtag-name {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-weight: 400;
-  font-size: 1.24rem;
-  line-height: 1;
-}
-.dtag-hash { color: var(--muted); }
-.dtag-n {
-  font-size: 0.72rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.dtag-go {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-/* The live tag underlines its word — the same "this is what's narrowing the
-   page" language the filter dial already speaks. */
-.dtag[aria-pressed="true"] .dtag-name,
-.dtag[aria-pressed="true"] .dtag-hash { color: var(--text); }
-.dtag[aria-pressed="true"] .dtag-name {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.2em;
-}
-@media (hover: hover) {
-  .dtag:hover .dtag-name {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 0.2em;
-  }
-}
+.discover-kicker { margin: 0 0 0.5rem; }
 
 .ptile {
   display: block;
@@ -7270,10 +7011,12 @@ button.poll-option:disabled { cursor: default; }
 }
 .pin-glow--flat { inset: 0; clip-path: none; filter: none; opacity: 0.3; }
 
-/* The square on the leading edge: an album cover, or a photograph. 88px — the
-   listening rail draws the same object at 132 (see .np-art), where the record
-   is the whole content rather than a detail beside a title. A post with no
-   picture has NO square — see .pin--wordy below and pinCardEl in app.js. */
+/* The square on the leading edge: an album cover, or a photograph. 88px. A
+   post with no picture has NO square — see .pin--wordy below and pinCardEl in
+   app.js. A song's square is an album cover, so it rounds like every cover
+   (--radius-art), and its card rounds with it to stay concentric. The stack
+   reads fine with one card rounder than the others: the record is a different
+   object from a post, and the curve is the first thing that says so. */
 .pin-art {
   position: relative;
   flex: 0 0 auto;
@@ -7285,6 +7028,8 @@ button.poll-option:disabled { cursor: default; }
   background-size: cover;
   background-position: center;
 }
+.pin--song .pin-art { border-radius: var(--radius-art); }
+.pin--song { border-radius: calc(var(--pin-art) * var(--art-round) + var(--pin-pad)); }
 
 /* THE COVER GETS THE EXTRA, on a song's art and a photo's alike. A hairline
    would draw it as a picture printed into the card; a real drop shadow and a
@@ -7299,7 +7044,7 @@ button.poll-option:disabled { cursor: default; }
    this class exists to prevent.
 
    IT IS THE APP'S COVER TREATMENT, not the pin card's: the same class rides
-   Discover's rail (.np-art) and both pickers' squares (.song-art, .pin-row-art)
+   both pickers' squares (.song-art, .pin-row-art) and a music post's sleeve
    as of 1.5, so a record looks like the same object wherever you meet it. It is
    added only where there is actually a picture — the empty sleeve on a song
    with no art, the + on the rail's own slot and a wordless post's pastel tile
@@ -7313,10 +7058,6 @@ button.poll-option:disabled { cursor: default; }
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 7px 15px -7px rgba(0, 0, 0, 0.32);
 }
-/* Discover's rail keeps the lit edge and the sheen but not the drop (Zoe,
-   2026-09-14): a row of 132px squares each casting its own shadow read heavy,
-   where one 88px cover beside a title doesn't. */
-.np-art.pin-cover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
 /* One soft diagonal, the light a glossy surface catches. It stops at 58% so it
    reads as a highlight rather than as a scrim over the picture. */
 .pin-cover::after {
@@ -10213,23 +9954,14 @@ button.poll-option:disabled { cursor: default; }
     padding-top: calc(env(safe-area-inset-top) + 5.2rem);   /* clears the fixed .auth-topbar */
     padding-bottom: calc(env(safe-area-inset-bottom) + 3rem);
   }
-  /* Already inset by .view here, so the type-axis padding comes back off. .dtags
-     rides with them: on a phone the rail, the title and the grid all sit on the
-     view's own inset and no second one is wanted. */
-  .masthead, .dtags, .nowplaying, .daily-lede, .daily-banner { padding-inline: 0; }
+  /* Already inset by .view here, so the type-axis padding comes back off: on a
+     phone the title and the page's own blocks sit on the view's inset and no
+     second one is wanted. */
+  .masthead, .daily-lede, .daily-banner { padding-inline: 0; }
   /* And the identity header, which is now type on the same axis. (Its badge
      cluster used to be positioned off that inset and needed pulling back with
      it; those controls are in the toolbar as of 1.3.) */
   .account { padding-inline: 0; }
-  /* The strip itself breaks out past .view's own 1.15rem, the same move as
-     .feed below: without it the scrollable box still stops at the view's
-     inset, so a square caught mid-scroll clips hard against visible page
-     padding well short of the screen edge. Padding-inline puts the same
-     1.15rem back as the row's own content inset, so it still opens flush with
-     the rest of the page and closes with the same breathing room once you've
-     scrolled all the way — the box is just wider than its resting content
-     now, out to where the screen actually ends. */
-  .np-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; }
   /* The frame wall lives inside #feed, which breaks out by 1.15rem on a phone to
      put post photos screen-edge-to-edge. A masonry grid doesn't want that: it's
      already on Discover's axis and the card above it is on the view's, so the
@@ -10750,130 +10482,56 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    editor's combo box for its form, the chat roster's rows for its members.
    No pastel: the quintet belongs to post types, and a circle is not one. */
 
-/* Discover's section of them. The same measure and inset as the song rail
-   above it, and the same caption voice (.np-kicker). */
-.communities {
+/* Discover is circles (1.9): the daily's card, then a section of circles,
+   each one THE DAILY'S OWN CARD (.daily-card and its parts, reused rather than
+   copied, Zoe: "style circles like the daily cards"). What follows is only what
+   a circle has that a daily hasn't: a face in the corner, a stack of them, and
+   the dashed card that starts one. Search adds a section of people rows. */
+.communities,
+.discover-people {
   max-width: var(--feed-width);
   margin: 0 auto 2rem;
   padding-inline: var(--inset);
 }
-/* On a phone the view already carries the inset, as it does for the rail. */
-@media (max-width: 680px) { .communities { padding-inline: 0; } }
-/* Two across on a phone, three from where the post grid goes to three, and back
-   to two in the sidebar band for the post grid's own reason (see .pgrid). A
-   real grid, not dealt columns: every card is the same kind of object, and a
-   row of them should line up. */
-.community-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
-}
-@media (min-width: 620px) { .community-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.85rem; } }
-@media (min-width: 681px) and (max-width: 899px) { .community-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* On a phone the view already carries the inset, as it does for the daily. */
+@media (max-width: 680px) { .communities, .discover-people { padding-inline: 0; } }
+/* A stack of cards wants less air between them than the daily's 2rem, which
+   is the gap between the page's headline and whatever follows it. */
+.communities .daily-card { margin: 0 0 0.8rem; }
 
-.community-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 9.5rem;
-  padding: 0.85rem 0.9rem 0.8rem;
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  color: var(--text);
-  text-decoration: none;
-  -webkit-tap-highlight-color: transparent;
-  animation: rise 0.4s var(--ease) both;   /* the app's shared row entrance */
-  transition: background-color var(--dur-micro), border-color var(--dur-micro);
-}
-@media (hover: hover) {
-  .community-card:hover { border-color: color-mix(in srgb, var(--text) 22%, transparent); }
-}
-.community-card:active { background: var(--surface-2); }
-.community-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.7rem;
-}
-/* The circle's mark: Discover's own woven triad in a disc, the mark circles are
-   found under. The chat list's glyph disc, at a card's size. */
-.community-mark {
+/* A circle's face: its photo, or Discover's woven triad on the chat list's
+   glyph disc when it has none. Round, like every face in the app. */
+.community-pic {
   display: grid;
   place-items: center;
-  width: 2.1rem;
-  height: 2.1rem;
+  flex-shrink: 0;
   border-radius: 50%;
+  overflow: hidden;
   background: var(--surface-2);
   color: var(--text);
-  flex-shrink: 0;
 }
-.community-mark svg { width: 1.2rem; height: 1.2rem; }
-.community-card-in {
-  font-size: 0.72rem;
-  color: var(--muted);
-  letter-spacing: 0.02em;
+.community-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.community-pic--mark svg { width: 46%; height: 46%; }
+/* On the card it sits in the top corner, and the kicker and the name keep clear
+   of it. The stretched link still covers it, so it taps through to the circle. */
+.community-card-pic {
+  position: absolute;
+  top: 0.95rem;
+  right: 1.05rem;
+  width: 52px;
+  height: 52px;
 }
-.community-card-name {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-size: 1.32rem;
-  line-height: 1.08;
-  letter-spacing: -0.005em;
-  overflow-wrap: anywhere;
-}
-.community-card-slug {
-  margin-top: 0.15rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.community-card-about {
-  margin-top: 0.45rem;
-  font-size: 0.84rem;
-  line-height: 1.4;
-  color: var(--text);
-  opacity: 0.86;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-/* The foot sits on the card's floor, so a short about doesn't float the faces
-   up to the middle of the card. */
-.community-card-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-top: auto;
-  padding-top: 0.75rem;
-  font-size: 0.76rem;
-  color: var(--muted);
-}
-.community-faces { display: flex; }
-.community-face.avatar {
-  width: 20px;
-  height: 20px;
-  font-size: 0.72rem;
-  border: 1.5px solid var(--surface);
-}
-.community-face.avatar + .community-face.avatar { margin-left: -0.4rem; }
+.community-card:not(.community-card--start) .daily-kicker,
+.community-card:not(.community-card--start) .daily-open { padding-right: 4rem; }
 
-/* The card that starts one. The same box with its fill taken out and a dashed
-   edge, the way an empty slot is drawn: an invitation, not a room. */
+/* The card that starts one: the same card with its fill taken out and a dashed
+   edge, the way an empty slot is drawn. An invitation, not a room. */
 .community-card--start {
   background: none;
   border-style: dashed;
   border-color: color-mix(in srgb, var(--text) 24%, transparent);
 }
-.community-mark--add {
-  font-size: 1.35rem;
-  line-height: 1;
-  font-weight: 400;
-  color: var(--muted);
-}
+a.daily-answer { text-decoration: none; }
 
 /* Which circle a post was said in, over its byline (communityTagHtml). Small
    print in the caption voice, a link in, and absent on the circle's own page,
@@ -10892,8 +10550,8 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 @media (hover: hover) { .card-community:hover { color: var(--text); } }
 .view--community .card-community { display: none; }
 
-/* The circle's page: the profile's identity block, with the triad where the
-   photo goes. */
+/* The circle's page: the profile's identity block, with its photo where a
+   face goes, or the triad when it has none. */
 .community-photo { background: var(--surface); }
 .community-photo-ico {
   width: 42%;
@@ -10942,6 +10600,23 @@ a.friend-btn { text-decoration: none; }
   padding-left: 0.1rem;
 }
 .field-hint--warn { color: var(--type-find-ink); }
+
+/* The host's editor carries the circle's photo the way Edit profile carries a
+   face (.pf-photo and the cropper). Without a photo the disc wears the triad on
+   the glyph disc's fill instead of an initial on ink. */
+.avatar.community-pf-mark { background: var(--surface-2); color: var(--text); }
+.community-pf-mark svg { width: 40%; height: 40%; }
+.community-photo-off { text-align: center; margin: -0.4rem 0 0.6rem; }
+.community-photo-off[hidden] { display: none; }
+.community-photo-off button {
+  min-height: 44px;
+  padding: 0 0.8rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+}
 
 /* Who is in it (openCommunityMembers): the chat roster's row, with the person
    as a link and the host's Remove at its end. */

@@ -12568,129 +12568,12 @@
     } catch { /* old build without the method; Automatic stays Apple Music */ }
   }
 
-  // Everyone with a song still standing, me first and the rest newest-set
-  // first — so the rail reads as what the room is on right now rather than as a
-  // directory. Blocked accounts drop out the way they do everywhere else.
-  function listeners() {
-    const me = Store.session();
-    let mine = null;
-    const rest = [];
-    for (const u of Store.users()) {
-      if (!u.listening || !u.username) continue;
-      if (u.username === me) { mine = u; continue; }
-      if (Blocks.has(u.username)) continue;
-      rest.push(u);
-    }
-    rest.sort((a, b) => Date.parse(b.listening.at || 0) - Date.parse(a.listening.at || 0));
-    return { mine, rest };
-  }
-
-  /* One square's CONTENTS, without a wrapper — because the same three spans go
-     inside two different elements. Somebody else's song is an <a>; mine is a
-     <button>, because you edit yours rather than open it. Keeping the wrapper
-     out here is what lets both exist without a second copy of the innards.
-
-     There was a third, a flat <div> for a song with nowhere to go, on the rule
-     that a tap target that does nothing is worse than no tap target. songLink
-     retired it: a typed-in title with no service link now opens a search for
-     itself, so every square goes somewhere. */
-  function npFace(u, me) {
-    const s = u.listening;
-    const who = u.username === me ? 'You' : (u.name || u.username);
-    const sub = songSub(s, ', ');
-    return {
-      label: `${who}: ${s.title}${sub ? ', ' + sub : ''}`,
-      html:
-        // .pin-cover is the app's cover treatment (shadow + sheen, no hairline),
-        // and it rides a square only when there is a sleeve on it — an artless
-        // song keeps the outline where one would be.
-        `<span class="np-art${s.art ? ' pin-cover' : ''}"` +
-          `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''}` +
-          ` aria-hidden="true"></span>` +
-        `<span class="np-song">${esc(s.title)}</span>` +
-        `<span class="np-who">${esc(who)}</span>`,
-    };
-  }
-
-  // target="_blank" is what the outbound handler up top reads to hand the URL to
-  // iOS rather than letting a WKWebView swallow it.
-  function npSquare(u, me) {
-    const f = npFace(u, me);
-    return `<a class="np-item" href="${esc(songLink(u.listening))}" ` +
-        `target="_blank" rel="noopener noreferrer" ` +
-        `data-out="system" aria-label="${esc(f.label)}">${f.html}</a>`;
-  }
-
-  /* The rail. Your own square is always drawn, even empty, because it is the
-     only way into the feature — a strip that hides itself until somebody has
-     used it can never have a first user. */
-  /* ON REPEAT IS THE MUSIC YOU POST (Zoe, 2026-10-22). Posting a song and
-     having it on repeat are one act, so once posts can carry a song the rail
-     is a condensed read of the Music posts in the world: each person's newest
-     one, newest first, a square that opens the post (where it can be liked and
-     talked about, which a status never could). It read only the last week
-     until circles landed (same day, Zoe: "remove the week long limit on
-     songs"), so a song stays up until its owner posts another. The + is always
-     first, because it is the way in and the rail must be able to have a first
-     user. Without add-song-posts.sql the rail is the old listening status,
-     untouched (statusRailEl). */
-  function songPostsOnRepeat() {
-    const seen = new Set();
-    const out = [];
-    for (const p of Store.posts()) {   // newest first
-      if (p.type !== 'song' || !p.song || !p.author || seen.has(p.author)) continue;
-      if (Blocks.has(p.author)) continue;
-      const u = Store.user(p.author);
-      if (!u) continue;
-      seen.add(p.author);
-      out.push({ u, post: p });
-    }
-    return out;
-  }
-
-  function nowPlayingEl() {
-    if (!Store.songsReady()) return statusRailEl();
-    const me = Store.session();
-    const items = songPostsOnRepeat();
-    if (!me && !items.length) return '';
-    const add = !me ? '' :
-      `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
-          `aria-label="Share a song">` +
-        `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
-        `<span class="np-song">Share a song</span>` +
-        `<span class="np-who">You</span>` +
-      `</button>`;
-    const square = ({ u, post }) => {
-      const f = npFace({ ...u, listening: post.song }, me);
-      return `<a class="np-item" href="#/p/${encodeURIComponent(post.id)}" ` +
-        `aria-label="${esc(f.label)}">${f.html}</a>`;
-    };
-    return `<section class="nowplaying" aria-label="What people have on repeat">` +
-        `<p class="np-kicker">On repeat</p>` +
-        `<div class="np-strip">${add}${items.map(square).join('')}</div>` +
-      `</section>`;
-  }
-
-  function statusRailEl() {
-    const me = Store.session();
-    const { mine, rest } = listeners();
-    // Signed out (the public site) there is no "you" to add a song for, and an
-    // empty strip with nobody in it is not a rail.
-    if (!me && !rest.length) return '';
-    const first = !me ? '' : mine
-      ? `<button type="button" class="np-item np-mine" data-np="edit" ` +
-          `aria-label="Change your song">${npFace(mine, me).html}</button>`
-      : `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
-          `aria-label="Say what you’re listening to">` +
-          `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
-          `<span class="np-song">Add a song</span>` +
-          `<span class="np-who">You</span>` +
-        `</button>`;
-    return `<section class="nowplaying" aria-label="What people are listening to">` +
-        `<p class="np-kicker">On repeat</p>` +
-        `<div class="np-strip">${first}${rest.map(u => npSquare(u, me)).join('')}</div>` +
-      `</section>`;
-  }
+  /* ON REPEAT, the rail of squares that headed Discover (1.5 to 1.9), is gone:
+     Zoe took it off Discover on 2026-10-22, the same day Discover became
+     circles, and Discover was the only place it was drawn. A song is still a
+     post (the Create sheet's Music row and a profile's song pin both open the
+     composer's song search, see goListening), still the listening status, and
+     still a profile's pin. */
 
   /* ── The picker (#/listening) ────────────────────────────────────────────────
      A PAGE and not a sheet, which is the call the profile editor and the friends
@@ -13397,87 +13280,32 @@
       }));
   }
 
-  /* ── Discover — the meeting ground ───────────────────────────────────────────
-     ONE surface: a masonry grid where every tile is a post you're allowed to see
-     with the person who made it attached, plus a portrait tile for anyone with
-     nothing to show. Not a post feed and not a directory, but the join of the
-     two. There used to be a People / Posts switcher here, and a tab you have to
-     choose is a tab nobody chooses, so the two were merged and the tile carries
-     both jobs.
+  /* ── Discover — the way in to circles (1.9) ──────────────────────────────────
+     DISCOVER IS CIRCLES NOW (Zoe, 2026-10-22: "remove the posts from the
+     Discover feed. THIS is the new way to discover."). It was a masonry wall of
+     everyone's posts with the person attached, and it had seven rules holding
+     that shape. The wall is gone, and with it the trending tags that indexed
+     it, the per-person cap, the chronological nudge and the portrait tiles:
+     Tria is for small groups of friends, and the way to find new people here is
+     to walk into a room about something you like, not to scroll a stranger's
+     archive.
 
-     Seven rules hold the shape, each guarding something the app cares about:
+     What is left, top to bottom: today's Daily, and the circles, each one drawn
+     as the daily's own card (Zoe: "style circles like the daily cards"), a card
+     to start one first, then the ones you are in, then the rest, each by its
+     last sign of life. The Share Tria ask still ends the page. On repeat headed
+     it for one afternoon and came off too (Zoe, same day).
 
-     1. THE POST IS A PREVIEW, NEVER A CARD. No like, no comment, no RSVP, and no
-        tag chips. The moment a tile grows an action row, Discover is a public
-        timeline again with extra steps, which is precisely the thing Tria is
-        built not to be. Read it in full on their page, where the real controls
-        live.
-     2. THE PERSON IS ALWAYS ATTACHED, and the tap goes to the PROFILE, never to
-        the post. That single rule is what keeps this a people-first surface
-        while it shows content: you're always looking at someone, never at a
-        stream of anonymous stuff.
-     3. NO TIMESTAMPS. The order already rewards posting all by itself — rule 5
-        puts the newest thing at the top, so recency has a visible consequence
-        without ever being written down. A printed date would turn that into a
-        staleness scoreboard, which is the frequency treadmill wearing a
-        different hat. An old tile looks the same as a fresh one, it just sits
-        further down.
-     4. A PERSON WITH NOTHING TO SHOW IS FACED BY THEIR PROFILE PHOTO, at full
-        square. In a masonry grid the short tiles read as the poor ones, and
-        since users.private defaults true, plenty of people have nothing here.
-        Making privacy look like poverty in an app that defaults to private is
-        backwards, so a quiet account gets a big portrait and its bio instead.
-        Its tile is the same WIDTH as everyone's; it just says something else.
-     5. IT READS IN TIME ORDER, AND NOBODY OWNS IT. The grid is chronological,
-        newest first, because that's the promise the About page makes and it's
-        what keeps new posts arriving at the top where they belong. But flat
-        recency broke on contact: one heavy poster's run held the whole first
-        screen, which reads as a personal feed. So time order is nudged, never
-        re-sorted — a post whose author just appeared waits a couple of slots
-        while the next face takes the turn, and nobody holds more than TILE_CAP
-        tiles. See `spaced`. The result is meant to FEEL chronological while
-        never showing you the same person twice in a row.
-     6. IT'S THE WHOLE ROOM, NOT THE PUBLIC SQUARE. Every post you're allowed to
-        see that isn't yours can tile here, your circle's included, in ONE grid
-        rather than a strangers band above a friends band. A page that empties
-        out as you make friends punishes you for using the app, and the split
-        made your own people read as an appendix to the page rather than part of
-        it. Chronology is what now keeps the page distinct from your feed:
-        strangers post on their own clock, so their posts land between your
-        people's rather than in a section of their own. Nothing here widens who
-        may see what — Store.discover only ever filters the cache, and the cache
-        only holds what RLS already handed over.
-     7. TRENDING TAGS ARE THE ONE INDEX. Five tags at the head of the page, each
-        with its post count, each a shortcut into search. It's the only ranked
-        thing on Discover and the only place a NUMBER is allowed to show, which
-        is why it stays a strip of five and never becomes a leaderboard.
-
-     Search reaches every account by name and @handle AND matches the text and
-     tags of every post it can show, so "who here is into ceramics" lands on the
-     person who said it. It runs wider than the browse grid on purpose: no
-     per-person cap and hand-addressed posts fold back in, because a courtesy
-     that hides what you're hunting for isn't one.
-     The filter dial narrows the grid to tiles of one type, or — one row below
-     All — to PEOPLE, which drops the posts and gives every account rule 4's
-     portrait tile in alphabetical order. That row is the answer to "I know
-     roughly who I'm looking for": the browse grid is chronological and capped, so
-     a quiet account can sit a long way down it, and a directory doesn't care when
-     anyone last posted. Search still reaches post text there (see saidBy), so
-     hunting by interest works on a page of faces too. Private
-     accounts are listed but wear a lock (see isLocked), so you know before the
-     tap. This page replaced the Friends page outright — your own
-     circle roster lives on your profile, and incoming requests live on Updates,
-     so nothing here is orphaned. */
-  let discoverQuery = '';     // live search over people + the text of every post here
-  // Both FIXED since 1.8, when Discover's filter dial came out: it was the only
-  // thing that set either. They stay as names because the paint reads them and
-  // the list form and the People directory still exist in it, unreachable, should
-  // a control ever come back. A stored 'list' (tria:discoverView) is ignored on
-  // purpose: with no switch, honouring it would strand that reader in a column.
-  const discoverFilter = 'all';
-  const discoverView = 'gallery';
+     SEARCH is circles and PEOPLE, never posts. A person matches on their name
+     and @handle first and on what they have said second (saidBy), so "who here
+     is into ceramics" still lands on somebody, as a row with the same Add the
+     friends page offers. That is the one use of post text left on this page,
+     and it shows a person, not the post. */
+  let discoverQuery = '';     // live search over circles and people
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
-  let discoverResizeOff = null; // drops the grid's resize listener when the view goes
+  // The router still asks this on the way out. Discover had a grid to re-deal on
+  // a width change and has none now, so nothing ever sets it.
+  let discoverResizeOff = null;
   /* ── Circles (1.9) ──────────────────────────────────────────────────────────
      A CIRCLE is a room for an interest: anyone can start one, anyone can join,
      and it lives at #/c/<slug> (the clean link is /c/<slug>, the way a subreddit
@@ -13497,8 +13325,9 @@
      reader sees says circle, and its handle says c/.
 
      WHERE IT IS READ. A circle's posts live on its page and on their own post
-     page. They are not in My Circle, not in Discover's post grid and not on the
-     author's profile (Store.feed / discover / postsBy all drop them): My Circle
+     page. They are not in My Circle, not on Discover (which shows no posts at
+     all since 1.9) and not on the author's profile (Store.feed / discover /
+     postsBy all drop them): My Circle
      is your friends, and a post said in a hobby circle was said to the circle.
 
      The rules (who may rename, remove, the cap of ten, a block with the host,
@@ -13530,44 +13359,90 @@
       .map(u => Store.user(u)).filter(Boolean);
   }
 
-  // A circle on Discover. A card rather than a tile: what is worth knowing about
-  // a room is its name, what it is for and who is in it, and none of that is a
-  // picture. A count of members is a size, like a friend count on a profile,
-  // and never a number to drive anywhere (see the rule on counts).
-  function communityCardHtml(c, i = 0) {
-    const n = Store.communityMembers(c.id).length;
-    const faces = Store.isAuthed() ? communityFaces(c) : [];
-    return `<a class="community-card" href="${communityRoute(c)}" style="animation-delay:${staggerDelay(i)}">` +
-        `<span class="community-card-top">` +
-          `<span class="community-mark" aria-hidden="true">${svgIcon('circle')}</span>` +
-          (Store.inCommunity(c.id) ? `<span class="community-card-in">Joined</span>` : '') +
-        `</span>` +
-        `<span class="community-card-name">${esc(c.name)}</span>` +
-        `<span class="community-card-slug">${esc(communityHandle(c))}</span>` +
-        (c.about ? `<span class="community-card-about">${esc(c.about)}</span>` : '') +
-        (n && Store.isAuthed()
-          ? `<span class="community-card-foot">` +
-              (faces.length
-                ? `<span class="community-faces" aria-hidden="true">` +
-                    faces.map(u => avatarEl(u, { cls: 'community-face' })).join('') + `</span>`
-                : '') +
-              `<span>${n} ${memberWord(n)}</span>` +
-            `</span>`
-          : '') +
-      `</a>`;
+  // A circle's face: the photo its host gave it, or Discover's woven triad
+  // when it has none. `px` is the size it is drawn at, for sizedSrc.
+  function communityPicHtml(c, cls, px) {
+    return c.avatar
+      ? `<span class="community-pic ${cls}" aria-hidden="true">` +
+          `<img src="${esc(sizedSrc(c.avatar, px))}" alt="" decoding="async"></span>`
+      : `<span class="community-pic community-pic--mark ${cls}" aria-hidden="true">${svgIcon('circle')}</span>`;
   }
 
-  // The card that starts one, first in the grid (Zoe: "add a card on Discover to
-  // create a circle"). Signed out it is the way into an account instead, since
-  // starting a room is the one thing on it a guest cannot do yet.
+  /* A circle on Discover IS THE DAILY'S CARD (Zoe: "style circles like the
+     daily cards"), and literally so: the same classes, so the two can't drift.
+     The kicker is its handle, the serif headline is its name, the hint is its
+     about, and the foot is who is in it and the way in, the daily's faces and
+     count and the daily's own pill. The one thing a daily hasn't got is a face
+     of its own, so the circle's photo sits in the card's top corner.
+
+     A member's card drops the pill, the way an answered daily does, and says so
+     in the kicker instead; the whole card is a link either way. A count of
+     members is a size, like a friend count, never a number to drive anywhere. */
+  function communityCardHtml(c) {
+    const me = Store.session();
+    const n = Store.communityMembers(c.id).length;
+    const mine = Store.inCommunity(c.id);
+    const faces = me ? communityFaces(c, 4) : [];
+    return `<section class="daily-card community-card" data-community="${esc(c.id)}">` +
+        communityPicHtml(c, 'community-card-pic', 52) +
+        `<p class="daily-kicker">${esc(communityHandle(c))}` +
+          (mine ? `<span class="daily-sep" aria-hidden="true">·</span>${c.owner === me ? 'Yours' : 'Joined'}` : '') +
+        `</p>` +
+        `<a class="daily-open" href="${communityRoute(c)}">` +
+          `<span class="daily-prompt">${esc(c.name)}</span>` +
+        `</a>` +
+        (c.about ? `<p class="daily-hint">${esc(c.about)}</p>` : '') +
+        `<div class="daily-foot">` +
+          (n && me
+            ? `<div class="daily-answered">` +
+                (faces.length
+                  ? `<div class="daily-faces" aria-hidden="true">` +
+                      faces.map(u => avatarEl(u, { cls: 'daily-face' })).join('') + `</div>`
+                  : '') +
+                `<span class="daily-count">${n} ${memberWord(n)}</span>` +
+              `</div>`
+            : `<span class="daily-count"></span>`) +
+          (mine ? ''
+            : `<button type="button" class="daily-answer publish-fill is-solid" data-join="${esc(c.id)}">` +
+                `Join<span class="daily-go" aria-hidden="true">→</span>` +
+              `</button>`) +
+        `</div>` +
+      `</section>`;
+  }
+
+  // The card that starts one (Zoe: "add a card on Discover to create a
+  // circle"), the same card with its fill taken out and a dashed edge, the way
+  // an empty slot is drawn. Signed out its pill is the way into an account.
   function communityStartHtml() {
-    return `<a class="community-card community-card--start" href="${Store.isAuthed() ? '#/c/new' : '#/join'}">` +
-        `<span class="community-card-top">` +
-          `<span class="community-mark community-mark--add" aria-hidden="true">+</span>` +
-        `</span>` +
-        `<span class="community-card-name">Start a circle</span>` +
-        `<span class="community-card-about">A room for a hobby or an interest. Anyone can join.</span>` +
-      `</a>`;
+    const href = Store.isAuthed() ? '#/c/new' : '#/join';
+    return `<section class="daily-card community-card community-card--start">` +
+        `<p class="daily-kicker">Your own room</p>` +
+        `<a class="daily-open" href="${href}"><span class="daily-prompt">Start a circle</span></a>` +
+        `<p class="daily-hint">For a hobby or an interest. Anyone on Tria can find it here and join.</p>` +
+        `<div class="daily-foot">` +
+          `<span class="daily-count"></span>` +
+          `<a class="daily-answer publish-fill is-solid" href="${href}">` +
+            `Start<span class="daily-go" aria-hidden="true">→</span></a>` +
+        `</div>` +
+      `</section>`;
+  }
+
+  // Joining from a card: in, and straight through the door, since the reason
+  // to join from here is to read what is inside.
+  function wireCommunityJoins(root) {
+    root.querySelectorAll('[data-join]').forEach(btn => btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      const c = Store.community(btn.dataset.join);
+      if (!c) return;
+      btn.disabled = true;
+      let res = null;
+      try { res = await Store.joinCommunity(c.id).catch(() => null); }
+      finally { btn.disabled = false; }
+      if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
+      hapticTap('LIGHT');
+      toast('You’re in. Its chat starts muted.');
+      go(communityRoute(c));
+    }));
   }
 
   // Discover's order: the circles you are in, liveliest first, then the rest,
@@ -13601,11 +13476,10 @@
   function communitiesSectionHtml(list, { search = false } = {}) {
     if (!Store.communitiesReady()) return '';
     if (search && !list.length) return '';
-    const cards = (search ? '' : communityStartHtml()) +
-      list.map((c, i) => communityCardHtml(c, i + 1)).join('');
     return `<section class="communities" aria-label="Circles">` +
-        `<p class="np-kicker">Circles</p>` +
-        `<div class="community-grid">${cards}</div>` +
+        `<p class="discover-kicker">Circles</p>` +
+        (search ? '' : communityStartHtml()) +
+        list.map(communityCardHtml).join('') +
       `</section>`;
   }
 
@@ -13702,6 +13576,21 @@
       label: 'Edit circle', icon: 'pencil',
       run: () => { editorPushed = true; go(`${communityRoute(c)}/edit`); },
     });
+    // The host can close it outright (circle-photo-delete.sql). Everything
+    // inside goes with it, which the confirm says in so many words.
+    if (me && c.owner === me && Store.communityToolsReady()) items.push({
+      label: 'Delete circle', icon: 'trash', danger: true,
+      run: () => openSheet({
+        title: `Delete ${communityHandle(c)}? Its posts and its chat go with it, for everyone. This can’t be undone.`,
+        items: [{ label: 'Delete circle', icon: 'trash', danger: true, run: async () => {
+          const res = await Store.deleteCommunity(c.id).catch(() => null);
+          if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t delete it, try again.'); return; }
+          toast(`${communityHandle(c)} is gone.`);
+          // Not the back target: that can be the circle's own chat, which is gone too.
+          go('#/discover');
+        } }],
+      }),
+    });
     if (member) items.push({
       label: 'Leave circle', icon: 'signout', danger: true,
       run: () => openSheet({
@@ -13776,9 +13665,11 @@
             `<button class="friend-btn friend-btn--quiet" type="button" id="community-chat">Chat</button>`
           : `<button class="friend-btn publish-fill is-solid" type="button" id="community-join">Join</button>`;
       return `<div class="account-head">` +
-          `<div class="account-photo account-photo--empty community-photo" aria-hidden="true">` +
-            svgIcon('circle', 'community-photo-ico') +
-          `</div>` +
+          (c.avatar
+            ? `<div class="account-photo" aria-hidden="true">` +
+                `<img src="${esc(sizedSrc(c.avatar, 160))}" alt="" decoding="async"></div>`
+            : `<div class="account-photo account-photo--empty community-photo" aria-hidden="true">` +
+                svgIcon('circle', 'community-photo-ico') + `</div>`) +
           `<div class="account-meta">` +
             `<div class="account-id">` +
               `<h1 class="account-name">${esc(c.name)}</h1>` +
@@ -13899,6 +13790,12 @@
     const back = editing
       ? { href: communityRoute(editing), label: editing.name }
       : { href: '#/discover', label: 'Discover' };
+    // Only the host's editor carries the photo, and only once the column exists.
+    const photos = !!editing && Store.communityToolsReady();
+    const photoFace = (src) => src
+      ? `<span class="avatar avatar--photo pf-photo-avatar" aria-hidden="true">` +
+          `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 180))}" alt="" decoding="async"></span>`
+      : `<span class="avatar pf-photo-avatar community-pf-mark" aria-hidden="true">${svgIcon('circle')}</span>`;
     mountToolbar({
       leading: toolbarBackEl(back.href, back.label),
       title: editing ? 'Edit circle' : 'New circle',
@@ -13917,6 +13814,29 @@
           (editing ? '' :
             `<p class="community-form-lede">A room for a hobby or an interest. Anyone on Tria can find it ` +
               `on Discover and join, and what’s posted in it is for the people inside.</p>`) +
+          // Its photo, the host's to change (circle-photo-delete.sql), drawn
+          // and cropped exactly as Edit profile does a face: the camera on the
+          // rim, an inline square crop in its place once a file is picked.
+          (photos
+            ? `<div class="pf-photo" id="cf-photo">` +
+                `<div class="pf-photo-figure">` +
+                  `<span id="cf-photo-face">${photoFace(editing.avatar)}</span>` +
+                  `<div class="pf-photo-edit" id="cf-photo-pick" role="button" tabindex="0" ` +
+                    `aria-label="Change the circle’s photo" title="Change the circle’s photo">` +
+                    svgIcon('camera', 'pf-photo-ico') + `</div>` +
+                `</div>` +
+              `</div>` +
+              `<p class="community-photo-off"${editing.avatar ? '' : ' hidden'}>` +
+                `<button type="button" id="cf-photo-off">Remove photo</button></p>` +
+              `<input id="cf-file" type="file" accept="image/*" hidden>` +
+              `<div class="crop-stage" id="cf-cropstage" hidden>` +
+                `<div class="crop crop--avatar" id="cf-crop">` +
+                  `<img id="cf-cropimg" alt="" draggable="false">` +
+                `</div>` +
+                `<p class="crop-hint">${finePointer() ? 'Drag to move, scroll to zoom.' : 'Drag to move, pinch to zoom.'}</p>` +
+                `<div class="crop-replace" id="cf-replace" role="button" tabindex="0">Choose another</div>` +
+              `</div>`
+            : '') +
           `<div class="field field--combo">` +
             `<input id="cf-name" class="combo-title" type="text" maxlength="40" ` +
               `value="${esc(editing ? editing.name : '')}" placeholder="Name it" ` +
@@ -13948,12 +13868,18 @@
     const errEl = form.querySelector('#cf-error');
     const saveBtn = document.getElementById('community-save');
     let slugTouched = false;
+    // The photo's pending answer: a cropper while a new one is being framed, or
+    // `photoOff` once Remove was pressed. Neither writes until the check.
+    let cropper = null;
+    let photoOff = false;
+    stopActiveCrop = () => { if (cropper) cropper.destroy(); };
 
     const slugNow = () => (slugEl ? slugEl.value.trim().toLowerCase() : '');
     const ready = () => {
       const name = nameEl.value.trim();
       if (!name) return false;
-      if (editing) return name !== editing.name || aboutEl.value.trim() !== editing.about;
+      if (editing) return !!cropper || photoOff
+        || name !== editing.name || aboutEl.value.trim() !== editing.about;
       return !Store.slugProblem(slugNow());
     };
     const sync = () => {
@@ -13979,6 +13905,58 @@
     sync();
     if (!editing) requestAnimationFrame(() => nameEl.focus());
 
+    if (photos) {
+      const file = form.querySelector('#cf-file');
+      const stage = form.querySelector('#cf-cropstage');
+      const row = form.querySelector('#cf-photo');
+      const offRow = form.querySelector('.community-photo-off');
+      const face = form.querySelector('#cf-photo-face');
+      // Clearing first is what lets re-picking the same file fire `change`.
+      const openPicker = () => { file.value = ''; file.click(); };
+      const pickKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } };
+      for (const el of [form.querySelector('#cf-photo-pick'), form.querySelector('#cf-replace')]) {
+        el.addEventListener('click', openPicker);
+        el.addEventListener('keydown', pickKey);
+      }
+      form.querySelector('#cf-photo-off').addEventListener('click', () => {
+        photoOff = true;
+        face.innerHTML = photoFace(null);
+        offRow.hidden = true;
+        sync();
+      });
+      file.addEventListener('change', () => {
+        const f = file.files && file.files[0];
+        if (!f) return;
+        errEl.textContent = '';
+        if (saveBtn) saveBtn.disabled = true;      // held until the crop decodes
+        const reader = new FileReader();
+        reader.onerror = () => {
+          if (saveBtn) saveBtn.disabled = false;
+          errEl.textContent = 'Couldn’t read that file, try another photo.';
+        };
+        reader.onload = () => {
+          row.hidden = true;
+          offRow.hidden = true;
+          stage.hidden = false;
+          photoOff = false;
+          if (cropper) cropper.destroy();
+          cropper = initCropper(form.querySelector('#cf-crop'), form.querySelector('#cf-cropimg'), reader.result, {
+            onReady: () => { if (saveBtn) saveBtn.disabled = false; },
+            onError: () => {
+              if (saveBtn) saveBtn.disabled = false;
+              cropper = null;
+              stage.hidden = true;
+              row.hidden = false;
+              errEl.textContent = 'Couldn’t open that photo, try another one.';
+              sync();
+            },
+          });
+          sync();
+        };
+        reader.readAsDataURL(f);
+      });
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!ready() || !saveBtn || saveBtn.disabled) return;
@@ -13990,10 +13968,29 @@
       saveBtn.disabled = true;
       try {
         if (editing) {
-          const res = await Store.updateCommunity(editing.id,
-            { name: nameEl.value.trim(), about: aboutEl.value.trim() }).catch(() => null);
-          if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t save that, try again.'; return; }
+          // The crop is taken BEFORE anything commits, for Edit profile's reason:
+          // a photo that never decoded must not leave the words saved and the
+          // page saying nothing.
+          let shot = null;
+          if (cropper) {
+            try { shot = cropper.export(512); } catch { shot = null; }
+            if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
+          }
+          const name = nameEl.value.trim(), about = aboutEl.value.trim();
+          if (name !== editing.name || about !== editing.about) {
+            const res = await Store.updateCommunity(editing.id, { name, about }).catch(() => null);
+            if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t save that, try again.'; return; }
+          }
+          // The photo goes out behind the navigation, optimistic like a face:
+          // the circle's head already wears it, and a refusal says so.
+          const pending = shot ? Store.setCommunityPhoto(editing.id, shot)
+            : photoOff ? Store.setCommunityPhoto(editing.id, null) : null;
           if (canPop) history.back(); else go(communityRoute(editing));
+          if (pending) pending.then(r => {
+            if (r && r.ok) { communityRepaint?.(); return; }
+            toast((r && r.error) || 'Couldn’t save the photo, try again.');
+            communityRepaint?.();
+          }, () => {});
           return;
         }
         const slug = slugNow();
@@ -14017,47 +14014,23 @@
 
   function renderDiscover() {
     const me = Store.session();
-    const notBlocked = (name) => !Blocks.has(name);
 
-    // Store.discover() re-sorts the whole post cache on every call, and one paint
-    // asks for it up to three times over: the grid, the trending rail, and (while
-    // searching) saidBy. Hold each variant for the life of ONE paint — cleared at
-    // the top of paint, so a background re-pull is never served a stale world.
-    let pools = {};
-    const discoverPool = (addressed) => {
-      const k = addressed ? 'addressed' : 'browse';
-      return pools[k] || (pools[k] = Store.discover({ addressed }));
-    };
-
-    // A post's searchable text: title, body, tags, and its author's name/@handle
-    // — so "search anything" (tags, interests, keywords, names) all land on the
-    // person who said it. Cached per post for the life of the view: search asks
-    // for the same haystack once per keystroke, and building one means reading a
-    // rich note (see notePlain's memo). Keyed by the post OBJECT, so a re-pull
-    // that mints fresh rows gets fresh haystacks for free.
+    // A post's searchable text, so a person can be found by what they have said
+    // (see saidBy). Cached per post object for the life of the view: a re-pull
+    // mints fresh rows and so fresh haystacks.
     const haystacks = new WeakMap();
     const postHaystack = (p) => {
       let h = haystacks.get(p);
       if (h === undefined) {
-        const au = Store.user(p.author);
         h = [p.title, notePlain(p.note), (p.tags || []).join(' '),
-          p.song && p.song.title, p.song && p.song.artist,
-          au && au.name, p.author].filter(Boolean).join(' ').toLowerCase();
+          p.song && p.song.title, p.song && p.song.artist].filter(Boolean).join(' ').toLowerCase();
         haystacks.set(p, h);
       }
       return h;
     };
 
-    // Is this account's feed fenced to me? The same test the profile page runs:
-    // private, and not someone I'm mutual with. It's the only per-person fact a
-    // tile still needs — the lock it earns is a warning that the tap lands on a
-    // wall, not a statistic. Memoised for the paint (one person can hold several
-    // tiles now) and cleared at the top of every paint so a background re-pull
-    // can't be served a stale answer.
-    //
-    // Note this does NOT hide their post. A locked account that floated
-    // something out meant it to be seen, and hiding it would punish the exact
-    // gesture we want more of.
+    // Is this account's feed fenced to me? The profile page's test. A row for a
+    // locked account wears the padlock, so you know before the tap.
     const lockCache = new Map();
     const isLocked = (name) => {
       if (!lockCache.has(name)) lockCache.set(name, Store.isPrivate(name) && name !== me
@@ -14065,74 +14038,10 @@
       return lockCache.get(name);
     };
 
-    /* ── The tile ────────────────────────────────────────────────────────── */
-
-    // The faces and the tile itself live at module scope (see ptileEl) — they're
-    // the third caller of the same grid now that a daily's answers deal into one
-    // too. All this view still owns is WHO is fenced, which it caches per paint.
-    const tileEl = (t) => ptileEl(t, isLocked(t.user.username));
-
-    /* ── Trending tags: the one index on the page (rule 7) ────────────────────
-       The five tags carried by the most posts Discover can show. Counted across
-       the whole browse pool rather than the tiles on screen, so a tag's pull
-       never depends on where the per-person cap happened to fall.
-
-       A tag has to REPEAT to qualify. One post wearing a tag isn't a trend,
-       it's a tag, and "Trending: #kiln 1" is a strip admitting it has nothing to
-       say. On a quiet instance the whole rail is simply absent, which is the
-       honest state and not a bug.
-
-       Picking one runs it as a search rather than carrying its own filter state.
-       That's Zoe's call and it's the right one: search already matches tags, and
-       a second parallel narrowing mechanism is two things to keep in sync and
-       two ways to end up with a grid nobody can explain. */
-    const topTags = () => {
-      const n = new Map();
-      // Deduped per post, so a post that somehow carries a tag twice still only
-      // votes once. Counts the BROWSE pool, which is why tapping a tag can
-      // surface more posts than the number says: the tap runs a search, and
-      // search reaches hand-addressed posts the rail deliberately doesn't count.
-      //
-      // A daily's tag never trends. The rail indexes what the room brought up on
-      // its own; a tag the app itself hands to everybody on the same morning would
-      // hold the top slot every day and say nothing (the daily has its own card
-      // three inches above, which is a better link than a word in a strip).
-      discoverPool(false).filter(p => notBlocked(p.author)).forEach(p =>
-        new Set((p.tags || []).map(t => String(t).trim().toLowerCase().replace(/^#/, '')))
-          .forEach(k => { if (k && !k.startsWith('daily-')) n.set(k, (n.get(k) || 0) + 1); }));
-      return [...n.entries()].filter(([, c]) => c > 1)
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .slice(0, 5);
-    };
-
-    const tagRail = (tags, active) => tags.length
-      ? `<nav class="dtags" aria-label="Trending tags">` +
-          `<p class="dtags-cap">Trending</p>` +
-          `<div class="dtags-rail">` +
-            tags.map(([t, c]) =>
-              `<button type="button" class="dtag" data-tag="${esc(t)}" ` +
-                  `aria-pressed="${active === t}">` +
-                `<span class="dtag-name"><span class="dtag-hash">#</span>${esc(t)}</span>` +
-                `<span class="dtag-n">${c}</span>` +
-                `<span class="dtag-go" aria-hidden="true">→</span>` +
-              `</button>`).join('') +
-          `</div>` +
-        `</nav>`
-      : '';
-
-    // The standing "share Tria" invite at the foot of the grid (hidden while
-    // searching or filtering) — a gentle way to bring someone new into the
-    // square, and it earns its keep here: a masonry grid reads as endless, so a
-    // small one needs something to end ON.
+    // The standing "share Tria" invite at the foot of the page, out of search.
     const shareAsk =
       `<div class="feed-empty friends-share">` +
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
-        // The label names the ACT, not one of its two implementations. It read
-        // "Copy triaonline.com to share", which is what shareOrCopy does only on
-        // the branch it takes second: navigator.share exists in the webview and
-        // on every phone browser, so the app announced "copy" for a button that
-        // opens the share sheet. The visible word is already "Share Tria" and
-        // the label now agrees with it.
         `<button class="friends-share-copy publish-fill is-solid" type="button" ` +
           `aria-label="Share Tria">` +
           svgIcon('send', 'friends-share-ico') +
@@ -14140,38 +14049,24 @@
         `</button>` +
       `</div>`;
 
-    /* SEARCH IS THE HEADER (1.8). Discover has no nameplate: the bar at the top
-       holds one search field, always open, and it comes and goes with the
-       header itself, away while you read down and back the moment you scroll
-       up. It was a toolbar disc that grew into a glass field (a CSS shell on
-       the web, TriaSearchField natively) with an open state, a close state and
-       an X, and then briefly a bar on the page under the title. Zoe's calls,
-       both: no open, no close, just a search bar, and it lives in the header.
-       It is web in every shell (see mountToolbar's `field`). Empty is the
-       whole grid; typing narrows it. */
+    /* SEARCH IS THE HEADER (1.8). One field, always open, coming and going with
+       the header itself. It is web in every shell (see mountToolbar's `field`).
+       Empty is the whole page; typing narrows it to circles and people. */
     const searchBar =
       `<div class="discover-search" role="search">` +
         `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
         `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
           `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
-          `placeholder="Search circles, people, anything" aria-label="Search Tria">` +
+          `placeholder="Search circles and people" aria-label="Search Tria">` +
       `</div>`;
 
-    mountToolbar({
-      // No small title either: the field IS the header, and the tab bar
-      // already says where you are.
-      field: searchBar,
-      // Nothing trailing since 1.8: search is the bar on the page, and the
-      // filter went with it (Zoe: unneeded). Search already answers "who" and
-      // "what", which is what the dial's People row and type rows narrowed by.
-      actions: '',
-    });
+    mountToolbar({ field: searchBar, actions: '' });
 
     view.innerHTML =
       `<section class="view view--discover">` +
         (Store.isAuthed() ? '' :
           `<p class="guest-note">You’re looking around signed out. ` +
-            `<a class="about-more" href="#/join">Make an account</a> to like, comment and add people.</p>`) +
+            `<a class="about-more" href="#/join">Make an account</a> to join a circle.</p>`) +
         `<div class="discover-body" id="discover-body"></div>` +
       `</section>`;
 
@@ -14179,338 +14074,80 @@
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
 
-    // Rank a person against the query: 2 = a name-word or @username STARTS with it,
-    // 1 = appears somewhere, 0 = no match.
+    // Rank a person against the query: 2 = a name-word or @username STARTS with
+    // it, 1 = appears somewhere, 0 = no match.
     const scoreName = (u, q) => {
       const name = (u.name || '').toLowerCase(), user = (u.username || '').toLowerCase();
       if (user.startsWith(q) || name.split(' ').some(w => w.startsWith(q))) return 2;
       if (user.includes(q) || name.includes(q)) return 1;
       return 0;
     };
-    // Everything one account has said here, joined. A portrait tile carries no
-    // post to match against, so without this, searching under the People filter
-    // would only reach names and "who here is into ceramics" would come back
-    // empty on the very view that's meant to answer it. Built once per paint and
-    // only when a search actually asks for it.
+    // Everything one account has said that I can see, joined, built once per
+    // paint and only when a search asks for it. Hand-addressed posts fold in:
+    // looking someone up should reach every way they could answer.
     let saidCache = null;
     const saidBy = (name) => {
       if (!saidCache) {
         saidCache = new Map();
-        discoverPool(true).forEach(p =>
+        Store.discover({ addressed: true }).forEach(p =>
           saidCache.set(p.author, (saidCache.get(p.author) || '') + ' ' + postHaystack(p)));
       }
       return saidCache.get(name) || '';
     };
+    // Everyone but me and anyone blocked, ranked: a name match first, then
+    // somebody who has said the words.
+    const peopleMatching = (q) => Store.users()
+      .filter(u => u.username && u.username !== me && !Blocks.has(u.username))
+      .map(u => ({ u, s: scoreName(u, q) || (saidBy(u.username).includes(q) ? 0.5 : 0) }))
+      .filter(x => x.s)
+      .sort((a, b) => b.s - a.s || (a.u.name || '').localeCompare(b.u.name || ''))
+      .map(x => x.u);
 
-    // A tile matches on WHO it's by first and WHAT it says second, so typing a
-    // name still puts that person's tiles up top even if a stranger mentioned them.
-    // And within a name match the PORTRAIT outranks every post: someone typing a
-    // name is asking for the person, and the profile tile is the person — their
-    // photographs are the second answer, not the first. The bump is bigger than
-    // the whole name scale (2), so any portrait beats any post rather than a
-    // loose match on one sorting under a tight match on the other.
-    const tileScore = (t, q) => {
-      const named = scoreName(t.user, q);
-      if (named) return t.post ? named : named + 3;
-      return (t.post ? postHaystack(t.post) : saidBy(t.user.username)).includes(q) ? 0.5 : 0;
-    };
-
-    // Every tile on the page, in ONE grid — see rules 5 and 6. Chronological,
-    // newest first, with elbow room.
-    //
-    // Straight recency was the honest order right up until one person outposted
-    // the room, and on a small instance that happens immediately: a single
-    // enthusiast's run held the whole first screen, which is the precise
-    // opposite of a people-first surface. The fix that shipped first was a
-    // round-robin deal (everyone's latest, then everyone's second), and it did
-    // spread the faces — but it also scattered time badly enough that the page
-    // stopped reading as "what happened lately", which is the thing the About
-    // page promises.
-    //
-    // So: walk the posts in strict time order and only ever step FORWARD past a
-    // face that just appeared. Three knobs, and they're deliberately small:
-    //   TILE_CAP  most tiles one person can hold on the page.
-    //   FACE_GAP  how many other faces must pass before they can return.
-    //   HOLD_MAX  how far the walk may run ahead of the oldest post still
-    //             waiting. This is the knob that keeps it honest: once the
-    //             queue is this deep, the GAP yields instead, because drifting
-    //             further out of time order is worse than showing a face twice
-    //             close together.
-    // Nothing is ever sorted backwards, so the page still reads top-to-bottom in
-    // time; it just refuses to show you the same person twice in a row.
-    //
-    // Searching runs the same build wider: no cap, and hand-addressed posts fold
-    // back in. Looking something up should reach every account and every post
-    // that could answer it.
-    const TILE_CAP = 3, FACE_GAP = 2, HOLD_MAX = 3;
-
-    /* CIRCLES TAKE THE PAGE AS THEY FILL IT (Zoe, 2026-10-22: "replace posts on
-       Discover with this feature as it fills up. Since Tria is more for private
-       friend groups anyway, that would be better"). The post grid gives up
-       TILES_PER_COMMUNITY tiles for every circle on the page, and at
-       COMMUNITIES_FULL circles it is gone: Discover is then a page of rooms to
-       walk into, with the song rail and the daily over them. Before the first
-       circle it is the grid it always was, uncapped.
-
-       Search is untouched by it. A query still reaches every post and every
-       person it can answer with, because a browsing page making room for
-       something is no reason to hide what someone is looking for. */
-    const COMMUNITIES_FULL = 8, TILES_PER_COMMUNITY = 6;
-    const postBudget = (n) => (!n ? Infinity : Math.max(0, (COMMUNITIES_FULL - n) * TILES_PER_COMMUNITY));
-    // How long typing has to settle before the grid rebuilds. Short enough that
-    // it reads as "keeping up" rather than as a wait, long enough that a normal
-    // typing burst lands one paint instead of eight.
+    // How long typing has to settle before the page rebuilds.
     const SEARCH_BEAT = 110;
 
-    const spaced = (posts, cap, gap) => {
-      const out = [], held = [], count = new Map();
-      const recent = [];                    // authors of the last `gap` tiles
-      const over = (p) => (count.get(p.author) || 0) >= cap;
-      const tooSoon = (p) => recent.includes(p.author);
-      // Someone's own posts must never overtake each other, so once one of
-      // theirs is waiting the rest queue behind it rather than at the cursor.
-      const waiting = (p) => held.some(h => h.author === p.author);
-      const place = (p) => {
-        out.push(p);
-        count.set(p.author, (count.get(p.author) || 0) + 1);
-        recent.push(p.author);
-        if (recent.length > gap) recent.shift();
-      };
-      let i = 0;
-      while (i < posts.length || held.length) {
-        // Everything held is NEWER than the cursor, so the queue always gets
-        // first refusal — that's what keeps the order chronological.
-        const ready = held.findIndex(p => !over(p) && !tooSoon(p));
-        if (ready > -1) { place(held.splice(ready, 1)[0]); continue; }
-        if (i >= posts.length || held.length >= HOLD_MAX) {
-          const p = held.shift();           // the gap yields (see HOLD_MAX)
-          if (p && !over(p)) place(p);
-          continue;
-        }
-        const p = posts[i++];
-        if (over(p)) continue;               // past their cap: it just doesn't tile
-        if (tooSoon(p) || waiting(p)) held.push(p);
-        else place(p);
-      }
-      return out;
-    };
-
-    // The posts first, then whoever had nothing to show, trailing alphabetically
-    // with a portrait (see rule 4).
-    //
-    // A search adds a third group ahead of both: a portrait for every account
-    // whose NAME matches the query. A portrait only ever appeared for someone
-    // with nothing on the page, so looking a person up reached them through
-    // their posts and nowhere else — the more somebody posted the harder they
-    // were to find AS a person, and the answer to their name was a wall of their
-    // photographs with the profile one tap inside any of them. Ranking is
-    // tileScore's job; this is what gives it a profile to rank.
-    const buildTiles = (q) => {
-      // Everyone but me (you aren't discovering yourself) and anyone blocked.
-      const pool = new Set(Store.users().map(u => u.username)
-        .filter(n => !!n && n !== me && notBlocked(n)));
-      // People: the room as a directory. Every account gets rule 4's portrait
-      // tile, so nobody's row depends on whether they posted lately — which is
-      // the whole point of asking for people rather than for posts. Alphabetical,
-      // because a directory sorted by recency is just the grid again.
-      const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
-      if (discoverFilter === 'people') {
-        return [...pool].map(n => Store.user(n)).filter(Boolean).sort(byName)
-          .map(u => ({ user: u, post: null }));
-      }
-      // Whoever the query names, portrait first. They keep their post tiles too,
-      // further down — the profile leads, the work follows.
-      const named = q ? [...pool].map(n => Store.user(n))
-        .filter(u => u && scoreName(u, q)).sort(byName) : [];
-      const facing = new Set(named.map(u => u.username));
-      const posts = spaced(
-        discoverPool(!!q).filter(p => pool.has(p.author)),
-        q ? Infinity : TILE_CAP, q ? 0 : FACE_GAP);
-      const loud = new Set(posts.map(p => p.author));
-      // Anyone already holding a portrait above is skipped here, or a quiet
-      // account whose name matched would face you twice.
-      const quiet = [...pool].filter(n => !loud.has(n) && !facing.has(n))
-        .map(n => Store.user(n)).filter(Boolean).sort(byName);
-      return named.map(u => ({ user: u, post: null }))
-        .concat(posts.map(p => ({ user: Store.user(p.author), post: p })))
-        .concat(quiet.map(u => ({ user: u, post: null })));
-    };
-
-    const wireFaces = () => wireFrameFades(bodyEl);
-
-    const layoutGrid = (fresh) => dealMasonry(bodyEl.querySelector('.pgrid'), fresh);
-
-    // Build the grid for the current query + filter. A grid has no per-tile
-    // reconciliation the way the feed does, so a repaint is a full rebuild, and
-    // background refreshes land here too. Sign what the tiles actually render
-    // and skip the rebuild when nothing in view moved, otherwise every quiet
-    // re-pull would replay the stagger and re-run every photo fade.
-    // `stage` is the tile entrance. It plays when a DISCRETE act changed what the
-    // page is showing — landing here, picking a filter, tapping a tag, clearing
-    // the search — and stays out of the two cases where it reads as noise rather
-    // than feedback: mid-TYPING (a fresh stagger of the whole grid on every
-    // letter is the page flinching at you while you work), and a background
-    // re-pull (one new post arriving should not restage seventy tiles).
-    const paint = ({ stage = true } = {}) => {
-      pools = {};
+    const paint = () => {
       lockCache.clear();
       saidCache = null;
       const q = discoverQuery.trim().toLowerCase();
-      // People has already built exactly the tiles it wants, so it keeps them all;
-      // a type keeps the tiles faced by it.
-      const keep = (t) => discoverFilter === 'all' || discoverFilter === 'people'
-        || (t.post && t.post.type === discoverFilter);
-      let tiles = buildTiles(q).filter(keep);
-      // The circles (the rooms): every one in order while browsing, the ones the
-      // words reach while searching. Built as a string here for the reason the
-      // song rail is: the markup IS the description of what changed, so it goes
-      // into the signature whole.
-      const rooms = q ? communitiesMatching(q) : communitiesInOrder();
-      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q });
-      const budget = q || !Store.communitiesReady() ? Infinity : postBudget(rooms.length);
-      if (tiles.length > budget) tiles = tiles.slice(0, budget);
-      // Score ONCE per tile, then sort the scores. Scoring inside the comparator
-      // read every haystack O(n log n) times instead of once, which on a page
-      // this size is the difference between a keystroke you feel and one you
-      // don't. Sort is stable, so ties still keep grid order.
-      if (q) tiles = tiles.map(t => ({ t, s: tileScore(t, q) })).filter(x => x.s > 0)
-        .sort((a, b) => b.s - a.s).map(x => x.t);
-      // The rail is deliberately NOT rebuilt from the query: it's the index of
-      // the page, so it has to stay put and stay tappable while you're standing
-      // inside one of its tags, or there's no way back out but the X.
-      const tags = topTags();
-      // Today's daily heads the page, above the rail: it's the one thing here
-      // with a deadline, and it's the same for everybody, so it reads as the
-      // room's headline rather than as a tile that happens to be first. The rail
-      // led for one day (2026-09-03) and gave the top back the next, on Zoe's
-      // read of it: two objects of that size in a row compete, and the tie goes
-      // to the one that expires. It stays out of SEARCH — you asked a question,
-      // the page owes you an answer and not a card — but rides every filter,
-      // because the card isn't part of the grid it would be narrowing.
+      // Today's daily stays out of search: you asked a question, and the page
+      // owes you an answer rather than a card.
       const occ = q ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
-      // The rail rides every filter and stays out of SEARCH, exactly as the
-      // card above it does and for the same reason: it isn't part of the grid a
-      // query would be narrowing. Built here rather than at paint time so its
-      // whole markup can go into the signature below — it's a string, and a
-      // string IS the description of what changed, which beats hand-listing the
-      // fields of everyone's song and forgetting one.
-      const np = q ? '' : nowPlayingEl();
-      // discoverView is IN the signature, and has to be: the tiles are identical
-      // either way, so without it a format switch would sign the same and this
-      // early return would swallow the repaint the tap asked for. It also
-      // decides how much of a tile the signature has to describe — a person's
-      // row carries a TIE, so in list mode the answer to "are we friends" is
-      // part of what is drawn, and a request accepted between two pulls has to
-      // be able to move the button. The tap's own answer doesn't come through
-      // here: the delegated handler swaps the slot in place, exactly as the
-      // friends page does, so this only catches the change that arrives from
-      // somewhere else.
-      const asList = discoverView === 'list';
-      const sig = JSON.stringify([q, discoverFilter, discoverView, tags, np, roomsHtml, budget,
-        occ && [occ.slug, answers.length],
-        tiles.map(t =>
-          [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
-            t.post && t.post.id, isLocked(t.user.username),
-            asList && !t.post ? Store.friendStatus(t.user.username) : ''])]);
+      const rooms = q ? communitiesMatching(q) : communitiesInOrder();
+      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q });
+      const people = q ? peopleMatching(q) : [];
+      // The markup is the description of what changed, so it signs the paint;
+      // a person's row carries a tie, so their friendStatus is in it too.
+      const sig = JSON.stringify([q, roomsHtml, occ && [occ.slug, answers.length],
+        people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
+          isLocked(u.username), Store.friendStatus(u.username)])]);
       if (bodyEl.dataset.sig === sig) return;
       bodyEl.dataset.sig = sig;
-      const empty = q
-        ? (rooms.length ? '' : `No one matches “${esc(discoverQuery.trim())}”.`)
-        : TYPE_PLURAL[discoverFilter]
-          ? `No ${TYPE_PLURAL[discoverFilter]} out here yet.`
-          : 'Nobody here yet.';
-      // LIST is Circle's column and the friends page's directory, not a second
-      // design of either: the same makeCard, so a stranger's post reads here
-      // exactly as a friend's does at home and the two gates (canSocial,
-      // canJoin) keep meaning what they already mean; and the same friendRowHtml,
-      // so a person you find here offers the same Add the friends page does.
-      //
-      // FORMAT IS NOW UNIVERSAL, which it wasn't through 1.3. A portrait tile
-      // was dropped in list mode on the argument that a tile with no post has
-      // nothing for a card to be — true, and the wrong conclusion: the answer
-      // isn't a card, it's a ROW, and the app already had one. That left People
-      // as the one filter with no column form (the dial hid the switch there),
-      // and it left a name search under All silently discarding the very person
-      // you searched for. Both are gone: every tile has a form in both formats.
-      //
-      // Drawn as RUNS rather than as one flat column, because the two forms are
-      // different objects and each brings a container that means something. A
-      // run of posts is a `.feed`; a run of people is a `.friends-list`, whose
-      // opening rule is on the CONTAINER (see the CSS note) — so alternating
-      // them one node at a time would draw a hairline above every single person.
-      // Grouping costs nothing in ORDER: consecutive tiles of a kind stay
-      // consecutive, so the column reads in exactly the sequence the grid would
-      // have dealt, ranked search included.
-      const runs = [];
-      if (asList) for (const t of tiles) {
-        const kind = t.post ? 'posts' : 'people';
-        const last = runs[runs.length - 1];
-        if (last && last.kind === kind) last.items.push(t);
-        else runs.push({ kind, items: [t] });
-      }
-      // Each run deals itself in from its own start, which is not a choice so
-      // much as the honest description of what already happens: syncCards
-      // staggers a container's cards from the index INSIDE that container, so a
-      // people run counting on from the posts above it would be the only block
-      // on the page not doing that. The cap is 0.4s either way, and a column
-      // with more than one run of each kind only exists under a ranked search.
-      const runHtml = (r, i) => r.kind === 'posts'
-        ? `<div class="feed" data-run="${i}"></div>`
-        : `<div class="friends-list" data-run="${i}">` +
-            r.items.map((t, j) => friendRowHtml(t.user, j,
-              { locked: isLocked(t.user.username), bio: true })).join('') +
-          `</div>`;
-      // The tags LEAD the body, on every screen and always (see .dtags in the
-      // CSS). They sat between the listening rail and the grid until 1.5, then
-      // hid inside the open search field for a version; neither survived. An
-      // index belongs at the top of the thing it indexes, where it can be read
-      // without being asked for.
-      //
-      // CIRCLES REORDERED THE PAGE (1.9). On repeat goes on top of everything
-      // (Zoe), then today's daily, then the circles, and the tags move down to
-      // lead the thing they index, which is the post grid under them. When the
-      // circles have filled the page there is no grid and so no tags, and no
-      // "nobody here" line either: the page is the circles.
-      const emptyLine = budget === 0 || !empty ? '' : `<p class="feed-empty">${empty}</p>`;
-      bodyEl.innerHTML = np +
-        (occ ? dailyCardEl(occ, answers) : '') +
-        roomsHtml +
-        (budget > 0 ? tagRail(tags, q) : '') +
-        (asList
-          ? (runs.length ? runs.map(runHtml).join('') : emptyLine)
-          : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>` : emptyLine));
-      if (asList) runs.forEach((r, i) => {
-        if (r.kind !== 'posts') return;
-        syncCards(bodyEl.querySelector(`.feed[data-run="${i}"]`),
-          r.items.map(t => t.post), wireFeedCard);
-      });
-      bodyEl.querySelector('.daily-answer')
+
+      const peopleHtml = people.length
+        ? `<section class="discover-people" aria-label="People">` +
+            `<p class="discover-kicker">People</p>` +
+            `<div class="friends-list">` +
+              people.map((u, i) => friendRowHtml(u, i, { locked: isLocked(u.username), bio: true })).join('') +
+            `</div>` +
+          `</section>`
+        : '';
+      const none = q && !rooms.length && !people.length
+        ? `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>` : '';
+
+      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') +
+        roomsHtml + peopleHtml + none +
+        (q ? '' : shareAsk);
+
+      // The daily's own invitation. Scoped to the daily's card: a circle's Join
+      // wears the same pill (it is the daily's card, after all).
+      bodyEl.querySelector('.daily-card:not(.community-card) .daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
-      // Every other square is a plain link (a post, or the song itself on a
-      // server without song posts); only the + needs wiring, and it opens the
-      // composer's song search (goListening).
-      bodyEl.querySelector('[data-np="edit"]')
-        ?.addEventListener('click', () => goListening('#/discover'));
-      // The share ask ends the page, so it follows the two views that ARE the
-      // page (All and People) and stays out of a narrowed one. It earns its place
-      // under People especially: a list of everyone here is exactly where "know
-      // someone who'd like it?" lands.
-      if (!q && (discoverFilter === 'all' || discoverFilter === 'people')) {
-        bodyEl.insertAdjacentHTML('beforeend', shareAsk);
-        wireShare();
-      }
-      // All three are no-ops in list mode (there is no .pgrid to deal, no tile
-      // faces to fade and no tile hearts to wire), so they're left unguarded
-      // rather than branched around.
-      layoutGrid(stage);
-      wireFaces();
-      wireTileLikes(bodyEl, tiles);
-      wireTags();
-      // The Add on a person's row, in list mode. Unguarded for the same reason
-      // and one more: it binds to the BODY, which outlives every repaint, and
-      // wireTieList refuses a second binding — so calling it from the paint is
-      // how it survives the innerHTML that just replaced the rows.
+      wireCommunityJoins(bodyEl);
+      if (!q) wireShare();
+      // The Add on a person's row. It binds to the BODY, once (it refuses a
+      // second binding), which is what lets it survive every repaint.
       wireTieList(bodyEl);
     };
 
@@ -14521,11 +14158,8 @@
       shareBtn.addEventListener('click', async () => {
         const result = await shareOrCopy({ title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com' });
         if (result === 'cancelled') return;
-        // The receipt, and then the word back. Both say so: this is a
-        // characterData change, which is the one kind watchPage deliberately
-        // does NOT observe (thousands of records on a feed mid-render, for this
-        // single swap), so the native face would otherwise still read
-        // "Share Tria" while the web element underneath said "Shared".
+        // The receipt, and then the word back. Both say so, because a text swap
+        // is the one change watchPage doesn't observe (see NativeChrome).
         const label = shareBtn.querySelector('span');
         label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
         NativeChrome.schedulePage();
@@ -14536,88 +14170,33 @@
       });
     }
 
-    // A tag is a shortcut into search, and tapping the live one again undoes it
-    // — the rail is the only control on this page that can turn itself off, so
-    // it has to be able to. It fills the bar rather than opening anything, and
-    // does not focus it: tapping a tag should show you the answer, not raise a
-    // keyboard over it.
-    const wireTags = () => {
-      bodyEl.querySelectorAll('.dtag').forEach(btn => btn.addEventListener('click', () => {
-        const on = btn.getAttribute('aria-pressed') === 'true';
-        discoverQuery = searchEl.value = on ? '' : btn.dataset.tag;
-        paintNow();
-      }));
-    };
     // Escape empties the bar, the one way out a keyboard reader has without an X.
     searchEl.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && searchEl.value) {
         discoverQuery = searchEl.value = '';
         paintNow();
       }
-      // Return is "show me", and the answer is already on the page: the
-      // keyboard going down is all that is left to do.
+      // Return is "show me", and the answer is already on the page.
       if (e.key === 'Enter') searchEl.blur();
     });
 
-    // Typing repaints on a short trailing beat rather than per letter. A paint
-    // here is a full rebuild — search lifts the per-person cap and folds the
-    // hand-addressed posts back in, so the grid it builds is roughly double the
-    // browse grid, and every letter was re-laying out every tile. Coalescing a
-    // burst into one paint at the end of it costs nothing you can perceive (the
-    // field itself is native and never waits) and takes the work per word from
-    // one-per-keystroke to one. `discoverQuery` still moves on the keystroke, so
-    // anything else reading it (a background re-pull's guard, a re-render
-    // restoring the field) sees what's actually typed.
+    // Typing repaints on a short trailing beat rather than per letter.
     let searchTimer = 0;
     const paintSoon = () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        if (bodyEl.isConnected) paint({ stage: false });
-      }, SEARCH_BEAT);
+      searchTimer = setTimeout(() => { if (bodyEl.isConnected) paint(); }, SEARCH_BEAT);
     };
-    // Any discrete gesture (Escape, the X, a tag) paints straight away and must
-    // cancel a beat still in flight, or the stale one lands on top of it.
-    const paintNow = (opts) => { clearTimeout(searchTimer); paint(opts); };
+    const paintNow = () => { clearTimeout(searchTimer); paint(); };
     searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); });
 
-    // A re-pull while you're standing on Discover repaints the body in place
-    // instead of re-rendering the whole view (which would tear down the masthead
-    // and replay every tile). A quiet refresh skips a live search — results
-    // shifting under a query you're still typing is worse than showing them a
-    // beat late — but an explicit tab re-tap (`force`) repaints regardless,
-    // because a refresh you asked for has to answer. Returns false only if this
-    // closure has gone stale (the view was rebuilt under it), which is the
-    // caller's cue to render Discover from scratch.
+    // A re-pull while you're standing here repaints the body in place. A quiet
+    // refresh skips a live search; an explicit tab re-tap (`force`) does not.
+    // False only if this closure has gone stale, the caller's cue to render
+    // Discover from scratch.
     discoverRepaint = (force) => {
       if (!bodyEl.isConnected) return false;
-      if (force || !discoverQuery.trim()) paintNow({ stage: false });
+      if (force || !discoverQuery.trim()) paintNow();
       return true;
-    };
-
-    // JS owns the column deal, so a WIDTH change is ours to answer: the count
-    // flips at the breakpoint and the balance depends on how text wraps. Only
-    // the layout re-runs, never the paint — rebuilding the markup would replay
-    // every photo fade because someone turned their phone.
-    //
-    // Width, and only width. On iOS a `resize` is mostly a HEIGHT event: the
-    // keyboard rising under the search field fires one, and so does Safari's
-    // URL bar collapsing as you scroll. Re-dealing the columns then is a forced
-    // reflow of the whole grid for an answer that cannot have changed, landing
-    // in the exact moment (mid-type, mid-scroll) where a stall is most visible.
-    // So we remember the last width we dealt at and ignore everything else.
-    discoverResizeOff?.();
-    let sizeTimer = 0, lastW = window.innerWidth;
-    const onResize = () => {
-      if (window.innerWidth === lastW) return;
-      lastW = window.innerWidth;
-      clearTimeout(sizeTimer);
-      sizeTimer = setTimeout(() => { if (bodyEl.isConnected) layoutGrid(); }, 120);
-    };
-    window.addEventListener('resize', onResize, { passive: true });
-    discoverResizeOff = () => {
-      clearTimeout(sizeTimer);
-      window.removeEventListener('resize', onResize);
-      discoverResizeOff = null;
     };
 
     // Restore an in-flight query if a background refresh re-rendered the page.
@@ -15116,8 +14695,12 @@
     }
     if (c.kind === 'activity')
       return `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('cal')}</span>`;
-    if (c.kind === 'community')
-      return `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('circle')}</span>`;
+    if (c.kind === 'community') {
+      const room = Store.community(c.communityId);
+      return room && room.avatar
+        ? communityPicHtml(room, 'chat-avatar', 48)
+        : `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('circle')}</span>`;
+    }
     const faces = c.members.filter(u => u !== Store.session()).slice(0, 2).map(Store.user).filter(Boolean);
     return `<span class="chat-faces" aria-hidden="true">` +
       faces.map(u => avatarEl(u, { cls: 'comment-avatar chat-avatar' })).join('') + `</span>`;

@@ -1462,8 +1462,10 @@ DB says "Music posts aren't switched on yet." rather than "try again".
 ## Circles (1.9)
 
 **A circle is a room for an interest** at `#/c/<slug>`, which anyone signed in
-can start (ten held each) and anyone can join (`supabase/add-circles.sql`, NOT
-run as of 2026-10-22; the probe answers PGRST205). Zoe asked for it to be built
+can start (ten held each) and anyone can join (`supabase/add-circles.sql`,
+confirmed run 2026-10-22; `supabase/circle-photo-delete.sql` adds the host's
+photo and Delete, NOT run as of the same day, probe 42703 on
+`communities.avatar`). Zoe asked for it to be built
 out of "existing audience and group chat features", and it is exactly those two
 things with a page in front of them.
 
@@ -1501,8 +1503,9 @@ Tria is for. The chat still bolds when something is new; it just never lights
 the tab or pushes until you unmute it.
 
 **Where a circle's posts are read.** On the circle's page and their own post
-page, and nowhere else. `Store.feed`, `Store.discover` and `Store.postsBy` drop
-them: My Circle is your friends, and a post said in a hobby circle was said to
+page, and nowhere else. `Store.feed` and `Store.postsBy` drop them (and
+`Store.discover`, which only Discover's people search still reads, for what
+someone has said): My Circle is your friends, and a post said in a hobby circle was said to
 the circle. A card says which circle it was said in above its byline
 (`communityTagHtml`), except on that circle's own page. A circle post can't be
 pinned to a profile, and sharing a song into a circle doesn't set your listening
@@ -1516,13 +1519,22 @@ are whoever ANSWERED going or maybe and is still in it, plus anyone brought
 into the plan's own chat: the members who never said a word are not "waiting",
 and nobody is woken up about a plan in a circle they never answered.
 
-**Discover, as circles fill it.** On repeat leads the page (Zoe), then the
-daily, then the Circles section (a Start a circle card, then your circles, then
-the rest, each group by `Store.communityPulse`, the last sign of life this
-reader can see). The tags moved down to lead the thing they index, the post
-grid. That grid gives up `TILES_PER_COMMUNITY` (6) tiles per circle and is gone
-at `COMMUNITIES_FULL` (8), Zoe's "replace posts on Discover with this feature as
-it fills up". Search is never capped by it, and it reaches circles first.
+**Discover is circles, and shows no posts** (Zoe, 2026-10-22: "remove the
+posts from the Discover feed. THIS is the new way to discover."). It went there
+in two steps on the same day: first the post grid gave up six tiles per circle
+and vanished at eight, then the grid, its trending tags and On repeat came off
+outright. What is left is the daily and the circles, each drawn as the daily's
+own card, plus the Share Tria ask. Search answers with circles and people, a
+person matching on name first and on what they have said second; it never
+answers with a post. The masonry machinery (`ptileEl`, `dealMasonry`) lives on
+for the daily's page and a profile's frame wall.
+
+**The host's tools** (`circle-photo-delete.sql`). A circle can wear a photo,
+uploaded to the host's own folder in `media` like a face and set by
+`set_community_photo`; null is the triad. And the host can delete it
+(`delete_community`): the same ending as the last member leaving, posts and chat
+with it, so the delete needs no logic of its own beyond the host check. Both are
+offered only once the column answers (`Store.communityToolsReady`).
 
 **On repeat has no week any more** (Zoe, same day), and neither does the
 listening status (`freshSong`), so a song pin can't blank while the rail still

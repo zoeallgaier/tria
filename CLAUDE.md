@@ -32,10 +32,12 @@ picker, and a circle's Post button opens the composer aimed at it), and its talk
 is a **group chat** (`chats.kind = 'community'`) whose roster the database keeps
 equal to the circle's by trigger. Joining seats you in the chat MUTED (Claude's
 call: a room of strangers should not buzz). Leaving the chat IS leaving the
-circle. The host can rename it, edit its about and take people out; the slug
-never changes. When the host leaves, the longest-standing member inherits; when
-the last member leaves, the circle closes and its posts and chat go with it. Ten
-circles held per person. A circle post cannot be reposted or pinned to a profile.
+circle. The host can rename it, edit its about, give it a photo (cropped like a
+profile face, `setCommunityPhoto`), take people out, and **delete it**
+(`deleteCommunity`, which takes its posts and chat with it); the slug never
+changes. When the host leaves, the longest-standing member inherits; when the
+last member leaves, the circle closes the same way a delete does. Ten circles
+held per person. A circle post cannot be reposted or pinned to a profile.
 A plan posted in a circle can be answered by its members (`canJoin`), and only
 the members who answered are reminded.
 
@@ -46,20 +48,32 @@ audience, My Circle). Every word on screen says circle and `c/<slug>`. Do not
 rename either side.
 
 **Where a circle's posts are read:** its page and their own post page. They are
-dropped from My Circle (`Store.feed`), from Discover's post grid
-(`Store.discover`) and from profiles (`Store.postsBy`). A card says which circle
+dropped from My Circle (`Store.feed`) and from profiles (`Store.postsBy`). A card says which circle
 it was said in above its byline (`communityTagHtml`, hidden on the circle's page).
 
-**Discover, reordered:** On repeat on top of everything (Zoe), then the daily,
-then **Circles** (a Start a circle card first, then yours, then the rest, by last
-sign of life, `Store.communityPulse`), then the tags and the post grid. The grid
-**gives up six tiles per circle and is gone at eight** (`postBudget`, Zoe:
-"replace posts on Discover with this feature as it fills up"). Search reaches
-circles first and is never capped. **On repeat lost its week** (Zoe: "remove the
-week long limit on songs"), and so did the listening status (`freshSong`), so a
-song pin doesn't blank while the rail still shows the song.
+**Discover IS circles** (Zoe: "remove the posts from the Discover feed. THIS is
+the new way to discover."). It shows NO posts: today's daily, then **Circles**
+(a dashed Start a circle card, then yours, then the rest, by last sign of life,
+`Store.communityPulse`), then Share Tria. Every circle is drawn as **the daily's
+own card** (the same `.daily-card` classes, Zoe: "style circles like the daily
+cards"): handle as kicker, name as the serif headline, about as the hint,
+members' faces and count in the foot, the daily's pill as Join (which joins and
+walks you in), and the circle's photo in the top corner. Search is **circles
+and people only** (a person matches on name, then on what they've said), never
+posts. The masonry wall, the trending tags and On repeat are all gone from it;
+On repeat headed the page for one afternoon and then came off too (Zoe), and
+Discover was the only place it was drawn, so its rail code is deleted. **On
+repeat lost its week** first (Zoe: "remove the week long limit on songs"), and so
+did the listening status (`freshSong`), so a song pin doesn't blank.
 
-Every rule is in `supabase/add-circles.sql`; the reasoning is in
+**Album art is rounder** (Zoe: "round the edges much more of all album art,
+that'd be cuter"): `--radius-art` is 26% of the square (`--art-round`), on every
+song sleeve (`.song-art`, a song pin's `.pin-art`), and the boxes that hold one
+at a known size and pad (`.card-song`, `.song-now`, `.pin--song`) stay concentric
+by reading `--art-round`. Photos keep `--radius-img`.
+
+Every rule is in `supabase/add-circles.sql` and `supabase/circle-photo-delete.sql`;
+the reasoning is in
 [docs/data.md](docs/data.md) under "Circles". **The push function changed too**
 (a circle's chat is named in a message push, a mention in a circle only reaches
 members, and circle plans remind only members who answered).
@@ -378,13 +392,17 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `[{"song":null}]` after. Were the column ever missing again,
   `Store.songsReady` is false, no Music row or song button shows, and
   Discover's On repeat falls back to the old listening status.
-  **`add-circles.sql` is NOT run** (written 2026-10-22): anon
-  `GET /rest/v1/communities?select=slug&limit=1` answers PGRST205 until it is,
-  and `[]` (or rows) after. Until then `Store.communitiesReady` is false and
-  nothing of circles shows anywhere: no section on Discover, no circles in the
-  lock, and `#/c/…` says they aren't switched on yet. After running it, **deploy
-  the push function** (`swift-processor`), which learned circles in the same
-  commit and reads `community_members`.
+  **`add-circles.sql` is confirmed run** (2026-10-22): anon
+  `GET /rest/v1/communities?select=slug&limit=1` answered PGRST205 before it and
+  `[{"slug":"dnd"}]` after. Were the table ever missing again,
+  `Store.communitiesReady` is false and nothing of circles shows anywhere. **Not
+  confirmed: that the push function was redeployed after it** (it learned circles
+  in the same commit and reads `community_members`); REST can't tell.
+  **`circle-photo-delete.sql` is NOT run** (written 2026-10-22): anon
+  `GET /rest/v1/communities?select=avatar&limit=1` answers 42703 until it is
+  (a 400 in a boot pass's console, the one the probe makes). Until then
+  `Store.communityToolsReady` is false: no photo in the circle editor and no
+  Delete circle in the host's menu.
 
 ## Copy style
 

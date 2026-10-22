@@ -74,9 +74,12 @@ const Store = (() => {
   //     the app (the room at /c/<slug>); see "Circles" below for the naming
   //   communityMembers: [{communityId, user(username), _ts}]
   //   communitiesReady: whether add-circles.sql has run (the table answered)
+  //   communityToolsReady: whether circle-photo-delete.sql has run (a circle's
+  //     photo and its host's Delete)
   const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], reactionsReady: false, songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
-                         communities: [], communityMembers: [], communitiesReady: false });
+                         communities: [], communityMembers: [], communitiesReady: false,
+                         communityToolsReady: false });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -343,7 +346,7 @@ const Store = (() => {
      has settled, off the frames the paint is using, and never blocks anything:
      every failure here means only that the next launch waits like it used to. */
   const KEEP_KEY = 'world';
-  const KEEP_V = 3;                    // bump when state's shape changes
+  const KEEP_V = 4;                    // bump when state's shape changes
   let keepOn = false;
   let fresh = Promise.resolve(false);  // true once a kept launch's real load changed anything
   const whenFresh = () => fresh;
@@ -586,11 +589,14 @@ const Store = (() => {
       // whole share of them.
       readAll('communities', ['created_at', 'id']),
       readAll('community_members', ['community_id', 'user_id']),
+      // Whether a circle can wear a photo and be deleted by its host yet
+      // (circle-photo-delete.sql). The songsReady latch, once more.
+      state.communityToolsReady ? { data: [], error: null } : sb.from('communities').select('avatar').limit(1),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, rx, sg, h, pv, f, fd, pa, bl, ch, cc, cm] = read;
+    const [u, p, c, l, cl, rx, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -715,6 +721,8 @@ const Store = (() => {
     state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
     applyChats(ch, nameById);
     applyCommunities(cc, cm, nameById);
+    if (!ct.error) state.communityToolsReady = true;
+    else if (ct.error.code === '42703' || isMissing(ct.error)) state.communityToolsReady = false;
 
     // Everything written while we were waiting is newer than everything we just
     // read, so it goes back on top (see write()).
@@ -2885,6 +2893,7 @@ const Store = (() => {
     state.communitiesReady = true;
     state.communities = (cc.data || []).map(row => ({
       id: row.id, slug: row.slug, name: row.name || row.slug, about: row.about || '',
+      avatar: row.avatar || null,
       owner: nameById.get(row.owner) || null, _ts: row.created_at,
     }));
     if (!cm.error) state.communityMembers = (cm.data || []).map(row => ({
@@ -2892,6 +2901,7 @@ const Store = (() => {
     })).filter(x => x.user);
   }
   const communitiesReady = () => !!state.communitiesReady;
+  const communityToolsReady = () => !!state.communityToolsReady;
   const communities = () => state.communities;
   // By id or by slug: a route carries the slug, a post carries the id.
   const community = (key) => {
@@ -3016,6 +3026,45 @@ const Store = (() => {
     await afterCommunityWrite();
     return { ok: true };
   }
+  // The host giving the circle a photo (a cropped square, as a data URI) or
+  // taking it off (null). Optimistic like updateAvatar: the head repaints under
+  // the editor while the upload goes out, and a refusal puts the old one back.
+  async function setCommunityPhoto(id, dataURI) {
+    const before = community(id);
+    if (!before) return { ok: false, error: 'That circle has closed.' };
+    const patch = (avatar) => write('communities', cs => cs.map(c =>
+      (c.id === id ? Object.assign({}, c, { avatar }) : c)));
+    patch(dataURI || null);
+    let url = null;
+    if (dataURI) {
+      try { url = await uploadImage(dataURI, 'circle'); }
+      catch { patch(before.avatar); return { ok: false, error: 'Couldn’t upload, try again.' }; }
+    }
+    const { error } = await sb.rpc('set_community_photo', { p_community: id, p_avatar: url });
+    if (error) {
+      patch(before.avatar);
+      if (url) dropUploads([url]);
+      return { ok: false, error: communityError(error, 'Couldn’t save the photo, try again.') };
+    }
+    patch(url);
+    return { ok: true };
+  }
+  // The host closing a circle outright. Its posts, chat and roster go with it
+  // (the cascades in add-circles.sql), so the cache lets go of all three.
+  async function deleteCommunity(id) {
+    const { error } = await sb.rpc('delete_community', { p_community: id });
+    if (error) return { ok: false, error: communityError(error, 'Couldn’t delete it, try again.') };
+    const chatIds = new Set(state.chats.filter(c => c.communityId === id).map(c => c.id));
+    write('communities', cs => cs.filter(c => c.id !== id));
+    write('communityMembers', ms => ms.filter(m => m.communityId !== id));
+    write('posts', ps => ps.filter(p => p.communityId !== id));
+    write('chats', cs => cs.filter(c => !chatIds.has(c.id)));
+    write('chatMembers', ms => ms.filter(m => !chatIds.has(m.chatId)));
+    write('messages', ms => ms.filter(m => !chatIds.has(m.chatId)));
+    tellChats();
+    return { ok: true };
+  }
+
   async function removeCommunityMember(id, username) {
     const { error } = await sb.rpc('remove_community_member', { p_community: id, p_user: idOf(username) });
     if (error) return { ok: false, error: communityError(error, 'Couldn’t remove them, try again.') };
@@ -3817,6 +3866,7 @@ const Store = (() => {
     communitiesReady, communities, community, communityMembers, inCommunity, myCommunities,
     communityPosts, communityPulse, communityChat, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
+    communityToolsReady, setCommunityPhoto, deleteCommunity,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,
