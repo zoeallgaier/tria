@@ -82,11 +82,12 @@ search field in that same centred slot.
 
 **Every secondary menu is one sheet in iOS's share-sheet shape**: openSheet's
 panel and openBarMenu's card alike FLOAT 8px in from the sides and the bottom,
-rounded 34px on all corners, with a grab handle, a bold centred title, and the
-rows in one rounded group (`.sheet-items` / `.sheet-group`) a step lighter than
-the panel (`--sheet-bg` / `--sheet-card`, stepping up from dark paper). Solid,
-plain dim, NO Cancel (a tap outside, Escape, or a pull down: `dragToClose`). A
-`dock` ("Done") is its own rounded group below. A radio set shows a check, not a
+rounded 32px on all corners, and are ONE SURFACE: the CSS glass (thin fill,
+panel blur, one hairline) with the rows straight on it, edge to edge, and a
+pressed row clipped by the panel's corners. A card inside the panel was tried
+and removed (Zoe: padding in padding). Grab handle, bold centred title, NO
+Cancel (a tap outside, Escape, or a pull down: `dragToClose`). A `dock`
+("Done") is a soft pill at the panel's foot. A radio set shows a check, not a
 fade. The Create picker is that sheet's list.
 
 **The CSS glass is SIMPLIFIED** (tokens.css, the `--glass-*` block): a thin

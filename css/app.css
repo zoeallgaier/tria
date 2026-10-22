@@ -2176,40 +2176,25 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    Both of the app's secondary surfaces are this: openSheet's panel and
    openBarMenu's card (a profile's filter, the profile •••, Updates' filter, a
    post's •••, Create). It started as Instagram's Create sheet, full width on
-   the floor of the screen, and was then cleaned up into iOS's own share-sheet
-   shape (Zoe: padding and rounding, like the standard ones):
+   the floor of the screen, became iOS's share-sheet shape (a floating panel),
+   and then lost the card it had inside it (Zoe: padding in padding, it can just
+   be one thing). So:
 
-   - The panel FLOATS. Inset 8px from the sides and the bottom (past the home
-     indicator), rounded on all four corners at 34px, which is roughly the
-     phone's own corner radius, so the sheet echoes the glass it sits in.
-   - The rows sit in ONE ROUNDED GROUP inside it, a step lighter than the
-     panel, iOS's grouped-list layering: grouped background behind, cells on
-     top. Hairlines between rows start where the label does.
-   - A grab handle and a bold centred title above the group. No Cancel (a tap
-     outside, Escape, or a pull down: dragToClose); a `dock` ("Done") is its
-     own rounded group below, the way an iOS action sheet docks its last word.
+   ONE SURFACE. A floating panel, inset 8px from the sides and the bottom (past
+   the home indicator), rounded 32px on every corner, made of the CSS glass: a
+   thin fill, the panel-tier blur, one hairline. The rows sit straight on it,
+   edge to edge, and a pressed row's fill is clipped by the panel's own corners
+   (overflow), so there is no second shape anywhere. Grab handle, bold centred
+   title, rows of a 24px mark and a label with the hairline starting where the
+   label does. No Cancel (a tap outside, Escape, or a pull down: dragToClose);
+   a `dock` ("Done") is a soft pill at the foot of the same panel.
 
-   Solid, not glass: a sheet is the thing you are reading. Written as overrides
-   AFTER the two blocks above, at equal specificity, so the history above still
-   reads as what each surface was. */
-.sheet,
-.bar-menu {
-  --sheet-bg: var(--bg);
-  --sheet-card: var(--surface);
-}
-@media (prefers-color-scheme: dark) {
-  /* Dark paper is the darkest thing on screen, so the layering steps UP from
-     it: panel on --surface, rows on --surface-2. */
-  .sheet,
-  .bar-menu {
-    --sheet-bg: var(--surface);
-    --sheet-card: var(--surface-2);
-  }
-}
+   Written as overrides AFTER the two blocks above, at equal specificity, so the
+   history above still reads as what each surface was. */
 .sheet-scrim,
 .bar-menu-scrim {
   padding: 0 8px max(8px, env(safe-area-inset-bottom));
-  background: color-mix(in srgb, #000 40%, transparent);
+  background: color-mix(in srgb, #000 30%, transparent);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -2221,24 +2206,25 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 6px 12px 12px;
-  background: var(--sheet-bg);
-  border: 0;
-  border-radius: 34px;
+  padding: 6px 0 8px;
+  overflow: hidden;
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+  border: var(--glass-edge);
+  border-radius: 32px;
   box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
   /* The page doesn't take a pull on the panel for a scroll; a list that really
      scrolls hands pan-y back (dragToClose, and .aud-list below). */
   touch-action: none;
   overscroll-behavior: contain;
   transform: translateY(calc(100% + 24px));
-  transition: transform 0.32s var(--ease-soft);
+  transition: transform 0.34s cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 .sheet-scrim.open .sheet,
 .bar-menu-scrim.open .bar-menu { transform: none; }
-/* The bar menu's card stops being a card dropped from a button: same floating
-   panel, pinned to the same insets the scrim gives a sheet. */
+/* The bar menu's card stops being a card dropped from a button: the same
+   floating panel, at the same insets the scrim gives a sheet. */
 .bar-menu {
   position: fixed;
   left: 8px;
@@ -2257,66 +2243,62 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   flex-shrink: 0;
   width: 36px;
   height: 5px;
-  margin: 0 auto 12px;
+  margin: 0 auto 10px;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--text) 22%, transparent);
+  background: color-mix(in srgb, var(--text) 20%, transparent);
 }
 .sheet .sheet-title,
 .bar-menu .sheet-title {
   flex-shrink: 0;
   margin: 0;
-  padding: 0 1rem 12px;
+  padding: 2px 1.5rem 10px;
   text-align: center;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text);
 }
-/* THE GROUP: the rows' one rounded card. openSheet's `.sheet-items` is it, and
-   openBarMenu wraps its rows in `.sheet-group` for the same reason. */
+/* The rows straight on the panel: no card of their own. */
 .sheet-items,
 .sheet-group {
   min-height: 0;
   padding: 0;
   overflow-y: auto;
-  background: var(--sheet-card);
+  background: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border: 0;
-  border-radius: 22px;
+  border-radius: 0;
   box-shadow: none;
 }
 .sheet-item,
 .bar-menu-item {
-  gap: 0.9rem;
+  gap: 0.95rem;
   min-height: 52px;
-  padding: 0.8rem 1.1rem;
+  padding: 0.8rem 1.4rem;
   font-size: 1.02rem;
   border-radius: 0;
 }
 .sheet-item + .sheet-item::before,
 .bar-menu-item + .bar-menu-item::before {
-  left: calc(1.1rem + 24px + 0.9rem);
+  left: calc(1.4rem + 24px + 0.95rem);
   right: 0;
+  border-top-color: color-mix(in srgb, var(--text) 10%, transparent);
 }
 .sheet-ico,
 .bar-menu-ico { width: 24px; height: 24px; color: var(--text); }
-/* Pressed and hovered rows fill to the group's edge, which is its corners at
-   the ends of the list, so the fill takes the same rounding. */
-.sheet-item:first-child,
-.bar-menu-item:first-child { border-radius: 22px 22px 0 0; }
-.sheet-item:last-child,
-.bar-menu-item:last-child { border-radius: 0 0 22px 22px; }
-.sheet-item:only-child,
-.bar-menu-item:only-child { border-radius: 22px; }
-/* A docked answer ("Done"), never Cancel: its own rounded group below. */
+/* The press is a fill that runs to the panel's edges, which overflow clips to
+   its corners. Hover gets the same tint on a pointer. */
+.sheet-item:active,
+.bar-menu-item:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+/* A docked answer ("Done"), never Cancel: a soft pill at the foot of the panel. */
 .sheet-cancel {
   flex-shrink: 0;
-  margin: 10px 0 0;
-  min-height: 52px;
-  padding: 0.85rem;
+  margin: 8px 12px 2px;
+  min-height: 50px;
+  padding: 0.8rem;
   border: 0;
-  border-radius: 22px;
-  background: var(--sheet-card);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
