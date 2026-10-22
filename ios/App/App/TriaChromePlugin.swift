@@ -1532,7 +1532,10 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
                 markView.alpha = markWanted
             }
         }
-        let wanted: CGFloat = (wantsTitle && headerUp) ? 1 : 0
+        // The title is the page's name from the first frame now (1.8, one
+        // header on every page), so it keeps the wordmark's rule: up at the top
+        // of the page and whenever the header is.
+        let wanted: CGFloat = (wantsTitle && (scroll.atTop || headerUp)) ? 1 : 0
         guard titleLabel.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,

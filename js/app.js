@@ -5925,11 +5925,17 @@
   // `actions` (optional) is markup that rides the title's own line, at the right —
   // e.g. the Friends page's expanding search. The title row is a relative flex
   // container so an action can animate open over the nameplate.
-  function mastheadEl(kicker, title, actions) {
+  // ONE HEADER ON EVERY PAGE (1.8): under a bar, the nameplate is no longer
+  // drawn. The page's name is the bar's centred title, there from the top (see
+  // syncToolbarTitle), and this element stays in the DOM as the page's <h1> for
+  // VoiceOver and for the composer's type-word swap, which still runs on it.
+  // `keep` is the one nameplate that is CONTENT rather than a name: the daily's
+  // prompt, which is the question the page exists to ask.
+  function mastheadEl(kicker, title, actions, { keep = false } = {}) {
     // No title: the kicker carries the page (promoted to <h1> for a11y, same
     // small-caps look) instead of stacking a redundant big serif line under it.
     const kickerTag = title ? 'p' : 'h1';
-    return `<header class="masthead">` +
+    return `<header class="masthead${keep ? ' masthead--keep' : ''}">` +
         (kicker ? `<${kickerTag} class="masthead-kicker">${kicker}</${kickerTag}>` : '') +
         `<div class="masthead-row">` +
           (title ? `<h1 class="masthead-title">${title}</h1>` : '') +
@@ -6048,15 +6054,6 @@
     const el = document.getElementById('toolbar-title');
     if (el) el.textContent = text;
   }
-  // The page's own large in-flow heading, whatever that page calls it: the
-  // editorial nameplate on the four feed pages, the person's name on a profile
-  // (which has no masthead at all — its nameplate is a photograph). The bar's
-  // small title is a stand-in for THIS element and hides behind it, so a page
-  // whose <h1> isn't named here reads as having no big title and shows the
-  // small one at once — which is right for a pushed page with none, and wrong
-  // and invisible for one that has a big title under another class. Any new
-  // page-level <h1> has to join this list.
-  const BIG_TITLE_SEL = '.masthead-title, .account-name';
   // The HIG "collapsing large title": .toolbar-title stays invisible until the
   // page's own big one has scrolled bodily out from under the bar, then
   // crossfades in — so scrolling never shows both at once.
@@ -6069,8 +6066,10 @@
     const bar = document.querySelector('.topbar');
     const titleEl = document.getElementById('toolbar-title');
     if (!bar || !titleEl || !titleEl.textContent) return;
-    const big = document.querySelector(BIG_TITLE_SEL);
-    const past = !big || big.getBoundingClientRect().bottom <= bar.getBoundingClientRect().height;
+    // ALWAYS, since 1.8. The small title used to wait for the page's big one to
+    // scroll out from under the bar; there is no big one any more (mastheadEl),
+    // so the bar's title is the page's name from the first frame, on every page.
+    const past = true;
     if (instant) {
       bar.classList.add('topbar--title-instant');
       bar.classList.toggle('topbar--title-visible', past);
@@ -6108,10 +6107,12 @@
      as "off the top" must already count as "reading", or the material fades in
      for the one frame in between and shimmers. Same number, one comment. */
   const HEADER_SLACK = 4;
-  function holdsHeader() {
-    const path = (location.hash || '#/').split('?')[0];
-    return path.startsWith('#/u/') || path.startsWith('#/daily/') || path === '#/profile';
-  }
+  // EVERY PAGE THE SAME, since 1.8 (Zoe: unify every page header). A profile and
+  // a daily used to HOLD their header while you read down, on the argument
+  // above; one rule everywhere outranked it. The header leaves on the way down
+  // and is back on the way up, on every route. Kept as a function because the
+  // native bar still takes the answer as `holdHeader`.
+  function holdsHeader() { return false; }
   let barLastY = 0;
   let barReading = false;
   // `placed` is the router's own jump — see syncTopbar. It takes the new
@@ -8033,12 +8034,11 @@
       : '';
     mountToolbar({
       leading: b ? toolbarBackEl(b.href, b.label) : '',
-      // The person's name, which the bar has never carried before — it hid
-      // behind the photograph and then behind nothing at all. It stays
-      // invisible until .account-name has scrolled under the bar (see
-      // BIG_TITLE_SEL, which the profile is the reason for) and crossfades in
-      // there, so a long column of someone's posts finally says whose.
-      title: u.name,
+      // The @HANDLE, since 1.8, Instagram's arrangement: the bar title is up
+      // from the first frame on every page now, and the card under it already
+      // says the name in big serif, so the bar says the other half of who this
+      // is instead of saying the name twice.
+      title: '@' + u.username,
       actions: friendBadge + moreBadge + filterBtn,
     });
 
@@ -12138,7 +12138,7 @@
 
     view.innerHTML =
       `<section class="view view--daily" data-type="${occ.type}">` +
-        mastheadEl(kicker, `<span class="masthead-title--daily">${esc(occ.prompt)}</span>`, '') +
+        mastheadEl(kicker, `<span class="masthead-title--daily">${esc(occ.prompt)}</span>`, '', { keep: true }) +
         (occ.hint ? `<p class="daily-lede">${esc(occ.hint)}</p>` : '') +
         `<div class="daily-body" id="daily-body"></div>` +
       `</section>`;

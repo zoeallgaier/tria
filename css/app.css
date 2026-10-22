@@ -1068,6 +1068,27 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .toolbar-mark .wordmark { height: 100%; background: var(--text); }
 .topbar--reading .toolbar-mark { opacity: 0; }
+
+/* ── One header on every page (1.8) ───────────────────────────────────────────
+   Under a bar, a page's big serif nameplate is not drawn: its name is the bar's
+   centred title, there from the top (syncToolbarTitle), the same on every
+   route. The element stays as the page's <h1>, visually hidden, so VoiceOver
+   still lands on it. Phone width only, which is every app screen: the desktop
+   bar hides its small title (see the min-width block), so the web's wide
+   layout keeps its nameplates. `.masthead--keep` is the daily's prompt, which
+   is the page's content rather than its name. */
+@media (max-width: 680px) {
+  body.toolbar-live .masthead:not(.masthead--keep) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 /* The bell's dot on My Circle's bar (1.8), which is the Chats tab's old dot for
    Updates moved to where Updates now is. The same mark as .nav-dot: --dot, no
    number, faded in rather than popped. On the disc's top-right shoulder, which

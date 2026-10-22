@@ -69,6 +69,17 @@ wordmark is centred on its bar (`mountToolbar({ mark: true })`, `#toolbar-mark`,
 drawn natively from `icons/wordmark.svg` via `markSpec`), in the page's ink,
 leaving with the header on a read down.
 
+**One header on every page** (Zoe: unify every page header). Under a bar, no
+page draws a big serif nameplate (`mastheadEl` still emits it as the visually
+hidden `<h1>`, phone width only, `.masthead--keep` for the daily's prompt,
+which is content). The page's name is the bar's centred title, up from the
+first frame (`syncToolbarTitle`'s `past` is always true; natively the title
+follows the wordmark's rule, `atTop || headerUp`). A profile's bar says the
+`@handle`, the card says the name. The header leaves on a read down and is back
+on a scroll up on EVERY route: `holdsHeader()` returns false, so profiles and
+dailies no longer hold theirs. My Circle wears the wordmark and Discover the
+search field in that same centred slot.
+
 **Every secondary menu is one bottom sheet**, Instagram's Create sheet being
 the reference: openSheet's panel and openBarMenu's card alike sit full width on
 the floor of the screen, grab handle, bold centred title, rows of a 26px mark
