@@ -2172,160 +2172,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   .bar-menu-scrim { background: color-mix(in srgb, var(--bg) 44%, transparent); }
 }
 
-/* ── EVERY SECONDARY MENU IS ONE SHEET (1.8) ──────────────────────────────────
-   Both of the app's secondary surfaces are this: openSheet's panel and
-   openBarMenu's card (a profile's filter, the profile •••, Updates' filter, a
-   post's •••, Create). It started as Instagram's Create sheet, full width on
-   the floor of the screen, became iOS's share-sheet shape (a floating panel),
-   and then lost the card it had inside it (Zoe: padding in padding, it can just
-   be one thing). So:
-
-   ONE SURFACE. A floating panel, inset 8px from the sides and the bottom (past
-   the home indicator), rounded 32px on every corner, made of the CSS glass: a
-   thin fill, the panel-tier blur, one hairline. The rows sit straight on it,
-   edge to edge, and a pressed row's fill is clipped by the panel's own corners
-   (overflow), so there is no second shape anywhere. Grab handle, bold centred
-   title, rows of a 24px mark and a label with the hairline starting where the
-   label does. No Cancel (a tap outside, Escape, or a pull down: dragToClose);
-   a `dock` ("Done") is a soft pill at the foot of the same panel.
-
-   Written as overrides AFTER the two blocks above, at equal specificity, so the
-   history above still reads as what each surface was. */
-.sheet-scrim,
-.bar-menu-scrim {
-  padding: 0 8px max(8px, env(safe-area-inset-bottom));
-  background: color-mix(in srgb, #000 30%, transparent);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.sheet,
-.bar-menu {
-  width: 100%;
-  max-width: 520px;
-  max-height: 86dvh;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 6px 0 8px;
-  overflow: hidden;
-  background: var(--glass-bg-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
-  border: var(--glass-edge);
-  border-radius: 32px;
-  box-shadow: none;
-  /* The page doesn't take a pull on the panel for a scroll; a list that really
-     scrolls hands pan-y back (dragToClose, and .aud-list below). */
-  touch-action: none;
-  overscroll-behavior: contain;
-  transform: translateY(calc(100% + 24px));
-  transition: transform 0.34s cubic-bezier(0.2, 0.9, 0.25, 1);
-}
-.sheet-scrim.open .sheet,
-.bar-menu-scrim.open .bar-menu { transform: none; }
-/* The bar menu's card stops being a card dropped from a button: the same
-   floating panel, at the same insets the scrim gives a sheet. */
-.bar-menu {
-  position: fixed;
-  left: 8px;
-  right: 8px;
-  bottom: max(8px, env(safe-area-inset-bottom));
-  top: auto;
-  width: auto;
-  margin: 0 auto;
-  min-width: 0;
-  overflow-y: auto;
-  opacity: 1;
-  transform-origin: 50% 100%;
-}
-.sheet-grab {
-  display: block;
-  flex-shrink: 0;
-  width: 36px;
-  height: 5px;
-  margin: 0 auto 10px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--text) 20%, transparent);
-}
-.sheet .sheet-title,
-.bar-menu .sheet-title {
-  flex-shrink: 0;
-  margin: 0;
-  padding: 2px 1.5rem 10px;
-  text-align: center;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text);
-}
-/* The rows straight on the panel: no card of their own. */
-.sheet-items,
-.sheet-group {
-  min-height: 0;
-  padding: 0;
-  overflow-y: auto;
-  background: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-.sheet-item,
-.bar-menu-item {
-  gap: 0.95rem;
-  min-height: 52px;
-  padding: 0.8rem 1.4rem;
-  font-size: 1.02rem;
-  border-radius: 0;
-}
-.sheet-item + .sheet-item::before,
-.bar-menu-item + .bar-menu-item::before {
-  left: calc(1.4rem + 24px + 0.95rem);
-  right: 0;
-  border-top-color: color-mix(in srgb, var(--text) 10%, transparent);
-}
-.sheet-ico,
-.bar-menu-ico { width: 24px; height: 24px; color: var(--text); }
-/* The press is a fill that runs to the panel's edges, which overflow clips to
-   its corners. Hover gets the same tint on a pointer. */
-.sheet-item:active,
-.bar-menu-item:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
-/* A docked answer ("Done"), never Cancel: a soft pill at the foot of the panel. */
-.sheet-cancel {
-  flex-shrink: 0;
-  margin: 8px 12px 2px;
-  min-height: 50px;
-  padding: 0.8rem;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
-/* A radio set says its pick with a check at the row's end, Instagram's way,
-   and the fade it used before is off: in a flat list of full-strength rows a
-   faded one reads as disabled. */
-.bar-menu-item[role="menuitemradio"]:not(.is-on) { opacity: 1; }
-.bar-menu-item.is-on .bar-menu-label { font-weight: inherit; }
-.bar-menu-item[role="menuitemradio"].is-on::after {
-  content: "";
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-/* The colour picker's thin dim, which the rule above would otherwise beat: the
-   page behind it is washing in the colour being chosen. */
-.sheet-scrim.sheet-scrim--see-through { background: color-mix(in srgb, #000 13%, transparent); }
-/* The audience sheet's checklist scrolls inside the panel. */
-.aud-list { touch-action: pan-y; }
-@media (prefers-reduced-motion: reduce) {
-  .sheet, .bar-menu { transform: none; transition: none; }
-}
-
 /* Masthead and every content block share one readable measure, centred on the
    same axis — a clean, balanced column rather than a lopsided broadsheet. */
 .masthead,
@@ -4584,6 +4430,173 @@ body.postbar-live main { padding-bottom: 6.5rem; }
     background-image: linear-gradient(color-mix(in srgb, var(--text) 8%, transparent),
                                       color-mix(in srgb, var(--text) 8%, transparent));
   }
+}
+
+/* ── EVERY SECONDARY MENU IS ONE SHEET (1.8) ──────────────────────────────────
+   Both of the app's secondary surfaces are this: openSheet's panel and
+   openBarMenu's card (a profile's filter, the profile •••, Updates' filter, a
+   post's •••, Create). It started as Instagram's Create sheet, full width on
+   the floor of the screen, became iOS's share-sheet shape (a floating panel),
+   and then lost the card it had inside it (Zoe: padding in padding, it can just
+   be one thing). So:
+
+   ONE SURFACE. A floating panel, inset 6px from the sides and from the bottom
+   of the screen itself (it was parked above the home indicator, and Zoe wanted
+   it on the floor like the share sheet), rounded 32px up top with a foot that
+   follows the display's corner, made of the CSS glass: a
+   thin fill, the panel-tier blur, one hairline. The rows sit straight on it,
+   edge to edge, and a pressed row's fill is clipped by the panel's own corners
+   (overflow), so there is no second shape anywhere. Grab handle, bold centred
+   title, rows of a 24px mark and a label with the hairline starting where the
+   label does. No Cancel (a tap outside, Escape, or a pull down: dragToClose);
+   a `dock` ("Done") is a soft pill at the foot of the same panel.
+
+   Written as overrides AFTER both surfaces' own blocks (the bar menu's and the
+   sheet's, above), at equal specificity, so the history still reads as what
+   each surface was. It has to stay below BOTH: it once sat between them, and
+   the sheet's older `.sheet-items, .sheet-cancel` glass won by source order,
+   so the rows wore a second glass panel of their own inside this one. */
+.sheet-scrim,
+.bar-menu-scrim {
+  /* Down on the floor of the actual screen, the share sheet's way: 6px off the
+     sides and off the bottom edge itself, NOT parked above the home indicator.
+     The panel takes the indicator inside its own foot instead (below). */
+  padding: 0 6px 6px;
+  background: color-mix(in srgb, #000 30%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.sheet,
+.bar-menu {
+  width: 100%;
+  max-width: 520px;
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* The foot clears the home indicator from inside the panel, so the last row
+     still sits above it while the glass runs on underneath. */
+  padding: 6px 0 max(8px, calc(env(safe-area-inset-bottom) - 6px));
+  overflow: hidden;
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+  border: var(--glass-edge);
+  /* 32px up top; the foot follows the display's own corner, concentric 6px in
+     from it, on a phone with a home indicator (inset 34 gives 50). A phone
+     without one, and the web, get 32 all round. */
+  border-radius: 32px 32px max(32px, calc(env(safe-area-inset-bottom) + 16px)) max(32px, calc(env(safe-area-inset-bottom) + 16px));
+  box-shadow: none;
+  /* The page doesn't take a pull on the panel for a scroll; a list that really
+     scrolls hands pan-y back (dragToClose, and .aud-list below). */
+  touch-action: none;
+  overscroll-behavior: contain;
+  transform: translateY(calc(100% + 24px));
+  transition: transform 0.34s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.sheet-scrim.open .sheet,
+.bar-menu-scrim.open .bar-menu { transform: none; }
+/* The bar menu's card stops being a card dropped from a button: the same
+   floating panel, at the same insets the scrim gives a sheet. */
+.bar-menu {
+  position: fixed;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  top: auto;
+  width: auto;
+  margin: 0 auto;
+  min-width: 0;
+  overflow-y: auto;
+  opacity: 1;
+  transform-origin: 50% 100%;
+}
+.sheet-grab {
+  display: block;
+  flex-shrink: 0;
+  width: 36px;
+  height: 5px;
+  margin: 0 auto 10px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+}
+.sheet .sheet-title,
+.bar-menu .sheet-title {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px 1.5rem 10px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+/* The rows straight on the panel: no card of their own. */
+.sheet-items,
+.sheet-group {
+  min-height: 0;
+  padding: 0;
+  overflow-y: auto;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.sheet-item,
+.bar-menu-item {
+  gap: 0.95rem;
+  min-height: 52px;
+  padding: 0.8rem 1.4rem;
+  font-size: 1.02rem;
+  border-radius: 0;
+}
+.sheet-item + .sheet-item::before,
+.bar-menu-item + .bar-menu-item::before {
+  left: calc(1.4rem + 24px + 0.95rem);
+  right: 0;
+  border-top-color: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.sheet-ico,
+.bar-menu-ico { width: 24px; height: 24px; color: var(--text); }
+/* The press is a fill that runs to the panel's edges, which overflow clips to
+   its corners. Hover gets the same tint on a pointer. */
+.sheet-item:active,
+.bar-menu-item:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+/* A docked answer ("Done"), never Cancel: a soft pill at the foot of the panel. */
+.sheet-cancel {
+  flex-shrink: 0;
+  margin: 8px 12px 2px;
+  min-height: 50px;
+  padding: 0.8rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+/* A radio set says its pick with a check at the row's end, Instagram's way,
+   and the fade it used before is off: in a flat list of full-strength rows a
+   faded one reads as disabled. */
+.bar-menu-item[role="menuitemradio"]:not(.is-on) { opacity: 1; }
+.bar-menu-item.is-on .bar-menu-label { font-weight: inherit; }
+.bar-menu-item[role="menuitemradio"].is-on::after {
+  content: "";
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* The colour picker's thin dim, which the rule above would otherwise beat: the
+   page behind it is washing in the colour being chosen. */
+.sheet-scrim.sheet-scrim--see-through { background: color-mix(in srgb, #000 13%, transparent); }
+/* The audience sheet's checklist scrolls inside the panel. */
+.aud-list { touch-action: pan-y; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .bar-menu { transform: none; transition: none; }
 }
 
 /* ── Blocked wall — a blocked person's profile in place of their content ────── */

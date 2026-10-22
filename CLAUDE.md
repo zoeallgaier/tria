@@ -81,11 +81,15 @@ dailies no longer hold theirs. My Circle wears the wordmark and Discover the
 search field in that same centred slot.
 
 **Every secondary menu is one sheet in iOS's share-sheet shape**: openSheet's
-panel and openBarMenu's card alike FLOAT 8px in from the sides and the bottom,
-rounded 32px on all corners, and are ONE SURFACE: the CSS glass (thin fill,
-panel blur, one hairline) with the rows straight on it, edge to edge, and a
-pressed row clipped by the panel's corners. A card inside the panel was tried
-and removed (Zoe: padding in padding). Grab handle, bold centred title, NO
+panel and openBarMenu's card alike sit 6px in from the sides and from the
+bottom of the SCREEN (not above the home indicator; the panel's foot clears it
+inside), rounded 32px up top with a foot concentric with the display's corner,
+and are ONE SURFACE: the CSS glass (thin fill, panel blur, one hairline) with
+the rows straight on it, edge to edge, no fill of their own, and a pressed row
+clipped by the panel's corners. A card inside the panel was tried and removed
+(Zoe: padding in padding). **The block must stay BELOW the sheet's older rules
+in app.css**: it once sat above them and their `.sheet-items` glass won by
+source order. Grab handle, bold centred title, NO
 Cancel (a tap outside, Escape, or a pull down: `dragToClose`). A `dock`
 ("Done") is a soft pill at the panel's foot. A radio set shows a check, not a
 fade. The Create picker is that sheet's list.
