@@ -70,8 +70,13 @@ const Store = (() => {
   //   session: the signed-in username, or null
   //   chats / chatMembers / messages / messageHearts: see "Chats" below
   //   chatsReady: whether add-chats.sql has run (the tables answered)
+  //   communities: [{id, slug, name, about, owner(username), _ts}] — a CIRCLE in
+  //     the app (the room at /c/<slug>); see "Circles" below for the naming
+  //   communityMembers: [{communityId, user(username), _ts}]
+  //   communitiesReady: whether add-circles.sql has run (the table answered)
   const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], reactionsReady: false, songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
-                         chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [] });
+                         chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
+                         communities: [], communityMembers: [], communitiesReady: false });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -156,18 +161,18 @@ const Store = (() => {
     } catch { /* private mode */ }
   }
 
-  /* A self-reported status stops being true, and this is where it stops. Seven
-     days is long enough that a song set on Monday is still up on Friday, and
-     short enough that a rail of them describes this week rather than last year
-     — a wall of songs from March says the room is dead more loudly than an
-     empty wall would. See add-listening-to.sql.
+  /* A self-reported status USED to stop being true after seven days, and it
+     doesn't any more (Zoe, 2026-10-22, with circles: "remove the week long
+     limit on songs"). Posting a song IS having it on repeat since 1.8, and the
+     rail it feeds lost its week the same day, so a status that expired would
+     leave a profile's song pin blank while Discover still showed the song.
+     It stands until you change it now. add-listening-to.sql argued for the
+     clock; this is that argument losing to the rail.
 
      Applied HERE, in the mapper, rather than at each render site: `.listening`
-     then means "what to show", not "what's in the row", and no future caller
-     can forget the rule. A row with no `at` is dropped rather than trusted —
-     every write stamps one, so its absence means malformed, and the one thing
-     this feature must never do is show a song it can't date. */
-  const LISTENING_TTL_MS = 7 * 86400000;
+     then means "what to show", not "what's in the row". A row with no `at` is
+     still dropped rather than trusted — every write stamps one, so its absence
+     means malformed. */
   /* A song can carry a link PER SERVICE (`apple`, `spotify`, `youtube`),
      because the reader who taps it is not the reader who set it and they may
      not be on the same one. Rows written on the day the feature shipped carry a
@@ -179,7 +184,7 @@ const Store = (() => {
   function freshSong(v) {
     if (!v || typeof v !== 'object' || !v.title) return null;
     const at = Date.parse(v.at || '');
-    if (!Number.isFinite(at) || Date.now() - at > LISTENING_TTL_MS) return null;
+    if (!Number.isFinite(at)) return null;
     if (v.url && !v.apple && !v.spotify) {
       const key = /^https:\/\/music\.apple\.com\//i.test(v.url) ? 'apple'
         : /^https:\/\/open\.spotify\.com\//i.test(v.url) ? 'spotify' : '';
@@ -301,6 +306,9 @@ const Store = (() => {
     // same way it tolerates every other pending migration.
     if (p.repost_of) o.repostOf = p.repost_of;
     o.audience = p.audience || 'circle';   // 'circle' (all) or 'list' (hand-picked)
+    // A post addressed to a circle (add-circles.sql): audience 'community', and
+    // this names which one. The two always travel together.
+    if (p.community_id) o.communityId = p.community_id;
     return o;
   }
   const nameMap = () => new Map(state.users.map(u => [u.id, u.username]));
@@ -335,7 +343,7 @@ const Store = (() => {
      has settled, off the frames the paint is using, and never blocks anything:
      every failure here means only that the next launch waits like it used to. */
   const KEEP_KEY = 'world';
-  const KEEP_V = 2;                    // bump when state's shape changes
+  const KEEP_V = 3;                    // bump when state's shape changes
   let keepOn = false;
   let fresh = Promise.resolve(false);  // true once a kept launch's real load changed anything
   const whenFresh = () => fresh;
@@ -572,11 +580,17 @@ const Store = (() => {
       readAll('blocks', ['blocker', 'blocked']),
       // Chats, members, messages and hearts, as one group (see readChats).
       readChats(),
+      // Circles and who is in them (add-circles.sql). A missing table is an
+      // answer (communitiesReady), the same one-way reading as chatsReady. Anon
+      // reads the circles and none of the rosters, which is the public site's
+      // whole share of them.
+      readAll('communities', ['created_at', 'id']),
+      readAll('community_members', ['community_id', 'user_id']),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, rx, sg, h, pv, f, fd, pa, bl, ch] = read;
+    const [u, p, c, l, cl, rx, sg, h, pv, f, fd, pa, bl, ch, cc, cm] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -700,6 +714,7 @@ const Store = (() => {
     // pre-migration DB — the localStorage mirror in app.js covers that gap.
     state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
     applyChats(ch, nameById);
+    applyCommunities(cc, cm, nameById);
 
     // Everything written while we were waiting is newer than everything we just
     // read, so it goes back on top (see write()).
@@ -938,11 +953,14 @@ const Store = (() => {
   // (can_view_original), so a missing original means the row shouldn't be drawn —
   // and it's also the honest answer for the window between a delete landing and
   // the next pull, when the cascade has taken the original but not yet this.
+  // A post addressed to a CIRCLE (the room, add-circles.sql) is not part of
+  // this feed even when a friend wrote it: My Circle is your friends, and a
+  // circle's posts are read in the circle. Same on Discover and on a profile.
   function feed() {
     const circle = new Set([state.session, ...friends()]);
     const followed = new Set(following());
     return posts().filter(p =>
-      visibleRepost(p) && (
+      visibleRepost(p) && !p.communityId && (
         circle.has(p.author) ||
         (followed.has(p.author) && p.audience === 'public')));
   }
@@ -1012,7 +1030,8 @@ const Store = (() => {
   function repostable(post) {
     if (!post || !state.session) return false;
     const target = originalOf(post) || post;
-    return (target.audience || 'circle') !== 'list';
+    // A circle's post stays in its circle (posts_community_guard refuses it).
+    return (target.audience || 'circle') !== 'list' && !target.communityId;
   }
   function myRepostOf(postId) {
     const seed = byId(state.posts).get(postId);
@@ -1056,6 +1075,7 @@ const Store = (() => {
     return posts().filter(p => {
       if (p.author === state.session) return false;
       if (p.repostOf) return false;
+      if (p.communityId) return false;          // read in its circle (see feed)
       const aud = p.audience || 'circle';
       if (aud === 'public') return true;
       if (aud === 'list') return addressed;
@@ -1078,7 +1098,9 @@ const Store = (() => {
     }
     return list;
   }
-  const postsBy = (username) => posts().filter(p => p.author === username);
+  // A profile is what someone posted to their people. What they posted into a
+  // circle stays in the circle (see feed).
+  const postsBy = (username) => posts().filter(p => p.author === username && !p.communityId);
 
   // How many people a targeted post is shared with. Accurate for posts you
   // authored (RLS gives you all their allowlist rows); 0 for others' posts.
@@ -1115,6 +1137,18 @@ const Store = (() => {
     const names = nameMap();
     const listed = rowsFor(state.audience, postId).map(r => names.get(r.userId)).filter(Boolean);
     if ((post.audience || 'circle') === 'list') return listed;
+    // A CIRCLE'S PLAN (add-circles.sql) is read by the circle, which can be a
+    // room of strangers, so its invited are whoever ANSWERED going or maybe and
+    // is still in it, plus anyone brought into its chat. The same set the
+    // reminder sweep wakes (circleAnswers in the push function), for this
+    // function's reason: the two must name the same people.
+    if (post.communityId) {
+      const answered = rowsFor(state.headcount, postId)
+        .filter(h => (h.status === 'going' || h.status === 'maybe')
+          && communityMembers(post.communityId).includes(h.user))
+        .map(h => h.user);
+      return [...new Set(answered.concat(listed))];
+    }
     return [...new Set(friendsOf(post.author).concat(listed))];
   }
 
@@ -1696,6 +1730,13 @@ const Store = (() => {
     row.audience = data.audience === 'public'
       ? 'public'
       : (targetIds.length ? 'list' : 'circle');
+    // A fourth: a circle you're in (add-circles.sql). The pair goes together or
+    // the row is refused (posts_community_shape), and a circle you have left
+    // since the composer opened falls back to your friends rather than failing.
+    if (data.audience === 'community' && data.communityId && inCommunity(data.communityId)) {
+      row.audience = 'community';
+      row.community_id = data.communityId;
+    }
     if (data.title)    row.title = data.title;
     if (data.url)      row.url = data.url;
     if (data.note)     row.note = data.note;
@@ -1980,6 +2021,9 @@ const Store = (() => {
     // both doors write the column: "choose people" with nobody chosen is your
     // circle, since an empty allowlist is a post only you can read.
     let targetIds = null;
+    // A circle's post stays in its circle: the editor shows no lock for one, and
+    // an audience that arrives anyway is not this door's to move.
+    if (before.communityId) delete data.audience;
     if ('audience' in data) {
       targetIds = (data.audience === 'list' ? (data.audienceUsers || []) : [])
         .map(idOf).filter(Boolean);
@@ -2449,6 +2493,7 @@ const Store = (() => {
     state.chatsReady = true;
     state.chats = (c.data || []).map(row => ({
       id: row.id, kind: row.kind, title: row.title || '', postId: row.post_id || null,
+      communityId: row.community_id || null,
       directKey: row.direct_key || '', createdBy: nameById.get(row.created_by) || null,
       _ts: row.created_at, lastAt: row.last_at || row.created_at,
     }));
@@ -2554,6 +2599,7 @@ const Store = (() => {
     }
     return {
       id: c.id, kind: c.kind, title: c.title, postId: c.postId, createdBy: c.createdBy,
+      communityId: c.communityId || null,
       host, archived,
       other, members, last, status: mine.status, muted: mine.muted,
       unread: !!last && last.author !== me && last._ts > mine.lastReadAt,
@@ -2812,6 +2858,170 @@ const Store = (() => {
     const ch = liveChannel;
     liveChannel = null;
     sb.removeChannel(ch).catch(() => {});
+  }
+
+  /* ── Circles ────────────────────────────────────────────────────────────────
+     A CIRCLE is a room for an interest that anyone can start and anyone can
+     join, at /c/<slug> (add-circles.sql). IN CODE IT IS A "COMMUNITY", in the
+     database and here alike, because `circle` already means your mutual friends
+     (posts.audience = 'circle', My Circle) and a post carrying both words would
+     be a trap. Every word a reader sees says circle.
+
+     It is two things Tria already had: an AUDIENCE (a post's audience
+     'community' plus `communityId`, readable by the members, decided by
+     can_view_post) and a GROUP CHAT (kind 'community', whose roster the database
+     keeps equal to the circle's by trigger). So nothing here touches chats:
+     joining and leaving re-read them, and the chat list finds the new row.
+
+     Every write is an RPC, because every write has a rule behind it (who may
+     rename, who may remove, the ten-circle cap, a block with the owner). The
+     words those raise are written for people and pass straight through. */
+  function applyCommunities(cc, cm, nameById) {
+    if (cc.error) {
+      if (isMissing(cc.error)) state.communitiesReady = false;
+      else console.warn('[tria] could not read circles, keeping the last good copy:', cc.error.message || cc.error);
+      return;
+    }
+    state.communitiesReady = true;
+    state.communities = (cc.data || []).map(row => ({
+      id: row.id, slug: row.slug, name: row.name || row.slug, about: row.about || '',
+      owner: nameById.get(row.owner) || null, _ts: row.created_at,
+    }));
+    if (!cm.error) state.communityMembers = (cm.data || []).map(row => ({
+      communityId: row.community_id, user: nameById.get(row.user_id), _ts: row.joined_at,
+    })).filter(x => x.user);
+  }
+  const communitiesReady = () => !!state.communitiesReady;
+  const communities = () => state.communities;
+  // By id or by slug: a route carries the slug, a post carries the id.
+  const community = (key) => {
+    if (!key) return null;
+    const k = String(key).toLowerCase();
+    return state.communities.find(c => c.id === key || c.slug === k) || null;
+  };
+  // Oldest first: the founder leads, and the order is the one ownership passes in.
+  const communityMembers = (id) =>
+    (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).map(m => m.user);
+  const inCommunity = (id) => !!state.session && !!id &&
+    (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
+  const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
+  // Newest first, through posts() so it shares the one sort.
+  const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p));
+  // The last sign of life in a circle that this reader can see: a post (only
+  // members are handed those), a join, or the day it was started. Discover
+  // orders its circles by it.
+  const communityPulse = (id) => {
+    const c = community(id);
+    const ms = groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS;
+    const p = communityPosts(id)[0];
+    return [c ? c._ts : '', ms.length ? ms[ms.length - 1]._ts : '', p ? p._ts : '']
+      .filter(Boolean).sort().pop() || '';
+  };
+  // The circle's chat, if I'm in it.
+  const communityChat = (id) => {
+    const c = state.chats.find(x => x.kind === 'community' && x.communityId === id);
+    return c ? chatView(c) : null;
+  };
+  const SLUG_RE = /^[a-z0-9][a-z0-9_]{2,23}$/;
+  const KEPT_SLUGS = new Set(['new', 'edit', 'tria', 'admin', 'help', 'about', 'settings', 'support', 'official']);
+  // The handle a name suggests: lowercase, words joined by underscores, clipped.
+  const slugFrom = (name) => String(name || '').toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24).replace(/_+$/, '');
+  // The client's half of the handle rule, for the field's own line. The
+  // database decides for real (create_community), including a race for a name.
+  function slugProblem(slug) {
+    if (!slug) return 'Pick a handle for its link.';
+    if (!SLUG_RE.test(slug)) return 'Use 3 to 24 lowercase letters, numbers or underscores.';
+    if (KEPT_SLUGS.has(slug) || community(slug)) return 'That handle is taken.';
+    return '';
+  }
+  function communityError(error, fallback) {
+    if (isMissing(error)) return 'Circles aren’t switched on yet.';
+    if (error && error.code === '23505') return 'That handle is taken.';
+    if (error && ['42501', '22023', '28000'].includes(error.code) && error.message) return error.message;
+    return fallback;
+  }
+  // Circles and their rosters, re-read after a write. The chat list is re-read
+  // with them, because joining and leaving move a chat row too.
+  async function reloadCommunities() {
+    const gen = worldGen;
+    const mark = pendingWrites.length;
+    loadsInFlight++;
+    try {
+      const [cc, cm] = await Promise.all([
+        readAll('communities', ['created_at', 'id']),
+        readAll('community_members', ['community_id', 'user_id']),
+      ]);
+      if (gen !== worldGen) return;
+      applyCommunities(cc, cm, nameMap());
+      for (const [key, fn] of pendingWrites.slice(mark)) state[key] = fn(state[key]);
+    } finally {
+      loadsInFlight--;
+      if (!loadsInFlight) pendingWrites = [];
+    }
+  }
+  async function afterCommunityWrite() {
+    await Promise.all([reloadCommunities(), reloadChats()]).catch(() => {});
+    tellChats();
+  }
+
+  async function createCommunity({ slug, name, about }) {
+    if (!state.session) return { ok: false, error: 'You need to be signed in.' };
+    const { data, error } = await sb.rpc('create_community',
+      { p_slug: slug, p_name: name, p_about: about || '' });
+    if (error) return { ok: false, error: communityError(error, 'Couldn’t start that circle, try again.') };
+    await afterCommunityWrite();
+    return { ok: true, id: data, slug };
+  }
+  async function updateCommunity(id, { name, about }) {
+    const { error } = await sb.rpc('update_community',
+      { p_community: id, p_name: name, p_about: about || '' });
+    if (error) return { ok: false, error: communityError(error, 'Couldn’t save that, try again.') };
+    write('communities', cs => cs.map(c => (c.id === id
+      ? Object.assign({}, c, { name: String(name).trim(), about: String(about || '').trim() }) : c)));
+    write('chats', cs => cs.map(c => (c.kind === 'community' && c.communityId === id
+      ? Object.assign({}, c, { title: String(name).trim() }) : c)));
+    return { ok: true };
+  }
+  // Optimistic both ways, so the button answers on the tap; the re-read after
+  // brings the chat row (and, on a leave, a new owner or a closed circle).
+  async function joinCommunity(id) {
+    const me = state.session;
+    if (!me) return { ok: false, error: 'You need to be signed in.' };
+    const row = { communityId: id, user: me, _ts: new Date().toISOString() };
+    const same = m => m.communityId === id && m.user === me;
+    write('communityMembers', ms => upsert(ms, row, same));
+    const { error } = await sb.rpc('join_community', { p_community: id });
+    if (error) {
+      write('communityMembers', ms => ms.filter(m => !same(m)));
+      return { ok: false, error: communityError(error, 'Couldn’t join, try again.') };
+    }
+    await afterCommunityWrite();
+    // Its posts were fenced from this reader until a moment ago.
+    await loadWorld().catch(() => {});
+    return { ok: true };
+  }
+  async function leaveCommunity(id) {
+    const me = state.session;
+    const before = state.communityMembers;
+    write('communityMembers', ms => ms.filter(m => !(m.communityId === id && m.user === me)));
+    const { error } = await sb.rpc('leave_community', { p_community: id });
+    if (error) {
+      write('communityMembers', () => before);
+      return { ok: false, error: communityError(error, 'Couldn’t leave, try again.') };
+    }
+    // What I could read only as a member goes with me; my own posts stay.
+    write('posts', ps => ps.filter(p => p.communityId !== id || p.author === me));
+    await afterCommunityWrite();
+    return { ok: true };
+  }
+  async function removeCommunityMember(id, username) {
+    const { error } = await sb.rpc('remove_community_member', { p_community: id, p_user: idOf(username) });
+    if (error) return { ok: false, error: communityError(error, 'Couldn’t remove them, try again.') };
+    write('communityMembers', ms => ms.filter(m => !(m.communityId === id && m.user === username)));
+    await afterCommunityWrite();
+    return { ok: true };
   }
 
   // ── Profile (async writes) ──────────────────────────────────────────────────
@@ -3603,6 +3813,10 @@ const Store = (() => {
     chatsAreNew, startDirectChat, startGroupChat, addChatMembers, removeChatMember, renameChat,
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,
+    // Circles (the room; `community` in code, see "Circles")
+    communitiesReady, communities, community, communityMembers, inCommunity, myCommunities,
+    communityPosts, communityPulse, communityChat, slugFrom, slugProblem,
+    createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,

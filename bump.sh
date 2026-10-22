@@ -22,7 +22,7 @@ perl -pi -e "s/\\?v=${cur}\\b/?v=${next}/g" index.html
 
 # 404.html is a BYTE COPY of index.html, and this is the only place it is made.
 # GitHub Pages serves it for every path that isn't a real file, which is every
-# clean URL we share (/p/<id>, /u/<name>, /daily/<slug>, /i/<code>) — so the 404
+# clean URL we share (/p/<id>, /u/<name>, /c/<slug>, /daily/<slug>, /i/<code>) — so the 404
 # body IS the app and a shared link boots once, at its own address, with no
 # redirect. See the <base> comment at the top of index.html.
 #

@@ -69,6 +69,22 @@ async function postById(id: string) {
   const { data } = await supabase.from('posts').select('id,author,type,title,note').eq('id', id).single();
   return data;
 }
+// The circle a post is addressed to (add-circles.sql), or null. Asked on its
+// own rather than folded into postById, so a function deployed before that
+// migration ran still answers every other question: a missing column is an
+// error here, and an error here reads as "no circle".
+async function circleOf(postId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('posts').select('community_id').eq('id', postId).maybeSingle();
+  if (error || !data) return null;
+  return (data.community_id as string) || null;
+}
+// A circle post is for its members, so a push that quotes one is too.
+async function inCircle(circleId: string, userId: string) {
+  const { data } = await supabase.from('community_members').select('user_id')
+    .eq('community_id', circleId).eq('user_id', userId).maybeSingle();
+  return !!data;
+}
+
 // Mutual = both directed "add" edges exist (see friends table).
 async function areFriends(a: string, b: string) {
   const { data } = await supabase.from('friends').select('a,b')
@@ -269,10 +285,15 @@ async function handle(table: string, rec: Row) {
     // this would otherwise be a round trip on every single insert.
     let owner: Row | null | undefined;
     const postOwner = async () => (owner ??= await userById(post.author));
+    // On a circle's post, a mention only reaches somebody in the circle: the
+    // push quotes the comment, and the thread is the circle's.
+    let circle: string | null | undefined;
     for (const uname of new Set([...(rec.body || '').matchAll(/@(\w+)/g)].map(m => m[1]))) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author || notified.has(u.id)) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
+      if (circle === undefined) circle = await circleOf(post.id);
+      if (circle && !(await inCircle(circle, u.id))) continue;
       const home = u.id === post.author ? selfPost(post.id) : await (async () => {
         const o = await postOwner();
         return o ? userPost(o.username, post.id) : OPEN_URL;
@@ -302,6 +323,8 @@ async function handle(table: string, rec: Row) {
     const blocked = await blockedWith(rec.author);
     let where = '';
     if (chat.kind === 'group') where = chat.title || 'your group';
+    // A circle's chat carries the circle's name as its title (add-circles.sql).
+    if (chat.kind === 'community') where = chat.title || 'your circle';
     if (chat.kind === 'activity') {
       const act = await postById(chat.post_id);
       where = (act && act.title) || 'an activity chat';
@@ -356,6 +379,8 @@ async function handle(table: string, rec: Row) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
+      // A post in a circle is for its members (see circleOf).
+      if (rec.community_id && !(await inCircle(rec.community_id as string, u.id))) continue;
       await sendTo(u.id, {
         title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)),
         tag: `post:${rec.id}`, collapse: `post:${rec.id}:${u.id}`,
@@ -529,6 +554,19 @@ function hostBody(act: Row, count: number): string {
 const collapseKey = (postId: string, stage: string, userId: string) =>
   `r:${postId.slice(0, 8)}:${stage}:${userId.slice(0, 8)}`;
 
+// Who answered a circle's plan (going or maybe) and is still in the circle.
+async function circleAnswers(postId: string): Promise<string[]> {
+  const circle = await circleOf(postId);
+  if (!circle) return [];
+  const [heads, members] = await Promise.all([
+    supabase.from('headcount').select('user_id,status').eq('post_id', postId),
+    supabase.from('community_members').select('user_id').eq('community_id', circle),
+  ]);
+  const inside = new Set((members.data || []).map((r: Row) => r.user_id as string));
+  return (heads.data || []).filter((r: Row) => (r.status || 'going') !== 'cant' && inside.has(r.user_id))
+    .map((r: Row) => r.user_id as string);
+}
+
 // Mutual = both directed edges, the same rule as areFriends, in bulk.
 async function mutualFriends(userId: string): Promise<string[]> {
   const [out, back] = await Promise.all([
@@ -587,11 +625,19 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
   // says they are coming. Keep this in step with Store.audienceOf — if the two
   // ever disagree, the people a reminder wakes up and the people the app's guest
   // list names are different sets and one of them is lying to the host.
+  //
+  // A CIRCLE'S PLAN (add-circles.sql) is the one audience that is not the
+  // host's friends: its readers are the circle, which can be a room of
+  // strangers, so a reminder there goes only to the members who ANSWERED (going
+  // or maybe), plus anybody brought into its chat. Nobody is woken up about a
+  // plan in a circle they never said a word to.
   const listedHere = ((await supabase.from('post_audience').select('user_id').eq('post_id', act.id)).data || [])
     .map((r: Row) => r.user_id as string);
   const invited = act.audience === 'list'
     ? listedHere
-    : [...new Set([...(await mutualFriends(act.author as string)), ...listedHere])];
+    : act.audience === 'community'
+      ? [...new Set([...(await circleAnswers(act.id as string)), ...listedHere])]
+      : [...new Set([...(await mutualFriends(act.author as string)), ...listedHere])];
 
   const [blocked, heads, already] = await Promise.all([
     blockedWith(act.author as string),
@@ -741,6 +787,11 @@ async function calendarFeed(token: string): Promise<Response> {
     if (a.author === uid || a.audience === 'public') return true;
     if (listed.has(a.id)) return true;
     if (a.audience === 'list') return false;
+    // A circle's plan is for the circle's members (add-circles.sql).
+    if (a.audience === 'community') {
+      const circle = await circleOf(a.id as string);
+      return !!circle && await inCircle(circle, uid);
+    }
     if (!friendOf.has(a.author)) friendOf.set(a.author, await areFriends(uid, a.author));
     return friendOf.get(a.author)!;
   };

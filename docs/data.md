@@ -1458,3 +1458,76 @@ speaker button in the composer. The Music filter row on profiles and Discover is
 static and simply finds nothing before then. A publish that still meets an old
 DB says "Music posts aren't switched on yet." rather than "try again".
 
+
+## Circles (1.9)
+
+**A circle is a room for an interest** at `#/c/<slug>`, which anyone signed in
+can start (ten held each) and anyone can join (`supabase/add-circles.sql`, NOT
+run as of 2026-10-22; the probe answers PGRST205). Zoe asked for it to be built
+out of "existing audience and group chat features", and it is exactly those two
+things with a page in front of them.
+
+**IN CODE IT IS A `community`**, in the schema, the store, app.js and the CSS
+alike, because `circle` already means your mutual friends: `posts.audience =
+'circle'`, My Circle, `#/friends/<name>`. A row carrying `audience = 'circle'`
+beside a `circle_id` would mean two different things with one word. Every word
+a reader sees says circle, and a circle's handle is `c/<slug>`.
+
+**The audience.** A circle post is `audience = 'community'` with
+`community_id` naming the room; `posts_community_shape` makes the pair travel
+together. `can_view_post` gained one arm, `community_reads_post(p_id)`, which
+takes the POST so the function keeps its three-argument signature (the policies,
+`can_view_original` and the repost gate all call it by that shape). The block
+gate stays outside the OR and first; the migration restates the whole function,
+per the rule at `chat-roster.sql`. Who may put a post INTO a circle is a trigger
+(`posts_community_guard`) rather than a policy rewrite: membership is checked
+when the circle is set or changed and never when it stays the same, so somebody
+who left can still fix a typo in what they said there. The same trigger refuses
+a repost of a circle post outright.
+
+**The chat.** Each circle has one chat, `kind = 'community'`, made by
+`create_community`. Its roster is the circle's, and the DATABASE keeps it so:
+`community_member_joined` seats a new member (muted), `community_member_left`
+takes them out, passes the circle to the longest-standing member if the host
+left, and closes it if nobody is left. Leaving the chat on its own is refused
+("chat members delete own" now excludes the kind), and `add_chat_members` /
+`remove_chat_member` refuse a circle's chat (both restated in full), so the two
+lists cannot part. In the app, a circle chat's People is the circle's members
+sheet and its Leave is "Leave circle".
+
+**Muted on joining** is Claude's call, flagged for Zoe: a circle can be a room
+of strangers, and a buzz per message from all of them is the opposite of what
+Tria is for. The chat still bolds when something is new; it just never lights
+the tab or pushes until you unmute it.
+
+**Where a circle's posts are read.** On the circle's page and their own post
+page, and nowhere else. `Store.feed`, `Store.discover` and `Store.postsBy` drop
+them: My Circle is your friends, and a post said in a hobby circle was said to
+the circle. A card says which circle it was said in above its byline
+(`communityTagHtml`), except on that circle's own page. A circle post can't be
+pinned to a profile, and sharing a song into a circle doesn't set your listening
+status (the status is read by everyone).
+
+**The two gates.** `canSocial` and `canJoin` both open to a circle's members on
+its posts. A plan posted in a circle is the circle's plan, so its members can
+answer it whether or not they are the host's friends. Its guest list
+(`Store.audienceOf`) and its reminders (`circleAnswers` in the push function)
+are whoever ANSWERED going or maybe and is still in it, plus anyone brought
+into the plan's own chat: the members who never said a word are not "waiting",
+and nobody is woken up about a plan in a circle they never answered.
+
+**Discover, as circles fill it.** On repeat leads the page (Zoe), then the
+daily, then the Circles section (a Start a circle card, then your circles, then
+the rest, each group by `Store.communityPulse`, the last sign of life this
+reader can see). The tags moved down to lead the thing they index, the post
+grid. That grid gives up `TILES_PER_COMMUNITY` (6) tiles per circle and is gone
+at `COMMUNITIES_FULL` (8), Zoe's "replace posts on Discover with this feature as
+it fills up". Search is never capped by it, and it reaches circles first.
+
+**On repeat has no week any more** (Zoe, same day), and neither does the
+listening status (`freshSong`), so a song pin can't blank while the rail still
+shows the song. add-listening-to.sql's argument for the clock lost to the rail.
+
+**Signed out (web)** a `/c/<slug>` link reads as far as the circle's door: its
+name and about (`communities read all` serves anon), and a way into an account.
+Rosters are for signed-in readers only.

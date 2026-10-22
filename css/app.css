@@ -10739,6 +10739,265 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   .about-head { font-size: 1.4rem; }
 }
 
+/* ── Circles (1.9) ────────────────────────────────────────────────────────────
+   A circle is a room for an interest at #/c/<slug> (see "Circles" in app.js).
+   In code and in these class names it is a COMMUNITY, because `circle` here
+   already means your friends; every word on screen says circle.
+
+   Everything about a circle is drawn out of what the app already wears: the
+   flat card material (.daily-card, .pin: a --surface fill and a --rule
+   hairline, no blur), the profile's identity block for its page, the profile
+   editor's combo box for its form, the chat roster's rows for its members.
+   No pastel: the quintet belongs to post types, and a circle is not one. */
+
+/* Discover's section of them. The same measure and inset as the song rail
+   above it, and the same caption voice (.np-kicker). */
+.communities {
+  max-width: var(--feed-width);
+  margin: 0 auto 2rem;
+  padding-inline: var(--inset);
+}
+/* On a phone the view already carries the inset, as it does for the rail. */
+@media (max-width: 680px) { .communities { padding-inline: 0; } }
+/* Two across on a phone, three from where the post grid goes to three, and back
+   to two in the sidebar band for the post grid's own reason (see .pgrid). A
+   real grid, not dealt columns: every card is the same kind of object, and a
+   row of them should line up. */
+.community-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+@media (min-width: 620px) { .community-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.85rem; } }
+@media (min-width: 681px) and (max-width: 899px) { .community-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.community-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 9.5rem;
+  padding: 0.85rem 0.9rem 0.8rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  animation: rise 0.4s var(--ease) both;   /* the app's shared row entrance */
+  transition: background-color var(--dur-micro), border-color var(--dur-micro);
+}
+@media (hover: hover) {
+  .community-card:hover { border-color: color-mix(in srgb, var(--text) 22%, transparent); }
+}
+.community-card:active { background: var(--surface-2); }
+.community-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+/* The circle's mark: Discover's own woven triad in a disc, the mark circles are
+   found under. The chat list's glyph disc, at a card's size. */
+.community-mark {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  flex-shrink: 0;
+}
+.community-mark svg { width: 1.2rem; height: 1.2rem; }
+.community-card-in {
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.community-card-name {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.32rem;
+  line-height: 1.08;
+  letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+}
+.community-card-slug {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.community-card-about {
+  margin-top: 0.45rem;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--text);
+  opacity: 0.86;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* The foot sits on the card's floor, so a short about doesn't float the faces
+   up to the middle of the card. */
+.community-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.community-faces { display: flex; }
+.community-face.avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 0.72rem;
+  border: 1.5px solid var(--surface);
+}
+.community-face.avatar + .community-face.avatar { margin-left: -0.4rem; }
+
+/* The card that starts one. The same box with its fill taken out and a dashed
+   edge, the way an empty slot is drawn: an invitation, not a room. */
+.community-card--start {
+  background: none;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--text) 24%, transparent);
+}
+.community-mark--add {
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Which circle a post was said in, over its byline (communityTagHtml). Small
+   print in the caption voice, a link in, and absent on the circle's own page,
+   where every card would be saying the page's name. */
+.card-community {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+.card-community-ico { width: 0.95rem; height: 0.95rem; }
+@media (hover: hover) { .card-community:hover { color: var(--text); } }
+.view--community .card-community { display: none; }
+
+/* The circle's page: the profile's identity block, with the triad where the
+   photo goes. */
+.community-photo { background: var(--surface); }
+.community-photo-ico {
+  width: 42%;
+  height: 42%;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+}
+/* The second of two buttons under a member's head (Chat, beside Post): the
+   outline the tie's settled state wears, at full weight, because this one is
+   a way somewhere and not a thing already done. */
+.friend-btn.friend-btn--quiet {
+  color: var(--text);
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--text) 24%, transparent);
+}
+@media (hover: hover) {
+  .friend-btn.friend-btn--quiet:hover { border-color: color-mix(in srgb, var(--text) 45%, transparent); }
+}
+a.friend-btn { text-decoration: none; }
+
+/* Starting one, and its host's editor (#/c/new, #/c/<slug>/edit). */
+.community-form-lede {
+  margin: 0 0 0.4rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+/* The handle field wears c/ in front of what you type, inside the same box,
+   so the field reads as the link it is making. */
+.community-slug {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  transition: border-color var(--dur-micro);
+}
+.community-slug:focus-within { border-color: var(--accent); }
+.community-slug-pre {
+  padding-left: 0.85rem;
+  color: var(--muted);
+  user-select: none;
+}
+.field .community-slug input {
+  border: 0;
+  background: none;
+  padding-left: 0.1rem;
+}
+.field-hint--warn { color: var(--type-find-ink); }
+
+/* Who is in it (openCommunityMembers): the chat roster's row, with the person
+   as a link and the host's Remove at its end. */
+.community-member {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.6rem;
+  animation: rise 0.4s var(--ease) both;
+}
+.community-member-link {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-row-lg);
+  color: var(--text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.community-member-link .aud-avatar { width: 44px; height: 44px; font-size: 1.4rem; }
+@media (hover: hover) {
+  .community-member-link:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+}
+.community-member-out {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.community-member-out[data-sure] { color: var(--type-find-ink); font-weight: 700; }
+
+/* Your circles in the audience sheet, under the people picker. They are the
+   same mode rows, so the only new thing is the caption above them and a cap,
+   since one person can be in more circles than a panel has room for. */
+.aud-communities-cap {
+  margin: 0.7rem 0.9rem 0.2rem;
+  font-size: var(--kicker);
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.sheet-scrim--aud .aud-modes--communities {
+  flex-shrink: 1;
+  min-height: 0;
+  max-height: min(30dvh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ── Native chrome (1.4) ─────────────────────────────────────────────────────
    In the App Store build on iOS 26 the four destinations and the + are drawn by
    UIKit in the system's Liquid Glass (see js/app.js's NativeChrome and

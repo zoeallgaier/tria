@@ -62,6 +62,7 @@
   let lastPath = null;        // the path we were on before the current one (for back links)
   let profileOrigin = '#/discover';  // where a friend profile's "← Back" returns to
   let postOrigin = '#/';             // and where a post page's does
+  let communityOrigin = '#/discover'; // and where a circle's (the room at #/c/<slug>) does
   // Set by the tap that opens an editor — #/profile/edit, or a post's own
   // #/p/<id>?edit=1 — and consumed by that render, so the editor knows whether
   // leaving can pop an entry or has to navigate. One flag for both, because it
@@ -2722,6 +2723,18 @@
       `</header>`;
   }
 
+  // Which circle (the room) a post was said in, above its byline, the way a
+  // subreddit names itself over a post: c/pottery, a link into it. The circle's
+  // own page hides it (.view--community .card-community), where it would say the page's name
+  // over every card.
+  function communityTagHtml(post) {
+    if (!post.communityId) return '';
+    const c = Store.community(post.communityId);
+    if (!c) return '';
+    return `<a class="card-community" href="${communityRoute(c)}">` +
+      svgIcon('circle', 'card-community-ico') + `<span>${esc(communityHandle(c))}</span></a>`;
+  }
+
   // A slim single-author meta line that stands in for the byline on a profile,
   // where the header already establishes whose column this is. Just the date
   // (and a find's domain) — no repeated avatar + name down the page.
@@ -3339,10 +3352,16 @@
   //
   // The store guards every write behind the matching rule too — see
   // Store.addComment / toggleLike / votePoll (open) vs setRsvp (closed).
+  //
+  // A CIRCLE'S POST (the room, audience 'community') opens both to its members,
+  // and only to them. The circle is the audience, so it is also who turns up:
+  // a plan posted in a hobby circle is the circle's plan, friends or not.
+  const inItsCommunity = (post) => !!post.communityId && Store.inCommunity(post.communityId);
   const canSocial = (post) =>
-    post.author === Store.session() || Store.isFriend(post.author) || post.audience === 'public';
+    post.author === Store.session() || Store.isFriend(post.author) || post.audience === 'public'
+    || inItsCommunity(post);
   const canJoin = (post) =>
-    post.author === Store.session() || Store.isFriend(post.author);
+    post.author === Store.session() || Store.isFriend(post.author) || inItsCommunity(post);
 
   // The card's action row, tucked below the post: the like heart + comment toggle
   // grouped on the LEFT (each opens/toggles below on the same left axis), and edit
@@ -3929,7 +3948,7 @@
     const orig = post.repostOf ? Store.originalOf(post) : null;
     if (orig) return isQuote(post) ? quoteCard(post, orig, opts) : passedCard(post, orig, opts);
 
-    const head = opts.solo ? soloMetaEl(post) : bylineEl(post);
+    const head = communityTagHtml(post) + (opts.solo ? soloMetaEl(post) : bylineEl(post));
     const actions = cardActionsHtml(post, opts);
     const el = document.createElement('article');
     el.className = `card card--${post.type}`;
@@ -5716,7 +5735,8 @@
      on insert), so a picker here would either lie or do nothing — which is the
      reason the composer leaves it off a quote too. */
   function editFieldsFor(post) {
-    const lock = post.type !== 'repost';
+    // A circle's post stays in its circle, so its editor has no lock to move.
+    const lock = post.type !== 'repost' && !post.communityId;
     const tagsInput =
       `<div class="field">` +
         `<label for="e-tags">Tags</label>` +
@@ -8121,7 +8141,7 @@
     /* A SONG PIN WHOSE SONG HAS GONE is the one dangling pin no write is
        watching. A cleared song takes its pin with it (Store.setListeningTo) and
        a deleted post takes its pin with it (Store.deletePost), but a song that
-       simply aged past freshSong's week expires on the READ, with nothing
+       a read refuses (freshSong drops a malformed row) goes on the READ, with nothing
        running — so the entry stays, draws nothing, and quietly spends one of
        three slots where the reader can't see it to take it off.
 
@@ -10107,7 +10127,7 @@
        hand-picked names. A post whose rows the cache never got stays empty and,
        because the lock has to MOVE before anything is written, saves without
        touching the audience at all. */
-    const audEditable = post.type !== 'repost';
+    const audEditable = post.type !== 'repost' && !post.communityId;
     if (audEditable) {
       const mode = post.audience || 'circle';
       pubAudience = { mode, users: mode === 'list' ? Store.audienceOf(post.id) : [] };
@@ -10239,6 +10259,10 @@
       return { href: postOrigin, label: displayNameOf(who) };
     }
     if (postOrigin.startsWith('#/daily/')) return { href: postOrigin, label: 'Daily' };
+    if (postOrigin.startsWith('#/c/')) {
+      const c = Store.community(decodeURIComponent(postOrigin.slice(4).split('/')[0]));
+      return { href: postOrigin, label: c ? c.name : 'Circle' };
+    }
     const href = labels[postOrigin] ? postOrigin : '#/';
     return { href, label: labels[href] || 'Back' };
   }
@@ -10262,6 +10286,11 @@
     // A daily's answers are a browsing surface too, so a profile opened from one
     // goes back to the question rather than dumping you on Discover.
     if (profileOrigin.startsWith('#/daily/')) return { href: profileOrigin, label: 'Daily' };
+    // A circle's people are a browsing surface too (its feed, its members).
+    if (profileOrigin.startsWith('#/c/')) {
+      const c = Store.community(decodeURIComponent(profileOrigin.slice(4).split('/')[0]));
+      return { href: profileOrigin, label: c ? c.name : 'Circle' };
+    }
     const href = labels[profileOrigin] ? profileOrigin : '#/discover';
     return { href, label: labels[href] || 'Back' };
   }
@@ -11069,7 +11098,8 @@
       // rather than the row appearing and disappearing, so the same place in the
       // same menu is where a pin goes on and comes off.
       const at = myPins().findIndex(e => e.k === 'post' && e.id === post.id);
-      items.push(at >= 0
+      // A circle's post can't be pinned: a profile is not in it.
+      if (at >= 0 || !post.communityId) items.push(at >= 0
         ? { label: 'Unpin from profile', icon: 'pinned', run: () =>
             commitPins(myPins().filter((_, j) => j !== at), { toastOk: 'Unpinned.' }) }
         : { label: 'Pin to profile', icon: 'pinned', run: () => pinPostFromMenu(post) });
@@ -11989,6 +12019,9 @@
   // `answeringDaily` outlives the render so a posted answer lands back on the
   // question it answered instead of on the home feed.
   let pendingDaily = null;
+  // The circle (the room) a compose was opened from, by id. Set by its page's
+  // Post button, consumed by renderPublish.
+  let pendingCommunity = null;
   let answeringDaily = null;
 
   // A quote rides into the composer the same way a daily does, and for the same
@@ -12594,19 +12627,18 @@
   /* ON REPEAT IS THE MUSIC YOU POST (Zoe, 2026-10-22). Posting a song and
      having it on repeat are one act, so once posts can carry a song the rail
      is a condensed read of the Music posts in the world: each person's newest
-     one from the last week, newest first, a square that opens the post (where
-     it can be liked and talked about, which a status never could). The + is
-     always first, because it is the way in and the rail must be able to have
-     a first user. Without add-song-posts.sql the rail is the old listening
-     status, untouched (statusRailEl). */
-  const ON_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
+     one, newest first, a square that opens the post (where it can be liked and
+     talked about, which a status never could). It read only the last week
+     until circles landed (same day, Zoe: "remove the week long limit on
+     songs"), so a song stays up until its owner posts another. The + is always
+     first, because it is the way in and the rail must be able to have a first
+     user. Without add-song-posts.sql the rail is the old listening status,
+     untouched (statusRailEl). */
   function songPostsOnRepeat() {
-    const cut = Date.now() - ON_REPEAT_MS;
     const seen = new Set();
     const out = [];
     for (const p of Store.posts()) {   // newest first
       if (p.type !== 'song' || !p.song || !p.author || seen.has(p.author)) continue;
-      if (Date.parse(p._ts || 0) < cut) break;
       if (Blocks.has(p.author)) continue;
       const u = Store.user(p.author);
       if (!u) continue;
@@ -13156,7 +13188,8 @@
      note) and is offered like any other post. Nothing stops a bare repost being
      pinned by hand if some other path ever hands one over; this is the picker
      being opinionated, not the store. */
-  const pinnablePost = (p) => !(p.repostOf && !p.note);
+  // A circle's post stays in its circle, and a profile is not in it.
+  const pinnablePost = (p) => !(p.repostOf && !p.note) && !p.communityId;
 
   /* Pin a post from its own ••• (openPostMenu). At three, the row does not go
      away and does not do nothing: it asks which of the three to swap out. A
@@ -13445,6 +13478,543 @@
   const discoverView = 'gallery';
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   let discoverResizeOff = null; // drops the grid's resize listener when the view goes
+  /* ── Circles (1.9) ──────────────────────────────────────────────────────────
+     A CIRCLE is a room for an interest: anyone can start one, anyone can join,
+     and it lives at #/c/<slug> (the clean link is /c/<slug>, the way a subreddit
+     is /r/<name>). Zoe, 2026-10-22: "use existing audience and group chat
+     features". So it is not a third kind of thing:
+
+       · its posts are an AUDIENCE. The composer's lock offers your circles as a
+         fourth answer to "who can see this", beside Anyone, My circle and Choose
+         people, and can_view_post hands a circle's posts to its members only.
+       · its talk is a GROUP CHAT, kind 'community', whose roster the database
+         keeps equal to the circle's (joining seats you, leaving takes you out).
+
+     IN CODE A CIRCLE IS A "COMMUNITY", and the CSS calls it the same. `circle`
+     already means your mutual friends here (the 'circle' audience, My Circle,
+     #/friends/<name> is "someone's circle"), and a post carrying both words for
+     two different things is the bug this naming refuses to write. Every word a
+     reader sees says circle, and its handle says c/.
+
+     WHERE IT IS READ. A circle's posts live on its page and on their own post
+     page. They are not in My Circle, not in Discover's post grid and not on the
+     author's profile (Store.feed / discover / postsBy all drop them): My Circle
+     is your friends, and a post said in a hobby circle was said to the circle.
+
+     The rules (who may rename, remove, the cap of ten, a block with the host,
+     the hand-over when the host leaves, the circle closing when its last member
+     does) are all in supabase/add-circles.sql. This is the face of them. */
+  const communityRoute = (c) => `#/c/${encodeURIComponent(c.slug)}`;
+  const communityHandle = (c) => `c/${c.slug}`;
+  // A shareable link straight to a circle, on the root profileLink uses.
+  const communityLink = (c) => linkBase() + 'c/' + encodeURIComponent(c.slug);
+  const memberWord = (n) => (n === 1 ? 'member' : 'members');
+
+  // Where a circle's back chevron points: wherever you came from, as a profile's
+  // does (see communityOrigin in the router).
+  function communityBackTarget() {
+    const labels = { '#/': 'My Circle', '#/discover': 'Discover', '#/chats': 'Chats', '#/profile': 'Profile' };
+    if (communityOrigin.startsWith('#/chat/')) return { href: communityOrigin, label: 'Chat' };
+    const href = labels[communityOrigin] ? communityOrigin : '#/discover';
+    return { href, label: labels[href] };
+  }
+
+  // A few faces for a circle: your friends in it first, because a friend being
+  // there is the best reason a room of strangers is worth a look, then whoever
+  // joined first.
+  function communityFaces(c, n = 3) {
+    const me = Store.session();
+    const all = Store.communityMembers(c.id).filter(u => u !== me && !Blocks.has(u));
+    const known = all.filter(u => Store.isFriend(u));
+    return known.concat(all.filter(u => !Store.isFriend(u))).slice(0, n)
+      .map(u => Store.user(u)).filter(Boolean);
+  }
+
+  // A circle on Discover. A card rather than a tile: what is worth knowing about
+  // a room is its name, what it is for and who is in it, and none of that is a
+  // picture. A count of members is a size, like a friend count on a profile,
+  // and never a number to drive anywhere (see the rule on counts).
+  function communityCardHtml(c, i = 0) {
+    const n = Store.communityMembers(c.id).length;
+    const faces = Store.isAuthed() ? communityFaces(c) : [];
+    return `<a class="community-card" href="${communityRoute(c)}" style="animation-delay:${staggerDelay(i)}">` +
+        `<span class="community-card-top">` +
+          `<span class="community-mark" aria-hidden="true">${svgIcon('circle')}</span>` +
+          (Store.inCommunity(c.id) ? `<span class="community-card-in">Joined</span>` : '') +
+        `</span>` +
+        `<span class="community-card-name">${esc(c.name)}</span>` +
+        `<span class="community-card-slug">${esc(communityHandle(c))}</span>` +
+        (c.about ? `<span class="community-card-about">${esc(c.about)}</span>` : '') +
+        (n && Store.isAuthed()
+          ? `<span class="community-card-foot">` +
+              (faces.length
+                ? `<span class="community-faces" aria-hidden="true">` +
+                    faces.map(u => avatarEl(u, { cls: 'community-face' })).join('') + `</span>`
+                : '') +
+              `<span>${n} ${memberWord(n)}</span>` +
+            `</span>`
+          : '') +
+      `</a>`;
+  }
+
+  // The card that starts one, first in the grid (Zoe: "add a card on Discover to
+  // create a circle"). Signed out it is the way into an account instead, since
+  // starting a room is the one thing on it a guest cannot do yet.
+  function communityStartHtml() {
+    return `<a class="community-card community-card--start" href="${Store.isAuthed() ? '#/c/new' : '#/join'}">` +
+        `<span class="community-card-top">` +
+          `<span class="community-mark community-mark--add" aria-hidden="true">+</span>` +
+        `</span>` +
+        `<span class="community-card-name">Start a circle</span>` +
+        `<span class="community-card-about">A room for a hobby or an interest. Anyone can join.</span>` +
+      `</a>`;
+  }
+
+  // Discover's order: the circles you are in, liveliest first, then the rest,
+  // liveliest first. "Liveliest" is the last sign of life this reader can see
+  // (Store.communityPulse): a post (only members see those), a join, or the day
+  // it was started. A circle whose host you blocked is not offered.
+  function communitiesInOrder() {
+    const byPulse = (a, b) => {
+      const x = Store.communityPulse(a.id), y = Store.communityPulse(b.id);
+      return x < y ? 1 : x > y ? -1 : 0;
+    };
+    const all = Store.communities().filter(c => !(c.owner && Blocks.has(c.owner)));
+    const mine = all.filter(c => Store.inCommunity(c.id)).sort(byPulse);
+    const rest = all.filter(c => !Store.inCommunity(c.id)).sort(byPulse);
+    return mine.concat(rest);
+  }
+
+  // The circles a Discover search reaches: the name, the handle, or the about.
+  // A name or handle that STARTS with the words outranks one that only holds them.
+  function communitiesMatching(q) {
+    const score = (c) => {
+      const name = c.name.toLowerCase(), slug = c.slug;
+      if (slug.startsWith(q) || name.split(/\s+/).some(w => w.startsWith(q))) return 3;
+      if (slug.includes(q) || name.includes(q)) return 2;
+      return c.about.toLowerCase().includes(q) ? 1 : 0;
+    };
+    return communitiesInOrder().map(c => ({ c, s: score(c) })).filter(x => x.s)
+      .sort((a, b) => b.s - a.s).map(x => x.c);
+  }
+
+  function communitiesSectionHtml(list, { search = false } = {}) {
+    if (!Store.communitiesReady()) return '';
+    if (search && !list.length) return '';
+    const cards = (search ? '' : communityStartHtml()) +
+      list.map((c, i) => communityCardHtml(c, i + 1)).join('');
+    return `<section class="communities" aria-label="Circles">` +
+        `<p class="np-kicker">Circles</p>` +
+        `<div class="community-grid">${cards}</div>` +
+      `</section>`;
+  }
+
+  // What leaving costs, said before it happens. The last member closes the
+  // circle (add-circles.sql), and that takes its posts with it, which is the one
+  // thing here a reader could not guess.
+  function communityLeaveTitle(c) {
+    const n = Store.communityMembers(c.id).length;
+    if (n <= 1) return `You’re the last one in ${communityHandle(c)}. Leaving closes it, and its posts and chat go with it.`;
+    if (c.owner === Store.session())
+      return `Leave ${communityHandle(c)}? It passes to whoever joined after you, and you can join again.`;
+    return `Leave ${communityHandle(c)}? You’ll leave its chat too. You can join again whenever.`;
+  }
+  async function leaveCommunity(c) {
+    const closing = Store.communityMembers(c.id).length <= 1;
+    const res = await Store.leaveCommunity(c.id).catch(() => null);
+    if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t leave, try again.'); return false; }
+    hapticTap('LIGHT');
+    toast(closing ? `${communityHandle(c)} is closed.` : `You left ${communityHandle(c)}.`);
+    return true;
+  }
+
+  /* WHO IS IN IT. A sheet, the chat roster's shape (avatar, name, handle), and
+     it is the circle's own People: a circle's chat sends its People here too,
+     because the two rosters are one. Each row opens the person. The host can
+     take someone out, on a second tap, since there is no undo and the row is
+     right under the thumb that was scrolling. */
+  function openCommunityMembers(c) {
+    const me = Store.session();
+    const hosting = !!me && c.owner === me;
+    const names = Store.communityMembers(c.id).filter(u => !Blocks.has(u));
+    const ordered = names.filter(u => u === c.owner)
+      .concat(names.filter(u => u !== c.owner && Store.isFriend(u)))
+      .concat(names.filter(u => u !== c.owner && !Store.isFriend(u)));
+    const rows = ordered.map(u => Store.user(u)).filter(Boolean).map((u, i) => {
+      const note = u.username === c.owner ? 'host' : u.username === me ? 'you' : '';
+      return `<div class="community-member" style="animation-delay:${staggerDelay(i)}">` +
+          `<a class="community-member-link" href="#/u/${esc(encodeURIComponent(u.username))}">` +
+            avatarEl(u, { cls: 'aud-avatar' }) +
+            `<span class="friend-text">` +
+              `<span class="friend-name">${esc(u.name || u.username)}</span>` +
+              `<span class="friend-user">@${esc(u.username)}${note ? ' · ' + note : ''}</span>` +
+            `</span>` +
+          `</a>` +
+          (hosting && u.username !== me
+            ? `<button type="button" class="community-member-out" data-user="${esc(u.username)}">Remove</button>`
+            : '') +
+        `</div>`;
+    }).join('');
+    openSheet({
+      title: `In ${communityHandle(c)}`,
+      dock: 'Done',
+      scrimClass: 'sheet-scrim--aud',
+      head:
+        `<div class="aud-list-wrap is-open">` +
+          `<div class="aud-list">${rows || `<p class="aud-empty">Nobody’s in it yet.</p>`}</div>` +
+        `</div>`,
+      wire: (scrim) => {
+        scrim.querySelectorAll('.community-member-out').forEach(btn =>
+          btn.addEventListener('click', async () => {
+            if (btn.dataset.busy) return;
+            if (!btn.dataset.sure) { btn.dataset.sure = '1'; btn.textContent = 'Sure?'; return; }
+            btn.dataset.busy = '1';
+            btn.disabled = true;
+            const u = btn.dataset.user;
+            // Hands itself back on every path, rejection included.
+            const res = await Store.removeCommunityMember(c.id, u).catch(() => null);
+            delete btn.dataset.busy;
+            btn.disabled = false;
+            if (!res || !res.ok) {
+              delete btn.dataset.sure;
+              btn.textContent = 'Remove';
+              toast((res && res.error) || 'Couldn’t remove them, try again.');
+              return;
+            }
+            hapticTap('LIGHT');
+            btn.closest('.community-member')?.remove();
+            toast(`${displayNameOf(u)} is out.`);
+            communityRepaint?.();
+          }));
+      },
+    });
+  }
+
+  function openCommunityMenu(c) {
+    const me = Store.session();
+    const member = Store.inCommunity(c.id);
+    const items = [{
+      label: 'Share circle', icon: 'send',
+      run: () => handOver({ title: `${c.name} on Tria`, text: `${communityHandle(c)} on Tria`, url: communityLink(c) }),
+    }];
+    if (me) items.push({ label: 'People', icon: 'friends', run: () => openCommunityMembers(c) });
+    if (me && c.owner === me) items.push({
+      label: 'Edit circle', icon: 'pencil',
+      run: () => { editorPushed = true; go(`${communityRoute(c)}/edit`); },
+    });
+    if (member) items.push({
+      label: 'Leave circle', icon: 'signout', danger: true,
+      run: () => openSheet({
+        title: communityLeaveTitle(c),
+        items: [{ label: 'Leave circle', icon: 'signout', danger: true, run: async () => {
+          if (!(await leaveCommunity(c))) return;
+          if (Store.community(c.id)) communityRepaint?.();
+          else go(communityBackTarget().href);
+        } }],
+      }),
+    });
+    openSheet({ items });
+  }
+
+  // The page's in-place repaint, for a join, a leave, a removal or a pull that
+  // lands while it is up. False once the page it painted has gone.
+  let communityRepaint = null;
+
+  function renderCommunity(slug) {
+    communityRepaint = null;
+    const back = communityBackTarget();
+    const first = Store.community(slug);
+    if (!first) {
+      mountToolbar({ leading: toolbarBackEl(back.href, back.label), title: `c/${slug}` });
+      view.innerHTML =
+        `<section class="view view--community">` +
+          `<p class="feed-empty">${Store.communitiesReady()
+            ? 'This circle isn’t here. It may have closed.'
+            : 'Circles aren’t switched on yet.'}</p>` +
+        `</section>`;
+      return;
+    }
+    const id = first.id;
+    mountToolbar({
+      leading: toolbarBackEl(back.href, back.label),
+      // The HANDLE, the way a profile's bar says the @handle: the head under it
+      // already says the name in big serif.
+      title: communityHandle(first),
+      actions: `<button class="toolbar-btn" type="button" id="community-more" aria-label="Circle options">` +
+        `${svgIcon('dots')}</button>`,
+    });
+    view.innerHTML =
+      `<section class="view view--community">` +
+        `<div class="account community-head" id="community-head"></div>` +
+        `<div class="feed" id="feed"></div>` +
+      `</section>`;
+    const headEl = view.querySelector('#community-head');
+    const feedEl = view.querySelector('#feed');
+
+    // The head is the profile's identity block, worn by a room: a mark where the
+    // photo goes, the name, the handle, who is in it, what it is for, and the one
+    // decision it asks (Join), or, once you are in, the two things you came for.
+    const headHtml = (c) => {
+      const me = Store.session();
+      const member = Store.inCommunity(c.id);
+      const n = Store.communityMembers(c.id).length;
+      const host = c.owner ? Store.user(c.owner) : null;
+      const people = me && n
+        ? `<button type="button" class="account-stat account-stat--friends" id="community-members">` +
+            `<span class="account-stat-num">${n}</span> ` +
+            `<span class="account-stat-label">${memberWord(n)}</span>` +
+          `</button>`
+        : '';
+      const hostedBy = host
+        ? `<span class="account-stat">Hosted by ${host.username === me ? 'you' : esc(host.name || host.username)}</span>`
+        : '';
+      const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
+      const acts = !me
+        ? `<a class="friend-btn publish-fill is-solid" href="#/join">Make an account to join</a>`
+        : member
+          ? `<button class="friend-btn publish-fill is-solid" type="button" id="community-post">Post</button>` +
+            `<button class="friend-btn friend-btn--quiet" type="button" id="community-chat">Chat</button>`
+          : `<button class="friend-btn publish-fill is-solid" type="button" id="community-join">Join</button>`;
+      return `<div class="account-head">` +
+          `<div class="account-photo account-photo--empty community-photo" aria-hidden="true">` +
+            svgIcon('circle', 'community-photo-ico') +
+          `</div>` +
+          `<div class="account-meta">` +
+            `<div class="account-id">` +
+              `<h1 class="account-name">${esc(c.name)}</h1>` +
+              `<p class="account-handle">${esc(communityHandle(c))}</p>` +
+            `</div>` +
+            (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}</div>` : '') +
+            (c.about ? `<p class="account-bio">${esc(c.about)}</p>` : '') +
+          `</div>` +
+        `</div>` +
+        `<div class="account-actions">${acts}</div>`;
+    };
+
+    // A tag on a circle's card is a search of the whole room, the way a tag
+    // anywhere off My Circle is: there is no filter of this page to narrow.
+    const wireCard = (card) => card.querySelectorAll('.tag[data-tag]').forEach(btn =>
+      btn.addEventListener('click', () => { discoverQuery = btn.dataset.tag; go('#/discover'); }));
+
+    const paintFeed = (c) => {
+      if (!Store.inCommunity(c.id)) {
+        dropCards();
+        feedEl.innerHTML =
+          `<div class="profile-locked">` +
+            svgIcon('circle', 'profile-locked-ico') +
+            `<p class="profile-locked-line">What’s said here is for the people in it.</p>` +
+            `<p class="profile-locked-sub">${Store.isAuthed()
+              ? 'Join to read along and say something. Anyone can.'
+              : 'Make an account, then join to read along.'}</p>` +
+          `</div>`;
+        return;
+      }
+      const list = Store.communityPosts(c.id).filter(p => !Blocks.has(p.author));
+      if (!list.length) {
+        dropCards();
+        feedEl.innerHTML = `<p class="feed-empty">Nothing here yet. Say the first thing.</p>`;
+        return;
+      }
+      // The column Circle reads in, built as far as it is read (lazy).
+      syncCards(feedEl, list, wireCard, null, true);
+    };
+
+    const paint = () => {
+      const c = Store.community(id);
+      if (!c) return false;
+      headEl.innerHTML = headHtml(c);
+      wireHead(c);
+      paintFeed(c);
+      return true;
+    };
+
+    function wireHead(c) {
+      headEl.querySelector('#community-members')?.addEventListener('click', () => openCommunityMembers(c));
+      headEl.querySelector('#community-post')?.addEventListener('click', () => {
+        pendingCommunity = c.id;
+        go('#/publish');
+      });
+      headEl.querySelector('#community-chat')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        let chat = Store.communityChat(c.id);
+        // A member whose chat row went missing: joining again is the repair
+        // (join_community re-seats them and changes nothing else).
+        if (!chat && !btn.disabled) {
+          btn.disabled = true;
+          try { await Store.joinCommunity(c.id).catch(() => null); }
+          finally { btn.disabled = false; }
+          chat = Store.communityChat(c.id);
+        }
+        if (chat) go(`#/chat/${encodeURIComponent(chat.id)}`);
+        else toast('The chat isn’t ready yet, try again in a moment.');
+      });
+      const join = headEl.querySelector('#community-join');
+      join?.addEventListener('click', async () => {
+        if (join.disabled) return;
+        join.disabled = true;
+        join.textContent = 'Joining…';
+        let res = null;
+        try { res = await Store.joinCommunity(c.id).catch(() => null); }
+        finally {
+          if (join.isConnected) { join.disabled = false; join.textContent = 'Join'; }
+        }
+        if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
+        hapticTap('LIGHT');
+        // Circle chats start muted (add-circles.sql), so say where the bell is.
+        toast(`You’re in. Its chat starts muted.`);
+        if (feedEl.isConnected) paint();
+      });
+    }
+
+    document.getElementById('community-more')?.addEventListener('click', () => {
+      const c = Store.community(id);
+      if (c) openCommunityMenu(c);
+    });
+
+    communityRepaint = () => {
+      if (!feedEl.isConnected) return false;
+      return paint();
+    };
+    paint();
+  }
+
+  /* STARTING ONE, and its host's editor, are the same form: a name and an about
+     in the profile editor's combo box, and (only when starting) the handle its
+     link is made of. A PAGE and not a sheet, for the reason the profile editor
+     is one: the keyboard would cover a sheet's fields. The check in the bar
+     commits, the way New chat and Edit profile commit.
+
+     The handle follows the name as you type until you touch it, and it is the
+     one thing that never changes afterwards, because a link that moves is a
+     link that breaks. */
+  function renderCommunityForm(slug) {
+    const editing = slug ? Store.community(slug) : null;
+    const canPop = editorPushed;
+    editorPushed = false;
+    if (!Store.isAuthed()) { go('#/join'); return; }
+    if (slug && (!editing || editing.owner !== Store.session())) {
+      go(editing ? communityRoute(editing) : '#/discover');
+      return;
+    }
+    const back = editing
+      ? { href: communityRoute(editing), label: editing.name }
+      : { href: '#/discover', label: 'Discover' };
+    mountToolbar({
+      leading: toolbarBackEl(back.href, back.label),
+      title: editing ? 'Edit circle' : 'New circle',
+      actions: `<button type="submit" form="community-form" id="community-save" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `aria-label="${editing ? 'Save changes' : 'Start circle'}">${svgIcon('check')}</button>`,
+    });
+    if (!Store.communitiesReady()) {
+      view.innerHTML = `<section class="view"><p class="feed-empty">Circles aren’t switched on yet.</p></section>`;
+      return;
+    }
+    view.innerHTML =
+      `<section class="view view--community-form">` +
+        `<h1 class="visually-hidden">${editing ? 'Edit circle' : 'Start a circle'}</h1>` +
+        `<form id="community-form" class="pf-form community-form" novalidate>` +
+          (editing ? '' :
+            `<p class="community-form-lede">A room for a hobby or an interest. Anyone on Tria can find it ` +
+              `on Discover and join, and what’s posted in it is for the people inside.</p>`) +
+          `<div class="field field--combo">` +
+            `<input id="cf-name" class="combo-title" type="text" maxlength="40" ` +
+              `value="${esc(editing ? editing.name : '')}" placeholder="Name it" ` +
+              `autocomplete="off" aria-label="Circle name">` +
+            `<div class="combo-divider" aria-hidden="true"></div>` +
+            `<textarea id="cf-about" class="combo-note" rows="3" maxlength="280" ` +
+              `placeholder="What’s it for? (optional)" aria-label="About">${esc(editing ? editing.about : '')}</textarea>` +
+          `</div>` +
+          (editing
+            ? `<p class="field-hint">Its link stays triaonline.com/c/${esc(editing.slug)}.</p>`
+            : `<div class="field">` +
+                `<label for="cf-slug">Handle</label>` +
+                `<div class="community-slug">` +
+                  `<span class="community-slug-pre" aria-hidden="true">c/</span>` +
+                  `<input id="cf-slug" type="text" maxlength="24" autocapitalize="none" ` +
+                    `autocomplete="off" autocorrect="off" spellcheck="false" aria-describedby="cf-slug-hint">` +
+                `</div>` +
+              `</div>` +
+              `<p class="field-hint" id="cf-slug-hint"></p>`) +
+          `<p class="composer-error" id="cf-error" role="alert"></p>` +
+        `</form>` +
+      `</section>`;
+
+    const form = view.querySelector('#community-form');
+    const nameEl = form.querySelector('#cf-name');
+    const aboutEl = form.querySelector('#cf-about');
+    const slugEl = form.querySelector('#cf-slug');
+    const hintEl = form.querySelector('#cf-slug-hint');
+    const errEl = form.querySelector('#cf-error');
+    const saveBtn = document.getElementById('community-save');
+    let slugTouched = false;
+
+    const slugNow = () => (slugEl ? slugEl.value.trim().toLowerCase() : '');
+    const ready = () => {
+      const name = nameEl.value.trim();
+      if (!name) return false;
+      if (editing) return name !== editing.name || aboutEl.value.trim() !== editing.about;
+      return !Store.slugProblem(slugNow());
+    };
+    const sync = () => {
+      if (slugEl && !slugTouched) slugEl.value = Store.slugFrom(nameEl.value);
+      if (hintEl) {
+        const s = slugNow();
+        const problem = s ? Store.slugProblem(s) : '';
+        hintEl.textContent = problem || (s
+          ? `Its link: triaonline.com/c/${s}. It can’t change later.`
+          : 'Its link, triaonline.com/c/…, which can’t change later.');
+        hintEl.classList.toggle('field-hint--warn', !!problem);
+      }
+      saveBtn?.classList.toggle('toolbar-commit--idle', !ready());
+    };
+    slugEl?.addEventListener('input', () => {
+      slugTouched = true;
+      // Only what a handle can hold, as it is typed: a space becomes the
+      // underscore it would have to be anyway.
+      const clean = slugEl.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      if (clean !== slugEl.value) slugEl.value = clean;
+    });
+    form.addEventListener('input', sync);
+    sync();
+    if (!editing) requestAnimationFrame(() => nameEl.focus());
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!ready() || !saveBtn || saveBtn.disabled) return;
+      if (BLOCKLIST.hits(aboutEl.value, nameEl.value)) {
+        errEl.textContent = 'That looks like it breaks our community guidelines. Please revise it.';
+        return;
+      }
+      errEl.textContent = '';
+      saveBtn.disabled = true;
+      try {
+        if (editing) {
+          const res = await Store.updateCommunity(editing.id,
+            { name: nameEl.value.trim(), about: aboutEl.value.trim() }).catch(() => null);
+          if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t save that, try again.'; return; }
+          if (canPop) history.back(); else go(communityRoute(editing));
+          return;
+        }
+        const slug = slugNow();
+        const res = await Store.createCommunity({
+          slug, name: nameEl.value.trim(), about: aboutEl.value.trim(),
+        }).catch(() => null);
+        if (!res || !res.ok) {
+          errEl.textContent = (res && res.error) || 'Couldn’t start that circle, try again.';
+          hapticEvent('ERROR');
+          return;
+        }
+        hapticEvent('SUCCESS');
+        // In place of the form, so back from the new circle is where you were
+        // before you started it, not a form that already did its job.
+        location.replace(`#/c/${encodeURIComponent(slug)}`);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
   function renderDiscover() {
     const me = Store.session();
     const notBlocked = (name) => !Blocks.has(name);
@@ -13584,7 +14154,7 @@
         `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
         `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
           `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
-          `placeholder="Search people, tags, anything" aria-label="Search Tria">` +
+          `placeholder="Search circles, people, anything" aria-label="Search Tria">` +
       `</div>`;
 
     mountToolbar({
@@ -13673,6 +14243,20 @@
     // back in. Looking something up should reach every account and every post
     // that could answer it.
     const TILE_CAP = 3, FACE_GAP = 2, HOLD_MAX = 3;
+
+    /* CIRCLES TAKE THE PAGE AS THEY FILL IT (Zoe, 2026-10-22: "replace posts on
+       Discover with this feature as it fills up. Since Tria is more for private
+       friend groups anyway, that would be better"). The post grid gives up
+       TILES_PER_COMMUNITY tiles for every circle on the page, and at
+       COMMUNITIES_FULL circles it is gone: Discover is then a page of rooms to
+       walk into, with the song rail and the daily over them. Before the first
+       circle it is the grid it always was, uncapped.
+
+       Search is untouched by it. A query still reaches every post and every
+       person it can answer with, because a browsing page making room for
+       something is no reason to hide what someone is looking for. */
+    const COMMUNITIES_FULL = 8, TILES_PER_COMMUNITY = 6;
+    const postBudget = (n) => (!n ? Infinity : Math.max(0, (COMMUNITIES_FULL - n) * TILES_PER_COMMUNITY));
     // How long typing has to settle before the grid rebuilds. Short enough that
     // it reads as "keeping up" rather than as a wait, long enough that a normal
     // typing burst lands one paint instead of eight.
@@ -13777,6 +14361,14 @@
       const keep = (t) => discoverFilter === 'all' || discoverFilter === 'people'
         || (t.post && t.post.type === discoverFilter);
       let tiles = buildTiles(q).filter(keep);
+      // The circles (the rooms): every one in order while browsing, the ones the
+      // words reach while searching. Built as a string here for the reason the
+      // song rail is: the markup IS the description of what changed, so it goes
+      // into the signature whole.
+      const rooms = q ? communitiesMatching(q) : communitiesInOrder();
+      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q });
+      const budget = q || !Store.communitiesReady() ? Infinity : postBudget(rooms.length);
+      if (tiles.length > budget) tiles = tiles.slice(0, budget);
       // Score ONCE per tile, then sort the scores. Scoring inside the comparator
       // read every haystack O(n log n) times instead of once, which on a page
       // this size is the difference between a keystroke you feel and one you
@@ -13815,7 +14407,7 @@
       // friends page does, so this only catches the change that arrives from
       // somewhere else.
       const asList = discoverView === 'list';
-      const sig = JSON.stringify([q, discoverFilter, discoverView, tags, np,
+      const sig = JSON.stringify([q, discoverFilter, discoverView, tags, np, roomsHtml, budget,
         occ && [occ.slug, answers.length],
         tiles.map(t =>
           [t.user.username, t.user.name, t.user.bio || '', t.user.avatar || '',
@@ -13824,7 +14416,7 @@
       if (bodyEl.dataset.sig === sig) return;
       bodyEl.dataset.sig = sig;
       const empty = q
-        ? `No one matches “${esc(discoverQuery.trim())}”.`
+        ? (rooms.length ? '' : `No one matches “${esc(discoverQuery.trim())}”.`)
         : TYPE_PLURAL[discoverFilter]
           ? `No ${TYPE_PLURAL[discoverFilter]} out here yet.`
           : 'Nobody here yet.';
@@ -13874,13 +14466,20 @@
       // hid inside the open search field for a version; neither survived. An
       // index belongs at the top of the thing it indexes, where it can be read
       // without being asked for.
-      bodyEl.innerHTML = tagRail(tags, q) +
+      //
+      // CIRCLES REORDERED THE PAGE (1.9). On repeat goes on top of everything
+      // (Zoe), then today's daily, then the circles, and the tags move down to
+      // lead the thing they index, which is the post grid under them. When the
+      // circles have filled the page there is no grid and so no tags, and no
+      // "nobody here" line either: the page is the circles.
+      const emptyLine = budget === 0 || !empty ? '' : `<p class="feed-empty">${empty}</p>`;
+      bodyEl.innerHTML = np +
         (occ ? dailyCardEl(occ, answers) : '') +
-        np +
+        roomsHtml +
+        (budget > 0 ? tagRail(tags, q) : '') +
         (asList
-          ? (runs.length ? runs.map(runHtml).join('') : `<p class="feed-empty">${empty}</p>`)
-          : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>`
-            : `<p class="feed-empty">${empty}</p>`));
+          ? (runs.length ? runs.map(runHtml).join('') : emptyLine)
+          : (tiles.length ? `<div class="pgrid">${tiles.map(tileEl).join('')}</div>` : emptyLine));
       if (asList) runs.forEach((r, i) => {
         if (r.kind !== 'posts') return;
         syncCards(bodyEl.querySelector(`.feed[data-run="${i}"]`),
@@ -14479,10 +15078,11 @@
      store.js and supabase/add-chats.sql). The bar at the foot of a chat is the
      comment bar in its third job; see mountPostBar's `chat`. */
   const CHAT_FILTERS = [
-    { key: 'all',      label: 'All' },
-    { key: 'direct',   label: 'Direct',     ico: 'profile' },
-    { key: 'group',    label: 'Groups',     ico: 'friends' },
-    { key: 'activity', label: 'Activities', ico: 'cal' },
+    { key: 'all',       label: 'All' },
+    { key: 'direct',    label: 'Direct',     ico: 'profile' },
+    { key: 'group',     label: 'Groups',     ico: 'friends' },
+    { key: 'activity',  label: 'Activities', ico: 'cal' },
+    { key: 'community', label: 'Circles',    ico: 'circle' },
   ];
   let chatFilter = 'all';
   // Whether the Archived shelf is open, kept across the list's repaints.
@@ -14496,6 +15096,11 @@
 
   function chatTitle(c) {
     if (c.kind === 'direct') return c.other ? displayNameOf(c.other) : 'Chat';
+    // A circle's chat is named by the circle (the title follows a rename).
+    if (c.kind === 'community') {
+      const room = Store.community(c.communityId);
+      return (room && room.name) || c.title || 'Circle';
+    }
     if (c.kind === 'activity') {
       const act = Store.posts().find(p => p.id === c.postId);
       return (act && act.title) || 'Activity';
@@ -14511,6 +15116,8 @@
     }
     if (c.kind === 'activity')
       return `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('cal')}</span>`;
+    if (c.kind === 'community')
+      return `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('circle')}</span>`;
     const faces = c.members.filter(u => u !== Store.session()).slice(0, 2).map(Store.user).filter(Boolean);
     return `<span class="chat-faces" aria-hidden="true">` +
       faces.map(u => avatarEl(u, { cls: 'comment-avatar chat-avatar' })).join('') + `</span>`;
@@ -15125,13 +15732,17 @@
       items.push({ label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(c.other)}`) });
     if (c.kind === 'activity' && c.postId)
       items.push({ label: 'View activity', icon: 'cal', run: () => go(postRoute(c.postId)) });
+    const room = c.kind === 'community' ? Store.community(c.communityId) : null;
+    if (room) items.push({ label: 'View circle', icon: 'circle', run: () => go(communityRoute(room)) });
     const me = Store.session();
     const hosting = c.kind === 'activity' && c.host === me;
     const act = c.kind === 'activity' ? Store.posts().find(p => p.id === c.postId) : null;
     // A guest's answer, changed from inside the plan's own chat.
     if (act && !hosting && !isPastActivity(act) && canJoin(act))
       items.push({ label: 'Your RSVP', icon: 'going', run: () => openRsvpSheet(act) });
-    if (c.kind !== 'direct')
+    // A circle's chat holds the circle, so its People is the circle's roster.
+    if (room) items.push({ label: 'People', icon: 'friends', run: () => openCommunityMembers(room) });
+    else if (c.kind !== 'direct')
       items.push({ label: 'People', icon: 'friends', run: () => openChatPeopleSheet(c) });
     if (c.status === 'member') items.push({
       label: c.muted ? 'Unmute' : 'Mute', icon: c.muted ? 'sound' : 'mute',
@@ -15145,11 +15756,16 @@
       items.push({ label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(c.other, () => go('#/chats')) });
       items.push({ label: 'Report', icon: 'flag', danger: true, run: () => reportUser(c.other) });
     }
+    // A circle's chat is left by leaving the circle (the two rosters are one),
+    // so its row says so rather than offering a way out of one and not the other.
     const leave = c.kind === 'direct'
       ? { label: 'Delete chat', title: 'Delete this chat? It leaves your list, and they keep their copy.',
           act: () => Store.clearChat(c.id) }
-      : { label: c.kind === 'group' ? 'Leave group' : 'Leave chat', title: 'Leave this chat? You can be added back.',
-          act: () => Store.leaveChat(c.id) };
+      : room
+        ? { label: 'Leave circle', title: communityLeaveTitle(room),
+            act: () => Store.leaveCommunity(room.id) }
+        : { label: c.kind === 'group' ? 'Leave group' : 'Leave chat', title: 'Leave this chat? You can be added back.',
+            act: () => Store.leaveChat(c.id) };
     // The host stays in their own activity's chat.
     if (!hosting) items.push({
       label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true,
@@ -15934,10 +16550,17 @@
   function audienceLockText() {
     if (pubAudience.mode === 'public') return 'Anyone';
     if (pubAudience.mode === 'circle') return 'My circle';
+    if (pubAudience.mode === 'community') {
+      const c = Store.community(pubAudience.community);
+      return c ? communityHandle(c) : 'A circle';
+    }
     return audienceCountLabel(pubAudience.users.length);   // 'list'
   }
   function audienceLockInner() {
-    const glyph = pubAudience.mode === 'public' ? 'globe' : 'lock';
+    // A circle (the room) wears Discover's woven triad, the mark circles are
+    // found under; the other three keep the globe and the padlock.
+    const glyph = pubAudience.mode === 'public' ? 'globe'
+      : pubAudience.mode === 'community' ? 'circle' : 'lock';
     return svgIcon(glyph, 'aud-lock-ico') +
       `<span class="aud-lock-label">${esc(audienceLockText())}</span>`;
   }
@@ -15949,9 +16572,13 @@
   // BUTTON, so it is invisible both to the form's input/change events and to the
   // string snapshot dirty() measures. Without it the bar would sit there offering
   // no way to save an audience you had just moved.
-  function wireAudienceLock(root, onChange) {
+  // `rooms` puts your circles (the rooms, see renderCommunity) in the sheet.
+  // The composer's lock asks for them; the editor's does not, because a posted
+  // post moving into a circle, or out of one, is a different act from choosing
+  // who reads something you are about to say.
+  function wireAudienceLock(root, onChange, { rooms = false } = {}) {
     const btn = root.querySelector('.aud-lock');
-    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange));
+    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange, { rooms }));
   }
   function syncAudienceLock(scope) {
     const btn = (scope || document).querySelector('.aud-lock');
@@ -15986,11 +16613,17 @@
      gave. The coercion is unchanged and still stated exactly once: "Choose
      people" with nobody chosen is My circle, because an empty allowlist is a
      post that nobody can read. */
-  function openAudienceSheet(root, onChange) {
+  function openAudienceSheet(root, onChange, { rooms = false } = {}) {
     const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
       .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
     const chosen = new Set(pubAudience.users);
     let mode = pubAudience.mode;
+    // Which circle, when the answer is one. A circle is a fourth answer to the
+    // same question rather than a second control: the post is FOR its members,
+    // exactly as a circle post is for your friends.
+    let room = pubAudience.community || null;
+    const myRooms = rooms && Store.communitiesReady()
+      ? Store.myCommunities().slice().sort((a, b) => a.name.localeCompare(b.name)) : [];
 
     // What used to be the Done handler, run on every tap instead of once at the
     // end. Nothing else writes pubAudience from here, so the fallback lives in
@@ -15999,6 +16632,7 @@
       const users = [...chosen];
       if (mode === 'public') pubAudience = { mode: 'public', users: [] };
       else if (mode === 'list' && users.length) pubAudience = { mode: 'list', users };
+      else if (mode === 'community' && room) pubAudience = { mode: 'community', users: [], community: room };
       else pubAudience = { mode: 'circle', users: [] };
       pubAudienceTouched = true;      // an answer now, not a default
       syncAudienceLock(root);
@@ -16011,6 +16645,13 @@
     const modeBtn = (m, t, d) =>
       `<button type="button" class="aud-mode" data-mode="${m}" aria-pressed="${mode === m}">` +
         `<span class="aud-mode-t">${t}</span><span class="aud-mode-d">${d}</span>` +
+        `<span class="aud-mode-tick" aria-hidden="true"></span>` +
+      `</button>`;
+    const roomBtn = (c) =>
+      `<button type="button" class="aud-mode aud-mode--community" data-mode="community" data-room="${esc(c.id)}" ` +
+          `aria-pressed="${mode === 'community' && room === c.id}">` +
+        `<span class="aud-mode-t">${esc(c.name)}</span>` +
+        `<span class="aud-mode-d">Only the people in ${esc(communityHandle(c))}</span>` +
         `<span class="aud-mode-tick" aria-hidden="true"></span>` +
       `</button>`;
 
@@ -16026,19 +16667,30 @@
           modeBtn('circle', 'My circle', 'Only your mutual friends') +
           modeBtn('list', 'Choose people', 'Only who you pick') +
         `</div>` +
+
         `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}">` +
           `<div class="aud-list">` +
             (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
           `</div>` +
-        `</div>`,
+        `</div>` +
+        // Your circles, under the people picker so its checklist still opens
+        // straight beneath the row that asked for it.
+        (myRooms.length
+          ? `<p class="aud-communities-cap">Your circles</p>` +
+            `<div class="aud-modes aud-modes--communities" role="group" aria-label="Post in a circle">` +
+              myRooms.map(roomBtn).join('') +
+            `</div>`
+          : ''),
       wire: (scrim) => {
         const listWrap = scrim.querySelector('.aud-list-wrap');
         const modes = [...scrim.querySelectorAll('.aud-mode')];
         modes.forEach(b =>
           b.addEventListener('click', () => {
             mode = b.dataset.mode;
+            room = mode === 'community' ? b.dataset.room : null;
             modes.forEach(x =>
-              x.setAttribute('aria-pressed', String(x.dataset.mode === mode)));
+              x.setAttribute('aria-pressed', String(x.dataset.mode === mode
+                && (mode !== 'community' || x.dataset.room === room))));
             // Expand/collapse the checklist (grid-rows glide, matching the About
             // folds); re-stamp the row stagger so they cascade in fresh each
             // time it opens.
@@ -16102,6 +16754,10 @@
     const daily = pendingDaily;
     pendingDaily = null;
     answeringDaily = daily;
+    // A circle's Post button aims the composer at that circle (see mountFields),
+    // consumed once like the daily: the intent belonged to the tap.
+    const room = pendingCommunity;
+    pendingCommunity = null;
     // A quote arrives the same way, consumed once. If the post it points at has
     // gone (deleted while you were walking here), the flag is dropped and you get
     // a plain composer rather than a form aimed at nothing.
@@ -16334,6 +16990,13 @@
       composeSong = null;
       pubAudience = { mode: defaultAudience(), users: [] };
       pubAudienceTouched = false;
+      // Arrived from a circle's Post button: the post is for that circle until
+      // the reader says otherwise, and it is an answer, not a default, so a type
+      // change never moves it.
+      if (room && Store.inCommunity(room)) {
+        pubAudience = { mode: 'community', users: [], community: room };
+        pubAudienceTouched = true;
+      }
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
       // A quote is the one family left: one note field, no attach bar, no audience
@@ -16353,7 +17016,7 @@
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
         wireFindNudge();
         wireAttachBar();
-        wireAudienceLock(fieldsEl);        // the lock rides the attach bar's bottom-left
+        wireAudienceLock(fieldsEl, null, { rooms: true });   // the lock rides the attach bar's bottom-left
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       }
       applyBaseSurface();
@@ -17603,8 +18266,9 @@
     // Audience rides EVERY post type, not just activities — the lock is on the
     // note box's foot too, and a picked 'public' that never reached the row is
     // how a public post quietly landed back in 'circle' (and out of Discover).
-    data.audience = pubAudience.mode;          // 'public' | 'circle' | 'list'
+    data.audience = pubAudience.mode;          // 'public' | 'circle' | 'list' | 'community'
     data.audienceUsers = pubAudience.users;    // usernames when 'list'
+    data.communityId = pubAudience.community || null;   // the circle, when 'community'
 
     if (pubType === 'find') {
       data.url = val('c-url');
@@ -17738,7 +18402,8 @@
     // a hand-picked audience, because the status is seen by your whole circle
     // and would tell them what the post kept from them. Best effort and
     // silent: the post is what you asked for, and it is already out.
-    if (data.type === 'song' && data.song && res.post.audience !== 'list')
+    // A circle's song stays in the circle for the same reason.
+    if (data.type === 'song' && data.song && res.post.audience !== 'list' && !res.post.communityId)
       Store.setListeningTo(data.song).catch(() => {});
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // next compose opens as a plain Note until something's attached
@@ -17768,6 +18433,9 @@
       go(`#/daily/${encodeURIComponent(answered.slug)}`);
       return;
     }
+    // A post in a circle goes home to the circle: My Circle is not where it is.
+    const room = res.post.communityId && Store.community(res.post.communityId);
+    if (room) { go(communityRoute(room)); return; }
     go('#/');
   }
 
@@ -19826,6 +20494,12 @@
     }
     if (path.startsWith('#/u/')) return renderUser(decodeURIComponent(path.slice(4)));
     if (path.startsWith('#/daily/')) return renderDaily(decodeURIComponent(path.slice(8)));
+    // A circle reads signed out as far as its door: the name, the about, and a
+    // way to join Tria. Its posts are for members, and a guest is not one.
+    if (path.startsWith('#/c/')) {
+      const slug = decodeURIComponent(path.slice(4).split('/')[0]);
+      return slug === 'new' ? go('#/join') : renderCommunity(slug);
+    }
     if (path === '#/about') return renderAbout(false);
     if (path === '#/business') return renderBusiness(false);
     if (path.startsWith('#/profile')) return renderGuestPitch('profile');
@@ -20023,6 +20697,12 @@
     if (path.startsWith('#/p/')) {
       if (lastPath && !lastPath.startsWith('#/p/')) postOrigin = lastPath;
     }
+    // And a circle's. Its own pages (the editor, a post opened from it and back)
+    // are hops inside it, so they never become where the circle came from.
+    if (path.startsWith('#/c/')) {
+      if (lastPath && !lastPath.startsWith('#/c/') && !lastPath.startsWith('#/p/')
+          && !lastPath.startsWith('#/u/') && !lastPath.startsWith('#/publish')) communityOrigin = lastPath;
+    }
     lastPath = path;
     chatLive = null;   // the page that set it is going; a chat page sets its own
 
@@ -20072,6 +20752,16 @@
       // still redirects for the links that are out there.
       if (path.startsWith('#/friends/')) {
         renderFriends(decodeURIComponent(path.slice(10)));
+        return;
+      }
+      // A circle (the room) lives at #/c/<slug>, the way a subreddit lives at
+      // /r/<name>: #/c/new starts one, #/c/<slug>/edit is its owner's editor.
+      // Like a profile it lights no tab: it is somewhere you went.
+      if (path.startsWith('#/c/')) {
+        const [slug, sub] = path.slice(4).split('/').map(decodeURIComponent);
+        if (slug === 'new') renderCommunityForm(null);
+        else if (sub === 'edit') renderCommunityForm(slug);
+        else renderCommunity(slug);
         return;
       }
       // A chat lives at #/chat/<id>, with the Chats tab lit (see renderNav above).
@@ -20303,8 +20993,13 @@
   // `hold` keeps your place across the render — right for a refresh that arrives
   // while you're reading, wrong for a re-tap, which is already taking you to the
   // top and would only fight the scroll.
+  // A circle's own page is a feed people read, so it refreshes like the tabs do
+  // (its in-place repaint is communityRepaint). Its form pages are not.
+  const isCommunityPage = (path) =>
+    path.startsWith('#/c/') && path !== '#/c/new' && !path.endsWith('/edit');
   async function refreshWorld(path, { force = false, hold = true } = {}) {
-    if (path !== '#/' && path !== '#/discover' && path !== '#/updates' && path !== '#/chats') return;
+    if (path !== '#/' && path !== '#/discover' && path !== '#/updates' && path !== '#/chats'
+        && !isCommunityPage(path)) return;
     if (!force && Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
@@ -20337,6 +21032,7 @@
       if (path === '#/') renderFeed();
       else if (path === '#/discover') { if (!discoverRepaint?.(force)) renderDiscover(); }
       else if (path === '#/chats') renderChats();
+      else if (isCommunityPage(path)) { if (!communityRepaint?.()) route(); }
       else renderUpdates();
     };
 
@@ -20525,7 +21221,8 @@
     const herePath = () => (location.hash || '#/').split('?')[0];
     const eligible = () =>
       Store.isAuthed() && !busy
-      && (herePath() === '#/' || herePath() === '#/discover' || herePath() === '#/updates' || herePath() === '#/chats')
+      && (herePath() === '#/' || herePath() === '#/discover' || herePath() === '#/updates' || herePath() === '#/chats'
+        || isCommunityPage(herePath()))
       && document.body.style.overflow !== 'hidden';   // not under a lightbox/modal
     const draw = () => {
       raf = 0;

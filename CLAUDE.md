@@ -21,6 +21,49 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## 1.9 is circles (2026-10-22)
+
+**A circle is a room for an interest** that anyone can start and anyone can
+join, at `#/c/<slug>` (clean link `/c/<slug>`, the way reddit has `/r/`). Zoe:
+"use existing audience and group chat features", so it is NOT a third kind of
+thing. Its posts are an **audience** (`posts.audience = 'community'` plus
+`posts.community_id`; the composer's lock lists your circles under the people
+picker, and a circle's Post button opens the composer aimed at it), and its talk
+is a **group chat** (`chats.kind = 'community'`) whose roster the database keeps
+equal to the circle's by trigger. Joining seats you in the chat MUTED (Claude's
+call: a room of strangers should not buzz). Leaving the chat IS leaving the
+circle. The host can rename it, edit its about and take people out; the slug
+never changes. When the host leaves, the longest-standing member inherits; when
+the last member leaves, the circle closes and its posts and chat go with it. Ten
+circles held per person. A circle post cannot be reposted or pinned to a profile.
+A plan posted in a circle can be answered by its members (`canJoin`), and only
+the members who answered are reminded.
+
+**NAMING: in code a circle is a `community`** (table `communities`,
+`Store.communities()`, `post.communityId`, `renderCommunity`, `.community-*` in
+CSS), because `circle` already means your mutual friends (the `'circle'`
+audience, My Circle). Every word on screen says circle and `c/<slug>`. Do not
+rename either side.
+
+**Where a circle's posts are read:** its page and their own post page. They are
+dropped from My Circle (`Store.feed`), from Discover's post grid
+(`Store.discover`) and from profiles (`Store.postsBy`). A card says which circle
+it was said in above its byline (`communityTagHtml`, hidden on the circle's page).
+
+**Discover, reordered:** On repeat on top of everything (Zoe), then the daily,
+then **Circles** (a Start a circle card first, then yours, then the rest, by last
+sign of life, `Store.communityPulse`), then the tags and the post grid. The grid
+**gives up six tiles per circle and is gone at eight** (`postBudget`, Zoe:
+"replace posts on Discover with this feature as it fills up"). Search reaches
+circles first and is never capped. **On repeat lost its week** (Zoe: "remove the
+week long limit on songs"), and so did the listening status (`freshSong`), so a
+song pin doesn't blank while the rail still shows the song.
+
+Every rule is in `supabase/add-circles.sql`; the reasoning is in
+[docs/data.md](docs/data.md) under "Circles". **The push function changed too**
+(a circle's chat is named in a message push, a mention in a circle only reaches
+members, and circle plans remind only members who answered).
+
 ## 1.8 is the nav going all the way native (2026-10-21)
 
 **The bottom bar is a real `UITabBar` now**, in a real `UITabBarController`
@@ -110,7 +153,7 @@ IS having it on repeat** (Zoe, 2026-10-22): the Create sheet has a Music row,
 no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
 search (`goListening`), Share also sets the listening status (not for a
 hand-picked audience), and Discover's On repeat rail is each person's newest
-Music post from the last week, opening the post (`songPostsOnRepeat`).
+Music post (no week limit since 1.9), opening the post (`songPostsOnRepeat`).
 `#/listening` survives only as the fallback without the column. The composer's speaker button opens a
 song search (`lookUpSongs`, shared with `#/listening`), the card draws the track
 as a row linking out (`songTileHtml`), and its hue is butter (`--type-song`).
@@ -335,6 +378,13 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `[{"song":null}]` after. Were the column ever missing again,
   `Store.songsReady` is false, no Music row or song button shows, and
   Discover's On repeat falls back to the old listening status.
+  **`add-circles.sql` is NOT run** (written 2026-10-22): anon
+  `GET /rest/v1/communities?select=slug&limit=1` answers PGRST205 until it is,
+  and `[]` (or rows) after. Until then `Store.communitiesReady` is false and
+  nothing of circles shows anywhere: no section on Discover, no circles in the
+  lock, and `#/c/…` says they aren't switched on yet. After running it, **deploy
+  the push function** (`swift-processor`), which learned circles in the same
+  commit and reads `community_members`.
 
 ## Copy style
 

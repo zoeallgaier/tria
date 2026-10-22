@@ -6,6 +6,7 @@
         "components": [
           { "/": "/p/*", "comment": "A single post. Opens the app at #/p/<id>." },
           { "/": "/u/*", "comment": "A profile. Opens the app at #/u/<name>." },
+          { "/": "/c/*", "comment": "A circle. Opens the app at #/c/<slug>." },
           { "/": "/daily/*", "comment": "A daily prompt. Opens the app at #/daily/<slug>." },
           { "/": "/i/*", "comment": "An invite code. Opens the app at #/i/<code>." }
         ]
