@@ -6350,13 +6350,15 @@
   // in. An activity is the one that is a different act (a time, a place, who
   // is coming), so it keeps its door, and so does the Daily, which is a prompt
   // and not a type. Music is the composer's speaker button.
+  // The Daily row is always the composer with the prompt over it (Zoe), never
+  // the room, so it is there only while you have an answer left to give: one
+  // each, and a row that opens a page you can't post from is a dead end.
   function composeRows() {
     const occ = todaysDaily();
-    const answered = occ && myAnswer(occ);
     return [
       { key: 'note',     label: 'Post' },
       { key: 'activity', label: 'Activity' },
-      ...(occ ? [{ key: 'daily', label: answered ? 'Today’s Daily' : 'Answer the Daily', icon: 'daily' }] : []),
+      ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
     ];
   }
 
@@ -6368,13 +6370,8 @@
   function openComposeDial() {
     const occ = todaysDaily();
     const run = (row) => {
-      if (row.key === 'daily') {
-        // Answered already: the room is the thing to see. Not yet: straight to
-        // the composer with the prompt over it, the same as the card's Add yours.
-        if (myAnswer(occ)) go(`#/daily/${encodeURIComponent(occ.slug)}`);
-        else answerDaily(occ);
-        return;
-      }
+      // Straight to the composer with the prompt over it, the card's Add yours.
+      if (row.key === 'daily') return answerDaily(occ);
       pendingAttach = row.key === 'note' ? null : row.key;
       go('#/publish');
     };
