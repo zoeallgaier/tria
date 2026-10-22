@@ -6126,10 +6126,17 @@
     // thousand-pixel jump used to read as "scrolling down fast",
     // which is a second move stapled onto a navigation meant to be one fade.
     const jumped = placed || Math.abs(y - barLastY) > window.innerHeight;
-    if (!jumped) {
-      if (y > barLastY + HEADER_SLACK) barReading = true;
-      else if (y < barLastY - HEADER_SLACK) barReading = false;
-    }
+    // A NAVIGATION ARRIVES WITH ITS HEADER UP, and so does the top of a page.
+    // `placed` used to keep the last route's direction, so reading down My
+    // Circle and tapping Discover landed on a page with its search field gone
+    // and no scroll up to bring it back. The top has the same trap from the
+    // other side: a search that narrows the grid to under a screen clamps the
+    // window to 0 with no move up left to make. And a big move UP is always
+    // read: the jump guard is about a teleport passing for a fast read DOWN,
+    // and a grid shrinking under the window is a clamp up of any size.
+    if (placed || y <= HEADER_SLACK) barReading = false;
+    else if (y < barLastY - HEADER_SLACK) barReading = false;
+    else if (!jumped && y > barLastY + HEADER_SLACK) barReading = true;
     barLastY = y;
     bar.classList.toggle('topbar--reading', barReading && !holdsHeader());
   }
