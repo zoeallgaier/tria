@@ -266,6 +266,9 @@
     // THE COMPOSE MARK ON MY CIRCLE'S BAR (1.8): a sheet with a pencil on it, the
     // system's own "new note". It replaced the round + in the tab bar, and it is
     // a note rather than a + because a + on a bar reads as "add a friend".
+    // TODAY'S DAILY, in the compose sheet: a sun, because the Daily is the one
+    // prompt that belongs to a day, and no post type's mark says that.
+    daily:   '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
@@ -1129,9 +1132,14 @@
         colors: fill.colors,
         tint: fill.tint,
         glyph: cta ? '' : liveGlyph(el),
-        // A menu button already says so in markup: the web card is a WAI-ARIA
-        // menu and has had to declare aria-haspopup since 1.3.
-        menu: el.getAttribute('aria-haspopup') === 'menu',
+        // NEVER a system menu (1.8). Every menu a bar button drops is the
+        // web's own card now (openBarMenu), in the app as on the web: Zoe's
+        // call, so the secondary surfaces aren't all glass. So the native
+        // button is a plain button, its tap comes back as toolbarTap, the web
+        // element is clicked, and openBarMenu builds its card because no
+        // native menu is waiting to capture it. The UIMenu path (describeMenu,
+        // TriaToolbar.attachMenu) is still there and simply never asked.
+        menu: false,
         // The editor's Save is mounted before it is earned and fades in on the
         // keystroke that earns it. Read from its own class rather than from
         // computed visibility, which the gate in app.css sets on every control
@@ -6280,7 +6288,7 @@
      so the composer is still the only form there is. */
   function composeBtnEl() {
     return `<button class="toolbar-btn" type="button" id="home-compose-btn" ` +
-        `aria-haspopup="menu" aria-expanded="false" aria-label="Make something">` +
+        `aria-haspopup="dialog" aria-label="Make something">` +
         svgIcon('compose') +
       `</button>`;
   }
@@ -6307,12 +6315,19 @@
       { key: 'photo',    label: 'Frame' },
       { key: 'poll',     label: 'Poll' },
       { key: 'activity', label: 'Activity' },
-      ...(occ ? [{ key: 'daily', label: answered ? 'Today’s Daily' : 'Answer the Daily', icon: 'info' }] : []),
+      ...(occ ? [{ key: 'daily', label: 'Daily', icon: 'daily', aria: answered ? 'See today’s Daily' : 'Answer the Daily' }] : []),
       ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
     ];
   }
 
-  function openComposeDial(anchor) {
+  /* THE PICKER IS A SHARE SHEET (1.8). It rises from the bottom like the
+     system's share sheet: a grid of big round tiles, each type in its own
+     pastel with its mark on it, the name underneath, and Cancel docked below.
+     It was a card dropped from the button for a day; a card is a list you read,
+     and this is a set you reach into, which is the share sheet's whole shape.
+     It is openSheet's own panel (scrim, focus trap, Escape, the one way out)
+     holding a grid as its `head`, so there is no second sheet to keep in step. */
+  function openComposeDial() {
     const rows = composeRows();
     const occ = todaysDaily();
     const run = (row) => {
@@ -6326,33 +6341,34 @@
       pendingAttach = row.key === 'note' ? null : row.key;
       go('#/publish');
     };
-    // The type's own mark in the type's own ink, which is the vocabulary the
-    // composer's attach bar already taught (TYPE_GLYPH). The Daily wears the
-    // daily's mark, which is a prompt and so has no hue of its own.
-    const glyph = (row) => row.icon || TYPE_GLYPH[row.key] || 'pencil';
-    const ink = (row) => TYPE_GLYPH[row.key] ? `var(--type-${row.key}-ink)` : 'var(--muted)';
-    const markup = rows.map((row, i) =>
-      `<button class="bar-menu-item" type="button" role="menuitem" data-i="${i}">` +
-        // Inline, as the filter dial does it, because a .type-icon-- class
-        // brings sizing rules that fight the row's glyph box.
-        `<span class="bar-menu-ico" style="color:${ink(row)}" aria-hidden="true">${svgIcon(glyph(row))}</span>` +
-        `<span class="bar-menu-label">${esc(row.label)}</span>` +
-      `</button>`).join('');
-    openBarMenu(anchor, {
-      label: 'Make something',
-      rows: markup,
-      items: rows.map((row, i) => ({
-        label: row.label,
-        icon: svgIcon(glyph(row)),
-        ink: TYPE_GLYPH[row.key] ? ink(row) : '',
-        // The Daily stands apart from the five, the way an action row stands
-        // apart from a radio set in the filter dial.
-        group: TYPE_GLYPH[row.key] ? 0 : 1,
-        data: { i: String(i) },
-      })),
-      onRow: (btn, close) => {
-        const row = rows[+btn.dataset.i];
-        close(() => { if (row) run(row); });
+    // The type's own mark, the vocabulary the composer's attach bar already
+    // taught (TYPE_GLYPH). The Daily wears a sun of its own: a prompt for today,
+    // which no type's mark says, and it takes no pastel because it isn't a type.
+    // The name rides INSIDE the panel, where openSheet's own title floats above
+    // it over the page: over a frozen feed of photographs a line of small grey
+    // type on nothing is a line nobody can read.
+    const grid =
+      `<p class="make-title">Make something</p>` +
+      `<div class="make-grid" role="group" aria-label="Make something">` +
+        rows.map((row, i) =>
+          `<button class="make-tile" type="button" data-i="${i}"` +
+              `${row.aria ? ` aria-label="${esc(row.aria)}"` : ''}>` +
+            `<span class="make-disc${TYPE_GLYPH[row.key] ? ` make-disc--${row.key}` : ''}" aria-hidden="true">` +
+              svgIcon(row.icon || TYPE_GLYPH[row.key] || 'pencil') +
+            `</span>` +
+            `<span class="make-label">${esc(row.label)}</span>` +
+          `</button>`).join('') +
+      `</div>`;
+    openSheet({
+      head: grid,
+      scrimClass: 'sheet-scrim--make',
+      wire: (scrim, close) => {
+        scrim.querySelector('.sheet')?.setAttribute('aria-label', 'Make something');
+        scrim.querySelectorAll('.make-tile').forEach((btn) => btn.addEventListener('click', () => {
+          const row = rows[+btn.dataset.i];
+          hapticTap('LIGHT');
+          close(() => { if (row) run(row); });
+        }));
       },
     });
   }
@@ -6367,7 +6383,7 @@
       `</section>`;
 
     document.getElementById('home-compose-btn')
-      ?.addEventListener('click', (e) => openComposeDial(e.currentTarget));
+      ?.addEventListener('click', () => openComposeDial());
 
     renderFeed();
   }
@@ -8759,11 +8775,8 @@
     const errEl = view.querySelector('#pf-error');
     const privacyBtn = view.querySelector('#privacy-toggle');
 
-    // Three radio rows, through the system's own menu where there is one and
-    // the sheet everywhere else. This is a control on a PAGE, so the web asks
-    // native for a menu rather than native asking about it. (The colour ring
-    // beside it used to do the same and went back to its sheet; three words
-    // lose nothing in a menu, twelve colours did. See openAccentSheet.)
+    // Three radio rows, in the sheet. (Until 1.8 this asked for a native menu
+    // first; see the note at the click below.)
     const musicBtn = view.querySelector('#music-pick');
     const musicValEl = view.querySelector('#music-value');
     const pickMusic = (key) => {
@@ -8774,11 +8787,9 @@
     musicBtn.addEventListener('click', () => {
       const current = musicPref();
       const items = MUSIC_CHOICES.map(c => ({ label: c.label, key: c.key }));
-      if (NativeChrome.live() && NativeChrome.presentMenu(musicBtn, {
-        label: 'Open songs in',
-        items: items.map(c => ({ label: c.label, radio: true, checked: c.key === current })),
-        onPick: (i) => pickMusic(items[i].key),
-      })) return;
+      // The sheet in every shell since 1.8: it used to ask for a native menu
+      // first (NativeChrome.presentMenu), and secondary menus are the web's
+      // own now, not the system's glass.
       openSheet({
         title: 'Open songs in',
         items: items.map(c => ({
@@ -18289,7 +18300,7 @@
      pop (the dial items) keep their CSS :active rules and stay off this list. */
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
-    '.seg-tab', '.sheet-item', '.sheet-cancel',
+    '.seg-tab', '.sheet-item', '.sheet-cancel', '.make-tile',
     '.postbar-send', '.comment-delete', 'button.comment-like', '.modal-actions button',
     '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
     // One entry covers every toolbar control (back chevron, search, •••, the

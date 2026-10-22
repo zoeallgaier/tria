@@ -1,5 +1,13 @@
 # Design system
 
+**1.8 (2026-10-21): THE CSS GLASS IS SIMPLIFIED.** The blur stays and is
+now the whole material: a thin fill, the blur, one hairline (tokens.css). The
+specular rim, every drop shadow (`--glass-lift`, `--glass-lift-panel`) and the
+panel tier's saturate() are zeroed. A fully FLAT pass (solid surfaces, no blur)
+was tried the same day and reverted at Zoe's word: keep the blur. What this file
+says below about rims and lifts is history; the tiers and blur radii still hold.
+
+
 **1.4 moves the nav chrome to UIKit** ([native-chrome.md](native-chrome.md)), so
 read the toolbar, tab bar and FAB notes below as the description of the CSS
 chrome — which the web keeps, and which the app falls back to on an older OS or

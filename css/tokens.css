@@ -400,29 +400,30 @@
      native material, which is a thin fill over a deep blur. You are meant to see
      content through glass. The blur is what keeps it from competing with the
      text, not the fill. */
+  /* ── SIMPLIFIED, AS OF 1.8 (2026-10-21) ────────────────────────────────────
+     The blur stays, and it is now the whole material: a thin fill, the blur
+     behind it, and one hairline. What went is the decoration on top. The
+     specular rim (two insets faking a lit perimeter) and the drop shadows
+     under every disc and panel were a CSS impression of Liquid Glass, and the
+     real thing is on the native chrome now. Zoe's call, with zoeallgaier.com's
+     blurred header as the reference: no rims, no drop shadows, the blur kept.
+     saturate() went with them.
+
+     The rim and shadow tokens are a transparent zero rather than `none`
+     because they ride in comma lists (`box-shadow: var(--glass-rim),
+     var(--glass-lift)`), where `none` would void the whole declaration. The
+     names stay so the 60-odd rules that read them simplified untouched. */
   --glass-blur:       15px;
   --glass-blur-panel: 30px;
-  /* saturate() is what makes a native material pick up the colour of whatever
-     passes behind it. Static tier only — it rides on the blur that's already
-     happening, but a colour matrix is still per-pixel work and chrome pays that
-     bill on every scroll frame. */
-  --glass-filter-panel: blur(var(--glass-blur-panel)) saturate(1.7);
+  --glass-filter-panel: blur(var(--glass-blur-panel));
 
   --glass-bg:       color-mix(in srgb, var(--bg) 58%, transparent);
   --glass-bg-panel: color-mix(in srgb, var(--bg) 70%, transparent);
 
-  /* The specular edge. Native glass lights its whole perimeter and varies around
-     it: brightest where the light strikes, nearly gone on the far side. The old
-     rim was one `inset 0 1px 0` line, which is a lit LIP — a bright top and three
-     dead sides. Two insets at opposite offsets give the full perimeter WITH the
-     falloff, at the same cost of nothing (a box-shadow is not a filter). The
-     light is top-left, the same fixed source the lit dome uses. */
-  --glass-rim:
-    inset  1px  1px 0 color-mix(in srgb, #fff 52%, transparent),
-    inset -1px -1px 0 color-mix(in srgb, #fff 14%, transparent);
-  --glass-edge: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  --glass-lift:       0 10px 30px rgba(0, 0, 0, 0.14);
-  --glass-lift-panel: 0 24px 60px rgba(0, 0, 0, 0.28);
+  --glass-rim:   0 0 #0000;
+  --glass-edge:  1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  --glass-lift:       0 0 #0000;
+  --glass-lift-panel: 0 0 #0000;
 
   /* iOS installed-shell status-bar scrim — a top wash that backs the OS clock and
      battery glyphs where content scrolls under them (black-translucent bar, so the
@@ -599,12 +600,8 @@
        Shadows deepen, because a 14% black shadow on #0e1012 is not a shadow. */
     --glass-bg:       color-mix(in srgb, var(--bg) 55%, transparent);
     --glass-bg-panel: color-mix(in srgb, var(--bg) 74%, transparent);
-    --glass-rim:
-      inset  1px  1px 0 color-mix(in srgb, #fff 17%, transparent),
-      inset -1px -1px 0 color-mix(in srgb, #fff 5%, transparent);
     --glass-edge: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
-    --glass-lift:       0 10px 30px rgba(0, 0, 0, 0.5);
-    --glass-lift-panel: 0 24px 60px rgba(0, 0, 0, 0.5);
+    /* No rim and no shadows here either (1.8): the light block's zeroes stand. */
 
     /* Flip the status-bar scrim dark: iOS paints light glyphs on the dark
        theme-color, so they need a dark backing to read over light content. */

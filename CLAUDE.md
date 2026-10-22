@@ -35,8 +35,9 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark opens the DIAL again (`openComposeDial`): the five
-types, then the Daily and Music. Each row presses the composer's matching
+trailing. The compose mark raises a SHARE-SHEET picker (`openComposeDial`, openSheet
+holding a `.make-grid`): big round tiles in each type's pastel, four across,
+the five types, then the Daily (a sun, no pastel) and Music. Each row presses the composer's matching
 attach button on mount (`pendingAttach`); the type is still inferred. **My
 Circle lost its filter**; profiles, Discover and Updates keep theirs. On the
 web the phone nav simply drops its round +.
@@ -55,6 +56,12 @@ because native glass would blur a web field beneath it. Discover's filter dial
 is gone too, so it is always the gallery with every type
 (`discoverFilter`/`discoverView` are constants, a stored `tria:discoverView` is
 ignored). `TriaSearchField`/`searchSpec` have no caller now.
+
+**The CSS glass is SIMPLIFIED** (tokens.css, the `--glass-*` block): a thin
+fill, the blur, one hairline, and nothing else. No specular rim, no drop
+shadows, no saturate(). **Keep the blur**: a fully flat pass was tried the same
+day and Zoe asked for the blur back. The token names stayed so every rule
+simplified untouched.
 
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
 `posts.song` jsonb in the listening status's shape, minus `at`). The listening
@@ -142,9 +149,11 @@ web keeps its CSS glass unchanged. Plan, contract and traps:
 
 **All three stages have landed** (`ios/App/App/TriaChromePlugin.swift`,
 `NativeChrome` in app.js, the gate at the end of app.css): the tab bar, the +,
-and the top bar's controls with the menus they drop as real `UIMenu`s. Edit
-profile's music pick drops a `UIMenu` too — a control on the PAGE, which the web
-asks for rather than being asked about, and which falls back to a sheet off-app.
+and the top bar's controls. **The menus they drop are the web's own card again
+since 1.8** (`openBarMenu`; controlSpec sends `menu: false`), and Edit profile's
+music pick is its sheet in every shell: Zoe's call, so the secondary surfaces
+aren't all the system's glass. The `UIMenu` path (`describeMenu`,
+`presentMenu`, `attachMenu`) is still in the tree with no caller.
 **The post card's •••, the repost circle beside it (2026-08-30) and the
 profile's colour ring (2026-09-10) went back to the web sheet** in the app as
 well (`openPostMenu`, `openRepostMenu`, `openAccentSheet` in app.js) — they no
