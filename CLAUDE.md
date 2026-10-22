@@ -60,15 +60,16 @@ cards"): handle as kicker, name as the serif headline, about as the hint,
 members' faces and count in the foot, the daily's pill as Join (which joins and
 walks you in), and the circle's photo in the top corner. Search is **circles
 and people only** (a person matches on name, then on what they've said), never
-posts. The masonry wall, the trending tags and On repeat are all gone from it;
-On repeat headed the page for one afternoon and then came off too (Zoe), and
-Discover was the only place it was drawn, so its rail code is deleted. **On
-repeat lost its week** first (Zoe: "remove the week long limit on songs"), and so
+posts. The masonry wall and the trending tags are gone from it. **On repeat
+moved to My Circle** (Zoe: "add on repeat to circle feed"), over the feed and
+the week-of cards (`paintOnRepeat`), and it is your people's songs now: you and
+your friends, never a circle's post (`songPostsOnRepeat`). **On repeat lost its week** first (Zoe: "remove the week long limit on songs"), and so
 did the listening status (`freshSong`), so a song pin doesn't blank.
 
 **Album art is rounder** (Zoe: "round the edges much more of all album art,
 that'd be cuter"): `--radius-art` is 26% of the square (`--art-round`), on every
-song sleeve (`.song-art`, a song pin's `.pin-art`), and the boxes that hold one
+song sleeve (`.song-art`, `.np-art`, a song pin's `.pin-art`), and a music
+post's sleeve is **128px in the feed** (was 76, Zoe: "1.5x2x bigger"), and the boxes that hold one
 at a known size and pad (`.card-song`, `.song-now`, `.pin--song`) stay concentric
 by reading `--art-round`. Photos keep `--radius-img`.
 
@@ -398,7 +399,11 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `Store.communitiesReady` is false and nothing of circles shows anywhere. **Not
   confirmed: that the push function was redeployed after it** (it learned circles
   in the same commit and reads `community_members`); REST can't tell.
-  **`circle-photo-delete.sql` is NOT run** (written 2026-10-22): anon
+  **`circle-photo-delete.sql` is NOT run** (re-probed 2026-10-22 after Zoe said
+  everything was in: `communities.avatar` still 42703, and `delete_community` /
+  `set_community_photo` answer PGRST202 called with their real signatures, the
+  same as a bogus control, while `update_community` from add-circles.sql answers
+  its own 42501): anon
   `GET /rest/v1/communities?select=avatar&limit=1` answers 42703 until it is
   (a 400 in a boot pass's console, the one the probe makes). Until then
   `Store.communityToolsReady` is false: no photo in the circle editor and no

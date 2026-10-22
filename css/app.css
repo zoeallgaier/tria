@@ -5907,6 +5907,140 @@ button.poll-option:disabled { cursor: default; }
    would play its entrance again because the phone turned. */
 .pgrid--settled .ptile { animation: none; }
 
+/* ── On repeat — the listening rail ───────────────────────────────────────────
+   Discover's other strip, UNDER the day's card and above the grid, and built to
+   the same rules as the trending tags: flat editorial rather than glass (it's
+   contents, not something floating above content), one line that scrolls
+   sideways rather than wrapping, and the label in the page's ordinary caption
+   voice.
+
+   It opened the page for a day. The card took the top back on 2026-09-04 and
+   the reason is the one this page keeps relearning: the card is the only thing
+   on Discover with a DEADLINE, it is the same question for everybody, and it is
+   the page's headline. The rail is ambient — it will still be there tonight.
+   See "Discover's first screen" in design.md for what each fixture costs.
+
+   SQUARES, not the round faces the daily card uses. A face would say "these are
+   people", which the grid below already says about the same people; the square
+   says "these are records", and the album art is the only thing on the page
+   doing that job. 88px is the smallest a piece of cover art can be and still be
+   a picture instead of a swatch — under about 80 the art stops reading and the
+   rail turns into a row of coloured tiles. This rail is where the record IS the
+   page's content rather than a detail beside it, so it takes 132px — 1.5× the
+   pin card's own 88 — and is the one place cover art gets to be that big.
+
+   Two lines under each square, both clamped to the square's own width: the song
+   in the body face, the person in the muted caption. Song first, because the
+   rail is about what is being played; you find out who after you've been
+   interested. */
+.nowplaying {
+  max-width: var(--feed-width);
+  /* 2rem below, matching .daily-card's own 2rem above the rail — the same
+     balance argument runs the other way too. At 1.1rem the rail sat more than
+     half again closer to what follows it than to the card above, which read
+     as the rail belonging to the grid — and in list view it read worse, since
+     a people run's opening hairline (.friends-list's border-top) landed right
+     where the gap ran out, with nothing between the rail and a rule. */
+  margin: 0 auto 2rem;
+  padding-inline: var(--inset);
+}
+.np-kicker { margin: 0 0 0.5rem; }
+.np-strip {
+  display: flex;
+  gap: 0.7rem;
+  overflow-x: auto;
+  /* Keeps the swipe INSIDE the rail: without it, running out of squares hands
+     the gesture on, and in the installed app the thing waiting to catch a
+     horizontal swipe is the back navigation. Same reasoning as .dtags-rail,
+     touch-action left alone so a finger here can still scroll the page. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* The squares carry no vertical padding of their own, so the rail's own box
+     is exactly its content and nothing is clipped by the overflow. */
+  padding-block: 0.1rem;
+}
+.np-strip::-webkit-scrollbar { display: none; }
+
+.np-item {
+  flex: 0 0 auto;
+  width: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  /* Squares are their own tap targets and they're 88px wide by ~120 tall, so
+     there's no 44pt problem to solve here and no padding to take back. */
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+/* .np-item--flat is gone with the linkless square it dressed. A song with no
+   service link used to draw a plain <div>, since a tap target that does nothing
+   is worse than none; songLink now sends a typed-in title to a search for
+   itself, so there is no such square left to style. */
+
+.np-art {
+  width: 132px;
+  height: 132px;
+  border-radius: var(--radius-art);   /* a sleeve, rounded like every cover */
+  background: var(--glass-bg-panel);
+  background-size: cover;
+  background-position: center;
+  /* The hairline is the EMPTY square's dress, not the artwork's. It was never
+     the full --glass-rim (a lit perimeter wants a fill under it, and there is
+     none here, just the cover) and now it doesn't reach a cover at all: a square
+     holding art takes .pin-cover with the pins' squares, which drops the border
+     for a shadow and a sheen. What keeps it is the + slot and a song whose art
+     never loaded — an outline where a sleeve would be. */
+  border: var(--glass-edge);
+}
+/* The empty own-slot: a + on the same square, so the rail's first item is the
+   same object whether or not it's holding anything. */
+.np-art--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--muted);
+}
+/* ONE LINE EACH, and the title's is a measurement rather than a preference. It
+   clamped to two, which made the strip's height a fact about your friends'
+   taste: 165px when every title fits one line, 181 the moment any single one
+   wraps — and this strip is what stands between the daily card and the grid, so
+   one long song title in your circle moved where the page's actual contents
+   begin. It broke the rail's own baseline too, since a wrapped title pushes only
+   ITS name down and the row of names stops being a row (measured with six
+   squares up: five names at y=478, one at 494).
+
+   The argument for two lines was that a song title is a sentence often enough
+   that one line loses the half that distinguishes it. True, and two lines of
+   0.82rem in an 88px column lose it as well — about twenty characters either
+   way. The square above is what identifies the record, which is the same
+   argument that made these squares and not faces; the words underneath NAME it,
+   and a name is allowed to end in an ellipsis. */
+.np-song {
+  font-size: 0.82rem;
+  line-height: 1.25;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-who {
+  font-size: var(--kicker);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
    would sit on top of a sheet's results). The field and the rows are the
@@ -6056,13 +6190,15 @@ button.poll-option:disabled { cursor: default; }
 }
 .card-song:active { transform: scale(0.985); }
 .card-song + * { margin-top: 0.9rem; }
-/* Concentric with the tile: the tile's corner is the art's (a fraction of its
-   76px) plus the 0.75rem pad between them, so the rounder sleeve and the card
-   it sits in curve together. */
-.card-song { border-radius: calc(76px * var(--art-round) + 0.75rem); }
+/* The sleeve is the post (Zoe, 2026-10-22: "album art can be like 1.5x2x
+   bigger on posts in the feed"), so it went from 76px to 128, about 1.7x, the
+   most a phone's card can give it and still keep the title beside it. The tile
+   stays concentric: its corner is the art's (a fraction of the 128) plus the
+   0.75rem pad between them. */
+.card-song { --card-art: 128px; border-radius: calc(var(--card-art) * var(--art-round) + 0.75rem); }
 .card-song .song-art {
-  width: 76px;
-  height: 76px;
+  width: var(--card-art);
+  height: var(--card-art);
   border-radius: var(--radius-art);
 }
 .card-song .song-lines { gap: 0.2rem; flex: 1 1 auto; }
@@ -6074,8 +6210,9 @@ button.poll-option:disabled { cursor: default; }
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  /* Three lines: the taller sleeve gives a long title the height for one more. */
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 .card-song .song-artist { font-size: 0.8rem; letter-spacing: 0.02em; }
 .card-song-play {
@@ -6111,6 +6248,7 @@ button.poll-option:disabled { cursor: default; }
    be. The trending tags and the On repeat rail that shared this rule came off
    Discover with its post grid in 1.9. */
 .discover-kicker,
+.np-kicker,
 .daily-kicker {
   font-size: var(--kicker);
   font-weight: 400;
@@ -7058,6 +7196,9 @@ button.poll-option:disabled { cursor: default; }
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 7px 15px -7px rgba(0, 0, 0, 0.32);
 }
+/* The rail keeps the lit edge and the sheen but not the drop (Zoe,
+   2026-09-14): a row of squares each casting its own shadow read heavy. */
+.np-art.pin-cover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
 /* One soft diagonal, the light a glossy surface catches. It stops at 58% so it
    reads as a highlight rather than as a scrim over the picture. */
 .pin-cover::after {
@@ -9957,7 +10098,10 @@ button.poll-option:disabled { cursor: default; }
   /* Already inset by .view here, so the type-axis padding comes back off: on a
      phone the title and the page's own blocks sit on the view's inset and no
      second one is wanted. */
-  .masthead, .daily-lede, .daily-banner { padding-inline: 0; }
+  .masthead, .nowplaying, .daily-lede, .daily-banner { padding-inline: 0; }
+  /* The rail breaks out past .view's own 1.15rem so a square caught mid-scroll
+     runs to the screen edge, and opens flush with the page. */
+  .np-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; }
   /* And the identity header, which is now type on the same axis. (Its badge
      cluster used to be positioned off that inset and needed pulling back with
      it; those controls are in the toolbar as of 1.3.) */

@@ -1523,7 +1523,7 @@ and nobody is woken up about a plan in a circle they never answered.
 posts from the Discover feed. THIS is the new way to discover."). It went there
 in two steps on the same day: first the post grid gave up six tiles per circle
 and vanished at eight, then the grid, its trending tags and On repeat came off
-outright. What is left is the daily and the circles, each drawn as the daily's
+outright (On repeat went to the top of My Circle, as your people's songs). What is left is the daily and the circles, each drawn as the daily's
 own card, plus the Share Tria ask. Search answers with circles and people, a
 person matching on name first and on what they have said second; it never
 answers with a post. The masonry machinery (`ptileEl`, `dealMasonry`) lives on

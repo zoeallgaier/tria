@@ -6421,6 +6421,7 @@
     mountToolbar({ leading: composeBtnEl(), actions: updatesBtnEl(), mark: true });
     view.innerHTML =
       `<section class="view view--home">` +
+        `<div class="np-host" id="np-host"></div>` +
         `<div class="week-cards" id="week-cards" hidden></div>` +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
@@ -6916,9 +6917,22 @@
     }, lazy);
   }
 
+  // On repeat over My Circle's feed. Rebuilt only when its markup moved, so a
+  // quiet re-pull doesn't replay the squares.
+  function paintOnRepeat() {
+    const host = view.querySelector('#np-host');
+    if (!host) return;
+    const html = nowPlayingEl();
+    if (host.dataset.sig === html) return;
+    host.dataset.sig = html;
+    host.innerHTML = html;
+    host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
+  }
+
   function renderFeed() {
     const feedEl = view.querySelector('#feed');
     if (!feedEl) return;
+    paintOnRepeat();
     paintWeekCards();
     const list = Store.feed().filter(p => {
       if (Blocks.has(p.author)) return false;   // blocked authors never surface
@@ -12568,12 +12582,138 @@
     } catch { /* old build without the method; Automatic stays Apple Music */ }
   }
 
-  /* ON REPEAT, the rail of squares that headed Discover (1.5 to 1.9), is gone:
-     Zoe took it off Discover on 2026-10-22, the same day Discover became
-     circles, and Discover was the only place it was drawn. A song is still a
-     post (the Create sheet's Music row and a profile's song pin both open the
-     composer's song search, see goListening), still the listening status, and
-     still a profile's pin. */
+  /* ON REPEAT LIVES ON MY CIRCLE since 1.9. It headed Discover from 1.5, came
+     off it the day Discover became circles, and went over the feed on My
+     Circle the same day (Zoe: "add on repeat to circle feed"), as your
+     people's songs rather than the whole room's (see songPostsOnRepeat). */
+  // Everyone with a song still standing, me first and the rest newest-set
+  // first — so the rail reads as what the room is on right now rather than as a
+  // directory. Blocked accounts drop out the way they do everywhere else.
+  function listeners() {
+    const me = Store.session();
+    let mine = null;
+    const rest = [];
+    for (const u of Store.users()) {
+      if (!u.listening || !u.username) continue;
+      if (u.username === me) { mine = u; continue; }
+      if (Blocks.has(u.username) || !Store.isFriend(u.username)) continue;
+      rest.push(u);
+    }
+    rest.sort((a, b) => Date.parse(b.listening.at || 0) - Date.parse(a.listening.at || 0));
+    return { mine, rest };
+  }
+
+  /* One square's CONTENTS, without a wrapper — because the same three spans go
+     inside two different elements. Somebody else's song is an <a>; mine is a
+     <button>, because you edit yours rather than open it. Keeping the wrapper
+     out here is what lets both exist without a second copy of the innards.
+
+     There was a third, a flat <div> for a song with nowhere to go, on the rule
+     that a tap target that does nothing is worse than no tap target. songLink
+     retired it: a typed-in title with no service link now opens a search for
+     itself, so every square goes somewhere. */
+  function npFace(u, me) {
+    const s = u.listening;
+    const who = u.username === me ? 'You' : (u.name || u.username);
+    const sub = songSub(s, ', ');
+    return {
+      label: `${who}: ${s.title}${sub ? ', ' + sub : ''}`,
+      html:
+        // .pin-cover is the app's cover treatment (shadow + sheen, no hairline),
+        // and it rides a square only when there is a sleeve on it — an artless
+        // song keeps the outline where one would be.
+        `<span class="np-art${s.art ? ' pin-cover' : ''}"` +
+          `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''}` +
+          ` aria-hidden="true"></span>` +
+        `<span class="np-song">${esc(s.title)}</span>` +
+        `<span class="np-who">${esc(who)}</span>`,
+    };
+  }
+
+  // target="_blank" is what the outbound handler up top reads to hand the URL to
+  // iOS rather than letting a WKWebView swallow it.
+  function npSquare(u, me) {
+    const f = npFace(u, me);
+    return `<a class="np-item" href="${esc(songLink(u.listening))}" ` +
+        `target="_blank" rel="noopener noreferrer" ` +
+        `data-out="system" aria-label="${esc(f.label)}">${f.html}</a>`;
+  }
+
+  /* The rail. Your own square is always drawn, even empty, because it is the
+     only way into the feature — a strip that hides itself until somebody has
+     used it can never have a first user. */
+  /* ON REPEAT IS THE MUSIC YOU POST (Zoe, 2026-10-22). Posting a song and
+     having it on repeat are one act, so once posts can carry a song the rail
+     is a condensed read of the Music posts in the world: each person's newest
+     one, newest first, a square that opens the post (where it can be liked and
+     talked about, which a status never could). It read only the last week
+     until circles landed (same day, Zoe: "remove the week long limit on
+     songs"), so a song stays up until its owner posts another. The + is always
+     first, because it is the way in and the rail must be able to have a first
+     user. Without add-song-posts.sql the rail is the old listening status,
+     untouched (statusRailEl). */
+  function songPostsOnRepeat() {
+    const seen = new Set();
+    const out = [];
+    // MY CIRCLE'S rail since 1.9 (Zoe: "add on repeat to circle feed"), so it
+    // is my people's: me and my friends, and never a post said in a circle
+    // (the room), which is read in the room.
+    const mine = new Set([Store.session(), ...Store.friends()]);
+    for (const p of Store.posts()) {   // newest first
+      if (p.type !== 'song' || !p.song || !p.author || seen.has(p.author)) continue;
+      if (!mine.has(p.author) || p.communityId) continue;
+      if (Blocks.has(p.author)) continue;
+      const u = Store.user(p.author);
+      if (!u) continue;
+      seen.add(p.author);
+      out.push({ u, post: p });
+    }
+    return out;
+  }
+
+  function nowPlayingEl() {
+    if (!Store.songsReady()) return statusRailEl();
+    const me = Store.session();
+    const items = songPostsOnRepeat();
+    if (!me && !items.length) return '';
+    const add = !me ? '' :
+      `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
+          `aria-label="Share a song">` +
+        `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
+        `<span class="np-song">Share a song</span>` +
+        `<span class="np-who">You</span>` +
+      `</button>`;
+    const square = ({ u, post }) => {
+      const f = npFace({ ...u, listening: post.song }, me);
+      return `<a class="np-item" href="#/p/${encodeURIComponent(post.id)}" ` +
+        `aria-label="${esc(f.label)}">${f.html}</a>`;
+    };
+    return `<section class="nowplaying" aria-label="What people have on repeat">` +
+        `<p class="np-kicker">On repeat</p>` +
+        `<div class="np-strip">${add}${items.map(square).join('')}</div>` +
+      `</section>`;
+  }
+
+  function statusRailEl() {
+    const me = Store.session();
+    const { mine, rest } = listeners();
+    // Signed out (the public site) there is no "you" to add a song for, and an
+    // empty strip with nobody in it is not a rail.
+    if (!me && !rest.length) return '';
+    const first = !me ? '' : mine
+      ? `<button type="button" class="np-item np-mine" data-np="edit" ` +
+          `aria-label="Change your song">${npFace(mine, me).html}</button>`
+      : `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
+          `aria-label="Say what you’re listening to">` +
+          `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
+          `<span class="np-song">Add a song</span>` +
+          `<span class="np-who">You</span>` +
+        `</button>`;
+    return `<section class="nowplaying" aria-label="What people are listening to">` +
+        `<p class="np-kicker">On repeat</p>` +
+        `<div class="np-strip">${first}${rest.map(u => npSquare(u, me)).join('')}</div>` +
+      `</section>`;
+  }
 
   /* ── The picker (#/listening) ────────────────────────────────────────────────
      A PAGE and not a sheet, which is the call the profile editor and the friends
