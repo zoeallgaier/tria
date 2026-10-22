@@ -1106,34 +1106,24 @@ protocol TriaToolbarControl: AnyObject {
 @available(iOS 26.0, *)
 final class TriaToolbarMaterial: UIVisualEffectView {
 
-    /* 1.8: THE SYSTEM'S DEFAULT BLUR, and (5) on the list above. Zoe: no
+    /* 1.8: THE SYSTEM'S BAR MATERIAL, and (5) on the list above. Zoe: no
        heading backgrounds, just the default iOS blur. The glass pane read as an
-       object sitting on the page; a header is supposed to be the page going
-       soft where the chrome is. So this is `.systemMaterial`, the blur UIKit's
-       own bars have worn since iOS 13, and its bottom edge FADES (a gradient
-       mask) so the page dissolves into the header rather than stopping at a
-       line, the way an iOS 26 scroll edge does. It is still not that effect
-       (see 3): it is the material, shaped by hand.
+       object sitting on the page. This is `.systemChromeMaterial`, the material
+       UIKit's own bars wear, with a clean bottom edge, which is the look of
+       iOS 26's `.hard` scroll edge style.
 
-       No paper wash, no tint, no rims to push off-screen: (2) failed on a
-       painted `--bg` ramp stacked on a scrim, and nothing here paints. */
-    static let fadeDepth: CGFloat = 22
-    private let fade = TriaFadeMask()
-
+       IT HAD A FADED EDGE FOR ONE BUILD AND IT CAME OFF. A gradient mask on a
+       uniform blur fades the blur's OPACITY, where the system's `.soft` edge
+       grows the blur RADIUS toward the top, and the difference reads at once:
+       the masked one was a band of fog. Zoe's words: it doesn't quite feel
+       native. Simpler and plainer is the native answer here, so there is
+       nothing hand-shaped left on this view. */
     init() {
-        super.init(effect: UIBlurEffect(style: .systemMaterial))
+        super.init(effect: UIBlurEffect(style: .systemChromeMaterial))
         // A backdrop. Every tap in this rect belongs to a control on top of it
         // or to the page underneath.
         isUserInteractionEnabled = false
         alpha = 0
-        mask = fade
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        fade.frame = bounds
-        fade.solidUntil = bounds.height > 0
-            ? max(0, (bounds.height - Self.fadeDepth) / bounds.height) : 1
     }
 
     @available(*, unavailable)
@@ -1159,27 +1149,6 @@ final class TriaToolbarMaterial: UIVisualEffectView {
 ///
 /// KVO rather than the scroll delegate, because the web view's delegate is
 /// WebKit's and taking it is a way to break scrolling itself.
-/// Opaque from the top down to `solidUntil`, then to nothing at the bottom: the
-/// header's soft edge. A view rather than a bare layer because a visual effect
-/// view takes its mask as a VIEW.
-@available(iOS 26.0, *)
-final class TriaFadeMask: UIView {
-    override class var layerClass: AnyClass { CAGradientLayer.self }
-    var solidUntil: CGFloat = 0.75 {
-        didSet {
-            (layer as? CAGradientLayer)?.locations = [0, NSNumber(value: Double(solidUntil)), 1]
-        }
-    }
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        let ramp = layer as? CAGradientLayer
-        ramp?.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
-        ramp?.locations = [0, 0.75, 1]
-    }
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-}
-
 @available(iOS 26.0, *)
 final class TriaScrollWatch: NSObject {
 
@@ -1488,13 +1457,10 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
        place, which is two animations again. Alpha is safe HERE, unlike on the
        control container — this view is one plain UIVisualEffectView, not a
        glass container rendering nested elements in a pass of its own. */
-    // The bar's own height and the fade below it. The glass pane needed its
-    // rims pushed off three sides (`rimSlack`, gone); a blur has none, so it
-    // simply spans the width.
+    // The bar's own height, full width. The glass pane needed its rims pushed
+    // off three sides (`rimSlack`, gone); a blur has none.
     private func materialFrame() -> CGRect {
-        let strip = max(barHeight, safeAreaInsets.top)
-        return CGRect(x: 0, y: 0, width: bounds.width,
-                      height: strip + TriaToolbarMaterial.fadeDepth)
+        CGRect(x: 0, y: 0, width: bounds.width, height: max(barHeight, safeAreaInsets.top))
     }
 
     private func syncMaterial(animated: Bool) {

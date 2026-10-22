@@ -57,9 +57,11 @@ is gone too, so it is always the gallery with every type
 ignored). `TriaSearchField`/`searchSpec` have no caller now.
 
 **The top bar, cleaned up (2026-10-22).** No painted header: the native header
-is the system's default blur (`TriaToolbarMaterial`, `.systemMaterial` with a
-22pt faded bottom edge, `TriaFadeMask`), and the CSS band is a blur with a
-whisper of paper, soft-edged the same way. Plain glyph buttons are BARE at the
+is the system's bar material (`TriaToolbarMaterial`, `.systemChromeMaterial`,
+clean bottom edge, nothing hand-shaped), and the CSS band is a blur with a
+whisper of paper. A faded edge (a gradient mask) was tried and removed: a masked
+blur reads as fog, not as iOS's progressive soft edge, which a Capacitor web
+view cannot reach. Plain glyph buttons are BARE at the
 top of a page (just icons) and wear their glass once content scrolls under
 (`syncBare` natively, `.topbar--bare .toolbar-btn` in CSS); tinted commits keep
 their fill. **My Circle has no nameplate**: the italic Instrument "tria"
