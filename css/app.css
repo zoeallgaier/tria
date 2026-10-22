@@ -1031,6 +1031,23 @@ body.toolbar-live .view { padding-top: 1rem; }
    Keep the two numbers separate if either moves: 44 is the HIG floor and is not
    a style knob, this is. */
 .toolbar-btn svg { width: 24px; height: 24px; }
+/* The bell's dot on My Circle's bar (1.8), which is the Chats tab's old dot for
+   Updates moved to where Updates now is. The same mark as .nav-dot: --dot, no
+   number, faded in rather than popped. On the disc's top-right shoulder, which
+   the 24px glyph in a 44px disc leaves clear. */
+.toolbar-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: var(--dot);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-micro) var(--ease);
+}
+.toolbar-dot.is-on { opacity: 1; }
 /* .toolbar-commit is the one button up here that COMMITS rather than navigates
    or narrows: the profile editor's Save, a check in the trailing slot. It keeps
    every line above — the 44px disc that is its own tap target, the grid
@@ -1842,6 +1859,7 @@ main {
 .masthead-filter[data-active="find"]     { color: var(--type-find-ink); }
 .masthead-filter[data-active="photo"]    { color: var(--type-photo-ink); }
 .masthead-filter[data-active="poll"]     { color: var(--type-poll-ink); }
+.masthead-filter[data-active="song"]     { color: var(--type-song-ink); }
 .masthead-filter[data-active="activity"] { color: var(--type-activity-ink); }
 /* The two rows that aren't post types — Discover's People, Updates' Mentions —
    take ink rather than borrowing one of the five pastels, which are spoken for.
@@ -2224,6 +2242,7 @@ main {
 .card-repost[data-type="activity"] { --burst: var(--heart-activity); }
 .card-repost[data-type="photo"]    { --burst: var(--heart-photo); }
 .card-repost[data-type="poll"]     { --burst: var(--heart-poll); }
+.card-repost[data-type="song"]     { --burst: var(--heart-song); }
 
 .card-repost:active { color: var(--text); }
 @media (hover: hover) { .card-repost:hover { color: var(--text); } }
@@ -2374,6 +2393,7 @@ main {
 .card-like[data-type="activity"] { --burst: var(--heart-activity); }
 .card-like[data-type="photo"]    { --burst: var(--heart-photo); }
 .card-like[data-type="poll"]     { --burst: var(--heart-poll); }
+.card-like[data-type="song"]     { --burst: var(--heart-song); }
 
 /* 1. The snap. A hard, fast punch to 1.5× then a single undershoot and settle —
    no anticipation dip, so it reads sharp and dramatic rather than springy. Keeps
@@ -2498,6 +2518,7 @@ main {
 .post-sparkles[data-type="activity"] { --burst: var(--heart-activity); }
 .post-sparkles[data-type="photo"]    { --burst: var(--heart-photo); }
 .post-sparkles[data-type="poll"]     { --burst: var(--heart-poll); }
+.post-sparkles[data-type="song"]     { --burst: var(--heart-song); }
 .post-sparkles .spark {
   /* Same decoupled tracks as the like burst: post-rise owns the upward drift,
      spark-fade owns opacity — so the star is already climbing as it fades in. */
@@ -2536,6 +2557,7 @@ main {
 .comment-sparkles[data-type="activity"] { --burst: var(--heart-activity); }
 .comment-sparkles[data-type="photo"]    { --burst: var(--heart-photo); }
 .comment-sparkles[data-type="poll"]     { --burst: var(--heart-poll); }
+.comment-sparkles[data-type="song"]     { --burst: var(--heart-song); }
 .comment-sparkles .spark {
   left: 50%; top: 50%;
   animation: like-fly 0.4s linear both, comment-spark-fade 0.4s ease-in-out both;
@@ -2666,6 +2688,7 @@ main {
 .rx-fan[data-type="photo"]    { --burst: var(--heart-photo); }
 .rx-fan[data-type="activity"] { --burst: var(--heart-activity); }
 .rx-fan[data-type="poll"]     { --burst: var(--heart-poll); }
+.rx-fan[data-type="song"]     { --burst: var(--heart-song); }
 
 /* The heart the fan grew out of, redrawn over the veil in the same place and
    the same ink, so it stays clear while the page dims. A tap on it puts the fan
@@ -2977,6 +3000,7 @@ main {
    by itself and this file learns nothing about which one is live. */
 .type-icon--note     { color: var(--type-mark, var(--type-note-ink)); }
 .type-icon--poll     { color: var(--type-mark, var(--type-poll-ink)); }
+.type-icon--song     { color: var(--type-mark, var(--type-song-ink)); }
 .type-icon--find     { color: var(--type-mark, var(--type-find-ink)); }
 .type-icon--photo    { color: var(--type-mark, var(--type-photo-ink)); }
 .type-icon--activity { color: var(--type-mark, var(--type-activity-ink)); }
@@ -5007,6 +5031,7 @@ body.gate main { padding: 0; }
 #c-add-link[aria-pressed="true"]  { color: var(--type-find-ink); }
 #c-add-photo[aria-pressed="true"] { color: var(--type-photo-ink); }
 #c-add-poll[aria-pressed="true"]  { color: var(--type-poll-ink); }
+#c-add-song[aria-pressed="true"]  { color: var(--type-song-ink); }
 #c-add-event[aria-pressed="true"] { color: var(--type-activity-ink); }
 /* ── Composer: the poll surface ──────────────────────────────────────────────
    Flat editorial (a poll is content, never glass): a stack of choice rows, each
@@ -5818,6 +5843,42 @@ button.poll-option:disabled { cursor: default; }
   cursor: pointer;
 }
 .song-clear:disabled { opacity: 0.5; cursor: default; }
+
+/* ── A music post's track, on its card (1.8) ──────────────────────────────────
+   The current-song box from the picker, laid into a card: one record, stated,
+   so it keeps that box's hairline and panel fill and the pinned card's 88px
+   sleeve. The whole row is the link out (songLink); the play mark at the end
+   says so without a word, and wears the type's ink like a Find's arrow wears
+   nothing, because here the hue IS the type's only mark on the card. */
+.card-song {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.6rem 0 0.75rem;
+  padding: 0.4rem;
+  border: var(--glass-edge);
+  border-radius: var(--radius-card);
+  background: var(--glass-bg-panel);
+  color: inherit;
+  text-decoration: none;
+}
+.card-song .song-art { width: 88px; height: 88px; }
+.card-song .song-title { font-weight: 700; }
+.card-song-play {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--type-song-ink);
+}
+.card-song-play svg { width: 22px; height: 22px; }
+/* On the composer the surface is a field, so the current-pick box drops the page
+   gutter the picker page centres it in. */
+.song-field .song-now,
+.song-field .song-results { max-width: none; }
+.song-field .song-now { margin-bottom: 0.6rem; }
 
 /* ── Trending tags — the one index on Discover (rule 7 in renderDiscover) ─────
    Flat editorial, NOT glass. It's a contents strip for the page below it, and
@@ -6809,6 +6870,7 @@ button.poll-option:disabled { cursor: default; }
 .pin[data-type="photo"],    .pin-row[data-type="photo"]    { --pin-hue: var(--type-photo);    --pin-ink: var(--type-photo-ink); }
 .pin[data-type="activity"], .pin-row[data-type="activity"] { --pin-hue: var(--type-activity); --pin-ink: var(--type-activity-ink); }
 .pin[data-type="poll"],     .pin-row[data-type="poll"]     { --pin-hue: var(--type-poll);     --pin-ink: var(--type-poll-ink); }
+.pin[data-type="song"],     .pin-row[data-type="song"]     { --pin-hue: var(--type-song);     --pin-ink: var(--type-song-ink); }
 
 /* ── The album's own colour ───────────────────────────────────────────────────
    A blown-up, blurred copy of the artwork, lying over the card's fill and
@@ -9587,6 +9649,15 @@ button.poll-option:disabled { cursor: default; }
   .nav--compose .nav-pill {
     transform: translateX(calc((var(--fab-size) + var(--nav-gap)) / 2)) translateZ(0);
   }
+
+  /* 1.8: THE + LEFT THE TAB BAR. Making something lives on My Circle's top bar
+     now (the compose mark and its dial, see composeBtnEl in app.js), so on a
+     phone the four destinations are the whole bar and sit centred on every
+     route, the composer included. The two rules above are what it did while it
+     was here; they lose to these and are kept only because the sidebar's Post
+     link is the same element. */
+  .nav-publish { display: none; }
+  .nav--compose .nav-pill { transform: translateZ(0); }
 
   /* ── The comment bar takes the nav's place ────────────────────────────────
      ON A POST'S PAGE THE BOTTOM OF THE SCREEN IS THE COMPOSER. The four

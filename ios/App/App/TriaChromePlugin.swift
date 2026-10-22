@@ -179,7 +179,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard let host = self.bridge?.viewController?.view else {
+            guard let hostController = self.bridge?.viewController,
+                  let host = hostController.view else {
                 call.reject("No view controller to hang the chrome on.")
                 return
             }
@@ -197,7 +198,10 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 bar.onMetrics = { [weak self] bottom in
                     self?.notifyListeners("chromeMetrics", data: ["bottom": bottom])
                 }
-                bar.install(in: host)
+                // The controller, not its view: the tab bar is a child
+                // UITabBarController now, and the web view's scroll view is
+                // what it folds on. See TriaChromeBar.
+                bar.install(in: hostController, scroller: self.bridge?.webView?.scrollView)
                 self.bar = bar
             }
             bar.apply(tabs: tabs, fab: fab)
@@ -564,24 +568,6 @@ protocol TriaChromeControl: AnyObject {
 
 // MARK: - The bar
 
-/// The floating pill and the + beside it, in real glass.
-///
-/// This is a `UIGlassContainerEffect` view spanning the bottom of the screen,
-/// with the two glass elements nested in its `contentView` — the configuration
-/// the header calls for, and what makes the pair render as one glass system
-/// (shared environment sampling, one set of highlights) rather than two
-/// unrelated blurs that happen to be adjacent.
-///
-/// It is NOT a `UITabBar`, and the reason is that Tria's bar is not one: it is a
-/// detached capsule of four icons with a round Post button breaking out beside
-/// it, and it has been that since the July 2026 nav overhaul (see the mobile
-/// block of `css/app.css`). A `UITabBar` would draw a full-width bar with a
-/// different selection idiom, so "go native" would have meant "adopt a different
-/// design", which is not what 1.4 is. What that costs is spelled out in
-/// `docs/native-chrome.md`: the accessibility tree is built by hand below, and
-/// the icons don't scale with Dynamic Type — which is parity with the web bar,
-/// whose `.nav-ico` is a fixed 28px, not a regression.
-
 /* THE RAMP, UNDER THE GLASS RATHER THAN ON IT. This is the third answer to
    "the + cannot carry the four brand stops", and the first that keeps all four.
 
@@ -777,203 +763,79 @@ enum TriaBand {
     }
 }
 
+/// 1.8: THE FOUR DESTINATIONS IN A REAL `UITabBar`, inside a real
+/// `UITabBarController`, which is where every tab bar behaviour the system
+/// ships actually lives: the Liquid Glass capsule, the lens that slides to the
+/// tab you pressed (and follows a finger dragged along the bar), Dynamic Type,
+/// the accessibility tree, and `tabBarMinimizeBehavior`, which folds the bar to
+/// one glass bubble while you read DOWN and opens it again on the way back up.
+///
+/// This reverses the paragraph that used to stand here. It said Tria's bar was
+/// not a tab bar — a detached capsule of four icons with a round + breaking out
+/// beside it — so adopting `UITabBar` would mean adopting a different design.
+/// That was right, and 1.8 is the different design: the + went up to My
+/// Circle's top bar beside Updates, which left four destinations and nothing
+/// else, and four destinations is exactly what a `UITabBar` is for. A hand-built
+/// copy of one now would be the thing 1.4 existed to stop doing.
+///
+/// THE CONTROLLER DOES NOT OWN THE PAGE. Capacitor's bridge controller owns the
+/// web view and stays the window's root; this controller is its CHILD, and
+/// every one of its four tabs is an empty, clear, untouchable page. The web view
+/// is never moved into a tab. So the controller is a renderer of a bar and
+/// nothing more, which is the contract every other native piece keeps: app.js
+/// holds the route, a tap goes out as `chromeTap`, and the highlight comes back
+/// in through `select`. `TriaTabShell` is what makes that physically true —
+/// the controller's view spans the screen, and the shell hands every touch that
+/// is not on the bar itself through to the web view underneath.
+///
+/// `fab` still arrives with `setTabs` and `setFab`, and only `tabTint` is read
+/// from it now: there is no + down here to paint.
 @available(iOS 26.0, *)
-final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
+final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelegate {
 
-    // Every one of these is a figure from the mobile block of css/app.css, and
-    // they are the copy — change one there, change it here. CSS rem is 16px and
-    // a CSS px is a point, so the conversions are exact rather than eyeballed.
     private enum Metric {
-        static let tabSide: CGFloat = 50        // .nav-link
-        static let tabIcon: CGFloat = 28        // .nav-link .nav-ico
-        static let tabGap: CGFloat = 4.8        // .nav-pill gap: 0.3rem
-        static let pillPadX: CGFloat = 8.8      // .nav-pill padding-inline: 0.55rem
-        static let pillPadY: CGFloat = 6.4      // .nav-pill padding-block: 0.4rem
-        static let fabSize: CGFloat = 56        // --fab-size
-        static let fabIcon: CGFloat = 30        // .nav-publish .nav-ico
-        static let navGap: CGFloat = 11.2       // --nav-gap: 0.7rem
-        static let dotSize: CGFloat = 6.5       // .nav-pill .nav-dot
-        /// Off the tab's own 50pt square, top and trailing, which is what the
-        /// CSS measures from too. The glyph is 28 centred, so its edge is 14 out
-        /// from the middle and its diagonal corner nearer 10; this lands the mark
-        /// just clear of every drawing in the row.
-        static let dotInset: CGFloat = 11       // .nav-pill .nav-dot top/right
-        /// A tag rather than a stored array of views, because the row is thrown
-        /// away and rebuilt whole on every `setTabs` and a parallel array would
-        /// be a second thing to keep in step with it. The view IS the record.
-        static let dotTag = 0x7D07
-        static let float: CGFloat = 8           // .nav bottom: 0.5rem above the safe area
-        /// Slack around the glass inside the container, so `--glass-lift` — the
-        /// soft drop that makes the pill visibly float off the page — isn't
-        /// clipped by the container's own bounds. It is padding, not chrome:
-        /// `reservedBottom()` measures past it, and `point(inside:)` never
-        /// answers for it.
-        static let shadowPad: CGFloat = 24
-        /// The web reserves a little more than the bar's own height so a feed's
-        /// last card clears the glass rather than tucking under its edge.
-        static let clearance: CGFloat = 16
+        /// A tab bar item's drawing. The system lays the capsule out around it;
+        /// 26 is the size the icon-and-title idiom is drawn at, and the web's
+        /// 28px nav glyph had no title under it to make room for.
+        static let icon: CGFloat = 26
+        /// Past the top of the bar, what the last card of a feed keeps clear.
+        static let clearance: CGFloat = 8
     }
 
-    /// `--muted` / `--text` from css/tokens.css, in the one form CSS can't
-    /// reach. A trait-closure UIColor re-resolves itself when the system scheme
-    /// flips, so this needs no `traitCollectionDidChange` — the same trick, and
-    /// the same standing obligation, as `TriaViewController.paper`.
-    ///
-    /// `liveInk` is the FALLBACK the lit tab takes when the reader has no
-    /// accent to wear. `tabTint`, sent on the same `fab` payload as the +'s own
-    /// band and already declining the ramp (see fabSpec's note on why the +
-    /// can't carry four hues — a tab icon has even less room than a 56pt disc),
-    /// stands in for it whenever the reader has one.
-    private static let idleInk = UIColor { $0.userInterfaceStyle == .dark
-        ? UIColor(red: 0.588, green: 0.612, blue: 0.639, alpha: 1)   // #969ca3
-        : UIColor(red: 0.361, green: 0.388, blue: 0.420, alpha: 1)   // #5c636b
-    }
-    private static let liveInk = UIColor { $0.userInterfaceStyle == .dark
-        ? UIColor(red: 0.914, green: 0.922, blue: 0.929, alpha: 1)   // #e9ebed
-        : UIColor(red: 0.078, green: 0.090, blue: 0.102, alpha: 1)   // #14171a
-    }
-
+    /// A destination tapped, or the one you are on tapped again — app.js tells
+    /// the two apart, the same way it does for the CSS nav.
     var onTap: ((String) -> Void)?
+    /// The height the web has to reserve at the foot of every page.
     var onMetrics: ((CGFloat) -> Void)?
 
-    private let pill = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-    /// REGULAR glass, and the effect on it is replaced rather than tuned:
-    /// `TriaBand.apply` hands it a fresh one whenever the band changes, because
-    /// that is the only way a tint reaches the material. Clear glass was tried
-    /// and is wrong for this control — it is transparent enough that the disc
-    /// takes its value from whatever photograph is behind it, and the + is up
-    /// on every route over a scrolling feed.
-    private let fab = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
-    /// There is no ramp under the + . It wore one for as long as it wore Tria's
-    /// band, and that band was the only thing a ramp was ever for; the + takes
-    /// an accent as a tint on the glass and everything else as plain glass. See
-    /// `fabSpec` in app.js. What went with the ramp is a sibling view that the
-    /// fade and the sink below had to move, hide and show by hand.
-    private let row = UIStackView()
-    private let fabGlyph = UIImageView()
-    private let fabButton = UIButton(type: .custom)
-
+    private let controller = UITabBarController()
+    private let shell = TriaTabShell()
     private var routes: [String] = []
-    private var fabRoute = ""
     private var currentRoute = ""
-    /// The reader's own accent, off the `fab` payload's `tabTint` — nil is "no
-    /// colour" and also Tria's ramp, which a tab icon declines the same way the
-    /// + does. See the note on `liveInk` above.
-    ///
-    /// IT USED TO READ `tint`, the +'s own, and the two parted when the + stopped
-    /// having a bare state: it wears the NEUTRAL now where it used to wear
-    /// nothing (see `fabSpec` in app.js), and a tab row inked with the neutral is
-    /// a row inked with the paper's opposite — which is what `liveInk` already
-    /// is, said twice in two places and free to drift.
     private var tabTint: UIColor?
-
-    /// Which destinations carry a dot, and in what colour. Kept rather than
-    /// applied and forgotten, because `setTabs` throws the whole row away and
-    /// builds it again — the dots and the tabs arrive in either order and on
-    /// their own schedules, so whichever lands second has to be able to find the
-    /// other one waiting.
     private var dots: [String: UIColor] = [:]
-    private var pillCenterX: NSLayoutConstraint?
-    private var fabCenterX: NSLayoutConstraint?
-
-    /// What JS asked for, kept apart from what is on screen: the keyboard also
-    /// gets a vote (see `keyboardChanged`), and when it goes down the bar has to
-    /// return to the state the router last named rather than to "visible".
     private var wantsChrome = true
-    private var wantsFab = true
     private var keyboardUp = false
     private var lastReportedBottom: CGFloat = -1
+    private weak var scroller: UIScrollView?
 
-    init() {
-        // spacing 0, deliberately. The container's job here is combined
-        // rendering; the merge is a separate behaviour and Tria's design keeps
-        // the pill and the + as two distinct objects with air between them.
-        // A spacing at or above --nav-gap would fuse them into one blob.
-        let container = UIGlassContainerEffect()
-        container.spacing = 0
-        super.init(effect: container)
-        build()
-    }
+    override init() {
+        super.init()
+        controller.delegate = self
+        /* THE BAR FOLDS WHILE YOU READ DOWN. The system's own gesture, and the
+           reason this is a controller rather than a bare `UITabBar` in a view:
+           minimising is the controller's behaviour, read off the content scroll
+           view of the selected tab, which is handed the web view's scroll view
+           in `select` below. Nothing here watches the scroll for it. */
+        controller.tabBarMinimizeBehavior = .onScrollDown
+        controller.view.backgroundColor = .clear
+        // Ink for the lit tab. The system's default is its blue, which is not a
+        // colour Tria wears anywhere; `.label` is black on paper and white on
+        // ink, and a reader's accent replaces it in `apply`.
+        controller.tabBar.tintColor = .label
+        shell.tabBar = controller.tabBar
+        shell.onLayout = { [weak self] in self?.report() }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    // MARK: Building
-
-    private func build() {
-        translatesAutoresizingMaskIntoConstraints = false
-
-        // Interactive glass: the system's own press response, which is why
-        // there are no touch-down handlers below adding a scale of our own. It
-        // is also why there is no haptic here — system controls buzz
-        // themselves, and Tria's own rule reserves a buzz for an act that
-        // changed the shared world, which a navigation never is.
-        // The pill's own press response. The +'s is set by `TriaBand.apply`,
-        // which hands it a whole new effect every time its band changes — see
-        // the note there about mutating a cached one.
-        (pill.effect as? UIGlassEffect)?.isInteractive = true
-        pill.cornerConfiguration = .capsule()
-        fab.cornerConfiguration = .capsule()
-        pill.translatesAutoresizingMaskIntoConstraints = false
-        fab.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(pill)
-        contentView.addSubview(fab)
-
-        // VoiceOver reads the capsule as a tab bar and each disc as a button
-        // that is or isn't selected — built by hand, because a custom control
-        // gets none of that free. Icon-only tabs have no visible label, so
-        // `accessibilityLabel` off the route's own name is the only name there
-        // is, and it is not optional.
-        pill.contentView.accessibilityTraits = .tabBar
-        row.axis = .horizontal
-        row.spacing = Metric.tabGap
-        row.alignment = .center
-        row.translatesAutoresizingMaskIntoConstraints = false
-        pill.contentView.addSubview(row)
-
-        fabGlyph.translatesAutoresizingMaskIntoConstraints = false
-        fabGlyph.contentMode = .center
-        fabButton.translatesAutoresizingMaskIntoConstraints = false
-        fabButton.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
-        fab.contentView.addSubview(fabGlyph)
-        fab.contentView.addSubview(fabButton)
-        let pillX = pill.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
-        let fabX = fab.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
-        pillCenterX = pillX
-        fabCenterX = fabX
-
-        let pillHeight = Metric.tabSide + 2 * Metric.pillPadY
-
-        NSLayoutConstraint.activate([
-            pill.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            pill.heightAnchor.constraint(equalToConstant: pillHeight),
-            pillX,
-            row.leadingAnchor.constraint(equalTo: pill.contentView.leadingAnchor, constant: Metric.pillPadX),
-            row.trailingAnchor.constraint(equalTo: pill.contentView.trailingAnchor, constant: -Metric.pillPadX),
-            row.topAnchor.constraint(equalTo: pill.contentView.topAnchor, constant: Metric.pillPadY),
-            row.bottomAnchor.constraint(equalTo: pill.contentView.bottomAnchor, constant: -Metric.pillPadY),
-
-            fab.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            fab.widthAnchor.constraint(equalToConstant: Metric.fabSize),
-            fab.heightAnchor.constraint(equalToConstant: Metric.fabSize),
-            fabX,
-            fabGlyph.centerXAnchor.constraint(equalTo: fab.contentView.centerXAnchor),
-            fabGlyph.centerYAnchor.constraint(equalTo: fab.contentView.centerYAnchor),
-            fabButton.leadingAnchor.constraint(equalTo: fab.contentView.leadingAnchor),
-            fabButton.trailingAnchor.constraint(equalTo: fab.contentView.trailingAnchor),
-            fabButton.topAnchor.constraint(equalTo: fab.contentView.topAnchor),
-            fabButton.bottomAnchor.constraint(equalTo: fab.contentView.bottomAnchor)
-        ])
-
-        // The keyboard is the one piece of geometry the web layer genuinely
-        // cannot see from in here. Capacitor's webview does not resize when the
-        // keyboard comes up, so a CSS `position: fixed` bar simply ends up
-        // BEHIND the keyboard and out of sight — which is what 1.3 does, and it
-        // is right. A native bar has no such luck: it would float ON TOP of the
-        // keyboard, over the compose form's own controls. So the bar answers
-        // the keyboard itself. That is geometry, not navigation — it never
-        // changes which tab is lit, and the state the router named is restored
-        // the moment the keyboard goes down.
         let centre = NotificationCenter.default
         centre.addObserver(self, selector: #selector(keyboardShown),
                            name: UIResponder.keyboardWillShowNotification, object: nil)
@@ -981,278 +843,145 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
                            name: UIResponder.keyboardWillHideNotification, object: nil)
     }
 
-    func install(in host: UIView) {
-        host.addSubview(self)
-        NSLayoutConstraint.activate([
-            leadingAnchor.constraint(equalTo: host.leadingAnchor),
-            trailingAnchor.constraint(equalTo: host.trailingAnchor),
-            // `.nav { bottom: calc(0.5rem + env(safe-area-inset-bottom)) }` —
-            // iOS floating tab bars hug the home indicator rather than being
-            // lifted well into the screen, and the safe-area inset has already
-            // reserved the indicator itself.
-            bottomAnchor.constraint(equalTo: host.safeAreaLayoutGuide.bottomAnchor,
-                                    constant: -Metric.float + Metric.shadowPad),
-            heightAnchor.constraint(equalToConstant: Metric.tabSide + 2 * Metric.pillPadY
-                                    + 2 * Metric.shadowPad)
-        ])
+    func install(in host: UIViewController, scroller: UIScrollView?) {
+        self.scroller = scroller
+        shell.frame = host.view.bounds
+        shell.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.addChild(controller)
+        host.view.addSubview(shell)
+        controller.view.frame = shell.bounds
+        controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        shell.addSubview(controller.view)
+        controller.didMove(toParent: host)
     }
-
-    // MARK: State
 
     func apply(tabs: [[String: Any]]?, fab fabSpec: [String: Any]?) {
         if let tabs {
             routes = tabs.compactMap { $0["route"] as? String }
-            row.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            for (index, tab) in tabs.enumerated() {
-                let button = UIButton(type: .custom)
-                button.translatesAutoresizingMaskIntoConstraints = false
-                button.setImage(TriaSVG.image(markup: tab["icon"] as? String ?? "",
-                                              size: Metric.tabIcon, ink: .black,
-                                              template: true), for: .normal)
-                button.tag = index
-                // INKED HERE, not left to `selectTab`. A template image with no
-                // tintColor of its own inherits the window's, which is
-                // systemBlue — and `setTabs` and `selectTab` are two bridge
-                // calls a frame or more apart, so the bar's first paint was four
-                // blue glyphs. Idle is the right guess for three of the four,
-                // and `select` corrects the fourth on the same run loop.
-                button.tintColor = Self.idleInk
-                button.accessibilityLabel = tab["label"] as? String
-                button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
-                NSLayoutConstraint.activate([
-                    button.widthAnchor.constraint(equalToConstant: Metric.tabSide),
-                    button.heightAnchor.constraint(equalToConstant: Metric.tabSide)
-                ])
-                row.addArrangedSubview(button)
-            }
-            // Both offsets are the group centred as a whole, the way
-            // `.nav { justify-content: center }` centres [pill, +] together —
-            // so the pill sits left of centre by half the +'s footprint and the
-            // + sits right of centre by half the pill's.
-            let pillWidth = CGFloat(tabs.count) * Metric.tabSide
-                + CGFloat(max(tabs.count - 1, 0)) * Metric.tabGap
-                + 2 * Metric.pillPadX
-            pillCenterX?.constant = -(Metric.fabSize + Metric.navGap) / 2
-            fabCenterX?.constant = (pillWidth + Metric.navGap) / 2
-            // Every button above is new, so every dot on the old ones went with
-            // the row. This is why `dots` is held rather than applied once.
+            controller.setViewControllers(tabs.enumerated().map { index, tab in
+                let page = TriaTabPage()
+                let label = tab["label"] as? String ?? ""
+                // A template, so the system inks it: its own grey for the three
+                // you are not on and `tintColor` for the one you are.
+                let image = TriaSVG.image(markup: tab["icon"] as? String ?? "",
+                                          size: Metric.icon, ink: .black, template: true)
+                page.tabBarItem = UITabBarItem(title: label, image: image, tag: index)
+                return page
+            }, animated: false)
             paintDots()
+            select(route: currentRoute)
         }
         if let fabSpec {
-            fabRoute = fabSpec["route"] as? String ?? fabRoute
-            // Drawn from the same markup the web +'s own <svg> carries; see
-            // TriaSVG for why there is no second copy of it in Swift any more.
-            if let glyph = fabSpec["glyph"] as? String, !glyph.isEmpty {
-                fabGlyph.image = TriaSVG.image(markup: glyph, size: Metric.fabIcon,
-                                               ink: .black, template: true)
-            }
-            fabButton.accessibilityLabel = fabSpec["label"] as? String ?? fabButton.accessibilityLabel
-            TriaBand.apply(fabSpec, glass: fab)
-            // `.label` when the spec names no ink, which is what "no colour"
-            // sends: a bare + wears the system's own, right in both schemes.
-            fabGlyph.tintColor = TriaChromeBar.color(fromHex: fabSpec["ink"] as? String ?? "")
-                ?? .label
-            // The same band, on the lit tab. A colour pick sends this on
-            // `setFab` alone, so re-run `select` to retint whichever tab is
-            // already lit rather than waiting on a navigation to correct it —
-            // the amber-+-over-rainbow-pill bug `repaint` exists to close.
-            tabTint = TriaChromeBar.color(fromHex: fabSpec["tabTint"] as? String ?? "")
-            select(route: currentRoute)
+            tabTint = Self.color(fromHex: fabSpec["tabTint"] as? String ?? "")
+            controller.tabBar.tintColor = tabTint ?? .label
         }
     }
 
+    /// A DOT, and never a number: `badgeValue` set to the EMPTY string is the
+    /// system's own unnumbered badge. The colour is the reader's `--dot`,
+    /// resolved over there like every other paint on this bridge.
     func setDots(_ map: [String: String]) {
         for (route, hex) in map {
-            if let colour = Self.color(fromHex: hex) { dots[route] = colour }
-            else { dots[route] = nil }          // an empty colour is "no dot"
+            dots[route] = Self.color(fromHex: hex)   // an empty colour is "no dot"
         }
         paintDots()
     }
 
-    /// One dot per destination that has news, on the glyph's top trailing
-    /// corner, measured off the same 50pt square `.nav-pill .nav-dot` measures
-    /// off in app.css so the two chromes put the mark in one place.
-    ///
-    /// IT IS NOT DIMMED WITH ITS TAB, which is the whole reason it is a sibling
-    /// of the button's image rather than part of the drawing. `select` inks the
-    /// three tabs you are not on down to `idleInk`, and those are precisely the
-    /// three a dot can ever have anything to say about — the one you are looking
-    /// at is the one whose news you have already spent. The web answers the same
-    /// problem the same way; see the note beside `.nav-pill .nav-ico`.
     private func paintDots() {
-        for (index, view) in row.arrangedSubviews.enumerated() {
-            guard let button = view as? UIButton, index < routes.count else { continue }
-            let colour = dots[routes[index]]
-            // Spoken, not just drawn. The label is the destination's name, so
-            // VoiceOver reads "Updates, New" and the mark is not silent.
-            button.accessibilityValue = colour == nil ? nil : "New"
-            let existing = button.viewWithTag(Metric.dotTag)
-            guard let colour else {
-                existing?.removeFromSuperview()
-                continue
-            }
-            let dot: UIView
-            if let existing {
-                dot = existing
+        for (index, page) in (controller.viewControllers ?? []).enumerated() where index < routes.count {
+            let item = page.tabBarItem
+            if let colour = dots[routes[index]] {
+                item?.badgeValue = ""
+                item?.badgeColor = colour
+                item?.accessibilityValue = "New"
             } else {
-                dot = UIView()
-                dot.tag = Metric.dotTag
-                dot.translatesAutoresizingMaskIntoConstraints = false
-                dot.layer.cornerRadius = Metric.dotSize / 2
-                // The button owns the tap; a dot that took touches would be a
-                // 6.5pt hole in the middle of a 50pt target.
-                dot.isUserInteractionEnabled = false
-                button.addSubview(dot)
-                NSLayoutConstraint.activate([
-                    dot.widthAnchor.constraint(equalToConstant: Metric.dotSize),
-                    dot.heightAnchor.constraint(equalToConstant: Metric.dotSize),
-                    dot.topAnchor.constraint(equalTo: button.topAnchor,
-                                             constant: Metric.dotInset),
-                    dot.trailingAnchor.constraint(equalTo: button.trailingAnchor,
-                                                  constant: -Metric.dotInset)
-                ])
+                item?.badgeValue = nil
+                item?.accessibilityValue = nil
             }
-            dot.backgroundColor = colour
         }
     }
 
+    /// Which destination is lit. A route no tab names (a friend's profile, a
+    /// post) leaves the last one lit, which is what a pushed page in any tab
+    /// bar app does — a `UITabBarController` has no "none selected" state, and
+    /// the place you came from is the honest answer to "where am I".
     func select(route: String) {
         currentRoute = route
-        for (index, button) in row.arrangedSubviews.enumerated() {
-            guard let button = button as? UIButton, index < routes.count else { continue }
-            let live = routes[index] == route
-            button.tintColor = live ? (tabTint ?? Self.liveInk) : Self.idleInk
-            if live { button.accessibilityTraits.insert(.selected) }
-            else { button.accessibilityTraits.remove(.selected) }
-        }
+        guard let index = routes.firstIndex(of: route),
+              let pages = controller.viewControllers, index < pages.count else { return }
+        if controller.selectedIndex != index { controller.selectedIndex = index }
+        // The scroll the bar folds on belongs to whichever tab is up, so it is
+        // handed over with the selection. One web view, four owners in turn.
+        pages[index].setContentScrollView(scroller, for: .bottom)
     }
 
-    func setVisibility(chrome: Bool, fab fabVisible: Bool) {
+    /* A TAP CROSSES AS A ROUTE, and the system is allowed to move its lens first.
+       The old bar held its highlight still until the router answered, and a real
+       tab bar that does that reads as a bar that ignored the finger: the lens
+       slide IS the press feedback. So this returns true and app.js confirms it
+       on the next `select` — which also corrects it, on the frame after, for a
+       tap the router turns down. The same tab pressed again comes through here
+       too, and app.js answers that one with reclick (scroll to the top). */
+    func tabBarController(_ tabBarController: UITabBarController,
+                          shouldSelect viewController: UIViewController) -> Bool {
+        guard let index = tabBarController.viewControllers?.firstIndex(of: viewController),
+              index < routes.count else { return false }
+        onTap?(routes[index])
+        return true
+    }
+
+    func setVisibility(chrome: Bool, fab _: Bool) {
         wantsChrome = chrome
-        wantsFab = fabVisible
-        syncVisibility(animated: true)
+        syncVisibility()
     }
 
-    private func syncVisibility(animated: Bool) {
-        let chromeUp = wantsChrome && !keyboardUp
-        let fabUp = chromeUp && wantsFab
-
-        /* THE WHOLE CHROME GOES BY `isHidden`, NEVER BY `alpha`.
-           `alpha` on a visual effect view is unsupported, and on a glass
-           CONTAINER it silently does nothing useful: the container renders its
-           nested glass elements in a pass of its own, so alpha 0 left the pill
-           and the + drawn at partial strength on top of the post page's comment
-           bar — measured, on the simulator, and it is why this is not a fade.
-           Which is also the right answer: on the web these go with `display:
-           none` and no transition at all (see body.postbar-live .nav), for the
-           reason navigation.md gives about page changes. */
-        isHidden = !chromeUp
-        isUserInteractionEnabled = chromeUp
-        fab.isUserInteractionEnabled = fabUp
-        if fabUp { fab.isHidden = false }
-
-        // The + itself is a nested glass ELEMENT rather than the container, and
-        // it does honour alpha — so the composer's tuck keeps the fade and the
-        // sink it has on the web: fades fast while it sinks slower, so it reads
-        // as dropping behind the nav rather than blinking out.
-        let apply = {
-            self.fab.alpha = fabUp ? 1 : 0
-            self.fab.transform = fabUp ? .identity
-                : CGAffineTransform(translationX: 0, y: 14).scaledBy(x: 0.6, y: 0.6)
-            // The + stays in flow at opacity 0 and the pill glides right by half
-            // its footprint, which lands the pill's centre on the screen's —
-            // the same recentring `.nav--compose` does in CSS, by the same
-            // arithmetic.
-            self.pill.transform = fabUp ? .identity
-                : CGAffineTransform(translationX: (Metric.fabSize + Metric.navGap) / 2, y: 0)
-        }
-        // Hidden for real once it has finished sinking, so a + at alpha 0 can't
-        // take a tap meant for the pill. Re-read rather than captured: a newer
-        // state may have landed while this animation was running.
-        let settle: (Bool) -> Void = { [weak self] _ in
-            guard let self else { return }
-            self.fab.isHidden = !(self.wantsChrome && !self.keyboardUp && self.wantsFab)
-        }
-        if animated && !UIAccessibility.isReduceMotionEnabled {
-            UIView.animate(withDuration: 0.28, delay: 0,
-                           usingSpringWithDamping: 0.9, initialSpringVelocity: 0,
-                           options: [.allowUserInteraction, .beginFromCurrentState],
-                           animations: apply, completion: settle)
-        } else {
-            apply()
-            settle(true)
-        }
+    /// The whole bar goes by `isHidden`, with no transition, for the reason the
+    /// web gives `body.postbar-live .nav` a `display: none`: a page change has
+    /// no animation in this app (navigation.md), and the post page's comment
+    /// bar is the only thing that belongs at the foot of that screen.
+    private func syncVisibility() {
+        let up = wantsChrome && !keyboardUp
+        shell.isHidden = !up
     }
 
-    // MARK: Geometry
-
-    /// What the web must stop drawing under, in CSS pixels — which are points,
-    /// so this number needs no conversion. Measured from the bottom of the
-    /// window to the top of the glass, plus the clearance a feed's last card
-    /// wants. `main`'s padding reads it and never a hardcoded height, so the
-    /// bar's size can move here without a stylesheet edit chasing it.
     func reservedBottom() -> CGFloat {
-        guard let host = superview else { return 0 }
-        return host.bounds.maxY - (frame.minY + Metric.shadowPad) + Metric.clearance
+        guard let host = shell.superview else { return 0 }
+        let bar = controller.tabBar
+        guard bar.bounds.height > 0 else { return 0 }
+        let top = bar.convert(bar.bounds, to: host).minY
+        return max(0, host.bounds.maxY - top) + Metric.clearance
     }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        // A rotation or a safe-area change moves the bar; the web has to be
-        // told, and told only when the number actually changed, since this runs
-        // on every layout pass.
+    /* Reported only when it GROWS or the screen changed shape, never on the way
+       down. A folded bar is shorter than an open one, and a reserve that shrank
+       with it would move the foot of every page while the reader is scrolling
+       it — the one moment the page must hold still. */
+    private var reportedFor: CGSize = .zero
+    private func report() {
+        let size = shell.bounds.size
         let bottom = reservedBottom()
-        if abs(bottom - lastReportedBottom) > 0.5 {
+        guard bottom > 0 else { return }
+        if size != reportedFor || bottom > lastReportedBottom + 0.5 {
+            reportedFor = size
             lastReportedBottom = bottom
             onMetrics?(bottom)
         }
     }
 
-    /// The container spans the width of the screen so the two glass elements can
-    /// share one environment, but it must not eat the taps and scrolls that
-    /// belong to the page underneath. Returning false everywhere except over the
-    /// pill and the + makes `hitTest` walk straight past it, which is the same
-    /// contract `.nav { pointer-events: none }` gives the web row.
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        guard isUserInteractionEnabled, alpha > 0.01 else { return false }
-        for child in contentView.subviews where !child.isHidden && child.alpha > 0.01 {
-            if child.point(inside: child.convert(point, from: self), with: event) { return true }
-        }
-        return false
-    }
-
-    // MARK: Taps and the keyboard
-
-    @objc private func tabTapped(_ sender: UIButton) {
-        guard sender.tag < routes.count else { return }
-        // The route goes back to app.js, which calls the same `go('#/…')` the
-        // CSS nav calls. Nothing is selected here — the highlight moves when
-        // the router comes back with `selectTab`, so there is exactly one
-        // navigation path and native never gets ahead of the history.
-        onTap?(routes[sender.tag])
-    }
-
-    @objc private func fabTapped() {
-        guard !fabRoute.isEmpty else { return }
-        onTap?(fabRoute)
-    }
-
     @objc private func keyboardShown() {
         keyboardUp = true
-        syncVisibility(animated: true)
+        syncVisibility()
     }
 
     @objc private func keyboardHidden() {
         keyboardUp = false
-        syncVisibility(animated: true)
+        syncVisibility()
     }
 
-    // MARK: Colour
-
-    /// `#rgb` / `#rrggbb` / `rgb(r, g, b)` — whatever app.js resolved the band
-    /// to. It sends real numbers, never a token name: the band is the reader's
-    /// own accent as often as it is Tria's ramp (see paintBrandBand), and a
-    /// native copy of that derivation would be a second place for it to drift.
+    /// Hex or `rgb()`/`rgba()`, which are the two forms app.js resolves a colour
+    /// to. Every native piece in this file reads its colours through here; a
+    /// native copy of the web's colour derivation would be a second place for
+    /// it to drift.
     static func color(fromHex raw: String) -> UIColor? {
         let text = raw.trimmingCharacters(in: .whitespaces)
         if text.hasPrefix("rgb") {
@@ -1269,6 +998,41 @@ final class TriaChromeBar: UIVisualEffectView, TriaChromeControl {
         return UIColor(red: CGFloat((value >> 16) & 0xff) / 255,
                        green: CGFloat((value >> 8) & 0xff) / 255,
                        blue: CGFloat(value & 0xff) / 255, alpha: 1)
+    }
+}
+
+/// One tab's page, which is nothing. The web view under the shell is every
+/// page; this only exists because a `UITabBarController` needs a controller per
+/// tab to hang a `tabBarItem` on.
+@available(iOS 26.0, *)
+final class TriaTabPage: UIViewController {
+    override func loadView() {
+        let blank = UIView()
+        blank.backgroundColor = .clear
+        blank.isUserInteractionEnabled = false
+        view = blank
+    }
+}
+
+/// The tab bar controller's view spans the screen, and every point of it that is
+/// not the bar has to belong to the web view underneath. So a touch is kept only
+/// when it lands on something INSIDE the bar — a tab, the capsule — and never on
+/// the bar's own bounds, which run the width of the screen even while the
+/// capsule has folded down to one bubble at the leading edge.
+@available(iOS 26.0, *)
+final class TriaTabShell: UIView {
+    weak var tabBar: UITabBar?
+    var onLayout: (() -> Void)?
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, let bar = tabBar,
+              let hit = super.hitTest(point, with: event) else { return nil }
+        return hit !== bar && hit.isDescendant(of: bar) ? hit : nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?()
     }
 }
 
@@ -1888,6 +1652,31 @@ final class TriaToolbarButton: UIVisualEffectView {
         super.removeFromSuperview()
     }
 
+    /// THE BELL'S DOT (1.8), which moved here off the Chats tab when Updates
+    /// moved to My Circle's bar. Same mark as the tab bar's: one colour, no
+    /// number, 6.5pt, on the disc's top-trailing shoulder where the 24pt glyph
+    /// inside a 44pt disc leaves it clear. Nil takes it away.
+    private var dot: UIView?
+    private func paintDot(_ colour: UIColor?) {
+        button.accessibilityValue = colour == nil ? nil : "New"
+        guard let colour else { dot?.removeFromSuperview(); dot = nil; return }
+        let mark = dot ?? UIView()
+        if dot == nil {
+            mark.translatesAutoresizingMaskIntoConstraints = false
+            mark.layer.cornerRadius = 3.25
+            mark.isUserInteractionEnabled = false
+            contentView.addSubview(mark)
+            NSLayoutConstraint.activate([
+                mark.widthAnchor.constraint(equalToConstant: 6.5),
+                mark.heightAnchor.constraint(equalToConstant: 6.5),
+                mark.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+                mark.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8)
+            ])
+            dot = mark
+        }
+        mark.backgroundColor = colour
+    }
+
     func update(spec: [String: Any]) {
         frame = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
                        width: TriaToolbar.number(spec["w"]), height: TriaToolbar.number(spec["h"]))
@@ -1956,6 +1745,8 @@ final class TriaToolbarButton: UIVisualEffectView {
         // keystroke that earns it (`.toolbar-commit--idle`): hidden, but still a
         // transition target, and still holding its slot so the bar's title
         // reserve is settled once at mount. Same here.
+        paintDot(TriaChromeBar.color(fromHex: spec["dot"] as? String ?? ""))
+
         let hidden = spec["hidden"] as? Bool ?? false
         isUserInteractionEnabled = !hidden
         let settle = {
@@ -4191,7 +3982,7 @@ final class TriaPageControls: UIView, TriaPageControlsControl {
         // second line of defence rather than the only one. At boot the bars are
         // installed first (setTabs, then setToolbar, then a page's controls), so
         // this normally finds one.
-        if let chrome = host.subviews.first(where: { $0 is TriaChromeBar || $0 is TriaToolbar }) {
+        if let chrome = host.subviews.first(where: { $0 is TriaTabShell || $0 is TriaToolbar }) {
             host.insertSubview(self, belowSubview: chrome)
         } else {
             host.addSubview(self)

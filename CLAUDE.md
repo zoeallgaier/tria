@@ -21,6 +21,37 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## 1.8 is the nav going all the way native (2026-10-21)
+
+**The bottom bar is a real `UITabBar` now**, in a real `UITabBarController`
+that is a CHILD of the bridge controller (`TriaChromeBar` in
+TriaChromePlugin.swift). The four tabs are empty clear pages and the web view
+is never moved into one; `TriaTabShell` passes every touch that isn't on the bar
+through to the page. That buys the system's Liquid Glass capsule, the lens, the
+labels, Dynamic Type, and `tabBarMinimizeBehavior = .onScrollDown` (the bar
+folds while you read down), with the same `setTabs`/`selectTab`/`setDots`/
+`setChrome` contract as 1.4. The reserve only grows (a folded bar must not move
+the foot of a page mid-scroll).
+
+**The + left the tab bar for My Circle's top bar**, Instagram-style: the
+compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
+trailing. The compose mark opens the DIAL again (`openComposeDial`): the five
+types, then the Daily and Music. Each row presses the composer's matching
+attach button on mount (`pendingAttach`); the type is still inferred. **My
+Circle lost its filter**; profiles, Discover and Updates keep theirs. On the
+web the phone nav simply drops its round +.
+
+**Updates left the chat list.** The Chats tab's dot is chats only; Updates has
+its own dot on the bell (`.toolbar-dot`, crossed to native as a control's `dot`).
+`#/updates` lights My Circle and its back chevron goes there.
+
+**Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
+`posts.song` jsonb in the listening status's shape, minus `at`). The listening
+status is untouched and stays a non-post. The composer's speaker button opens a
+song search (`lookUpSongs`, shared with `#/listening`), the card draws the track
+as a row linking out (`songTileHtml`), and its hue is butter (`--type-song`).
+Everything Music is hidden until `Store.songsReady` sees the column.
+
 ## 1.7 is chats, activities and the public site
 
 Zoe's answers, the calls Claude made, and the three stages:
@@ -195,8 +226,8 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   through `Store.pushPermission()`.
 - **No COUNT, anywhere** — not in `aps`, not on the nav, not on a native tab.
   What the rule refuses is a NUMBER: something that climbs while you are away
-  and asks to be driven back to zero. A DOT is allowed, on the Chats tab only
-  (it answers for Updates and for chats since 1.7), and it is one: it cannot climb, there is nothing to be behind on, and it clears
+  and asks to be driven back to zero. A DOT is allowed, in two places since 1.8:
+  the Chats tab (chats) and the Updates bell on My Circle's bar, and each is one: it cannot climb, there is nothing to be behind on, and it clears
   by looking. Zoe's call, 2026-09-09. See `updatesAreNew` in app.js and
   `setDots` in `TriaChromePlugin.swift`; the dot wears `--dot`, the reader's
   own colour.
@@ -233,6 +264,10 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   "column likes.reaction does not exist" before it and `[]` after. Were the column
   ever missing again, every like reads as a heart and holding one does nothing
   (`Store.reactionsReady`), and that probe is a 400 in a boot pass's console.
+  **`add-song-posts.sql` is NOT run** (2026-10-21): anon
+  `GET /rest/v1/posts?select=song&limit=1` answers 42703 "column posts.song does
+  not exist". Until it runs, `Store.songsReady` is false, no Music row or song
+  button shows, and that probe is the one 400 in a boot pass's console.
 
 ## Copy style
 

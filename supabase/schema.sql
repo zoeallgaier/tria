@@ -56,7 +56,7 @@ create table public.users (
 create table public.posts (
   id         uuid primary key default gen_random_uuid(),
   author     uuid not null references public.users(id) on delete cascade,
-  type       text not null check (type in ('note','find','photo','activity','poll','repost')),
+  type       text not null check (type in ('note','find','photo','activity','poll','song','repost')),
   -- A repost IS a post row, pointing at the one it passes along. Cascading, so a
   -- deleted original takes its reposts with it (quotes included — a quote is a
   -- sentence ABOUT one post, not a post that stands alone). 'repost' is a sixth
@@ -74,6 +74,7 @@ create table public.posts (
   poll       jsonb,                          -- { q, options[] } for poll posts; expires 24h after created_at
   event_date date,                          -- the day an activity happens (sorts + retires past plans)
   event_time text,                          -- optional 'HH:MM' straight from <input type="time">
+  song       jsonb,                         -- { title, artist?, art?, apple?, spotify?, youtube?, kind? } for music posts; see add-song-posts.sql
   -- Who can see this post, authoritatively — the account's `private` flag does
   -- NOT gate reads (it only picks the composer's default). 'circle' means
   -- mutual-friends-only for every account, public ones included.
@@ -93,6 +94,11 @@ create table public.posts (
        and event_date is null and event_time is null)
     or
     (type <> 'repost' and repost_of is null)
+  ),
+  -- A song post carries a song, and nothing else does (add-song-posts.sql).
+  constraint posts_song_shape check (
+    (type = 'song' and song is not null and song ? 'title')
+    or (type <> 'song' and song is null)
   ),
   -- A carousel is a photo post whose cover is also its `image` (add-carousels.sql).
   constraint posts_images_shape check (

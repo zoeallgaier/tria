@@ -1438,3 +1438,23 @@ address and therefore a different person, and there is no way around that.
   because one pinned post was deleted this morning. `Store.deletePost` prunes a
   pin at the post it just deleted, so a spent slot with nothing in it is the
   fallback rather than the normal path.
+
+## Music posts (1.8)
+
+**A song can be a post now**, type `song`, with the track in `posts.song`
+(`supabase/add-song-posts.sql`, NOT run as of 2026-10-21; the probe answers
+42703). The shape is the listening status's, minus `at`:
+`{ title, artist?, art?, apple?, spotify?, youtube?, kind? }`, so `songLink` and
+`songSub` read both. `posts_song_shape` makes `song` required on a song post and
+forbidden everywhere else, reposts included.
+
+**It does not replace the listening status.** add-listening-to.sql argued a
+status must never become a post because it would then want likes, comments and a
+place in the feed. This is the post that wants exactly those, beside the status.
+
+The client asks for the column once (`Store.songsReady`, the same one-way latch
+as `reactionsReady`) and shows nothing Music until it answers: no dial row, no
+speaker button in the composer. The Music filter row on profiles and Discover is
+static and simply finds nothing before then. A publish that still meets an old
+DB says "Music posts aren't switched on yet." rather than "try again".
+

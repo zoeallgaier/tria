@@ -263,6 +263,10 @@
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
     profile: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
     publish: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    // THE COMPOSE MARK ON MY CIRCLE'S BAR (1.8): a sheet with a pencil on it, the
+    // system's own "new note". It replaced the round + in the tab bar, and it is
+    // a note rather than a + because a + on a bar reads as "add a friend".
+    compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
@@ -552,8 +556,8 @@
   const NAV = [
     { route: '#/',         key: 'myCircle', label: 'My Circle' },
     { route: '#/discover', key: 'circle',   label: 'Discover' },
-    // Chats took Updates' place in 1.7. Updates is the pinned row at the top of
-    // the chat list now, and still lives at #/updates with the Chats tab lit.
+    // Chats took Updates' place in 1.7. Since 1.8 Updates is the bell on My
+    // Circle's bar (updatesBtnEl), still at #/updates, with My Circle lit.
     { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
     { route: '#/publish',  key: 'publish',  label: 'Post', publish: true },
@@ -1094,6 +1098,11 @@
       return { colors: [], tint: stops[stops.length >> 1], ramp };
     }
 
+    function dotInk(el) {
+      const dot = el.querySelector('.toolbar-dot.is-on');
+      return dot ? toRgb(getComputedStyle(dot).backgroundColor) || '' : '';
+    }
+
     function controlSpec(el, key) {
       const rect = el.getBoundingClientRect();
       const styles = getComputedStyle(el);
@@ -1128,6 +1137,9 @@
         // computed visibility, which the gate in app.css sets on every control
         // in the bar and would therefore report every one of them as idle.
         hidden: el.classList.contains('toolbar-commit--idle'),
+        // The bell's dot (updatesBtnEl), as a resolved colour, and empty for
+        // none: the same one-payload shape setDots gives the tab bar's.
+        dot: dotInk(el),
       };
       if (cta) Object.assign(spec, words(el));
       return spec;
@@ -2572,7 +2584,8 @@
   // A small colored label marking an entry's type (Note / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
-  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll' };
+  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll',
+    song: 'Music' };
   // The same five, pluralised — for prose that has to name a type in the plural
   // ("No frames out here yet" when a filter empties Discover's grid).
   // The same five, pluralised, PLUS reposts — which is a filter row on a profile
@@ -2581,7 +2594,7 @@
   // and FILTERS: those are the quintet, and a repost has no hue, no heart and no
   // dot on the pull ring.
   const TYPE_PLURAL = { note: 'notes', find: 'finds', photo: 'frames', activity: 'activities', poll: 'polls',
-    repost: 'reposts' };
+    song: 'music', repost: 'reposts' };
   // Zoe's poll mark — a hand-drawn pink burst/asterisk (icons/poll.svg). This is
   // the TYPE identity glyph (masthead + filter); the composer's attach toggle uses
   // the plainer line glyph in ICONS ('poll') for legibility at button scale, the
@@ -2611,6 +2624,9 @@
     photo:    'image',
     poll:     'poll',
     activity: 'cal',
+    // 1.8's sixth (add-song-posts.sql): the speaker the listening rail already
+    // wears, so a song reads as a song in both places.
+    song:     'sound',
   };
   // The "All" filter's own mark — a pentad, one dot per post type in its own
   // hue, gathered into a ring. Says "all five" literally instead of a generic
@@ -2975,6 +2991,11 @@
                       `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
                     `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                       `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+                    // Music (1.8), once posts can carry a song (Store.songsReady).
+                    (Store.songsReady()
+                      ? `<button type="button" class="rt-attach" id="${idp}-add-song" ` +
+                          `aria-label="Add a song" aria-pressed="false">${svgIcon('sound', 'rt-attach-ico')}</button>`
+                      : '') +
                     (event
                       ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
                           `aria-label="Add a place and time" aria-pressed="false">` +
@@ -4006,6 +4027,7 @@
         head +
         titleHtml +
         noteHtml +
+        songTileHtml(post) +
         pollWidgetHtml(post) +
         locationHtml +
         whenHtml +
@@ -4022,6 +4044,27 @@
     wireLikes(el, post, opts);
     wireComments(el);
     return el;
+  }
+
+  /* A MUSIC POST'S TRACK (1.8): the listening rail's square and two lines, laid
+     flat as a row, under whatever the poster said about it. The words come
+     first for the reason a Frame's caption does: text settles before media.
+     The whole row is the link, out to the reader's own service (songLink),
+     which is the same tap a song on the rail makes. */
+  function songTileHtml(post) {
+    const s = post.type === 'song' && post.song;
+    if (!s) return '';
+    const sub = songSub(s);
+    return `<a class="card-song" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
+        `aria-label="${esc(['Listen to ' + s.title, songSub(s, ', ')].filter(Boolean).join(', '))}">` +
+        `<span class="song-art card-song-art${s.art ? ' pin-cover' : ''}"${s.art
+          ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+        `<span class="song-lines" aria-hidden="true">` +
+          `<span class="song-title">${esc(s.title)}</span>` +
+          (sub ? `<span class="song-artist">${esc(sub)}</span>` : '') +
+        `</span>` +
+        `<span class="card-song-play" aria-hidden="true">${svgIcon('play')}</span>` +
+      `</a>`;
   }
 
   // A BARE repost: the original's card with a line on top. makeCard calls itself,
@@ -6107,6 +6150,7 @@
     { key: 'photo',    label: 'Frames' },
     { key: 'poll',     label: 'Polls' },
     { key: 'activity', label: 'Activities' },
+    { key: 'song',     label: 'Music' },
   ];
   // Discover's dial carries one row the home feed has no use for: People, which
   // drops the posts and faces every account with its portrait, turning the grid
@@ -6234,8 +6278,103 @@
     }));
   }
 
+  /* ── My Circle's bar (1.8) ───────────────────────────────────────────────────
+     MAKING SOMETHING LIVES UP HERE NOW, beside Updates, and the filter that used
+     to hold this bar is gone from it. The round + left the tab bar when the tab
+     bar became a real UITabBar (four destinations and nothing else is what one
+     is), and it came up to the home feed's bar the way it did in Instagram's
+     2026 layout: the note mark leading, the bell trailing.
+
+     The filter went because it only ever made sense on a PROFILE, where "just
+     their Frames" is a way of reading one person. On your circle it was a way
+     to miss things, and the bar had room for one glyph that narrows and one
+     that makes. Profiles and Discover keep their dials.
+
+     The note mark opens the DIAL, which is back: the five things you can make,
+     then the Daily and Music, as one menu. Each row is a shortcut into the one
+     composer, pre-opening the attachment that makes that type (pendingAttach),
+     so the composer is still the only form there is. */
+  function composeBtnEl() {
+    return `<button class="toolbar-btn" type="button" id="home-compose-btn" ` +
+        `aria-haspopup="menu" aria-expanded="false" aria-label="Make something">` +
+        svgIcon('compose') +
+      `</button>`;
+  }
+  // The bell, with the dot that used to sit on the Chats tab for it. Shipped
+  // lit or not, then kept in step by syncNavDot like the tab's own dot.
+  function updatesBtnEl() {
+    return `<a class="toolbar-btn" id="home-updates-btn" href="#/updates" aria-label="Updates">` +
+        svgIcon('bell') +
+        `<i class="toolbar-dot${updatesAreNew() ? ' is-on' : ''}" aria-hidden="true"></i>` +
+      `</a>`;
+  }
+
+  // The dial's rows, in the order you'd reach for them: the five types, widest
+  // to narrowest the way FILTERS reads, then the two that aren't a type you
+  // attach — the Daily, which is a prompt you answer with any of the five, and
+  // Music. Music sits last and only appears once its column exists
+  // (Store.songsReady), because a row that can only fail is worse than no row.
+  function composeRows() {
+    const occ = todaysDaily();
+    const answered = occ && myAnswer(occ);
+    return [
+      { key: 'note',     label: 'Note' },
+      { key: 'find',     label: 'Find' },
+      { key: 'photo',    label: 'Frame' },
+      { key: 'poll',     label: 'Poll' },
+      { key: 'activity', label: 'Activity' },
+      ...(occ ? [{ key: 'daily', label: answered ? 'Today’s Daily' : 'Answer the Daily', icon: 'info' }] : []),
+      ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
+    ];
+  }
+
+  function openComposeDial(anchor) {
+    const rows = composeRows();
+    const occ = todaysDaily();
+    const run = (row) => {
+      if (row.key === 'daily') {
+        // Answered already: the room is the thing to see. Not yet: straight to
+        // the composer with the prompt over it, the same as the card's Add yours.
+        if (myAnswer(occ)) go(`#/daily/${encodeURIComponent(occ.slug)}`);
+        else answerDaily(occ);
+        return;
+      }
+      pendingAttach = row.key === 'note' ? null : row.key;
+      go('#/publish');
+    };
+    // The type's own mark in the type's own ink, which is the vocabulary the
+    // composer's attach bar already taught (TYPE_GLYPH). The Daily wears the
+    // daily's mark, which is a prompt and so has no hue of its own.
+    const glyph = (row) => row.icon || TYPE_GLYPH[row.key] || 'pencil';
+    const ink = (row) => TYPE_GLYPH[row.key] ? `var(--type-${row.key}-ink)` : 'var(--muted)';
+    const markup = rows.map((row, i) =>
+      `<button class="bar-menu-item" type="button" role="menuitem" data-i="${i}">` +
+        // Inline, as the filter dial does it, because a .type-icon-- class
+        // brings sizing rules that fight the row's glyph box.
+        `<span class="bar-menu-ico" style="color:${ink(row)}" aria-hidden="true">${svgIcon(glyph(row))}</span>` +
+        `<span class="bar-menu-label">${esc(row.label)}</span>` +
+      `</button>`).join('');
+    openBarMenu(anchor, {
+      label: 'Make something',
+      rows: markup,
+      items: rows.map((row, i) => ({
+        label: row.label,
+        icon: svgIcon(glyph(row)),
+        ink: TYPE_GLYPH[row.key] ? ink(row) : '',
+        // The Daily stands apart from the five, the way an action row stands
+        // apart from a radio set in the filter dial.
+        group: TYPE_GLYPH[row.key] ? 0 : 1,
+        data: { i: String(i) },
+      })),
+      onRow: (btn, close) => {
+        const row = rows[+btn.dataset.i];
+        close(() => { if (row) run(row); });
+      },
+    });
+  }
+
   function renderHome() {
-    mountToolbar({ title: 'My Circle', actions: filterBtnEl('home-filter-btn', activeFilter) });
+    mountToolbar({ title: 'My Circle', leading: composeBtnEl(), actions: updatesBtnEl() });
     view.innerHTML =
       `<section class="view">` +
         mastheadEl('', 'My Circle') +
@@ -6243,11 +6382,8 @@
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
-    document.getElementById('home-filter-btn')
-      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
-        current: activeFilter,
-        onPick: (key) => { activeFilter = key; activeTag = null; syncFilterBtn('home-filter-btn', activeFilter); renderFeed(); },
-      }));
+    document.getElementById('home-compose-btn')
+      ?.addEventListener('click', (e) => openComposeDial(e.currentTarget));
 
     renderFeed();
   }
@@ -6304,11 +6440,19 @@
 
     // Pin the card's right edge under the button so it reads as having dropped
     // out of it. A small extra gutter (past the button's own overhang past
-    // --inset) keeps it from hugging the screen edge.
+    // --inset) keeps it from hugging the screen edge. A button on the LEADING
+    // side (My Circle's compose mark) pins the card's left edge instead, or the
+    // card would hang off the screen's left side.
     const card = scrim.querySelector('.bar-menu');
     const r = anchor.getBoundingClientRect();
     card.style.top = (r.bottom + 10) + 'px';
-    card.style.right = Math.max(8, window.innerWidth - r.right + 8) + 'px';
+    if (r.left + r.width / 2 < window.innerWidth / 2) {
+      card.style.left = Math.max(8, r.left - 8) + 'px';
+      card.style.right = 'auto';
+      card.style.transformOrigin = 'top left';
+    } else {
+      card.style.right = Math.max(8, window.innerWidth - r.right + 8) + 'px';
+    }
     // One card of N rows can outgrow the screen where a column of chips just ran
     // off it unnoticed — Discover's filter is eight rows deep now. Cap it to
     // what's actually below the button and let it scroll inside its own glass.
@@ -7447,7 +7591,7 @@
   // shape: the composer has stored a poll's question in title/note for a while
   // now, so it's a last resort rather than the first look.
   const saidOf = (p) =>
-    notePlain(p.note) || p.title || (p.poll && p.poll.q) || '';
+    notePlain(p.note) || p.title || (p.poll && p.poll.q) || (p.song && p.song.title) || '';
 
   // Everything that isn't a photo speaks instead: what it said, set in the
   // serif, with a quiet second line where the type has one worth adding. A
@@ -7456,6 +7600,12 @@
   const TILE_SUB = {
     find:     (p) => domainOf(p.url || ''),
     activity: (p) => p.location || '',
+    // A song post with words of its own says them and names the track under
+    // them; one with none is its title, and the artist goes under that.
+    song:     (p) => !p.song ? ''
+      : (notePlain(p.note) || p.title)
+        ? [p.song.title, songSub(p.song)].filter(Boolean).join(' · ')
+        : songSub(p.song),
   };
   // A say tile leads with the WORDS — no type glyph above them competing for the
   // top of a small box. The sub line below adds what's worth adding (a Find's
@@ -11788,6 +11938,15 @@
   // `pinningPost` outlives that render because submitComposer is what reads it.
   let pendingPin = false;
   let pinningPost = false;
+  // A row of My Circle's compose dial (openComposeDial): which attachment the
+  // composer should open as it mounts, so "Poll" lands on a form with the
+  // choices already out. One-shot like the three above, and never the type
+  // itself: the type is still INFERRED from what is attached, and this only
+  // presses the button that attaches it.
+  let pendingAttach = null;
+  // The track a Music post will carry, picked on the composer's song surface.
+  // Module scope because submitComposer reads it, the way it reads `cropper`.
+  let composeSong = null;
 
   function answerDaily(occ) {
     if (!occ || myAnswer(occ)) return;   // one each — the UI shouldn't have offered
@@ -12422,6 +12581,48 @@
   let songBack = '#/discover';
   function goListening(from) { songBack = from || '#/discover'; go('#/listening'); }
 
+  /* ONE QUESTION TO THE MUSIC SEARCH, asked by both pickers: this page and the
+     composer's song surface (1.8). A link is resolved, words are searched, and
+     the answer is `{ hits, state }`, where `state` is a sentence to show in
+     place of rows. Null means the question was withdrawn (a newer keystroke
+     aborted it) and nothing should be painted. */
+  async function lookUpSongs(q, signal) {
+    const isLink = /^https?:\/\//i.test(q);
+    try {
+      const found = isLink
+        ? [await resolveSongUrl(q, signal)].filter(Boolean)
+        : await searchSongs(q, signal);
+      if (signal.aborted) return null;
+      // Never a dead end. A search that found nothing offers the words back
+      // as a plain title, which the stored shape allows; a link we can't read
+      // says which services we can, because "no results" would read as "that
+      // song doesn't exist" when the truth is "that service isn't one I
+      // know" — or, from one we do know, "that playlist is private".
+      if (!found.length && !isLink) {
+        return { hits: [{ title: q.slice(0, 120), artist: '', art: '', apple: '', spotify: '' }], state: '' };
+      }
+      return {
+        hits: found,
+        state: found.length ? '' : (MUSIC_HOST.test(q) ? LINK_CLOSED : LINK_HELP),
+      };
+    } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return null;
+      return { hits: [], state: 'Couldn’t reach the music search. Try again in a moment.' };
+    }
+  }
+  // A result row, which the picker page and the composer draw the same way.
+  function songHitHtml(s, i) {
+    return `<button type="button" class="song-hit" data-i="${i}">` +
+        `<span class="song-art${s.art ? ' pin-cover' : ''}"${s.art
+          ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+        `<span class="song-lines">` +
+          `<span class="song-title">${esc(s.title)}</span>` +
+          (songSub(s) ? `<span class="song-artist">${esc(songSub(s))}</span>`
+            : (songHasLink(s) ? '' : `<span class="song-artist">Just as you typed it</span>`)) +
+        `</span>` +
+      `</button>`;
+  }
+
   function renderListening() {
     const me = Store.user(Store.session());
     if (!me) { go('#/discover'); return; }
@@ -12487,16 +12688,7 @@
         return;
       }
       if (songState) { resEl.innerHTML = `<p class="feed-empty">${esc(songState)}</p>`; return; }
-      resEl.innerHTML = songHits.map((s, i) =>
-        `<button type="button" class="song-hit" data-i="${i}">` +
-          `<span class="song-art${s.art ? ' pin-cover' : ''}"${s.art
-            ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
-          `<span class="song-lines">` +
-            `<span class="song-title">${esc(s.title)}</span>` +
-            (songSub(s) ? `<span class="song-artist">${esc(songSub(s))}</span>`
-              : (songHasLink(s) ? '' : `<span class="song-artist">Just as you typed it</span>`)) +
-          `</span>` +
-        `</button>`).join('');
+      resEl.innerHTML = songHits.map(songHitHtml).join('');
       resEl.querySelectorAll('.song-hit').forEach(b =>
         b.addEventListener('click', () => commit(b, songHits[+b.dataset.i])));
     };
@@ -12508,28 +12700,9 @@
       const ctrl = new AbortController();
       songAbort = ctrl;
       songHits = []; songState = 'looking'; paint();
-      const isLink = /^https?:\/\//i.test(q);
-      try {
-        const found = isLink
-          ? [await resolveSongUrl(q, ctrl.signal)].filter(Boolean)
-          : await searchSongs(q, ctrl.signal);
-        if (ctrl.signal.aborted) return;
-        songHits = found;
-        // Never a dead end. A search that found nothing offers the words back
-        // as a plain title, which the stored shape allows; a link we can't read
-        // says which services we can, because "no results" would read as "that
-        // song doesn't exist" when the truth is "that service isn't one I
-        // know" — or, from one we do know, "that playlist is private".
-        songState = found.length ? ''
-          : (isLink ? (MUSIC_HOST.test(q) ? LINK_CLOSED : LINK_HELP) : '');
-        if (!found.length && !isLink) {
-          songHits = [{ title: q.slice(0, 120), artist: '', art: '', apple: '', spotify: '' }];
-        }
-      } catch (err) {
-        if (ctrl.signal.aborted || err?.name === 'AbortError') return;
-        songHits = [];
-        songState = 'Couldn’t reach the music search. Try again in a moment.';
-      }
+      const found = await lookUpSongs(q, ctrl.signal);
+      if (!found) return;
+      ({ hits: songHits, state: songState } = found);
       paint();
     };
 
@@ -13179,6 +13352,7 @@
       if (h === undefined) {
         const au = Store.user(p.author);
         h = [p.title, notePlain(p.note), (p.tags || []).join(' '),
+          p.song && p.song.title, p.song && p.song.artist,
           au && au.name, p.author].filter(Boolean).join(' ').toLowerCase();
         haystacks.set(p, h);
       }
@@ -13931,14 +14105,23 @@
   // always in the DOM; the native one is a colour sent across the bridge. Called
   // on every navigation (renderNav), on every background pull that lands
   // (refreshWorld) and on the visit that spends it (renderUpdates).
-  // Since 1.7 the dot sits on Chats and answers for both things under it: the
-  // Updates row and any chat with something new (Store.chatsAreNew). Still one
-  // state, never a number.
+  // In 1.7 the dot sat on Chats and answered for both things under it. Since 1.8
+  // they are two marks, because Updates is no longer under Chats: the tab's dot
+  // is chats only (Store.chatsAreNew), and Updates carries its own on the bell
+  // on My Circle's bar, the one place you open it from. Each is still one state
+  // and never a number, and each clears by looking at the thing it is on.
   function syncNavDot() {
-    const on = updatesAreNew() || Store.chatsAreNew();
+    const chats = Store.chatsAreNew();
     document.querySelectorAll('#nav .nav-dot')
-      .forEach(el => el.classList.toggle('is-on', on));
-    NativeChrome.setDots({ '#/chats': on });
+      .forEach(el => el.classList.toggle('is-on', chats));
+    NativeChrome.setDots({ '#/chats': chats });
+    const bell = document.querySelector('#home-updates-btn .toolbar-dot');
+    if (bell && bell.classList.contains('is-on') !== updatesAreNew()) {
+      bell.classList.toggle('is-on');
+      // The bell is a toolbar control, so native wears its face and reads the
+      // dot off it (controlSpec). A class flip is not a render, so say so.
+      NativeChrome.sync();
+    }
   }
 
   // The open chat page's repaint, set by renderChats / renderChat and dropped by
@@ -14405,22 +14588,12 @@
   function chatsPaneHtml() {
     const all = chatFilter === 'all';
     const reqs = Store.chatRequests();
-    const updatesNew = updatesAreNew();
-    // THE PINNED ROWS. Updates leads, under All only, because it is not a chat
-    // and a filter for Groups that still showed it would be lying. Requests sits
-    // under it whenever there are any, named by who and never by how many.
-    const pinned = (all || reqs.length)
+    // THE PINNED ROW. Message requests, whenever there are any, named by who
+    // and never by how many. Updates led this list from 1.7 until 1.8, when it
+    // moved to the bell on My Circle's bar: it was never a chat, and the
+    // ledger of likes and adds belongs beside the feed they happen on.
+    const pinned = reqs.length
       ? `<ul class="chat-list chat-list--pinned">` +
-          (all
-            ? `<li data-key="updates"><a class="chat-row${updatesNew ? ' chat-row--new' : ''}" href="#/updates">` +
-                `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('bell')}</span>` +
-                `<span class="chat-row-body">` +
-                  `<span class="chat-row-top"><span class="chat-row-name">Updates</span></span>` +
-                  `<span class="chat-row-preview">Likes, comments, mentions and adds</span>` +
-                `</span>` +
-                `<span class="notif-dot" aria-hidden="true"></span>` +
-              `</a></li>`
-            : '') +
           (reqs.length
             ? `<li data-key="requests"><a class="chat-row${reqs.some(c => c.unread) ? ' chat-row--new' : ''}" href="#/chats/requests">` +
                 `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('newchat')}</span>` +
@@ -14433,9 +14606,8 @@
             : '') +
         `</ul>`
       : '';
-    // Before add-chats.sql has run, the Updates row is the whole page.
     if (!Store.chatsReady())
-      return pinned + `<p class="feed-empty">Chats are almost here. Your updates are right up top.</p>`;
+      return pinned + `<p class="feed-empty">Chats are almost here.</p>`;
     const list = Store.chats().filter(c => all || c.kind === chatFilter);
     // An activity's chat moves to the shelf three days after the day.
     const current = list.filter(c => !c.archived);
@@ -15324,8 +15496,9 @@
       // reading, not a setting, so it does not survive leaving the page.
       notifShown = NOTIF_PAGE;
       mountToolbar({
-        // A page inside Chats since 1.7, reached from its pinned row.
-        leading: toolbarBackEl('#/chats', 'Chats'),
+        // Reached from the bell on My Circle's bar since 1.8 (a pinned row in
+        // the chat list before that), so that is where back goes.
+        leading: toolbarBackEl('#/', 'My Circle'),
         title: 'Updates',
         actions: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
       });
@@ -15673,6 +15846,7 @@
           `spellcheck="false" placeholder="https://…">` +
       `</div>` +
       pollFieldHtml() +
+      (Store.songsReady() ? songFieldHtml() : '') +
       frameFieldHtml() +
       (event ? eventFieldHtml() : '') + tags;
   }
@@ -15700,6 +15874,23 @@
         `</div>` +
         `<button type="button" class="poll-add-opt" id="c-poll-add">Add option</button>` +
         `<p class="field-hint">2 to 4 choices. Closes a day after you post it.</p>` +
+      `</div>`;
+  }
+
+  // The song surface (1.8), shipped hidden like the poll's and revealed by the
+  // speaker toggle, which is also what makes the post Music. The pick sits above
+  // the field once there is one, and the field stays, so changing your mind is a
+  // second search rather than a clear and a search. The words you write about it
+  // are the note above, the same as every other type.
+  function songFieldHtml() {
+    return `<div class="field song-field" id="c-song-row" hidden>` +
+        `<label for="c-song-q">Song</label>` +
+        `<div class="song-now" id="c-song-now" hidden></div>` +
+        `<input id="c-song-q" class="song-input" type="search" ` +
+          `placeholder="Search a song or album, or paste a link" ` +
+          `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
+          `aria-label="Search a song or album, or paste a link">` +
+        `<div class="song-results" id="c-song-results" aria-live="polite"></div>` +
       `</div>`;
   }
 
@@ -16047,6 +16238,7 @@
     let wantPhoto = false;          // frame surface open → this post is a Frame
     let wantPoll = false;           // poll surface open → this post is a Poll
     let wantEvent = false;          // place + time open → this post is an Activity
+    let wantSong = false;           // song surface open → this post is Music
 
     // The type is INFERRED from what's attached: a place and a time first (an
     // activity is the one thing here that lands in the real world, so it outranks
@@ -16058,6 +16250,7 @@
       if (wantEvent) return 'activity';
       if (wantPhoto || cropper || videoCapture) return 'photo';
       if (wantPoll) return 'poll';
+      if (wantSong) return 'song';
       const url = fieldsEl.querySelector('#c-url');
       if (wantLink || (url && url.value.trim())) return 'find';
       return 'note';
@@ -16090,6 +16283,7 @@
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
       fieldsEl.querySelector('#c-add-event')?.setAttribute('aria-pressed', String(pubType === 'activity'));
+      fieldsEl.querySelector('#c-add-song')?.setAttribute('aria-pressed', String(pubType === 'song'));
       // The headline stops being optional on an activity — it is the plan's name and
       // submitComposer refuses one without it — so the box says so up front instead
       // of letting the reader find out at the foot of the form. Same field either
@@ -16131,6 +16325,8 @@
       if (pollRow) pollRow.hidden = !wantPoll;
       const eventRow = fieldsEl.querySelector('#c-event-row');
       if (eventRow) eventRow.hidden = !wantEvent;
+      const songRow = fieldsEl.querySelector('#c-song-row');
+      if (songRow) songRow.hidden = !wantSong;
     }
 
     // A public account's posts default to Anyone (continuity: their notes, finds and
@@ -16168,6 +16364,8 @@
       wantPhoto = false;
       wantPoll = false;
       wantEvent = false;
+      wantSong = false;
+      composeSong = null;
       pubAudience = { mode: defaultAudience(), users: [] };
       pubAudienceTouched = false;
       const submitBtn = view.querySelector('.composer-submit');
@@ -16230,7 +16428,8 @@
       const photoBtn = fieldsEl.querySelector('#c-add-photo');
       const pollBtn  = fieldsEl.querySelector('#c-add-poll');
       const eventBtn = fieldsEl.querySelector('#c-add-event');
-      // The four attachments are one-at-a-time: turning one on folds the others so
+      const songBtn  = fieldsEl.querySelector('#c-add-song');
+      // The five attachments are one-at-a-time: turning one on folds the others so
       // the inferred type is never ambiguous. Photo owns a live picker/capture, so
       // clearing it routes through clearFrame (stops any stream); the other three
       // just fold their rows, leaving what's typed in them, so a mis-tap costs
@@ -16239,10 +16438,14 @@
       const foldLink  = () => { wantLink = false; };
       const foldPoll  = () => { wantPoll = false; };
       const foldEvent = () => { wantEvent = false; };
+      // A folded song surface keeps its pick, like the link row keeps its URL: a
+      // mis-tap costs the tap back. Only submitComposer reads it, and only for
+      // a post that is still Music.
+      const foldSong  = () => { wantSong = false; };
       linkBtn?.addEventListener('click', () => {
         wantLink = !wantLink;
         document.getElementById('c-error').textContent = '';
-        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); }
+        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); foldSong(); }
         else { const u = fieldsEl.querySelector('#c-url'); if (u) u.value = ''; }
         applyBaseSurface();
         syncType();
@@ -16252,7 +16455,7 @@
         wantPhoto = opening;
         document.getElementById('c-error').textContent = '';
         if (opening) {
-          foldLink(); foldPoll(); foldEvent();
+          foldLink(); foldPoll(); foldEvent(); foldSong();
           applyBaseSurface();                          // reveal the frame field first
           fieldsEl.querySelector('#c-file')?.click();  // then pop the picker
         } else {
@@ -16263,7 +16466,7 @@
       pollBtn?.addEventListener('click', () => {
         wantPoll = !wantPoll;
         document.getElementById('c-error').textContent = '';
-        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); }
+        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); foldSong(); }
         applyBaseSurface();
         syncType();
       });
@@ -16273,11 +16476,78 @@
       eventBtn?.addEventListener('click', () => {
         wantEvent = !wantEvent;
         document.getElementById('c-error').textContent = '';
-        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); }
+        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); foldSong(); }
         applyBaseSurface();
         syncType();
       });
+      songBtn?.addEventListener('click', () => {
+        wantSong = !wantSong;
+        document.getElementById('c-error').textContent = '';
+        if (wantSong) { foldPhoto(); foldLink(); foldPoll(); foldEvent(); }
+        applyBaseSurface();
+        syncType();
+        if (wantSong && !composeSong) fieldsEl.querySelector('#c-song-q')?.focus();
+      });
       wirePollOpts();
+      wireSongField();
+    }
+
+    // The song surface's search. Debounced like the picker page's, for the same
+    // reason (the Search API rate-limits by IP at about twenty a minute), and
+    // through the same lookUpSongs, so the two can never disagree about a link.
+    function wireSongField() {
+      const input = fieldsEl.querySelector('#c-song-q');
+      const resEl = fieldsEl.querySelector('#c-song-results');
+      const nowEl = fieldsEl.querySelector('#c-song-now');
+      if (!input || !resEl || !nowEl) return;
+      let hits = [], timer = 0, ctrl = null;
+      const paintNow = () => {
+        const s = composeSong;
+        nowEl.hidden = !s;
+        nowEl.innerHTML = s
+          ? `<span class="song-art${s.art ? ' pin-cover' : ''}"${s.art
+              ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+            `<span class="song-lines">` +
+              `<span class="song-title">${esc(s.title)}</span>` +
+              (songSub(s) ? `<span class="song-artist">${esc(songSub(s))}</span>` : '') +
+            `</span>` +
+            `<button type="button" class="song-clear" aria-label="Clear">×</button>`
+          : '';
+        nowEl.querySelector('.song-clear')?.addEventListener('click', () => {
+          composeSong = null;
+          paintNow();
+          input.focus();
+        });
+      };
+      const paint = (state) => {
+        if (state) { resEl.innerHTML = `<p class="feed-empty">${esc(state)}</p>`; return; }
+        resEl.innerHTML = hits.map(songHitHtml).join('');
+        resEl.querySelectorAll('.song-hit').forEach(b => b.addEventListener('click', () => {
+          const { at, ...song } = hits[+b.dataset.i] || {};
+          if (!song.title) return;
+          composeSong = song;
+          hapticTap('LIGHT');
+          hits = [];
+          input.value = '';
+          paint('');
+          paintNow();
+        }));
+      };
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const q = input.value.trim();
+          ctrl?.abort();
+          if (!q) { hits = []; paint(''); return; }
+          ctrl = new AbortController();
+          paint('Looking…');
+          const found = await lookUpSongs(q, ctrl.signal);
+          if (!found) return;
+          hits = found.hits;
+          paint(found.state);
+        }, 320);
+      });
+      paintNow();
     }
 
     // The choice list: grow from 2 up to 4 ("Add option", which hides at 4), and
@@ -16359,7 +16629,18 @@
     // submit regardless of what ends up attached (see submitComposer).
     mountFields();
     syncType();
+    // The dial's pick, pressed for the reader. A quote has no attach bar, so
+    // the pick is dropped there. For a Frame this opens the surface, and the
+    // OS picker only if the engine still counts the tap that got here as a
+    // gesture; the dropzone is on the page either way.
+    const attach = pendingAttach;
+    pendingAttach = null;
+    if (attach && family !== 'quote') fieldsEl.querySelector(ATTACH_BTN[attach])?.click();
   }
+  const ATTACH_BTN = {
+    find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
+    activity: '#c-add-event', song: '#c-add-song',
+  };
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
   // photo previews at its native aspect (no crop); a picked video drops into the
@@ -17432,6 +17713,10 @@
       if (!data.title && !data.note) { errEl.textContent = 'Ask your poll a question first.'; return; }
       if (options.length < 2) { errEl.textContent = 'Give the poll at least two choices.'; return; }
       data.poll = { options };
+    } else if (pubType === 'song') {
+      data.title = val('c-title');
+      if (!composeSong) { errEl.textContent = 'Pick a song first.'; return; }
+      data.song = composeSong;
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {
@@ -17481,6 +17766,7 @@
     cropper = null;
     stills = [];
     videoCapture = null;
+    composeSong = null;
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // next compose opens as a plain Note until something's attached
     // An answer goes home to its question: the point of answering is seeing what
@@ -19730,9 +20016,12 @@
     // the one route that borrows another's highlight: it is somewhere you went,
     // but it is somewhere INSIDE your profile, so that tab stays lit rather than
     // the nav going blank while you edit.
-    // Updates and every chat page sit inside Chats, so they keep its tab lit.
+    // Every chat page sits inside Chats, so it keeps that tab lit. Updates moved
+    // out of the chat list and onto My Circle's bar in 1.8, so it lights My
+    // Circle, the tab whose bar you reached it from.
     renderNav(path === '#/profile/edit' ? '#/profile'
-      : (path === '#/updates' || path.startsWith('#/chat')) ? '#/chats' : path);
+      : path === '#/updates' ? '#/'
+      : path.startsWith('#/chat') ? '#/chats' : path);
 
     // Remember where a friend profile's back chevron should return to: the page
     // you came from. Chained profile→profile hops keep the original origin, so

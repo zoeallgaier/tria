@@ -62,6 +62,7 @@ const Store = (() => {
   //   commentLikesReady: whether add-comment-likes.sql has run (the table answered)
   //   likes: [{postId, user(username), reaction, _ts}] — reaction is which nod it was
   //   reactionsReady: whether add-reactions.sql has run (the column answered)
+  //   songsReady: whether add-song-posts.sql has run (posts.song answered)
   //   friends: symmetric adjacency map keyed by username
   //   friendCounts: how many mutual ties each username actually has (see friendCount)
   //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
@@ -69,7 +70,7 @@ const Store = (() => {
   //   session: the signed-in username, or null
   //   chats / chatMembers / messages / messageHearts: see "Chats" below
   //   chatsReady: whether add-chats.sql has run (the tables answered)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], reactionsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], reactionsReady: false, songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [] });
   let state = empty();
 
@@ -292,6 +293,9 @@ const Store = (() => {
     if (p.poll)     o.poll = p.poll;   // { q, options[] } for poll posts
     if (p.event_date) o.eventDate = p.event_date;
     if (p.event_time) o.eventTime = p.event_time;
+    // A music post's track (add-song-posts.sql): the same shape as a listening
+    // status, minus `at`, because a post does not expire the way a status does.
+    if (p.song && typeof p.song === 'object' && p.song.title) o.song = p.song;
     // A repost points at the post it passes along. Absent on every other row, and
     // absent on ALL rows until reposts.sql has run — the client tolerates that the
     // same way it tolerates every other pending migration.
@@ -331,7 +335,7 @@ const Store = (() => {
      has settled, off the frames the paint is using, and never blocks anything:
      every failure here means only that the next launch waits like it used to. */
   const KEEP_KEY = 'world';
-  const KEEP_V = 1;                    // bump when state's shape changes
+  const KEEP_V = 2;                    // bump when state's shape changes
   let keepOn = false;
   let fresh = Promise.resolve(false);  // true once a kept launch's real load changed anything
   const whenFresh = () => fresh;
@@ -541,6 +545,9 @@ const Store = (() => {
       // until the answer is yes, and then never again: a column that exists
       // does not stop existing, and a sign-out empties the world and asks anew.
       state.reactionsReady ? { data: [], error: null } : sb.from('likes').select('reaction').limit(1),
+      // Whether a post can be a song yet (add-song-posts.sql). Same shape as the
+      // probe above and the same one-way latch.
+      state.songsReady ? { data: [], error: null } : sb.from('posts').select('song').limit(1),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
@@ -569,7 +576,7 @@ const Store = (() => {
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, rx, h, pv, f, fd, pa, bl, ch] = read;
+    const [u, p, c, l, cl, rx, sg, h, pv, f, fd, pa, bl, ch] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -615,6 +622,8 @@ const Store = (() => {
     // nothing, so a flaky probe can't take reactions away mid-session.
     if (!rx.error) state.reactionsReady = true;
     else if (rx.error.code === '42703') state.reactionsReady = false;
+    if (!sg.error) state.songsReady = true;
+    else if (sg.error.code === '42703') state.songsReady = false;
     // Comment likes arrive in their own migration, so a MISSING table says the
     // hearts are not wired up yet, and the app draws none rather than a heart
     // that silently springs back on every tap. Any other error is a blip and
@@ -1694,6 +1703,7 @@ const Store = (() => {
     if (data.poll)     row.poll = data.poll;   // { q, options[] }
     if (data.eventDate) row.event_date = data.eventDate;
     if (data.eventTime) row.event_time = data.eventTime;
+    if (data.song)     row.song = data.song;   // { title, artist?, art?, apple?, spotify?, youtube?, kind? }
     if (data.video) {
       try {
         const vExt = /mp4/i.test(data.video.type) ? 'mp4' : /webm/i.test(data.video.type) ? 'webm' : 'mov';
@@ -1742,6 +1752,15 @@ const Store = (() => {
       const missing = error.code === '42703' || error.code === 'PGRST204';
       return { ok: false, error: missing
         ? 'Carousels aren’t switched on yet. Share one photo for now.'
+        : 'Couldn’t publish, try again.' };
+    }
+    if (error && row.song) {
+      // Same answer as a carousel's: a DB without add-song-posts.sql refuses the
+      // column or the type, and "try again" would only fail the same way.
+      console.warn('[tria] song post refused:', error.code, error.message);
+      const missing = error.code === '42703' || error.code === 'PGRST204' || error.code === '23514';
+      return { ok: false, error: missing
+        ? 'Music posts aren’t switched on yet.'
         : 'Couldn’t publish, try again.' };
     }
     if (error) return { ok: false, error: 'Couldn’t publish, try again.' };
@@ -2134,6 +2153,9 @@ const Store = (() => {
   // reads as a heart, and nothing offers more (reactionsReady).
   const REACTIONS = ['heart', 'up', 'down', 'ha', 'wow'];
   const reactionsReady = () => !!state.reactionsReady;
+  // Whether a post can carry a song (add-song-posts.sql). Until then the
+  // compose dial offers no Music row and the composer no song button.
+  const songsReady = () => !!state.songsReady;
   const reactionOf = (postId) => {
     const row = mineIn(state.likes, postId);
     return row ? (row.reaction || 'heart') : null;
@@ -3563,7 +3585,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
-    reactionsReady, reactionOf, setReaction,
+    reactionsReady, reactionOf, setReaction, songsReady,
     commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,

@@ -109,6 +109,10 @@
   --type-activity-ink: #4d7519;
   --type-poll:         #ea86ae;  /* rose pink */
   --type-poll-ink:     #b23a68;
+  /* 1.8's sixth: MUSIC, butter. Chosen for the gap the five leave (nothing
+     near yellow), and its ink twin is a dark ochre at 4.6:1 on paper, AA. */
+  --type-song:         #f1cf6e;  /* butter */
+  --type-song-ink:     #85600f;
   --on-type:           #14171a;
 
   /* Tria's brand ramp — lavender, blue, green, orange. FOUR of the five type
@@ -255,6 +259,7 @@
   --heart-photo:    var(--user-heart-lt, color-mix(in srgb, var(--type-photo-ink)    70%, var(--type-photo)));
   --heart-activity: var(--user-heart-lt, color-mix(in srgb, var(--type-activity-ink) 70%, var(--type-activity)));
   --heart-poll:     var(--user-heart-lt, color-mix(in srgb, var(--type-poll-ink)     70%, var(--type-poll)));
+  --heart-song:     var(--user-heart-lt, color-mix(in srgb, var(--type-song-ink)     70%, var(--type-song)));
 
   /* GOING — the "Going" tag beside a name on a host's guest list. It is the one
      place a WORD (rather than a glyph) says somebody is coming, so it wants the
@@ -542,6 +547,8 @@
     --type-activity-ink: var(--type-activity);
     --type-poll:         #ea86ae;
     --type-poll-ink:     var(--type-poll);
+    --type-song:         #f1cf6e;
+    --type-song-ink:     var(--type-song);
 
     /* Monochrome flips: paper-side band on ink paper, near-black glyph on it.
        The chromatic fills do not flip and do not need to — see the note beside
@@ -558,6 +565,7 @@
     --heart-photo:    var(--user-heart-dk, var(--type-photo-ink));
     --heart-activity: var(--user-heart-dk, var(--type-activity-ink));
     --heart-poll:     var(--user-heart-dk, var(--type-poll-ink));
+    --heart-song:     var(--user-heart-dk, var(--type-song-ink));
 
     /* Dark takes the dark heart for the same reason the hearts do, and needs
        no contrast caveat: a palette hex on ink paper measures 4.14 (ruby) or

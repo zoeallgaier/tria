@@ -253,7 +253,42 @@ iOS 26 only. So:
 `TriaViewController.capacitorDidLoad` beside `TriaSettings`. `js/app.js`'s
 `NativeChrome` module is the whole web side; `css/app.css` ends with the gate.
 
+**1.8 (2026-10-21): IT IS A `UITabBar` NOW, and the paragraphs below are the
+history of why it wasn't.** The + went up to My Circle's top bar, which left four
+destinations and nothing else, and that is exactly what a tab bar is. So
+`TriaChromeBar` is a `UITabBarController` added as a CHILD of the bridge
+controller, with four empty, clear, non-interactive pages (`TriaTabPage`) whose
+only job is to carry a `tabBarItem`. The web view is never reparented into a tab.
+`TriaTabShell` holds the controller's full-screen view and keeps a touch only when
+it lands on a view INSIDE the tab bar (never the bar's own full-width bounds), so
+the page under it still scrolls and taps. What arrived free: the glass capsule
+and its lens, labels under the icons, Dynamic Type, the VoiceOver tab tree, and
+`tabBarMinimizeBehavior = .onScrollDown`, fed by handing the web view's scroll
+view to the selected page in `select` (`setContentScrollView(_:for: .bottom)`).
+
+Four decisions inside it:
+
+- **The lens moves on the tap** (`shouldSelect` returns true and sends
+  `chromeTap`), and app.js confirms with `selectTab`, which also corrects a tap
+  the router refuses. Holding the highlight until the router answered read as a
+  bar ignoring the finger.
+- **A route no tab names leaves the last tab lit.** A `UITabBarController` has
+  no "none" state, and the tab you came from is the honest answer on a pushed
+  page.
+- **The dot is the system's unnumbered badge** (`badgeValue = ""`, `badgeColor`
+  from `--dot`). It is bigger than the web's 6.5px dot. Drawing a custom one
+  would mean baking it into the item's image and giving up the system's
+  inking, so it is the system's mark until Zoe says otherwise.
+- **The reserve only grows** (`report`): a folded bar is shorter, and a reserve
+  that shrank with it would move the foot of the page mid-scroll.
+
+The + is gone from this file's world: `fab` still crosses for `tabTint` (the lit
+tab's ink) and nothing else. Updates' dot moved off the Chats tab onto the bell
+on My Circle's bar, a toolbar control, which now carries `dot` in its spec and
+draws it in `TriaToolbarButton.paintDot`.
+
 **It is not a `UITabBar`, and that is a decision rather than an oversight.**
+(1.4 to 1.7; superseded above.)
 Tria's bar has not been a full-width tab bar since the July 2026 nav overhaul: it
 is a detached capsule of four icons with a round Post button breaking out beside
 it. Adopting `UITabBar` would have meant adopting a different design, and 1.4 is
