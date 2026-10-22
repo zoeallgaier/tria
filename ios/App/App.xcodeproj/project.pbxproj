@@ -19,10 +19,10 @@
 		TR1A0001000000000000001 /* TriaViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0002000000000000002 /* TriaViewController.swift */; };
 		TR1A0004000000000000004 /* TriaSettingsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0005000000000000005 /* TriaSettingsPlugin.swift */; };
 		TR1A0007000000000000007 /* TriaChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0008000000000000008 /* TriaChromePlugin.swift */; };
-		TR1A0013000000000000013 /* TriaAuthPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0014000000000000014 /* TriaAuthPlugin.swift */; };
-		TR1A0015000000000000015 /* TriaSharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0016000000000000016 /* TriaSharePlugin.swift */; };
 		TR1A0009000000000000009 /* Oxygen-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = TR1A0010000000000000010 /* Oxygen-Bold.ttf */; };
 		TR1A0011000000000000011 /* Oxygen-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = TR1A0012000000000000012 /* Oxygen-Regular.ttf */; };
+		TR1A0013000000000000013 /* TriaAuthPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0014000000000000014 /* TriaAuthPlugin.swift */; };
+		TR1A0015000000000000015 /* TriaSharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0016000000000000016 /* TriaSharePlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,10 +41,10 @@
 		TR1A0003000000000000003 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		TR1A0005000000000000005 /* TriaSettingsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaSettingsPlugin.swift; sourceTree = "<group>"; };
 		TR1A0008000000000000008 /* TriaChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaChromePlugin.swift; sourceTree = "<group>"; };
-		TR1A0014000000000000014 /* TriaAuthPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaAuthPlugin.swift; sourceTree = "<group>"; };
-		TR1A0016000000000000016 /* TriaSharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaSharePlugin.swift; sourceTree = "<group>"; };
 		TR1A0010000000000000010 /* Oxygen-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oxygen-Bold.ttf"; sourceTree = "<group>"; };
 		TR1A0012000000000000012 /* Oxygen-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oxygen-Regular.ttf"; sourceTree = "<group>"; };
+		TR1A0014000000000000014 /* TriaAuthPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaAuthPlugin.swift; sourceTree = "<group>"; };
+		TR1A0016000000000000016 /* TriaSharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaSharePlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -385,7 +385,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.3;
+				MARKETING_VERSION = 1.8;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.triaonline.tria;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -412,7 +412,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.3;
+				MARKETING_VERSION = 1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.triaonline.tria;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
