@@ -2287,7 +2287,7 @@
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
   // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
   // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 88]];
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 64]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -13789,10 +13789,8 @@
        no tie to offer and no friends to have in common.
 
        Each card is the person's face, their name, who you both know (names,
-       never a number), and the newest thing of theirs you may read, linked to
-       its own page. Store.discover is the room's reading list, so a private
-       stranger's circle posts never reach it: their card says their bio, or
-       that the account is private. */
+       never a number), and their bio (Zoe: "not recent posts. just bios"). No
+       bio says Private account on a locked one and nothing on an open one. */
     const PEOPLE_RAIL = 20;
     const railKept = new Set();
     const isStranger = (name) => ['none', 'incoming', 'follower'].includes(Store.friendStatus(name));
@@ -13809,12 +13807,6 @@
         .sort((a, b) => b.common.length - a.common.length || b.i - a.i)
         .slice(0, PEOPLE_RAIL);
     };
-    // The newest post of each author that this reader may browse, one pass.
-    const newestBy = () => {
-      const m = new Map();
-      Store.discover().forEach(p => { if (p.type !== 'song' && !m.has(p.author)) m.set(p.author, p); });
-      return m;
-    };
     // "Friends with Ana", "Friends with Ana and Ben", "Friends with Ana, Ben and
     // others". A name you recognise does what a count would, without being one.
     const inCommonLine = (common) => {
@@ -13823,35 +13815,26 @@
       if (common.length > 2) return `Friends with ${names.join(', ')} and others`;
       return `Friends with ${names.join(' and ')}`;
     };
-    const personCardHtml = ({ u, common }, post) => {
+    const personCardHtml = ({ u, common }) => {
       const locked = isLocked(u.username);
       const fence = locked
         ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
-      const said = post ? saidOf(post) : '';
-      const still = post && !said ? cardStill(post) : '';
-      const body = post
-        ? `<a class="person-card-post${still ? ' person-card-post--still' : ''}" href="${postRoute(post)}">` +
-            (still ? `<img src="${esc(still)}" alt="" loading="lazy" decoding="async">`
-                   : `<span class="person-card-said">${esc(said || TYPE_LABEL[post.type] || 'A post')}</span>`) +
-          `</a>`
-        : `<p class="person-card-said person-card-said--quiet">` +
-            esc(u.bio || (locked ? 'Private account' : 'Hasn’t posted yet')) + `</p>`;
+      const bio = u.bio || (locked ? 'Private account' : '');
       return `<article class="person-card">` +
           `<a class="person-card-open" href="#/u/${encodeURIComponent(u.username)}">` +
             avatarEl(u, { cls: 'person-card-avatar' }) +
             `<span class="person-card-name">${esc(u.name || u.username)}${fence}</span>` +
             `<span class="person-card-sub">${esc(inCommonLine(common) || '@' + u.username)}</span>` +
+            `<span class="person-card-bio${u.bio ? '' : ' person-card-bio--quiet'}">${esc(bio)}</span>` +
           `</a>` +
-          body +
           `<span class="friend-slot person-card-slot">${tieHtml(u)}</span>` +
         `</article>`;
     };
     const peopleRailHtml = (people) => {
       if (!people.length) return '';
-      const newest = newestBy();
       return `<section class="person-rail" aria-label="People">` +
           `<div class="person-strip">` +
-            people.map(x => personCardHtml(x, newest.get(x.u.username))).join('') +
+            people.map(personCardHtml).join('') +
           `</div>` +
         `</section>`;
     };

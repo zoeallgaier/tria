@@ -125,11 +125,11 @@ it was said in above its byline (`communityTagHtml`, hidden on the circle's page
 the new way to discover."). It shows NO posts: today's daily, then **Circles**
 (a dashed Start a circle card, then yours, then the rest, by last sign of life,
 `Store.communityPulse`), then Share Tria. **People, under the Start a circle card and over the circles** (Zoe, 2026-10-23, `between` in `communitiesSectionHtml`): a sideways rail
-of 320px 4:5 cards (`peopleForRail`, `.person-card`), strangers only (no
+of 200px 4:5 cards (`peopleForRail`, `.person-card`), strangers only (no
 friend, follow or request of yours; someone who added you first stays), most
 friends in common first, then newest account; face, name, "Friends with Ana and
-Ben" (names, never a number) or the @handle, their newest post you may read
-(`Store.discover`, never a song) or else their bio or "Private account", and the
+Ben" (names, never a number) or the @handle, their bio (Zoe: "not recent posts. just
+bios"; none says "Private account" on a locked one), and the
 row's own tie (`tieHtml`). A card answered this visit keeps its place
 (`railKept`). Signed in only, gone while searching. Every circle is drawn as **the daily's
 own card** (the same `.daily-card` classes, Zoe: "style circles like the daily
