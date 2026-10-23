@@ -426,6 +426,9 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   repo has lost work that way twice.
 - **Every cache write goes through `write()`** ([docs/data.md](docs/data.md)), or
   a refresh in flight silently eats it.
+- **Every field is 16px or more**, a field you add at runtime too: iOS zooms the
+  whole page into any input, textarea or contenteditable set smaller (the
+  composer's tag box did at 0.86rem, 2026-10-23). Check computed sizes in WebKit.
 - **Never read `Notification.permission` in app.js** — it throws in the app. Go
   through `Store.pushPermission()`.
 - **No COUNT, anywhere** — not in `aps`, not on the nav, not on a native tab.

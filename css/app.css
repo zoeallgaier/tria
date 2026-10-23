@@ -8117,17 +8117,21 @@ button.poll-option:disabled { cursor: default; }
   padding: 0.25rem 0.4rem 0.5rem 0.75rem;
 }
 .tag-list { display: contents; }
+/* 16px on all three, never less: the typing box is a field, and iOS zooms
+   the whole page into any field set smaller (0.86rem did, 2026-10-23). The
+   chip it turns into and the + Tag that opened it match it, so nothing
+   changes size when a tag commits. */
 .tag-chip,
 .tag-add,
 .tag-row .tag-new {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  height: 2rem;
+  height: 2.25rem;
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 16px;
   font-weight: 600;
 }
 .tag-chip { padding: 0 0.2rem 0 0.7rem; color: var(--text); }
