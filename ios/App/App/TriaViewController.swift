@@ -79,6 +79,13 @@ class TriaViewController: CAPBridgeViewController {
         webView?.scrollView.bounces = true
         webView?.scrollView.alwaysBounceVertical = true
 
+        // No scroll indicator on the page (Zoe, 2026-10-22). It's chrome that
+        // says where you are in an infinite list, and Tria isn't trying to be
+        // one; it also slid over the refresh glow's edge. Panels that scroll
+        // inside the page are hidden in CSS, under html[data-shell="installed"].
+        webView?.scrollView.showsVerticalScrollIndicator = false
+        webView?.scrollView.showsHorizontalScrollIndicator = false
+
         // Swipe from the left edge to go back, the way every other iOS app
         // works. Tria's routes are hash changes, which WebKit keeps in the
         // web view's own back-forward list, so the gesture drives `hashchange`

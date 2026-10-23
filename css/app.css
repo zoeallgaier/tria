@@ -10175,3 +10175,13 @@ html[data-chrome="native"] .postbar .mention-list,
 html[data-chrome="native"] .postbar .postbar-attach {
   bottom: var(--native-postbar-lift, 96px);
 }
+
+/* NO SCROLLBARS IN THE APP (Zoe, 2026-10-22). The page's own indicator is the
+   web view's scroll view and is turned off in TriaViewController.swift; this
+   is every panel that scrolls inside the page (sheets, lists, strips), and the
+   page itself in a home-screen install. Installed shells only: in a browser a
+   desktop mouse still wants the bar it can grab. */
+html[data-shell="installed"],
+html[data-shell="installed"] * { scrollbar-width: none; }
+html[data-shell="installed"]::-webkit-scrollbar,
+html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
