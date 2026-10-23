@@ -36,7 +36,11 @@ wordmark ruled off by a hairline (`.nav-head`), the same neutral capsule for
 where you are, and **Share** at the foot, ruled off (`.nav-foot`). **One
 Share per shell:** the sidebar's Share opens the Share sheet
 (`openComposeDial`, the old "+ Post" linked straight to the composer), and My
-Circle's compose mark is hidden at desktop width outside the native shell. The
+Circle's compose mark is hidden at desktop width outside the native shell. **Updates is a sidebar row on
+desktop** (Zoe), after Chats, with the bell's dot (NAV's `rail` entry: hidden
+on the phone capsule, never sent to the native tab bar), and the bar's bell is
+hidden at desktop width the same way. On `#/updates` the sidebar lights that
+row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
