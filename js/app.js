@@ -2204,9 +2204,19 @@
     // binary that predates it, and the caller falls back to the file input.
     const pickPhoto = () => call('pickPhoto');
 
+    /* The refresh glow's colours: the reader's band, every stop, resolved the
+       way the + reads it. Not through bandFill, because an outline is a line of
+       colour and not glass: an accent's three near stops, Tria's peach to rose
+       and None's neutral all draw as they are. Read per pull, so a colour pick
+       or a change of scheme is simply there on the next one. */
+    function glowColors() {
+      return splitStops(probe('background-image: var(--pill-band)').image || '')
+        .map(toRgb).filter(Boolean);
+    }
+
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
-             live: isLive };
+             glowColors, live: isLive };
   })();
 
   /* ── Right-sized images ──────────────────────────────────────────────────────
@@ -5773,7 +5783,7 @@
       go('#/publish');
     };
     openSheet({
-      title: 'Create',
+      title: 'Share',
       items: composeRows().map((row) => ({
         label: row.label,
         // The type's own mark (TYPE_GLYPH), the vocabulary the composer's
@@ -12921,7 +12931,7 @@
   // circle"), the same card with its fill taken out and a dashed edge, the way
   // an empty slot is drawn. Signed out its pill is the way into an account.
   // Signed in it can be waved off (Zoe), per device like the week-of cards,
-  // and the Create sheet grows a Circle row so the door is never lost. A wave
+  // and the Share sheet grows a Circle row so the door is never lost. A wave
   // only lasts until the app is next opened; the THIRD one is for good (Zoe:
   // "dismissed three times total ... to totally disappear"). The count lives
   // on the device, the "for now" in memory, so a cold launch brings it back.
@@ -12958,7 +12968,7 @@
       startWavedNow = true;
       hapticTap('LIGHT');
       e.currentTarget.closest('.community-card--start')?.remove();
-      toast(waves >= START_WAVES ? 'Gone for good. Start one anytime from Create.' : 'Hidden for now. Start one anytime from Create.');
+      toast(waves >= START_WAVES ? 'Gone for good. Start one anytime from Share.' : 'Hidden for now. Start one anytime from Share.');
     });
   }
 
@@ -20367,21 +20377,22 @@
      reloaded at random. The tab re-tap still scrolls you to the top and clears a
      filter; it simply no longer re-pulls the world.
 
-     IN THE APP THE RING IS LIGHT AT THE TOP OF THE SCREEN (2.0): a soft bloom
-     of the brand ramp, the profile wash's cousin, drawn by `TriaRefreshGlow` in
-     TriaChromePlugin.swift, which reads the pull off its own scroll view and
-     owns the haptics (a ratchet of soft detents, a click at the threshold, a
-     soft landing). This side still decides WHEN:
+     IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): a thin line of the reader's
+     own band traced round the glass by `TriaEdgeGlow` in TriaChromePlugin.swift,
+     which reads the pull off its own scroll view and owns the haptics (a ratchet
+     of soft detents, a click where the two strokes meet, a soft landing). This side still decides WHEN:
      it says pull on the first frame of overscroll, then spin or idle on release.
      The ring stays the fallback until the first setGlow resolves, so a binary
      without the method refreshes exactly as before. */
   (() => {
-    const THRESHOLD = 72;   // TriaRefreshGlow.threshold has to match
+    const THRESHOLD = 72;   // TriaEdgeGlow.threshold has to match
     let ptr = null, pulling = false, raf = 0, busy = false, armed = false;
     let glow = false, glowing = false;
     const setGlow = (state, opts) => {
       if (!glow) return;
-      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, ...opts }).catch(() => {});
+      // Colours ride the two messages that show it; idle needs none.
+      const colors = state === 'idle' ? undefined : NativeChrome.glowColors();
+      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, colors, ...opts }).catch(() => {});
     };
     if (nativeShell()) {
       window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state: 'idle' })

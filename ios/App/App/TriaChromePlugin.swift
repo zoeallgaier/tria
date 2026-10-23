@@ -85,10 +85,10 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// availability dance again.
     private var postBar: TriaPostBarControl?
 
-    /// The refresh glow at the top of the screen, built on the first `setGlow`.
+    /// The refresh glow round the screen's edge, built on the first `setGlow`.
     /// No availability dance: it is a gradient and two strokes, nothing 26 only,
     /// so it answers on every OS the app installs on.
-    private var glow: TriaRefreshGlow?
+    private var glow: TriaEdgeGlow?
 
     /// The last keyboard reach handed to the web, so a notification that changes
     /// nothing costs a compare. -1 until the first one, which is what makes the
@@ -504,15 +504,20 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let state = call.getString("state") ?? "idle"
         let quiet = call.getBool("quiet") ?? false
         let land = call.getBool("land") ?? false
+        // Read through the bar's one colour parser. Below 26 that class doesn't
+        // exist, and the glow simply keeps Tria's own ramp.
+        var colors: [UIColor] = []
+        if #available(iOS 26.0, *) {
+            colors = ((call.getArray("colors") as? [String]) ?? [])
+                .compactMap { TriaChromeBar.color(fromHex: $0) }
+        }
         DispatchQueue.main.async { [weak self] in
-            guard let self, let web = self.bridge?.webView, web.window != nil else {
+            guard let self, let web = self.bridge?.webView, let window = web.window else {
                 call.reject("No window to glow in yet.")
                 return
             }
-            if self.glow == nil { self.glow = TriaRefreshGlow(scroll: web.scrollView) }
-            // Inside the web view, just above its page and below the bars the
-            // chrome adds to it later, so their glass refracts the light.
-            self.glow?.set(state: state, quiet: quiet, land: land, in: web, above: web.scrollView)
+            if self.glow == nil { self.glow = TriaEdgeGlow(scroll: web.scrollView) }
+            self.glow?.set(state: state, colors: colors, quiet: quiet, land: land, in: window)
             call.resolve()
         }
     }
@@ -3922,65 +3927,68 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
 // MARK: - The refresh glow
 
-/* 2.0: A REFRESH IS LIGHT RISING FROM THE TOP OF THE SCREEN, and this replaced
-   the five dot ring in the app. The web keeps the ring.
+/* 2.0: A REFRESH IS THE SCREEN'S EDGE LIGHTING UP, and this replaced the five
+   dot ring in the app. The web keeps the ring (a browser window has no rounded
+   glass to trace). A soft bloom at the top only, built like the profile wash,
+   was tried the same day and Zoe went back to this, thinner.
 
-   IT IS THE PROFILE WASH'S COUSIN, on purpose (Zoe: "a blurred glow almost like
-   the profile gradients"). Same construction as `body[data-ambient="tria"]
-   .ambient` in app.css: the brand ramp at 115deg carries the colour, an
-   elliptical radial MASK carries the shape, each stop is mixed toward the
-   paper first so the two hexes don't arrive at full shout. No blur pass: the
-   softness is the mask's falloff, which is cheap enough to reshape every frame.
-   An outline round the whole display was the first try and was too much
-   frame for a background act; the light now lives where the pull happens.
+   IT WEARS THE READER'S COLOUR, the same band every commit wears
+   (`--pill-band`, resolved by `NativeChrome.glowColors` and sent with each
+   pull): an accent is its three near stops, Tria's own ramp is peach to rose,
+   and None is the neutral, ink-side on paper and paper-side on ink.
 
-   IT SITS UNDER THE BARS, directly above the web view's scroll view, so the
-   native glass samples and bends it the way it bends the page. On top of the
-   bars it was a coloured film over the glyphs.
+   THE PULL DRAWS IT. Two strokes leave the top centre together and run down
+   either side, each as far along as the pull has got, and they MEET AT THE
+   BOTTOM exactly at the threshold. So the outline closing is "let go now", the
+   job the ring opening used to do. Let go and the ramp turns slowly round the
+   closed outline while the world re-pulls, then it fades.
 
-   THE MOTION, in four beats, all on one ellipse whose centre sits just above
-   the screen's top edge:
-     pull   the bloom deepens and widens with the finger (eased, so the first
-            points of pull already show light), and keeps a little rubber past
-            the threshold;
-     arm    one swell where letting go will refresh, with the click;
-     wait   the ramp drifts slowly side to side under a slow breath. Eased and
-            back and forth, NOT a turn: this is light breathing, not a spinner,
-            so the views.md rule about linear spins doesn't apply;
-     done   it sinks back up into the edge it came out of, and fades.
+   NATIVE READS THE PULL ITSELF, off the web view's own scroll view, the same
+   way `TriaScrollWatch` reads the header's state. The stroke has to move with
+   the finger at the display's rate and the haptics have to land on the frame
+   the stroke reaches a mark; sixty bridge messages a second would cost both
+   (every one is a main thread round trip, see the haptics note in
+   ios-shell.md). app.js says three things per pull: pull, spin, idle.
 
-   NATIVE READS THE PULL ITSELF, off the web view's scroll view, the way
-   `TriaScrollWatch` does: the bloom moves with the finger at the display's
-   rate and the ticks land on the frame the pull reaches them, with no bridge
-   message per frame. app.js says three things per pull: pull, spin, idle.
+   THE HAPTICS ARE A RATCHET. Six soft detents as the strokes travel, each a
+   touch firmer than the last, then one rigid click where the ends meet, then a
+   soft landing as the glow leaves (only after a pull: a resume nobody asked
+   for stays silent). UIImpactFeedbackGenerator rather than Core Haptics on
+   purpose: it obeys Settings, Sounds & Haptics, System Haptics before we ever
+   hear about it, which is the app's standing rule, and `prepare()` on the first
+   frame of the pull wakes the Taptic Engine so the first detent isn't late.
+   Detents and not a continuous hum: a hum under the thumb reads as the phone
+   buzzing, a ratchet reads as the pull having resistance.
 
-   THE HAPTICS ARE A RATCHET: soft detents as the pull tightens, each firmer
-   than the last, a rigid click at the threshold, a soft tap as a PULLED
-   refresh lands (a resume nobody asked for is silent). UIImpactFeedbackGenerator
-   because it obeys System Haptics for us; prepared on the pull's first frame.
+   THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js,
+   but only as the fallback for a pull that arrives without colours. */
+final class TriaEdgeGlow: UIView {
 
-   THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js. */
-final class TriaRefreshGlow: UIView {
-
-    /// Points of pull that arm a refresh. MUST match THRESHOLD in app.js.
+    /// Points of pull that arm a refresh. MUST match THRESHOLD in app.js's pull
+    /// module: that side decides whether letting go refreshes, this side draws
+    /// and clicks at the moment it will.
     private static let threshold: CGFloat = 72
-    private static let detents = 5
-    /// How far the bloom reaches below the top edge at full depth.
-    private static let reach: CGFloat = 300
-    private static let peach = (r: 1.0, g: 0xac / 255.0, b: 0x68 / 255.0)
-    private static let rose = (r: 1.0, g: 0.0, b: 0x49 / 255.0)
+    private static let detents = 6
+    /// Thin on purpose (Zoe: thinner than the first 3pt). The halo does the
+    /// glowing; the line itself is a hairline of colour on the glass's edge.
+    private static let line: CGFloat = 1.5
+    private static let peach = UIColor(red: 1, green: 0xac / 255.0, blue: 0x68 / 255.0, alpha: 1)
+    private static let rose = UIColor(red: 1, green: 0, blue: 0x49 / 255.0, alpha: 1)
+    private static let halo: CGFloat = 4
 
     private weak var scroll: UIScrollView?
     private var watch: NSKeyValueObservation?
-    /// The colour: the ramp, wider than the screen so the wait can drift it.
     private let ramp = CAGradientLayer()
-    /// The shape: an elliptical falloff, used as the ramp's mask.
-    private let bloom = CAGradientLayer()
+    private let strokes = CALayer()
+    private let left = CAShapeLayer()
+    private let right = CAShapeLayer()
     private let detent = UIImpactFeedbackGenerator(style: .soft)
     private let click = UIImpactFeedbackGenerator(style: .rigid)
     private var state = "idle"
     private var reached = 0
     private var armed = false
+    /// Bumped by every state change, so a fade's completion that lands after a
+    /// new pull has started doesn't blank it.
     private var generation = 0
 
     init(scroll: UIScrollView) {
@@ -3991,89 +3999,116 @@ final class TriaRefreshGlow: UIView {
         alpha = 0
         backgroundColor = .clear
 
-        // 115deg, the --brand-band's angle, as unit points. The ramp layer is
-        // 1.6 screens wide, so the drift's travel stays inside it.
-        ramp.startPoint = CGPoint(x: 0, y: 0.32)
-        ramp.endPoint = CGPoint(x: 1, y: 0.68)
+        // Conic, peach at the top and rose at the foot on BOTH sides, so the
+        // two strokes are mirror images while they draw; turning it is the spin.
+        ramp.type = .conic
+        ramp.startPoint = CGPoint(x: 0.5, y: 0.5)
+        ramp.endPoint = CGPoint(x: 0.5, y: 0)
+        wear([Self.peach, Self.rose])
         layer.addSublayer(ramp)
 
-        // A gaussian-ish falloff rather than a two-stop fade: two stops leave a
-        // visible rim where the colour gives out, which reads as a shape with an
-        // edge instead of light.
-        bloom.type = .radial
-        bloom.startPoint = CGPoint(x: 0.5, y: 0.5)
-        bloom.endPoint = CGPoint(x: 1, y: 1)
-        bloom.locations = [0, 0.18, 0.36, 0.54, 0.72, 0.88, 1]
-        bloom.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-        ramp.mask = bloom
-        paint()
+        for s in [left, right] {
+            s.fillColor = nil
+            s.strokeColor = UIColor.black.cgColor
+            s.lineWidth = Self.line
+            s.lineCap = .round
+            s.strokeEnd = 0
+            strokes.addSublayer(s)
+        }
+        // The bloom is the MASK's shadow: a mask's shadow counts as coverage, so
+        // the ramp shows through a soft halo round the line with no blur pass.
+        strokes.shadowColor = UIColor.black.cgColor
+        strokes.shadowOpacity = 1
+        strokes.shadowOffset = .zero
+        strokes.shadowRadius = Self.halo
+        layer.mask = strokes
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
-        super.traitCollectionDidChange(previous)
-        paint()
-    }
-
-    /// On paper each stop is mixed toward white, as `--wash-keep` does for the
-    /// profile wash, and the mask's peak is the loudness (`--wash-amt`). On ink
-    /// it is SCREENED over the page instead of laid on it: peach and rose at
-    /// partial alpha over near black is brown however it's mixed (mixing toward
-    /// black, the profile wash's dark rule, was browner still), and light on a
-    /// dark page has to add, not stain.
-    private func paint() {
-        let dark = traitCollection.userInterfaceStyle == .dark
-        let keep = dark ? 1.0 : 0.72
-        let paper = 1.0
-        func mix(_ c: (r: Double, g: Double, b: Double), _ k: Double) -> CGColor {
-            UIColor(red: c.r * k + paper * (1 - k), green: c.g * k + paper * (1 - k),
-                    blue: c.b * k + paper * (1 - k), alpha: 1).cgColor
-        }
-        let mid = (r: (Self.peach.r + Self.rose.r) / 2, g: (Self.peach.g + Self.rose.g) / 2,
-                   b: (Self.peach.b + Self.rose.b) / 2)
-        ramp.colors = [mix(Self.peach, keep), mix(mid, keep), mix(Self.rose, keep)]
-        let peak: CGFloat = dark ? 0.75 : 0.8
-        layer.compositingFilter = dark ? "screenBlendMode" : nil
-        bloom.colors = [1, 0.86, 0.6, 0.34, 0.14, 0.04, 0].map {
-            UIColor(white: 0, alpha: peak * $0).cgColor
-        }
+    /// The band's stops, first at the top and last at the foot, mirrored so the
+    /// two strokes match while they draw. One stop or many, a conic needs two.
+    private func wear(_ stops: [UIColor]) {
+        let band = stops.isEmpty ? [Self.peach, Self.rose] : stops
+        let loop = band + band.dropLast().reversed()
+        let ends = loop.count == 1 ? loop + loop : loop
+        ramp.colors = ends.map { $0.cgColor }
+        ramp.locations = ends.indices.map { NSNumber(value: Double($0) / Double(ends.count - 1)) }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let w = bounds.width
-        ramp.frame = CGRect(x: -w * 0.3, y: 0, width: w * 1.6, height: Self.reach * 1.4)
-        // The ellipse's centre a little above the glass, so the brightest band
-        // is the very top of the screen and the light reads as coming from
-        // behind it. Positioned in the ramp's space, which starts at -0.3w.
-        bloom.bounds = CGRect(x: 0, y: 0, width: w * 1.5, height: Self.reach * 2)
-        bloom.position = CGPoint(x: w * 0.8, y: -Self.reach * 0.12)
+        // A square on the diagonal, so turning it never shows a corner.
+        let side = hypot(bounds.width, bounds.height)
+        ramp.frame = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        strokes.frame = bounds
+        let half = Self.halfPath(in: bounds, radius: Self.cornerRadius(for: window))
+        right.path = half.cgPath
+        let mirrored = half.copy() as! UIBezierPath
+        mirrored.apply(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: bounds.width, ty: 0))
+        left.path = mirrored.cgPath
         CATransaction.commit()
     }
 
-    func set(state next: String, quiet: Bool, land: Bool, in host: UIView, above scroller: UIView) {
-        if superview !== host {
-            removeFromSuperview()
-            host.insertSubview(self, aboveSubview: scroller)
+    /// The right half of the screen's outline, top centre round to bottom
+    /// centre, inset by half the line so the stroke sits on the glass's edge and
+    /// stays concentric with its corners.
+    private static func halfPath(in b: CGRect, radius: CGFloat) -> UIBezierPath {
+        let i = line / 2
+        let r = max(0, radius - i)
+        let rect = b.insetBy(dx: i, dy: i)
+        let p = UIBezierPath()
+        p.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
+                 startAngle: -.pi / 2, endAngle: 0, clockwise: true)
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
+                 startAngle: 0, endAngle: .pi / 2, clockwise: true)
+        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        return p
+    }
+
+    /// The display's corner, by panel. The exact number is only on a private
+    /// API (`_displayCornerRadius`), which is an App Store risk, so this is the
+    /// published table keyed on `nativeBounds` height (which tells the X from
+    /// the mini and the XR from the XS Max where the point size can't). A panel
+    /// this doesn't know guesses from the home indicator: square corners
+    /// without one, the commonest modern radius with one.
+    private static func cornerRadius(for window: UIWindow?) -> CGFloat {
+        let h = max(UIScreen.main.nativeBounds.width, UIScreen.main.nativeBounds.height)
+        switch h {
+        case 2436, 2688: return 39       // X, XS, 11 Pro; XS Max, 11 Pro Max
+        case 1792: return 41.5           // XR, 11
+        case 2340: return 44             // 12 mini, 13 mini
+        case 2532: return 47.33          // 12, 13, 14, 16e
+        case 2778: return 53.33          // 12/13 Pro Max, 14 Plus
+        case 2556, 2796: return 55       // 14 Pro to 16, and their Max/Plus
+        case 2622, 2868, 2736: return 62 // 16 Pro onward, Air (unverified)
+        default:
+            return (window?.safeAreaInsets.bottom ?? 0) > 0 ? 55 : 0
         }
-        frame = host.bounds
+    }
+
+    func set(state next: String, colors: [UIColor], quiet: Bool, land: Bool, in window: UIWindow) {
+        if !colors.isEmpty { wear(colors) }
+        if superview !== window {
+            removeFromSuperview()
+            window.addSubview(self)
+        }
+        frame = window.bounds
+        // Above the native bars, and above anything presented since last time.
+        window.bringSubviewToFront(self)
         generation += 1
         let was = state
         state = next
         switch next {
         case "pull": beginPull()
-        case "spin": wait(quiet: quiet)
+        case "spin": spin(quiet: quiet)
         default: finish(from: was, land: land)
         }
-    }
-
-    /// The bloom's depth as a transform: `e` 0 is a sliver tucked behind the
-    /// top edge, 1 the full reach, a little more for an over-pull.
-    private static func depth(_ e: CGFloat) -> CATransform3D {
-        CATransform3DMakeScale(0.7 + 0.3 * min(e, 1.1), 0.12 + 0.88 * e, 1)
     }
 
     // MARK: pull
@@ -4081,7 +4116,6 @@ final class TriaRefreshGlow: UIView {
     private func beginPull() {
         layer.removeAllAnimations()
         ramp.removeAllAnimations()
-        bloom.removeAllAnimations()
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
@@ -4097,95 +4131,82 @@ final class TriaRefreshGlow: UIView {
 
     private func track(pull d: CGFloat) {
         guard state == "pull" else { return }
-        let raw = d / Self.threshold
-        let p = min(raw, 1)
-        // Ease out, so light arrives with the first points of pull; past the
-        // threshold the rubber gives a little more, on a curve that flattens.
-        let e = 1 - (1 - p) * (1 - p) + (raw > 1 ? 0.12 * (1 - exp(-(raw - 1) * 2)) : 0)
+        let p = min(d / Self.threshold, 1)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        bloom.transform = Self.depth(e)
+        left.strokeEnd = p
+        right.strokeEnd = p
         CATransaction.commit()
-        alpha = min(1, p * 1.6)
+        alpha = p > 0 ? 0.45 + 0.55 * p : 0
 
+        // Detents on the way out only, firmer as the pull tightens. Backing off
+        // re-arms the ones you backed off, so pulling again ticks again.
         let step = Int(floor(p * CGFloat(Self.detents)))
         if step > reached, step < Self.detents {
             reached = step
-            detent.impactOccurred(intensity: 0.3 + 0.4 * p)
+            detent.impactOccurred(intensity: 0.25 + 0.45 * p)
             detent.prepare()
         } else if step < reached {
             reached = step
         }
 
+        // The ends meeting. A little give before it un-arms, so a thumb
+        // resting on the line doesn't click twice.
         if p >= 1, !armed {
             armed = true
-            click.impactOccurred(intensity: 0.85)
+            click.impactOccurred(intensity: 0.9)
             click.prepare()
-            swell()
+            bloom()
         } else if p < 0.9, armed {
             armed = false
         }
     }
 
-    /// One breath in where the pull arms. Additive, so it rides on top of the
-    /// depth the finger is still setting every frame.
-    private func swell() {
-        let a = CAKeyframeAnimation(keyPath: "transform.scale.y")
-        a.values = [0, 0.14, 0]
-        a.keyTimes = [0, 0.3, 1]
-        a.duration = 0.5
-        a.isAdditive = true
-        a.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
-        bloom.add(a, forKey: "swell")
+    /// The halo swells once as the outline closes.
+    private func bloom() {
+        let a = CAKeyframeAnimation(keyPath: "shadowRadius")
+        a.values = [Self.halo, Self.halo * 2.2, Self.halo]
+        a.keyTimes = [0, 0.35, 1]
+        a.duration = 0.45
+        a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        strokes.add(a, forKey: "bloom")
     }
 
-    // MARK: wait
+    // MARK: spin
 
-    private func wait(quiet: Bool) {
+    private func spin(quiet: Bool) {
         watch = nil
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
-        // Settle to full depth from wherever the pull left it (a resume rises
-        // from the sliver).
-        let from = bloom.presentation()?.transform ?? Self.depth(0)
-        let settle = CASpringAnimation(keyPath: "transform")
-        settle.fromValue = from
-        settle.toValue = Self.depth(1)
-        settle.damping = 16
-        settle.stiffness = 170
-        settle.duration = settle.settlingDuration
-        bloom.transform = Self.depth(1)
-        bloom.add(settle, forKey: "settle")
-        UIView.animate(withDuration: 0.3) { self.alpha = quiet ? 0.55 : 1 }
-        guard !UIAccessibility.isReduceMotionEnabled else { return }
-        // The COLOURS drift, not the layer: the bloom is the ramp's mask and
-        // would ride along with it. Sliding the gradient's axis moves peach and
-        // rose under a shape that stays put.
-        // From rest, out to one side, across to the other, home: no jump on the
-        // first frame of the wait, and `.cubic` keeps every turn soft.
-        func sway(_ key: String, _ x: CGFloat, _ y: CGFloat) -> CAKeyframeAnimation {
-            let k = CAKeyframeAnimation(keyPath: key)
-            k.values = [x, x + 0.28, x - 0.28, x].map { CGPoint(x: $0, y: y) }
-            k.keyTimes = [0, 0.25, 0.75, 1]
-            k.calculationMode = .cubic
-            return k
+        // Close the outline from wherever the pull left it (a resume starts from
+        // nothing and draws in from the top).
+        for s in [left, right] {
+            let close = CABasicAnimation(keyPath: "strokeEnd")
+            close.fromValue = s.presentation()?.strokeEnd ?? s.strokeEnd
+            close.toValue = 1
+            close.duration = 0.35
+            close.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            s.strokeEnd = 1
+            s.add(close, forKey: "close")
         }
-        let drift = CAAnimationGroup()
-        drift.animations = [sway("startPoint", 0, 0.32), sway("endPoint", 1, 0.68)]
-        drift.duration = 5.2
-        drift.repeatCount = .infinity
-        ramp.add(drift, forKey: "drift")
-        let breathe = CABasicAnimation(keyPath: "transform.scale.y")
-        breathe.fromValue = 0
-        breathe.toValue = -0.12
-        breathe.isAdditive = true
-        breathe.duration = 1.7
-        breathe.beginTime = CACurrentMediaTime() + 0.4
+        UIView.animate(withDuration: 0.25) { self.alpha = quiet ? 0.55 : 1 }
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        // Linear, never eased: an eased spinner lurches once a turn (views.md).
+        let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+        turn.fromValue = 0
+        turn.toValue = 2 * Double.pi
+        turn.duration = 2.4
+        turn.repeatCount = .infinity
+        ramp.add(turn, forKey: "turn")
+        let breathe = CABasicAnimation(keyPath: "shadowRadius")
+        breathe.fromValue = Self.halo
+        breathe.toValue = Self.halo * 1.8
+        breathe.duration = 1.2
         breathe.autoreverses = true
         breathe.repeatCount = .infinity
         breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        bloom.add(breathe, forKey: "breathe")
+        strokes.add(breathe, forKey: "breathe")
     }
 
     // MARK: idle
@@ -4193,27 +4214,35 @@ final class TriaRefreshGlow: UIView {
     private func finish(from was: String, land: Bool) {
         watch = nil
         guard !isHidden else { return }
-        if was == "spin", land { detent.impactOccurred(intensity: 0.5) }
+        if was == "spin", land {
+            detent.impactOccurred(intensity: 0.5)
+        }
         let mine = generation
-        let quick = was == "pull"
-        // Back up into the edge it came out of.
-        let sink = CABasicAnimation(keyPath: "transform")
-        sink.fromValue = bloom.presentation()?.transform ?? bloom.transform
-        sink.toValue = Self.depth(0)
-        sink.duration = quick ? 0.25 : 0.55
-        sink.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.7, 1)
-        bloom.removeAnimation(forKey: "breathe")
-        bloom.removeAnimation(forKey: "swell")
-        bloom.transform = Self.depth(0)
-        bloom.add(sink, forKey: "settle")
-        UIView.animate(withDuration: quick ? 0.25 : 0.55, delay: quick ? 0 : 0.08,
-                       options: [.beginFromCurrentState, .curveEaseIn]) {
+        // A pull let go short retracts the way it came; a refresh fades whole.
+        if was == "pull" {
+            for s in [left, right] {
+                let back = CABasicAnimation(keyPath: "strokeEnd")
+                back.fromValue = s.presentation()?.strokeEnd ?? s.strokeEnd
+                back.toValue = 0
+                back.duration = 0.25
+                back.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                s.strokeEnd = 0
+                s.add(back, forKey: "close")
+            }
+        }
+        UIView.animate(withDuration: was == "pull" ? 0.25 : 0.5, delay: 0,
+                       options: [.beginFromCurrentState, .curveEaseOut]) {
             self.alpha = 0
         } completion: { _ in
             guard mine == self.generation else { return }
             self.isHidden = true
             self.ramp.removeAllAnimations()
-            self.bloom.removeAllAnimations()
+            self.strokes.removeAllAnimations()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            self.left.strokeEnd = 0
+            self.right.strokeEnd = 0
+            CATransaction.commit()
         }
     }
 }
