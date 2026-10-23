@@ -124,7 +124,7 @@ it was said in above its byline (`communityTagHtml`, hidden on the circle's page
 **Discover IS circles** (Zoe: "remove the posts from the Discover feed. THIS is
 the new way to discover."). It shows NO posts: today's daily, then **Circles**
 (a dashed Start a circle card, then yours, then the rest, by last sign of life,
-`Store.communityPulse`), then Share Tria. **Over the daily, people** (Zoe, 2026-10-23): a sideways rail
+`Store.communityPulse`), then Share Tria. **People, under the Start a circle card and over the circles** (Zoe, 2026-10-23, `between` in `communitiesSectionHtml`): a sideways rail
 of 320px 4:5 cards (`peopleForRail`, `.person-card`), strangers only (no
 friend, follow or request of yours; someone who added you first stays), most
 friends in common first, then newest account; face, name, "Friends with Ana and

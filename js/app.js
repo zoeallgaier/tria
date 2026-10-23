@@ -13095,12 +13095,15 @@
       .sort((a, b) => b.s - a.s).map(x => x.c);
   }
 
-  function communitiesSectionHtml(list, { search = false } = {}) {
-    if (!Store.communitiesReady()) return '';
+  // `between` is whatever Discover puts under the Start card and over the
+  // circles themselves (the people rail); it still shows with no circles at all.
+  function communitiesSectionHtml(list, { search = false, between = '' } = {}) {
+    if (!Store.communitiesReady()) return between;
     if (search && !list.length) return '';
     return `<section class="communities" aria-label="Circles">` +
         // Searching, it is captioned like People and Posts above it.
         (search ? `<p class="discover-kicker">Circles</p>` : communityStartHtml()) +
+        between +
         list.map(communityCardHtml).join('') +
       `</section>`;
   }
@@ -13776,7 +13779,7 @@
     // How long typing has to settle before the page rebuilds.
     const SEARCH_BEAT = 110;
 
-    /* PEOPLE, OVER THE DAILY (Zoe, 2026-10-23). A sideways rail of 4:5 cards,
+    /* PEOPLE, UNDER START A CIRCLE (Zoe, 2026-10-23). A sideways rail of 4:5 cards,
        one per person you have no tie to yet: the most friends in common first,
        then the newest account. Strangers only, so a friend, a follow or a
        request you sent is left out; someone who added you first stays, with
@@ -13862,19 +13865,20 @@
       const occ = q ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
       const rooms = q ? communitiesMatching(q) : communitiesInOrder();
-      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q });
+      const rail = q ? [] : peopleForRail();
+      // Whoever is on the rail now stays on it for the rest of this visit.
+      rail.forEach(x => railKept.add(x.u.username));
+      const railHtml = peopleRailHtml(rail);
+      // The rail sits under the Start a circle card, over the circles (Zoe).
+      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q, between: railHtml });
       const matched = q ? peopleMatching(q) : [];
       const people = allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
       const morePeople = matched.length > people.length;
       if (q) discoverable = new Set(Store.discover({ addressed: true }));
       const found = q ? postsMatching(q) : [];
-      const rail = q ? [] : peopleForRail();
-      // Whoever is on the rail now stays on it for the rest of this visit.
-      rail.forEach(x => railKept.add(x.u.username));
-      const railHtml = peopleRailHtml(rail);
       // The markup is the description of what changed, so it signs the paint;
       // a person's row carries a tie, so their friendStatus is in it too.
-      const sig = JSON.stringify([q, railHtml, roomsHtml, occ && [occ.slug, answers.length],
+      const sig = JSON.stringify([q, roomsHtml, occ && [occ.slug, answers.length],
         people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
           isLocked(u.username), Store.friendStatus(u.username)]),
         morePeople, found.map(p => p.id)]);
@@ -13900,10 +13904,10 @@
         ? `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>` : '';
 
       // Searching, the results run people, posts, circles; otherwise the page
-      // is the people rail, the daily and the circles.
+      // is the daily, then the circles with the people rail inside them.
       bodyEl.innerHTML = q
         ? peopleHtml + postsHtml + roomsHtml + none
-        : railHtml + (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
+        : (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
       bodyEl.querySelector('.discover-more')?.addEventListener('click', () => {
         allPeopleFor = q;
         paintNow();
