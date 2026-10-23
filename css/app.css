@@ -4956,30 +4956,15 @@ body.gate main { padding: 0; }
 }
 .rt-count.is-over { color: var(--danger); }
 
-/* The composer's attach bar — link, photo, poll and calendar toggles at the FOOT
-   of the note box, the counterweight to the "Aa" styles button in the title row.
-   A hairline lifts it off the body. The active tool wears the brand's ink — and
-   the four of them
-   are the whole type picker now, the Post / Activity switcher above the form
-   having folded into the calendar. Wired in wireAttachBar (renderPublish). */
-.rich-attach {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 0.1rem;
-  min-height: 2.75rem;  /* .rt-attach (2.4rem) plus this bar's own vertical
-                            padding — the bar's floor is stated rather than left
-                            to its contents, so the note box's foot is the same
-                            ~44px whatever is riding in it. */
-  padding: 0.15rem 0.3rem 0.2rem;
-  border-top: 1px solid var(--rule);
-}
+/* The composer's type tools: link, photo, poll and calendar, in the title row
+   leading the note box's foot, ahead of the tags (2026-10-23). Each flips the post's
+   inferred type; wired in wireAttachBar (renderPublish). */
 .rt-attach {
   -webkit-appearance: none;
   appearance: none;
   border: none;
   background: none;
-  width: 2.15rem;
+  width: 2.1rem;
   height: 2.4rem;
   display: inline-flex;
   align-items: center;
@@ -4989,7 +4974,7 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-pill);
   transition: color var(--dur-micro), background var(--dur-micro);
 }
-.rt-attach-ico { width: 21px; height: 21px; }
+.rt-attach-ico { width: 20px; height: 20px; }
 @media (hover: hover) { .rt-attach:hover { color: var(--text); background: var(--surface-2); } }
 .rt-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* The live toggle is the READER'S COLOUR (Zoe, 2026-10-22: the type options
@@ -8122,46 +8107,58 @@ button.poll-option:disabled { cursor: default; }
 @media (hover: hover) { .aud-lock:hover { border-color: var(--muted); } }
 .aud-lock:focus-visible { outline: none; border-color: var(--accent); }
 
-/* Tags pill — the bar's left half, where the lock was: a hash and the tags
-   input in one quiet hairline pill that takes whatever width the four tools
-   leave. Tapping anywhere on it (it is the input's <label>) puts the caret in.
-   The `.field` prefix outranks `.field label` and `.field input`, whose look
-   this is not. */
-.rich-attach--withtags { justify-content: space-between; gap: 0.4rem; }
-.field .tag-pill {
-  flex: 1;
-  min-width: 0;
+/* Tags — the note box's foot (2026-10-23): a chip per tag and a + Tag pill,
+   one tap per tag, wrapping onto new lines so the box grows as they're added.
+   No rule over it (Zoe). The `.field` prefix outranks `.field input`. */
+.tag-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem 0.6rem;
+}
+.tag-chip,
+.tag-add,
+.field .tag-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
   height: 2rem;
-  padding: 0 0.7rem 0 0.55rem;
-  margin: 0 0 0 0.15rem;
-  font-size: inherit;
-  letter-spacing: 0;
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  color: var(--muted);
-  cursor: text;
-  transition: border-color var(--dur-micro);
-}
-.field .tag-pill:focus-within { border-color: var(--accent); }
-.tag-pill-ico { width: 15px; height: 15px; flex-shrink: 0; }
-.field .tag-pill input {
-  flex: 1;
-  min-width: 0;
-  width: auto;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
+  font: inherit;
   font-size: 0.86rem;
   font-weight: 600;
-  color: var(--text);
 }
-.field .tag-pill input::placeholder { color: var(--muted); opacity: 1; }
-.rich-attach-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
+.tag-chip { padding: 0 0.2rem 0 0.7rem; color: var(--text); }
+.tag-chip-x {
+  -webkit-appearance: none; appearance: none;
+  border: 0; background: none; padding: 0;
+  width: 1.6rem; height: 1.6rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); cursor: pointer;
+}
+.tag-chip-x-ico { width: 13px; height: 13px; }
+.tag-add {
+  -webkit-appearance: none; appearance: none;
+  padding: 0 0.75rem 0 0.55rem;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tag-add[hidden] { display: none; }
+.tag-add-ico { width: 15px; height: 15px; }
+@media (hover: hover) { .tag-add:hover { color: var(--text); border-color: var(--muted); } }
+.field .tag-new {
+  width: 8rem;
+  padding: 0 0.75rem;
+  background: none;
+  color: var(--text);
+  border-color: var(--accent);
+}
+.field .tag-new:focus { border-color: var(--accent); }
+/* The type tools lead the tags row, the chips flowing after them. */
+.rich-attach-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; margin-left: -0.45rem; }
 
 /* Audience sheet — a clean iOS checkmark list, docked at the foot of the screen
    in the app's own sheet (openSheet, .sheet-scrim--aud below). No hard borders

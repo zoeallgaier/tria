@@ -279,8 +279,8 @@
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
     // Edit profile's row (Zoe, 2026-10-22: "use gear icon for edit profile").
     gear:    '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
-    camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
-    comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
+    camera:  '<path d="M3.5 10A3 3 0 0 1 6.5 7H7l1.4-2h7.2L17 7h.5a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3z"/><circle cx="12" cy="13" r="3.3"/>',
+    comment: '<path d="M4 8.5A3.5 3.5 0 0 1 7.5 5h9A3.5 3.5 0 0 1 20 8.5v4a3.5 3.5 0 0 1-3.5 3.5H11l-4 3v-3h0.5A3.5 3.5 0 0 1 4 12.5z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
     // The headcount control's glyph, both states in one drawing. The person sits
     // LEFT of centre so the check has somewhere to land — a centred figure would
@@ -303,7 +303,7 @@
     // Map pin for an activity's location line.
     pin:     '<path d="M12 21s-6.5-5.2-6.5-10a6.5 6.5 0 0 1 13 0c0 4.8-6.5 10-6.5 10z"/><circle cx="12" cy="11" r="2.4"/>',
     // Calendar page for an activity's when-line.
-    cal:     '<rect x="4" y="6" width="16" height="14" rx="1.5"/><path d="M4 10.5h16"/><path d="M8.5 3.5V7"/><path d="M15.5 3.5V7"/>',
+    cal:     '<rect x="4" y="5.5" width="16" height="14.5" rx="4.5"/><path d="M4 10.5h16"/><path d="M8.5 3.5V7"/><path d="M15.5 3.5V7"/>',
     // The little "opens elsewhere" mark on a find's title. An SVG (not the ↗
     // glyph) so it renders as this plain arrow everywhere — mobile fonts render
     // the character as a colour emoji, which we never want.
@@ -374,7 +374,7 @@
     // it cleaner at the toolbar's glyph size.
     sliders: '<path d="M4 9h9"/><path d="M17 9h3"/><circle cx="15" cy="9" r="2"/><path d="M4 15h4"/><path d="M12 15h8"/><circle cx="10" cy="15" r="2"/>',
     // Padlock — marks an activity shared with a hand-picked few, not the whole circle.
-    lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+    lock:    '<rect x="5" y="10.5" width="14" height="9.5" rx="3"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
     // Globe — the "Anyone" audience level (a public post, discoverable by all).
     globe:   '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4a12 12 0 0 1 0 16 12 12 0 0 1 0-16"/>',
     // Horizontal ellipsis — the quiet "more" overflow on a post header. Opens the
@@ -408,7 +408,7 @@
     // which put the triangle 4px off the middle of its own disc.
     play:    '<path d="M7 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
     // A framed picture (sun + hills) — the composer's "add a photo or clip" tool.
-    image:   '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M4.5 17.5 9 13l3 2.5L15.5 12l4 5"/>',
+    image:   '<rect x="3.5" y="5" width="17" height="14" rx="4.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M5 17 9 13l3 2.5L15.5 12l3.5 4"/>',
     // A drop of ink — the profile-colour control on your own identity card.
     // Not a painter's palette: the thumb-hole and the four blobs that make that
     // glyph legible are ~2px each at the 18px this renders at, which is mud. A
@@ -434,19 +434,11 @@
     // `poll` two lines up: that glyph is three bars of DIFFERENT lengths because
     // it's a bar chart, and at 22px in the same toolbar a ragged right edge and
     // a flush one are the only thing telling the two apart. Keep them flush.
-    grid:    '<rect x="4" y="4" width="7" height="7" rx="2"/>' +
-             '<rect x="13" y="4" width="7" height="7" rx="2"/>' +
-             '<rect x="4" y="13" width="7" height="7" rx="2"/>' +
-             '<rect x="13" y="13" width="7" height="7" rx="2"/>',
+    grid:    '<rect x="4" y="4" width="7" height="7" rx="2.6"/>' +
+             '<rect x="13" y="4" width="7" height="7" rx="2.6"/>' +
+             '<rect x="4" y="13" width="7" height="7" rx="2.6"/>' +
+             '<rect x="13" y="13" width="7" height="7" rx="2.6"/>',
     list:    '<path d="M5 7.5h14"/><path d="M5 12h14"/><path d="M5 16.5h14"/>',
-    // The composer's attach bar (2026-10-23): one compact family, drawn small
-    // inside the grid and rounder than the card glyphs, so four of them leave
-    // the tags pill room in the note box's foot.
-    attLink:  '<path d="m9.5 14.5 5-5"/><path d="m11 7.6 1.3-1.3a3.6 3.6 0 0 1 5.1 5.1L16.1 12.7"/><path d="m13 16.4-1.3 1.3a3.6 3.6 0 0 1-5.1-5.1l1.3-1.3"/>',
-    attPhoto: '<rect x="4.5" y="4.5" width="15" height="15" rx="4.5"/><circle cx="9.6" cy="9.6" r="1.3"/><path d="m19 15.5-3.6-3.6-7.2 7.2"/>',
-    attPoll:  '<path d="M7 18v-5"/><path d="M12 18V6"/><path d="M17 18v-8.5"/>',
-    attPlan:  '<rect x="4.5" y="5.5" width="15" height="14" rx="4.5"/><path d="M9 3.8v3.4"/><path d="M15 3.8v3.4"/><circle cx="12" cy="13.6" r="1.1" fill="currentColor" stroke="none"/>',
-    hash:     '<path d="M10 5 8.5 19"/><path d="M15.5 5 14 19"/><path d="M5.5 9.5h13"/><path d="M5 14.5h13"/>',
     chevDown: '<path d="m7 10 5 5 5-5"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
@@ -2739,59 +2731,88 @@
         `<div class="combo-divider" aria-hidden="true"></div>` +
         `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
-        // Foot bar. Right (opts.tools): link + photo + poll + calendar toggles — each a
-        // live toggle that flips the post's inferred type (link → Find, photo → Frame,
-        // poll → Poll, calendar → Activity) and pops the masthead mark. Left (opts.lock):
-        // the audience lock, so who sees it and what it is share one row.
-        //
-        // THE TWO HALVES PART COMPANY IN THE EDITOR, and the split is the whole
-        // rule: the tools are composer-only, because you can't swap a post's
-        // media or its type after the fact and a button there would promise
-        // something the editor can't do — but WHO CAN SEE IT is not fixed by
-        // anything, so the editor takes the lock alone (tools: false, lock: true)
-        // and the bar comes up holding just it. The one editable family that
-        // still gets neither is a quote, whose audience is the original's.
-        //
-        // TAGS RIDE THE BAR'S LEFT and the lock left it (Zoe, 2026-10-23: "tap
-        // the pill to add tags"). The pill IS the tags input, so val('c-tags')
-        // and val('e-tags') read it as before, and it takes whatever width the
-        // tools leave, which is why those were redrawn compact (att-*). The lock
-        // is a field of its own under the box (audienceFieldHtml).
-        (tools || opts.tags
-          ? `<div class="rich-attach${opts.tags ? ' rich-attach--withtags' : ''}" role="group" aria-label="Post options">` +
-              (opts.tags ? tagPillHtml(idp, opts.tags) : '') +
-              (tools
-                ? `<div class="rich-attach-tools">` +
-                    `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
-                      `aria-label="Add a link" aria-pressed="false">${svgIcon('attLink', 'rt-attach-ico')}</button>` +
-                    `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
-                      `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('attPhoto', 'rt-attach-ico')}</button>` +
-                    `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
-                      `aria-label="Add a poll" aria-pressed="false">${svgIcon('attPoll', 'rt-attach-ico')}</button>` +
-                    // No Music button since 2026-10-23 (Zoe): a song is its
-                    // own page (fieldsFor's 'song'), reached from the Share sheet.
-                    (event
-                      ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
-                          `aria-label="Add a place and time" aria-pressed="false">` +
-                          `${svgIcon('attPlan', 'rt-attach-ico')}</button>`
-                      : '') +
-                  `</div>`
-                : '') +
-            `</div>`
-          : '') +
+        // TAGS ARE THE FOOT (Zoe, 2026-10-23): a row of chips, one + Tag tap
+        // per tag, that wraps and grows the box as it fills, with no rule over
+        // it. The type tools (link → Find, photo → Frame, poll → Poll, calendar
+        // → Activity) lead the same row and the chips flow after them; the
+        // tools stay composer-only, since the editor can't change a post's
+        // type. The audience is a field of its own under the box
+        // (audienceFieldHtml).
+        (opts.tags ? tagRowHtml(idp, opts.tags, (tools
+            ? `<div class="rich-attach-tools">` +
+                `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
+                  `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
+                `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
+                  `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
+                `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
+                  `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+                // No Music button since 2026-10-23 (Zoe): a song is its
+                // own page (fieldsFor's 'song'), reached from the Share sheet.
+                (event
+                  ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
+                      `aria-label="Add a place and time" aria-pressed="false">` +
+                      `${svgIcon('cal', 'rt-attach-ico')}</button>`
+                  : '') +
+              `</div>`
+            : '')) : '') +
       `</div>` +
       (opts.lock ? audienceFieldHtml(idp) : '');
   }
 
-  // The tags pill in the note box's foot: a hash and the input itself, so a
-  // tap anywhere on the pill lands the caret in it.
-  function tagPillHtml(idp, { value = '', placeholder = 'Add tags' } = {}) {
-    return `<label class="tag-pill" for="${idp}-tags">` +
-        svgIcon('hash', 'tag-pill-ico') +
-        `<input id="${idp}-tags" type="text" autocapitalize="none" ` +
-          `value="${esc(value)}" placeholder="${esc(placeholder)}" ` +
-          `aria-label="Tags, separated with commas">` +
-      `</label>`;
+  // The tags row in the note box's foot: a chip per tag and a + Tag pill that
+  // opens one new chip to type in. The hidden input holds the commas, so
+  // val('c-tags') and val('e-tags') read it as they always did (wireTagRow).
+  const tagChipHtml = (t) =>
+    `<span class="tag-chip" data-tag="${esc(t)}">#${esc(t)}` +
+      `<button type="button" class="tag-chip-x" aria-label="Remove ${esc(t)}">` +
+        `${svgIcon('close', 'tag-chip-x-ico')}</button></span>`;
+  function tagRowHtml(idp, { value = '' } = {}, toolsHtml = '') {
+    return `<div class="tag-row" role="group" aria-label="Tags and post options">` +
+        toolsHtml +
+        `<input type="hidden" id="${idp}-tags" value="${esc(value)}">` +
+        parseTags(value).map(tagChipHtml).join('') +
+        `<button type="button" class="tag-add">${svgIcon('plus', 'tag-add-ico')}Tag</button>` +
+      `</div>`;
+  }
+  function wireTagRow(root) {
+    const row = root.querySelector('.tag-row');
+    if (!row) return;
+    const hidden = row.querySelector('input[type="hidden"]');
+    const add = row.querySelector('.tag-add');
+    const sync = () => {
+      hidden.value = [...row.querySelectorAll('.tag-chip')].map(c => c.dataset.tag).join(', ');
+      hidden.dispatchEvent(new Event('input', { bubbles: true }));   // the editor's dirty()
+    };
+    add.addEventListener('click', () => {
+      const box = document.createElement('input');
+      box.className = 'tag-new';
+      box.setAttribute('autocapitalize', 'none');
+      box.setAttribute('aria-label', 'New tag');
+      box.placeholder = 'tag';
+      row.insertBefore(box, add);
+      add.hidden = true;
+      box.focus();
+      let done = false;
+      const commit = () => {
+        if (done) return; done = true;
+        const t = parseTags(box.value)[0];
+        const have = [...row.querySelectorAll('.tag-chip')].some(c => c.dataset.tag === t);
+        if (t && !have) box.insertAdjacentHTML('beforebegin', tagChipHtml(t));
+        box.remove(); add.hidden = false;
+        sync();
+      };
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); add.focus(); }
+        else if (e.key === 'Escape') { box.value = ''; commit(); }
+      });
+      box.addEventListener('blur', commit);
+    });
+    row.addEventListener('click', (e) => {
+      const x = e.target.closest('.tag-chip-x');
+      if (!x) return;
+      x.closest('.tag-chip').remove();
+      sync();
+    });
   }
 
   // Wire a rich Note editor: the H1/H2/B/I toolbar, plain-text-only paste, the
@@ -9667,6 +9688,7 @@
     wireMentions(noteEl);
     if (noteEl && noteEl.isContentEditable)
       wireRichEditor(noteEl, form.querySelector('#e-note-count'));
+      wireTagRow(form);
     // The sheet commits as you tap, so every tap has to re-ask the bar. syncAnswers
     // is declared below and this only ever runs from a click, so the reference is
     // live by then.
@@ -16270,6 +16292,7 @@
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
       wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
+      wireTagRow(fieldsEl);
       if (family !== 'quote') {
         wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the field set
         wireWhenHints(fieldsEl);           // …and so do the date and time inputs
