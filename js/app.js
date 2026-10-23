@@ -15644,15 +15644,10 @@
 
     // MUSIC IS ITS OWN PAGE (Zoe, 2026-10-23), the way the Daily is the
     // composer with its prompt over it: the song search open from the first
-    // frame, who hears it, and Share. No headline, no note, no tags, no attach
-    // bar, because the song is the whole post and On repeat draws nothing else.
-    if (type === 'song') {
-      return songFieldHtml({ open: true }) +
-        `<div class="field song-aud">` +
-          `<label for="c-audience">Who sees it</label>` +
-          `<div>${audienceLockHtml('c')}</div>` +
-        `</div>`;
-    }
+    // frame and Share. No headline, no note, no tags, no attach bar, because
+    // the song is the whole post and On repeat draws nothing else, and no
+    // audience either (Zoe): On repeat is My Circle's, so a song is your circle's.
+    if (type === 'song') return songFieldHtml({ open: true });
 
     // The one field set, shared by all five types. The Note rich editor is the base
     // (headline + a contenteditable body + the H1/H2/B/I toolbar, 15k). The link row,
@@ -16264,9 +16259,9 @@
         family = 'song';
         wantSong = true;
         fieldsEl.innerHTML = fieldsFor('song');
-        // Your friends, or Anyone: the sheet leaves your circles off, because
-        // a song is read only on My Circle.
-        wireAudienceLock(fieldsEl, null, { rooms: false });
+        // Always your circle, latched so no type change can move it.
+        pubAudience = { mode: 'circle', users: [] };
+        pubAudienceTouched = true;
         wireSongField();
         return;
       }
