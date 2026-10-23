@@ -2762,8 +2762,10 @@
   // The tags row in the note box's foot: a chip per tag and a + Tag pill that
   // opens one new chip to type in. The hidden input holds the commas, so
   // val('c-tags') and val('e-tags') read it as they always did (wireTagRow).
+  // Every piece wears the feed's own `.tag` (Zoe: "sized and styled like tags
+  // in feed posts"), so a tag looks the same written as it does posted.
   const tagChipHtml = (t) =>
-    `<span class="tag-chip" data-tag="${esc(t)}">#${esc(t)}` +
+    `<span class="tag tag-chip" data-tag="${esc(t)}">${esc(t)}` +
       `<button type="button" class="tag-chip-x" aria-label="Remove ${esc(t)}">` +
         `${svgIcon('close', 'tag-chip-x-ico')}</button></span>`;
   function tagRowHtml(idp, { value = '' } = {}, toolsHtml = '') {
@@ -2771,7 +2773,7 @@
         `<div class="tag-list" role="group" aria-label="Tags">` +
           `<input type="hidden" id="${idp}-tags" value="${esc(value)}">` +
           parseTags(value).map(tagChipHtml).join('') +
-          `<button type="button" class="tag-add">${svgIcon('plus', 'tag-add-ico')}Tag</button>` +
+          `<button type="button" class="tag tag-add">${svgIcon('plus', 'tag-add-ico')}Tag</button>` +
         `</div>` +
         toolsHtml +
       `</div>`;
@@ -2786,12 +2788,18 @@
       hidden.dispatchEvent(new Event('input', { bubbles: true }));   // the editor's dirty()
     };
     add.addEventListener('click', () => {
+      // A tag-sized pill holding a 16px field drawn at the tag's size (see
+      // .tag-typing): a field set as small as a tag zooms the page on iOS.
+      const pill = document.createElement('span');
+      pill.className = 'tag tag-typing';
+      pill.innerHTML = '<span class="tag-typing-sizer" aria-hidden="true">tag</span>';
       const box = document.createElement('input');
       box.className = 'tag-new';
       box.setAttribute('autocapitalize', 'none');
       box.setAttribute('aria-label', 'New tag');
       box.placeholder = 'tag';
-      add.before(box);
+      pill.append(box);
+      add.before(pill);
       add.hidden = true;
       box.focus();
       let done = false;
@@ -2799,8 +2807,8 @@
         if (done) return; done = true;
         const t = parseTags(box.value)[0];
         const have = [...row.querySelectorAll('.tag-chip')].some(c => c.dataset.tag === t);
-        if (t && !have) box.insertAdjacentHTML('beforebegin', tagChipHtml(t));
-        box.remove(); add.hidden = false;
+        if (t && !have) pill.insertAdjacentHTML('beforebegin', tagChipHtml(t));
+        pill.remove(); add.hidden = false;
         sync();
       };
       box.addEventListener('keydown', (e) => {
