@@ -1626,6 +1626,10 @@ body.toolbar-live .view { padding-top: 1rem; }
 /* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's Share
    is on every page, so the same act on My Circle's bar would be a second door. */
 @media (min-width: 681px) { html:not([data-chrome="native"]) #home-compose-btn { display: none; } }
+/* THE SAME FOR THE BELL: at desktop width Updates is a row in the sidebar
+   (NAV's `rail` entry), with the bell's dot, so the bar's bell would be a
+   second door. On a phone the row is hidden and the bell is the way in. */
+@media (min-width: 681px) { html:not([data-chrome="native"]) #home-updates-btn { display: none; } }
 
 /* ── Main / views ────────────────────────────────────────────────────────── */
 main {
@@ -9117,7 +9121,8 @@ button.poll-option:disabled { cursor: default; }
      rather than left out of renderNav, because the breakpoint moves under a
      resize and the nav is built once. Share is My Circle's compose mark here. */
   .nav-head,
-  .nav-foot { display: none; }
+  .nav-foot,
+  .nav-pill .nav-link--rail { display: none; }
   .nav-pill {
     pointer-events: auto;
     position: relative;               /* containing block for anything absolute inside */
@@ -9164,6 +9169,11 @@ button.poll-option:disabled { cursor: default; }
   /* The capsule says where you are, so the label keeps its weight: a bold
      label changing width under a moving capsule would make the row twitch. */
   .nav-pill .nav-link[aria-current="page"] { font-weight: 400; }
+  /* Updates is My Circle's on a phone (its bell), so that tab stays lit there. */
+  .nav-pill .nav-link--under {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+  }
   /* The dot on the glyph's top trailing corner: the glyph is 24px, centred,
      so its corner is 12px either side of the tab's middle. */
   .nav-pill .nav-dot {

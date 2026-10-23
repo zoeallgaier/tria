@@ -530,13 +530,18 @@
     // Chats took Updates' place in 1.7. Since 1.8 Updates is the bell on My
     // Circle's bar (updatesBtnEl), still at #/updates, with My Circle lit.
     { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
+    // …and on desktop it is in the sidebar too (Zoe, 2026-10-22), where the
+    // rail has the room and My Circle's bar is one bar among many. `rail` is
+    // the sidebar only: hidden on the phone's capsule (which keeps the bell)
+    // and never sent to the native tab bar (tabSpec).
+    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true, rail: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
   ];
 
   function renderNav(active) {
     const nav = document.getElementById('nav');
     const link = (n) =>
-      `<a class="nav-link" href="${n.route}" aria-label="${n.label}">` +
+      `<a class="nav-link${n.rail ? ' nav-link--rail' : ''}" href="${n.route}" aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
         // Shipped empty and lit by class, never built and torn down: the pill is
@@ -572,9 +577,13 @@
         `</div>`;
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
     }
+    // On #/updates the sidebar lights its own Updates row, and My Circle, the
+    // tab whose bell you reached it from on a phone, is lit there only
+    // (.nav-link--under, worn like aria-current in the phone block of app.css).
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
+      a.classList.toggle('nav-link--under', active === '#/updates' && a.getAttribute('href') === '#/');
     });
     // On the compose page the + would compete with the composer's own publish
     // button, so it drops away (fade + sink behind the nav) and the four-icon
@@ -596,7 +605,7 @@
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
     // having to know this line ran.
-    NativeChrome.setActive(active);
+    NativeChrome.setActive(active === '#/updates' ? '#/' : active);
   }
 
   // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
@@ -858,7 +867,7 @@
     // more marks, and twenty more copies is not a thing to own. Markup is still
     // presentation, so this stays inside the rule about what may cross: native
     // can draw a triad of circles without knowing it means Discover.
-    const tabSpec = () => NAV.filter(n => !n.publish)
+    const tabSpec = () => NAV.filter(n => !n.publish && !n.rail)
       .map(n => ({ route: n.route, label: n.label, icon: svgIcon(n.key) }));
 
     // Native measures its own bars and hands the number back; CSS reads the
@@ -13737,11 +13746,15 @@
   // and never a number, and each clears by looking at the thing it is on.
   function syncNavDot() {
     const chats = Store.chatsAreNew();
-    document.querySelectorAll('#nav .nav-dot')
+    document.querySelectorAll('#nav a[href="#/chats"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', chats));
+    // The sidebar's Updates row (desktop only) carries the bell's dot.
+    const fresh = updatesAreNew();
+    document.querySelectorAll('#nav a[href="#/updates"] .nav-dot')
+      .forEach(el => el.classList.toggle('is-on', fresh));
     NativeChrome.setDots({ '#/chats': chats });
     const bell = document.querySelector('#home-updates-btn .toolbar-dot');
-    if (bell && bell.classList.contains('is-on') !== updatesAreNew()) {
+    if (bell && bell.classList.contains('is-on') !== fresh) {
       bell.classList.toggle('is-on');
       // The bell is a toolbar control, so native wears its face and reads the
       // dot off it (controlSpec). A class flip is not a render, so say so.
@@ -19741,10 +19754,9 @@
     // but it is somewhere INSIDE your profile, so that tab stays lit rather than
     // the nav going blank while you edit.
     // Every chat page sits inside Chats, so it keeps that tab lit. Updates moved
-    // out of the chat list and onto My Circle's bar in 1.8, so it lights My
-    // Circle, the tab whose bar you reached it from.
+    // out of the chat list and onto My Circle's bar in 1.8; renderNav lights the
+    // sidebar's own Updates row on desktop and My Circle on a phone and natively.
     renderNav(path === '#/profile/edit' ? '#/profile'
-      : path === '#/updates' ? '#/'
       : path.startsWith('#/chat') ? '#/chats' : path);
 
     // Remember where a friend profile's back chevron should return to: the page
