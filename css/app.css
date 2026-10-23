@@ -9931,8 +9931,9 @@ a.daily-answer { text-decoration: none; }
    the card's auto margins would shrink-wrap it (the .pgrid--frames trap), so
    it stretches across the column instead. On a phone #feed bleeds to the
    screen's edges for photos, and the card takes the view's inset back. */
-/* Discover's side padding too, so it is that page's Start card exactly. */
-.community-first { align-self: stretch; margin: 0; padding-inline: 0.8rem; }
+/* The daily card's own side padding (1.15rem), not Discover's tighter 0.8rem:
+   at 0.8rem the words and the pill read as touching the dashed edge (Zoe). */
+.community-first { align-self: stretch; margin: 0; }
 @media (max-width: 680px) { .community-first { margin-inline: 1.15rem; } }
 
 /* A circle is born (celebrateCircle): Tria's own ramp in stars, the start and
