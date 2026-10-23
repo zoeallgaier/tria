@@ -18554,6 +18554,7 @@
      pick and a new avatar all change that key. */
   let bandKey = null;
   let bandSeq = 0;
+  const SPLASH_KEY = 'tria:splash';   // read by the inline script under #splash in index.html
   function paintBrandBand() {
     const me = Store.isAuthed() ? Store.currentUser() : null;
     const key = me ? `${me.id}:${me.accent || (me.avatar ? 'auto' : 'default')}:${me.avatar || ''}` : 'none';
@@ -18569,6 +18570,15 @@
     const stamp = (band, heartLt, heartDk, inkLt, inkDk, mark) => {
       if (seq !== bandSeq) return;
       const el = document.documentElement;
+      /* The splash's copy of this answer (Zoe, 2026-10-22: the logo wears your
+         colour). It is the one surface that paints before auth, so it can only
+         read what this install wore LAST time, which is why it is its own key
+         and never --user-band on <html>: the gate must not inherit a past
+         reader's colour. Signed out and Tria's own ramp both clear it. */
+      try {
+        if (band) localStorage.setItem(SPLASH_KEY, band);
+        else localStorage.removeItem(SPLASH_KEY);
+      } catch {}
       if (!band) {
         ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk', '--type-mark']
           .forEach(p => el.style.removeProperty(p));

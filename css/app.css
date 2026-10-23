@@ -572,16 +572,13 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
   transition: opacity var(--dur-move) var(--ease);
 }
 
-/* THE MARK IS TRIA'S, not the reader's, and that is a decision rather than a
-   limitation. A version wearing --user-band from a localStorage cache was built
-   and taken out: the splash paints before auth resolves, so the only accent it
-   could show is the one this install wore LAST time, and a curtain that is
-   sometimes your colour and sometimes the brand's is the app looking uncertain
-   about whose name is on the door. It is the door. It says Tria.
-
-   Which also keeps --user-band's absence load-bearing everywhere it matters —
-   there is no cache of it, so the gate cannot paint its submit button in the
-   last reader's colour by accident. */
+/* THE MARK WEARS THE READER'S COLOUR (Zoe, 2026-10-22), reversing an older
+   call that it should always say Tria. The splash paints before auth resolves,
+   so the colour is the one this install wore last time: paintBrandBand caches
+   its band as tria:splash and an inline script under #splash in index.html
+   stamps it as --splash-band. Absent (signed out, or Tria's own ramp) is the
+   brand ramp turning, below. It is a separate key on purpose, never
+   --user-band, so the gate cannot paint its submit in a past reader's colour. */
 .splash-t {
   /* The logo (Zoe, 2026-09-16), in place of the italic serif "tria" that
      replaced the roman t. It keeps that word's width, which was 1.27 times its
@@ -600,6 +597,12 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
   background-image: linear-gradient(115deg,
     var(--splash-c1), var(--splash-c2), var(--splash-c3), var(--splash-c4));
   animation: splash-cycle 1s linear infinite;
+}
+/* A reader's own band holds still: it is one hue, and turning one hue reads
+   as a flicker rather than a pass through the colours. */
+:root[style*="--splash-band"] .splash-ramp {
+  background-image: var(--splash-band);
+  animation: none;
 }
 @keyframes splash-in {
   from { opacity: 0; transform: translateY(12px); filter: blur(6px); }
