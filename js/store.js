@@ -60,8 +60,7 @@ const Store = (() => {
   //   comments: [{id, postId, author(username), text, date}]
   //   commentLikes: [{commentId, user(username), _ts}] — RLS-filtered like likes
   //   commentLikesReady: whether add-comment-likes.sql has run (the table answered)
-  //   likes: [{postId, user(username), reaction, _ts}] — reaction is which nod it was
-  //   reactionsReady: whether add-reactions.sql has run (the column answered)
+  //   likes: [{postId, user(username), _ts}]
   //   songsReady: whether add-song-posts.sql has run (posts.song answered)
   //   friends: symmetric adjacency map keyed by username
   //   friendCounts: how many mutual ties each username actually has (see friendCount)
@@ -76,7 +75,7 @@ const Store = (() => {
   //   communitiesReady: whether add-circles.sql has run (the table answered)
   //   communityToolsReady: whether circle-photo-delete.sql has run (a circle's
   //     photo and its host's Delete)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], reactionsReady: false, songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
                          communities: [], communityMembers: [], communitiesReady: false,
                          communityToolsReady: false });
@@ -552,12 +551,9 @@ const Store = (() => {
       // a comment I wrote. A missing table (add-comment-likes.sql not run) is
       // an answer here, not a blip; see commentLikesReady below.
       readAll('comment_likes', ['created_at', 'comment_id', 'user_id']),
-      // Whether a like can be more than a heart yet (add-reactions.sql). Asked
-      // until the answer is yes, and then never again: a column that exists
-      // does not stop existing, and a sign-out empties the world and asks anew.
-      state.reactionsReady ? { data: [], error: null } : sb.from('likes').select('reaction').limit(1),
-      // Whether a post can be a song yet (add-song-posts.sql). Same shape as the
-      // probe above and the same one-way latch.
+      // Whether a post can be a song yet (add-song-posts.sql). Asked until the
+      // answer is yes, and then never again: a column that exists does not stop
+      // existing, and a sign-out empties the world and asks anew.
       state.songsReady ? { data: [], error: null } : sb.from('posts').select('song').limit(1),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
@@ -596,7 +592,7 @@ const Store = (() => {
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, rx, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct] = read;
+    const [u, p, c, l, cl, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -635,13 +631,11 @@ const Store = (() => {
     }), state.comments).filter(x => x.author);
     state.likes = core(l, 'likes', row => ({
       postId: row.post_id, user: nameById.get(row.user_id),
-      reaction: row.reaction || 'heart', _ts: row.created_at,
+      _ts: row.created_at,
     }), state.likes);
-    // 42703 is Postgres saying the column isn't there: the migration hasn't run,
-    // and every like above read as a heart. Anything else is a blip and changes
-    // nothing, so a flaky probe can't take reactions away mid-session.
-    if (!rx.error) state.reactionsReady = true;
-    else if (rx.error.code === '42703') state.reactionsReady = false;
+    // 42703 is Postgres saying the column isn't there: the migration hasn't run.
+    // Anything else is a blip and changes nothing, so a flaky probe can't take
+    // songs away mid-session.
     if (!sg.error) state.songsReady = true;
     else if (sg.error.code === '42703') state.songsReady = false;
     // Comment likes arrive in their own migration, so a MISSING table says the
@@ -964,11 +958,18 @@ const Store = (() => {
   // A post addressed to a CIRCLE (the room, add-circles.sql) is not part of
   // this feed even when a friend wrote it: My Circle is your friends, and a
   // circle's posts are read in the circle. Same on Discover and on a profile.
+  //
+  // A MUSIC POST is in no feed either (Zoe, 2026-10-22: "posts for music
+  // aren't needed so get rid of those"). Posting a song is putting it on
+  // repeat, and On repeat over My Circle is the one place a song is read; its
+  // row is still a post, so it can be liked from there. A repost of one is
+  // out with it (and a song can't be reposted any more, see repostable).
+  const isSongPost = (p) => p.type === 'song' || (p.repostOf && (originalOf(p) || {}).type === 'song');
   function feed() {
     const circle = new Set([state.session, ...friends()]);
     const followed = new Set(following());
     return posts().filter(p =>
-      visibleRepost(p) && !p.communityId && (
+      visibleRepost(p) && !p.communityId && !isSongPost(p) && (
         circle.has(p.author) ||
         (followed.has(p.author) && p.audience === 'public')));
   }
@@ -1038,8 +1039,9 @@ const Store = (() => {
   function repostable(post) {
     if (!post || !state.session) return false;
     const target = originalOf(post) || post;
-    // A circle's post stays in its circle (posts_community_guard refuses it).
-    return (target.audience || 'circle') !== 'list' && !target.communityId;
+    // A circle's post stays in its circle (posts_community_guard refuses it),
+    // and a song stays in On repeat (see isSongPost).
+    return (target.audience || 'circle') !== 'list' && !target.communityId && target.type !== 'song';
   }
   function myRepostOf(postId) {
     const seed = byId(state.posts).get(postId);
@@ -1108,7 +1110,7 @@ const Store = (() => {
   }
   // A profile is what someone posted to their people. What they posted into a
   // circle stays in the circle (see feed).
-  const postsBy = (username) => posts().filter(p => p.author === username && !p.communityId);
+  const postsBy = (username) => posts().filter(p => p.author === username && !p.communityId && !isSongPost(p));
 
   // How many people a targeted post is shared with. Accurate for posts you
   // authored (RLS gives you all their allowlist rows); 0 for others' posts.
@@ -2191,43 +2193,32 @@ const Store = (() => {
     } else {
       const { error } = await sb.from('likes').insert({ post_id: postId, user_id: mine });
       if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
-      const row = { postId, user: me, reaction: 'heart', _ts: new Date().toISOString() };
+      const row = { postId, user: me, _ts: new Date().toISOString() };
       write('likes', xs => upsert(xs, row, x => x.postId === postId && x.user === me));
     }
     return { ok: true, liked: !has };
   }
 
-  // ── Reactions (which nod a like is) ─────────────────────────────────────────
-  // A like row says WHICH nod it was: a tap is a heart, a hold on the heart picks
-  // one of four more. Same row, same privacy, one per person, so everything
-  // above still holds and the author's count is still everybody who reacted at
-  // all. Until add-reactions.sql has run the column isn't there, every like
-  // reads as a heart, and nothing offers more (reactionsReady).
-  const REACTIONS = ['heart', 'up', 'down', 'ha', 'wow'];
-  const reactionsReady = () => !!state.reactionsReady;
+  // ── A like, as the post card's heart writes it ──────────────────────────────
+  // A like is a heart and nothing else since 2026-10-22 (Zoe: "remove the other
+  // types of reactions other than liking"). add-reactions.sql's `reaction`
+  // column is still in the table and is never read or written, so a row left as
+  // a thumbs up before then reads as the like it also was.
   // Whether a post can carry a song (add-song-posts.sql). Until then the
   // compose dial offers no Music row and the composer no song button.
   const songsReady = () => !!state.songsReady;
-  const reactionOf = (postId) => {
-    const row = mineIn(state.likes, postId);
-    return row ? (row.reaction || 'heart') : null;
-  };
+  const reactionOf = (postId) => mineIn(state.likes, postId) ? 'heart' : null;
 
-  // Set my reaction to `reaction`, or take it back with null. Changing one nod
-  // for another UPDATES the row rather than replacing it, so it keeps its
-  // created_at and the author's Updates don't see a second arrival.
+  // Like a post ('heart') or take the like back (null).
   async function setReaction(postId, reaction) {
     const me = state.session;
     if (!me) return { ok: false };
     const post = state.posts.find(p => p.id === postId);
     if (!post || post.author === me) return { ok: false };
     if (!isFriend(post.author) && post.audience !== 'public') return { ok: false };
-    if (reaction && !REACTIONS.includes(reaction)) return { ok: false };
-    if (reaction && reaction !== 'heart' && !state.reactionsReady) return { ok: false };
     const mine = idOf(me);
     const same = x => x.postId === postId && x.user === me;
     const had = mineIn(state.likes, postId);
-
     if (!reaction) {
       if (!had) return { ok: true, reaction: null };
       const { error } = await sb.from('likes').delete().eq('post_id', postId).eq('user_id', mine);
@@ -2235,33 +2226,14 @@ const Store = (() => {
       write('likes', xs => xs.filter(x => !same(x)));
       return { ok: true, reaction: null };
     }
-
-    // RLS answers an update it refuses with zero rows and a clean 200, so the
-    // row is asked for back and an empty answer is a refusal.
-    const change = async () => {
-      const { data, error } = await sb.from('likes').update({ reaction })
-        .eq('post_id', postId).eq('user_id', mine).select('post_id');
-      return !error && !!(data && data.length);
-    };
-    if (had) {
-      if ((had.reaction || 'heart') === reaction) return { ok: true, reaction };
-      if (!(await change())) return { ok: false };
-      write('likes', xs => upsert(xs, { ...had, reaction }, same));
-      return { ok: true, reaction };
-    }
-    const ins = { post_id: postId, user_id: mine };
-    if (state.reactionsReady) ins.reaction = reaction;
-    const { error } = await sb.from('likes').insert(ins);
-    if (error) {
-      // Already liked from another device, which this cache hasn't heard yet:
-      // the row is there, so this is a change of mind rather than a new nod.
-      if (!/duplicate|unique/i.test(error.message)) return { ok: false };
-      if (reaction !== 'heart' && !(await change())) return { ok: false };
-    }
-    const row = { postId, user: me, reaction, _ts: new Date().toISOString() };
-    write('likes', xs => upsert(xs, row, same));
-    return { ok: true, reaction };
+    if (had) return { ok: true, reaction: 'heart' };
+    const { error } = await sb.from('likes').insert({ post_id: postId, user_id: mine });
+    // Already liked from another device, which this cache hasn't heard yet.
+    if (error && !/duplicate|unique/i.test(error.message)) return { ok: false };
+    write('likes', xs => upsert(xs, { postId, user: me, _ts: new Date().toISOString() }, same));
+    return { ok: true, reaction: 'heart' };
   }
+
 
   // ── Headcount (who's in, on an activity) ────────────────────────────────────
   // The public counterpart to likes: every row is readable, so anyone who can
@@ -2383,7 +2355,7 @@ const Store = (() => {
         evts.push({ kind: 'mention', postId: p.id, user: p.author, text: p.note, _ts: p._ts || '' });
     for (const l of state.likes)
       if (mine.has(l.postId) && l.user !== me)
-        evts.push({ kind: 'like', postId: l.postId, user: l.user, reaction: l.reaction || 'heart', _ts: l._ts || '' });
+        evts.push({ kind: 'like', postId: l.postId, user: l.user, _ts: l._ts || '' });
     // Likes on MY comments, which RLS hands me in full. Filed against the post
     // the comment sits under, so the row walks to that thread, and carrying the
     // comment's words so the row says which of your replies it was.
@@ -2916,7 +2888,7 @@ const Store = (() => {
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
   const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
   // Newest first, through posts() so it shares the one sort.
-  const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p));
+  const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p) && !isSongPost(p));
   // The last sign of life in a circle that this reader can see: a post (only
   // members are handed those), a join, or the day it was started. Discover
   // orders its circles by it.
@@ -3848,7 +3820,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
-    reactionsReady, reactionOf, setReaction, songsReady,
+    reactionOf, setReaction, songsReady,
     commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,

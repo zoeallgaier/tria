@@ -2732,214 +2732,15 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   .like-sparkles { display: none; }
 }
 
-/* The ink flood is a silhouette, and a heart that became a thumbs up has to
-   flood as a thumb. One mask per mark, each the same drawing as its glyph in
-   ICONS (optical offset included) filled solid; the grin's eyes ride along as
-   strokes so they ink with the mouth. data-rx is stamped by likeToggleHtml and
-   paintReaction, and a heart needs no rule: it is the default above. */
-.card-like[data-rx="up"]   { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(.45 -1.05)'%3E%3Cpath d='M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9zM8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
-.card-like[data-rx="down"] { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(.45 1) matrix(1 0 0 -1 0 24)'%3E%3Cpath d='M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9zM8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
-.card-like[data-rx="ha"]   { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(0 -.25)'%3E%3Cpath d='M5.8 12h12.4a6.2 6.2 0 0 1-12.4 0z'/%3E%3Cpath fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M4.6 8.6 7.3 6l2.7 2.6M14 8.6 16.7 6l2.7 2.6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
-.card-like[data-rx="wow"]  { --heart-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23000'%3E%3Cg transform='translate(0 .7)'%3E%3Cpath d='M6.2 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM13.4 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM8.4 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4zM15.6 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
-
 /* The action row gives up the system's own long press: no callout, no text
    selection, no magnifier. It holds buttons and a count, nothing anybody means
    to select, and a hold that lands a few px off the heart would otherwise raise
-   the magnifier over the text beside it. A held heart used to sink while the
-   hold counted down; that was a transform, and the fan's third pass took every
-   transform off the gesture (see the fan below). */
+   the magnifier over the text beside it. */
 .card-actions {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
           user-select: none;
 }
-/* ── The reaction fan (Fan in app.js) ───────────────────────────────────────
-   Five 44px discs on a quarter arc around the heart that was held, over a veil
-   that dims the page. It is the + speed dial's vocabulary: frosted discs you
-   reach for, each blooming in a colour behind its glyph.
-
-   NOTHING ON IT MOVES BUT THE DISC UNDER THE FINGER: the third and fourth
-   passes on Zoe's phone (2026-09-25), and her call. How it got here, so nobody
-   walks it back:
-     · It shipped lavish: a blurred veil, the discs fluttering out along the
-       arc on a 0.4s spring with a rotation. It read slow, and the BLUR was
-       the cost that mattered (fading a backdrop-filter makes WebKit re-blur
-       the whole page every frame, over a feed full of photos).
-     · Then a 100ms fade of the whole thing, everything placed: fast, but a
-       pop-up rather than something coming out of the heart.
-     · Then the discs springing out of the heart again, quick (0.26s): better,
-       and still a little jumpy on the phone. Any translate is five discs
-       crossing the page in one hitch-prone quarter of a second.
-     · Now every disc is already where it lives and they fade in ONE AT A TIME
-       along the arc, heart first (0.14s each, 40ms apart, the last one full at
-       300ms). That keeps the sense of the fan opening out from the heart with
-       nothing travelling. The close is one quick fade of everything. The veil
-       is a flat dim.
-     · Then the one exception, asked for by name: the lit disc STEPS OUT 12px
-       along its own bearing and grows a tenth (0.12s). A bloom alone was hard
-       to read, because the fingertip is usually sitting on the lit disc. 12px
-       puts it at radius 128, where the approved canvas drew it. One disc going
-       a finger's width is not five crossing the page, and it follows the
-       finger rather than arriving on its own.
-   Tune it on a phone, never in a desktop browser.
-
-   No words anywhere on it (Zoe, 2026-09-25). Each disc is named for VoiceOver.
-
-   Every mark's colour is the post's (--heart-*, which is the reader's accent
-   where they picked one): the lit disc blooms in it, and your current mark sits
-   filled in it, the way it sits on the card.
-
-   NOTHING ON IT IS SELECTABLE, and that is load-bearing rather than tidy. The
-   fan opens under a finger that is still down, and iOS's long-press text
-   gesture fires about a tenth of a second later on whatever is under that
-   finger, which is now the ghost heart on this layer. Selectable, it raised the
-   text magnifier over the fan.
-
-   Positions come from JS as --x/--y, because the
-   arc turns down under the toolbar and mirrors near a left edge, and because
-   CSS trig arrived in WebKit after the oldest iOS this app opens on. Above the
-   toolbar and nav (101) and under the modals (250). */
-.rx-veil,
-.rx-fan {
-  -webkit-user-select: none;
-          user-select: none;
-  -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.rx-veil {
-  position: fixed;
-  inset: 0;
-  z-index: 240;
-  background: color-mix(in srgb, var(--bg) 62%, transparent);
-}
-.rx-fan {
-  position: fixed;
-  z-index: 241;
-  width: 0;
-  height: 0;
-  --burst: var(--heart-note);
-}
-/* Closed (or closing) takes no taps, so the 120ms fade out can't swallow the
-   next one. */
-.rx-veil,
-.rx-fan {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease-in;
-}
-.rx-veil.is-open,
-.rx-fan.is-open {
-  opacity: 1;
-  pointer-events: auto;
-  transition: opacity 0.16s ease-out;
-}
-.rx-fan[data-type="find"]     { --burst: var(--heart-find); }
-.rx-fan[data-type="photo"]    { --burst: var(--heart-photo); }
-.rx-fan[data-type="activity"] { --burst: var(--heart-activity); }
-.rx-fan[data-type="poll"]     { --burst: var(--heart-poll); }
-.rx-fan[data-type="song"]     { --burst: var(--heart-song); }
-
-/* The heart the fan grew out of, redrawn over the veil in the same place and
-   the same ink, so it stays clear while the page dims. A tap on it puts the fan
-   away, and it reaches past the glyph to the 44px the real heart has. */
-.rx-ghost {
-  position: absolute;
-  display: block;
-  line-height: 0;
-  cursor: pointer;
-}
-.rx-ghost::after { content: ''; position: absolute; inset: -8px; }
-.rx-ghost svg { display: block; width: 100%; height: 100%; }
-.rx-ghost.liked svg { fill: currentColor; }
-
-.rx-item {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  /* Always in its place on the arc. Its opacity is what changes, in one at a
-     time from the heart outward and out all together; the only thing that
-     moves is the lit one, below. */
-  transform: translate(var(--x), var(--y));
-  opacity: 0;
-  will-change: opacity;
-  transition: opacity 0.12s ease-in;
-}
-.rx-fan.is-open .rx-item {
-  opacity: 1;
-  transition: opacity 0.14s ease-out calc(var(--i) * 40ms), transform 0.12s ease-out;
-}
-/* The disc the finger points at steps out along its own bearing (--hx/--hy are
-   the same arc at a longer radius), clear of the fingertip. Only while open:
-   a closed fan never moves anything, so a quick reopen elsewhere can't glide
-   the discs across. Pointing is by bearing, not hit-testing, so moving the
-   disc can't change which one is lit. */
-.rx-fan.is-open .rx-item.hot {
-  z-index: 1;
-  transform: translate(var(--hx), var(--hy)) scale(1.1);
-}
-.rx-disc {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  border: var(--glass-edge);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
-}
-.rx-disc::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(64% 64% at 50% 50%, var(--burst) 0%, transparent 66%);
-  opacity: 0;
-  transition: opacity 0.1s ease-out;
-}
-/* Every glyph is centred optically in its drawing (see react_* in ICONS), so the
-   disc centres the box and nothing here nudges any one of them. */
-.rx-disc svg { position: relative; width: 24px; height: 24px; }
-.rx-item.hot .rx-disc::before { opacity: 0.6; }
-.rx-item.cur { color: var(--burst); }
-.rx-item.cur .rx-disc::before { opacity: 0.28; }
-.rx-item.cur svg { fill: currentColor; }
-@media (hover: hover) { .rx-fan.is-open .rx-item:hover .rx-disc::before { opacity: 0.6; } }
-.rx-item:focus-visible { outline: none; }
-.rx-item:focus-visible .rx-disc { outline: 2px solid var(--text); outline-offset: 2px; }
-
-@media (prefers-color-scheme: dark) {
-  .rx-veil { background: color-mix(in srgb, var(--bg) 70%, transparent); }
-  .rx-disc { background: color-mix(in srgb, var(--bg) 92%, transparent); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4); }
-  .rx-item.hot .rx-disc::before { opacity: 0.45; }
-  .rx-item.cur .rx-disc::before { opacity: 0.2; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .rx-veil, .rx-fan, .rx-veil.is-open, .rx-fan.is-open,
-  .rx-item, .rx-fan.is-open .rx-item, .rx-disc::before { transition: none; }
-}
-
-/* The mark somebody left, on the author's who-liked list, in the pill where the
-   guest list writes Going or Maybe. Filled, and in the post's own colour (the
-   list stamps --burst), because it is the reaction as its giver saw it land. */
-/* Two classes, because .liker-tag sets its own ink and padding further down. */
-.liker-tag.liker-mark {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.14rem 0.42rem;
-  line-height: 0;
-  color: var(--burst, var(--going-ink));
-}
-.liker-mark svg { width: 15px; height: 15px; fill: currentColor; }
-
 /* Headcount + RSVP, one control (activities). Person-glyph + count, leading the
    social cluster and built like the comment count beside it — same 44px target,
    same 0.82rem bold number, growing leftward from the glyph's square. No
@@ -5944,7 +5745,6 @@ button.poll-option:disabled { cursor: default; }
   margin: 0 auto 2rem;
   padding-inline: var(--inset);
 }
-.np-kicker { margin: 0 0 0.5rem; }
 .np-strip {
   display: flex;
   gap: 0.7rem;
@@ -6040,6 +5840,56 @@ button.poll-option:disabled { cursor: default; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* A song somebody posted (1.9): the square is a link out to the song and the
+   heart is the post's own like, laid over the cover's top corner (Zoe: "add a
+   like button to the corner on the on repeat section"). Two siblings in one
+   box, since a button can't sit inside a link. The heart sits on a disc of the
+   bar's glass so it reads on any cover, and its 44px target is the disc plus
+   the clear corner around it. */
+.np-item--post { position: relative; cursor: default; }
+.np-open {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.card-like.np-like {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  --heart-size: 18px;
+  cursor: pointer;
+}
+.card-like.np-like::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+          backdrop-filter: blur(var(--glass-blur));
+  border: var(--glass-edge);
+  z-index: -1;
+}
+/* The disc is centred on the button, so the heart, its pop and its ink flood
+   all land in the middle of it with no offsets of their own. */
+.card-like.np-like svg { width: 18px; height: 18px; }
+.card-like.np-like.liked { color: var(--burst, var(--heart-song)); }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
@@ -6181,7 +6031,7 @@ button.poll-option:disabled { cursor: default; }
   margin: 0.9rem 0 0;
   padding: 0.75rem;
   border: 1px solid var(--rule);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   background: var(--surface);
   color: inherit;
   text-decoration: none;
@@ -6248,7 +6098,6 @@ button.poll-option:disabled { cursor: default; }
    be. The trending tags and the On repeat rail that shared this rule came off
    Discover with its post grid in 1.9. */
 .discover-kicker,
-.np-kicker,
 .daily-kicker {
   font-size: var(--kicker);
   font-weight: 400;
@@ -6293,7 +6142,7 @@ button.poll-option:disabled { cursor: default; }
      is what's last. One margin on the tile is right however many paragraphs. */
   margin-top: 0.9rem;
   overflow: hidden;                    /* a quoted Frame is full-bleed; the tile clips it */
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   /* The flat cards' material (.week-card, .daily-card): a --surface fill and a
      --rule hairline, no rim, no drop, no hover lift (Zoe, 2026-09-14). */
   background: var(--surface);
@@ -6675,7 +6524,7 @@ button.poll-option:disabled { cursor: default; }
      belongs to neither: it's the page's headline, on its own. */
   margin: 0 auto 2rem;
   padding: 1rem 1.15rem 0.95rem;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   background: var(--surface);
   border: 1px solid var(--rule);
 }
@@ -6757,6 +6606,20 @@ button.poll-option:disabled { cursor: default; }
   z-index: 1;
   margin-left: auto;
 }
+/* FULL WIDTH AND A LITTLE TALLER (Zoe, 2026-10-22: "use full width (and a bit
+   taller) buttons for daily and start and share tria and stuff"). The pill
+   takes its own line under the faces and the count, edge to edge of the card,
+   so the way in is the biggest thing to hit on it. An empty count (a circle
+   nobody signed in can see into, the start card) leaves no row behind. */
+.daily-card .daily-answer,
+.friends-share .friends-share-copy {
+  flex: 1 0 100%;
+  width: 100%;
+  min-height: 52px;
+  margin-left: 0;
+  font-size: 0.95rem;
+}
+.daily-count:empty { display: none; }
 .daily-go { font-size: 1rem; transition: transform var(--dur-micro) var(--ease); }
 /* Already answered (one each): the invitation is spent and nothing replaces it.
    There's no "yours is in" line here — the faces and the count already moved when
@@ -7070,7 +6933,7 @@ button.poll-option:disabled { cursor: default; }
   --pin-pad: 0.7rem;
   min-height: calc(var(--pin-art) + var(--pin-pad) * 2 + 2px);
   padding: var(--pin-pad) 0.8rem;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   /* The flat cards' material (.week-card, .daily-card, .card-quoted): a
      --surface fill and a --rule hairline, no blur, no rim, no lift. No
      prefers-color-scheme block — both tokens answer the scheme in tokens.css,
@@ -7160,7 +7023,7 @@ button.poll-option:disabled { cursor: default; }
   flex: 0 0 auto;
   width: var(--pin-art);
   height: var(--pin-art);
-  border-radius: var(--radius-img);
+  border-radius: calc(var(--radius-soft) - var(--pin-pad));   /* concentric with the soft card */
   border: var(--glass-edge);
   background-color: color-mix(in srgb, var(--pin-hue, var(--text)) 20%, transparent);
   background-size: cover;
@@ -7611,8 +7474,11 @@ button.poll-option:disabled { cursor: default; }
 /* Empty Discover list: the "no one new" note plus a soft ask to share Tria,
    with a copy-the-link pill wearing the Post button's gradient ring. */
 .friends-share p { margin: 0; }
-/* Standing at the foot of Find Friends — a hairline lifts it off the list above. */
+/* Standing at the foot of Find Friends — a hairline lifts it off the list above.
+   Not on Discover, where it follows a stack of cards that already end on their
+   own edge (Zoe, 2026-10-22: "remove divider line after cards on discover"). */
 .friends-share { border-top: 1px solid var(--rule); margin-top: 1.25rem; }
+.view--discover .friends-share { border-top: 0; margin-top: 0; padding-top: 0.5rem; }
 .friends-share-ask { margin-top: 0.35rem; }
 /* The 44px floor is STATED, not inherited from the padding — which is what it
    was, and the padding measured 36.8. This is the app's only standing share CTA
@@ -7645,7 +7511,7 @@ button.poll-option:disabled { cursor: default; }
   gap: 0.85rem 1.2rem;
   margin: 0.35rem 0 1.5rem;
   padding: 1rem 1.15rem;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   background: var(--glass-bg-panel);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
@@ -8128,7 +7994,7 @@ button.poll-option:disabled { cursor: default; }
   padding: 1rem;
   text-align: center;
   background: var(--surface);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
 }
 .chat-request p { margin: 0 0 0.8rem; font-size: 0.95rem; }
 .chat-request-actions { display: flex; justify-content: center; gap: 0.6rem; }
@@ -8246,7 +8112,7 @@ button.poll-option:disabled { cursor: default; }
   padding: 0.85rem 0.4rem 0.85rem 1rem;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   animation: rise var(--dur-slow) var(--ease) both;
 }
 .week-card-link {
@@ -10641,7 +10507,13 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 @media (max-width: 680px) { .communities, .discover-people { padding-inline: 0; } }
 /* A stack of cards wants less air between them than the daily's 2rem, which
    is the gap between the page's headline and whatever follows it. */
-.communities .daily-card { margin: 0 0 0.8rem; }
+/* ONE GAP down the whole page (Zoe, 2026-10-22: "even the spacing between
+   search and cards"): the search field to the first card, the daily to the
+   circles, and circle to circle are all the same ~15px the bar leaves under
+   the field. The daily kept its 2rem from when flat type followed it. */
+.view--discover .daily-card,
+.communities .daily-card { margin: 0 0 0.95rem; }
+.view--discover .communities { margin-bottom: 0; }
 
 /* A circle's face: its photo, or Discover's woven triad on the chat list's
    glyph disc when it has none. Round, like every face in the app. */

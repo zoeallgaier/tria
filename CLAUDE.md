@@ -58,20 +58,47 @@ the new way to discover."). It shows NO posts: today's daily, then **Circles**
 own card** (the same `.daily-card` classes, Zoe: "style circles like the daily
 cards"): handle as kicker, name as the serif headline, about as the hint,
 members' faces and count in the foot, the daily's pill as Join (which joins and
-walks you in), and the circle's photo in the top corner. Search is **circles
+walks you in), and the circle's photo in the top corner. No eyebrows: no
+"Circles" caption, no kicker on the Start card. **Every card's pill is full
+width and 52px tall** (`.daily-card .daily-answer`, Share Tria too), and the
+page runs on ONE GAP, ~15px, from the search field down through every card
+(Zoe: "even the spacing between search and cards"). No hairline over Share Tria
+on Discover. Search is **circles
 and people only** (a person matches on name, then on what they've said), never
 posts. The masonry wall and the trending tags are gone from it. **On repeat
 moved to My Circle** (Zoe: "add on repeat to circle feed"), over the feed and
-the week-of cards (`paintOnRepeat`), and it is your people's songs now: you and
-your friends, never a circle's post (`songPostsOnRepeat`). **On repeat lost its week** first (Zoe: "remove the week long limit on songs"), and so
-did the listening status (`freshSong`), so a song pin doesn't blank.
+the week-of cards (`paintOnRepeat`), with no "On repeat" eyebrow, and it is
+your people's songs: you and your friends, never a circle's post
+(`songPostsOnRepeat`). **It is a WEEK** (Zoe: "the on repeat section at the
+top should be a weekly thing, posts for music aren't needed"): each person's
+newest Music post from the last seven days. **A Music post is in no feed**
+(`isSongPost` in store.js: not My Circle, not a profile, not a circle, and it
+can't be reposted or aimed at a circle), so On repeat is the only place a song
+is read. A square opens the song itself, and a friend's square carries the
+post's own like as a heart on a glass disc in the cover's corner (`.np-like`,
+`wireLikes`). The listening status (`freshSong`) still has no week, so a song
+pin doesn't blank.
 
 **Album art is rounder** (Zoe: "round the edges much more of all album art,
-that'd be cuter"): `--radius-art` is 26% of the square (`--art-round`), on every
+that'd be cuter", then "a bit less rounding"): `--radius-art` is 20% of the square (`--art-round`), on every
 song sleeve (`.song-art`, `.np-art`, a song pin's `.pin-art`), and a music
 post's sleeve is **128px in the feed** (was 76, Zoe: "1.5x2x bigger"), and the boxes that hold one
 at a known size and pad (`.card-song`, `.song-now`, `.pin--song`) stay concentric
-by reading `--art-round`. Photos keep `--radius-img`.
+by reading `--art-round`. Photos keep `--radius-img`. **Every flat card in a
+page wears the soft corner, `--radius-soft` (24px)** (Zoe: "unify everything
+with the more rounded edges ... so everything has that cutesy roundedness"):
+the daily and circle cards, a quoted post, the Updates push ask, a profile's
+pins (their art concentric inside), the week-of cards, a chat request. Floating
+glass (menus, sheets) keeps its own ladder.
+
+**A like is a heart and nothing else** (Zoe: "remove the other types of
+reactions other than liking"). The fan, its four marks, its tick and its CSS
+are deleted; `likes.reaction` is left in the database, never read or written,
+so an old thumbs up reads as a like. **My Circle's tab is a house**
+(`ICONS.myCircle`; Zoe: "use a home icon ... now that the titles gone"), and
+the native tab bar draws it from the same markup. **The + sheet is titled
+Share** (was Create), and a song wears a music note (`ICONS.music`), not the
+speaker, which is a video's sound again.
 
 Every rule is in `supabase/add-circles.sql` and `supabase/circle-photo-delete.sql`;
 the reasoning is in
@@ -93,7 +120,7 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`): Post, Activity,
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 1.9): Post, Activity,
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on
@@ -223,26 +250,12 @@ reader's last world at once from IndexedDB while the real one loads
 (`Store.init({ keep })`, deleted on sign-out). **Bump `KEEP_V` in store.js when
 `state` changes shape.**
 
-## Holding the heart (2026-09-25)
+## Holding the heart (2026-09-25, removed 2026-10-22)
 
-A tap on a friend's heart is a like; HOLDING it fans out four more marks (thumbs
-up, thumbs down, ha ha, whoa) on a quarter arc, and the one under the finger's
-bearing is the pick. Zoe approved the drawings and the fan on a canvas
-(https://claude.ai/artifact/PuR89X1b68P16TFXgFgHhN) and said **no words on it**;
-the names exist for VoiceOver and the author's Updates only. **Nothing on it
-moves but the disc under the finger**: every disc is in place and they fade in
-one at a time from the heart (0.14s, 40ms apart), after three passes on her
-phone (lavish read slow, a spring still read jumpy). The lit disc then steps
-12px out along its bearing and grows a tenth, because a bloom under a fingertip
-was hard to see (her fourth pass). No blur and no other transform anywhere on
-the gesture; the history is in the fan's block in app.css. It **ticks** with the system picker haptic as the finger crosses each
-mark, the one exception to the buzz rule at `hapticTap`. It is one private
-like row with a `reaction` column, so every like rule still holds. The code is
-`REACTIONS`, `react_*` in `ICONS`, `Fan` and `wireHeart` in app.js,
-`setReaction` in store.js; the reasoning is in [docs/data.md](docs/data.md) and
-[docs/design.md](docs/design.md). **Each mark is optically centred on the heart
-INSIDE its drawing** (a measured translate), so never nudge one in CSS: redraw,
-re-measure, and re-bake instead.
+Holding a friend's heart used to fan out four more marks (thumbs up, thumbs
+down, ha ha, whoa). Zoe took them out in 1.9: a like is a heart. The history
+of the fan's tuning is in git (`Fan`, `react_*` before commit 3f713d4's
+successor) if it is ever re-argued.
 
 ## 1.4 is the chrome going native
 
@@ -384,10 +397,8 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   anon `GET /rest/v1/comment_likes?select=comment_id&limit=1` answered PGRST205
   before it and `[]` after. Were the table ever missing again, the comment
   hearts draw nothing, on purpose (`Store.commentLikesReady`). **`add-reactions.sql` is confirmed run**
-  (2026-09-25): anon `GET /rest/v1/likes?select=reaction&limit=1` answered 42703
-  "column likes.reaction does not exist" before it and `[]` after. Were the column
-  ever missing again, every like reads as a heart and holding one does nothing
-  (`Store.reactionsReady`), and that probe is a 400 in a boot pass's console.
+  (2026-09-25), and its column has been unused since reactions came out in 1.9;
+  the client no longer probes for it.
   **`add-song-posts.sql` is confirmed run** (2026-10-22): anon
   `GET /rest/v1/posts?select=song&limit=1` answered 42703 before it and
   `[{"song":null}]` after. Were the column ever missing again,

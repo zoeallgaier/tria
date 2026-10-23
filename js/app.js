@@ -248,17 +248,13 @@
     // dots; these are r 4.4 on a tighter one, so what you see is the weave.
     // Same idea, same tab, drawn so it survives being 28pt across.
     circle:  '<circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/>',
-    // A RING WITH A CENTRE — the people around you, and you in the middle of
-    // them, which is what the home feed is. The bare ring it replaces said
-    // "circle" and had no way to say WHICH circle, so it leaned entirely on
-    // being the plainest mark in the row. The centre is the reader, and that is
-    // the whole distinction between this tab and Discover's said in the drawings
-    // rather than in how busy they are: one triad has somebody at its middle and
-    // the other does not. The centre is FILLED rather than outlined so the mark
-    // has one solid thing in it at 28pt, and `stroke="none"` matters as much as
-    // the fill does: ICON_ATTRS strokes everything at 1.8, and a 1.9-radius
-    // circle stroked at 1.8 is not a dot, it is a smudge with a hole in it.
-    myCircle: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/>',
+    // A HOUSE (Zoe, 2026-10-22: "use a home icon for the circle page on nav
+    // instead of the dot and circle now that the titles gone"). The ring with a
+    // centre said "you among your people" while the page wore its name; with
+    // the name gone from the bar (1.8), the tab has to say home on its own.
+    // A pitched roof over a rounded body with a door, on the same grid and
+    // stroke as every other mark, so the native tab bar draws it from here too.
+    myCircle: '<path d="M3.8 10.6 12 4l8.2 6.6"/><path d="M6 9.2v9.3a1.5 1.5 0 0 0 1.5 1.5h2.8v-4.6a1.7 1.7 0 0 1 3.4 0V20h2.8a1.5 1.5 0 0 0 1.5-1.5V9.2"/>',
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
@@ -276,37 +272,6 @@
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
-    // THE FOUR MARKS A HELD HEART FANS OUT (see REACTIONS), drawn on the heart's
-    // own grid and stroke so the five read as one set, and each one an outline
-    // at rest that FILLS when it is yours, the way the liked heart does. The
-    // grin's eyes and the whoa's dots are the two parts that never change:
-    // `fill="none"` keeps the eyes open strokes under `.liked svg { fill }` (a
-    // filled chevron is a triangle), and the dots are solid in both states for
-    // the smudge reason myCircle's centre gives.
-    //
-    // Each sits inside a translate that CENTRES IT OPTICALLY ON THE HEART, and
-    // those numbers are measured, not tasted. Rendered at 10x, each mark's
-    // optical centre was taken as the midpoint of its box and its ink centroid,
-    // and moved onto the heart's: a thumb's weight is the fist, so thumbs up
-    // rides a unit high and down a unit low, and both come right by half a unit
-    // because the cuff is lighter than the knuckles; the whoa's wedges are
-    // top-heavy, so it sinks; the grin's mouth is bottom-heavy, so it lifts. Baked
-    // into the drawing rather than nudged in CSS, so the fan's discs, the card's
-    // row (which then gives every mark the heart's own --like-nudge), the likers
-    // list's pill and the ink-rise masks in app.css all agree without being told.
-    // Thumbs down is thumbs up turned over, not a second drawing.
-    react_up:   '<g transform="translate(.45 -1.05)">' +
-                  '<path d="M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9z"/>' +
-                  '<path d="M8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z"/></g>',
-    react_down: '<g transform="translate(.45 1) matrix(1 0 0 -1 0 24)">' +
-                  '<path d="M3.7 11h1.2a.9.9 0 0 1 .9.9v7.2a.9.9 0 0 1-.9.9H3.7a.9.9 0 0 1-.9-.9v-7.2a.9.9 0 0 1 .9-.9z"/>' +
-                  '<path d="M8.9 20V11L11.6 5.2a1.7 1.7 0 0 1 3.1 1.3L14.1 10h4.4a1.9 1.9 0 0 1 1.9 2.2l-1.1 6.2a1.9 1.9 0 0 1-1.9 1.6z"/></g>',
-    react_ha:   '<g transform="translate(0 -.25)">' +
-                  '<path fill="none" d="M4.6 8.6 7.3 6l2.7 2.6M14 8.6 16.7 6l2.7 2.6"/>' +
-                  '<path d="M5.8 12h12.4a6.2 6.2 0 0 1-12.4 0z"/></g>',
-    react_wow:  '<g transform="translate(0 .7)">' +
-                  '<path d="M6.2 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0zM13.4 6a2.2 2.2 0 0 1 4.4 0l-1 8a1.2 1.2 0 0 1-2.4 0z"/>' +
-                  '<path fill="currentColor" stroke="none" d="M8.4 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4zM15.6 17.5a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4z"/></g>',
     // The headcount control's glyph, both states in one drawing. The person sits
     // LEFT of centre so the check has somewhere to land — a centred figure would
     // have to jump sideways to make room, which reads as a bug. The check arm
@@ -420,6 +385,9 @@
       '<circle cx="12" cy="7.9" r="0.95" fill="currentColor" stroke="none"/>',
     // Speaker + waves / speaker + X — the Frame video sound toggle.
     sound:   '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/>',
+    // A song (Zoe, 2026-10-22: "use a music note for posting a song instead of
+    // the sound icon"). Two beamed notes; the speaker above is a video's sound.
+    music:   '<path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/>',
     mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
     // Filled triangle — the play affordance on a Frame video that hasn't started.
     // Optically centred IN THE PATH, and only here: the bbox (x 7 → 18.5) sits 0.75
@@ -478,24 +446,16 @@
   const svgIcon = (key, cls) =>
     `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${ICONS[key]}</svg>`;
 
-  /* ── Reactions ─────────────────────────────────────────────────────────────
-     A tap on a friend's heart is a like, the same as it ever was. HOLDING it
-     fans out the other four (see Fan), in iMessage's order, and the like becomes
-     whichever you picked. It is still one private row per person, which the
-     author alone reads (Store.setReaction, supabase/add-reactions.sql).
-
-     The keys are the column's values and never change. `name` is not copy on
-     the screen: the fan carries no words, on Zoe's call (2026-09-25), so a name
-     is only ever read aloud, or set in a sentence in the author's Updates.
-     `did` is that sentence's verb phrase around the post's label. */
+  /* ── Likes ─────────────────────────────────────────────────────────────────
+     A like is a heart and nothing else (Zoe, 2026-10-22: "remove the other
+     types of reactions other than liking. liking serves well enough"). The
+     four marks a held heart fanned out (1.6) are gone, the fan with them. The
+     `likes.reaction` column add-reactions.sql made stays in the database
+     unread, so every row there, whatever nod it was, reads as a like.
+     `did` is the verb phrase the author's Updates set around the post. */
   const REACTIONS = [
-    { key: 'heart', icon: 'heart',      name: 'Heart',       did: (w) => `liked ${w}` },
-    { key: 'up',    icon: 'react_up',   name: 'Thumbs up',   did: (w) => `gave ${w} a thumbs up` },
-    { key: 'down',  icon: 'react_down', name: 'Thumbs down', did: (w) => `gave ${w} a thumbs down` },
-    { key: 'ha',    icon: 'react_ha',   name: 'Ha ha',       did: (w) => `laughed at ${w}` },
-    { key: 'wow',   icon: 'react_wow',  name: 'Whoa',        did: (w) => `said whoa to ${w}` },
+    { key: 'heart', icon: 'heart', name: 'Heart', did: (w) => `liked ${w}` },
   ];
-  // Anything unknown (a null, a row from before the column) reads as the heart.
   const rxDef = (key) => REACTIONS.find(r => r.key === key) || REACTIONS[0];
 
   /* ── Blocking ────────────────────────────────────────────────────────────────
@@ -2664,9 +2624,8 @@
     photo:    'image',
     poll:     'poll',
     activity: 'cal',
-    // 1.8's sixth (add-song-posts.sql): the speaker the listening rail already
-    // wears, so a song reads as a song in both places.
-    song:     'sound',
+    // 1.8's sixth (add-song-posts.sql): a music note.
+    song:     'music',
   };
   // The "All" filter's own mark — a pentad, one dot per post type in its own
   // hue, gathered into a ring. Says "all five" literally instead of a generic
@@ -3046,7 +3005,7 @@
                     // Music (1.8), once posts can carry a song (Store.songsReady).
                     (Store.songsReady()
                       ? `<button type="button" class="rt-attach" id="${idp}-add-song" ` +
-                          `aria-label="Add a song" aria-pressed="false">${svgIcon('sound', 'rt-attach-ico')}</button>`
+                          `aria-label="Add a song" aria-pressed="false">${svgIcon('music', 'rt-attach-ico')}</button>`
                       : '') +
                     (event
                       ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
@@ -3414,11 +3373,8 @@
   function likeToggleHtml(post) {
     const rx = Store.reactionOf(post.id);
     const r = rxDef(rx);
-    // data-rx names the mark the glyph is drawing, and app.css hangs the ink
-    // flood's silhouette off it. aria-haspopup only once a hold can open anything.
     return `<button class="card-like${rx ? ' liked' : ''}" type="button" aria-pressed="${!!rx}" ` +
         `data-type="${burstTypeOf(post)}" data-rx="${r.key}" ` +
-        (Store.reactionsReady() ? 'aria-haspopup="menu" ' : '') +
         `aria-label="${rx ? r.name : 'Like'}" title="${rx ? r.name : 'Like'}">` +
         svgIcon(r.icon, 'like-heart') +
       `</button>`;
@@ -4663,10 +4619,7 @@
   // are the same object wherever they appear — who liked, who's going, who was
   // invited — and a second copy of this markup would drift the first time one of
   // them moved.
-  //
-  // `mark` is the same slot holding a drawing instead of a word: the reaction
-  // somebody left, on the author's who-liked list. Same pill, same place.
-  function likerItemHtml(l, tag, mark) {
+  function likerItemHtml(l, tag) {
     const u = Store.user(l.user);
     const name = esc(u ? u.name : l.user);
     return `<li class="comment liker">` +
@@ -4676,7 +4629,6 @@
         `<div class="comment-body">` +
           `<p class="comment-text"><a class="comment-name" href="#/u/${esc(encodeURIComponent(l.user))}">${name}</a>` +
             (tag ? `<span class="liker-tag">${esc(tag)}</span>` : '') +
-            (mark || '') +
           `</p>` +
         `</div>` +
       `</li>`;
@@ -4688,22 +4640,7 @@
   function likersPanelHtml(post, full) {
     if (!full) return '';
     if (post.author !== Store.session()) return '';    // only the author sees who liked
-    /* GROUPED BY MARK, the way the host's guest list is grouped by answer:
-       every heart, then every thumbs up, and so on in the fan's order, each
-       group in the order people arrived (sort is stable). Each row carries its
-       mark in the pill where that list writes Going or Maybe, filled, in the
-       post's own colour, since it is the reaction as its giver saw it land.
-       Before add-reactions.sql every like is a heart and the list is drawn as
-       it always was, untagged. */
-    const rank = new Map(REACTIONS.map((r, i) => [r.key, i]));
-    const tagged = Store.reactionsReady();
-    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user))
-      .slice().sort((a, b) => (rank.get(a.reaction) ?? 0) - (rank.get(b.reaction) ?? 0));
-    const markOf = (l) => {
-      if (!tagged) return '';
-      const r = rxDef(l.reaction);
-      return `<span class="liker-tag liker-mark" role="img" aria-label="${r.name}">${svgIcon(r.icon)}</span>`;
-    };
+    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
     /* NO LABEL over the list, and the argument that put one here is worth
        keeping because it was right about the disclosure and wrong about the
        page. It said: under a disclosure the BUTTON was the label, you tapped a
@@ -4736,7 +4673,7 @@
                  this app reserves for who is coming to a plan. Any future call
                  site that means "no tag" has to say so with an arrow. */
               ? `<ul class="likers-list" style="--burst:var(--heart-${burstTypeOf(post)})">` +
-                  `${list.map(l => likerItemHtml(l, null, markOf(l))).join('')}</ul>`
+                  `${list.map(l => likerItemHtml(l)).join('')}</ul>`
               : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
           `</div>` +
         `</div>` +
@@ -4930,16 +4867,8 @@
      against a fixed panel, not a broken one.
 
      LIGHT for something that stays on the screen, MEDIUM for something that lands
-     in the real world — the same split as canSocial vs canJoin.
-
-     ONE EXCEPTION, on Zoe's call (2026-09-25): the reaction fan ticks as the
-     finger crosses each mark (Fan), with the system's own picker feedback, the
-     way a date wheel does. Nothing is chosen until the finger lifts, but a fan
-     with no words has only the tick to say which mark you are on without looking
-     under your thumb. It is a handful of calls per hold, and the fan only ever
-     fades, so the frames they cross are the compositor's, not the main thread's. */
+     in the real world — the same split as canSocial vs canJoin. */
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
-  const hapticTick = () => haptic('selectionChanged');
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
 
   /* ── Outbound links in the native shell ──────────────────────────────────────
@@ -5033,284 +4962,6 @@
     setTimeout(() => layer.remove(), 700);   // matches the .is-liking window
   }
 
-  /* ── The reaction fan ─────────────────────────────────────────────────────
-     HOLD a friend's heart and the other four marks fan out around it; drag onto
-     one and let go to pick it. A quarter arc, after una.im's and Ashley
-     Sheridan's radial menus, because the heart lives at the bottom right of
-     every card and tile: a half ring centred on it would run off the screen,
-     and a quarter swept from due left up to straight up is what fits.
-
-     THE ANGLE PICKS, NOT THE DISTANCE. Once the finger has left the heart the
-     mark nearest its bearing lights, so every mark is the same short drag away
-     and nobody has to travel the 116px to a disc to reach it. Let go in place
-     and the fan stays open for a tap (and for VoiceOver, whose double-tap-and-
-     hold lands here as a hold). A tap on the veil or the heart puts it away.
-
-     NO WORDS, on Zoe's call: the five marks carry themselves and a label under
-     the finger was one more thing to read. Each disc still has its name for
-     VoiceOver. What the finger gets instead is a TICK each time a new mark
-     lights (hapticTick, the one exception to the rule at hapticTap), and the
-     pick itself buzzes like any like.
-
-     It lives on <body> rather than in the card, so no card's clipping or
-     stacking can reach it, over a veil that blurs the page. The heart it grew
-     from is under that veil, so a GHOST of its glyph is drawn on top in the same
-     place: the fan has to visibly come out of something.
-
-     One fan for the whole app, built on first use and reused. */
-  const Fan = (() => {
-    const HOLD_MS = 400;
-    // The five bearings, in REACTIONS order. 184° is just below due left, 88°
-    // just right of straight up, so the arc stays inside a card's right edge.
-    const ANGLES = [184, 160, 136, 112, 88];
-    const RADIUS = 116, DISC = 44;
-    // How far the lit disc steps out along its bearing, clear of the fingertip.
-    const LIFT = 12;
-    // Room the fan needs on each side of the heart before it turns around.
-    const REACH = RADIUS + DISC / 2 + 24;
-    let veil = null, fan = null, ghost = null, open = null, holding = 0;
-
-    // While a heart is held or the fan is out, no text selection may start
-    // anywhere. The CSS already makes the row and the fan unselectable; this is
-    // the belt to those braces, for a finger that lands a few px off the heart.
-    document.addEventListener('selectstart', (e) => {
-      if (holding || open) e.preventDefault();
-    }, true);
-
-    function build() {
-      if (fan) return;
-      veil = document.createElement('div');
-      veil.className = 'rx-veil';
-      veil.hidden = true;
-      fan = document.createElement('div');
-      fan.className = 'rx-fan';
-      fan.setAttribute('role', 'menu');
-      fan.setAttribute('aria-label', 'Reactions');
-      fan.hidden = true;
-      fan.innerHTML = `<span class="rx-ghost" aria-hidden="true"></span>` +
-        REACTIONS.map((r, i) =>
-          `<button class="rx-item" type="button" role="menuitemradio" aria-checked="false" ` +
-            `data-rx="${r.key}" aria-label="${r.name}" style="--i:${i}">` +
-            `<span class="rx-disc">${svgIcon(r.icon)}</span>` +
-          `</button>`).join('');
-      ghost = fan.querySelector('.rx-ghost');
-      document.body.append(veil, fan);
-      veil.addEventListener('click', () => close(true));
-      ghost.addEventListener('click', () => close(true));
-      fan.querySelectorAll('.rx-item').forEach(b =>
-        b.addEventListener('click', () => choose(b.dataset.rx)));
-      // The page under an open fan doesn't move: a stray drag on the veil would
-      // scroll the heart out from under the fan it opened.
-      for (const layer of [veil, fan])
-        layer.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-      fan.addEventListener('keydown', onFanKey);
-    }
-
-    // The glyph's box, taken at the press, so the ghost lands exactly on it.
-    const glyphRect = (btn) => (btn.querySelector('svg') || btn).getBoundingClientRect();
-    // Where the page stops being visible at the top: the toolbar's lower edge,
-    // which native chrome keeps in the DOM at its true size under the glass.
-    const topEdge = () => {
-      const bar = document.querySelector('.topbar');
-      return bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
-    };
-
-    function show(btn, post, pick, rect) {
-      build();
-      const b = btn.getBoundingClientRect();
-      const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
-      // Turn DOWN when the toolbar is in the way above, and to the RIGHT when a
-      // heart sits too near the left edge (a tile in the first column of a wide
-      // grid). Both are multipliers the CSS applies to the same arc.
-      const flip = cy - topEdge() < REACH;
-      const side = cx - REACH < 0 ? -1 : 1;
-      const mine = shownReaction(btn);
-      open = { btn, pick, cx, cy, flip, side, hot: null };
-
-      fan.style.left = `${cx}px`;
-      fan.style.top = `${cy}px`;
-      fan.dataset.type = burstTypeOf(post);
-      // Each disc's place on the arc. Worked out here rather than with CSS
-      // cos() and sin(), which WebKit only has from iOS 15.4 and this app still
-      // opens on 15.0.
-      const up = flip ? 1 : -1;
-      fan.querySelectorAll('.rx-item').forEach((item, i) => {
-        const a = ANGLES[i] * Math.PI / 180;
-        const x = Math.cos(a) * side, y = Math.sin(a) * up;
-        item.style.setProperty('--x', `${(x * RADIUS).toFixed(1)}px`);
-        item.style.setProperty('--y', `${(y * RADIUS).toFixed(1)}px`);
-        item.style.setProperty('--hx', `${(x * (RADIUS + LIFT)).toFixed(1)}px`);
-        item.style.setProperty('--hy', `${(y * (RADIUS + LIFT)).toFixed(1)}px`);
-        const on = item.dataset.rx === mine;
-        item.classList.toggle('cur', on);
-        item.classList.remove('hot');
-        item.setAttribute('aria-checked', String(on));
-      });
-      const svg = btn.querySelector('svg');
-      ghost.innerHTML = svg ? svg.outerHTML : '';
-      ghost.classList.toggle('liked', !!mine);
-      ghost.style.cssText =
-        `left:${rect.left - cx}px;top:${rect.top - cy}px;` +
-        `width:${rect.width}px;height:${rect.height}px;color:${getComputedStyle(btn).color}`;
-
-      veil.hidden = false;
-      fan.hidden = false;
-      void fan.offsetWidth;                  // land the clear frame, so the fades have a start
-      veil.classList.add('is-open');
-      fan.classList.add('is-open');
-      // Wake the picker generator now, so the first tick lands on the finger
-      // rather than after the Taptic Engine spins up.
-      haptic('selectionStart');
-      btn.setAttribute('aria-expanded', 'true');
-      window.addEventListener('scroll', onAway, true);
-      window.addEventListener('resize', onAway);
-      window.addEventListener('hashchange', onAway);
-      document.addEventListener('keydown', onDocKey);
-    }
-
-    function close(refocus) {
-      if (!open) return;
-      const { btn } = open;
-      open = null;
-      veil.classList.remove('is-open');
-      fan.classList.remove('is-open');
-      btn.setAttribute('aria-expanded', 'false');
-      window.removeEventListener('scroll', onAway, true);
-      window.removeEventListener('resize', onAway);
-      window.removeEventListener('hashchange', onAway);
-      document.removeEventListener('keydown', onDocKey);
-      if (refocus && fan.contains(document.activeElement)) btn.focus();
-      haptic('selectionEnd');
-      // Out of the accessibility tree once the 120ms fade has played (it takes
-      // no taps meanwhile). A fan reopened inside that window keeps its layers.
-      window.setTimeout(() => {
-        if (!open) { fan.hidden = true; veil.hidden = true; }
-      }, prefersReduced() ? 0 : 130);
-    }
-
-    function choose(key) {
-      if (!open) return;
-      const { pick } = open;
-      close(true);
-      pick(key);
-    }
-
-    const onAway = () => close();
-    function onDocKey(e) {
-      if (e.key === 'Escape') { e.preventDefault(); close(true); }
-    }
-    // Arrows walk the arc in either direction and wrap; Home and End go to its
-    // ends. Tab leaves, as it leaves any menu, and takes the fan with it.
-    function onFanKey(e) {
-      if (e.key === 'Tab') { e.preventDefault(); close(true); return; }
-      const items = [...fan.querySelectorAll('.rx-item')];
-      const at = items.indexOf(document.activeElement);
-      const to =
-        (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? (at + 1) % items.length :
-        (e.key === 'ArrowLeft' || e.key === 'ArrowDown') ? (at - 1 + items.length) % items.length :
-        e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : -1;
-      if (to < 0) return;
-      e.preventDefault();
-      items[to].focus();
-    }
-
-    // Which mark the finger points at: the nearest bearing, once it has left the
-    // heart, within half a step of the arc's ends. The multipliers undo a
-    // flipped or mirrored fan so one set of angles serves all four.
-    function markAt(x, y) {
-      const dx = (x - open.cx) * open.side;
-      const dy = (y - open.cy) * (open.flip ? -1 : 1);
-      if (Math.hypot(dx, dy) < 28) return null;
-      let a = Math.atan2(-dy, dx) * 180 / Math.PI;
-      if (a < 0) a += 360;
-      let best = 0, gap = Infinity;
-      ANGLES.forEach((t, i) => {
-        const d = Math.abs(a - t);
-        if (d < gap) { gap = d; best = i; }
-      });
-      return gap <= 26 ? REACTIONS[best].key : null;
-    }
-    function light(key) {
-      if (!open || open.hot === key) return;
-      open.hot = key;
-      fan.querySelectorAll('.rx-item').forEach(item =>
-        item.classList.toggle('hot', item.dataset.rx === key));
-      // A tick for each mark the finger reaches, none for drifting off them all.
-      if (key) hapticTick();
-    }
-
-    const canReact = () => Store.isAuthed() && Store.reactionsReady();
-    // Focus lands on your own mark if you have one, else the heart.
-    const firstMark = () => fan.querySelector('.rx-item.cur') || fan.querySelector('.rx-item');
-
-    function wire(btn, post, pick) {
-      let press = null, timer = 0;
-      const letGo = () => {
-        clearTimeout(timer);
-        if (press) holding--;
-        press = null;
-      };
-      btn.addEventListener('pointerdown', (e) => {
-        if (!canReact() || open) return;
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        btn._held = false;
-        if (press) holding--;
-        holding++;
-        press = { id: e.pointerId, x: e.clientX, y: e.clientY, opened: false, moved: false, rect: glyphRect(btn) };
-        try { btn.setPointerCapture(e.pointerId); } catch { /* the drag still works uncaptured, mostly */ }
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          if (!press) return;
-          press.opened = true;
-          btn._held = true;
-          show(btn, post, pick, press.rect);
-        }, HOLD_MS);
-      });
-      btn.addEventListener('pointermove', (e) => {
-        if (!press || e.pointerId !== press.id) return;
-        const far = Math.hypot(e.clientX - press.x, e.clientY - press.y);
-        // A finger that travels before the hold lands was scrolling, not asking.
-        if (!press.opened) { if (far > 10) letGo(); return; }
-        if (far > 8) press.moved = true;
-        if (open) light(markAt(e.clientX, e.clientY));
-      });
-      btn.addEventListener('pointerup', (e) => {
-        if (!press || e.pointerId !== press.id) return;
-        const { opened, moved } = press;
-        letGo();
-        if (!opened || !open) return;
-        if (open.hot) choose(open.hot);
-        else if (moved) close();
-        // Let go in place: the fan stays, and focus goes to it so a screen
-        // reader's next swipe is a mark rather than the rest of the page.
-        else firstMark().focus({ preventScroll: true });
-      });
-      // The system took the touch (a call, a swipe from the edge). A fan that
-      // was already open stays open for a tap; a hold that hadn't landed is off.
-      btn.addEventListener('pointercancel', (e) => {
-        if (!press || e.pointerId !== press.id) return;
-        letGo();
-        if (open) light(null);
-      });
-      // Once the fan is out, the drag is the fan's and must not scroll the page.
-      btn.addEventListener('touchmove', (e) => {
-        if (press && press.opened) e.preventDefault();
-      }, { passive: false });
-      // A long press is also the system's context menu (and the callout on iOS).
-      btn.addEventListener('contextmenu', (e) => { if (canReact()) e.preventDefault(); });
-      // From the keyboard: the arrow that points at the fan opens it.
-      btn.addEventListener('keydown', (e) => {
-        if (!canReact() || open) return;
-        if (e.key !== 'ArrowUp' && e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return;
-        e.preventDefault();
-        show(btn, post, pick, glyphRect(btn));
-        firstMark().focus({ preventScroll: true });
-      });
-    }
-
-    return { wire, close };
-  })();
-
   function wireLikes(el, post, opts) {
     // Not a comment's heart: on the post page the thread lives inside this card,
     // and its hearts wear `.card-like` too (see commentLikeHtml). The post's own
@@ -5327,7 +4978,7 @@
       return;
     }
 
-    // Friend: toggle my own like, or hold for the other four. The count belongs
+    // Friend: toggle my own like. The count belongs
     // to the author, not to me, so there's nothing on my card to recompute —
     // just flip the heart in place (no card rebuild, no rise-flash).
     wireHeart(btn, null, post);
@@ -5339,11 +4990,8 @@
      and a copy would drift the first time one of them was tuned. `toggle` is the
      write; the button carries everything else.
 
-     A POST'S heart passes the post instead of a toggle, and its state is a
-     reaction key rather than a yes: a tap is a heart or takes back whatever is
-     there, and a hold opens the fan (Fan.wire), whose pick runs through the same
-     answer below, so a thumbs up snaps, inks and sparkles exactly as a heart
-     does. A comment's heart is a heart and nothing else. */
+     A POST'S heart passes the post instead of a toggle, and writes through
+     Store.setReaction: a heart, or null to take it back. */
   function wireHeart(btn, toggle, post) {
     const paint = post
       ? (rx) => paintReaction(btn, rx)
@@ -5401,9 +5049,6 @@
     };
 
     btn.addEventListener('click', () => {
-      // A hold that opened the fan ends in a click on this same button. The
-      // fan has already answered it, so the tap mustn't answer it twice.
-      if (btn._held) { btn._held = false; return; }
       if (!post) {
         const liked = !btn.classList.contains('liked');
         answer(liked, !liked, toggle);
@@ -5411,13 +5056,6 @@
       }
       const prev = shownReaction(btn);
       const next = prev ? null : 'heart';
-      answer(next, prev, () => Store.setReaction(post.id, next));
-    });
-
-    // Picking the mark you already have takes it back, the same as a tap on it.
-    if (post) Fan.wire(btn, post, (key) => {
-      const prev = shownReaction(btn);
-      const next = prev === key ? null : key;
       answer(next, prev, () => Store.setReaction(post.id, next));
     });
   }
@@ -6390,10 +6028,12 @@
   }
 
   /* THE PICKER IS A CREATE SHEET (1.8), Instagram's own shape: a bottom
-     sheet titled Create with one row per thing you can make, the type's mark
-     and its name. It was a card dropped from the button, then a share-sheet
-     grid of pastel tiles, and Zoe pointed at Instagram's sheet for the last
-     word. Each row is a shortcut into the one composer (pendingAttach). */
+     sheet with one row per thing you can make, the type's mark and its name.
+     It was a card dropped from the button, then a share-sheet grid of pastel
+     tiles, and Zoe pointed at Instagram's sheet for the last word. Titled
+     Share since 2026-10-22 (Zoe: "change create menu title to share"), the
+     word the composer's own button says. Each row is a shortcut into the one
+     composer (pendingAttach). */
   function openComposeDial() {
     const occ = todaysDaily();
     const run = (row) => {
@@ -6403,7 +6043,7 @@
       go('#/publish');
     };
     openSheet({
-      title: 'Create',
+      title: 'Share',
       items: composeRows().map((row) => ({
         label: row.label,
         // The type's own mark (TYPE_GLYPH), the vocabulary the composer's
@@ -6927,6 +6567,10 @@
     host.dataset.sig = html;
     host.innerHTML = html;
     host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
+    host.querySelectorAll('.np-item--post').forEach(item => {
+      const post = Store.posts().find(p => String(p.id) === item.dataset.post);
+      if (post) wireLikes(item, post);
+    });
   }
 
   function renderFeed() {
@@ -12644,23 +12288,30 @@
      used it can never have a first user. */
   /* ON REPEAT IS THE MUSIC YOU POST (Zoe, 2026-10-22). Posting a song and
      having it on repeat are one act, so once posts can carry a song the rail
-     is a condensed read of the Music posts in the world: each person's newest
-     one, newest first, a square that opens the post (where it can be liked and
-     talked about, which a status never could). It read only the last week
-     until circles landed (same day, Zoe: "remove the week long limit on
-     songs"), so a song stays up until its owner posts another. The + is always
-     first, because it is the way in and the rail must be able to have a first
-     user. Without add-song-posts.sql the rail is the old listening status,
-     untouched (statusRailEl). */
+     is a condensed read of the Music posts: each person's newest one, newest
+     first. It is MY CIRCLE'S rail since 1.9 (Zoe: "add on repeat to circle
+     feed"), so it is my people's songs, me and my friends, and never a post
+     said in a circle.
+
+     A WEEK, and the only place a song is read (Zoe, later that day: "the on
+     repeat section at the top should be a weekly thing, posts for music
+     aren't needed"). A Music post is in no feed (Store.isSongPost's note in
+     store.js); it is up here for seven days and then it is gone, the way a
+     week of listening is. A square opens the song itself, and a friend's
+     carries a heart in its corner, the post's own like ("add a like button to
+     the corner ... so people can still react to songs"), which reaches the
+     author's Updates like any other. The + is always first, because it is the
+     way in and the rail must be able to have a first user. Without
+     add-song-posts.sql the rail is the old listening status (statusRailEl). */
+  const ON_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
   function songPostsOnRepeat() {
     const seen = new Set();
     const out = [];
-    // MY CIRCLE'S rail since 1.9 (Zoe: "add on repeat to circle feed"), so it
-    // is my people's: me and my friends, and never a post said in a circle
-    // (the room), which is read in the room.
+    const since = new Date(Date.now() - ON_REPEAT_MS).toISOString();
     const mine = new Set([Store.session(), ...Store.friends()]);
     for (const p of Store.posts()) {   // newest first
       if (p.type !== 'song' || !p.song || !p.author || seen.has(p.author)) continue;
+      if ((p._ts || '') < since) break;   // newest first, so the rest are older
       if (!mine.has(p.author) || p.communityId) continue;
       if (Blocks.has(p.author)) continue;
       const u = Store.user(p.author);
@@ -12683,13 +12334,17 @@
         `<span class="np-song">Share a song</span>` +
         `<span class="np-who">You</span>` +
       `</button>`;
+    // The square is a link out and the heart a button, side by side in one
+    // box (a button can't sit inside a link), the heart laid over the art.
     const square = ({ u, post }) => {
       const f = npFace({ ...u, listening: post.song }, me);
-      return `<a class="np-item" href="#/p/${encodeURIComponent(post.id)}" ` +
-        `aria-label="${esc(f.label)}">${f.html}</a>`;
+      return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}">` +
+          `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" ` +
+            `rel="noopener noreferrer" data-out="system" aria-label="${esc(f.label)}">${f.html}</a>` +
+          (u.username !== me && Store.isAuthed() ? likeToggleHtml(post).replace('class="card-like', 'class="card-like np-like') : '') +
+        `</div>`;
     };
-    return `<section class="nowplaying" aria-label="What people have on repeat">` +
-        `<p class="np-kicker">On repeat</p>` +
+    return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
         `<div class="np-strip">${add}${items.map(square).join('')}</div>` +
       `</section>`;
   }
@@ -12710,7 +12365,6 @@
           `<span class="np-who">You</span>` +
         `</button>`;
     return `<section class="nowplaying" aria-label="What people are listening to">` +
-        `<p class="np-kicker">On repeat</p>` +
         `<div class="np-strip">${first}${rest.map(u => npSquare(u, me)).join('')}</div>` +
       `</section>`;
   }
@@ -13144,7 +12798,7 @@
     // One picker, one song. "Change song" is the same page the rail's own square
     // opens, because there is only one song and this card is a window on it.
     if (e.k === 'song')
-      items.push({ label: 'Change song', icon: 'sound', run: () => goListening('#/profile') });
+      items.push({ label: 'Change song', icon: 'music', run: () => goListening('#/profile') });
     if (k > 0)
       items.push({ label: 'Move up', icon: 'arrowup',
         run: () => commitPins(movedPins(pins, at, slots[k - 1]), { repaint }) });
@@ -13187,7 +12841,7 @@
     // down, which is a write and not a journey. Without one, the way to pin a
     // song is to have a song, so it opens the picker — where saving pins it.
     const songRow = pins.some(e => e.k === 'song') ? []
-      : [{ label: u.listening ? 'What you’re listening to' : 'A song', icon: 'sound',
+      : [{ label: u.listening ? 'What you’re listening to' : 'A song', icon: 'music',
            run: () => (u.listening
              ? commitPins(pins.concat([{ k: 'song' }]), { toastOk: 'Pinned to your profile.' })
              : goListening('#/profile')) }];
@@ -13556,9 +13210,8 @@
   function communityStartHtml() {
     const href = Store.isAuthed() ? '#/c/new' : '#/join';
     return `<section class="daily-card community-card community-card--start">` +
-        `<p class="daily-kicker">Your own room</p>` +
         `<a class="daily-open" href="${href}"><span class="daily-prompt">Start a circle</span></a>` +
-        `<p class="daily-hint">For a hobby or an interest. Anyone on Tria can find it here and join.</p>` +
+        `<p class="daily-hint">For hobbies, interests, events and more. Your circle will show up here for others to join.</p>` +
         `<div class="daily-foot">` +
           `<span class="daily-count"></span>` +
           `<a class="daily-answer publish-fill is-solid" href="${href}">` +
@@ -13617,7 +13270,6 @@
     if (!Store.communitiesReady()) return '';
     if (search && !list.length) return '';
     return `<section class="communities" aria-label="Circles">` +
-        `<p class="discover-kicker">Circles</p>` +
         (search ? '' : communityStartHtml()) +
         list.map(communityCardHtml).join('') +
       `</section>`;
@@ -14485,7 +14137,7 @@
     // complains. Any new kind has to land above this line.
     const what =
       n.kind === 'comment' ? `commented on ${label}` :
-      n.kind === 'like'    ? rxDef(n.reaction).did(label) :
+      n.kind === 'like'    ? `liked ${label}` :
       n.kind === 'commentlike' ? `liked your comment on ${label}` :
       n.kind === 'mention' ? `mentioned you in ${label}` :
       n.kind === 'vote'    ? `voted in ${label}` :
@@ -14508,9 +14160,7 @@
     const fresh = n._ts && n._ts > lastSeen;
     // data-key is the row's stable identity for the reconcile in renderUpdates
     // (kind + which post + who + when) — one event, one row, across refreshes.
-    // A like's reaction is in it, because changing your mind rewrites the row
-    // in place (same person, same time) and the sentence has to follow.
-    const key = esc(`${n.kind}${n.reaction ? '-' + n.reaction : ''}:${n.postId || ''}:${n.user}:${n._ts || ''}`);
+    const key = esc(`${n.kind}:${n.postId || ''}:${n.user}:${n._ts || ''}`);
     return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
           `data-post="${esc(n.postId || '')}" data-kind="${n.kind}">` +
@@ -17992,6 +17642,12 @@
     data.audience = pubAudience.mode;          // 'public' | 'circle' | 'list' | 'community'
     data.audienceUsers = pubAudience.users;    // usernames when 'list'
     data.communityId = pubAudience.community || null;   // the circle, when 'community'
+    // A song is read in one place, On repeat over My Circle, which is your
+    // people's and never a circle's. Aimed at a circle it would land nowhere.
+    if (pubType === 'song' && data.audience === 'community') {
+      errEl.textContent = 'Songs go to On repeat on My Circle, so pick your circle or your friends for this one.';
+      return;
+    }
 
     if (pubType === 'find') {
       data.url = val('c-url');

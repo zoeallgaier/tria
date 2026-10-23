@@ -335,13 +335,22 @@
      square's own width, so a 48px search hit and an 88px pin wear the same
      shape at different sizes; --radius-art is the corner itself, and a box
      holding a cover at a known size and pad reads --art-round to stay
-     concentric with it (see .card-song, .song-now, .pin--song). */
-  --art-round:  0.26;
+     concentric with it (see .card-song, .song-now, .pin--song). A FIFTH, down
+     from a quarter, the same day (Zoe: "a bit less rounding on the album
+     art"), with the soft corner below carrying the cuteness instead. */
+  --art-round:  0.2;
   --radius-art: calc(var(--art-round) * 100%);
   /* The rest of the corner scale, tokenised so the ladder is enforced not
      remembered (see the design system note in CLAUDE.md). */
   --radius-field: 12px;   /* composer + edit inputs and their grouped rows */
   --radius-card:  14px;   /* photos, and floating glass menus / cards */
+  /* THE SOFT CORNER, for every flat card that sits in a page (Zoe, 2026-10-22:
+     "unify everything with the more rounded edges: discover cards, quote
+     reposts, updates soft ask, pinned posts etc. so everything has that
+     cutesy roundedness"): the daily and circle cards, a quoted post, the push
+     ask, a profile's pins, the week-of cards, a chat request. Floating glass
+     (menus, sheets) keeps its own ladder. */
+  --radius-soft:  24px;
   --radius-nav:   18px;   /* the nav rail */
   --radius-modal: 20px;   /* glass modals + sheets */
   /* Concentric corners (the iOS 26 rule): a nested corner is its PARENT's radius

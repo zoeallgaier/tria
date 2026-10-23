@@ -632,24 +632,13 @@ address and therefore a different person, and there is no way around that.
   missing table (`isMissing`, PGRST205) turns the hearts off rather than showing
   a heart that springs back on every tap, and a push to main deploys the web
   whether or not the SQL has run.
-- **A LIKE CAN BE ONE OF FIVE NODS (2026-09-25).** Tap a friend's heart and it
-  is a heart, as ever; HOLD it and a fan offers thumbs up, thumbs down, ha ha and
-  whoa, in iMessage's order. It is not a second kind of row: `likes.reaction`
-  (added by `supabase/add-reactions.sql`) says WHICH nod the one private row is,
-  so the author still reads them all, nobody else reads a total, and nothing is
-  pushed. Changing your mind UPDATES the row (the migration's one new policy,
-  `likes update own`) rather than deleting and inserting, so it keeps its
-  `created_at` and the author's Updates don't see a second arrival; the row's
-  sentence follows the mark ("gave your post a thumbs up", `REACTIONS[].did`) and
-  its `data-key` carries the reaction so a change of mind redraws it. The
-  author's who-liked list is grouped by mark in the fan's order and tags each
-  row with it, the way the host's guest list tags Going and Maybe. The owner's
-  count is still everybody who reacted at all.
-  **Nothing changes until the column answers** (`Store.reactionsReady`): the load
-  probes `likes?select=reaction` until it gets a 200, and a 42703 means every
-  like is a heart and the hold does nothing. Against a database without the
-  column that probe is a 400 in the console of every load; it stops being asked
-  the moment it succeeds. The SQL was run the day it was written (2026-09-25).
+- **A LIKE IS A HEART (2026-10-22).** From 2026-09-25 a held heart fanned
+  out four more nods (thumbs up, thumbs down, ha ha, whoa) stored in
+  `likes.reaction` (`supabase/add-reactions.sql`). Zoe took them out in 1.9
+  ("liking serves well enough"). The column is still in the table and the
+  client neither reads nor writes it nor probes for it, so a row left as a
+  thumbs up reads as the like it also was. `Store.setReaction(postId,
+  'heart' | null)` is the post heart's write; the history is in git.
 - **THE LAST WORLD IS KEPT ON THE PHONE (2026-09-25)**, and a launch paints
   from it. A cold launch used to wait on the whole world (a dozen paged reads)
   before drawing anything; measured on the simulator, the feed appeared at about
@@ -1543,3 +1532,10 @@ shows the song. add-listening-to.sql's argument for the clock lost to the rail.
 **Signed out (web)** a `/c/<slug>` link reads as far as the circle's door: its
 name and about (`communities read all` serves anon), and a way into an account.
 Rosters are for signed-in readers only.
+
+**Music posts live in On repeat only (2026-10-22).** A `song` post is in no
+feed (`isSongPost` in store.js filters it, and any repost of one, out of
+`feed`, `postsBy` and `communityPosts`), it can't be reposted, and the composer
+refuses to aim one at a circle. On repeat over My Circle reads each of your
+people's newest song post from the last seven days, and a friend's square
+carries that post's like.
