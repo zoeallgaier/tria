@@ -391,14 +391,14 @@ body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
    any token stream, so an unparseable interpolation hint doesn't fail the
    declaration, it fails at the point of use and takes the whole background to
    nothing on iOS 15. */
-/* QUIETER SINCE 2.0'S BRAND (Zoe, 2026-10-22: "a bitttt intense"). The knobs
-   were set for pastels, which needed chroma bought BACK; peach and rose
-   arrive already saturated, so the saturate() is nearly off, more paper is
-   mixed into each stop, and the bloom itself is thinner (--wash-amt below). */
+/* QUIETER SINCE 2.0'S BRAND (Zoe, 2026-10-22: "a bitttt intense"), then
+   brought back up the same day (Zoe: "too dull"), so it sits between the
+   pastel-era settings and that first cut: a little less paper in each stop,
+   some chroma bought back, and a fuller bloom (--wash-amt below). */
 body[data-ambient="tria"] {
   --wash-tint: #fff;
-  --wash-keep: 50%;
-  --wash-sat: 1.1;
+  --wash-keep: 64%;
+  --wash-sat: 1.5;
   --wash-band: linear-gradient(115deg,
     color-mix(in srgb, var(--brand-peach) var(--wash-keep), var(--wash-tint)),
     color-mix(in srgb, var(--brand-rose)  var(--wash-keep), var(--wash-tint)));
@@ -413,8 +413,8 @@ body[data-ambient="tria"] {
 @media (prefers-color-scheme: dark) {
   body[data-ambient="tria"] {
     --wash-tint: #000;
-    --wash-keep: 45%;
-    --wash-sat: 1.1;
+    --wash-keep: 56%;
+    --wash-sat: 1.5;
   }
 }
 body[data-ambient="tria"] .ambient {
@@ -430,9 +430,9 @@ body[data-ambient="tria"] .ambient {
      pixel there is one hue at 30% and the whole thing read as a smudge of
      nothing. The tint mix does the luminance protection here (--wash-keep is up
      too, so less of the paper is mixed in), and this dial is free to be the
-     loudness it looks like. Down from 68% with 2.0's brand, which is louder
-     per pixel than any pastel was. */
-  --wash-amt: 50%;
+     loudness it looks like. Down from 68% to 50% with 2.0's brand, which is
+     louder per pixel than any pastel was, and back to 60% when that read dull. */
+  --wash-amt: 60%;
   /* The mask carries the bloom's SHAPE and the band carries its colour, which
      is the one structural difference from the accent version: there the shape
      and the colour are the same gradient, because one colour can live in a
