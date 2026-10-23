@@ -504,6 +504,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let state = call.getString("state") ?? "idle"
         let quiet = call.getBool("quiet") ?? false
         let land = call.getBool("land") ?? false
+        let depth = call.getDouble("depth")
         // Read through the bar's one colour parser. Below 26 that class doesn't
         // exist, and the glow simply keeps Tria's own ramp.
         var colors: [UIColor] = []
@@ -517,7 +518,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             if self.glow == nil { self.glow = TriaEdgeGlow(scroll: web.scrollView) }
-            self.glow?.set(state: state, colors: colors, quiet: quiet, land: land, in: window)
+            // CSS pixels are the web view's points; the glow lives in the window.
+            let foot = depth.map { web.convert(CGPoint(x: 0, y: $0), to: window).y }
+            self.glow?.set(state: state, colors: colors, depth: foot, quiet: quiet, land: land, in: window)
             call.resolve()
         }
     }
@@ -3960,8 +3963,9 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
    THE PULL DRAWS IT. Two strokes leave the top centre together and run round
    the corners and down either side, each as far as the pull has got, and they
-   reach HALFWAY DOWN THE SCREEN exactly at the threshold (Zoe: stop halfway,
-   not at the foot). Let go and the colours turn slowly along the lit edge
+   reach WHERE THE PAGE'S CONTENT STARTS exactly at the threshold (Zoe: halfway
+   first, then "end it around where the content starts"). app.js measures that
+   line per pull and sends it as `depth`; halfway is the fallback without it. Let go and the colours turn slowly along the lit edge
    while the world re-pulls, then it fades.
 
    THE TIPS ARE FEATHERED, not capped (Zoe: "fade them out instead of sharp
@@ -4027,7 +4031,9 @@ final class TriaEdgeGlow: UIView {
     private let left = CAShapeLayer()
     /// The right stroke's geometry, for turning a distance along it into an
     /// angle round the centre: the top run, the corner, the side run.
-    private var shape = (rect: CGRect.zero, r: CGFloat(0))
+    private var shape = (rect: CGRect.zero, r: CGFloat(0), foot: CGFloat(0))
+    /// Where the strokes end, in this view's points (the page's content top).
+    private var depth: CGFloat?
     private let detent = UIImpactFeedbackGenerator(style: .soft)
     private let click = UIImpactFeedbackGenerator(style: .rigid)
     private var state = "idle"
@@ -4085,17 +4091,25 @@ final class TriaEdgeGlow: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    /// The band twice round the circle, there and back, then again: the lit
-    /// edge only spans the top half (a quarter turn each side of the top), so
-    /// a half turn has to carry the whole band, first stop at the top and last
-    /// at the halfway point on either side. Repeating it keeps the turn
-    /// seamless, whichever half is passing under the light.
+    /// The band round the circle, there and back, again and again: each run
+    /// of it spans the turn from the top centre to the strokes' foot, so the
+    /// whole band shows along the lit edge, first stop at the top and last at
+    /// the tips. An even count of runs keeps the turn seamless, whichever run
+    /// is passing under the light. Four when the foot was halfway down.
+    private var band: [CGColor] = []
+    private var bands = 4
+
     private func wear(_ stops: [UIColor]) {
-        var band = stops.isEmpty ? [Self.start, Self.end] : stops
-        if band.count == 1 { band += band }
-        let there = band.map { $0.cgColor }
-        let back = Array(there.reversed().dropFirst())
-        let loop = there + back + Array(there.dropFirst()) + back
+        var b = stops.isEmpty ? [Self.start, Self.end] : stops
+        if b.count == 1 { b += b }
+        band = b.map { $0.cgColor }
+        paint()
+    }
+
+    private func paint() {
+        let back = Array(band.reversed().dropFirst())
+        var loop = band
+        for k in 1..<bands { loop += k % 2 == 1 ? back : Array(band.dropFirst()) }
         ramp.colors = loop
         ramp.locations = loop.indices.map { NSNumber(value: Double($0) / Double(loop.count - 1)) }
     }
@@ -4113,20 +4127,25 @@ final class TriaEdgeGlow: UIView {
         feather.frame = lit.bounds
         strokes.frame = bounds
         let radius = Self.cornerRadius(for: window)
-        shape = (bounds.insetBy(dx: -Self.line / 2, dy: -Self.line / 2), radius + Self.line / 2)
-        let half = Self.halfPath(in: bounds, radius: radius)
+        // Never above the corner's end or below halfway.
+        let foot = min(bounds.midY, max(radius, depth ?? bounds.midY))
+        shape = (bounds.insetBy(dx: -Self.line / 2, dy: -Self.line / 2), radius + Self.line / 2, foot)
+        let half = Self.halfPath(in: bounds, radius: radius, foot: foot)
         let mirrored = half.copy() as! UIBezierPath
         mirrored.apply(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: bounds.width, ty: 0))
         right.path = half.cgPath
         left.path = mirrored.cgPath
+        let span = turn(at: 1)
+        let fit = span > 0 ? max(4, 2 * Int((0.5 / span).rounded())) : 4
+        if fit != bands { bands = fit; paint() }
         CATransaction.commit()
     }
 
     /// The right half of the screen's outline, top centre round the corner and
-    /// down to halfway, OUTSET by half the line so the stroke's inner edge sits
+    /// down to `foot`, OUTSET by half the line so the stroke's inner edge sits
     /// on the glass's edge (all of it off screen) and stays concentric with its
     /// corner.
-    private static func halfPath(in b: CGRect, radius: CGFloat) -> UIBezierPath {
+    private static func halfPath(in b: CGRect, radius: CGFloat, foot: CGFloat) -> UIBezierPath {
         let i = -line / 2
         let r = max(0, radius - i)
         let rect = b.insetBy(dx: i, dy: i)
@@ -4135,7 +4154,7 @@ final class TriaEdgeGlow: UIView {
         p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
         p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
                  startAngle: -.pi / 2, endAngle: 0, clockwise: true)
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: max(rect.minY + r, foot)))
         return p
     }
 
@@ -4163,10 +4182,10 @@ final class TriaEdgeGlow: UIView {
     /// The point `u` (0 to 1) of the way along the right stroke, as a turn
     /// round the screen's centre clockwise from the top: 0 to 0.25.
     private func turn(at u: CGFloat) -> CGFloat {
-        let (rect, r) = shape
+        let (rect, r, foot) = shape
         let top = max(0, rect.width / 2 - r)
         let corner = .pi * r / 2
-        let down = max(0, rect.height / 2 - r)
+        let down = max(0, foot - rect.minY - r)
         var d = u * (top + corner + down)
         let point: CGPoint
         if d <= top {
@@ -4228,8 +4247,9 @@ final class TriaEdgeGlow: UIView {
         if u >= 1 { link.invalidate(); tween = nil }
     }
 
-    func set(state next: String, colors: [UIColor], quiet: Bool, land: Bool, in window: UIWindow) {
+    func set(state next: String, colors: [UIColor], depth: CGFloat?, quiet: Bool, land: Bool, in window: UIWindow) {
         if !colors.isEmpty { wear(colors) }
+        if next != "idle" { self.depth = depth }
         if superview !== window {
             removeFromSuperview()
             window.addSubview(self)
@@ -4323,7 +4343,7 @@ final class TriaEdgeGlow: UIView {
         let turn = CABasicAnimation(keyPath: "transform.rotation.z")
         turn.fromValue = 0
         turn.toValue = 2 * Double.pi
-        turn.duration = 4.8   // the band repeats every half turn, so 2.4s a band
+        turn.duration = 1.2 * Double(bands)   // 1.2s a run of the band, whatever the reach
         turn.repeatCount = .infinity
         ramp.add(turn, forKey: "turn")
         let breathe = CABasicAnimation(keyPath: "shadowRadius")

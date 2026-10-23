@@ -6,8 +6,10 @@ past the glass so it is never seen, and only its 16pt halo shows; it was a
 1.5pt line with a 4pt halo until Zoe asked for the glow, not the line)
 (`TriaEdgeGlow` in TriaChromePlugin.swift), drawn over the native bars. Two
 strokes leave the top centre and run round the corners and down either side as
-you pull, and they **reach halfway down the screen at the threshold** (Zoe:
-stop halfway, not at the foot), which is the "let go now" the ring's opening
+you pull, and they **reach where the page's content starts at the threshold**
+(Zoe: halfway first, then "end it around where the content starts"; app.js
+measures `#view`'s content top per pull and sends it as `depth`, and the band
+repeats round the circle so a whole run of it fits that shorter reach), which is the "let go now" the ring's opening
 used to say. **The tips are feathered** (Zoe: fade, not sharp ends): the last
 38% of each stroke at full reach fades on a smoothstep down to nothing, halo
 included, through a CONIC alpha mask centred on the screen (every point of the

@@ -20424,8 +20424,8 @@
      reloaded at random. The tab re-tap still scrolls you to the top and clears a
      filter; it simply no longer re-pulls the world.
 
-     IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): a thin line of the reader's
-     own band traced round the glass by `TriaEdgeGlow` in TriaChromePlugin.swift,
+     IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): a glow of the reader's
+     own band in off the glass, down to where the page's content starts, by `TriaEdgeGlow` in TriaChromePlugin.swift,
      which reads the pull off its own scroll view and owns the haptics (a ratchet
      of soft detents, a click at the threshold, a soft landing). This side still decides WHEN:
      it says pull on the first frame of overscroll, then spin or idle on release.
@@ -20439,7 +20439,18 @@
       if (!glow) return;
       // Colours ride the two messages that show it; idle needs none.
       const colors = state === 'idle' ? undefined : NativeChrome.glowColors();
-      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, colors, ...opts }).catch(() => {});
+      const depth = state === 'idle' ? undefined : contentTop();
+      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, colors, depth, ...opts }).catch(() => {});
+    };
+    // Where the page's content starts, as it sits at rest (scrollY is negative
+    // mid-pull, so adding it takes the overscroll back out). The glow's tips
+    // stop there (Zoe: end around where the content starts, not halfway).
+    const contentTop = () => {
+      const view = document.getElementById('view');
+      if (!view) return undefined;
+      const top = view.getBoundingClientRect().top + window.scrollY
+        + (parseFloat(getComputedStyle(view).paddingTop) || 0);
+      return top > 0 ? Math.round(top) : undefined;
     };
     if (nativeShell()) {
       window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state: 'idle' })
