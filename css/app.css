@@ -8120,31 +8120,39 @@ button.poll-option:disabled { cursor: default; }
 /* Every piece is the feed's `.tag` (2026-10-23, Zoe: "sized and styled like
    tags in feed posts"): a chip is a tag with an × tucked in its right
    padding, + Tag is a tag with a plus, and the box you type in is a tag too. */
+/* A size up from the feed's, though (Zoe: "a bit bigger, meet in the
+   middle"): 14px, halfway between a posted tag's 12px and the 16px these
+   were, with the feed's padding scaled to match. */
 .tag-chip,
 .tag-add,
-.tag-typing { display: inline-flex; align-items: center; }
-.tag-chip { padding-right: 0.2rem; }
+.tag-typing {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  padding: 0.2rem 0.65rem;
+}
+.tag-chip { padding-right: 0.25rem; }
 .tag-chip-x {
   -webkit-appearance: none; appearance: none;
   border: 0; background: none; padding: 0;
-  width: 1.1rem; height: 1.1rem;
+  width: 1.25rem; height: 1.25rem;
   margin-left: 0.1rem;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--muted); cursor: pointer;
 }
-.tag-chip-x-ico { width: 10px; height: 10px; }
-.tag-add { gap: 0.2rem; padding-left: 0.4rem; cursor: pointer; }
+.tag-chip-x-ico { width: 11px; height: 11px; }
+.tag-add { gap: 0.25rem; padding-left: 0.5rem; cursor: pointer; }
 .tag-add[hidden] { display: none; }
-.tag-add-ico { width: 11px; height: 11px; }
+.tag-add-ico { width: 12px; height: 12px; }
 /* THE TYPING TAG. A field under 16px zooms the whole page on iOS, and a tag
-   is 0.76rem, so the field IS 16px and is drawn at the tag's size by a
+   here is 0.875rem, so the field IS 16px and is drawn at the tag's size by a
    transform instead (the zoom reads the computed font size, which a scale
    leaves alone). The pill is an ordinary .tag, its height set by a hidden
    word in the tag's own type, and the field sits over its text box, sized up
-   by 1/0.76 and scaled back down into it. */
+   by 1/0.875 and scaled back down into it. */
 .tag-typing {
   position: relative;
-  width: 6rem;
+  width: 6.5rem;
   color: var(--text);
   border-color: var(--accent);
 }
@@ -8152,10 +8160,10 @@ button.poll-option:disabled { cursor: default; }
 .tag-row .tag-new {
   position: absolute;
   top: -1px;               /* Oxygen sits a hair low in a field; on the chips' line */
-  left: 0.55rem;
-  width: calc((100% - 1.1rem) / 0.76);
-  height: calc(100% / 0.76);
-  transform: scale(0.76);
+  left: 0.65rem;
+  width: calc((100% - 1.3rem) / 0.875);
+  height: calc(100% / 0.875);
+  transform: scale(0.875);
   transform-origin: 0 0;
   -webkit-appearance: none;
   appearance: none;
