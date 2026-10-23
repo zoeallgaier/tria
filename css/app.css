@@ -5452,6 +5452,13 @@ button.poll-option:disabled { cursor: default; }
   font-size: 0.92rem;
   color: var(--muted);
 }
+/* The bar's title says the @handle at phone width (it is hidden past 681px,
+   see .toolbar-title), so the card's own copy only shows where that one can't.
+   Pronouns stay; a line that was only the handle goes. */
+@media (max-width: 680px) {
+  .account-at { display: none; }
+  .account-handle--bare { display: none; }
+}
 
 /* One inline stat line: "N posts · N friends". The count is inked, its label
    muted, the two stats parted by a faint dot. A locked profile shows the friend

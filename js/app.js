@@ -7638,8 +7638,11 @@
             `<div class="account-meta">` +
               `<div class="account-id">` +
                 `<h1 class="account-name">${esc(u.name)}</h1>` +
-                `<p class="account-handle">@${esc(u.username)}` +
-                  (u.pronouns ? ` · ${esc(u.pronouns)}` : '') + `</p>` +
+                // The @handle steps aside wherever the bar's title already
+                // says it (phone width, every shell); pronouns stay.
+                `<p class="account-handle${u.pronouns ? '' : ' account-handle--bare'}">` +
+                  `<span class="account-at">@${esc(u.username)}${u.pronouns ? ' · ' : ''}</span>` +
+                  (u.pronouns ? esc(u.pronouns) : '') + `</p>` +
               `</div>` +
               statsRow +
               bio +
