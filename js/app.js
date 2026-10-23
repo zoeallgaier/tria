@@ -2287,7 +2287,7 @@
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
   // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
   // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44]];
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 88]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -13776,6 +13776,83 @@
     // How long typing has to settle before the page rebuilds.
     const SEARCH_BEAT = 110;
 
+    /* PEOPLE, OVER THE DAILY (Zoe, 2026-10-23). A sideways rail of 4:5 cards,
+       one per person you have no tie to yet: the most friends in common first,
+       then the newest account. Strangers only, so a friend, a follow or a
+       request you sent is left out; someone who added you first stays, with
+       Accept / Add back on the card. A card answered on this visit keeps its
+       place (now Requested or Following, so a mistap undoes where it was made)
+       and is gone the next time the page is drawn. Signed in only: a guest has
+       no tie to offer and no friends to have in common.
+
+       Each card is the person's face, their name, who you both know (names,
+       never a number), and the newest thing of theirs you may read, linked to
+       its own page. Store.discover is the room's reading list, so a private
+       stranger's circle posts never reach it: their card says their bio, or
+       that the account is private. */
+    const PEOPLE_RAIL = 20;
+    const railKept = new Set();
+    const isStranger = (name) => ['none', 'incoming', 'follower'].includes(Store.friendStatus(name));
+    const peopleForRail = () => {
+      if (!Store.isAuthed()) return [];
+      const mine = new Set(Store.friends());
+      // Store.users() is in the order the accounts were made (readAll), so its
+      // index is the age tiebreak, newest highest.
+      return Store.users()
+        .map((u, i) => ({ u, i }))
+        .filter(({ u }) => u.username && u.username !== me && !Blocks.has(u.username)
+          && (railKept.has(u.username) || (isStranger(u.username) && !Store.isDeclined(u.username))))
+        .map(x => ({ ...x, common: Store.friendsOf(x.u.username).filter(n => mine.has(n) && !Blocks.has(n)) }))
+        .sort((a, b) => b.common.length - a.common.length || b.i - a.i)
+        .slice(0, PEOPLE_RAIL);
+    };
+    // The newest post of each author that this reader may browse, one pass.
+    const newestBy = () => {
+      const m = new Map();
+      Store.discover().forEach(p => { if (p.type !== 'song' && !m.has(p.author)) m.set(p.author, p); });
+      return m;
+    };
+    // "Friends with Ana", "Friends with Ana and Ben", "Friends with Ana, Ben and
+    // others". A name you recognise does what a count would, without being one.
+    const inCommonLine = (common) => {
+      const names = common.slice(0, 2).map(n => (Store.user(n) || {}).name || n);
+      if (!names.length) return '';
+      if (common.length > 2) return `Friends with ${names.join(', ')} and others`;
+      return `Friends with ${names.join(' and ')}`;
+    };
+    const personCardHtml = ({ u, common }, post) => {
+      const locked = isLocked(u.username);
+      const fence = locked
+        ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
+      const said = post ? saidOf(post) : '';
+      const still = post && !said ? cardStill(post) : '';
+      const body = post
+        ? `<a class="person-card-post${still ? ' person-card-post--still' : ''}" href="${postRoute(post)}">` +
+            (still ? `<img src="${esc(still)}" alt="" loading="lazy" decoding="async">`
+                   : `<span class="person-card-said">${esc(said || TYPE_LABEL[post.type] || 'A post')}</span>`) +
+          `</a>`
+        : `<p class="person-card-said person-card-said--quiet">` +
+            esc(u.bio || (locked ? 'Private account' : 'Hasn’t posted yet')) + `</p>`;
+      return `<article class="person-card">` +
+          `<a class="person-card-open" href="#/u/${encodeURIComponent(u.username)}">` +
+            avatarEl(u, { cls: 'person-card-avatar' }) +
+            `<span class="person-card-name">${esc(u.name || u.username)}${fence}</span>` +
+            `<span class="person-card-sub">${esc(inCommonLine(common) || '@' + u.username)}</span>` +
+          `</a>` +
+          body +
+          `<span class="friend-slot person-card-slot">${tieHtml(u)}</span>` +
+        `</article>`;
+    };
+    const peopleRailHtml = (people) => {
+      if (!people.length) return '';
+      const newest = newestBy();
+      return `<section class="person-rail" aria-label="People">` +
+          `<div class="person-strip">` +
+            people.map(x => personCardHtml(x, newest.get(x.u.username))).join('') +
+          `</div>` +
+        `</section>`;
+    };
+
     const paint = () => {
       lockCache.clear();
       saidCache = null;
@@ -13791,9 +13868,13 @@
       const morePeople = matched.length > people.length;
       if (q) discoverable = new Set(Store.discover({ addressed: true }));
       const found = q ? postsMatching(q) : [];
+      const rail = q ? [] : peopleForRail();
+      // Whoever is on the rail now stays on it for the rest of this visit.
+      rail.forEach(x => railKept.add(x.u.username));
+      const railHtml = peopleRailHtml(rail);
       // The markup is the description of what changed, so it signs the paint;
       // a person's row carries a tie, so their friendStatus is in it too.
-      const sig = JSON.stringify([q, roomsHtml, occ && [occ.slug, answers.length],
+      const sig = JSON.stringify([q, railHtml, roomsHtml, occ && [occ.slug, answers.length],
         people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
           isLocked(u.username), Store.friendStatus(u.username)]),
         morePeople, found.map(p => p.id)]);
@@ -13819,10 +13900,10 @@
         ? `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>` : '';
 
       // Searching, the results run people, posts, circles; otherwise the page
-      // is the daily and the circles.
+      // is the people rail, the daily and the circles.
       bodyEl.innerHTML = q
         ? peopleHtml + postsHtml + roomsHtml + none
-        : (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
+        : railHtml + (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
       bodyEl.querySelector('.discover-more')?.addEventListener('click', () => {
         allPeopleFor = q;
         paintNow();

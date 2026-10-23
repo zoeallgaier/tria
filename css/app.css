@@ -5884,7 +5884,7 @@ button.poll-option:disabled { cursor: default; }
   display: -webkit-box;
   -webkit-box-orient: vertical;
   /* Three lines: the taller sleeve gives a long title the height for one more. */
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 5;
   line-clamp: 3;
 }
 .card-song .song-artist { font-size: 0.8rem; letter-spacing: 0.02em; }
@@ -9822,6 +9822,89 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    on discover cards"): the words and the full-width pill run nearer the edge. */
 .view--discover .daily-card { padding-inline: 0.8rem; }
 .view--discover .community-card-pic { right: 0.8rem; }
+
+/* PEOPLE, OVER THE DAILY (Zoe, 2026-10-23). A sideways rail of 4:5 cards in the
+   daily card's flat material, one across a phone with the next peeking in (320px,
+   Zoe: "2x the card size"). It runs in the page's column with the daily's ~15px under it, and
+   on a phone it bleeds to the screen's edges so a card scrolls off the glass
+   rather than into the gutter. Face, name and who you both know open the
+   profile (a stretched link); the newest post opens itself and the tie is its
+   own control, both raised over that link. */
+.person-rail { max-width: var(--feed-width); margin: 0 auto 0.95rem; }
+.person-strip {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  /* Same as .np-strip: the swipe stays in the rail, never the back gesture. */
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.person-strip::-webkit-scrollbar { display: none; }
+@media (max-width: 680px) {
+  .person-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; scroll-padding-inline: 1.15rem; }
+}
+.person-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: min(320px, calc(100vw - 4rem));
+  aspect-ratio: 4 / 5;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem;
+  border-radius: var(--radius-soft);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  scroll-snap-align: start;
+  overflow: hidden;
+}
+.person-card-open { display: flex; flex-direction: column; min-width: 0; color: var(--text); }
+.person-card-open::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.person-card-avatar.avatar { width: 88px; height: 88px; font-size: 2.6rem; margin-bottom: 0.7rem; }
+.person-card-name,
+.person-card-sub {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.person-card-name { font-weight: 700; font-size: 1.2rem; line-height: 1.2; }
+.person-card-sub { margin-top: 0.15rem; font-size: 0.9rem; line-height: 1.3; color: var(--muted); }
+/* The post fills what's left between the name and the tie: its words in the
+   serif, clamped, or a wordless Frame's picture filling the space. */
+.person-card-post {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.8rem;
+  color: var(--text);
+  overflow: hidden;
+}
+.person-card-said {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin: 0;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.6rem;
+  line-height: 1.12;
+}
+p.person-card-said { flex: 1; min-height: 0; margin-top: 0.8rem; }
+.person-card-said--quiet { color: var(--muted); }
+.person-card-post--still img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-img);
+}
+/* Full width at the card's foot, a page-wide pill's 52px. */
+.person-card-slot { z-index: 1; margin-top: 0.8rem; }
+.person-card-slot .friend-tie { width: 100%; min-height: 52px; font-size: 0.95rem; }
+.person-card-slot .friend-go { display: none; }
 
 /* A circle's face: its photo, or Discover's woven triad on the chat list's
    glyph disc when it has none. Round, like every face in the app. */
