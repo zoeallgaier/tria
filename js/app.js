@@ -5729,6 +5729,8 @@
       { key: 'activity', label: 'Activity' },
       ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
+      // Discover's Start a circle card, once it has been waved off.
+      ...(Store.communitiesReady() && communityStartDismissed() ? [{ key: 'circle', label: 'Circle', icon: 'circle' }] : []),
     ];
   }
 
@@ -5744,6 +5746,7 @@
     const run = (row) => {
       // Straight to the composer with the prompt over it, the card's Add yours.
       if (row.key === 'daily') return answerDaily(occ);
+      if (row.key === 'circle') return go('#/c/new');
       pendingAttach = row.key === 'note' ? null : row.key;
       go('#/publish');
     };
@@ -12911,17 +12914,36 @@
   // The card that starts one (Zoe: "add a card on Discover to create a
   // circle"), the same card with its fill taken out and a dashed edge, the way
   // an empty slot is drawn. Signed out its pill is the way into an account.
+  // Signed in it can be waved off (Zoe), per device like the week-of cards,
+  // and the Share sheet grows a Circle row so the door is never lost.
+  const startKey = () => `tria:circle-start-dismissed:${Store.session()}`;
+  function communityStartDismissed() {
+    if (!Store.isAuthed()) return false;
+    try { return localStorage.getItem(startKey()) === '1'; } catch { return false; }
+  }
   function communityStartHtml() {
-    const href = Store.isAuthed() ? '#/c/new' : '#/join';
+    if (communityStartDismissed()) return '';
+    const authed = Store.isAuthed();
+    const href = authed ? '#/c/new' : '#/join';
     return `<section class="daily-card community-card community-card--start">` +
+        (authed ? `<button class="community-start-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` : '') +
         `<a class="daily-open" href="${href}"><span class="daily-prompt">Start a circle</span></a>` +
         `<p class="daily-hint">For hobbies, interests, events and more. Your circle will show up here for others to join.</p>` +
         `<div class="daily-foot">` +
           `<span class="daily-count"></span>` +
           `<a class="daily-answer publish-fill" href="${href}">` +
-            `Start<span class="daily-go" aria-hidden="true">→</span></a>` +
+            `Start your own<span class="daily-go" aria-hidden="true">→</span></a>` +
         `</div>` +
       `</section>`;
+  }
+  function wireCommunityStart(root) {
+    root.querySelector('.community-start-x')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try { localStorage.setItem(startKey(), '1'); } catch { /* private window */ }
+      hapticTap('LIGHT');
+      e.currentTarget.closest('.community-card--start')?.remove();
+      toast('Hidden. Start one anytime from Share.');
+    });
   }
 
   // Joining from a card: in, and straight through the door, since the reason
@@ -13640,6 +13662,7 @@
       bodyEl.querySelector('.daily-card:not(.community-card) .daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
       wireCommunityJoins(bodyEl);
+      wireCommunityStart(bodyEl);
       if (!q) wireShare();
       // The Add on a person's row. It binds to the BODY, once (it refuses a
       // second binding), which is what lets it survive every repaint.

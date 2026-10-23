@@ -9857,6 +9857,25 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   border-color: color-mix(in srgb, var(--text) 24%, transparent);
 }
 a.daily-answer { text-decoration: none; }
+/* Its wave-off, in the corner a circle's photo takes on the other cards, and
+   above the stretched link so the tap is the X's own. */
+.community-start-x {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+.community-start-x svg { width: 16px; height: 16px; }
+.community-start-x ~ .daily-open { padding-right: 2.5rem; }
 
 /* Which circle a post was said in, over its byline (communityTagHtml). Small
    print in the caption voice, a link in, and absent on the circle's own page,
