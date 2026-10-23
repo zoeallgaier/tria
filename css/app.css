@@ -8207,6 +8207,10 @@ button.poll-option:disabled { cursor: default; }
 }
 .aud-list-wrap.is-open { grid-template-rows: 1fr; opacity: 1; }
 .aud-list-wrap > .aud-list { min-height: 0; }
+/* Clipped, as .about-fold-inner is. Without it a folded checklist is a 0-tall
+   row with the whole of your circle overflowing it at opacity 0, and the
+   panel's scroller counts that overflow: an endless scroll through nobody. */
+.aud-list-wrap { overflow: hidden; }
 /* THE ONE THING ON THIS PANEL THAT SCROLLS, and the whole reason the picker is a
    sheet. The list is your circle, which has no length this stylesheet gets to
    assume — the card this replaced assumed it was short and clipped the question
@@ -8294,9 +8298,10 @@ button.poll-option:disabled { cursor: default; }
    Every other sheet in the app is a short fixed list, so `.sheet-items` can be
    `overflow: hidden` and the panel is as tall as its rows. Here the height
    belongs to a list nobody gets to assume the length of, so the whole sheet is
-   capped to the screen it is standing on and the column inside it is allowed to
-   shrink down to the one child that scrolls. The list's own dvh cap above is
-   what it wants to be; this is what it is allowed to be.
+   capped to the screen it is standing on, and the column under the title
+   (.sheet-items, the base sheet's own scroller) scrolls when the modes, the
+   checklist at its dvh cap and your circles don't fit. Two scrollers, no more:
+   the panel's column and the checklist inside it.
 
    The insets are the scrim's own 0.7rem twice over, plus the notch and the home
    indicator — the scrim only pads for the second of those, and a sheet that runs
@@ -8305,17 +8310,6 @@ button.poll-option:disabled { cursor: default; }
   max-height: calc(100dvh - 1.4rem
                    - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
-.sheet-scrim--aud .sheet-items {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-/* The modes and the dock hold still; the checklist is the only thing that gives.
-   `min-height: 0` on the wrap is what lets flex shrink it past its content — the
-   default `auto` would push the panel back out to the full list and put us right
-   back where the card was. */
-.sheet-scrim--aud .aud-modes { flex-shrink: 0; }
-.sheet-scrim--aud .aud-list-wrap { min-height: 0; }
 
 /* ── Frame picker — a plain upload field ────────────────────────────────────
    Same frame + fill as every other composer field (.field input/textarea) —
@@ -9917,20 +9911,14 @@ a.daily-answer { text-decoration: none; }
 .community-member-out[data-sure] { color: var(--danger); font-weight: 700; }
 
 /* Your circles in the audience sheet, under the people picker. They are the
-   same mode rows, so the only new thing is the caption above them and a cap,
-   since one person can be in more circles than a panel has room for. */
+   same mode rows, so the only new thing is the caption above them. No scroller
+   of their own: ten circles is the most anyone holds, and the panel's column
+   scrolls if they don't fit. */
 .aud-communities-cap {
   margin: 0.7rem 0.9rem 0.2rem;
   font-size: var(--kicker);
   color: var(--muted);
   letter-spacing: 0.02em;
-}
-.sheet-scrim--aud .aud-modes--communities {
-  flex-shrink: 1;
-  min-height: 0;
-  max-height: min(30dvh, 240px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 /* ── Native chrome (1.4) ─────────────────────────────────────────────────────

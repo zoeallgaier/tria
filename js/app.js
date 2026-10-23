@@ -5935,7 +5935,18 @@
      tap is still a tap, and the click a drag ends on is swallowed. */
   function dragToClose(panel, list, close) {
     if (!panel) return;
-    if (list && list.scrollHeight > list.clientHeight + 1) list.style.touchAction = 'pan-y';
+    // Whether the list scrolls is not settled at open: the audience sheet's
+    // checklist folds open inside it and can make it scroll later. So it is
+    // re-measured whenever the list or anything in it changes size.
+    const sync = () => {
+      if (list) list.style.touchAction = list.scrollHeight > list.clientHeight + 1 ? 'pan-y' : '';
+    };
+    sync();
+    if (list && typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver(sync);
+      ro.observe(list);
+      [...list.children].forEach((c) => ro.observe(c));
+    }
     let startY = 0, dy = 0, dragging = false, down = false, swallow = false;
     panel.addEventListener('pointerdown', (e) => {
       if (e.button) return;
@@ -15841,7 +15852,11 @@
     // same question rather than a second control: the post is FOR its members,
     // exactly as a circle post is for your friends.
     let room = pubAudience.community || null;
-    const myRooms = rooms && Store.communitiesReady()
+    // `rooms` may be a question rather than a yes: the composer asks it on each
+    // open, because a song can't go to a circle (see submit) and the sheet
+    // shouldn't offer what the post button would then refuse.
+    const offerRooms = typeof rooms === 'function' ? rooms() : rooms;
+    const myRooms = offerRooms && Store.communitiesReady()
       ? Store.myCommunities().slice().sort((a, b) => a.name.localeCompare(b.name)) : [];
 
     // What used to be the Done handler, run on every tap instead of once at the
@@ -15887,7 +15902,9 @@
           modeBtn('list', 'Choose people', 'Only who you pick') +
         `</div>` +
 
-        `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}">` +
+        // Inert while folded: its rows are still in the DOM, and without this
+        // Tab and VoiceOver walk a list nobody can see.
+        `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}"${mode === 'list' ? '' : ' inert'}>` +
           `<div class="aud-list">` +
             (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
           `</div>` +
@@ -15914,6 +15931,7 @@
             // folds); re-stamp the row stagger so they cascade in fresh each
             // time it opens.
             listWrap.classList.toggle('is-open', mode === 'list');
+            listWrap.inert = mode !== 'list';
             if (mode === 'list') {
               scrim.querySelectorAll('.aud-pick').forEach((row, i) => {
                 row.style.animation = 'none';
@@ -16236,7 +16254,9 @@
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
         wireFindNudge();
         wireAttachBar();
-        wireAudienceLock(fieldsEl, null, { rooms: true });   // the lock rides the attach bar's bottom-left
+        // The lock rides the attach bar's bottom-left. A song is read only on
+        // My Circle, so the sheet leaves your circles off while one is attached.
+        wireAudienceLock(fieldsEl, null, { rooms: () => pubType !== 'song' });
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       }
       applyBaseSurface();
