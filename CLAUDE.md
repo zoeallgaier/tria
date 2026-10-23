@@ -194,7 +194,7 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post, Activity,
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post (wearing the Frame's image mark, Zoe 2026-10-23), Activity,
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on
@@ -265,8 +265,8 @@ simplified untouched.
 
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
 `posts.song` jsonb in the listening status's shape, minus `at`). **Posting a song
-IS having it on repeat** (Zoe, 2026-10-22): the Create sheet has a Music row,
-no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
+IS having it on repeat** (Zoe, 2026-10-22): the Create sheet's Music row is gone
+(Zoe, 2026-10-23; the composer's song button stays), posting no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
 search (`goListening`), Share also sets the listening status (not for a
 hand-picked audience), and Discover's On repeat rail is each person's newest
 Music post (no week limit since 2.0), opening the post (`songPostsOnRepeat`).

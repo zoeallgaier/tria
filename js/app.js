@@ -5757,18 +5757,17 @@
   // what you attach, so a Find or a Frame is a Post you put a link or a photo
   // in. An activity is the one that is a different act (a time, a place, who
   // is coming), so it keeps its door, and so does the Daily, which is a prompt
-  // and not a type. Music came back as a row (Zoe, 2026-10-22): a song is
-  // picked from a search, not typed, so the row opens the composer with the
-  // speaker button pressed, there only once posts can carry one.
+  // and not a type. Music was a row for a day and left again (Zoe,
+  // 2026-10-23): a song is still the composer's own button. Post wears the
+  // Frame's mark (Zoe), not the pencil.
   // The Daily row is always the composer with the prompt over it (Zoe), never
   // the room, so it is there only while you have an answer left to give: one
   // each, and a row that opens a page you can't post from is a dead end.
   function composeRows() {
     const occ = todaysDaily();
     return [
-      { key: 'note',     label: 'Post' },
+      { key: 'note',     label: 'Post', icon: 'image' },
       { key: 'activity', label: 'Activity' },
-      ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
       // Discover's Start a circle card, once it has been waved off.
       ...(Store.communitiesReady() && communityStartDismissed() ? [{ key: 'circle', label: 'Circle', icon: 'circle' }] : []),
