@@ -9901,7 +9901,24 @@
   // browsers that lack navigator.share. Resolves to 'shared', 'copied', or
   // 'cancelled' so callers can tune their confirmation. A deliberate dismiss of
   // the sheet (AbortError) is a cancel, not a reason to fall back to copy.
+  //
+  // In the app the sheet is UIKit's, through TriaShare.shareLink, and never
+  // WebKit's: every Share row reaches this from a menu row after its close, and
+  // WKWebView's navigator.share opened nothing from there (2.0). A binary
+  // without shareLink rejects, and that falls through to the web's way.
   function shareOrCopy(data) {
+    if (nativeShell() && window.Capacitor?.isPluginAvailable?.('TriaShare')) {
+      let native;
+      try { native = window.Capacitor.nativePromise('TriaShare', 'shareLink', data); }
+      catch { native = Promise.reject(); }
+      return native.then(
+        (r) => (r && r.completed) ? 'shared' : 'cancelled',
+        () => webShareOrCopy(data),
+      );
+    }
+    return webShareOrCopy(data);
+  }
+  function webShareOrCopy(data) {
     if (navigator.share) {
       return navigator.share(data).then(
         () => 'shared',

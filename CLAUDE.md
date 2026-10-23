@@ -81,7 +81,9 @@ page-button bridge are deleted. The native bar's commits wear the same wash
 
 **Share profile is the system share sheet**, on your own profile too (Zoe:
 "remove all the qr code bullshit"). The profile card, its QR, `js/vendor/qr.js`
-and `profileCardSpec` are gone; own-POST story cards stay.
+and `profileCardSpec` are gone; own-POST story cards stay. **In the app the sheet is UIKit's** (`TriaShare.shareLink`, which
+`shareOrCopy` tries first in the native shell): WKWebView's `navigator.share`
+opened nothing from a menu row, so it is only the web's now.
 
 **First run.** Signup's @handle fills itself from the display name until you
 type in it, cleans what you type, and says "taken" as it settles

@@ -37,7 +37,8 @@ public class TriaSharePlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "canShareToInstagram", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "shareToInstagram", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "saveToPhotos", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "saveToPhotos", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "shareLink", returnType: CAPPluginReturnPromise)
     ]
 
     private static let scheme = "instagram-stories://share"
@@ -148,6 +149,42 @@ public class TriaSharePlugin: CAPPlugin, CAPBridgedPlugin {
                     call.reject(error?.localizedDescription ?? "The card could not be saved.")
                 }
             })
+        }
+    }
+
+    /// The system share sheet for a link, presented from here rather than
+    /// through WebKit's `navigator.share`. In the app that one opened nothing
+    /// from a menu row (2.0, once Share profile became this sheet): it rides on
+    /// the tap's transient activation, refuses while it thinks a share is still
+    /// pending, and presents from a controller WebKit picks on its own, any of
+    /// which can fail without a word. This depends on none of them. Resolves
+    /// `{completed}`; false is a dismiss.
+    @objc func shareLink(_ call: CAPPluginCall) {
+        var items: [Any] = []
+        if let text = call.getString("text"), !text.isEmpty { items.append(text) }
+        if let raw = call.getString("url"), let url = URL(string: raw) { items.append(url) }
+        guard !items.isEmpty else {
+            call.reject("Nothing to share.")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let root = self?.bridge?.viewController else {
+                call.reject("No view controller to present the share sheet from.")
+                return
+            }
+            var top: UIViewController = root
+            while let shown = top.presentedViewController { top = shown }
+            let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            sheet.completionWithItemsHandler = { _, completed, _, _ in
+                call.resolve(["completed": completed])
+            }
+            // An iPad shows it as a popover, which needs somewhere to stand.
+            if let pop = sheet.popoverPresentationController {
+                pop.sourceView = top.view
+                pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.maxY, width: 1, height: 1)
+                pop.permittedArrowDirections = []
+            }
+            top.present(sheet, animated: true)
         }
     }
 
