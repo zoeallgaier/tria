@@ -39,7 +39,7 @@ fallback) hold the two hexes by hand. See the top of [docs/design.md](docs/desig
 
 In the app, pull to refresh glows the reader's own band in off the
 display's rounded edge (the stroke sits past the glass; only its halo shows) instead of the dot ring (`TriaEdgeGlow`, `setGlow`,
-`NativeChrome.glowColors`), with feathered tips that reach where the page's content starts at
+`NativeChrome.glowColors`), with feathered tips that reach the foot of the status bar at
 the threshold, and a haptic ratchet of detents into a click there. The web keeps the ring. See the
 top of [docs/views.md](docs/views.md).
 

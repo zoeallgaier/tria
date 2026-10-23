@@ -504,7 +504,6 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let state = call.getString("state") ?? "idle"
         let quiet = call.getBool("quiet") ?? false
         let land = call.getBool("land") ?? false
-        let depth = call.getDouble("depth")
         // Read through the bar's one colour parser. Below 26 that class doesn't
         // exist, and the glow simply keeps Tria's own ramp.
         var colors: [UIColor] = []
@@ -518,8 +517,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             if self.glow == nil { self.glow = TriaEdgeGlow(scroll: web.scrollView) }
-            // CSS pixels are the web view's points; the glow lives in the window.
-            let foot = depth.map { web.convert(CGPoint(x: 0, y: $0), to: window).y }
+            // The tips stop at the status bar's foot (Zoe: the status bar, not the header).
+            let foot: CGFloat? = window.safeAreaInsets.top > 0 ? window.safeAreaInsets.top : nil
             self.glow?.set(state: state, colors: colors, depth: foot, quiet: quiet, land: land, in: window)
             call.resolve()
         }
@@ -3963,9 +3962,9 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
    THE PULL DRAWS IT. Two strokes leave the top centre together and run round
    the corners and down either side, each as far as the pull has got, and they
-   reach WHERE THE PAGE'S CONTENT STARTS exactly at the threshold (Zoe: halfway
-   first, then "end it around where the content starts"). app.js measures that
-   line per pull and sends it as `depth`; halfway is the fallback without it. Let go and the colours turn slowly along the lit edge
+   reach THE FOOT OF THE STATUS BAR exactly at the threshold (Zoe: halfway
+   first, then where the content starts, then the status bar's end rather than
+   the header's). It is the window's top safe inset; halfway is the fallback. Let go and the colours turn slowly along the lit edge
    while the world re-pulls, then it fades.
 
    THE TIPS ARE FEATHERED, not capped (Zoe: "fade them out instead of sharp
@@ -4032,7 +4031,7 @@ final class TriaEdgeGlow: UIView {
     /// The right stroke's geometry, for turning a distance along it into an
     /// angle round the centre: the top run, the corner, the side run.
     private var shape = (rect: CGRect.zero, r: CGFloat(0), foot: CGFloat(0))
-    /// Where the strokes end, in this view's points (the page's content top).
+    /// Where the strokes end, in this view's points (the status bar's foot).
     private var depth: CGFloat?
     private let detent = UIImpactFeedbackGenerator(style: .soft)
     private let click = UIImpactFeedbackGenerator(style: .rigid)
