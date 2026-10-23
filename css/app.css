@@ -4979,7 +4979,7 @@ body.gate main { padding: 0; }
   appearance: none;
   border: none;
   background: none;
-  width: 2.4rem;
+  width: 2.15rem;
   height: 2.4rem;
   display: inline-flex;
   align-items: center;
@@ -4989,7 +4989,7 @@ body.gate main { padding: 0; }
   border-radius: var(--radius-pill);
   transition: color var(--dur-micro), background var(--dur-micro);
 }
-.rt-attach-ico { width: 20px; height: 20px; }
+.rt-attach-ico { width: 21px; height: 21px; }
 @media (hover: hover) { .rt-attach:hover { color: var(--text); background: var(--surface-2); } }
 .rt-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* The live toggle is the READER'S COLOUR (Zoe, 2026-10-22: the type options
@@ -8094,47 +8094,74 @@ button.poll-option:disabled { cursor: default; }
 /* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
    "Shared with  Everyone in your circle ›". Reads as a field, opens the picker
    sheet. (Design preview, demo-gated.) */
-/* Audience lock — the shared "who sees this" control at the foot of every
-   composer. Flat editorial (the composer is content, never glass): a quiet pill
-   of icon + current level. It sits bottom-left of the Post attach bar and as its
-   own field on the Activity form. */
+/* Audience — "who sees this", under the note box since 2026-10-23, in the look
+   the tags field had: a label over a full-width box that reads as a field (the
+   `.field input` box, same rule, radius and padding) and opens the sheet. */
 .aud-lock {
   -webkit-appearance: none;
   appearance: none;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-img);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-micro);
+}
+.aud-lock-ico { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
+.aud-lock-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aud-lock-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
+@media (hover: hover) { .aud-lock:hover { border-color: var(--muted); } }
+.aud-lock:focus-visible { outline: none; border-color: var(--accent); }
+
+/* Tags pill — the bar's left half, where the lock was: a hash and the tags
+   input in one quiet hairline pill that takes whatever width the four tools
+   leave. Tapping anywhere on it (it is the input's <label>) puts the caret in.
+   The `.field` prefix outranks `.field label` and `.field input`, whose look
+   this is not. */
+.rich-attach--withtags { justify-content: space-between; gap: 0.4rem; }
+.field .tag-pill {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 2rem;
+  padding: 0 0.7rem 0 0.55rem;
+  margin: 0 0 0 0.15rem;
+  font-size: inherit;
+  letter-spacing: 0;
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  background: none;
   color: var(--muted);
-  font: inherit;
+  cursor: text;
+  transition: border-color var(--dur-micro);
+}
+.field .tag-pill:focus-within { border-color: var(--accent); }
+.tag-pill-ico { width: 15px; height: 15px; flex-shrink: 0; }
+.field .tag-pill input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
   font-size: 0.86rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: color var(--dur-micro), border-color var(--dur-micro), background var(--dur-micro);
+  color: var(--text);
 }
-.aud-lock-ico { width: 16px; height: 16px; flex-shrink: 0; }
-/* The label truncates rather than pushing the tools out of the bar. Measured at
-   320px with four attach buttons: every label the lock can actually reach fits
-   ("144 people" is the widest, with 3px to spare — "Choose people" is longer but
-   unreachable here, since the sheet coerces an empty list back to My circle), so
-   this is a floor under a very large circle rather than a live behaviour. Without
-   it the overflow lands on the BUTTONS, which is the wrong thing to lose. */
-.aud-lock { min-width: 0; }
-.aud-lock-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (hover: hover) {
-  .aud-lock:hover { color: var(--text); border-color: var(--muted); background: var(--surface-2); }
-}
-.aud-lock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* Attach bar with the lock present: lock hugs the left, the four link/photo/poll/
-   calendar tools stay clustered on the right. The tools never shrink — they are
-   tap targets already under the 44pt floor — so the lock is the flexible half
-   (see its min-width above). */
-.rich-attach--withlock { justify-content: space-between; }
-.rich-attach-tools { display: flex; align-items: center; gap: 0.1rem; flex-shrink: 0; }
+.field .tag-pill input::placeholder { color: var(--muted); opacity: 1; }
+.rich-attach-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
 
 /* Audience sheet — a clean iOS checkmark list, docked at the foot of the screen
    in the app's own sheet (openSheet, .sheet-scrim--aud below). No hard borders

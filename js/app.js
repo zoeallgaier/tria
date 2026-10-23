@@ -439,6 +439,15 @@
              '<rect x="4" y="13" width="7" height="7" rx="2"/>' +
              '<rect x="13" y="13" width="7" height="7" rx="2"/>',
     list:    '<path d="M5 7.5h14"/><path d="M5 12h14"/><path d="M5 16.5h14"/>',
+    // The composer's attach bar (2026-10-23): one compact family, drawn small
+    // inside the grid and rounder than the card glyphs, so four of them leave
+    // the tags pill room in the note box's foot.
+    attLink:  '<path d="m9.5 14.5 5-5"/><path d="m11 7.6 1.3-1.3a3.6 3.6 0 0 1 5.1 5.1L16.1 12.7"/><path d="m13 16.4-1.3 1.3a3.6 3.6 0 0 1-5.1-5.1l1.3-1.3"/>',
+    attPhoto: '<rect x="4.5" y="4.5" width="15" height="15" rx="4.5"/><circle cx="9.6" cy="9.6" r="1.3"/><path d="m19 15.5-3.6-3.6-7.2 7.2"/>',
+    attPoll:  '<path d="M7 18v-5"/><path d="M12 18V6"/><path d="M17 18v-8.5"/>',
+    attPlan:  '<rect x="4.5" y="5.5" width="15" height="14" rx="4.5"/><path d="M9 3.8v3.4"/><path d="M15 3.8v3.4"/><circle cx="12" cy="13.6" r="1.1" fill="currentColor" stroke="none"/>',
+    hash:     '<path d="M10 5 8.5 19"/><path d="M15.5 5 14 19"/><path d="M5.5 9.5h13"/><path d="M5 14.5h13"/>',
+    chevDown: '<path d="m7 10 5 5 5-5"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -2742,29 +2751,47 @@
         // anything, so the editor takes the lock alone (tools: false, lock: true)
         // and the bar comes up holding just it. The one editable family that
         // still gets neither is a quote, whose audience is the original's.
-        (tools || opts.lock
-          ? `<div class="rich-attach${opts.lock ? ' rich-attach--withlock' : ''}" role="group" aria-label="Post options">` +
-              (opts.lock ? audienceLockHtml(idp) : '') +
+        //
+        // TAGS RIDE THE BAR'S LEFT and the lock left it (Zoe, 2026-10-23: "tap
+        // the pill to add tags"). The pill IS the tags input, so val('c-tags')
+        // and val('e-tags') read it as before, and it takes whatever width the
+        // tools leave, which is why those were redrawn compact (att-*). The lock
+        // is a field of its own under the box (audienceFieldHtml).
+        (tools || opts.tags
+          ? `<div class="rich-attach${opts.tags ? ' rich-attach--withtags' : ''}" role="group" aria-label="Post options">` +
+              (opts.tags ? tagPillHtml(idp, opts.tags) : '') +
               (tools
                 ? `<div class="rich-attach-tools">` +
                     `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
-                      `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
+                      `aria-label="Add a link" aria-pressed="false">${svgIcon('attLink', 'rt-attach-ico')}</button>` +
                     `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
-                      `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
+                      `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('attPhoto', 'rt-attach-ico')}</button>` +
                     `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
-                      `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+                      `aria-label="Add a poll" aria-pressed="false">${svgIcon('attPoll', 'rt-attach-ico')}</button>` +
                     // No Music button since 2026-10-23 (Zoe): a song is its
                     // own page (fieldsFor's 'song'), reached from the Share sheet.
                     (event
                       ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
                           `aria-label="Add a place and time" aria-pressed="false">` +
-                          `${svgIcon('cal', 'rt-attach-ico')}</button>`
+                          `${svgIcon('attPlan', 'rt-attach-ico')}</button>`
                       : '') +
                   `</div>`
                 : '') +
             `</div>`
           : '') +
-      `</div>`;
+      `</div>` +
+      (opts.lock ? audienceFieldHtml(idp) : '');
+  }
+
+  // The tags pill in the note box's foot: a hash and the input itself, so a
+  // tap anywhere on the pill lands the caret in it.
+  function tagPillHtml(idp, { value = '', placeholder = 'Add tags' } = {}) {
+    return `<label class="tag-pill" for="${idp}-tags">` +
+        svgIcon('hash', 'tag-pill-ico') +
+        `<input id="${idp}-tags" type="text" autocapitalize="none" ` +
+          `value="${esc(value)}" placeholder="${esc(placeholder)}" ` +
+          `aria-label="Tags, separated with commas">` +
+      `</label>`;
   }
 
   // Wire a rich Note editor: the H1/H2/B/I toolbar, plain-text-only paste, the
@@ -5123,27 +5150,21 @@
   function editFieldsFor(post) {
     // A circle's post stays in its circle, so its editor has no lock to move.
     const lock = post.type !== 'repost' && !post.communityId;
-    const tagsInput =
-      `<div class="field">` +
-        `<label for="e-tags">Tags</label>` +
-        `<input id="e-tags" type="text" autocapitalize="none" ` +
-          // shownTags, not post.tags: a daily answer's join tag is invisible here
-          // too, and submitEdit puts it back (otherwise editing a typo in the
-          // caption would quietly drop the post off the daily page).
-          `value="${esc(shownTags(post).join(', '))}" placeholder="garden, clay">` +
-        `<p class="field-hint">Optional · separate with commas.</p>` +
-      `</div>`;
+    // shownTags, not post.tags: a daily answer's join tag is invisible here
+    // too, and submitEdit puts it back (otherwise editing a typo in the
+    // caption would quietly drop the post off the daily page).
+    const tags = { value: shownTags(post).join(', ') };
 
     if (post.type === 'find') {
       // A Find shares the Note editor (headline + rich body), same as the composer,
       // then carries the link field. Keeps create and edit identical, so a formatted
       // Find edits as rich text instead of raw markup in a flat 180-char box.
-      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, lock }) +
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, lock, tags }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
             `spellcheck="false" value="${esc(post.url || '')}" placeholder="https://…">` +
-        `</div>` + tagsInput;
+        `</div>`;
     }
 
     if (post.type === 'activity') {
@@ -5155,7 +5176,7 @@
       // `editorPrefill` carries a legacy plain-text note across to paragraphs.
       return richNoteField('e', post.title, editorPrefill(post.note),
           'When to show up, what to bring.',
-          { tools: false, lock, titlePh: 'Picnic at the park' }) +
+          { tools: false, lock, tags, titlePh: 'Picnic at the park' }) +
         `<div class="field">` +
           `<label for="e-location">Where</label>` +
           `<input id="e-location" type="text" maxlength="120" ` +
@@ -5168,7 +5189,7 @@
             `<input id="e-time" type="time" aria-label="Time" placeholder="--:-- --" value="${esc(post.eventTime || '')}">` +
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
-        `</div>` + tagsInput;
+        `</div>`;
     }
 
     // post (Note) and photo (Frame) share the rich editor — a Frame is a full post
@@ -5176,7 +5197,7 @@
     // optional; the image carries the post). Prefilled from the stored note (a
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
-    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, lock }) + tagsInput;
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, lock, tags });
   }
 
   // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
@@ -15515,26 +15536,6 @@
   const audienceCountLabel = (n) =>
     n === 0 ? 'Choose people' : n === 1 ? '1 person' : `${n} people`;
 
-  // A rotating cast of example tags for the composer's Tags placeholder — two
-  // picked at random each time the field mounts, so it never goes stale.
-  const TAG_PLACEHOLDERS = [
-    'garden', 'clay', 'vinyl', 'sourdough', 'thrifted',
-    'group chat', 'road trip', 'gremlin era', 'reading nook',
-    'review', 'hobbies', 'gaming', 'painting',
-    'villain arc', 'delulu era', 'small dog energy', 'chaotic good',
-    'girl dinner', '3am thoughts',
-    'meal prep', 'farmers market', 'polaroids',
-    'houseplants', 'sports', 'side quest', 'npc moment',
-  ];
-  const randomTagPlaceholder = () => {
-    const pool = [...TAG_PLACEHOLDERS];
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    return pool.slice(0, 2).join(', ');
-  };
-
   // Same trick for the post composer's note field — one of a few voices picked
   // at random each time it mounts, so the empty field never feels flat.
   const NOTE_PLACEHOLDERS = [
@@ -15616,13 +15617,6 @@
 
   function fieldsFor(type, opts = {}) {
     const event = opts.event !== false;
-    const tags =
-      `<div class="field">` +
-        `<label for="c-tags">Tags</label>` +
-        `<input id="c-tags" type="text" autocapitalize="none" ` +
-          `placeholder="${randomTagPlaceholder()}">` +
-        `<p class="field-hint">Optional · separate with commas.</p>` +
-      `</div>`;
 
     // A QUOTE is the ordinary note field — headline and all, like any other post —
     // followed by the thing it is about. What it does NOT get is the attach bar,
@@ -15654,7 +15648,7 @@
     // hidden below it; an attach toggle reveals the one it names and folds the rest,
     // so the words you have already written carry across every one of those changes
     // (see applyBaseSurface in renderPublish).
-    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true, event }) +
+    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true, event, tags: {} }) +
       `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
         `<button type="button" id="c-make-find">Make it a Find</button></p>` +
       `<div class="field" id="c-link-row" hidden>` +
@@ -15664,7 +15658,7 @@
       `</div>` +
       pollFieldHtml() +
       frameFieldHtml() +
-      (event ? eventFieldHtml() : '') + tags;
+      (event ? eventFieldHtml() : '');
   }
 
   // The poll surface, shipped hidden in the Post field set — revealed when the
@@ -15799,11 +15793,18 @@
     const glyph = pubAudience.mode === 'public' ? 'globe'
       : pubAudience.mode === 'community' ? 'circle' : 'lock';
     return svgIcon(glyph, 'aud-lock-ico') +
-      `<span class="aud-lock-label">${esc(audienceLockText())}</span>`;
+      `<span class="aud-lock-label">${esc(audienceLockText())}</span>` +
+      svgIcon('chevDown', 'aud-lock-chev');
   }
-  function audienceLockHtml(idp) {
-    return `<button type="button" class="aud-lock" id="${idp}-audience" ` +
-        `aria-label="Who can see this post">` + audienceLockInner() + `</button>`;
+  // Under the note box since 2026-10-23, where the tags field was, and in its
+  // look: a label and a full-width box that reads as a field and opens the
+  // sheet. Still the one `.aud-lock` on the page, so the wiring is unchanged.
+  function audienceFieldHtml(idp) {
+    return `<div class="field aud-field">` +
+        `<label for="${idp}-audience">Who can see this</label>` +
+        `<button type="button" class="aud-lock" id="${idp}-audience">` +
+          audienceLockInner() + `</button>` +
+      `</div>`;
   }
   // `onChange` is the editor's, and it is not optional there: the lock is a
   // BUTTON, so it is invisible both to the form's input/change events and to the
