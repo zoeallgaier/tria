@@ -7,14 +7,45 @@
     {
       "layers" : [
         {
-          "glass" : true,
-          "image-name" : "wordmark.svg",
-          "name" : "wordmark",
+          "fill" : {
+            "solid" : "display-p3:0.27997,0.90607,0.66397,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "Image 10.png",
+          "name" : "Image 10",
+          "opacity" : 0.2,
           "position" : {
-            "scale" : 0.42,
+            "scale" : 0.62,
             "translation-in-points" : [
-              4.958161690919724,
-              -36
+              351,
+              313
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.00000,0.78723,0.80975,1.00000",
+              "display-p3:0.00125,0.80047,0.62070,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5000000000000001,
+                "y" : 0
+              },
+              "stop" : {
+                "x" : 0,
+                "y" : 1
+              }
+            }
+          },
+          "image-name" : "Image 5.png",
+          "name" : "Image 5",
+          "position" : {
+            "scale" : 0.47,
+            "translation-in-points" : [
+              10,
+              -42
             ]
           }
         }

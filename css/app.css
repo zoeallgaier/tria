@@ -538,7 +538,7 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    --brand-band, the same two tokens every primary button paints, and the splash
    can turn them.
 
-   The file's own gradient is the brand's, peach to rose, so it reads the same
+   The file's own gradient is the brand's, cyan to green, so it reads the same
    opened on its own. The mask reads only the shape either way, so the app's
    stops win and the logo cannot drift from the buttons.
 

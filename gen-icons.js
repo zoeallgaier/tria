@@ -18,7 +18,7 @@
 // down by sips; that is what keeps 32px a word rather than a smudge.
 //
 // The band stops are written out rather than read from tokens.css because these
-// are baked pixels: they are --brand-peach and --brand-rose, and the ramp is
+// are baked pixels: they are --brand-start and --brand-end, and the ramp is
 // --brand-band's own, 115deg in oklab. Keep them in step with css/tokens.css by
 // hand; a drift shows up as a tile that doesn't match the curtain.
 const { chromium } = require('playwright');
