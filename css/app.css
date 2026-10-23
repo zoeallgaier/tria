@@ -9929,8 +9929,11 @@ a.daily-answer { text-decoration: none; }
 /* On a circle's own page, an empty room's first post (renderCommunity):
    the same dashed card, in the feed's column. #feed is a flex column, where
    the card's auto margins would shrink-wrap it (the .pgrid--frames trap), so
-   it takes the full width back. */
-.community-first { width: 100%; margin: 0; }
+   it stretches across the column instead. On a phone #feed bleeds to the
+   screen's edges for photos, and the card takes the view's inset back. */
+/* Discover's side padding too, so it is that page's Start card exactly. */
+.community-first { align-self: stretch; margin: 0; padding-inline: 0.8rem; }
+@media (max-width: 680px) { .community-first { margin-inline: 1.15rem; } }
 
 /* A circle is born (celebrateCircle): Tria's own ramp in stars, the start and
    end of the band alternating, bursting out of the circle's face and drifting
