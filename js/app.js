@@ -5755,7 +5755,7 @@
       go('#/publish');
     };
     openSheet({
-      title: 'Share',
+      title: 'Create',
       items: composeRows().map((row) => ({
         label: row.label,
         // The type's own mark (TYPE_GLYPH), the vocabulary the composer's
@@ -12946,7 +12946,7 @@
       try { localStorage.setItem(startKey(), '1'); } catch { /* private window */ }
       hapticTap('LIGHT');
       e.currentTarget.closest('.community-card--start')?.remove();
-      toast('Hidden. Start one anytime from Share.');
+      toast('Hidden. Start one anytime from Create.');
     });
   }
 
