@@ -268,9 +268,12 @@
     // THE COMPOSE MARK ON MY CIRCLE'S BAR (1.8): a sheet with a pencil on it, the
     // system's own "new note". It replaced the round + in the tab bar, and it is
     // a note rather than a + because a + on a bar reads as "add a friend".
+    // 2.0: it is a + after all (Zoe), on My Circle's bar and Discover's, since
+    // the sheet it opens is Share and not only a note. `compose` stays drawn.
     // TODAY'S DAILY, in the compose sheet: a sun, because the Daily is the one
     // prompt that belongs to a day, and no post type's mark says that.
     daily:   '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/>',
+    plus:    '<path d="M12 5v14"/><path d="M5 12h14"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
@@ -561,7 +564,7 @@
     // compose mark opens (openComposeDial), not a link to the composer. It was
     // "+ Post" straight to #/publish while the bar's mark opened the sheet: two
     // ways in that did different things. At desktop width the bar's mark is
-    // hidden (.toolbar-btn#home-compose-btn in app.css), because this one is on
+    // hidden (.toolbar-compose in app.css), because this one is on
     // every page; on a phone the mark is the way in and this is hidden.
     if (!nav.querySelector('.nav-pill')) {
       nav.innerHTML =
@@ -5695,10 +5698,11 @@
      The note mark opens the DIAL, which is back: Post, Activity, and today's
      Daily. Each row is a shortcut into the one composer (pendingAttach), so
      the composer is still the only form there is. */
-  function composeBtnEl() {
-    return `<button class="toolbar-btn" type="button" id="home-compose-btn" ` +
+  // My Circle's and Discover's, the same + opening the same Share sheet.
+  function composeBtnEl(id = 'home-compose-btn') {
+    return `<button class="toolbar-btn toolbar-compose" type="button" id="${id}" ` +
         `aria-haspopup="dialog" aria-label="Make something">` +
-        svgIcon('compose') +
+        svgIcon('plus') +
       `</button>`;
   }
   // The bell, with the dot that used to sit on the Chats tab for it. Shipped
@@ -13577,7 +13581,14 @@
           `placeholder="Search circles and people" aria-label="Search Tria">` +
       `</div>`;
 
-    mountToolbar({ field: searchBar, actions: '' });
+    // The + leads, as on My Circle, and the field takes the rest of the row.
+    // It is the Share sheet's way in here too, so a Start a circle card that
+    // has been waved off still leaves the sheet's Circle row (Zoe).
+    mountToolbar({
+      leading: Store.isAuthed() ? composeBtnEl('discover-compose-btn') : '',
+      field: searchBar,
+      actions: '',
+    });
 
     view.innerHTML =
       `<section class="view view--discover">` +
@@ -13590,6 +13601,8 @@
     const bodyEl = view.querySelector('#discover-body');
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
+    document.getElementById('discover-compose-btn')
+      ?.addEventListener('click', () => openComposeDial());
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with
     // it, 1 = appears somewhere, 0 = no match.

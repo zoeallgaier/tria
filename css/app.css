@@ -1625,7 +1625,7 @@ body.toolbar-live .view { padding-top: 1rem; }
 .nav--compose .nav-foot { visibility: hidden; }
 /* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's Share
    is on every page, so the same act on My Circle's bar would be a second door. */
-@media (min-width: 681px) { html:not([data-chrome="native"]) #home-compose-btn { display: none; } }
+@media (min-width: 681px) { html:not([data-chrome="native"]) .toolbar-compose { display: none; } }
 /* THE SAME FOR THE BELL: at desktop width Updates is a row in the sidebar
    (NAV's `rail` entry), with the bell's dot, so the bar's bell would be a
    second door. On a phone the row is hidden and the bell is the way in. */
@@ -1794,6 +1794,9 @@ main {
   .toolbar-field { transition: opacity var(--dur-quick) var(--ease); }
   .topbar--reading .toolbar-field:not(:focus-within) { transform: none; }
 }
+/* Discover's + (2.0) leads the row like My Circle's, at its own width, and the
+   field moves over and takes what is left. */
+body.toolbar-field .toolbar-page { flex: 0 0 auto; margin-right: var(--toolbar-gap); }
 /* The page starts under the bar, with the gap the nameplate used to leave. */
 body.toolbar-field .view--discover { padding-top: 0.5rem; }
 /* On desktop the bar spans the window but the cards are one 660px column, so
@@ -10072,6 +10075,9 @@ html[data-chrome="native"] .topbar .toolbar-cta { visibility: hidden; }
    tapped would vanish under its own card. The web's copies show instead, under
    the card's scrim and dimmed with the page, exactly as on the web. */
 html[data-chrome="native"] body:has(.bar-menu-scrim) .topbar .toolbar-btn { visibility: visible; }
+/* AND ON A ROUTE WHOSE BAR HOLDS A WEB FIELD (Discover). Native is off duty
+   there and the web draws the whole bar, so Discover's + is the web's own. */
+html[data-chrome="native"] body.toolbar-field .topbar .toolbar-btn { visibility: visible; }
 
 /* AND THE TITLE, for a reason the controls never had.
 
