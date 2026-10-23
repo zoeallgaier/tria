@@ -4986,7 +4986,9 @@ body.gate main { padding: 0; }
 .rt-attach-ico { width: 20px; height: 20px; }
 @media (hover: hover) { .rt-attach:hover { color: var(--text); background: var(--surface-2); } }
 .rt-attach:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* The live toggle is the BRAND'S INK and nothing else. Each carried a pastel
+/* The live toggle is the READER'S COLOUR (Zoe, 2026-10-22: the type options
+   match your colour, but only when on), the heart's token so "no colour" is
+   its grey and Tria's own is the rose; resting ones stay grey. Each carried a pastel
    disc behind the glyph once — the type's own hue at ~24% — and it was the fill
    doing the shouting rather than the mark: four grey line glyphs and one filled
    button reads as a chip that got left on, in a bar that lives inside the note
@@ -4999,7 +5001,7 @@ body.gate main { padding: 0; }
 #c-add-photo[aria-pressed="true"],
 #c-add-poll[aria-pressed="true"],
 #c-add-song[aria-pressed="true"],
-#c-add-event[aria-pressed="true"] { color: var(--brand-ink); }
+#c-add-event[aria-pressed="true"] { color: var(--heart); }
 /* ── Composer: the poll surface ──────────────────────────────────────────────
    Flat editorial (a poll is content, never glass): a stack of choice rows, each
    an input plus a remove ×, then a dashed "add option" that reads as an
