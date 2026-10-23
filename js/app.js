@@ -531,14 +531,12 @@
     // Circle's bar (updatesBtnEl), still at #/updates, with My Circle lit.
     { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
-    { route: '#/publish',  key: 'publish',  label: 'Post', publish: true },
   ];
 
   function renderNav(active) {
     const nav = document.getElementById('nav');
     const link = (n) =>
-      `<a class="nav-link${n.publish ? ' nav-publish publish-fill' : ''}" href="${n.route}"` +
-        ` aria-label="${n.label}">` +
+      `<a class="nav-link" href="${n.route}" aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
         // Shipped empty and lit by class, never built and torn down: the pill is
@@ -548,22 +546,31 @@
         (n.dot ? '<i class="nav-dot" aria-hidden="true"></i>' : '') +
       `</a>`;
     // Built ONCE and kept, so the links persist across renders and only their
-    // aria-current flips. The four destinations ride inside a glass pill; Post
-    // floats beside it as its own round button on phones. On desktop .nav-pill is
-    // display:contents, so the sidebar sees the same flat column of links it
-    // always has.
+    // aria-current flips. ONE DOM, TWO SHAPES (2.0, after zoeallgaier.com's own
+    // nav): on a phone the four destinations are a floating glass tab bar, icon
+    // over label; on desktop .nav-pill is display:contents and the sidebar sees
+    // a flat column, headed by the wordmark and footed by Share, each ruled off
+    // with a hairline. The head and the foot are display:none on a phone.
+    //
+    // SHARE IS THE SIDEBAR'S FOOT, and it is the same Share sheet My Circle's
+    // compose mark opens (openComposeDial), not a link to the composer. It was
+    // "+ Post" straight to #/publish while the bar's mark opened the sheet: two
+    // ways in that did different things. At desktop width the bar's mark is
+    // hidden (.toolbar-btn#home-compose-btn in app.css), because this one is on
+    // every page; on a phone the mark is the way in and this is hidden.
     if (!nav.querySelector('.nav-pill')) {
       nav.innerHTML =
-        // The rail's head, DESKTOP ONLY (.nav-brand is display:none on phones,
-        // where the nav is a floating pill with no head to put it on). It is
-        // decorative on purpose: the wordmark was the signed-in link to About
+        // Decorative on purpose: the wordmark was the signed-in link to About
         // until 1.3 and About is a row in the ••• sheet now, so this says the
         // app's name and takes no taps. See .nav-brand in app.css.
-        `<div class="wordmark nav-brand" role="img" aria-label="Tria"></div>` +
-        `<div class="nav-pill">` +
-          NAV.filter(n => !n.publish).map(link).join('') +
-        `</div>` +
-        NAV.filter(n => n.publish).map(link).join('');
+        `<div class="nav-head"><div class="wordmark nav-brand" role="img" aria-label="Tria"></div></div>` +
+        `<div class="nav-pill">` + NAV.map(link).join('') + `</div>` +
+        `<div class="nav-foot">` +
+          `<button class="nav-link nav-publish publish-fill" type="button" aria-haspopup="dialog">` +
+            svgIcon('compose', 'nav-ico') + `<span class="nav-label">Share</span>` +
+          `</button>` +
+        `</div>`;
+      nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
     }
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
@@ -1054,7 +1061,7 @@
       return { colors: [], tint: stops[stops.length >> 1], ramp };
     }
 
-    /* THE BUTTON, ON THE BAR (1.9). A commit up here wears what it wears in a
+    /* THE BUTTON, ON THE BAR (2.0). A commit up here wears what it wears in a
        page: glass with the band washed under it, in the system's own ink. So
        every band crosses as a ramp at the button's own --pill-wash, read off its
        ::before (an accent's three near stops included, which draw as one
@@ -5496,6 +5503,16 @@
     else if (!jumped && y > barLastY + HEADER_SLACK) barReading = true;
     barLastY = y;
     bar.classList.toggle('topbar--reading', barReading && !holdsHeader());
+    // THE WEB'S TAB BAR GOES WITH THE HEADER (2.0), the way zoeallgaier.com's
+    // does and the native bar folds (tabBarMinimizeBehavior): out on a read
+    // down, back on a scroll up, and back at the foot of a page, where there is
+    // nothing left to read and the next thing to do is go somewhere. Only the
+    // phone's CSS reads the class; the sidebar and the native shell ignore it.
+    const nav = document.getElementById('nav');
+    if (nav) {
+      const atFoot = y + window.innerHeight >= document.documentElement.scrollHeight - 80;
+      nav.classList.toggle('nav--tucked', barReading && !atFoot);
+    }
   }
   // The bar's MATERIAL, on the same terms as its title: a fill and a blur are
   // for separating the bar from something, and at the top of a page there is
@@ -6702,7 +6719,7 @@
     });
   }
 
-  /* THE @HANDLE WRITES ITSELF (1.9). Typing a display name fills the handle
+  /* THE @HANDLE WRITES ITSELF (2.0). Typing a display name fills the handle
      with the name made legal (lowercase, accents off, spaces to nothing, 20
      at most) until the reader types in the handle themselves, and the handle
      field cleans what is typed into it rather than refusing it at submit. A
@@ -7640,7 +7657,7 @@
         return;
       }
       // Your own empty page offers the two things that fill it: a first post,
-      // and a face and a line about you (1.9's first-run pass).
+      // and a face and a line about you (2.0's first-run pass).
       if (!shown.length && isSelf && profileFilter === 'all') {
         const bare = !u.avatar && !u.bio;
         feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
@@ -7784,7 +7801,7 @@
           // and it was making the reader read past it.
           { label: 'Edit profile', icon: 'gear', run: () => { editorPushed = true; go('#/profile/edit'); } },
           /* THE SYSTEM SHARE SHEET, the same as a friend's profile (Zoe,
-             1.9: "remove all the qr code bullshit and everything in favor of
+             2.0: "remove all the qr code bullshit and everything in favor of
              the native share sheet"). Your own profile used to open a card
              with a QR on it; now the link goes straight to the OS. */
           { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username) },
@@ -11879,7 +11896,7 @@
     } catch { /* old build without the method; Automatic stays Apple Music */ }
   }
 
-  /* ON REPEAT LIVES ON MY CIRCLE since 1.9. It headed Discover from 1.5, came
+  /* ON REPEAT LIVES ON MY CIRCLE since 2.0. It headed Discover from 1.5, came
      off it the day Discover became circles, and went over the feed on My
      Circle the same day (Zoe: "add on repeat to circle feed"), as your
      people's songs rather than the whole room's (see songPostsOnRepeat). */
@@ -11942,7 +11959,7 @@
   /* ON REPEAT IS THE MUSIC YOU POST (Zoe, 2026-10-22). Posting a song and
      having it on repeat are one act, so once posts can carry a song the rail
      is a condensed read of the Music posts: each person's newest one, newest
-     first. It is MY CIRCLE'S rail since 1.9 (Zoe: "add on repeat to circle
+     first. It is MY CIRCLE'S rail since 2.0 (Zoe: "add on repeat to circle
      feed"), so it is my people's songs, me and my friends, and never a post
      said in a circle.
 
@@ -11996,7 +12013,7 @@
     if (!me && !all.length) return '';
     // Nobody to play it to: a song goes to your circle, so an account with no
     // friends and nothing on repeat gets no rail, not an empty + over an
-    // empty feed (1.9's first-run pass).
+    // empty feed (2.0's first-run pass).
     if (!all.length && !Store.friends().length) return '';
     // Mine leads, as the + it stands in for did; everybody else follows.
     const mine = all.find(x => x.u.username === me);
@@ -12752,7 +12769,7 @@
       }));
   }
 
-  /* ── Discover — the way in to circles (1.9) ──────────────────────────────────
+  /* ── Discover — the way in to circles (2.0) ──────────────────────────────────
      DISCOVER IS CIRCLES NOW (Zoe, 2026-10-22: "remove the posts from the
      Discover feed. THIS is the new way to discover."). It was a masonry wall of
      everyone's posts with the person attached, and it had seven rules holding
@@ -12778,7 +12795,7 @@
   // The router still asks this on the way out. Discover had a grid to re-deal on
   // a width change and has none now, so nothing ever sets it.
   let discoverResizeOff = null;
-  /* ── Circles (1.9) ──────────────────────────────────────────────────────────
+  /* ── Circles (2.0) ──────────────────────────────────────────────────────────
      A CIRCLE is a room for an interest: anyone can start one, anyone can join,
      and it lives at #/c/<slug> (the clean link is /c/<slug>, the way a subreddit
      is /r/<name>). Zoe, 2026-10-22: "use existing audience and group chat
@@ -12798,7 +12815,7 @@
 
      WHERE IT IS READ. A circle's posts live on its page and on their own post
      page. They are not in My Circle, not on Discover (which shows no posts at
-     all since 1.9) and not on the author's profile (Store.feed / discover /
+     all since 2.0) and not on the author's profile (Store.feed / discover /
      postsBy all drop them): My Circle
      is your friends, and a post said in a hobby circle was said to the circle.
 

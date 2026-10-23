@@ -21,7 +21,25 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
-## 1.9's polish pass: one button, one share, a first run (2026-10-22)
+## 2.0: the version, and the web's nav (2026-10-22)
+
+**1.9 shipped as 2.0** (Zoe: circles earn it). `MARKETING_VERSION` is 2.0 and
+every "1.9" release marker in code and docs now says 2.0.
+
+**The web nav is zoeallgaier.com's**, in Tria's glass (`renderNav`, "The nav
+(2.0)" in app.css). One DOM, two shapes. **Phone (web, Android, an installed
+PWA):** a floating glass capsule with a 1px `--rule` hairline, four tabs, icon
+over label, the current tab on a soft neutral capsule, and it **tucks on a read
+down** with the header (`nav--tucked`, set in `syncToolbarReading`; back on a
+scroll up and at a page's foot). **Desktop:** the inset glass sidebar, its
+wordmark ruled off by a hairline (`.nav-head`), the same neutral capsule for
+where you are, and **Share** at the foot, ruled off (`.nav-foot`). **One
+Share per shell:** the sidebar's Share opens the Share sheet
+(`openComposeDial`, the old "+ Post" linked straight to the composer), and My
+Circle's compose mark is hidden at desktop width outside the native shell. The
+native shell never draws the CSS nav, so none of this reaches the iOS build.
+
+## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
 **THE BUTTON.** Every button in a page is one material at two weights (Zoe:
 "every button in every page should have this new style"), declared once early
@@ -47,7 +65,7 @@ link, "Add me on Tria"); an account with no friends and no songs gets no On
 repeat rail; empty Chats offers Start a chat; your own empty profile offers
 Write your first post and, while bare, Add a photo and bio.
 
-## 1.9 is circles (2026-10-22)
+## 2.0 is circles (2026-10-22)
 
 **A circle is a room for an interest** that anyone can start and anyone can
 join, at `#/c/<slug>` (clean link `/c/<slug>`, the way reddit has `/r/`). Zoe:
@@ -147,7 +165,7 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 1.9): Post, Activity,
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post, Activity,
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on
@@ -222,7 +240,7 @@ IS having it on repeat** (Zoe, 2026-10-22): the Create sheet has a Music row,
 no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
 search (`goListening`), Share also sets the listening status (not for a
 hand-picked audience), and Discover's On repeat rail is each person's newest
-Music post (no week limit since 1.9), opening the post (`songPostsOnRepeat`).
+Music post (no week limit since 2.0), opening the post (`songPostsOnRepeat`).
 `#/listening` survives only as the fallback without the column. The composer's speaker button opens a
 song search (`lookUpSongs`, shared with `#/listening`), the card draws the track
 as a row linking out (`songTileHtml`), and its hue is butter (`--type-song`).
@@ -280,7 +298,7 @@ reader's last world at once from IndexedDB while the real one loads
 ## Holding the heart (2026-09-25, removed 2026-10-22)
 
 Holding a friend's heart used to fan out four more marks (thumbs up, thumbs
-down, ha ha, whoa). Zoe took them out in 1.9: a like is a heart. The history
+down, ha ha, whoa). Zoe took them out in 2.0: a like is a heart. The history
 of the fan's tuning is in git (`Fan`, `react_*` before commit 3f713d4's
 successor) if it is ever re-argued.
 
@@ -306,7 +324,7 @@ colours off and a menu row can't. See "A menu the page asks for" in
 [docs/native-chrome.md](docs/native-chrome.md).
 
 The page's own primary acts were native too (`PAGE_SEL`, `TriaPageButton`),
-one by one, until **1.9 painted every page button in CSS** (THE BUTTON, below)
+one by one, until **2.0 painted every page button in CSS** (THE BUTTON, below)
 and the whole bridge was deleted. Not native, ever: anything in a page.
 
 **The band crosses as one of three things**, sorted off the stops themselves
@@ -416,7 +434,7 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   anon `GET /rest/v1/comment_likes?select=comment_id&limit=1` answered PGRST205
   before it and `[]` after. Were the table ever missing again, the comment
   hearts draw nothing, on purpose (`Store.commentLikesReady`). **`add-reactions.sql` is confirmed run**
-  (2026-09-25), and its column has been unused since reactions came out in 1.9;
+  (2026-09-25), and its column has been unused since reactions came out in 2.0;
   the client no longer probes for it.
   **`add-song-posts.sql` is confirmed run** (2026-10-22): anon
   `GET /rest/v1/posts?select=song&limit=1` answered 42703 before it and

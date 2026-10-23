@@ -1,6 +1,6 @@
 # Design system
 
-**1.9 (2026-10-22): THE BUTTON.** Every button in a page is one material at two
+**2.0 (2026-10-22): THE BUTTON.** Every button in a page is one material at two
 weights (Zoe: "every button in every page should have this new style"):
 
 - `.publish-fill`: a commit, or a way to go and commit (Post, Share, Join, Add
@@ -13,7 +13,7 @@ weights (Zoe: "every button in every page should have this new style"):
   background). The same glass and hairline, no band. A chosen one (`.is-on`)
   takes the wash.
 
-Both are declared ONCE, early in app.css under "THE BUTTON (1.9)"; a component
+Both are declared ONCE, early in app.css under "THE BUTTON (2.0)"; a component
 rule owns only geometry (and ink where it has a reason). Page-wide pills are
 52px. Every pill presses through PRESS_TARGETS (`.publish-fill, .pill-quiet`),
 never `:active`. The ring mode, `.is-solid`, the tinted-glass list and the lit

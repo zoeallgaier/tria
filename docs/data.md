@@ -633,7 +633,7 @@ address and therefore a different person, and there is no way around that.
   whether or not the SQL has run.
 - **A LIKE IS A HEART (2026-10-22).** From 2026-09-25 a held heart fanned
   out four more nods (thumbs up, thumbs down, ha ha, whoa) stored in
-  `likes.reaction` (`supabase/add-reactions.sql`). Zoe took them out in 1.9
+  `likes.reaction` (`supabase/add-reactions.sql`). Zoe took them out in 2.0
   ("liking serves well enough"). The column is still in the table and the
   client neither reads nor writes it nor probes for it, so a row left as a
   thumbs up reads as the like it also was. `Store.setReaction(postId,
@@ -1447,7 +1447,7 @@ static and simply finds nothing before then. A publish that still meets an old
 DB says "Music posts aren't switched on yet." rather than "try again".
 
 
-## Circles (1.9)
+## Circles (2.0)
 
 **A circle is a room for an interest** at `#/c/<slug>`, which anyone signed in
 can start (ten held each) and anyone can join (`supabase/add-circles.sql`,

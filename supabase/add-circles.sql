@@ -1,4 +1,4 @@
--- Tria — circles (1.9)
+-- Tria — circles (2.0)
 -- Run once in the Supabase dashboard → SQL Editor. Additive + idempotent, so a
 -- re-run is harmless. Then deploy the push function (see the foot of this
 -- file): it carries its own copy of the audience rule.

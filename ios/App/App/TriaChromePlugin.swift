@@ -695,7 +695,7 @@ enum TriaBand {
         let wantsRamp = tint == nil && !stops.isEmpty && ramp != nil
         ramp?.isHidden = !wantsRamp
         if wantsRamp {
-            // A commit on the bar sends its own `wash` (THE BUTTON, 1.9: the
+            // A commit on the bar sends its own `wash` (THE BUTTON, 2.0: the
             // band thin under glass in the system's ink, as in a page); the
             // older ramp alphas are the fallback for a spec without one.
             let wash = TriaToolbar.number(spec["wash"], fallback: 0)

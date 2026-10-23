@@ -246,7 +246,7 @@
      how SOLID a primary button reads, not only how legible. */
   --pill-alpha: 0.85;
 
-  /* THE BUTTON (1.9). Every button in a page is hairline glass: the glass
+  /* THE BUTTON (2.0). Every button in a page is hairline glass: the glass
      fill, ONE hairline (--pill-edge), and on a commit the band laid under the
      words at --pill-wash, in the page's own ink (Zoe: "use the hairline glass
      style and a gradient for css buttons, like the daily's tag KIND OF", then

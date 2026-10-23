@@ -1453,9 +1453,16 @@ body.toolbar-live .view { padding-top: 1rem; }
   margin-block: 0.1rem 0.2rem;
 }
 
-/* On desktop the pill wrapper dissolves: its links become direct flex children
-   of the sidebar column, exactly the flat list the sidebar always styled. The
-   phone styles (see the mobile block) turn it into the floating glass pill. */
+/* ── The nav (2.0): zoeallgaier.com's, in Tria's glass ─────────────────────────
+   ONE DOM that the breakpoints reshape, the way Zoe's site does it: an inset
+   glass SIDEBAR on desktop (the wordmark as its masthead, ruled off with a
+   hairline, the four destinations, and Share at the foot, ruled off the same
+   way) and a floating glass TAB BAR on a phone (icon over label, one hairline,
+   tucking away on a read down). The current destination wears a soft neutral
+   capsule in both shapes, never a hue: the band belongs to commits.
+
+   On desktop the pill wrapper dissolves (display: contents), so its links are
+   direct flex children of the column. The phone block turns it into the bar. */
 .nav-pill { display: contents; }
 
 .nav {
@@ -1467,51 +1474,36 @@ body.toolbar-live .view { padding-top: 1rem; }
   z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  /* This used to be `calc(var(--topbar-h) - 0.25rem)` — 84px of head, reserved
-     for the wordmark the topbar rested on the card. The wordmark went with 1.3
-     and the bar moved off the card entirely, so that reserve was holding up
-     nothing and the column started a third of the way down its own glass. The
-     head was the foot's size for the whole of 1.3 through 1.7, with a tenth of
-     a rem of aim on top: it put the first destination's centre on the same line
-     as the toolbar's buttons across the gap.
-     The wordmark is back in that head (Zoe, 2026-09-17) and INHERITS the aim
-     rather than pushing it down the column: 1.5rem here puts the MARK's centre
-     on the toolbar's own midline (the rail floats 1rem down, its glass edge is
-     a pixel, and the mark is 38px tall), which is the line the first
-     destination used to hold. The rail and the page's bar still start
-     together; the destinations simply follow the name. See .nav-brand. */
-  padding: 1.5rem 0.85rem 1.25rem;
+  gap: 0.15rem;
+  /* 1.5rem up top puts the wordmark's centre on the toolbar's own midline
+     (the rail floats 1rem down and the mark is 38px tall), so the rail and the
+     page's bar start together. See .nav-brand. */
+  padding: 1.5rem 0.75rem 0.85rem;
   border-radius: var(--radius-nav);
   border: var(--glass-edge);
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  /* Specular rim + a soft drop, so the rail visibly floats off the page — the
-     same glass language as the mobile nav pill, scaled up to a sidebar. */
   box-shadow: var(--glass-rim), var(--glass-lift);
+  /* Native-feeling controls: no grey tap flash, no long-press callout, no
+     accidental selection while thumbing between tabs. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* THE RAIL'S HEAD, and the one place the signed-in app says its own name
-   (Zoe, 2026-09-17). A desktop sidebar has a head to put a name on; a phone's
-   floating pill does not, which is why this is display:none down there rather
-   than resized — see the phone block. It is the same mask every other caller
-   draws, so it wears the band and cannot drift from the splash or the buttons.
-
-   3.8rem is NOT a taste number: the mark is 1650:1028, so that width makes it
-   38px tall, and 38px under the rail's 1.5rem head puts its centre on the line
-   the first destination used to hold (see .nav above). The left inset is the
-   destinations' own 0.9rem, so the name starts where the glyph column starts
-   rather than floating over it, and the margin under it is the gap a head
-   needs to stop reading as another row.
-
-   NO TAP. The wordmark was the signed-in link to About until 1.3, and About
-   moved into the ••• sheet on your own profile because the feedback form is
-   there; a link back would be a second way in that nobody maintains. */
-.nav-brand {
-  width: 3.8rem;
-  margin: 0 0 0.95rem 0.9rem;
+/* THE MASTHEAD: the wordmark alone, ruled off from the destinations by one
+   hairline, like the site's monogram. The rule spans the column's inner width
+   (the head is a block; the mark inside it is sized by its own width). The
+   mark is 1650:1028, so 3.8rem makes it 38px tall, which is what the rail's
+   1.5rem head is aimed for. NO TAP: About is a row in the ••• sheet. */
+.nav-head {
+  margin: 0 0.15rem 0.85rem;
+  padding: 0 0 1.1rem 0.75rem;
+  border-bottom: 1px solid var(--rule);
 }
+.nav-brand { width: 3.8rem; }
 
 .nav-link {
   display: flex;
@@ -1523,17 +1515,24 @@ body.toolbar-live .view { padding-top: 1rem; }
   font-size: 1.12rem;
   font-weight: 400;
   line-height: 1;
-  transition: color var(--dur-micro);
+  transition: color var(--dur-micro) var(--ease), background-color var(--dur-micro) var(--ease);
 }
 .nav-link .nav-ico { width: 22px; height: 22px; flex-shrink: 0; }
-@media (hover: hover) {
-  .nav-link:hover { color: var(--text); }
-}
-/* Active page reads through color + weight alone — no background highlight. */
-.nav-link[aria-current="page"] {
-  color: var(--accent);
+/* Where you are: full ink on a soft neutral capsule (the site's 8%), and a
+   lighter one under the pointer. Hover only on a real pointer, so a first tap
+   on a touch screen is never spent becoming a hover. */
+.nav-pill .nav-link[aria-current="page"] {
+  color: var(--text);
   font-weight: 700;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
+@media (hover: hover) {
+  .nav-pill .nav-link:hover { color: var(--text); }
+  .nav-pill .nav-link:not([aria-current]):hover {
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+  }
+}
+.nav-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* THE UNREAD DOT. One mark, two placements: here it is the last thing in a
    labelled row (icon, name, dot), and on a phone it rides the glyph's top
@@ -1556,7 +1555,7 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .nav-dot.is-on { opacity: 1; }
 
-/* ── THE BUTTON (1.9) ─────────────────────────────────────────────────────────
+/* ── THE BUTTON (2.0) ─────────────────────────────────────────────────────────
    Every button in a page is ONE material at two weights (Zoe: "every button in
    every page should have this new style"), the hairline glass Discover's cards
    wore first:
@@ -1602,13 +1601,31 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .publish-fill:disabled,
 .pill-quiet:disabled { opacity: 0.6; }
-.nav-publish {
+/* THE FOOT: Share, ruled off from the destinations like the site's Contact,
+   and pushed to the bottom of the rail. It is THE BUTTON at its commit weight
+   and opens the Share sheet (openComposeDial), the same one My Circle's
+   compose mark opens on a phone. Hidden on the composer, which has its own. */
+.nav-foot {
   margin-top: auto;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--rule);
+}
+.nav-publish {
+  width: 100%;
+  min-height: 52px;
   justify-content: center;
   gap: 0.5rem;
+  font: inherit;
   font-size: 1.08rem;
-  padding: 0.8rem 0.9rem;
+  font-weight: 700;
+  padding: 0 0.9rem;
+  color: var(--text);
+  cursor: pointer;
 }
+.nav--compose .nav-foot { visibility: hidden; }
+/* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's Share
+   is on every page, so the same act on My Circle's bar would be a second door. */
+@media (min-width: 681px) { html:not([data-chrome="native"]) #home-compose-btn { display: none; } }
 
 /* ── Main / views ────────────────────────────────────────────────────────── */
 main {
@@ -1775,6 +1792,11 @@ main {
 }
 /* The page starts under the bar, with the gap the nameplate used to leave. */
 body.toolbar-field .view--discover { padding-top: 0.5rem; }
+/* On desktop the bar spans the window but the cards are one 660px column, so
+   the field stops where they do instead of running the window's width. */
+@media (min-width: 681px) {
+  .toolbar-field .discover-search { max-width: var(--feed-width); margin-inline: auto; }
+}
 .discover-search { position: relative; }
 .discover-search-ico {
   position: absolute;
@@ -5710,7 +5732,7 @@ button.poll-option:disabled { cursor: default; }
   text-overflow: ellipsis;
 }
 
-/* A song somebody posted (1.9): the square is a link out to the song and the
+/* A song somebody posted (2.0): the square is a link out to the song and the
    heart is the post's own like, laid over the cover's top corner (Zoe: "add a
    like button to the corner on the on repeat section"). Two siblings in one
    box, since a button can't sit inside a link. The heart sits on a disc of the
@@ -5965,7 +5987,7 @@ button.poll-option:disabled { cursor: default; }
    already speaks (`Tags`, above its field): --kicker, weight 400, sentence
    case, the muted ink. Nothing in the app is uppercase, and nothing new should
    be. The trending tags and the On repeat rail that shared this rule came off
-   Discover with its post grid in 1.9. */
+   Discover with its post grid in 2.0. */
 .discover-kicker,
 .daily-kicker {
   font-size: var(--kicker);
@@ -8049,7 +8071,7 @@ button.poll-option:disabled { cursor: default; }
   padding: 0.62rem 1.6rem;
 }
 /* The composer's Share: full width and 52px, the size of every page-wide pill
-   since 1.9 (the daily's and the circles' on Discover, the gate's submit, a
+   since 2.0 (the daily's and the circles' on Discover, the gate's submit, a
    profile's tie). line-height: 1 so the box is the padding and not the font's
    leading, and the floor STATED, because the padding alone measured 43.81pt in
    Oxygen. */
@@ -9053,56 +9075,62 @@ button.poll-option:disabled { cursor: default; }
      bar does not do that any more. */
   .topbar::before { content: ''; }
 
-  /* Floating liquid-glass nav: the old edge-to-edge tab bar becomes a detached
-     pill hovering above the bottom edge, with Post breaking out beside it as
-     its own round gradient button (Zoe's nav overhaul, July 2026). The .nav
-     wrapper itself is now just an invisible positioning row — the glass lives
-     on .nav-pill so the gap between pill and button stays tap-transparent. */
+  /* THE TAB BAR (2.0), zoeallgaier.com's phone nav in Tria's glass: a capsule
+     floating just over the home indicator, four tabs sharing it evenly, icon
+     over label, one hairline round the glass, and the current tab on a soft
+     neutral capsule of its own. It replaced an icon-only pill (July 2026),
+     which said where you were with opacity alone and no names. The native
+     shell never sees any of this (html[data-chrome="native"] .nav is
+     display:none); this is the web, Android, and an installed home-screen app.
+
+     .nav is an invisible positioning row; the glass is on .nav-pill, so the
+     row's empty width either side of the capsule stays tap-transparent. */
   .nav {
     top: auto;
-    /* Hug the bottom edge. iOS floating tab bars (Liquid Glass) sit close to the
-       home indicator, not lifted well into the screen — safe-area-inset-bottom
-       already reserves the indicator, so this is a small float over it, not a gap. */
-    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    bottom: max(0.6rem, calc(env(safe-area-inset-bottom) - 0.4rem));
     left: 0;
     right: 0;
     width: auto;
     height: auto;
     z-index: 101;
     flex-direction: row;
-    align-items: center;
     justify-content: center;
-    gap: 0.7rem;
-    padding: 0;
+    padding: 0 1rem;
     border: none;
     border-radius: 0;
-    box-shadow: none;                 /* undo the desktop card's float shadow/rim */
+    box-shadow: none;
     background: none;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    pointer-events: none;             /* the row spans the screen; only its children take taps */
+    pointer-events: none;             /* the row spans the screen; only the bar takes taps */
+    transition: translate var(--dur-move) cubic-bezier(0.32, 0.72, 0, 1), opacity var(--dur-quick) var(--ease);
   }
-  .nav-pill { pointer-events: auto; }
-  /* The rail's head has nowhere to go here: the nav is a pill and a round +
-     floating over the content, not a column with a top. The name is on the app
-     icon the reader tapped to get here, and on a phone the screen is the thing
-     to spend space on. Hidden rather than shrunk, and hidden in CSS rather than
-     left out of renderNav, because the breakpoint moves under a resize and the
-     nav is built once. */
-  .nav-brand { display: none; }
+  /* A READ DOWN TUCKS IT AWAY below the screen and a scroll up brings it back,
+     with the header (syncToolbarReading in app.js sets the class; the foot of a
+     page always shows it). Focus inside brings it back for a keyboard. */
+  .nav.nav--tucked:not(:focus-within) {
+    translate: 0 calc(100% + 1.5rem);
+    opacity: 0;
+  }
+  .nav.nav--tucked:not(:focus-within) .nav-pill { pointer-events: none; }
+  /* The rail's head and foot have nowhere to go on a capsule. Hidden in CSS
+     rather than left out of renderNav, because the breakpoint moves under a
+     resize and the nav is built once. Share is My Circle's compose mark here. */
+  .nav-head,
+  .nav-foot { display: none; }
   .nav-pill {
+    pointer-events: auto;
     position: relative;               /* containing block for anything absolute inside */
     display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.4rem 0.55rem;
+    width: min(100%, 24rem);
+    gap: 0.125rem;
+    padding: 0.3rem;
     border-radius: var(--radius-pill);
     background: var(--glass-bg);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
-    /* Glass edges: a hairline border, the specular rim around the whole
-       perimeter, and a soft drop so the pill visibly floats off the page. */
-    border: var(--glass-edge);
+    /* THE HAIRLINE: one 1px rule round the glass, the site's own edge. */
+    border: 1px solid var(--rule);
     box-shadow: var(--glass-rim), var(--glass-lift);
     /* Keep the pill on its own compositing layer. iOS Safari (standalone) will
        otherwise drop a fixed + backdrop-filter element's layer after a big DOM
@@ -9110,61 +9138,41 @@ button.poll-option:disabled { cursor: default; }
        it. Pinning the layer here, plus the repaint nudge in route(), fixes it. */
     transform: translateZ(0);
   }
-  /* Icon-only destinations: labels stay in the DOM for the accessible name but
-     drop from view. Each target is a 50px circle with a 28px glyph — trimmed a
-     touch from the earlier 56px, still well above the 44pt iOS tap-target floor. */
-  .nav-link {
-    width: 50px;
-    height: 50px;
-    padding: 0;
-    justify-content: center;
-    border-radius: var(--radius-pill);
-  }
-  .nav-link .nav-label { display: none; }
-  .nav-link .nav-ico { width: 28px; height: 28px; }
-
-  /* Where you are is told by INK AND OPACITY, and that is the whole control.
-     The four destinations sit back at 0.4 and the current one comes forward to
-     full strength and --accent. Opacity is the cheapest property there is
-     (composited, no repaint), and dimming the three you are NOT on is a truer
-     statement of the same fact than lighting the one you are — the pill reads as
-     one control with a focus rather than four buttons with a lamp under one.
-     No lozenge, no lit backdrop: both are per-frame paint for a fact a dimmed
-     icon answers free. Scoped to `.nav-pill .nav-link` so the FAB, which lives
-     outside the pill, keeps its own full-strength presence. */
-  /* THE DIM SITS ON THE GLYPH RATHER THAN ON THE LINK, and that is about the
-     dot. Opacity composites a whole subtree, so a dot inside a link at 0.4 is a
-     dot at 0.4 — faint on exactly the three tabs it could have anything to say
-     about, since the one you are looking at is the one whose news you have just
-     spent. Nothing else changes: the label is display:none here, so the glyph IS
-     the link's visible ink and the pill reads the same as it always did. */
+  /* A tab: icon over label, an equal share of the capsule, 56px tall, well
+     past the 44pt floor. The label is 10px, an iOS tab bar's own size. */
   .nav-pill .nav-link {
     position: relative;               /* the dot's containing block */
-    transition: color var(--dur-micro) var(--ease);
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    height: 56px;
+    padding: 0 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
   }
-  .nav-pill .nav-ico {
-    opacity: 0.4;
-    transition: opacity var(--dur-micro) var(--ease);
+  .nav-pill .nav-link .nav-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .nav-pill .nav-link[aria-current="page"] { color: var(--accent); }
-  .nav-pill .nav-link[aria-current="page"] .nav-ico { opacity: 1; }
-  /* The dot on the glyph's top trailing corner. The link is a 50px square with a
-     28px mark centred in it, so the glyph's own edge is 14px out from the middle
-     and its diagonal corner is nearer 10 — 11px in from the link's corner puts
-     the dot just clear of every mark in the row, none of which carries ink out
-     that far. It matches the native bar's own offsets; see paintDots in
-     TriaChromePlugin.swift, which measures from the same 50pt square. */
+  .nav-pill .nav-link .nav-ico { width: 24px; height: 24px; }
+  /* The capsule says where you are, so the label keeps its weight: a bold
+     label changing width under a moving capsule would make the row twitch. */
+  .nav-pill .nav-link[aria-current="page"] { font-weight: 400; }
+  /* The dot on the glyph's top trailing corner: the glyph is 24px, centred,
+     so its corner is 12px either side of the tab's middle. */
   .nav-pill .nav-dot {
     position: absolute;
-    top: 11px;
-    right: 11px;
+    top: 7px;
+    left: calc(50% + 9px);
     width: 6.5px;
     height: 6.5px;
   }
-  /* 1.8: THE + LEFT THE TAB BAR for My Circle's top bar (composeBtnEl in
-     app.js), so on a phone the four destinations are the whole bar. The
-     sidebar's Post link is the same element, so it is hidden, not removed. */
-  .nav-publish { display: none; }
 
   /* ── The comment bar takes the nav's place ────────────────────────────────
      ON A POST'S PAGE THE BOTTOM OF THE SCREEN IS THE COMPOSER. The four
@@ -9197,16 +9205,10 @@ button.poll-option:disabled { cursor: default; }
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
   }
 
-  /* Dark glass. The pill's own fill, rim and lift are tokens now and flip
-     themselves, so what's left here is the pill's SPECIFIC dark problem: muted
-     icons over a bright photo bleeding through chrome-tier glass drop below
-     AA-graphics contrast, so it runs firmer than the shared chrome fill. */
+  /* Dark glass runs firmer than the shared chrome fill, so muted labels over a
+     bright photo bleeding through still clear AA. */
   @media (prefers-color-scheme: dark) {
     .nav-pill { background: color-mix(in srgb, var(--bg) 72%, transparent); }
-    /* Dark paper needs the inactive icons a touch stronger than 0.4: --muted is
-       already low-contrast against a dark pill, and dimming it by the light-mode
-       amount pushes the three you are not on close to invisible. */
-    .nav-pill .nav-ico { opacity: 0.5; }
   }
 
   /* ── The view switcher sits inline, at the top ──────────────────────────────
@@ -9770,7 +9772,7 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   .about-head { font-size: 1.4rem; }
 }
 
-/* ── Circles (1.9) ────────────────────────────────────────────────────────────
+/* ── Circles (2.0) ────────────────────────────────────────────────────────────
    A circle is a room for an interest at #/c/<slug> (see "Circles" in app.js).
    In code and in these class names it is a COMMUNITY, because `circle` here
    already means your friends; every word on screen says circle.
@@ -9781,7 +9783,7 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    editor's combo box for its form, the chat roster's rows for its members.
    No pastel: the quintet belongs to post types, and a circle is not one. */
 
-/* Discover is circles (1.9): the daily's card, then a section of circles,
+/* Discover is circles (2.0): the daily's card, then a section of circles,
    each one THE DAILY'S OWN CARD (.daily-card and its parts, reused rather than
    copied, Zoe: "style circles like the daily cards"). What follows is only what
    a circle has that a daily hasn't: a face in the corner, a stack of them, and
@@ -9800,9 +9802,13 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    search and cards"): the search field to the first card, the daily to the
    circles, and circle to circle are all the same ~15px the bar leaves under
    the field. The daily kept its 2rem from when flat type followed it. */
+/* `auto` sideways, not 0: every card is the same centred column. At 0 the
+   daily sat flush left on desktop while the circles centred themselves 57px
+   in, so the page read as two columns (the 2.0 desktop audit). And on Discover
+   the circles drop their own inset, which only the daily's width needs. */
 .view--discover .daily-card,
-.communities .daily-card { margin: 0 0 0.95rem; }
-.view--discover .communities { margin-bottom: 0; }
+.communities .daily-card { margin: 0 auto 0.95rem; }
+.view--discover .communities { margin-bottom: 0; padding-inline: 0; }
 /* Less side padding on Discover's cards (Zoe, 2026-10-22: "less side padding
    on discover cards"): the words and the full-width pill run nearer the edge. */
 .view--discover .daily-card { padding-inline: 0.8rem; }

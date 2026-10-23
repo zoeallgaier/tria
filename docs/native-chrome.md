@@ -1620,7 +1620,7 @@ boxes, which looks exactly like a renderer bug and is a build-order one.
 
 ## The page's own primary acts
 
-**Removed in 1.9.** Every page button is painted CSS now (THE BUTTON, see
+**Removed in 2.0.** Every page button is painted CSS now (THE BUTTON, see
 design.md), so `PAGE_SEL`, `pageSpec`/`pushPage`/`watchPage`, the `pageTap`
 listener, `setPageControls`, `TriaPageButton` and `TriaPageControls` are
 deleted. What follows is history.

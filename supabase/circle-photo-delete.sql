@@ -1,4 +1,4 @@
--- Tria — a circle's photo, and its host deleting it (1.9)
+-- Tria — a circle's photo, and its host deleting it (2.0)
 -- Run once in the Supabase dashboard → SQL Editor, AFTER add-circles.sql.
 -- Additive + idempotent, so a re-run is harmless.
 --

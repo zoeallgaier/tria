@@ -38,7 +38,7 @@
    If the type colours or --band-deepen change there, change them here too;
    BAND_STOPS carries the arithmetic that ties the two together.
 
-   POSTS ONLY. The profile card and its QR came out in 1.9 (Zoe: "remove all
+   POSTS ONLY. The profile card and its QR came out in 2.0 (Zoe: "remove all
    the qr code bullshit ... in favor of the native share sheet"); sharing a
    profile hands its link to the system share sheet and draws nothing.
 

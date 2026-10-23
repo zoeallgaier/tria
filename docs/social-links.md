@@ -1,6 +1,6 @@
 # Social links
 
-**1.9 (2026-10-22): THE PROFILE QR IS GONE.** Zoe: "simplify share profile.
+**2.0 (2026-10-22): THE PROFILE QR IS GONE.** Zoe: "simplify share profile.
 remove all the qr code bullshit and everything in favor of the native share
 sheet". Every Share profile row (your own included) hands `/u/<handle>` to the
 system share sheet through `shareProfile`; the profile card, `qr.js`,

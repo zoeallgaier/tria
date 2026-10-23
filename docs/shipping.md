@@ -67,8 +67,8 @@ the gitignored bundle, and one sync from a stale source destroyed a finished
 pass that had to be restored from a scratch copy.
 
 **The review queue is the release cycle.** Work committed today reaches phones
-when the next build is submitted and approved. `MARKETING_VERSION` is **1.3**;
-everything in the tree accumulates toward **1.4**.
+when the next build is submitted and approved. `MARKETING_VERSION` is **2.0**
+(circles were big enough to call it that; the 1.9 work shipped as 2.0).
 
 ## What the web still is
 
