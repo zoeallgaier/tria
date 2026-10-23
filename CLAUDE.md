@@ -36,8 +36,8 @@ the Icon Composer gradient, `storycard.js`, `gen-icons.js` and the refresh glow
 
 In the app, pull to refresh draws a thin line of the reader's own band round the
 display's rounded edge instead of the dot ring (`TriaEdgeGlow`, `setGlow`,
-`NativeChrome.glowColors`), with a haptic ratchet of detents into a click where
-the two strokes meet. The web keeps the ring. See the
+`NativeChrome.glowColors`), with feathered tips that reach halfway down at the
+threshold, and a haptic ratchet of detents into a click there. The web keeps the ring. See the
 top of [docs/views.md](docs/views.md).
 
 ## 2.0: the version, and the web's nav (2026-10-22)

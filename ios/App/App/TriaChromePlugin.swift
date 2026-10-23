@@ -3937,11 +3937,22 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    pull): an accent is its three near stops, Tria's own ramp is peach to rose,
    and None is the neutral, ink-side on paper and paper-side on ink.
 
-   THE PULL DRAWS IT. Two strokes leave the top centre together and run down
-   either side, each as far along as the pull has got, and they MEET AT THE
-   BOTTOM exactly at the threshold. So the outline closing is "let go now", the
-   job the ring opening used to do. Let go and the ramp turns slowly round the
-   closed outline while the world re-pulls, then it fades.
+   THE PULL DRAWS IT. Two strokes leave the top centre together and run round
+   the corners and down either side, each as far as the pull has got, and they
+   reach HALFWAY DOWN THE SCREEN exactly at the threshold (Zoe: stop halfway,
+   not at the foot). Let go and the colours turn slowly along the lit edge
+   while the world re-pulls, then it fades.
+
+   THE TIPS ARE FEATHERED, not capped (Zoe: "fade them out instead of sharp
+   edges"). A stroke can't carry a gradient along its own length, but every
+   point of these two strokes sits at a steadily growing ANGLE from the
+   screen's centre (top centre is 0, halfway down a side a quarter turn), so a
+   CONIC alpha mask centred there is a gradient along the stroke: solid up to
+   the last `fade` of it, then a smoothstep down to nothing at the tip, mirrored
+   for the left. While the stroke is shorter than the fade, all of it is fade,
+   so the light arrives out of nothing rather than as a dot. The halo is inside
+   the mask too, so it feathers with the line. A run of fainter and fainter
+   segments was the first way and showed its steps as bands down the side.
 
    NATIVE READS THE PULL ITSELF, off the web view's own scroll view, the same
    way `TriaScrollWatch` reads the header's state. The stroke has to move with
@@ -3951,7 +3962,7 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    ios-shell.md). app.js says three things per pull: pull, spin, idle.
 
    THE HAPTICS ARE A RATCHET. Six soft detents as the strokes travel, each a
-   touch firmer than the last, then one rigid click where the ends meet, then a
+   touch firmer than the last, then one rigid click at the threshold, then a
    soft landing as the glow leaves (only after a pull: a resume nobody asked
    for stays silent). UIImpactFeedbackGenerator rather than Core Haptics on
    purpose: it obeys Settings, Sounds & Haptics, System Haptics before we ever
@@ -3972,24 +3983,42 @@ final class TriaEdgeGlow: UIView {
     /// Thin on purpose (Zoe: thinner than the first 3pt). The halo does the
     /// glowing; the line itself is a hairline of colour on the glass's edge.
     private static let line: CGFloat = 1.5
+    private static let halo: CGFloat = 4
+    /// How much of each stroke's length, at full reach, is the feathered tip,
+    /// and how many stops the mask spends on it.
+    private static let fade: CGFloat = 0.38
+    private static let feather = 10
     private static let peach = UIColor(red: 1, green: 0xac / 255.0, blue: 0x68 / 255.0, alpha: 1)
     private static let rose = UIColor(red: 1, green: 0, blue: 0x49 / 255.0, alpha: 1)
-    private static let halo: CGFloat = 4
 
     private weak var scroll: UIScrollView?
     private var watch: NSKeyValueObservation?
     private let ramp = CAGradientLayer()
+    /// Holds the ramp still while it turns inside, and carries the feather.
+    private let lit = CALayer()
+    private let feather = CAGradientLayer()
     private let strokes = CALayer()
-    private let left = CAShapeLayer()
     private let right = CAShapeLayer()
+    private let left = CAShapeLayer()
+    /// The right stroke's geometry, for turning a distance along it into an
+    /// angle round the centre: the top run, the corner, the side run.
+    private var shape = (rect: CGRect.zero, r: CGFloat(0))
     private let detent = UIImpactFeedbackGenerator(style: .soft)
     private let click = UIImpactFeedbackGenerator(style: .rigid)
     private var state = "idle"
     private var reached = 0
     private var armed = false
+    /// Where the tips are, 0 to 1 along each stroke.
+    private var reach: CGFloat = 0
     /// Bumped by every state change, so a fade's completion that lands after a
     /// new pull has started doesn't blank it.
     private var generation = 0
+    /// Drives `reach` when no finger is (closing on release, retracting).
+    private var tween: CADisplayLink?
+    private var tweenFrom: CGFloat = 0
+    private var tweenTo: CGFloat = 0
+    private var tweenStart: CFTimeInterval = 0
+    private var tweenLength: CFTimeInterval = 0
 
     init(scroll: UIScrollView) {
         self.scroll = scroll
@@ -3999,24 +4028,29 @@ final class TriaEdgeGlow: UIView {
         alpha = 0
         backgroundColor = .clear
 
-        // Conic, peach at the top and rose at the foot on BOTH sides, so the
-        // two strokes are mirror images while they draw; turning it is the spin.
+        // Conic, so turning it is the spin. See `wear` for the stops.
         ramp.type = .conic
         ramp.startPoint = CGPoint(x: 0.5, y: 0.5)
         ramp.endPoint = CGPoint(x: 0.5, y: 0)
         wear([Self.peach, Self.rose])
-        layer.addSublayer(ramp)
+        lit.addSublayer(ramp)
+        feather.type = .conic
+        feather.startPoint = CGPoint(x: 0.5, y: 0.5)
+        feather.endPoint = CGPoint(x: 0.5, y: 0)
+        lit.mask = feather
+        layer.addSublayer(lit)
 
-        for s in [left, right] {
+        for s in [right, left] {
             s.fillColor = nil
             s.strokeColor = UIColor.black.cgColor
             s.lineWidth = Self.line
-            s.lineCap = .round
+            s.lineCap = .butt   // the tip is at nothing anyway
             s.strokeEnd = 0
             strokes.addSublayer(s)
         }
         // The bloom is the MASK's shadow: a mask's shadow counts as coverage, so
         // the ramp shows through a soft halo round the line with no blur pass.
+        // It follows each segment's opacity, so the halo feathers with the line.
         strokes.shadowColor = UIColor.black.cgColor
         strokes.shadowOpacity = 1
         strokes.shadowOffset = .zero
@@ -4026,35 +4060,46 @@ final class TriaEdgeGlow: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    /// The band's stops, first at the top and last at the foot, mirrored so the
-    /// two strokes match while they draw. One stop or many, a conic needs two.
+    /// The band twice round the circle, there and back, then again: the lit
+    /// edge only spans the top half (a quarter turn each side of the top), so
+    /// a half turn has to carry the whole band, first stop at the top and last
+    /// at the halfway point on either side. Repeating it keeps the turn
+    /// seamless, whichever half is passing under the light.
     private func wear(_ stops: [UIColor]) {
-        let band = stops.isEmpty ? [Self.peach, Self.rose] : stops
-        let loop = band + band.dropLast().reversed()
-        let ends = loop.count == 1 ? loop + loop : loop
-        ramp.colors = ends.map { $0.cgColor }
-        ramp.locations = ends.indices.map { NSNumber(value: Double($0) / Double(ends.count - 1)) }
+        var band = stops.isEmpty ? [Self.peach, Self.rose] : stops
+        if band.count == 1 { band += band }
+        let there = band.map { $0.cgColor }
+        let back = Array(there.reversed().dropFirst())
+        let loop = there + back + Array(there.dropFirst()) + back
+        ramp.colors = loop
+        ramp.locations = loop.indices.map { NSNumber(value: Double($0) / Double(loop.count - 1)) }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        // A square on the diagonal, so turning it never shows a corner.
+        // Squares on the diagonal, centred on the screen: turning the ramp never
+        // shows a corner, and the feather's angles are true angles.
         let side = hypot(bounds.width, bounds.height)
-        ramp.frame = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        let square = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        lit.frame = square
+        ramp.frame = lit.bounds
+        feather.frame = lit.bounds
         strokes.frame = bounds
-        let half = Self.halfPath(in: bounds, radius: Self.cornerRadius(for: window))
-        right.path = half.cgPath
+        let radius = Self.cornerRadius(for: window)
+        shape = (bounds.insetBy(dx: Self.line / 2, dy: Self.line / 2), max(0, radius - Self.line / 2))
+        let half = Self.halfPath(in: bounds, radius: radius)
         let mirrored = half.copy() as! UIBezierPath
         mirrored.apply(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: bounds.width, ty: 0))
+        right.path = half.cgPath
         left.path = mirrored.cgPath
         CATransaction.commit()
     }
 
-    /// The right half of the screen's outline, top centre round to bottom
-    /// centre, inset by half the line so the stroke sits on the glass's edge and
-    /// stays concentric with its corners.
+    /// The right half of the screen's outline, top centre round the corner and
+    /// down to halfway, inset by half the line so the stroke sits on the glass's
+    /// edge and stays concentric with its corner.
     private static func halfPath(in b: CGRect, radius: CGFloat) -> UIBezierPath {
         let i = line / 2
         let r = max(0, radius - i)
@@ -4064,10 +4109,7 @@ final class TriaEdgeGlow: UIView {
         p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
         p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
                  startAngle: -.pi / 2, endAngle: 0, clockwise: true)
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
-                 startAngle: 0, endAngle: .pi / 2, clockwise: true)
-        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
         return p
     }
 
@@ -4092,6 +4134,74 @@ final class TriaEdgeGlow: UIView {
         }
     }
 
+    /// The point `u` (0 to 1) of the way along the right stroke, as a turn
+    /// round the screen's centre clockwise from the top: 0 to 0.25.
+    private func turn(at u: CGFloat) -> CGFloat {
+        let (rect, r) = shape
+        let top = max(0, rect.width / 2 - r)
+        let corner = .pi * r / 2
+        let down = max(0, rect.height / 2 - r)
+        var d = u * (top + corner + down)
+        let point: CGPoint
+        if d <= top {
+            point = CGPoint(x: rect.midX + d, y: rect.minY)
+        } else if d - top <= corner {
+            d -= top
+            let a = -CGFloat.pi / 2 + (r > 0 ? d / r : 0)
+            point = CGPoint(x: rect.maxX - r + r * cos(a), y: rect.minY + r + r * sin(a))
+        } else {
+            d -= top + corner
+            point = CGPoint(x: rect.maxX, y: rect.minY + r + d)
+        }
+        let a = atan2(point.x - bounds.midX, bounds.midY - point.y)
+        return min(0.25, max(0, a / (2 * .pi)))
+    }
+
+    /// Puts the tips at `t` along each stroke: whole up to `t - fade`, then a
+    /// smoothstep down to nothing at `t` itself, written into the feather as
+    /// angles, the right side and its mirror.
+    private func draw(_ t: CGFloat) {
+        reach = t
+        let from = max(0, t - Self.fade)
+        func alpha(_ u: CGFloat) -> CGFloat {
+            let x = min(1, max(0, (t - u) / Self.fade))
+            return x * x * (3 - 2 * x)
+        }
+        var stops: [(CGFloat, CGFloat)] = [(0, alpha(0))]
+        for j in 0...Self.feather {
+            let u = from + (t - from) * CGFloat(j) / CGFloat(Self.feather)
+            stops.append((turn(at: u), alpha(u)))
+        }
+        let mirror = stops.reversed().map { (1 - $0.0, $0.1) }
+        let all = stops + mirror
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        right.strokeEnd = t
+        left.strokeEnd = t
+        feather.locations = all.map { NSNumber(value: Double($0.0)) }
+        feather.colors = all.map { UIColor(white: 0, alpha: $0.1).cgColor }
+        CATransaction.commit()
+    }
+
+    /// Moves the tips without a finger, on the display's clock.
+    private func animate(to t: CGFloat, over seconds: CFTimeInterval) {
+        tween?.invalidate()
+        tweenFrom = reach
+        tweenTo = t
+        tweenStart = CACurrentMediaTime()
+        tweenLength = seconds
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.add(to: .main, forMode: .common)
+        tween = link
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        let u = min(1, (CACurrentMediaTime() - tweenStart) / tweenLength)
+        let eased = 1 - pow(1 - u, 3)   // ease out
+        draw(tweenFrom + (tweenTo - tweenFrom) * CGFloat(eased))
+        if u >= 1 { link.invalidate(); tween = nil }
+    }
+
     func set(state next: String, colors: [UIColor], quiet: Bool, land: Bool, in window: UIWindow) {
         if !colors.isEmpty { wear(colors) }
         if superview !== window {
@@ -4114,8 +4224,11 @@ final class TriaEdgeGlow: UIView {
     // MARK: pull
 
     private func beginPull() {
+        tween?.invalidate()
+        tween = nil
         layer.removeAllAnimations()
         ramp.removeAllAnimations()
+        strokes.removeAllAnimations()
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
@@ -4132,11 +4245,7 @@ final class TriaEdgeGlow: UIView {
     private func track(pull d: CGFloat) {
         guard state == "pull" else { return }
         let p = min(d / Self.threshold, 1)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        left.strokeEnd = p
-        right.strokeEnd = p
-        CATransaction.commit()
+        draw(p)
         alpha = p > 0 ? 0.45 + 0.55 * p : 0
 
         // Detents on the way out only, firmer as the pull tightens. Backing off
@@ -4150,8 +4259,8 @@ final class TriaEdgeGlow: UIView {
             reached = step
         }
 
-        // The ends meeting. A little give before it un-arms, so a thumb
-        // resting on the line doesn't click twice.
+        // The threshold. A little give before it un-arms, so a thumb resting
+        // on the line doesn't click twice.
         if p >= 1, !armed {
             armed = true
             click.impactOccurred(intensity: 0.9)
@@ -4162,7 +4271,7 @@ final class TriaEdgeGlow: UIView {
         }
     }
 
-    /// The halo swells once as the outline closes.
+    /// The halo swells once at the threshold.
     private func bloom() {
         let a = CAKeyframeAnimation(keyPath: "shadowRadius")
         a.values = [Self.halo, Self.halo * 2.2, Self.halo]
@@ -4179,24 +4288,16 @@ final class TriaEdgeGlow: UIView {
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
-        // Close the outline from wherever the pull left it (a resume starts from
+        // Reach halfway from wherever the pull left it (a resume starts from
         // nothing and draws in from the top).
-        for s in [left, right] {
-            let close = CABasicAnimation(keyPath: "strokeEnd")
-            close.fromValue = s.presentation()?.strokeEnd ?? s.strokeEnd
-            close.toValue = 1
-            close.duration = 0.35
-            close.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            s.strokeEnd = 1
-            s.add(close, forKey: "close")
-        }
+        animate(to: 1, over: 0.35)
         UIView.animate(withDuration: 0.25) { self.alpha = quiet ? 0.55 : 1 }
         guard !UIAccessibility.isReduceMotionEnabled else { return }
         // Linear, never eased: an eased spinner lurches once a turn (views.md).
         let turn = CABasicAnimation(keyPath: "transform.rotation.z")
         turn.fromValue = 0
         turn.toValue = 2 * Double.pi
-        turn.duration = 2.4
+        turn.duration = 4.8   // the band repeats every half turn, so 2.4s a band
         turn.repeatCount = .infinity
         ramp.add(turn, forKey: "turn")
         let breathe = CABasicAnimation(keyPath: "shadowRadius")
@@ -4219,30 +4320,18 @@ final class TriaEdgeGlow: UIView {
         }
         let mine = generation
         // A pull let go short retracts the way it came; a refresh fades whole.
-        if was == "pull" {
-            for s in [left, right] {
-                let back = CABasicAnimation(keyPath: "strokeEnd")
-                back.fromValue = s.presentation()?.strokeEnd ?? s.strokeEnd
-                back.toValue = 0
-                back.duration = 0.25
-                back.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                s.strokeEnd = 0
-                s.add(back, forKey: "close")
-            }
-        }
+        if was == "pull" { animate(to: 0, over: 0.25) }
         UIView.animate(withDuration: was == "pull" ? 0.25 : 0.5, delay: 0,
                        options: [.beginFromCurrentState, .curveEaseOut]) {
             self.alpha = 0
         } completion: { _ in
             guard mine == self.generation else { return }
+            self.tween?.invalidate()
+            self.tween = nil
             self.isHidden = true
             self.ramp.removeAllAnimations()
             self.strokes.removeAllAnimations()
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            self.left.strokeEnd = 0
-            self.right.strokeEnd = 0
-            CATransaction.commit()
+            self.draw(0)
         }
     }
 }

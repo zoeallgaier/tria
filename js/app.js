@@ -16011,16 +16011,17 @@
     // been the tab bar sitting right there with the + tucked away. So at the
     // top of the page the bar is completely invisible, which is the whole
     // intent — a composer should open as a sheet of paper and not as chrome.
-    // What it buys is the scroll: a long Find with a note under it collapses
-    // the serif nameplate away, and the bar quietly picks the word up.
-    mountToolbar({ title: pubTitle() });
+    // 2026-10-22: the serif nameplate is back ON the page (Zoe: bring back the
+    // Instrument titles for New post / New activity), kept as content like the
+    // daily's prompt, so the bar carries no title of its own here.
+    mountToolbar();
     view.innerHTML =
       `<section class="view">` +
         // No kicker: the audience row below now says who this reaches, so
         // "Share to your circle" was both redundant and sometimes wrong. The
         // title names the inferred type instead (see syncTitle), so the word
         // rides in a span the swap animation can hand off between.
-        mastheadEl('', `<span class="title-word">${pubTitle()}</span>`, typeIndicatorHtml()) +
+        mastheadEl('', `<span class="title-word">${pubTitle()}</span>`, typeIndicatorHtml(), { keep: true }) +
         // What you're answering: the daily page's own masthead in miniature, the
         // caption over the question. It sits OUTSIDE the form and on the
         // nameplate's axis, because it's a lede for the page rather than a field
@@ -16241,11 +16242,6 @@
       const word = titleEl?.querySelector('.title-word:not(.title-word--out)');
       const next = pubTitle();
       if (!word || word.textContent === next) return;
-      // The bar's collapsed copy of this nameplate, straight across with no
-      // swap of its own: it is either invisible (you are at the top, where the
-      // serif line is doing the talking) or you are scrolled deep in a form,
-      // where a word animating in fixed chrome is a movement nobody caused.
-      setToolbarTitle(next);
       titleEl.querySelectorAll('.title-word--out').forEach(g => g.remove());
       const ghost = word.cloneNode(true);
       ghost.classList.add('title-word--out');
@@ -20380,7 +20376,7 @@
      IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): a thin line of the reader's
      own band traced round the glass by `TriaEdgeGlow` in TriaChromePlugin.swift,
      which reads the pull off its own scroll view and owns the haptics (a ratchet
-     of soft detents, a click where the two strokes meet, a soft landing). This side still decides WHEN:
+     of soft detents, a click at the threshold, a soft landing). This side still decides WHEN:
      it says pull on the first frame of overscroll, then spin or idle on release.
      The ring stays the fallback until the first setGlow resolves, so a binary
      without the method refreshes exactly as before. */

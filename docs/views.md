@@ -1,12 +1,20 @@
 # Refresh, feeds and photos
 
 **In the app, the refresh is the screen's edge (2.0, trial).** A thin line
-(1.5pt, with a 4pt halo) traced round the display's own rounded corners
+(1.5pt, with a 4pt halo) traced along the display's own rounded corners
 (`TriaEdgeGlow` in TriaChromePlugin.swift), drawn over the native bars. Two
-strokes leave the top centre and run down either side as you pull, and they
-**meet at the bottom at the threshold**, which is the "let go now" the ring's
-opening used to say. Let go and the colours turn slowly round the closed outline
-(linear, 2.4s a turn) with the halo breathing, then it fades. A resume refresh
+strokes leave the top centre and run round the corners and down either side as
+you pull, and they **reach halfway down the screen at the threshold** (Zoe:
+stop halfway, not at the foot), which is the "let go now" the ring's opening
+used to say. **The tips are feathered** (Zoe: fade, not sharp ends): the last
+38% of each stroke at full reach fades on a smoothstep down to nothing, halo
+included, through a CONIC alpha mask centred on the screen (every point of the
+strokes is at a steadily growing angle from the centre, so an angular gradient
+is a gradient along the line; a run of fainter segments, tried first, banded), so a short stroke is all fade and
+the light arrives out of nothing. Let go and the colours turn slowly along the
+lit edge (linear; the band is laid twice round the circle so the top half
+always holds the whole of it, 2.4s a band) with the halo breathing, then it
+fades. A resume refresh
 (`refreshRing.on()`) is the same spin at 55%, drawn in from nothing. Reduce
 Motion keeps the drawing (it is the finger's own movement) and drops the turn
 and the breathing.
@@ -34,7 +42,7 @@ is what draws, unchanged. No `ptr-hold` under the glow, since nothing is in the
 page to make room for.
 
 **Its haptics are a ratchet**: six soft detents as the strokes travel, each
-firmer than the last (0.25 rising to 0.7), a rigid click where the ends meet
+firmer than the last (0.25 rising to 0.7), a rigid click at the threshold
 (with a swell of the halo), and one soft tap as a PULLED refresh's glow leaves. The
 resume path is silent. `UIImpactFeedbackGenerator`, not Core Haptics, because
 it obeys the System Haptics switch for us; prepared on the pull's first frame.
