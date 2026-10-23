@@ -192,7 +192,7 @@ folds while you read down), with the same `setTabs`/`selectTab`/`setDots`/
 `setChrome` contract as 1.4. The reserve only grows (a folded bar must not move
 the foot of a page mid-scroll).
 
-**The + left the tab bar for My Circle's top bar**, Instagram-style: the
+**The + left the tab bar for My Circle's top bar** (and your own profile's, 2026-10-23), Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
 trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post (the Note's pencil), Frame (the image mark, the photo picker pressed), Activity,
 and Daily (a sun, straight to its composer, there only while you haven't
