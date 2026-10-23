@@ -5758,7 +5758,8 @@
   // in. An activity is the one that is a different act (a time, a place, who
   // is coming), so it keeps its door, and so does the Daily, which is a prompt
   // and not a type. Music was a row for a day and left again (Zoe,
-  // 2026-10-23): a song is still the composer's own button.
+  // 2026-10-23): a song is still the composer's own button. Frame came back
+  // (Zoe, 2026-10-23): it opens the composer with the photo button pressed.
   // The Daily row is always the composer with the prompt over it (Zoe), never
   // the room, so it is there only while you have an answer left to give: one
   // each, and a row that opens a page you can't post from is a dead end.
@@ -5766,6 +5767,7 @@
     const occ = todaysDaily();
     return [
       { key: 'note',     label: 'Post' },
+      { key: 'photo',    label: 'Frame' },
       { key: 'activity', label: 'Activity' },
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
       // Discover's Start a circle card, once it has been waved off.

@@ -194,7 +194,7 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar**, Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post (the Note's pencil), Activity,
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post (the Note's pencil), Frame (the image mark, the photo picker pressed), Activity,
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on
