@@ -2754,9 +2754,12 @@
                     `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                       `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
                     // Music (1.8), once posts can carry a song (Store.songsReady).
+                    // Off the bar since 2026-10-23 (Zoe): a song is the Share
+                    // sheet's Music row, which presses this hidden button
+                    // (pendingAttach), so the surface is wired the one way.
                     (Store.songsReady()
                       ? `<button type="button" class="rt-attach" id="${idp}-add-song" ` +
-                          `aria-label="Add a song" aria-pressed="false">${svgIcon('music', 'rt-attach-ico')}</button>`
+                          `aria-label="Add a song" aria-pressed="false" hidden>${svgIcon('music', 'rt-attach-ico')}</button>`
                       : '') +
                     (event
                       ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
@@ -5757,8 +5760,8 @@
   // what you attach, so a Find or a Frame is a Post you put a link or a photo
   // in. An activity is the one that is a different act (a time, a place, who
   // is coming), so it keeps its door, and so does the Daily, which is a prompt
-  // and not a type. Music was a row for a day and left again (Zoe,
-  // 2026-10-23): a song is still the composer's own button. Frame came back
+  // and not a type. Music left and came back (Zoe, 2026-10-23), and is now
+  // its door (with goListening's): the composer's bar lost its song button. Frame came back
   // (Zoe, 2026-10-23): it opens the composer with the photo button pressed.
   // The Daily row is always the composer with the prompt over it (Zoe), never
   // the room, so it is there only while you have an answer left to give: one
@@ -5769,6 +5772,8 @@
       { key: 'note',     label: 'Post' },
       { key: 'photo',    label: 'Frame' },
       { key: 'activity', label: 'Activity' },
+      // Music is a row again and off the composer's bar (Zoe, 2026-10-23).
+      ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
       // Discover's Start a circle card, once it has been waved off.
       ...(Store.communitiesReady() && communityStartDismissed() ? [{ key: 'circle', label: 'Circle', icon: 'circle' }] : []),
