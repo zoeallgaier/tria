@@ -565,7 +565,7 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
 .splash {
   position: fixed;
   inset: 0;
-  z-index: 400;                     /* above topbar/nav (100) and modals (250) */
+  z-index: 400;                     /* above topbar/nav (100) */
   display: grid;
   place-items: center;
   background: var(--bg);
@@ -1133,35 +1133,16 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .toolbar-dot.is-on { opacity: 1; }
 /* .toolbar-commit is the one button up here that COMMITS rather than navigates
-   or narrows: the profile editor's Save, a check in the trailing slot. It keeps
-   every line above — the 44px disc that is its own tap target, the grid
-   centring, the svg size — and swaps only the material, for the tinted glass
-   the compose + and the composer's Post pill wear. That material is declared
-   beside those two, near .composer-post, so the app's primary-act surfaces stay
-   one list and can't drift apart.
+   or narrows: an editor's Save, a check in the trailing slot. It keeps the 44px
+   disc and swaps only the material for THE BUTTON's (.publish-fill, declared
+   later in this file, so it wins over .toolbar-btn's glass on source order).
+   .toolbar-btn's backdrop-filter would only sample behind the wash, so it goes.
 
-   Nothing needs overriding here, which is worth stating because it looks like
-   it should. .publish-fill sits LATER in this file than .toolbar-btn, so its
-   `background: none` / `border: none` already beat the glass; .publish-fill
-   .is-solid's --on-type ink beats --toolbar-ink on specificity, wash or no
-   wash; and the glass box-shadow is replaced by the dome rule's own at (0,3,0).
-   One line IS overridden below: .toolbar-btn's backdrop-filter would sample
-   behind a pill that is already opaque, which is pure wasted compositor work
-   rather than a visual bug, but there's no reason to pay it.
-
-   What it does carry is a way to NOT BE THERE. The editor's Save only exists
-   once the form has something to commit (syncAnswers in app.js drives both bar
-   answers off one predicate), and `--idle` is that state. Hidden by
-   `visibility`, not by dropping the node: hidden visibility is already out of
-   the tab order and the a11y tree, so it is honestly absent, while staying a
-   transition target so the button FADES in on the keystroke that earns it
-   rather than popping into the corner of the eye. It also keeps its slot, so
-   --toolbar-side is settled once at mount instead of moving as you type.
-
-   Both selectors restate .toolbar-btn, and that is load-bearing rather than
-   redundant: .publish-fill sits LATER in this file and declares a `transition`
-   of its own, so a bare .toolbar-commit (0,1,0) would lose the ramp it needs.
-   At (0,2,0) it wins wherever it sits. */
+   `--idle` is the Save that has nothing to commit yet: hidden by `visibility`,
+   so it is out of the tab order and the a11y tree, while staying a transition
+   target so it FADES in on the keystroke that earns it, in a slot settled at
+   mount. Both selectors restate .toolbar-btn so they win at (0,2,0) wherever
+   they sit. */
 .toolbar-btn.toolbar-commit {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -1204,19 +1185,9 @@ body.toolbar-live .view { padding-top: 1rem; }
    feature spends a paragraph in app.js on the difference between an invitation
    and a worksheet ("Answer" is a command stacked on a question).
 
-   And it wears .publish-fill.is-solid, the app's gradient-button system, rather
-   than a hue invented for the daily. That is the honest reading of what this
-   button does: it is not a filter or a navigation, it opens the composer, so it
-   is the same act as the compose + and the Post pill and belongs to the same
-   family. It also puts the quintet where the quintet means something — "make
-   any of the five" — instead of on the card behind it, which was a panel
-   wearing a button's colour. The dome itself is declared beside .composer-post
-   with the app's other lit surfaces, so the set stays one list and can't drift.
-
-   No transition on the press: :active dims instantly and restores instantly,
-   which is what a press wants, and it keeps this rule clear of .publish-fill's
-   own `transition` further down the file (a one-class selector here would lose
-   to it — the same trap .toolbar-btn.toolbar-commit restates two classes for). */
+   It wears THE BUTTON (.publish-fill): it opens the composer, so it is the
+   same act as Post and belongs to the same family. Its press is the shared
+   press engine's, like every pill (PRESS_TARGETS in app.js). */
 .toolbar-cta,
 .daily-answer {
   display: inline-flex;
@@ -1237,8 +1208,6 @@ body.toolbar-live .view { padding-top: 1rem; }
   font-size: 0.9rem;
   white-space: nowrap;
 }
-.toolbar-cta:active,
-.daily-answer:active { opacity: 0.55; }
 @media (hover: hover) {
   .toolbar-cta:hover .daily-go,
   .daily-answer:hover .daily-go { transform: translateX(2px); }
@@ -1584,88 +1553,52 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .nav-dot.is-on { opacity: 1; }
 
-/* Post — the one primary action. At rest a gradient OUTLINE (the type pastels
-   circling the pill — a quiet arrow pointing at posting); on hover / press /
-   while on the compose page it fills with the same gradient. Text contrast holds
-   AA in every state and both modes: page ink on the page at rest, near-black
-   --on-type on the pastel fill. The ring is drawn by a masked ::before, so it
-   sits cleanly over any backdrop (sidebar surface, frosted topbar, composer
-   paper) and unmasking it IS the fill.
+/* ── THE BUTTON (1.9) ─────────────────────────────────────────────────────────
+   Every button in a page is ONE material at two weights (Zoe: "every button in
+   every page should have this new style"), the hairline glass Discover's cards
+   wore first:
 
-   The band is --pill-band, declared once in tokens.css: Tria's four-stop brand
-   ramp by default, or the reader's own accent if they picked one. It is no
-   longer the post-type quintet — see the token for why that decoupling is the
-   point rather than a stop being deleted.
+   .publish-fill   a COMMIT, or a way to go and commit: Post, Share, Join, Add
+                   yours, Add friend, Accept, Turn on, Create account, Save. The
+                   glass fill, one hairline, and the reader's band (--pill-band:
+                   their colour, Tria's ramp, or the neutral) washed under the
+                   words at --pill-wash, in the page's own ink.
+   .pill-quiet     everything else that is still a button: Chat, Requested, the
+                   sign-in providers, Unblock, Log out, an RSVP or a card
+                   background not yet picked. The same glass and hairline with no
+                   band. A chosen one (`.is-on`) takes the wash, which is how a
+                   picked RSVP reads as yours.
 
-   This ring and that fill are the same band in two modes, and they now read the
-   same variable instead of each hand-writing the stops. The ring IS the fill
-   with a mask over it, so a stop dropped from one and not the other made
-   hovering a button reshuffle its colours; there is nothing left to drop.
+   Declared HERE, early, on purpose: this is the material and nothing else, and
+   every component rule further down owns only its geometry (and its ink, where
+   it has a reason), so a component can never paint a second fill over it.
 
-   The band no longer DRIFTS, and that is the whole quintet's new rule. It used
-   to slide `background-position` across a 300%-wide gradient on a 14s loop,
-   here and on the FAB and the seg-tabs glow and the splash mark — and
-   background-position is a paint property, not a composited one, so every one
-   of those was invalidating and re-rasterizing its element at display refresh
-   rate for as long as it was on screen. The FAB's copy ran on every page in the
-   app. Now the band is sized 1:1 and simply shows every colour it has at once,
-   which is a better statement anyway: a drifting window showed two or three
-   arbitrary hues at any moment and the still band shows the set. Three or four
-   stops across a small element is a short interpolation run per hue, so it does
-   not band and needs nothing laid over it to hide that. */
-.publish-fill {
+   The band sits on a ::before at inset -1px, not 0: an absolute child resolves
+   against the PADDING box, and the hairline is translucent, so at 0 the edge
+   would show the page instead of the wash. The press is PRESS_TARGETS in app.js,
+   not :active here. The tokens are in tokens.css under THE BUTTON. */
+.publish-fill,
+.pill-quiet {
   position: relative;
-  isolation: isolate;               /* keeps the z-index:-1 ring inside the button */
+  isolation: isolate;               /* keeps the z-index:-1 wash inside the button */
   color: var(--text);
-  background: none;
-  border: none;
+  background: var(--glass-bg);
+  border: var(--pill-edge);
+  box-shadow: none;
   font-weight: 700;
-  transition: color var(--dur-micro) var(--ease);
 }
-.publish-fill::before {
+.publish-fill::before,
+.pill-quiet.is-on::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -1px;
   z-index: -1;
   border-radius: inherit;
-  padding: 2px;                     /* the ring's thickness */
   background: var(--pill-band);
-  /* Ring mode: keep only the 2px band between padding-box and border-box. */
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  opacity: var(--pill-wash);
 }
-/* Filled: drop the mask so the whole pill carries the gradient. Kept a clean,
-   vibrant fill — no inner rim/shade, which only muddied the pastels. (The grain
-   ::after that used to ride these fills went with the rest of the grain — see
-   the note in the ambient section for why it had to be all or nothing.) */
-/* NOTE THAT `:active` HERE DOES NOTHING FOR .is-solid, which is most of the set.
-   Both lines below are what .is-solid already declares at rest, so a solid CTA
-   pressed looks exactly like a solid CTA idle. That is correct — the ring is the
-   thing being filled, and a filled pill has no ring left to fill — but it means
-   the press has to come from somewhere else. It comes from PRESS_TARGETS in
-   app.js, which is where every solid CTA is now listed. Don't read this block as
-   the press state for the buttons that wear .is-solid. */
-.publish-fill:active,
-.publish-fill[aria-current="page"],
-.publish-fill:focus-visible { color: var(--pill-ink); }
-.publish-fill:active::before,
-.publish-fill[aria-current="page"]::before,
-.publish-fill:focus-visible::before { -webkit-mask: none; mask: none; }
-@media (hover: hover) {
-  .publish-fill:hover { color: var(--pill-ink); }
-  .publish-fill:hover::before { -webkit-mask: none; mask: none; }
-}
-/* Solid at rest: Post and Share Tria wear the gradient FILLED from the start
-   (the ring is the resting state everywhere else). Same as the filled state
-   above, just permanent. */
-.publish-fill.is-solid { color: var(--pill-ink); }
-.publish-fill.is-solid::before { -webkit-mask: none; mask: none; }
-.publish-fill:disabled { opacity: 0.6; }
-/* No animation on this fill. If one is ever added, note a waiver written as
-   `.publish-fill::before` LOSES to `.nav-publish::before` further down the
-   file — equal specificity, later wins — so reduced motion needs both. */
+.publish-fill:disabled,
+.pill-quiet:disabled { opacity: 0.6; }
 .nav-publish {
   margin-top: auto;
   justify-content: center;
@@ -2218,21 +2151,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 .feed-empty { max-width: var(--feed-width); margin-inline: auto; }
 
 
-/* ── Segmented tab control — REMOVED, tombstone kept. .seg-tabs was a frosted
-   track holding two equal segments over a thumb that SLID between them, and it
-   outlived its callers one at a time: Friends' pair went with the Friends page,
-   Updates' All / Mentions became a toolbar filter in 1.3, and the composer's
-   Post / Activity became the calendar toggle in the attach bar. That last one is
-   why this is a deletion and not a dormancy — the control was kept through the
-   other two on the argument that its segments weren't narrowing anything but
-   choosing what you were about to make, and folding it into the attach bar is
-   the finding that a form can just read what you attached. Nothing left in the
-   app puts two whole versions of one page side by side. Gone with it: the
-   .seg-tabs-glow rules (a masked, blurred quintet lit at index 0, which belonged
-   to Friends' "My circle" and had had no true branch for two releases), the
-   phone block's #c-group-tabs and .seg-tabs margins, and .masthead:has(+
-   .seg-tabs). See the matching tombstone above segTabsEl's old home in app.js. */
-
 /* ── Feed — editorial blocks, no boxes; whitespace + a right type-tag ──────── */
 /* Entries are separated by whitespace plus a centered hairline divider, so one
    post's tail never blurs into the next byline. Each carries a small colored
@@ -2246,17 +2164,26 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   padding: 2rem 0.5rem;
   text-align: center;
 }
-.feed-empty--welcome { padding-top: 3.5rem; }
-.feed-empty--welcome p { margin-bottom: 0.9rem; }
-.feed-empty-cta {
-  display: inline-block;
-  color: var(--accent);
-  font-weight: 700;
-  border-bottom: 1px solid currentColor;
-  padding-bottom: 1px;
-  transition: opacity var(--dur-micro) var(--ease);
+.feed-empty--welcome { padding-top: 3rem; display: grid; gap: 0.7rem; }
+.feed-empty--welcome p { margin: 0 auto; max-width: 30ch; line-height: 1.5; }
+.welcome-head {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.6rem;
+  color: var(--text);
 }
-.feed-empty-cta:active { opacity: 0.6; }
+.welcome-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 52px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+.welcome-go.publish-fill { margin-top: 0.8rem; }
 
 /* There is deliberately NO `content-visibility: auto` here, and its absence is a
    fix rather than an oversight. It was added by the July 2026 battery pass
@@ -3194,14 +3121,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    never left with bare space under the card. */
 .post-pane:not(.open) { display: none; }
 
-/* TOMBSTONE — .panel-label ("Liked by", "Going") is deleted. It named the two
-   name lists on the post page, on the argument that a page has had nothing
-   tapped so a bare name could be a liker or an attendee. What that missed is
-   that the action row on this page is the section SWITCHER: comments is the
-   resting state and needs no name, and the only way to reach either list is the
-   glyph that then stays lit. The button is the label, exactly as it was under a
-   disclosure. See the note in likersPanelHtml before adding one back. */
-
 /* Sits under the box, never over it: "No comments yet." above an empty composer
    would be the page saying the same thing twice before you had a chance to
    answer it. */
@@ -3836,16 +3755,10 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 /* A mention picked while a photo waits opens above the photo, not over it. */
 .postbar.has-photo .mention-list { margin-bottom: calc(0.6rem + 88px + 0.6rem); }
 
-/* THE SEND DISC — the FAB's job on this route, so it wears the FAB's material
-   in the same corner of the same screen. It is a member of the primary-act set
-   (see the .publish-fill.is-solid block down near .composer-post, where the
-   band, the edge, the rim, the float and --pill-alpha are declared ONCE for all
-   of them), so nothing about the material is restated here — only geometry, the
-   ramp, and the way it isn't there.
-
-   Thinned, not opaque. The FAB is the set's one opaque member because it floats
-   over live scrolling content; this disc floats over the bar's own glass, which
-   is the .toolbar-cta case exactly.
+/* THE SEND DISC wears THE BUTTON (.publish-fill, declared once near the top
+   of this file), so only geometry and the way it isn't there are stated here.
+   Natively the disc is drawn by the plugin off this element's own computed
+   fill, hairline and wash (setPostBar in app.js), so the two cannot part.
 
    44px, and the disc IS the target — the toolbar's settlement for the toolbar's
    reason: a bar full of the page's own controls is drawn at the size it is
@@ -4177,26 +4090,14 @@ body.postbar-live main { padding-bottom: 6.5rem; }
    It is deliberately SMALL. A card is a thing you choose a colour for, not a
    thing you read in a sheet — the words on it are already the words on the post
    behind the scrim, and a preview tall enough to read them would push the
-   actions off the bottom of a short phone.
-
-   THE PROFILE SHEET PUTS A CODE IN THAT FRAME INSTEAD, and it is the one place
-   the paragraph above does not hold: a QR scaled down with the card around it
-   is 110px of picture on a screen somebody is holding out to be scanned. The
-   panel is the profile's own header over the code, on Tria's paper, and it
-   carries its own size in an inline style (storycard.js measures it, in whole
-   device pixels per module), so it needs nothing here but the frame it lands
-   in. It has NO BACKGROUND ROW under it either — its colour is the code's — so
-   .cardshare-bgs is absent from that sheet rather than styled away. See "A CODE
-   IS NOT A PREVIEW" in app.js. */
+   actions off the bottom of a short phone. */
 .cardshare { padding: 0.35rem 0.15rem 0.6rem; }
 .cardshare-art {
   display: grid; place-items: center;
   margin-bottom: 0.7rem;
   /* RESERVED BEFORE THE FIRST DRAW, so the sheet opens at the height it keeps
      instead of standing up under the finger a frame or two later. It is the
-     canvas ceiling below, because that is what a portrait card always comes to;
-     the code panel measures shorter than this on a narrow window and overrides
-     both this and `height` inline. */
+     canvas ceiling below, because that is what a portrait card always comes to. */
   min-height: clamp(240px, 44vh, 500px);
 }
 .cardshare-art canvas {
@@ -4220,30 +4121,16 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   grid-template-columns: repeat(4, 1fr);
   gap: 0.3rem;
 }
+/* .pill-quiet, and the chosen one takes the wash (.is-on), the way a picked
+   RSVP does. */
 .cardshare-bg {
-  font: inherit; font-size: 0.8rem;
+  font: inherit; font-size: 0.8rem; font-weight: 500;
+  min-height: 36px;
   padding: 0.5rem 0.2rem;
-  border: 0; border-radius: 999px;
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  color: var(--muted);
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: background var(--dur-micro), color var(--dur-micro);
 }
-/* The chosen one wears the reader's own band, the same fill every primary act
-   in the app wears, so "which background" is answered in the app's own colour
-   rather than in a grey that means nothing. */
-.cardshare-bg[aria-pressed="true"] {
-  background-image: var(--pill-band);
-  color: var(--pill-ink);
-  font-weight: 700;
-}
-.cardshare-bg:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
-}
-@media (prefers-reduced-motion: reduce) {
-  .cardshare-bg { transition: none; }
-}
+.cardshare-bg.is-on { font-weight: 700; }
 
 /* No dark-mode block here any more: fill, rim and lift are all tokens now, and
    the tokens flip themselves. Same for the mention popover and the modal card. */
@@ -4439,11 +4326,9 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .blocked-name { font-size: 1.4rem; margin: 0; }
 .blocked-note { color: var(--muted); max-width: 30ch; margin: 0 0 0.6rem; line-height: 1.5; }
 .blocked-unblock {
-  padding: 0.6rem 1.4rem; border-radius: 999px; cursor: pointer;
-  font: inherit; font-weight: 700; color: var(--text);
-  background: var(--surface-2); border: 1px solid var(--rule);
+  min-height: 52px; padding: 0.6rem 1.8rem; border-radius: var(--radius-pill);
+  cursor: pointer; font: inherit; font-weight: 700;
 }
-@media (hover: hover) { .blocked-unblock:hover { background: var(--surface-3, var(--surface-2)); } }
 
 /* ── Photo entries — identity + caption lead, full-bleed image last ────────── */
 /* The image keeps its own aspect ratio (no forced 1:1 crop); the figure sizes to
@@ -4991,6 +4876,7 @@ body.gate main { padding: 0; }
 }
 .field--combo .combo-userinput:focus { outline: none; }
 .field-hint--combo { margin-top: 0.4rem; }
+.field-hint.is-taken { color: var(--type-find-ink); }
 
 /* ── Rich Note editor (contenteditable) + its formatting toolbar ───────────────
    The body is a contenteditable that renders headings/emphasis live (WYSIWYG) —
@@ -5445,21 +5331,14 @@ button.poll-option:disabled { cursor: default; }
   justify-content: center;
   gap: 0.6rem;
   width: 100%;
-  min-height: 3rem;
+  min-height: 52px;
   padding: 0.72rem 1rem;
   font: inherit;
   font-weight: 600;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: border-color var(--dur-micro), background-color var(--dur-micro);
 }
-@media (hover: hover) {
-  .auth-provider:hover { border-color: var(--muted); background: var(--surface-2); }
-}
-.auth-provider:disabled { cursor: default; color: var(--muted); }
+.auth-provider:disabled { cursor: default; color: var(--muted); opacity: 1; }
 /* The marks are set on the CAP HEIGHT of the label, not on its em box, so the
    two rows line up with each other rather than each with its own glyph. Apple's
    optical centre sits high (the leaf), hence the hair of negative top margin. */
@@ -5496,25 +5375,12 @@ button.poll-option:disabled { cursor: default; }
 
 .auth-submit {
   width: 100%;
+  min-height: 52px;
   margin-top: 0.5rem;
-  color: var(--on-accent);
-  background: var(--lit-top), var(--accent);
-  border: none;
   border-radius: var(--radius-pill);
-  font-weight: 700;
   font-size: 1.02rem;
   padding: 0.8rem;
-  box-shadow: var(--lit-rim), var(--lit-drop);
-  transition: background-color var(--dur-micro);
 }
-.auth-submit:hover { background: var(--lit-top), var(--accent-press); }
-/* The auth gate's Create account / Log in commit wears the same tinted glass as
-   the hero Post pill and compose "+" (.publish-fill.is-solid): the flat accent
-   bg would paint over the band, so drop it here and let the material below
-   (shared with .composer-post) carry the look. Its own box-shadow goes too, or
-   it would sit under the shared rim and float. */
-.auth-submit.publish-fill { background: none; box-shadow: none; color: var(--pill-ink); }
-.auth-submit.publish-fill:hover { background: none; }
 .auth-alt { margin-top: 1.5rem; font-size: 0.88rem; color: var(--muted); text-align: center; }
 .auth-alt button {
   background: none;
@@ -6623,22 +6489,6 @@ button.poll-option:disabled { cursor: default; }
   font-size: 0.95rem;
 }
 @media (hover: hover) { .friends-share-copy:hover .daily-go { transform: translateX(2px); } }
-/* HAIRLINE GLASS WITH A GRADIENT WASH (Zoe, 2026-10-22: "use the hairline
-   glass style and a gradient for css buttons, like the daily's tag KIND OF").
-   Not the solid band: the glass fill, the daily tag's hairline, and the band
-   laid over it thin (the tag runs it at 0.17; a button wants a little more to
-   read as the thing to press), with the page's own ink on top. Stated with
-   two more classes than the shared solid-CTA rule below, so it wins there
-   without a source-order dance. */
-.daily-card .daily-answer.publish-fill.is-solid,
-.friends-share .friends-share-copy.publish-fill.is-solid {
-  color: var(--text);
-  background: var(--glass-bg);
-  border: 1px solid color-mix(in srgb, var(--text) 26%, transparent);
-  box-shadow: none;
-}
-.daily-card .daily-answer.publish-fill.is-solid::before,
-.friends-share .friends-share-copy.publish-fill.is-solid::before { opacity: 0.3; }
 .daily-count:empty { display: none; }
 .daily-go { font-size: 1rem; transition: transform var(--dur-micro) var(--ease); }
 /* Already answered (one each): the invitation is spent and nothing replaces it.
@@ -7276,76 +7126,29 @@ button.poll-option:disabled { cursor: default; }
    ••• beside it. Dress only; the geometry is .toolbar-btn's. */
 .account-friend-badge { color: var(--text); border-color: color-mix(in srgb, var(--text) 22%, transparent); }
 
-/* Friend toggle (pre-friend states only — add / requested / accept; once you're
-   friends it collapses to the toolbar's tie glyph). Centred in the action row. */
-/* Every state is the SAME box — Add friend, Requested, Following, Add back all
-   draw at one size, so the button never resizes under your thumb when it flips.
-   Sizing lives here and only here; the state rules below change dress (gradient
-   vs. outline), never geometry. The 44pt HIG target is drawn rather than bought
-   with the shared ::after overlay — originally because the publish-fill variant
-   spent ::after on the grain layer, and kept now that the grain is gone because
-   a real box is the sturdier way to size a control that changes label. border-box
-   is global, so the outline state's 1px border doesn't make it a pixel taller. */
+/* A profile's tie (Add friend, Requested, Following, Add back, Accept request)
+   and a circle's Join / Post / Chat. Every state is the SAME box, so the button
+   never resizes under your thumb when it flips: geometry lives here, and the
+   material is THE BUTTON's. A live commit wears .publish-fill; a done state
+   (Requested, Following) and Chat wear .pill-quiet, and the done ones say so in
+   the muted ink, because the wash means "this is the move", not "you already
+   did it". */
 .friend-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin: 0;
-  /* Fills the row rather than sitting at a label's width — min-width stays as
-     the floor for anything that ever draws this button outside .account-actions. */
   flex: 1;
   min-width: 122px;
-  min-height: 44px;
+  min-height: 52px;
   border-radius: var(--radius-pill);
   padding: 0.46rem 1.35rem;
-  font-weight: 700;
-  font-size: 0.87rem;
+  font-size: 0.95rem;
   line-height: 1;
-  transition: color var(--dur-micro), background-color var(--dur-micro), border-color var(--dur-micro);
+  text-decoration: none;
 }
-/* The accent fill is the NON-gradient dress (only "Requested" wears it now, via
-   [aria-pressed] below). Scoped off .publish-fill so it can't override the
-   gradient's own background/border/colour — .friend-btn is later in the file and
-   would otherwise win on equal specificity. */
-.friend-btn:not(.publish-fill) {
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 1px solid var(--accent);
-}
-/* The accent hover is DORMANT, and the :not() is what makes it safe rather than
-   redundant. app.js gives .publish-fill to exactly the three live-commit states,
-   so `:not(.publish-fill)` and `[aria-pressed="true"]` currently select the same
-   two buttons — which meant this rule, written for the accent dress, was landing
-   squarely on the ghost. At 0,3,0 it outranked the ghost's own 0,2,0 rule, so
-   hovering "Requested" or "Following" painted a solid --accent-press fill and the
-   ghost hover below lifted the label to --text on top of it: measured 1.14:1 in
-   light and 1.13:1 in dark, i.e. the word vanished into its own button. Desktop
-   web only (@media hover), which is why the phone never showed it. Kept, not
-   deleted, because it is the correct hover for the accent dress the moment
-   anything wears it un-pressed again. */
-@media (hover: hover) {
-  .friend-btn:not(.publish-fill):not([aria-pressed="true"]):hover {
-    background: var(--accent-press);
-    border-color: var(--accent-press);
-  }
-}
-/* "Requested" is the one state with no fill of its own, so its outline is drawn in
-   its own label colour (currentColor) rather than --rule or a flat white. Two
-   reasons. It sits in the card's bottom-right corner, which is exactly where the
-   profile's sampled glow is strongest, and a neutral hairline there took a tint
-   from whatever colour that person's avatar happened to be — the one element on
-   the card whose job is to look the same for everybody. And a ghost button is a
-   label with an edge round it, not a label plus a separate line: tying the two
-   together means the outline can never drift off the ink, in either scheme.
-   Hover comes free — the label lifts to --text and the border rides along, which
-   the fixed white it replaced couldn't do. */
-.friend-btn[aria-pressed="true"] {
-  color: var(--muted);
-  background: none;
-  border-color: currentColor;
-  font-weight: 400;
-}
+.friend-btn[aria-pressed="true"] { color: var(--muted); font-weight: 400; }
 @media (hover: hover) {
   .friend-btn[aria-pressed="true"]:hover { color: var(--text); }
 }
@@ -7423,11 +7226,10 @@ button.poll-option:disabled { cursor: default; }
    a reader is most likely to aim at. Only the button wants the events; the
    chevron is decoration and hands its taps down to the row. */
 .friend-slot { position: relative; display: flex; flex-shrink: 0; pointer-events: none; }
-/* The tie, at row scale. NOT .friend-btn's accent fill: on a profile that
-   button is the one primary act on the page and the fill says so, and a column
-   of forty of them says it about nothing. Ink on a hairline for a live tie,
-   muted for a committed one (Requested / Following, the two that undo on tap) —
-   the same split .friend-btn draws with aria-pressed, minus the fill.
+/* The tie, at row scale, and always .pill-quiet: on a profile the tie is the
+   one primary act on the page and the wash says so, and a column of forty of
+   them would say it about nothing. Muted for a committed one (Requested /
+   Following, the two that undo on tap), the same split .friend-btn draws.
 
    44px, and the pill IS the target: a row's own control is drawn at the size it
    is touched, which is the settlement --toolbar-btn already took, so there is no
@@ -7440,23 +7242,14 @@ button.poll-option:disabled { cursor: default; }
   min-height: 44px;
   padding: 0.4rem 0.9rem;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--rule);
-  background: none;
-  color: var(--text);
-  font-weight: 700;
   font-size: 0.82rem;
   line-height: 1;
   white-space: nowrap;
-  transition: color var(--dur-micro), background-color var(--dur-micro),
-              border-color var(--dur-micro), opacity var(--dur-micro);
 }
 .friend-tie[aria-pressed="true"] { color: var(--muted); font-weight: 400; }
-@media (hover: hover) {
-  .friend-tie:hover { background: var(--surface); border-color: var(--muted); }
-}
 /* Disabled means a write is in flight, and it always hands itself back (see the
    delegated handler in renderFriends) — so this is a wait, not a dead end. */
-.friend-tie:disabled { opacity: 0.5; cursor: default; }
+.friend-tie:disabled { cursor: default; }
 .friend-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
 .friend-name { font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--text); }
 .friend-user { font-size: 0.82rem; color: var(--muted); }
@@ -7491,38 +7284,26 @@ button.poll-option:disabled { cursor: default; }
   .ptile:hover .friend-go { color: var(--text); transform: translateX(3px); }
 }
 
-/* Empty Discover list: the "no one new" note plus a soft ask to share Tria,
-   with a copy-the-link pill wearing the Post button's gradient ring. */
+/* Share Tria, at the foot of Discover: an ask and the full-width pill the cards
+   above it wear (its size is declared with theirs, in the daily block). No
+   hairline over it: the cards already end on their own edge (Zoe, 2026-10-22:
+   "remove divider line after cards on discover"). */
+.friends-share { padding-top: 0.5rem; }
 .friends-share p { margin: 0; }
-/* Standing at the foot of Find Friends — a hairline lifts it off the list above.
-   Not on Discover, where it follows a stack of cards that already end on their
-   own edge (Zoe, 2026-10-22: "remove divider line after cards on discover"). */
-.friends-share { border-top: 1px solid var(--rule); margin-top: 1.25rem; }
-.view--discover .friends-share { border-top: 0; margin-top: 0; padding-top: 0.5rem; }
 .friends-share-ask { margin-top: 0.35rem; }
-/* The 44px floor is STATED, not inherited from the padding — which is what it
-   was, and the padding measured 36.8. This is the app's only standing share CTA
-   that is a button rather than a menu row (every other share is a row in a
-   UIMenu, which the system sizes), so there was nothing beside it to keep it
-   honest. Same settlement as .daily-answer: the pill IS the target, no invisible
-   ::after to keep in step. */
 .friends-share-copy {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
   margin-top: 1rem;
-  min-height: 44px;
   border-radius: var(--radius-pill);
   padding: 0.45rem 1rem;
-  font-size: 0.85rem;
 }
 
 /* ── Push pre-prompt — the soft ask on Updates. Still editorial (serif title,
    not a system alert), but on the same frosted-glass card material as the
    notifications it sits above, so the head of the Updates list reads as one
-   family. The affirmative action wears the Post button's gradient, the dismiss
-   stays a quiet ghost. ── */
+   family. Turn on wears THE BUTTON, the dismiss stays a muted word. ── */
 .push-ask {
   display: flex;
   flex-wrap: wrap;
@@ -7569,12 +7350,8 @@ button.poll-option:disabled { cursor: default; }
   color: var(--muted);
 }
 .push-ask-dismiss:hover { color: var(--text); }
-/* The affirmative action wears .publish-fill.is-solid — the same tinted glass
-   as Add yours, down in the shared rule that names it alongside the other
-   PRIMARY ACTS. Turning notifications on is that same weight of commitment, so
-   it gets the app's real brand gesture rather than a plain accent fill standing
-   in for it. Only the geometry is stated here, sized to this card rather than
-   the toolbar's own tokens. */
+/* Turn on is THE BUTTON (.publish-fill): the one irreversible commitment on
+   the card. Only the geometry is stated here. */
 .push-ask-on {
   display: inline-flex;
   align-items: center;
@@ -8099,6 +7876,7 @@ button.poll-option:disabled { cursor: default; }
 /* ── Activities (1.7) ─────────────────────────────────────────────────────────
    The three answers, above the guest list on an activity's page. */
 .rsvp-choice { display: flex; gap: 0.5rem; margin: 0.25rem 0 1rem; }
+/* .pill-quiet, and the chosen one takes the wash (.is-on). */
 .rsvp-opt {
   flex: 1;
   min-height: 44px;
@@ -8106,14 +7884,9 @@ button.poll-option:disabled { cursor: default; }
   font: inherit;
   font-size: 0.92rem;
   font-weight: 500;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  transition: background-color var(--dur-micro), color var(--dur-micro), border-color var(--dur-micro);
 }
-.rsvp-opt.is-on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
-.rsvp-opt:disabled { opacity: 0.6; }
+.rsvp-opt.is-on { font-weight: 700; }
 
 /* This week, stacked on top of My Circle. It rides the shared --feed-width
    column with the feed under it (see the content-block cap above): left to fill
@@ -8222,20 +7995,12 @@ button.poll-option:disabled { cursor: default; }
 .request-text { font-size: 0.95rem; font-weight: 300; line-height: 1.4; min-width: 0; }
 .request-text strong { font-weight: 700; }
 .request-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
-/* Accept wears the compact filled-accent pill (the directory's Add); Ignore is
-   a quiet muted text button beside it — secondary, understated. */
+/* Accept is THE BUTTON at row scale; Ignore is a muted word beside it. */
 .request-accept {
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  min-height: 44px;
   border-radius: var(--radius-pill);
   padding: 0.4rem 1rem;
   font-size: 0.85rem;
-  font-weight: 700;
-  transition: background-color var(--dur-micro), border-color var(--dur-micro);
-}
-@media (hover: hover) {
-  .request-accept:hover { background: var(--accent-press); border-color: var(--accent-press); }
 }
 .request-ignore {
   background: none;
@@ -8251,8 +8016,6 @@ button.poll-option:disabled { cursor: default; }
 .composer { padding-inline: var(--inset); }
 
 /* Type picker reuses the filter chips, laid out as three equal segments. */
-.type-pick { display: flex; gap: 0.5rem; margin-bottom: 1.9rem; }
-.type-opt { flex: 1; text-align: center; padding-inline: 0.5rem; }
 
 .composer .field:first-of-type { margin-top: 0; }
 /* Softer, more iOS corners on the composer's own fields — a touch rounder than the
@@ -8278,46 +8041,15 @@ button.poll-option:disabled { cursor: default; }
   width: auto;
   margin-top: 0.4rem;
   margin-left: auto;
-  border: none;
   border-radius: var(--radius-pill);
-  font-weight: 700;
   font-size: 0.95rem;
   padding: 0.62rem 1.6rem;
-  transition: background-color var(--dur-micro);
 }
-/* Save-style submits stay monochrome ink; the composer's own Publish carries
-   the shifting pastel fill instead (.publish-fill). */
-.composer-submit:not(.publish-fill) {
-  color: var(--on-accent);
-  background: var(--lit-top), var(--accent);
-  box-shadow: var(--lit-rim), var(--lit-drop);
-}
-@media (hover: hover) { .composer-submit:not(.publish-fill):hover { background: var(--lit-top), var(--accent-press); } }
-
-/* The composer's own Post button: a centred, wider pill. Centring keeps it clear
-   of the floating "+" (which used to sit on top of the right-aligned fill). It
-   wears the same shifting-pastel liquid-glass fill as the nav Post and Share
-   buttons (.publish-fill.is-solid) — the hero commit reads as the brand gesture. */
-/* FULL WIDTH, the way the profile's Follow / Requested pair is, rather than a
-   centred pill at a label's width. Three things fall out of it and all three are
-   why it's the better shape:
-
-   The old pill was centred to keep clear of the floating "+", which is a
-   constraint that stopped existing — the composer tucks the FAB away
-   (.nav--compose), so the corner it was dodging is empty. What was left was a
-   hero commit sized to the word "Share", which is the one button on this page
-   and did not look like it.
-
-   .friend-btn is the model: `flex: 1` in its row, a 44px floor, and `line-height:
-   1` so the box is the padding and not the font's leading. Stated here as
-   `width: 100%` because this button's parent is a form rather than a two-button
-   row — same result, one less thing to inherit.
-
-   And the floor is STATED. Measured in the app, with Oxygen actually landed,
-   this button was 43.81pt — under the HIG floor by a fifth of a point, on the
-   app's single most important act. The padding-derived height was right at the
-   line in the fallback face and over it in the real one; line-height: 1 plus an
-   explicit min-height settles it in both. */
+/* The composer's Share: full width and 52px, the size of every page-wide pill
+   since 1.9 (the daily's and the circles' on Discover, the gate's submit, a
+   profile's tie). line-height: 1 so the box is the padding and not the font's
+   leading, and the floor STATED, because the padding alone measured 43.81pt in
+   Oxygen. */
 .composer .composer-post {
   display: flex;
   align-items: center;
@@ -8325,10 +8057,9 @@ button.poll-option:disabled { cursor: default; }
   width: 100%;
   margin-inline: 0;
   margin-top: 1.4rem;
-  min-height: 44px;
+  min-height: 52px;
   line-height: 1;
 }
-.composer .composer-post:disabled { opacity: 0.55; }
 
 /* No reactive colour on this page at all. A pool of the inferred type's hue sat
    behind the Post pill, then moved full-screen as the ambient wash, then went to
@@ -8397,128 +8128,6 @@ button.poll-option:disabled { cursor: default; }
   .post-progress-fill { transition: none; }
 }
 
-/* TINTED GLASS — the primary-action material, and what the LIT DOME became.
-
-   The rule for joining the list has not moved: this is what the app's PRIMARY
-   ACT looks like — commit, or go and commit. Post, the FAB, the gate's Create
-   account, Share Tria, the editor's Save, the daily's "Add yours" in both the
-   places it appears, and — as of the Updates push pre-ask — "Turn on". It is
-   not decoration for any button that would look nice with a gradient on it;
-   spread it and it stops meaning anything. "Turn on" qualifies on the same
-   test as the others: tapping it is the one irreversible commitment on its
-   card (iOS answers `requestAuthorization` once per install), not a filter or
-   a dismissal, so it earns the same weight as Add yours rather than borrowing
-   a plain accent fill.
-
-   What changed is the material. It used to be a lit dome: a top-left specular
-   gloss and a base cavity shadow layered over an opaque band, so the button
-   read as a glossy 3D bubble. It is now the app's own glass, tinted — the band
-   at --pill-alpha behind the app's ordinary --glass-edge, --glass-rim and
-   --glass-lift. Same three parts every other glass surface in Tria is built
-   from, so a CTA is now recognisably made of the same stuff as the toolbar and
-   the sheets rather than out of a vocabulary it alone spoke.
-
-   It is the GLASS-MINUS-BLUR tier, the same settlement the masonry tiles
-   already take, and that is deliberate rather than a shortcut. A
-   `backdrop-filter` costs area × radius × moving-frames, and the FAB is on
-   screen on every route in the app, over a feed that scrolls — which is exactly
-   the bill CLAUDE.md refuses everywhere else. Fill, edge, rim and float carry
-   the read; the sample is the one part that would only be visible while it was
-   also being expensive.
-
-   --pill-alpha is 0.85 and is a CONTRAST floor, not a taste setting. --on-type
-   (#14171a) rides on this fill, and translucency composites the button against
-   whatever is behind it — dark paper is the hard case, because a pastel thinned
-   over #0e1012 walks toward the ink sitting on it. The measured figures live
-   beside the token in tokens.css and are NOT restated here: this copy still
-   read "the worst pair is rose on dark at 5.51" long after accents were
-   normalised to one weight and the margin widened to 6.04, and "rose" has since
-   been reused for a different colour, so the sentence was wrong twice over. One
-   home for the numbers, which is what the paragraph below already asks for.
-   0.85 buys visible translucency and still clears AA in both schemes. The ink
-   is --pill-ink, and for a reader's colour it is measured PER SCHEME against
-   the hex thinned to this value (accentInk in app.js, as of 2026-09-10), so a
-   deep hex carries the near-white on ink and the near-black on paper. The note
-   that used to be here said the opaque FAB forbade a per-scheme ink, holding
-   its glyph to 4.5; that is the floor for text, and a glyph's is 3. The FAB's
-   worst is 3.57 (ocean on ink). See ACCENTS for the figures.
-
-   They are declared in ONE rule on purpose. Every one of them holds still, and
-   one drifting while the others held would read as a bug in whichever you saw
-   second — so there is no second copy of these numbers to forget. */
-.composer .composer-post.publish-fill.is-solid,
-.auth-submit.publish-fill.is-solid,
-.friends-share-copy.publish-fill.is-solid,
-.toolbar-commit.publish-fill.is-solid,
-.toolbar-cta.publish-fill.is-solid,
-.daily-answer.publish-fill.is-solid,
-.postbar-send.publish-fill.is-solid,
-.push-ask-on.publish-fill.is-solid {
-  /* THE BAND lives in tokens.css now (--pill-band) and is no longer declared
-     here, which is a change of meaning and not just of address.
-
-     It used to be the post-type quintet, under a rule that all five had to show
-     on every one of these buttons — a button carrying four of them was read as
-     saying the fifth type wasn't on offer. Rose came out once on looks and went
-     back in for exactly that reason. The band names no types at all now: it is
-     Tria's own four-stop brand ramp, or the reader's accent if they set one, so
-     "which types are missing" is not a question it can be asked any more.
-
-     What carries over intact is the ORDER, and it is still not `FILTERS` order.
-     The stops run by hue so the whole thing is one continuous sweep; filing
-     order would climb to the highest-chroma stop in the set and come back down
-     right under the label. The pull-to-refresh quintet is the opposite case and
-     correctly keeps filing order — five discrete dots, where the sweep argument
-     has nothing to say.
-
-     Reading a variable rather than declaring one is what lets the accent reach
-     these buttons without redeclaring the material around it. */
-  border: var(--glass-edge);
-  box-shadow: var(--glass-rim), var(--glass-lift);
-}
-.composer .composer-post.publish-fill.is-solid::before,
-.auth-submit.publish-fill.is-solid::before,
-.friends-share-copy.publish-fill.is-solid::before,
-.toolbar-commit.publish-fill.is-solid::before,
-.toolbar-cta.publish-fill.is-solid::before,
-.daily-answer.publish-fill.is-solid::before,
-.postbar-send.publish-fill.is-solid::before,
-.push-ask-on.publish-fill.is-solid::before {
-  /* The tint itself. Translucency lives HERE rather than in the band, because
-     --pill-band may be a gradient this stylesheet never sees (paintBrandBand
-     writes the accent one at runtime) and there is no way to reach into a
-     gradient's stops and add alpha from CSS. One opacity on the layer thins
-     every stop at once and works for both sources.
-
-     The ::before is already z-index:-1 under an `isolation: isolate` parent
-     whose own background is `none`, so thinning it composites the button
-     against the PAGE — which is the whole point, and what makes this glass
-     rather than a paler pill.
-
-     INSET IS -1px, NOT 0, AND THAT IS THE BORDER'S WIDTH. `inset` on an
-     absolute child resolves against the PADDING box, so a `.publish-fill::before`
-     at `inset: 0` stops 1px short of the border box all the way round — and the
-     element's own background is `none`, so --glass-edge's translucent hairline
-     had nothing but the PAGE behind it. The edge therefore stopped being an edge
-     and became a window: measured on dark paper at 390px, that 1px ring rendered
-     rgb(36,38,40) over #0e1012 and rgb(250,250,250) over a white photo, a swing
-     of 214 levels driven entirely by whatever happened to be scrolling behind
-     the button. A real `background` would have painted to the border box; -1px
-     is what puts this stand-in back where a background would have been, so the
-     hairline composites over the band the way it does on every other glass
-     surface in the app. Coupled to --glass-edge's 1px by hand, since a border
-     shorthand offers CSS no way to read its own width back out. */
-  inset: -1px;
-  background: var(--pill-band);
-  opacity: var(--pill-alpha);
-}
-/* Dark mode needs no second recipe, and that is the point of moving to the
-   shared material. The dome did: its black cavity and drop shadows all but
-   vanished on dark paper, so the volume had to be rebuilt out of light, which
-   meant two hand-tuned copies of the same button. --glass-edge, --glass-rim and
-   --glass-lift already answer the scheme once, in tokens.css, the way every
-   other glass surface gets it. Nothing to restate here. */
-/* No reduced-motion waiver either: the material holds still for everyone. */
 
 /* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
    "Shared with  Everyone in your circle ›". Reads as a field, opens the picker
@@ -9318,55 +8927,6 @@ button.poll-option:disabled { cursor: default; }
    app.js) — so the button says what leaving would cost. Dress only; both states
    are .toolbar-btn and neither needs a rule of its own. */
 
-/* ── Modal — a frosted overlay + a calm card ───────────────────────────────── */
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: 250;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
-  /* Panel tier: a full-screen sample, but of a page that cannot scroll while the
-     modal owns it, so the radius is free after the first frame. */
-  backdrop-filter: var(--glass-filter-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  animation: fade 0.18s ease;
-}
-.modal-card {
-  width: 100%;
-  max-width: 380px;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
-  padding: 1.6rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-  animation: rise var(--dur-quick) var(--ease);
-}
-/* Liquid-glass card: the same frosted panel language as the nav pill, scaled up
-   to a modal. Translucent frosted background (the dimmed page saturates through
-   it), a hairline border, a top inner highlight (the "lit rim"), and a deep
-   float shadow. The .modal veil already blurs what's behind, so this reads as a
-   pane of glass floating over frosted glass rather than a flat opaque sheet. */
-.modal-card--glass {
-  /* iOS HIG rounding: a soft continuous-feeling corner in the card/sheet range
-     (well above the 8px --radius-img), so the glass panel reads like a native
-     iOS modal rather than a boxy web dialog. */
-  border-radius: var(--radius-modal);
-  background: var(--glass-bg-panel);
-  backdrop-filter: var(--glass-filter-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  border: var(--glass-edge);
-  box-shadow: var(--glass-rim), var(--glass-lift-panel);
-}
-.modal-title {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-weight: 400;
-  font-size: 1.7rem;
-  color: var(--text);
-  margin-bottom: 1.1rem;
-}
 /* The avatar crop is a circle (what you see is what you get — photos display
    round), and it is BIGGER than the resting avatar it replaces. It used to read
    the same --pf-avatar, so picking a photo filled the circle without resizing
@@ -9392,31 +8952,6 @@ button.poll-option:disabled { cursor: default; }
    own aspect ratio, so there's nothing to pan (no square frame, no drag hint). */
 .crop--free { aspect-ratio: auto; cursor: default; touch-action: auto; }
 .crop--free img { position: static; width: 100%; height: auto; max-width: 100%; }
-/* A LIST INSIDE A FROSTED CARD IS GONE, and it took its bug with it. A card with
-   no max-height, centred in a `.modal` with no overflow, clipped a long list at
-   both ends with nothing left to scroll. Someone's circle went first and is a
-   page now (renderFriends). The composer's audience picker was argued safe here
-   because it was "short by construction" — it lists your whole circle, so it
-   never was — and it is a bottom sheet now too (.sheet-scrim--aud), where the
-   checklist scrolls inside a capped panel and the dock holds still under it. */
-/* A modal's commit row: Cancel beside Save, inside the card.
-   `.form-actions` rode alongside every selector here — the same row on the
-   profile editor page, which is a form with the same two answers and no card
-   around it. It's gone as of 1.3: that page's answers are an X and a check in
-   its own toolbar, where they hold still instead of sitting at the foot of a
-   scrolling form. A modal keeps the row, because a modal has no bar to put them
-   on and its card is short enough that the row is never scrolled away from. */
-.modal-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
-.modal-actions .edit-cancel {
-  color: var(--muted);
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pill);
-  padding: 0.6rem 1.2rem;
-  font-size: 0.92rem;
-}
-.modal-actions .composer-submit { width: auto; margin: 0; padding: 0.6rem 1.4rem; }
-
 /* Account actions — Log out + Delete, grouped in their own zone at the foot of
    the form and split off by a hairline (which is now the only thing between the
    form and them, the Cancel/Save row having moved into the bar). Icon + label each. Log out stays
@@ -9430,31 +8965,24 @@ button.poll-option:disabled { cursor: default; }
   padding-top: 1rem;
   border-top: 1px solid var(--rule);
 }
+/* Two .pill-quiet halves of the row; Delete says it is the risky one in ink. */
 .pf-account-btn {
+  flex: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
-  color: var(--muted);
-  background: none;
-  border: none;
+  min-height: 44px;
   padding: 0.5rem 0.85rem;
   font-size: 0.9rem;
   border-radius: var(--radius-pill);
-  transition: color var(--dur-micro), background var(--dur-micro);
 }
 .pf-account-btn svg { width: 18px; height: 18px; }
 .pf-delete { color: var(--type-find-ink); }
-@media (hover: hover) {
-  .pf-logout:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, var(--bg)); }
-  .pf-delete:hover { background: color-mix(in srgb, var(--type-find) 18%, var(--bg)); }
-}
-.pf-logout:focus-visible { color: var(--text); background: color-mix(in srgb, var(--text) 8%, var(--bg)); }
-.pf-delete:focus-visible { background: color-mix(in srgb, var(--type-find) 18%, var(--bg)); }
 
-/* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar.
-   Tops the whole stack (above modals at 250 and the filter layer at 400): the
-   notifications toggle lives inside the Edit profile modal, so its confirmation
-   toast has to clear that veil or it flashes invisibly behind it. */
+/* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar,
+   and tops the whole stack (above the filter layer at 400) so a confirmation
+   is never drawn behind a sheet. */
 .toast {
   position: fixed;
   left: 50%;
@@ -9475,27 +9003,14 @@ button.poll-option:disabled { cursor: default; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .toast { transition: opacity var(--dur-quick) ease; } }
-.modal-actions .composer-submit:disabled { opacity: 0.5; }
-@media (hover: hover) {
-  .modal-actions .edit-cancel:hover { color: var(--text); border-color: var(--text); }
-}
 @keyframes fade { from { opacity: 0; } }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-/* Closing mirrors the open: the frost fades and the card sinks back down the
-   same 12px it rose, so dismissing reads as the reverse of appearing. */
 @keyframes fade-out { to { opacity: 0; } }
-@keyframes sink {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(12px); }
-}
-.modal--closing { animation: fade-out var(--dur-quick) var(--ease) forwards; }
-.modal--closing .modal-card { animation: sink var(--dur-quick) var(--ease) forwards; }
 @media (prefers-reduced-motion: reduce) {
-  .modal--closing, .modal--closing .modal-card { animation: fade-out var(--dur-micro) ease forwards; }
   /* Entrances and the tile's hover lift go. What stays is the tile face's
      opacity fade — a cross-fade isn't motion, and without it a photo would
      still pop in over its placeholder. */
@@ -9550,16 +9065,11 @@ button.poll-option:disabled { cursor: default; }
     right: 0;
     width: auto;
     height: auto;
-    z-index: 101;                     /* the pill + dial ride above the dial veil (100) */
-    /* The + is a --fab-size disc set --nav-gap off the pill; on the compose page
-       it tucks away and the pill slides right by half that footprint to recenter
-       (see .nav--compose). Both are vars so the recenter maths stays exact. */
-    --fab-size: 56px;
-    --nav-gap: 0.7rem;
+    z-index: 101;
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--nav-gap);
+    gap: 0.7rem;
     padding: 0;
     border: none;
     border-radius: 0;
@@ -9569,7 +9079,7 @@ button.poll-option:disabled { cursor: default; }
     -webkit-backdrop-filter: none;
     pointer-events: none;             /* the row spans the screen; only its children take taps */
   }
-  .nav-pill, .nav-publish { pointer-events: auto; }
+  .nav-pill { pointer-events: auto; }
   /* The rail's head has nowhere to go here: the nav is a pill and a round +
      floating over the content, not a column with a top. The name is on the app
      icon the reader tapped to get here, and on a phone the screen is the thing
@@ -9596,8 +9106,6 @@ button.poll-option:disabled { cursor: default; }
        swap (a page switch), leaving the nav invisible until a scroll repaints
        it. Pinning the layer here, plus the repaint nudge in route(), fixes it. */
     transform: translateZ(0);
-    /* Glides to true center when the + drops away on the compose page. */
-    transition: transform var(--dur-move) var(--ease);
   }
   /* Icon-only destinations: labels stay in the DOM for the accessible name but
      drop from view. Each target is a 50px circle with a 28px glyph — trimmed a
@@ -9650,134 +9158,10 @@ button.poll-option:disabled { cursor: default; }
     width: 6.5px;
     height: 6.5px;
   }
-  /* Press compression lives in the shared press engine (app.js) — `scale`, so it
-     never fights the FAB's own transforms. */
-
-  /* Post breaks out of the pill as a round button, made of the same tinted
-     glass as every other primary act: the band thinned to --pill-alpha behind
-     the app's ordinary edge, rim and float. The tint lives in the ::before (the
-     ring mask is dropped here), so there's no layer-order fight with the +
-     glyph on top, and the rim rides the button itself so the perimeter light
-     stays at full strength over the thinned fill. */
-  .nav-publish {
-    margin: 0;
-    width: var(--fab-size);
-    height: var(--fab-size);
-    padding: 0;
-    color: var(--pill-ink);
-    border-radius: 50%;
-    border: var(--glass-edge);
-    box-shadow: var(--glass-rim), var(--glass-lift);
-    /* Fades fast while it sinks slower, so it reads as dropping behind the nav
-       rather than blinking out. (It used to be matched to the docked seg-tabs
-       rise; that switcher is inline now and no longer moves.) */
-    transition: opacity var(--dur-quick) var(--ease),
-                transform var(--dur-move) var(--ease);
-  }
-  /* THE + TAKES THE NEUTRAL WHERE THE REST OF THE APP TAKES TRIA'S RAMP, and it
-     is the one control in the set that does.
-
-     Four hues need a capsule to travel across and a 56pt disc is not one: the
-     sweep has nowhere to go and reads as a smudge rather than as a band. That is
-     why the NATIVE + has declined the ramp since 1.4 — the argument is written
-     out in full beside fabSpec in app.js — and this is the same decision said in
-     CSS, so the fallback chrome and the real chrome are finally the same button
-     rather than two answers to one question on one build.
-
-     --mono-band is ink-side on paper and paper-side on ink and --mono-ink is the
-     glyph built to ride it, so "no colour" and Tria's own both land as a black +
-     on white and a white + on black with no scheme test in this rule. A reader
-     who PICKED a colour still gets it: --user-band is stamped and wins the
-     fallback, and --user-ink is stamped alongside it on every branch that sets a
-     band (see paintBrandBand) so this line can never hand a picked accent the
-     neutral's near-white glyph.
-
-     Scoped to the phone deliberately. The SIDEBAR's Post is a capsule, which is
-     the one shape the ramp was always right on, and it keeps it. */
-  .nav-publish {
-    --pill-band: var(--user-band, var(--mono-band));
-    --pill-ink:  var(--user-ink,  var(--mono-ink));
-  }
-  .nav-publish .nav-ico { width: 30px; height: 30px; }
-  /* The + wears the whole band at once, lit, and holds still.
-
-     The band runs corner to corner across the disc at 1:1 instead of a
-     300%-wide band parked on a third of itself, so the button shows the whole
-     ramp in one glance. Which is also why the ramp's INTERPOLATION matters most
-     here: at 60px the gradient is the entire button, so the sRGB midpoint sag
-     that reads as a slight dullness on a 122px pill reads as banding on this
-     disc. It travels through oklab now — see --brand-band in tokens.css.
-
-     What the band IS depends on the reader's colour source, and both answers
-     land through --pill-band without this rule knowing which: an accent, or
-     --mono-band for everyone else — which is a reader who chose no colour and a
-     reader who chose Tria's own, together, for the reason set out at the
-     --pill-band override a few rules up.
-
-     The dome is GONE. The FAB takes the same glass edge, rim and float as every
-     other primary act, so it belongs to that set — but its fill stays OPAQUE,
-     and it is the one member that does.
-
-     Two reasons, and they are both about this disc being the only control that
-     is always up. It floats over the feed itself rather than over a form or a
-     page foot, so thinning it would show live content sliding through the app's
-     most permanent object — the FAB would flicker with whatever happened to
-     scroll behind it, which is noise on the one button that should read as
-     fixed. And the + glyph sits on this fill at every moment of the app's life;
-     an opaque band is the only version whose contrast doesn't depend on what is
-     underneath it. So --pill-alpha is deliberately NOT applied below.
-
-     The blur stays off here too, for the reason this disc has always been the
-     app's cost floor: on screen on EVERY route, over a feed that scrolls, which
-     is precisely the backdrop-filter bill the masonry grid already refuses.
-
-     What's gone with it is `publish-dome`, the 16s loop that slid the band
-     underneath that dome. It was the single most consequential animation in the
-     app — not because it was heavy on its own, but because this disc is always
-     up, so its per-frame paint invalidation was the app's permanent floor. */
-  .nav-publish::before {
-    -webkit-mask: none;
-    mask: none;
-    /* -1px, not 0 — the band has to reach the BORDER box or --glass-edge draws
-       over the live feed instead of over the fill. See the long note beside the
-       .is-solid ::before rule; the FAB is the worst case for it, being the one
-       opaque member and the one control that is up on every route, so its
-       hairline was the only part of it that flickered with the scroll. */
-    inset: -1px;
-    background: var(--pill-band);
-    /* No --pill-alpha on purpose — see above. The FAB is the opaque member. */
-  }
-  /* On the compose page the destination rule above would repaint the + with
-     --accent (white in dark mode); the glyph sits on the pastel fill in every
-     state, so it always wears the on-pastel ink. */
-  .nav-publish[aria-current="page"] { color: var(--pill-ink); }
-  /* The + does a whole turn as it becomes the ×: a full spin plus the 45° that
-     lands the plus on its diagonal. */
-  .nav-publish .nav-ico { transition: transform var(--dur-move) var(--ease); }
-  .nav-publish.dial-open .nav-ico { transform: rotate(405deg); }
-
-  /* Compose page (renderNav toggles .nav--compose): the + would fight the
-     composer's own publish button, so it sinks behind the nav and fades out,
-     and the tab pill glides to true center. The + stays in flow (opacity 0), so
-     shifting the pill right by exactly half the +'s footprint — its width plus
-     the row gap — lands the pill's center on the screen center. */
-  .nav--compose .nav-publish {
-    opacity: 0;
-    transform: translateY(14px) scale(0.6);
-    pointer-events: none;
-  }
-  .nav--compose .nav-pill {
-    transform: translateX(calc((var(--fab-size) + var(--nav-gap)) / 2)) translateZ(0);
-  }
-
-  /* 1.8: THE + LEFT THE TAB BAR. Making something lives on My Circle's top bar
-     now (the compose mark and its dial, see composeBtnEl in app.js), so on a
-     phone the four destinations are the whole bar and sit centred on every
-     route, the composer included. The two rules above are what it did while it
-     was here; they lose to these and are kept only because the sidebar's Post
-     link is the same element. */
+  /* 1.8: THE + LEFT THE TAB BAR for My Circle's top bar (composeBtnEl in
+     app.js), so on a phone the four destinations are the whole bar. The
+     sidebar's Post link is the same element, so it is hidden, not removed. */
   .nav-publish { display: none; }
-  .nav--compose .nav-pill { transform: translateZ(0); }
 
   /* ── The comment bar takes the nav's place ────────────────────────────────
      ON A POST'S PAGE THE BOTTOM OF THE SCREEN IS THE COMPOSER. The four
@@ -9810,116 +9194,6 @@ button.poll-option:disabled { cursor: default; }
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
   }
 
-  /* ── The + button's post-type speed dial ──────────────────────────────────
-     Tapping + fans these four labeled type buttons up out of the button (see
-     wireDial); the veil blurs the page behind them. Each item's icon chip
-     lines up in a column straight above the +, its label floating to the left
-     — the standard speed-dial reading. Absolutely placed inside the (fixed)
-     .nav; wireDial pins its right/bottom to the + each time it opens. */
-  .nav-dial {
-    position: absolute;
-    flex-direction: column-reverse;   /* Note (DOM-first) fans out nearest the + */
-    align-items: flex-end;
-    gap: 0.6rem;
-    pointer-events: none;             /* the items switch it back on once open */
-  }
-  /* Guarded so the `hidden` attribute still wins at rest (a bare `display: flex`
-     would outrank [hidden] and leave the empty menu in the a11y tree). */
-  .nav-dial:not([hidden]) { display: flex; }
-  .nav-dial.is-open { pointer-events: auto; }
-  .nav-dial-item {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    /* Collapsed: dropped onto the button and faded. Open: lifted into place,
-       each staggered a beat behind the one below it (nearest springs first). */
-    opacity: 0;
-    transform: translateY(14px) scale(0.9);
-    transition:
-      opacity var(--dur-quick) var(--ease),
-      transform var(--dur-quick) var(--ease);
-  }
-  .nav-dial.is-open .nav-dial-item {
-    opacity: 1;
-    transform: none;
-    transition-delay: calc(var(--i) * 0.04s);
-  }
-  /* No pill behind the label — the blurred veil plus the chip's own shadow
-     carry the separation. A soft page-coloured halo keeps the words legible
-     over whatever content the veil is dimming. */
-  .nav-dial-label {
-    padding: 0 0.1rem;
-    font-size: 0.98rem;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text);
-    white-space: nowrap;
-    text-shadow:
-      0 0 10px var(--bg),
-      0 1px 3px color-mix(in srgb, var(--bg) 65%, transparent);
-  }
-  /* Idea (b): the type colour GLOWS from behind the glyph rather than filling a
-     chip — a soft pastel bloom on frosted glass, keynote-ish, not a hard block. */
-  .nav-dial-ico {
-    position: relative;
-    width: 46px;
-    height: 46px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: color-mix(in srgb, var(--bg) 72%, transparent);
-    /* No backdrop-filter of its own — the veil behind the whole dial already
-       blurs the frozen page, so a second blur per disc is redundant sampling
-       fighting the stagger transform each row animates through. That is the
-       "never glass on glass" rule: one material at a time.
-
-       This dial and the FILTER dial were the same component on two anchors until
-       1.3, and they deliberately aren't any more. This one is a speed dial for
-       things you can MAKE, so it keeps the fanning discs and the pastel bloom —
-       that vocabulary is the point of it. The filter dial became a plain glass
-       card of listed rows, because "what am I looking at" is a list you read,
-       not a set of objects you reach for. Don't re-converge them. */
-    border: var(--glass-edge);
-    box-shadow: var(--glass-lift);
-  }
-  .nav-dial-ico::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    /* Bloom near centre so the hue reads as light through the whole disc — was
-       sunk low, but visually it lost the glyph; pulled up toward the middle. */
-    background: radial-gradient(64% 64% at 50% 50%, var(--glow) 0%, transparent 66%);
-    opacity: 0.7;
-  }
-  .nav-dial-ico svg { position: relative; width: 1.5rem; height: 1.5rem; }
-  .nav-dial-item:active .nav-dial-ico { transform: scale(0.92); transition: transform 0.08s; }
-
-  /* The page-dimming veil behind an open dial. */
-  .dial-veil {
-    position: fixed;
-    inset: 0;
-    z-index: 100;                     /* over the page + topbar, under the nav (101) */
-    background: color-mix(in srgb, var(--bg) 32%, transparent);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    opacity: 0;
-    transition: opacity var(--dur-quick) var(--ease);
-  }
-  .dial-veil.is-open { opacity: 1; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .nav-dial-item { transform: none; transition: opacity var(--dur-micro) ease; }
-    .nav-dial.is-open .nav-dial-item { transition-delay: 0s; }
-    .nav-publish .nav-ico, .dial-veil { transition: none; }
-    /* Snap the + away and the pill to center — no slide under reduced motion. */
-    .nav-pill, .nav-publish { transition: none; }
-    /* The FAB's dome drift used to need re-stilling here, because this rule
-       matched `.nav-publish::before` while the global waiver matched
-       `.publish-fill::before` and lost on source order. The + holds still in
-       every mode now, so there is nothing left to switch off. */
-  }
-
   /* Dark glass. The pill's own fill, rim and lift are tokens now and flip
      themselves, so what's left here is the pill's SPECIFIC dark problem: muted
      icons over a bright photo bleeding through chrome-tier glass drop below
@@ -9930,13 +9204,6 @@ button.poll-option:disabled { cursor: default; }
        already low-contrast against a dark pill, and dimming it by the light-mode
        amount pushes the three you are not on close to invisible. */
     .nav-pill .nav-ico { opacity: 0.5; }
-    /* Same treatment as the pill: run the icon chip less transparent so it reads
-       over dark content. The shadow is --glass-lift and deepens on its own. */
-    .nav-dial-ico { background: color-mix(in srgb, var(--bg) 82%, transparent); }
-    /* The pastel bloom glows far harder on dark paper — pull it right down so
-       the (light) glyph reads against the chip, not lost in a bright disc. */
-    .nav-dial-ico::before { opacity: 0.42; }
-    .dial-veil { background: color-mix(in srgb, var(--bg) 44%, transparent); }
   }
 
   /* ── The view switcher sits inline, at the top ──────────────────────────────
@@ -10593,18 +9860,6 @@ a.daily-answer { text-decoration: none; }
   height: 42%;
   color: color-mix(in srgb, var(--text) 55%, transparent);
 }
-/* The second of two buttons under a member's head (Chat, beside Post): the
-   outline the tie's settled state wears, at full weight, because this one is
-   a way somewhere and not a thing already done. */
-.friend-btn.friend-btn--quiet {
-  color: var(--text);
-  background: none;
-  border: 1px solid color-mix(in srgb, var(--text) 24%, transparent);
-}
-@media (hover: hover) {
-  .friend-btn.friend-btn--quiet:hover { border-color: color-mix(in srgb, var(--text) 45%, transparent); }
-}
-a.friend-btn { text-decoration: none; }
 
 /* Starting one, and its host's editor (#/c/new, #/c/<slug>/edit). */
 .community-form-lede {
@@ -10947,40 +10202,3 @@ html[data-chrome="native"] .postbar .mention-list,
 html[data-chrome="native"] .postbar .postbar-attach {
   bottom: var(--native-postbar-lift, 96px);
 }
-
-/* ── The page's own primary acts (1.4) ────────────────────────────
-   The auth gate's submit and Share Tria at the foot of Discover. UIKit draws
-   these now, in real Liquid Glass, over the page they sit on — see
-   TriaPageButton in the plugin and the PAGE_SEL half of NativeChrome in app.js
-   for the whole argument, including why a set that lives in SCROLLING content
-   can be native at all.
-
-   THE COMPOSER'S SHARE PILL AND THE DAILY CARD'S ADD YOURS ARE NOT HERE ANY
-   MORE (2026-09-19), and the reason is this file's material rather than the
-   plugin's tracking. Glass does not stack: a real lens over the composer's own
-   pane or over the daily card is a lens on something already blurred, and it
-   flattens where .publish-fill sitting IN the card shares the card's blur and
-   stays part of it. Those two are painted again, on every shell, and PAGE_SEL
-   carries the long version.
-
-   VISIBILITY, NOT DISPLAY, for exactly the reasons the toolbar's controls
-   state two hundred lines up, and one more that is sharper here. Hidden
-   visibility keeps the box in flow — and these boxes are load-bearing: Share
-   Tria is what a masonry grid ends ON. Dropping one from flow would collapse
-   the page the native button is measured against, which is the one measurement
-   this whole path depends on being true.
-
-   And the element underneath is still the button: a tap on the glass comes back
-   through `pageTap` and clicks it, so shareOrCopy and the gate's own form
-   remain the only implementations of themselves.
-
-   THE GATE'S OWN SUBMIT IS MATCHED HERE AND NEVER HIDDEN BY IT, which is not a
-   loose end. `data-chrome` goes up on a resolved setTabs, and setTabs is asked
-   for by renderNav, which does not run while body.gate is up — so signed out
-   this attribute is simply absent and the painted pill is the live one. The
-   selector is written for where the reader ends up, not for where they start.
-
-   LAST IN THE FILE, under the same rule the block above records: an attribute
-   selector carries specificity, and .publish-fill's own rules are stated later
-   than most of what they beat. Restated on the CTA rather than inherited. */
-html[data-chrome="native"] .auth-submit { visibility: hidden; }

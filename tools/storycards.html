@@ -96,15 +96,9 @@
 <p class="note" style="margin-top:40px">
   <b>What to look at.</b> The card is centred in what Instagram leaves free, so a
   longer post makes the type smaller rather than pushing the address under the
-  reply bar. Try the long one on the far right. The profile card is the odd one
-  out: no card on it at all, and no colour either. It is the profile page's own
-  header, shrunk, over a black code on Tria's paper, and it ignores both rows of
-  controls above. The code points at the profile, never at an invite link. The
-  share sheet draws that same composition at the size a camera reads it, with no
-  background pills under it.
+  reply bar. Try the long one on the far right.
 </p>
 
-<script src="../js/vendor/qr.js"></script>
 <script src="../js/storycard.js"></script>
 <script>
 (function () {
@@ -126,10 +120,6 @@
     { label: 'Daily, story', spec: { kind: 'daily', size: 'story', type: 'activity', author: ZOE,
         prompt: 'What actually made you laugh this week?',
         text: 'My dad tried to explain what a podcast is to my grandmother and she asked who was paying for it.' } },
-    { label: 'Profile, story', spec: { kind: 'profile', size: 'story', type: 'find', author: ZOE,
-        address: 'triaonline.com/u/zoe', qrUrl: 'triaonline.com/u/zoe' } },
-    { label: 'Profile, square', spec: { kind: 'profile', size: 'square', type: 'find', author: ZOE,
-        address: 'triaonline.com/u/zoe', qrUrl: 'triaonline.com/u/zoe' } },
     { label: 'Note, square', spec: { kind: 'note', size: 'square', type: 'note', author: ZOE, text: SHORT } },
     { label: 'Note, link preview', spec: { kind: 'note', size: 'link', type: 'note', author: ZOE, text: SHORT } },
     { label: 'A long one, story', spec: { kind: 'note', size: 'story', type: 'note', author: ZOE, text: LONG } },
@@ -137,8 +127,7 @@
 
   var LABELS = { gradient: 'Tria gradient', accent: 'Profile color', light: 'Light', dark: 'Dark' };
   /* The reader accents, as app.js stores them (ACCENTS), which is what a POST
-     card's "Your color" background paints. The profile card ignores this row
-     and the background row both: it has no colour on it. */
+     card's "Your color" background paints. */
   var SWATCHES = [
     { key: null, hex: null, label: 'No color set' },
     { key: 'ruby', hex: '#df2a48', label: 'Ruby' },

@@ -1620,6 +1620,11 @@ boxes, which looks exactly like a renderer bug and is a build-order one.
 
 ## The page's own primary acts
 
+**Removed in 1.9.** Every page button is painted CSS now (THE BUTTON, see
+design.md), so `PAGE_SEL`, `pageSpec`/`pushPage`/`watchPage`, the `pageTap`
+listener, `setPageControls`, `TriaPageButton` and `TriaPageControls` are
+deleted. What follows is history.
+
 Two buttons that are not on a bar: the auth gate's submit and **Share Tria** at
 the foot of Discover. On the web they are `.publish-fill.is-solid` — the brand band
 behind a hairline and a rim, which is a very good impression of Liquid Glass and

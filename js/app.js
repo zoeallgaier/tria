@@ -537,7 +537,7 @@
   function renderNav(active) {
     const nav = document.getElementById('nav');
     const link = (n) =>
-      `<a class="nav-link${n.publish ? ' nav-publish publish-fill is-solid' : ''}" href="${n.route}"` +
+      `<a class="nav-link${n.publish ? ' nav-publish publish-fill' : ''}" href="${n.route}"` +
         ` aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
@@ -553,10 +553,6 @@
     // display:contents, so the sidebar sees the same flat column of links it
     // always has.
     if (!nav.querySelector('.nav-pill')) {
-      // The four-way speed dial is retired: the composer surfaces every type on one
-      // form now — link, photo, poll and place-and-time are all toggles at the note
-      // field's foot — so the + routes straight to it. dialEl/wireDial are kept
-      // dormant in case we ever want a lighter fan here.
       nav.innerHTML =
         // The rail's head, DESKTOP ONLY (.nav-brand is display:none on phones,
         // where the nav is a floating pill with no head to put it on). It is
@@ -738,9 +734,6 @@
       const stops = splitStops(mono.image || '').map(toRgb).filter(Boolean);
       return { tint: stops[stops.length >> 1] || '', ink: toRgb(mono.color || '') || '' };
     }
-    // Which controls take it. Share Tria and the gate's submit keep plain glass,
-    // and since 2026-09-19 the two that are back on CSS wear it in CSS instead.
-    const MONO_SEL = '.toolbar-cta';
 
     function fabSpec() {
       const band = probe('background-image: var(--pill-band)');
@@ -814,8 +807,7 @@
         tabTint: accent,
         /* THE INK, AND THE + IS THE ONE THING HERE THAT ALWAYS NAMES ONE.
 
-           controlSpec and pageSpec both point at this note and both still keep
-           the older rule: only a tint sends its own ink, and empty is what
+           controlSpec points at this note and still keeps the older rule: only a tint sends its own ink, and empty is what
            native reads as `.label` — the system's, black on light and white on
            dark, flipped over there with no JS asking which scheme is live. That
            is still right for them, because what they wear when they are NOT
@@ -869,10 +861,6 @@
       const n = Number(px);
       if (!Number.isFinite(n) || n <= 0) return;
       document.documentElement.style.setProperty('--native-chrome-bottom', n + 'px');
-      // This number IS the bottom of the band the page's own CTAs are clipped
-      // to (see pageBand), and it is not something an observer on #view can
-      // see change. A new measurement is a new clip.
-      schedulePage();
     }
 
     /* ── The top bar's controls ──────────────────────────────────────────────
@@ -985,15 +973,12 @@
 
     /* HOW SOLID THAT BAND SITS, off the element rather than off the token.
 
-       `.publish-fill.is-solid::before` carries `opacity: var(--pill-alpha)` —
-       a CONTRAST FLOOR with measured figures behind it in tokens.css, and the
-       one token Reduce Transparency and Increase Contrast both take to 1. So
-       reading it here is how the one button that still PAINTS its band — the
-       comment bar's send disc, which is deliberately not glass — inherits those
-       two settings. Reading the ELEMENT rather than the token is the stricter
-       version of it: a control that ever thins its band differently answers for
-       itself. The three GLASS families take no alpha at all any more; see
-       bandFill. */
+       `.publish-fill::before` carries `opacity: var(--pill-wash)`, THE
+       BUTTON's wash (tokens.css). Reading it here is how the comment bar's send
+       disc and the bar's commits
+       (washFill) wear the same wash a painted button does. Reading the ELEMENT
+       rather than the token is the stricter version of it: a control that ever
+       thins its band differently answers for itself. */
     function bandAlpha(el) {
       return Number(getComputedStyle(el, '::before').opacity) || 1;
     }
@@ -1069,6 +1054,20 @@
       return { colors: [], tint: stops[stops.length >> 1], ramp };
     }
 
+    /* THE BUTTON, ON THE BAR (1.9). A commit up here wears what it wears in a
+       page: glass with the band washed under it, in the system's own ink. So
+       every band crosses as a ramp at the button's own --pill-wash, read off its
+       ::before (an accent's three near stops included, which draw as one
+       colour), and "no colour" crosses as nothing: plain glass, the quiet
+       weight. Reduce Transparency keeps bandFill's tint, because a ramp under a
+       solid material is a ramp nobody sees. */
+    function washFill(el) {
+      const stops = bandStops(el);
+      const fill = bandFill(stops);
+      if (solidGlass() || (!fill.tint && !fill.colors.length)) return fill;
+      return { colors: stops, tint: '', wash: bandAlpha(el) };
+    }
+
     function dotInk(el) {
       const dot = el.querySelector('.toolbar-dot.is-on');
       return dot ? toRgb(getComputedStyle(dot).backgroundColor) || '' : '';
@@ -1079,14 +1078,10 @@
       const styles = getComputedStyle(el);
       const cta = el.classList.contains('toolbar-cta');
       const tinted = cta || el.classList.contains('toolbar-commit');
-      let fill = tinted ? bandFill(bandStops(el)) : { colors: [], tint: '' };
-      // Only a tint sends its own ink; a ramp and a bare control both take the
+      const fill = tinted ? washFill(el) : { colors: [], tint: '' };
+      // Only a tint sends its own ink; a wash and a bare control both take the
       // system's, which flips with the paper. See the ink note in fabSpec.
       const bare = !fill.tint;
-      // "No colour" on the CTA is the neutral, like the +. See monoWear.
-      const mono = tinted && bare && !fill.colors.length && el.matches(MONO_SEL)
-        ? monoWear() : null;
-      if (mono) fill = { colors: [], tint: mono.tint };
       const spec = {
         id: key,
         x: rect.left, y: rect.top, w: rect.width, h: rect.height,
@@ -1095,10 +1090,11 @@
         // washed profile sets --toolbar-ink and a tinted control takes
         // --pill-ink, and reading the element answers both without either rule
         // being restated here.
-        ink: mono ? mono.ink : bare ? '' : (toRgb(styles.color) || ''),
-        // A tint, a ramp, or neither. See bandFill.
+        ink: bare ? '' : (toRgb(styles.color) || ''),
+        // A wash, a tint, or neither. See washFill.
         colors: fill.colors,
         tint: fill.tint,
+        wash: fill.wash || 0,
         glyph: cta ? '' : liveGlyph(el),
         // NEVER a system menu (1.8). Every menu a bar button drops is the
         // web's own card now (openBarMenu), in the app as on the web: Zoe's
@@ -1328,198 +1324,6 @@
       requestAnimationFrame(() => { barQueued = false; pushToolbar(); });
     }
 
-    /* ── THE PAGE'S OWN PRIMARY ACTS ──────────────────────────────
-
-       Two buttons, named one by one rather than matched by a rule: the auth
-       gate's submit and Share Tria at the foot of Discover. On the web they are
-       `.publish-fill.is-solid` — a painted gradient with a hairline and a rim,
-       which is an extremely good impression of Liquid Glass and is not it.
-
-       THIS MOVES A LINE docs/native-chrome.md DREW, and the line is worth
-       restating so the exception is not read as the rule. "Not native, ever:
-       content" was about CARDS, the feed, the composer FORM — the things a
-       reader READS. It was never about the one button on a page that COMMITS.
-       The post card's ••• already crossed here for its menu, on the argument
-       that a control is a control wherever it sits; this is that argument
-       applied to the same kind of object. THE SET IS CLOSED. PAGE_SEL is a list
-       of selectors, not a rule about buttons, and it stays that way.
-
-       THE TWO THAT WENT BACK TO CSS (2026-09-19). The composer's Share pill and
-       the daily card's Add yours were here and are not any more, and the reason
-       is the material rather than the tracking, which worked. GLASS DOES NOT
-       STACK: a `UIGlassEffect` is a lens on what is BEHIND it, and what is
-       behind these two is glass already — the composer's own pane and the daily
-       card. Two lenses in a line do not read as one deeper piece of glass, they
-       read as a flat patch, because the second one samples a backdrop the first
-       has already flattened. The painted `.publish-fill` sitting IN the card
-       shares the card's blur and comes out ahead of a real lens that cannot
-       borrow it. The gate's submit sits on the page's own paper and Share Tria
-       ends a masonry grid of photographs, so both of those still have something
-       to look through and both stay native.
-
-       THE ONE THAT COULD NOT COME. The gate's own Create account / Log in are
-       `.auth-submit` and they are matched here, but nothing native exists while
-       `body.gate` is up — the bars are asked for by renderNav, which never runs
-       signed out. So on the gate itself these stay painted, and the selector
-       reaches the `.auth-submit`s that appear AFTER sign-in (Send feedback, and
-       the password change). That is a real seam and it is the safe half of one:
-       the riskiest screen in the app keeps the path that has always worked.
-
-       WHY A RECT IS NOT ENOUGH HERE, when it is for every toolbar control. A
-       control on a bar cannot move. These sit in content that scrolls, and a
-       native view at a web rect does not follow it — measured in this file, at
-       "the anchor scrolled 400pt out from under a menu that never moved" (see
-       watchAnchor). So what crosses is `docY`, the position in the DOCUMENT,
-       and native subtracts its own scroll offset on every change of it. That
-       works because the offset is read by KVO on the web view's scroller rather
-       than from a `scroll` event bounced out of here, which arrives late and
-       coalesced. See TriaPageButton. */
-    const PAGE_SEL = [
-      '.auth-submit',          // the gate's submit, and Send feedback
-      // Share Tria left (2026-10-22, Zoe: "share tria should be css like start
-      // buttons"): it is painted CSS in every shell now, the same full-width
-      // pill as the cards' Start and Join above it.
-    ].join(', ');
-
-    let pageIds = 0;
-    let toldPage = '';
-    let pageQueued = false;
-
-    function pageSpec(el) {
-      if (!el.dataset.nativePage) el.dataset.nativePage = `p${++pageIds}`;
-      const r = el.getBoundingClientRect();
-      const styles = getComputedStyle(el);
-      const { text, after } = words(el);
-      // A mark, if one ever carries one (Share Tria did, before it went back
-      // to CSS). liveGlyph would do here too, but none of these holds two.
-      const mark = el.querySelector('svg');
-      // The same three answers the + takes, off this button's own ::before.
-      // See bandFill, and the ink note in fabSpec for why a bare one sends none.
-      const fill = bandFill(bandStops(el));
-      const bare = !fill.tint;
-      // No monoWear branch here: the two that took the neutral were the two that
-      // went back to CSS, and these two have always worn plain glass.
-      return {
-        id: el.dataset.nativePage,
-        x: r.left,
-        // The DOCUMENT position, which is the whole point — see the note above.
-        docY: r.top + window.scrollY,
-        w: r.width, h: r.height,
-        text, after,
-        glyph: mark ? mark.outerHTML : '',
-        // Resolved colours, never token names, the same as every toolbar
-        // control: a washed page and a reader's accent both land in the cascade
-        // and reading the element answers both.
-        ink: bare ? '' : (toRgb(styles.color) || ''),
-        colors: fill.colors,
-        tint: fill.tint,
-        // These are set at different sizes (1.02rem on the gate, 0.85 on Share
-        // Tria), so the face's size is measured rather than being one constant
-        // over there.
-        font: parseFloat(styles.fontSize) || 14.4,
-        disabled: !!el.disabled,
-        label: el.getAttribute('aria-label') || text,
-      };
-    }
-
-    /* THE BAND THESE ARE CLIPPED TO, WHICH IS NOT QUITE visibleBand()'s.
-
-       visibleBand measures the bottom bar off `#postbar` and `#nav` — laid-out
-       boxes it can read. Under native chrome `#nav` is `display: none` (the
-       gate at the end of app.css), so there is no box to read and the band's
-       bottom comes back as the whole window. For a MENU that mostly did not
-       matter: UIKit clamps a menu into the safe area on its own. For a button
-       that has to be CUT OFF by the tab bar it matters completely — the whole
-       point of the clip is that a CTA scrolled to the bottom of the feed goes
-       under the chrome instead of floating over it.
-
-       So the bottom comes from the one number that does describe the native
-       bar: `--native-chrome-bottom`, which the plugin measures and stampBottom
-       writes. It is deliberately a little larger than the glass (it carries the
-       clearance a feed's last card wants, see the note in app.css), so the clip
-       lands a few points ABOVE the bar rather than exactly on it. That is the
-       right direction to be wrong in: a button that vanishes a moment early is
-       invisible, and one that vanishes a moment late is drawn on top of the
-       navigation.
-
-       `told.chrome` is the gate, because the post page takes the bottom chrome
-       away entirely and the band opens back up when it does. */
-    function pageBand() {
-      const band = visibleBand();
-      const reserved = parseFloat(getComputedStyle(document.documentElement)
-        .getPropertyValue('--native-chrome-bottom')) || 0;
-      if (told.chrome && reserved > 0) {
-        band.bottom = Math.min(band.bottom, window.innerHeight - reserved);
-      }
-      return band;
-    }
-
-    function pushPage() {
-      if (!live) return;
-      // An overlay has taken the screen, so the page under it is frozen and
-      // being dimmed. Its buttons go with it, for the reason the toolbar's own
-      // controls do: half the app dimmed and half of it bright is worse than
-      // either. An empty set is also what every route without a CTA sends.
-      const controls = overlaid() ? []
-        : [...document.querySelectorAll(PAGE_SEL)]
-            .filter((el) => el.getClientRects().length)
-            .map(pageSpec);
-      const band = pageBand();
-      const payload = {
-        controls,
-        band: { top: band.top, bottom: band.bottom, width: window.innerWidth },
-      };
-      const signature = JSON.stringify(payload);
-      if (signature === toldPage) return;
-      toldPage = signature;
-      call('setPageControls', payload).catch(() => {});
-    }
-
-    // Coalesced per frame, like the toolbar's, and for the same reason: a render
-    // replaces the page and then wires it, which is several mutations and one
-    // change. Exported so the two call sites that change a CTA without touching
-    // its box — Share Tria's label after a share — can say so.
-    function schedulePage() {
-      if (!live || pageQueued) return;
-      pageQueued = true;
-      requestAnimationFrame(() => { pageQueued = false; pushPage(); });
-    }
-
-    function watchPage() {
-      const doc = document.getElementById('view');
-      if (!doc) return;
-      /* WHAT MOVES ONE OF THESE, and it is not the same list as the toolbar's.
-         A navigation replaces the whole page (childList). The composer's pill
-         earns and loses its commit (`disabled`). And a photo landing above the
-         fold changes the page's HEIGHT without changing anything an attribute
-         observer can see, which moves every docY below it — that is the
-         ResizeObserver, and it is the same failure watchAnchor documents for
-         menus.
-
-         Deliberately NOT characterData, which on a feed mid-render is thousands
-         of records for the one text swap that matters (Share Tria's label, for
-         1.6s after a share). That call site says so itself instead. */
-      new MutationObserver(schedulePage).observe(doc, {
-        attributes: true, attributeFilter: ['disabled', 'class', 'hidden'],
-        childList: true, subtree: true,
-      });
-      new ResizeObserver(schedulePage).observe(doc);
-      window.addEventListener('resize', schedulePage, { passive: true });
-      // A pill sized in Oxygen is a different width once Oxygen lands, and a
-      // font arriving mutates nothing for an observer to see. Same as the bar.
-      if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(schedulePage);
-      }
-    }
-
-    /* A tap on a native CTA, handed straight back to the button it is wearing
-       the face of. The web element is still in the DOM (the data-chrome gate
-       hides it, it does not remove it) and its own handler is still the only
-       implementation of what the button does — so the composer's submit path,
-       shareOrCopy and the gate's own form all run exactly as they do off-app.
-
-       An id that no longer resolves is a page that has been replaced since the
-       push, and doing nothing is the right answer to it. */
     function watchToolbar() {
       const bar = document.querySelector('.topbar');
       if (!bar) return;
@@ -2212,24 +2016,9 @@
                 document.documentElement.style.setProperty('--native-postbar-lift', lift + 'px');
               }
             });
-          /* A tap on one of the page's own primary acts, handed straight back
-             to the button it is wearing the face of. The web element is still
-             in the DOM — the data-chrome gate hides it, it does not remove it —
-             so the composer's submit path, shareOrCopy and the gate's own form
-             all run exactly as they do off-app. An id that no longer resolves is
-             a page replaced since the push, and doing nothing is the right
-             answer to that. */
-          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
-            { eventName: 'pageTap' }, (ev) => {
-              const el = ev && ev.id
-                && document.querySelector(`[data-native-page="${ev.id}"]`);
-              if (el) el.click();
-            });
         } catch { /* the bars are up but inert; better than no bars */ }
         watchToolbar();
-        watchPage();
         told.route = told.chrome = told.fab = null;   // force the first push
-        toldPage = '';
         sync();
       }).catch(() => {
         // iOS 25 or older, or a plugin that isn't in the binary. Nothing to say
@@ -2265,9 +2054,6 @@
       }
       pushPostBar();
       scheduleToolbar();
-      // The page's own CTAs move for a third set of reasons (see watchPage),
-      // but a navigation and an overlay opening are common to all three.
-      schedulePage();
     }
 
     /* A DOT ON A DESTINATION, which is the only thing the native bar ever says
@@ -2308,9 +2094,9 @@
       call('setFab', { fab: fabSpec() }).catch(() => {});
       /* AND EVERYTHING ELSE WEARING THE SAME BAND, which this used to leave
          behind. The + is repainted on the frame the band is stamped; the
-         toolbar's CTA and Save, the page's own primary acts and the comment
-         bar's send disc were not. Each of those is cached on the payload it
-         last sent (`toldBar`, `toldPage`, the post bar's own signature), a
+         toolbar's CTA and Save and the comment bar's send disc were not. Each
+         of those is cached on the payload it last sent (`toldBar`, the post
+         bar's own signature), a
          colour pick changes nothing else about any of them, and paintBrandBand
          is memoised on the reader's identity — so the only thing that ever
          corrected them was the next navigation happening to rebuild the page.
@@ -2321,7 +2107,6 @@
          drawn its buttons). The + was never the odd one out — it was the only
          one being told. */
       scheduleToolbar();
-      schedulePage();
       pushPostBar();
       /* AND THE DOT, which moves for both of this function's callers. It
          resolves through the heart weights, so a colour pick changes it; those
@@ -2379,107 +2164,8 @@
 
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
-             schedulePage, live: isLive };
+             live: isLive };
   })();
-
-  /* ── Publish speed dial (phones) ───────────────────────────────────────────
-     On a phone the + doesn't jump straight to the composer — it fans open a
-     little menu of the four post types, each labeled, so you pick what you're
-     making before the form loads (one screen, one job). Desktop keeps the +
-     as a plain link to the full composer with its type picker. Built once with
-     the nav and wired here; the visuals live in the mobile block of app.css. */
-  let dialOpen = false;
-
-  function dialEl() {
-    return `<div class="nav-dial" id="nav-dial" role="menu" ` +
-        `aria-label="Choose a post type" hidden>` +
-      PUB_TYPES.map((t, i) =>
-        `<a class="nav-dial-item" role="menuitem" href="#/publish" ` +
-          `data-type="${t.key}" style="--i:${i}">` +
-          `<span class="nav-dial-label">${t.label}</span>` +
-          // TYPE_GLYPH, not the ornate set: this dial is the phone's version of
-          // the composer's attach buttons — a place you PICK what to make — so
-          // it speaks the same vocabulary as the mark it's about to produce.
-          `<span class="nav-dial-ico type-icon--${t.key}" ` +
-            `style="--glow:var(--type-${t.key})">${svgIcon(TYPE_GLYPH[t.key])}</span>` +
-        `</a>`).join('') +
-    `</div>`;
-  }
-
-  function wireDial(nav) {
-    const dial = nav.querySelector('#nav-dial');
-    const veil = document.getElementById('dial-veil');
-    const btn  = nav.querySelector('.nav-publish');
-    if (!dial || !veil || !btn) return;
-
-    const isPhone = () => matchMedia('(max-width: 680px)').matches;
-
-    // The + sits at a spot that shifts with the pill's width, so measure it and
-    // pin the dial's right edge so its icon chips stack straight up over the +.
-    function place() {
-      const nr = nav.getBoundingClientRect();
-      const br = btn.getBoundingClientRect();
-      const chipW = 46;   // keep in sync with .nav-dial-ico in app.css
-      dial.style.right  = (nr.right - br.right + (br.width - chipW) / 2) + 'px';
-      dial.style.bottom = (nr.bottom - br.top + 14) + 'px';
-    }
-
-    function openDial() {
-      if (dialOpen || !isPhone()) return;
-      dialOpen = true;
-      place();
-      dial.hidden = false;
-      veil.hidden = false;
-      requestAnimationFrame(() => {
-        veil.classList.add('is-open');
-        dial.classList.add('is-open');
-        btn.classList.add('dial-open');
-      });
-      btn.setAttribute('aria-expanded', 'true');
-      document.addEventListener('keydown', onKey);
-    }
-
-    function closeDial() {
-      if (!dialOpen) return;
-      dialOpen = false;
-      veil.classList.remove('is-open');
-      dial.classList.remove('is-open');
-      btn.classList.remove('dial-open');
-      btn.setAttribute('aria-expanded', 'false');
-      document.removeEventListener('keydown', onKey);
-      // Pull it out of the a11y tree once the collapse has settled.
-      const settle = prefersReduced() ? 0 : 260;
-      window.setTimeout(() => {
-        if (!dialOpen) { dial.hidden = true; veil.hidden = true; }
-      }, settle);
-    }
-
-    function onKey(e) {
-      if (e.key === 'Escape') { closeDial(); btn.focus(); }
-    }
-
-    btn.addEventListener('click', (e) => {
-      if (!isPhone()) return;   // desktop: a plain link to the composer
-      e.preventDefault();
-      dialOpen ? closeDial() : openDial();
-    });
-
-    dial.querySelectorAll('.nav-dial-item').forEach(item =>
-      item.addEventListener('click', (e) => {
-        e.preventDefault();
-        // The four cute icons are smart shortcuts into the one composer: each just
-        // preselects its type filter (Find opens the link field, Frame the picker,
-        // Activity its form). renderPublish reads pubType on mount.
-        pubType = item.dataset.type || 'note';
-        closeDial();
-        go(item.getAttribute('href'));
-      }));
-
-    veil.addEventListener('click', closeDial);
-    // Any navigation dismisses the dial — including tapping a pill destination
-    // while it's open, which routes without going through closeDial otherwise.
-    window.addEventListener('hashchange', closeDial);
-  }
 
   /* ── Right-sized images ──────────────────────────────────────────────────────
      Every picture on Tria is stored once, at upload size: a 512px avatar, a
@@ -3575,7 +3261,7 @@
     const out = !host && !isPastActivity(post)
       ? `<div class="rsvp-choice" role="group" aria-label="Your answer">` +
           RSVP_CHOICES.map(r =>
-            `<button class="rsvp-opt${mine === r.key ? ' is-on' : ''}" type="button" ` +
+            `<button class="rsvp-opt pill-quiet${mine === r.key ? ' is-on' : ''}" type="button" ` +
               `data-rsvp="${r.key}" aria-pressed="${mine === r.key}">${r.label}</button>`).join('') +
         `</div>`
       : '';
@@ -5862,22 +5548,6 @@
       : `<button type="button" ${attrs}>${ico}</button>`;
   }
 
-  /* ── Segmented tab control — REMOVED, and this is the tombstone. .seg-tabs was
-     the iOS view switcher: two equal segments over a thumb that slid between
-     them. It lost its callers one at a time and for the same reason each time —
-     Friends' "My circle / Everyone" went with the Friends page, Updates' All /
-     Mentions became a toolbar filter in 1.3 so that all four root pages narrow
-     through one control, and the composer's Post / Activity became the calendar
-     button in the attach bar (see renderPublish). The last of those is the one
-     that settles it: it was kept through the other two on the argument that its
-     segments weren't narrowing anything, they picked what you were about to
-     make — and that turned out to be the argument for a switcher nobody needed,
-     since what you're making is legible from what you've attached. So there is
-     no surface left where a reader chooses between two whole pages of the same
-     thing, and segTabsEl + wireSegTabs went with the last caller rather than
-     sitting in the bundle waiting for a fourth. The CSS went too — see the
-     matching tombstone in app.css. */
-
   /* ── Home view ───────────────────────────────────────────────────────────── */
   const FILTERS = [
     { key: 'all',      label: 'All' },
@@ -6652,14 +6322,24 @@
     if (!list.length) {
       feedEl.innerHTML = '';
       justPostedId = null;   // nothing to sparkle if a filter emptied the feed
-      // A brand-new account has no friends yet, so its Circle is genuinely empty —
-      // point them at Discover rather than leaving a blank "nothing here".
+      /* A BRAND-NEW ACCOUNT'S FIRST SCREEN. No friends yet, so the Circle is
+         genuinely empty, and it says what fills it and offers the two ways to:
+         Discover (people and circles, one search) and handing your own profile
+         to a friend, where adding you is one tap. */
       const noFilter = activeFilter === 'all' && !activeTag;
       if (noFilter && Store.friends().length === 0) {
         feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
-          `<p>Your circle is empty, for now.</p>` +
-          `<a class="feed-empty-cta" href="#/discover">Discover people to add →</a>` +
+          `<p class="welcome-head">Your circle is empty, for now.</p>` +
+          `<p>Add friends to see what they share, or join a circle for something you’re into.</p>` +
+          `<a class="welcome-go publish-fill" href="#/discover">` +
+            `<span>Find people and circles</span><span class="daily-go" aria-hidden="true">→</span></a>` +
+          `<button class="welcome-go pill-quiet" type="button" id="welcome-invite">Invite a friend</button>` +
         `</div>`;
+        const me = Store.currentUser();
+        document.getElementById('welcome-invite').addEventListener('click', () => {
+          if (!me) return;
+          handOver({ title: 'Tria', text: 'Add me on Tria', url: profileLink(me.username) });
+        });
       } else {
         feedEl.innerHTML = `<p class="feed-empty">Nothing here yet.` +
           (activeTag ? ` <button class="tag" type="button" data-clear="1">clear ${esc(activeTag)}</button>` : '') +
@@ -6805,9 +6485,8 @@
      phone this app actually ships to it is also the private one: Hide My Email
      means a Tria account that never learns your address.
 
-     Nothing here is native chrome and nothing here may become it. These sit on
-     the gate, where renderNav never runs and no bar exists to borrow a control
-     into (see the note above PAGE_SEL), and PAGE_SEL is a closed list besides. */
+     Nothing here is native chrome: these are THE BUTTON's quiet weight, painted
+     CSS, on the gate where no bar exists to borrow a control into. */
   const APPLE_MARK =
     `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">` +
       `<path d="M17.05 12.54c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.09-2.01-3.76-2.04-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.9-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.79 1.3 10.34.86 1.25 1.89 2.65 3.24 2.6 1.3-.05 1.79-.84 3.36-.84 1.57 0 2.01.84 3.38.81 1.4-.02 2.28-1.27 3.13-2.53.99-1.45 1.4-2.85 1.42-2.92-.03-.01-2.72-1.04-2.75-4.12z"/>` +
@@ -6824,7 +6503,7 @@
     `</svg>`;
 
   const providerRow = (id, mark, label) =>
-    `<button type="button" class="auth-provider" data-provider="${id}">` +
+    `<button type="button" class="auth-provider pill-quiet" data-provider="${id}">` +
       `<span class="auth-provider-mark auth-provider-mark--${id}">${mark}</span>` +
       `<span class="auth-provider-label">${label}</span>` +
     `</button>`;
@@ -6913,7 +6592,7 @@
             `<label for="f-pass">Password</label>` +
             `<input id="f-pass" type="password" ` +
               `autocomplete="${isSignup ? 'new-password' : 'current-password'}" ` +
-              `placeholder="••••••">` +
+              `placeholder="${isSignup ? 'At least 6 characters' : '••••••'}">` +
           `</div>` +
           // Login only: a quiet way out for a forgotten password, mirroring the
           // #auth-toggle link's plain text-button treatment.
@@ -6934,7 +6613,7 @@
               `</label>`
             : '') +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
-          `<button class="auth-submit publish-fill is-solid" type="submit">` +
+          `<button class="auth-submit publish-fill" type="submit">` +
             `${isSignup ? 'Create account' : 'Log in'}</button>` +
         `</form>` +
         `<p class="auth-alt">` +
@@ -6951,6 +6630,7 @@
     const nameInput = document.getElementById('f-name');
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
+    if (isSignup) wireHandle(document.getElementById('auth-form'));
     document.getElementById('auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('f-email').value;
@@ -7022,6 +6702,52 @@
     });
   }
 
+  /* THE @HANDLE WRITES ITSELF (1.9). Typing a display name fills the handle
+     with the name made legal (lowercase, accents off, spaces to nothing, 20
+     at most) until the reader types in the handle themselves, and the handle
+     field cleans what is typed into it rather than refusing it at submit. A
+     handle that can be checked is checked as it settles, so "taken" is said
+     under the field before anybody reaches the password. */
+  const handleFrom = (text) => String(text || '').normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '').slice(0, 20);
+
+  function wireHandle(form) {
+    const nameEl = form.querySelector('#f-name');
+    const userEl = form.querySelector('#f-user');
+    const hintEl = form.querySelector('.field-hint--combo');
+    if (!nameEl || !userEl || !hintEl) return;
+    const rest = hintEl.textContent;
+    let touched = !!userEl.value;
+    let seq = 0, timer = 0;
+    const check = () => {
+      clearTimeout(timer);
+      const u = userEl.value;
+      hintEl.textContent = rest;
+      hintEl.classList.remove('is-taken');
+      if (u.length < 2) return;
+      const mine = ++seq;
+      timer = setTimeout(async () => {
+        const free = await Store.usernameFree(u).catch(() => null);
+        if (mine !== seq || free === null) return;
+        hintEl.textContent = free ? `@${u} is yours if you want it.` : `@${u} is taken. Try another.`;
+        hintEl.classList.toggle('is-taken', !free);
+      }, 450);
+    };
+    nameEl.addEventListener('input', () => {
+      if (touched) return;
+      userEl.value = handleFrom(nameEl.value);
+      check();
+    });
+    userEl.addEventListener('input', () => {
+      touched = !!userEl.value;
+      const clean = handleFrom(userEl.value);
+      if (clean !== userEl.value) userEl.value = clean;
+      check();
+    });
+    if (userEl.value) check();
+  }
+
   /* ── The handle screen ──────────────────────────────────────────────────────
      Signed in to Supabase, nobody in Tria yet: the third state (see hydrate in
      store.js). Apple and Google hand back an email, sometimes a name, and never
@@ -7065,7 +6791,7 @@
               `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
                 `autocapitalize="none" spellcheck="false" maxlength="20" ` +
                 `placeholder="username" aria-label="Username" ` +
-                `value="${esc(hint.username || '')}"${hint.name ? ' autofocus' : ''}>` +
+                `value="${esc(hint.username || handleFrom(hint.name))}"${hint.name ? ' autofocus' : ''}>` +
             `</div>` +
           `</div>` +
           `<p class="field-hint field-hint--combo">Lowercase letters, numbers or _ for your @handle.</p>` +
@@ -7074,13 +6800,14 @@
             `<span>I agree to Tria's <a href="#/about?open=guidelines">Community Guidelines</a> and <a href="#/about?open=privacy">Privacy Policy</a>.</span>` +
           `</label>` +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
-          `<button class="auth-submit publish-fill is-solid" type="submit">Create account</button>` +
+          `<button class="auth-submit publish-fill" type="submit">Create account</button>` +
         `</form>` +
         `<p class="auth-alt">Not you? <button type="button" id="claim-out">Sign out</button></p>` +
       `</div></section>`;
 
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
+    wireHandle(document.getElementById('claim-form'));
 
     document.getElementById('claim-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -7140,7 +6867,7 @@
               `placeholder="you@example.com" autofocus>` +
           `</div>` +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
-          `<button class="auth-submit publish-fill is-solid" type="submit">Send reset link</button>` +
+          `<button class="auth-submit publish-fill" type="submit">Send reset link</button>` +
         `</form>` +
         `<p class="auth-alt"><button type="button" id="reset-back">Back to log in</button></p>` +
       `</div></section>`;
@@ -7220,7 +6947,7 @@
               `placeholder="••••••" autofocus>` +
           `</div>` +
           `<p class="auth-error" id="auth-error" role="alert"></p>` +
-          `<button class="auth-submit publish-fill is-solid" type="submit">Save password</button>` +
+          `<button class="auth-submit publish-fill" type="submit">Save password</button>` +
         `</form>` +
       `</div></section>`;
     const errEl = document.getElementById('auth-error');
@@ -7251,7 +6978,7 @@
         `<div class="wordmark auth-brand" role="img" aria-label="Tria"></div>` +
         `<h1 class="auth-head">You're all set</h1>` +
         `<p class="auth-sub">Your email is confirmed. Log in and say hello.</p>` +
-        `<button class="auth-submit publish-fill is-solid" type="button" id="confirmed-go">Log in</button>` +
+        `<button class="auth-submit publish-fill" type="button" id="confirmed-go">Log in</button>` +
       `</div></section>`;
     document.getElementById('confirmed-go').addEventListener('click', () => {
       authMode = 'login';
@@ -7542,7 +7269,7 @@
           `<div class="blocked-mark">${svgIcon('block')}</div>` +
           `<h1 class="blocked-name">${esc(u.name)}</h1>` +
           `<p class="blocked-note">You blocked @${esc(u.username)}. You won't see each other on Tria.</p>` +
-          `<button class="blocked-unblock" type="button" id="unblock">Unblock</button>` +
+          `<button class="blocked-unblock pill-quiet" type="button" id="unblock">Unblock</button>` +
         `</div>` +
       `</section>`;
     const btn = document.getElementById('unblock');
@@ -7666,16 +7393,16 @@
           // ("Requested" on a private account, "Following" on a public one) —
           // muted outline. The other three are the live commit, and are the one
           // primary action on a visitor's card (Share lives in the ••• menu
-          // here), so they wear the publish-fill gradient. The done states
-          // deliberately do NOT: the gradient means "this is the move", not
-          // "you already did it".
+          // here), so they wear THE BUTTON's wash (.publish-fill). The done
+          // states wear its quiet weight (.pill-quiet): the wash means "this is
+          // the move", not "you already did it".
           const s = friendStatus;
           const label = { none: 'Add friend', sent: 'Requested', following: FOLLOW_STATE,
                           incoming: 'Accept request', follower: 'Add back' }[s];
           const committed = s === 'sent' || s === 'following';
           const title = s === 'sent' ? ' title="Tap to cancel your request"'
             : s === 'following' ? ` title="Tap to stop ${FOLLOW_STATE.toLowerCase()}"` : '';
-          const fill = committed ? '' : ' publish-fill is-solid';
+          const fill = committed ? ' pill-quiet' : ' publish-fill';
           return `<div class="account-actions">` +
             `<button class="friend-btn${fill}" type="button" id="friend" ` +
               `data-status="${s}" aria-pressed="${committed}"${title}>${esc(label)}</button>` +
@@ -7912,10 +7639,22 @@
         feedEl.innerHTML = lockedNudge(false);
         return;
       }
+      // Your own empty page offers the two things that fill it: a first post,
+      // and a face and a line about you (1.9's first-run pass).
+      if (!shown.length && isSelf && profileFilter === 'all') {
+        const bare = !u.avatar && !u.bio;
+        feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
+          `<p>Nothing posted yet. Whenever you’re ready.</p>` +
+          `<a class="welcome-go publish-fill" href="#/publish">Write your first post</a>` +
+          (bare ? `<a class="welcome-go pill-quiet" href="#/profile/edit">Add a photo and bio</a>` : '') +
+        `</div>`;
+        const edit = feedEl.querySelector('[href="#/profile/edit"]');
+        if (edit) edit.addEventListener('click', () => { editorPushed = true; });
+        return;
+      }
       if (!shown.length) {
         feedEl.innerHTML = `<p class="feed-empty">` +
           (profileFilter !== 'all' ? `No ${TYPE_PLURAL[profileFilter]} here yet.`
-            : isSelf ? 'Nothing posted yet. Whenever you’re ready.'
             : 'Nothing here yet.') + `</p>`;
         return;
       }
@@ -8044,32 +7783,11 @@
           // the first thing you'd want; on your OWN page it is the rarer act,
           // and it was making the reader read past it.
           { label: 'Edit profile', icon: 'gear', run: () => { editorPushed = true; go('#/profile/edit'); } },
-          /* ONE SHARE ROW (Zoe, 2026-09-22). This menu carried two, "Share
-             profile" and the card, stacked one on the other — and they were
-             never two decisions. They are the same intent at two fidelities, a
-             link you paste and a card you hold up, which is a SHEET'S job to
-             lay out and not a menu's. So the row opens the card, and the link
-             is the last row of the sheet it opens.
-
-             THE SHARE GLYPH, the same one a visitor's profile carries below
-             and the same one a post's ••• carries (Zoe, 2026-09-22). This row
-             wore the picture frame for a while, on the argument that a row
-             opening a PREVIEW should look different from one handing an address
-             to the OS — which was the menu describing its own plumbing again,
-             one layer down from the label that used to do it. The picture frame
-             belongs to Save image and to nothing else. One intent, one word,
-             one glyph.
-
-             OWN PROFILE ONLY, and this is the only card in Tria that carries a
-             QR. A QR to somebody else's profile, made by a third party, is a
-             different act wearing the same button.
-
-             The code points at the PROFILE and never at the invite link. A card
-             is a public surface by definition and an invite makes friends
-             outright, so the two never meet: whoever scans this lands somewhere
-             that still asks. */
-          { label: 'Share profile', icon: 'send',
-            run: () => openStoryCardSheet(profileCardSpec(u), profileLink(u.username)) },
+          /* THE SYSTEM SHARE SHEET, the same as a friend's profile (Zoe,
+             1.9: "remove all the qr code bullshit and everything in favor of
+             the native share sheet"). Your own profile used to open a card
+             with a QR on it; now the link goes straight to the OS. */
+          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username) },
           { label: 'Connect to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
@@ -8100,21 +7818,6 @@
     const friendsBtn = document.getElementById('show-friends');
     if (friendsBtn) friendsBtn.addEventListener('click',
       () => go(`#/friends/${encodeURIComponent(u.username)}`));
-  }
-
-  /* Dismiss a .modal by playing the reverse of its open animation (frost fades,
-     card sinks back down) and removing it once that settles. Returns a guarded
-     close() the modal's own Esc/backdrop/cancel handlers can all share. */
-  function modalCloser(modal, cleanup) {
-    let closing = false;
-    return () => {
-      if (closing) return;
-      closing = true;
-      document.body.style.overflow = '';
-      if (cleanup) cleanup();
-      modal.classList.add('modal--closing');
-      modal.addEventListener('animationend', () => modal.remove(), { once: true });
-    };
   }
 
   /* ── Someone's circle, as a PAGE ────────────────────────────────
@@ -8301,10 +8004,9 @@
   /* The five states the profile's own tie draws, minus the two with nothing to
      offer: `self` and `friends` fall through to the chevron.
 
-     NOT the publish-fill gradient those wear on a profile. There the tie is the
-     one primary act on the page and the band says exactly that; forty of them
-     down a list says it about nothing, which is the rule against spreading that
-     gradient in the first place. So a live tie is ink on a hairline and a
+     NOT the wash those wear on a profile. There the tie is the one primary act
+     on the page and the band says exactly that; forty of them down a list says
+     it about nothing. So every tie here is .pill-quiet, ink on a hairline, and a
      committed one — Requested / Following, the two that undo on tap — is muted,
      which is the same split `.friend-btn` draws with aria-pressed, minus the
      fill. */
@@ -8323,7 +8025,7 @@
                    incoming: `Accept ${name}’s request`,
                    follower: `Add ${name} back` }[s];
     const committed = s === 'sent' || s === 'following';
-    return `<button type="button" class="friend-tie" data-user="${esc(f.username)}" ` +
+    return `<button type="button" class="friend-tie pill-quiet" data-user="${esc(f.username)}" ` +
       `data-status="${s}" aria-pressed="${committed}" ` +
       `aria-label="${esc(aria)}">${esc(label)}</button>`;
   }
@@ -8426,7 +8128,7 @@
       // and having it here settles the bar's slot count once, at mount, instead
       // of moving it as you type.
       actions: `<button type="submit" form="pf-form" id="pf-save" ` +
-        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill" ` +
         `aria-label="Save changes">${svgIcon('check')}</button>`,
     });
 
@@ -8542,9 +8244,9 @@
           // option — still guarded by the confirm sheet); Log out sits right, in
           // the more reachable spot, since it's the one tapped often.
           `<div class="pf-account">` +
-            `<button type="button" class="pf-account-btn pf-delete" id="pf-delete">` +
+            `<button type="button" class="pf-account-btn pill-quiet pf-delete" id="pf-delete">` +
               svgIcon('trash') + `Delete account</button>` +
-            `<button type="button" class="pf-account-btn pf-logout" id="pf-logout">` +
+            `<button type="button" class="pf-account-btn pill-quiet pf-logout" id="pf-logout">` +
               svgIcon('signout') + `Log out</button>` +
           `</div>` +
         `</form>` +
@@ -8957,7 +8659,7 @@
         // aria-hidden rides with the idle state (see syncSend) rather than being
         // stamped here: an empty bar has no send, and announcing one is worse
         // than hiding it.
-        `<button class="postbar-send publish-fill is-solid is-idle" type="submit" ` +
+        `<button class="postbar-send publish-fill is-idle" type="submit" ` +
           `aria-label="${words.send}" disabled>${svgIcon('arrowup', 'postbar-send-ico')}</button>` +
       `</form>`;
     bar.hidden = false;
@@ -8978,7 +8680,7 @@
      the send disc becomes a clear.
 
      THE CLEAR DELIBERATELY DOES NOT WEAR THE SEND'S BAND. That gradient means
-     "commit, or go and commit" (see the .publish-fill.is-solid set), and
+     "commit, or go and commit" (THE BUTTON, .publish-fill), and
      emptying a search field is neither; it is a dismissal, so it is a quiet
      glyph at the same 44px on the same glass. What it does borrow is
      `is-idle` — an empty field has nothing to clear, and a control that cannot
@@ -9785,13 +9487,8 @@
      Both read one predicate, so the bar can never offer a save with nothing to
      save or a plain way back over unsaved words.
 
-     That move also settles a 1.4 question rather than reopening it. The old
-     Cancel/Save pair sat at the foot of a SCROLLING form, which is exactly the
-     kind of painted commit `PAGE_SEL` exists for — but the honest fix was not
-     another selector, it was that an editor's answers belong on the bar, where
-     they hold still and where the toolbar has been native since Stage 3. The set
-     stays closed, and it has since got smaller — see PAGE_SEL on the two that
-     went back to CSS because glass does not stack.
+     An editor's answers belong on the bar, where they hold still and where the
+     toolbar has been native since Stage 3, not at the foot of a scrolling form.
 
      Delete is not here. It is one row down in the post's own •••, which is where
      it has always been and where it can't be reached by aiming at Save. */
@@ -9855,7 +9552,7 @@
       // before the form exists is fine — and it is mounted idle rather than left
       // out so it can FADE in on the keystroke that earns it.
       actions: `<button type="submit" form="e-form" id="e-save" ` +
-        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill" ` +
         `aria-label="Save changes">${svgIcon('check')}</button>`,
     });
 
@@ -10013,7 +9710,7 @@
 
   /* Hand a link to the OS, or to the clipboard, and say which happened. This
      is where a Share row goes when there is no card to draw for it — somebody
-     else's post, an activity, a poll, a profile that isn't yours — so the
+     else's post, an activity, a poll, a profile — so the
      system tray is still one tap from every ••• in the app. The card sheet does
      NOT come through here: its last row copies and says so (see toLink). */
   function handOver(payload) {
@@ -10023,14 +9720,10 @@
     });
   }
 
-  /* Handing SOMEBODY ELSE'S profile on, from the two places that offer it: a
-     friend's tie menu and a non-friend's •••. Your own no longer comes through
-     here — it opens the card sheet, and the link is a row inside that — which
-     is what took the old `self` branch out with it. The sentence that branch
-     chose, "Join me on Tria", had exactly one caller and it was your own
-     profile; someone else's was always a recommendation rather than an
-     invitation, because the app does not speak in your voice about a person you
-     don't share an account with. */
+  /* A profile's link, to the system share sheet, from every place that offers
+     it: your own •••, a friend's tie menu, a non-friend's •••. Somebody else's
+     profile is a recommendation, never "Join me on Tria", because the app does
+     not speak in your voice about a person you don't share an account with. */
   function shareProfile(username) {
     const u = Store.user(username);
     const who = u ? u.name : '@' + username;
@@ -10416,31 +10109,6 @@
     };
   }
 
-  /* YOUR OWN PROFILE, as a card, and the only card that carries a QR.
-     The code points at the PROFILE and never at the invite link — Zoe's firm
-     rule and the one thing in here that must not drift. A card is a public
-     surface by definition, an invite makes friends outright, and the two must
-     never meet. Someone who scans this lands on a profile, where adding you is
-     still a request you get to answer.
-
-     `qrUrl` is also what the share sheet reads to know it is holding something
-     scannable, so this is the one spec whose sheet leads with the CODE rather
-     than with a preview of the card. See "A CODE IS NOT A PREVIEW". */
-  function profileCardSpec(u) {
-    const at = 'triaonline.com/u/' + u.username;
-    return {
-      kind: 'profile',
-      type: 'note',
-      author: { name: u.name, username: u.username, avatar: u.avatar || null },
-      /* No bio, no card, no background to pick and NO COLOUR AT ALL: the
-         profile's own header over a black code on Tria's paper. It carries no
-         accent because there is nothing left on it for one to paint. See "THE
-         CARD IS THE CODE" and "BLACK AND WHITE ONLY" in storycard.js. */
-      address: at,
-      qrUrl: at,
-    };
-  }
-
   /* Can this shell put a picture in the camera roll? Native only — a browser
      has no such thing, and "save" there means a download. One row either way
      (see toSave): what "Save image" MEANS is the same sentence on both, and
@@ -10454,24 +10122,15 @@
   function openStoryCardSheet(base, link) {
     if (!window.StoryCard) { toast('Cards need a newer version of Tria.'); return; }
 
-    /* THE PROFILE CARD HAS NO BACKGROUNDS TO PICK (Zoe, 2026-09-23). That card
-       has no colour on it at all now — a black code on Tria's paper with the
-       profile's own header over it — so the four pills were a row of furniture
-       between a code and the acts under it, offering a choice about a picture
-       that no longer has one to make. The card draws on paper whatever this
-       says; `pick` still exists because Save image and Instagram go through the
-       same two calls.
-
-       YOUR COLOUR LEADS ON THE OTHERS, and Tria's ramp is last (same call). A
+    /* YOUR COLOUR LEADS ON THE OTHERS, and Tria's ramp is last (same call). A
        post card's background is the only colour on it and it should open
        wearing the sender's, not the house's. Where a sender has no colour of
        their own, "Your color" is the post type's pastel — true of the pill
        before this change and the reason the DEFAULT falls back to Tria rather
        than opening on a colour that is nobody's. */
-    const plain = !!base.qrUrl;
-    const pick = { bg: plain ? 'light' : (base.accent ? 'accent' : 'gradient') };
+    const pick = { bg: base.accent ? 'accent' : 'gradient' };
 
-    const BACKGROUNDS = plain ? [] : [
+    const BACKGROUNDS = [
       ['accent', 'Your color'],
       ['light', 'Light'],
       ['dark', 'Dark'],
@@ -10484,13 +10143,11 @@
     const head =
       `<div class="cardshare">` +
         `<div class="cardshare-art"></div>` +
-        (BACKGROUNDS.length
-          ? `<div class="cardshare-bgs" role="group" aria-label="Background">` +
-              BACKGROUNDS.map(([key, label]) =>
-                `<button class="cardshare-bg" type="button" data-bg="${key}"` +
-                ` aria-pressed="${key === pick.bg}">${esc(label)}</button>`).join('') +
-            `</div>`
-          : '') +
+        `<div class="cardshare-bgs" role="group" aria-label="Background">` +
+          BACKGROUNDS.map(([key, label]) =>
+            `<button class="cardshare-bg pill-quiet${key === pick.bg ? ' is-on' : ''}" type="button" data-bg="${key}"` +
+            ` aria-pressed="${key === pick.bg}">${esc(label)}</button>`).join('') +
+        `</div>` +
       `</div>`;
 
     // Rendered once per background and held, because a person flicking through
@@ -10536,77 +10193,33 @@
       items,
       wire: (scrim) => {
         const art = scrim.querySelector('.cardshare-art');
-        /* A CODE IS NOT A PREVIEW (Zoe, 2026-09-22). Where the thing being
-           shared carries one — your own profile, and nothing else does — the
-           frame holds the CODE, drawn at the size a camera reads it, with your
-           photo, your name and your handle over it. It used to hold the same
-           1080 card the post sheet shows, scaled to a phone's width: 82px of
-           code in a 108px plate, four pixels to a module, a picture of a QR on
-           a screen somebody is holding up to a friend precisely so they can
-           scan it. The panel is 192px of code on a 393pt phone, every module a
-           whole number of device pixels, and it was put through Vision at
-           shrinking sizes rather than looked at.
-
-           WHAT SAVES IS STILL THE CARD, and the card is now the same drawing
-           at 1080: paper, photo, name, handle, code, address. There is nothing
-           to choose between them any more — one paper, no colour — so what is
-           on screen is what saves, exactly, and the row of background pills
-           came off this sheet with the last of the layers.
-
-           THE FRAME RESERVES ITS HEIGHT before anything is drawn — the panel's
-           in JS, since codeBox has measured it exactly by here, and the card's
-           in CSS — so the sheet opens at the size it will stay. Without that it
-           is furniture-only for a frame or two and then jumps 400px taller
-           under the finger, which is the single ugliest thing this sheet did.
-
-           A LATE RENDER DOES NOT WIN. Two taps in quick succession start two
+        /* A LATE RENDER DOES NOT WIN. Two taps in quick succession start two
            draws and they can land in either order, so a paint only mounts its
            canvas if that background is still the chosen one. `isConnected`
            alone caught the closed sheet and not this. */
-        const box = base.qrUrl && StoryCard.codeBox
-          ? StoryCard.codeBox(base, {
-              width: art.clientWidth,
-              /* Half the window, which is more than the card preview's 44vh
-                 gets and is affordable: a panel is barely taller than it is
-                 wide, where a story card is twice that. Measured with all three
-                 action rows at 375x667, the shortest phone Tria supports. */
-              maxHeight: Math.round(window.innerHeight * 0.5),
-            })
-          : null;
-        if (box) {
-          art.style.height = box.css.height + 'px';
-          art.style.minHeight = box.css.height + 'px';   // the CSS reserve is the card's
-        }
-        /* No encoder on the page is the one way a panel cannot be had, and it
-           falls back to the card rather than to an empty frame. */
-        const drawArt = (bg) => (box
-          ? StoryCard.code(Object.assign({}, base, { bg }), box)
-          : draw(bg));
         const paint = () => {
           const bg = pick.bg;
-          drawArt(bg).then((canvas) => {
+          draw(bg).then((canvas) => {
             if (!scrim.isConnected || pick.bg !== bg) return;
             canvas.setAttribute('role', 'img');
-            canvas.setAttribute('aria-label', box
-              ? `A code that opens ${base.address}. Your photo, your name and your handle, @${base.author.username}, are above it.`
-              : 'A preview of the card');
+            canvas.setAttribute('aria-label', 'A preview of the card');
             // Re-mounting a cached canvas re-runs the fade, which is what makes
             // flicking through the four read as one card changing clothes
-            // rather than four cards being swapped. The panel is drawn fresh
-            // each time and fades for the same reason: it is cheap, and a cache
-            // keyed on a background would go stale the moment the frame moved.
+            // rather than four cards being swapped.
             canvas.classList.remove('is-in');
             art.replaceChildren(canvas);
             requestAnimationFrame(() => canvas.classList.add('is-in'));
-          }).catch(() => toast(box ? 'The code could not be drawn.' : 'The card could not be drawn.'));
+          }).catch(() => toast('The card could not be drawn.'));
         };
         scrim.querySelectorAll('.cardshare-bg').forEach((btn) => {
           btn.addEventListener('click', () => {
             if (pick.bg === btn.dataset.bg) return;
             pick.bg = btn.dataset.bg;
             hapticTap('LIGHT');
-            scrim.querySelectorAll('.cardshare-bg').forEach(b =>
-              b.setAttribute('aria-pressed', String(b.dataset.bg === pick.bg)));
+            scrim.querySelectorAll('.cardshare-bg').forEach((b) => {
+              b.setAttribute('aria-pressed', String(b.dataset.bg === pick.bg));
+              b.classList.toggle('is-on', b.dataset.bg === pick.bg);
+            });
             paint();
           });
         });
@@ -11807,7 +11420,7 @@
           // waiting one tap away. A card that reports your own action back to you
           // is talking about the app instead of the room.
           (mine ? ''
-            : `<button type="button" class="daily-answer publish-fill is-solid">` +
+            : `<button type="button" class="daily-answer publish-fill">` +
                 `${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span>` +
               `</button>`) +
         `</div>` +
@@ -11871,7 +11484,7 @@
       leading: toolbarBackEl('#/discover', 'Discover'),
       title: 'Daily',
       actions: canAnswer
-        ? `<button type="button" class="toolbar-cta publish-fill is-solid" id="daily-answer" data-slots="2">` +
+        ? `<button type="button" class="toolbar-cta publish-fill" id="daily-answer" data-slots="2">` +
             `${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span>` +
           `</button>`
         : '',
@@ -12381,6 +11994,10 @@
     const me = Store.session();
     const all = songPostsOnRepeat();
     if (!me && !all.length) return '';
+    // Nobody to play it to: a song goes to your circle, so an account with no
+    // friends and nothing on repeat gets no rail, not an empty + over an
+    // empty feed (1.9's first-run pass).
+    if (!all.length && !Store.friends().length) return '';
     // Mine leads, as the + it stands in for did; everybody else follows.
     const mine = all.find(x => x.u.username === me);
     const items = all.filter(x => x !== mine);
@@ -13258,7 +12875,7 @@
               `</div>`
             : `<span class="daily-count"></span>`) +
           (mine ? ''
-            : `<button type="button" class="daily-answer publish-fill is-solid" data-join="${esc(c.id)}">` +
+            : `<button type="button" class="daily-answer publish-fill" data-join="${esc(c.id)}">` +
                 `Join<span class="daily-go" aria-hidden="true">→</span>` +
               `</button>`) +
         `</div>` +
@@ -13275,7 +12892,7 @@
         `<p class="daily-hint">For hobbies, interests, events and more. Your circle will show up here for others to join.</p>` +
         `<div class="daily-foot">` +
           `<span class="daily-count"></span>` +
-          `<a class="daily-answer publish-fill is-solid" href="${href}">` +
+          `<a class="daily-answer publish-fill" href="${href}">` +
             `Start<span class="daily-go" aria-hidden="true">→</span></a>` +
         `</div>` +
       `</section>`;
@@ -13512,11 +13129,11 @@
         : '';
       const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
       const acts = !me
-        ? `<a class="friend-btn publish-fill is-solid" href="#/join">Make an account to join</a>`
+        ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
         : member
-          ? `<button class="friend-btn publish-fill is-solid" type="button" id="community-post">Post</button>` +
-            `<button class="friend-btn friend-btn--quiet" type="button" id="community-chat">Chat</button>`
-          : `<button class="friend-btn publish-fill is-solid" type="button" id="community-join">Join</button>`;
+          ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
+            `<button class="friend-btn pill-quiet" type="button" id="community-chat">Chat</button>`
+          : `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`;
       return `<div class="account-head">` +
           (c.avatar
             ? `<div class="account-photo" aria-hidden="true">` +
@@ -13653,7 +13270,7 @@
       leading: toolbarBackEl(back.href, back.label),
       title: editing ? 'Edit circle' : 'New circle',
       actions: `<button type="submit" form="community-form" id="community-save" ` +
-        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill" ` +
         `aria-label="${editing ? 'Save changes' : 'Start circle'}">${svgIcon('check')}</button>`,
     });
     if (!Store.communitiesReady()) {
@@ -13895,7 +13512,7 @@
     const shareAsk =
       `<div class="feed-empty friends-share">` +
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
-        `<button class="friends-share-copy publish-fill is-solid" type="button" ` +
+        `<button class="friends-share-copy publish-fill" type="button" ` +
           `aria-label="Share Tria">` +
           `<span>Share Tria</span><span class="daily-go" aria-hidden="true">→</span>` +
         `</button>` +
@@ -14010,15 +13627,10 @@
       shareBtn.addEventListener('click', async () => {
         const result = await shareOrCopy({ title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com' });
         if (result === 'cancelled') return;
-        // The receipt, and then the word back. Both say so, because a text swap
-        // is the one change watchPage doesn't observe (see NativeChrome).
+        // The receipt, and then the word back.
         const label = shareBtn.querySelector('span');
         label.textContent = result === 'copied' ? 'Link copied' : 'Shared';
-        NativeChrome.schedulePage();
-        setTimeout(() => {
-          label.textContent = 'Share Tria';
-          NativeChrome.schedulePage();
-        }, 1600);
+        setTimeout(() => { label.textContent = 'Share Tria'; }, 1600);
       });
     }
 
@@ -14332,7 +13944,7 @@
     // difference between a decision and a snooze, and it's why the label can stay
     // this quiet.
     const reqRows = reqs.map(u => row(u, 'req', 'wants to be friends',
-      `<button class="request-accept" type="button" data-accept="${esc(u.username)}">Accept</button>` +
+      `<button class="request-accept publish-fill" type="button" data-accept="${esc(u.username)}">Accept</button>` +
       `<button class="request-ignore" type="button" data-ignore="${esc(u.username)}" ` +
         `aria-label="Ignore request from ${esc(u.name)}">Ignore</button>`)).join('');
 
@@ -14412,7 +14024,7 @@
         `</div>` +
         `<div class="push-ask-actions">` +
           `<button type="button" class="push-ask-dismiss" id="push-not-now">No thanks</button>` +
-          `<button type="button" class="push-ask-on publish-fill is-solid" id="push-turn-on">Turn on</button>` +
+          `<button type="button" class="push-ask-on publish-fill" id="push-turn-on">Turn on</button>` +
         `</div>` +
       `</div>`;
   }
@@ -14626,9 +14238,11 @@
       : '';
     if (current.length) return pinned + `<ul class="chat-list">${current.map(chatRowHtml).join('')}</ul>` + shelf;
     if (shelf) return pinned + shelf;
-    return pinned + `<p class="feed-empty">${all
-      ? 'No chats yet. Tap the new chat button to start one.'
-      : 'Nothing here yet.'}</p>`;
+    if (!all) return pinned + `<p class="feed-empty">Nothing here yet.</p>`;
+    return pinned + `<div class="feed-empty feed-empty--welcome">` +
+      `<p>No chats yet.</p>` +
+      `<a class="welcome-go publish-fill" href="#/chats/new">Start a chat</a>` +
+    `</div>`;
   }
 
   function renderChats() {
@@ -15242,7 +14856,7 @@
               `<p>${esc(displayNameOf(c.other))} wants to message you. They won’t know you’ve seen this unless you accept.</p>` +
               `<div class="chat-request-actions">` +
                 `<button class="request-ignore" type="button" data-deny>Delete</button>` +
-                `<button class="request-accept" type="button" data-accept>Accept</button>` +
+                `<button class="request-accept publish-fill" type="button" data-accept>Accept</button>` +
               `</div>` +
             `</div>`
           : '') +
@@ -15340,7 +14954,7 @@
       leading: toolbarBackEl('#/chats', 'Chats'),
       title: 'New chat',
       actions: `<button type="button" id="nc-go" ` +
-        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill is-solid" ` +
+        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill" ` +
         `aria-label="Start chat" disabled>${svgIcon('check')}</button>`,
     });
 
@@ -16284,7 +15898,7 @@
             `<span class="post-progress-label" id="c-progress-label"></span>` +
             `<div class="post-progress-track"><div class="post-progress-fill" id="c-progress-fill"></div></div>` +
           `</div>` +
-          `<button class="composer-submit composer-post publish-fill is-solid" type="submit">Share</button>` +
+          `<button class="composer-submit composer-post publish-fill" type="submit">Share</button>` +
         `</form>` +
       `</section>`;
 
@@ -18544,31 +18158,19 @@
      response: a fast compression the instant a finger lands, a springy release
      on let-go. It animates the `scale` property (NOT `transform`) so it
      composes with whatever transform a control already carries — the going
-     label's optical nudge, the FAB's glide, the dome — with zero collisions.
-     WAAPI rather than CSS :active because (a) the release can ride the shared
-     --spring token and (b) a CSS transition on scale would clobber each
-     control's own transition shorthand. Elements whose press is a child-icon
-     pop (the dial items) keep their CSS :active rules and stay off this list. */
+     label's optical nudge — with zero collisions. WAAPI rather than CSS :active
+     because (a) the release can ride the shared --spring token and (b) a CSS
+     transition on scale would clobber each control's own transition shorthand. */
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
-    '.seg-tab', '.sheet-item', '.sheet-cancel',
-    '.postbar-send', '.comment-delete', 'button.comment-like', '.modal-actions button',
-    '.masthead-filter', '.friend-btn', '.request-accept', '.request-ignore',
+    '.sheet-item', '.sheet-cancel',
+    '.postbar-send', '.comment-delete', 'button.comment-like',
+    '.masthead-filter', '.request-ignore', '.push-ask-dismiss',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.
     '.toolbar-btn', '.pf-photo-edit', '.nav-link',
-    '.feed-empty-cta', '.composer-post',
-    /* THE COMMITS THAT ANSWERED NOTHING. .publish-fill:active only drops the
-       ring mask and sets --pill-ink, and .is-solid already does both at rest —
-       so `:active` is a VISUAL NO-OP on every solid CTA, and these five had no
-       other press state and were not on this list. The auth gate's submit,
-       Share Tria and Save changes are the heaviest acts on their pages and were
-       the only ones in the app that took a finger without moving.
-
-       .daily-answer and .toolbar-cta are deliberately absent: they carry their
-       own `:active { opacity: 0.55 }` and would otherwise be pressed twice. */
-    '.auth-submit', '.friends-share-copy',
-    '.push-ask-on', '.push-ask-dismiss',
+    // THE BUTTON, both weights: every pill in a page presses the same way.
+    '.publish-fill', '.pill-quiet',
   ].join(', ');
   let pressing = null;   // { el, scale, down } while a finger is down
   function pressRelease() {
@@ -19411,7 +19013,7 @@
         // there was no argument for it — Save password and Send reset link both
         // wear the band, and a feedback form sitting in the same shell with a
         // flat accent pill read as a different app's button.
-        `<button class="auth-submit fb-submit publish-fill is-solid" type="submit">Send feedback</button>` +
+        `<button class="auth-submit fb-submit publish-fill" type="submit">Send feedback</button>` +
       `</form>`);
 
     // Signed in this is a pushed page and takes the bar; the chevron goes to
@@ -19447,7 +19049,7 @@
           // The App Store link is browser-only for the same reason: the app is
           // what it points at.
           (nativeShell() ? '' :
-            `<p class="about-appstore"><a class="auth-submit publish-fill is-solid guest-join" ` +
+            `<p class="about-appstore"><a class="auth-submit publish-fill guest-join" ` +
               `href="${APP_STORE_URL}" target="_blank" rel="noopener">Get Tria on the App Store</a></p>`) +
           (nativeShell() ? '' : aboutFold('install', 'On Android? Add Tria to your home screen', installHtml)) +
           guidelinesHtml + privacyHtml + faqHtml +
@@ -19981,7 +19583,7 @@
         `<div class="about-body">` +
           p.lede.map(t => `<p class="about-lede">${t}</p>`).join('') +
           `<div class="guest-acts">` +
-            `<a class="auth-submit publish-fill is-solid guest-join" href="#/join">Create an account</a>` +
+            `<a class="auth-submit publish-fill guest-join" href="#/join">Create an account</a>` +
             `<p class="auth-alt">Already on Tria? <a href="#/signin">Log in</a></p>` +
             (kind === 'post' ? `<p class="guest-more"><a class="about-more" href="#/discover">Look around Discover</a></p>` : '') +
             `<p class="guest-more">On iPhone? <a class="about-more" href="${APP_STORE_URL}" ` +
@@ -20786,7 +20388,6 @@
         const latest = (html.match(/js\/app\.js\?v=([^"&]+)/) || [])[1];
         if (!latest || latest === booted) return;
         const busy = location.hash.split('?')[0] === '#/publish' ||
-          document.querySelector('.modal-card') ||
           document.querySelector('.page.enter');
         // location.reload() re-reads the CACHED index.html on iOS standalone (same
         // max-age=600), which reloads the very build we're trying to leave — an

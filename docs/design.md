@@ -1,5 +1,26 @@
 # Design system
 
+**1.9 (2026-10-22): THE BUTTON.** Every button in a page is one material at two
+weights (Zoe: "every button in every page should have this new style"):
+
+- `.publish-fill`: a commit, or a way to go and commit (Post, Share, Join, Add
+  yours, Add friend, Accept, Turn on, Create account, Save, Start, Share Tria).
+  Glass fill (`--glass-bg`), one hairline (`--pill-edge`, the ink at 26%), and
+  the reader's band (`--pill-band`) on a `::before` at `--pill-wash` (0.3),
+  in the page's own ink (`--text`), never `--pill-ink`.
+- `.pill-quiet`: everything else that is a button (Chat, Requested, the Apple
+  and Google doors, Unblock, Log out, Delete account, an RSVP or a card
+  background). The same glass and hairline, no band. A chosen one (`.is-on`)
+  takes the wash.
+
+Both are declared ONCE, early in app.css under "THE BUTTON (1.9)"; a component
+rule owns only geometry (and ink where it has a reason). Page-wide pills are
+52px. Every pill presses through PRESS_TARGETS (`.publish-fill, .pill-quiet`),
+never `:active`. The ring mode, `.is-solid`, the tinted-glass list and the lit
+dome are gone; where this file says `.publish-fill.is-solid`, tinted glass or
+dome below, read THE BUTTON. On the native bar a commit crosses as the same wash
+(`washFill` in app.js, `spec.wash` in `TriaBand.apply`).
+
 **1.8 (2026-10-21): THE CSS GLASS IS SIMPLIFIED.** The blur stays and is
 now the whole material: a thin fill, the blur, one hairline (tokens.css). The
 specular rim, every drop shadow (`--glass-lift`, `--glass-lift-panel`) and the

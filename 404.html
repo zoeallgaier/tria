@@ -126,9 +126,9 @@
        and the maskable narrower (66%) because a wordmark's DIAGONAL is what has
        to clear Android's 80% safe circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=708" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=708" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=708" />
+  <link rel="icon" href="icons/icon-32.png?v=709" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=709" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=709" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -157,8 +157,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=708" />
-  <link rel="stylesheet" href="css/app.css?v=708" />
+  <link rel="stylesheet" href="css/tokens.css?v=709" />
+  <link rel="stylesheet" href="css/app.css?v=709" />
 </head>
 
 <body>
@@ -214,11 +214,6 @@
        topbar tucks away and bare content scrolls under the glyphs. -->
   <div class="statusbar-scrim" aria-hidden="true"></div>
 
-  <!-- Speed-dial veil: blurs and dims the page while the phone + button fans
-       out its post-type menu. Sits between topbar and nav in the DOM so it
-       stacks over the bar but under the dial (all three share z-index 100). -->
-  <div class="dial-veil" id="dial-veil" hidden></div>
-
   <!-- Nav lives OUTSIDE the (backdrop-filtered) topbar so its mobile
        fixed-to-bottom positioning anchors to the viewport, not the bar.
        Desktop: top-right of the bar. Mobile: bottom tab bar. Filled by app.js. -->
@@ -247,16 +242,13 @@
        Local also PINS the version: the old src said `@2`, so any minor release
        shipped itself into production without a deploy. Update deliberately —
        drop a new file in, change this line, bump. -->
-  <script src="js/vendor/supabase-js-2.110.9.min.js?v=708"></script>
-  <!-- The QR encoder, before storycard.js, which picks it up off `window` if it
-       is there and draws a labelled plate in its place if it isn't. Both are
-       ahead of app.js because app.js reads `window.StoryCard` to decide whether
-       to offer the card row at all. -->
-  <script src="js/vendor/qr.js?v=708"></script>
-  <script src="js/storycard.js?v=708"></script>
-  <script src="js/config.js?v=708"></script>
-  <script src="js/store.js?v=708"></script>
-  <script src="js/app.js?v=708"></script>
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=709"></script>
+  <!-- Ahead of app.js, which reads `window.StoryCard` to decide whether to
+       offer the card row at all. -->
+  <script src="js/storycard.js?v=709"></script>
+  <script src="js/config.js?v=709"></script>
+  <script src="js/store.js?v=709"></script>
+  <script src="js/app.js?v=709"></script>
 </body>
 
 </html>

@@ -1439,6 +1439,19 @@ const Store = (() => {
   // with the identity half moved after the password half. claim_profile re-makes
   // all of them server-side (see supabase/oauth-signin.sql) — these are only so
   // a typo costs no round trip.
+  /* Is this @handle free? true, false, or null when nobody can say (the RPC
+     missing, the network down). The signup form asks as you type so a taken
+     name is known before the password is; the submit still asks again, and the
+     unique constraint is the real fence. */
+  async function usernameFree(username) {
+    username = String(username || '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{2,20}$/.test(username)) return null;
+    try {
+      const { data, error } = await sb.rpc('username_available', { u: username });
+      return error || typeof data !== 'boolean' ? null : data;
+    } catch { return null; }
+  }
+
   async function claimProfile({ name, username }) {
     name = String(name || '').trim();
     username = String(username || '').trim().toLowerCase();
@@ -3805,7 +3818,7 @@ const Store = (() => {
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,
     isRecovering, onRecovery,
-    signInWithProvider, pendingProfile, claimProfile,
+    signInWithProvider, pendingProfile, claimProfile, usernameFree,
     // Friends
     isFriend, areFriends, addFriend, removeFriend, following, followers,
     requestsSent, requestsReceived, friendStatus,

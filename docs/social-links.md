@@ -1,5 +1,13 @@
 # Social links
 
+**1.9 (2026-10-22): THE PROFILE QR IS GONE.** Zoe: "simplify share profile.
+remove all the qr code bullshit and everything in favor of the native share
+sheet". Every Share profile row (your own included) hands `/u/<handle>` to the
+system share sheet through `shareProfile`; the profile card, `qr.js`,
+`StoryCard.codeBox`/`code`/`useEncoder` and `profileCardSpec` are deleted.
+Story cards for your own POSTS stay. Everything below about the QR and the
+profile card is history.
+
 Getting a Tria link to behave like a link from a real social app: open the app
 when it's installed, look like something when it's pasted, and carry an invite
 that turns a stranger into a friend.

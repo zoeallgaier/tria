@@ -246,6 +246,17 @@
      how SOLID a primary button reads, not only how legible. */
   --pill-alpha: 0.85;
 
+  /* THE BUTTON (1.9). Every button in a page is hairline glass: the glass
+     fill, ONE hairline (--pill-edge), and on a commit the band laid under the
+     words at --pill-wash, in the page's own ink (Zoe: "use the hairline glass
+     style and a gradient for css buttons, like the daily's tag KIND OF", then
+     "every button in every page should have this new style"). The ink is
+     --text, never --pill-ink: at 0.3 the band is a wash over the paper, so the
+     page's ink reads on it in both schemes and with every accent. --pill-alpha
+     above is now only for the chat bubble, which still paints a solid fill. */
+  --pill-wash: 0.3;
+  --pill-edge: 1px solid color-mix(in srgb, var(--text) 26%, transparent);
+
   /* Liked-heart quintet — the ink twins nudged toward their pastels so the
      filled heart reads brighter on paper (it's an icon, not text, so it can
      sit lighter than AA). Dark mode resets these to the inks (= pastels). */
@@ -666,5 +677,6 @@
     /* Every glass surface reads this, not just the CTAs. A firmer hairline is
        the whole ask under Increase Contrast, so the wider reach is the point. */
     --glass-edge: 1px solid color-mix(in srgb, var(--text) 32%, transparent);
+    --pill-edge: 1px solid color-mix(in srgb, var(--text) 50%, transparent);
   }
 }

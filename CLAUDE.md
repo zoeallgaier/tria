@@ -21,6 +21,32 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## 1.9's polish pass: one button, one share, a first run (2026-10-22)
+
+**THE BUTTON.** Every button in a page is one material at two weights (Zoe:
+"every button in every page should have this new style"), declared once early
+in app.css: **`.publish-fill`** is a commit (glass fill, one hairline
+`--pill-edge`, the reader's band washed under the words at `--pill-wash` 0.3,
+page ink) and **`.pill-quiet`** is every other button (same glass and hairline,
+no band; `.is-on` takes the wash for a chosen RSVP or card background).
+Components own geometry only; page-wide pills are 52px; both weights press
+through PRESS_TARGETS. `.is-solid`, the ring mode, the tinted-glass list, the
+dead phone FAB and speed dial, the dead `.modal` system and the native
+page-button bridge are deleted. The native bar's commits wear the same wash
+(`washFill` → `spec.wash` in `TriaBand.apply`). See docs/design.md's top.
+
+**Share profile is the system share sheet**, on your own profile too (Zoe:
+"remove all the qr code bullshit"). The profile card, its QR, `js/vendor/qr.js`
+and `profileCardSpec` are gone; own-POST story cards stay.
+
+**First run.** Signup's @handle fills itself from the display name until you
+type in it, cleans what you type, and says "taken" as it settles
+(`wireHandle`, `Store.usernameFree`), on the claim screen too. An empty My
+Circle offers Find people and circles and Invite a friend (your own profile
+link, "Add me on Tria"); an account with no friends and no songs gets no On
+repeat rail; empty Chats offers Start a chat; your own empty profile offers
+Write your first post and, while bare, Add a photo and bio.
+
 ## 1.9 is circles (2026-10-22)
 
 **A circle is a room for an interest** that anyone can start and anyone can
@@ -279,17 +305,9 @@ longer try a native menu at all; the colour ring because the sheet shows the
 colours off and a menu row can't. See "A menu the page asks for" in
 [docs/native-chrome.md](docs/native-chrome.md).
 
-So do the page's own PRIMARY ACTS: the auth gate's submit (and **Share Tria**, until 1.9 painted it in CSS like the cards' Start, Zoe's call).
-Those sit in content that SCROLLS, which is why they could not be native until
-now — each one crosses with its position in the document and native tracks the
-web view's own `contentOffset`, clipped to the band between the bars. "Not
-native, ever: content" still holds and always meant what a reader READS; the one
-button on a page that commits was never that. **The set is closed** — `PAGE_SEL`
-in app.js is a list of selectors, not a rule about buttons, and it only gets
-shorter. **The composer's Share pill and the daily card's Add yours left it
-(2026-09-19)** and are painted CSS again on every shell: glass does not stack,
-and both of those sit ON glass, where a second lens samples a backdrop the first
-has already flattened and reads as a flat patch.
+The page's own primary acts were native too (`PAGE_SEL`, `TriaPageButton`),
+one by one, until **1.9 painted every page button in CSS** (THE BUTTON, below)
+and the whole bridge was deleted. Not native, ever: anything in a page.
 
 **The band crosses as one of three things**, sorted off the stops themselves
 (`bandFill`): a reader's accent is one colour and tints the glass, Tria's own

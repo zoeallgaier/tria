@@ -327,9 +327,8 @@ address and therefore a different person, and there is no way around that.
     page inherits the last one's.
   - **IT IS THE ONLY COMPOSER.** No second box in the thread — the same one-door
     settlement the feed card's comment glyph got when it became a link.
-  - **THE SEND DISC IS THE FAB'S JOB ON THIS ROUTE**, so it is a member of the
-    `.publish-fill.is-solid` set: same tinted glass, same corner, 44px and the
-    disc IS the target. That is why a comment's send earns the brand band when
+  - **THE SEND DISC IS THE FAB'S JOB ON THIS ROUTE**, so it wears THE BUTTON
+    (`.publish-fill`, design.md): 44px and the disc IS the target. That is why a comment's send earns the brand band when
     the old in-thread `Post` (bare type) never did. `--idle` until there are
     words, the profile editor's own trick.
   - **THE KEYBOARD ARRIVES BY TWO ROUTES AND ONLY ONE NEEDS ANYTHING FROM US**
