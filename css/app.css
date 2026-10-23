@@ -4202,10 +4202,13 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .bar-menu .sheet-title {
   flex-shrink: 0;
   margin: 0;
-  padding: 2px 1.5rem 10px;
+  padding: 0 1.5rem 8px;
   text-align: center;
-  font-size: 0.95rem;
-  font-weight: 700;
+  /* A sheet's name is a title, so it takes the serif (Zoe, 2026-10-23). */
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.4rem;
+  font-weight: 400;
+  line-height: 1.15;
   color: var(--text);
 }
 /* The rows straight on the panel: no card of their own. */
