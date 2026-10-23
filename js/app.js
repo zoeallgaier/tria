@@ -13010,7 +13010,8 @@
     if (!Store.communitiesReady()) return '';
     if (search && !list.length) return '';
     return `<section class="communities" aria-label="Circles">` +
-        (search ? '' : communityStartHtml()) +
+        // Searching, it is captioned like People and Posts above it.
+        (search ? `<p class="discover-kicker">Circles</p>` : communityStartHtml()) +
         list.map(communityCardHtml).join('') +
       `</section>`;
   }
@@ -13582,13 +13583,14 @@
 
     /* SEARCH IS THE HEADER (1.8). One field, always open, coming and going with
        the header itself. It is web in every shell (see mountToolbar's `field`).
-       Empty is the whole page; typing narrows it to circles and people. */
+       Empty is the whole page; typing turns it into results: people first, as
+       compact rows, then posts, then circles (Zoe). */
     const searchBar =
       `<div class="discover-search" role="search">` +
         `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
         `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
           `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
-          `placeholder="Search circles and people" aria-label="Search Tria">` +
+          `placeholder="Search people, posts and circles" aria-label="Search Tria">` +
       `</div>`;
 
     // The + leads, as on My Circle, and the field takes the rest of the row.
@@ -13611,8 +13613,34 @@
     const bodyEl = view.querySelector('#discover-body');
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
-    document.getElementById('discover-compose-btn')
-      ?.addEventListener('click', () => openComposeDial());
+    const leadBtn = document.getElementById('discover-compose-btn');
+
+    /* WHILE SEARCH IS OPEN THE + IS A WAY BACK (Zoe). Open is the field holding
+       the caret or a query: the + turns into the back chevron, and pressing it
+       empties the field, drops the keyboard and puts the + back. Its mousedown
+       is swallowed so the tap doesn't blur the field first, which would turn
+       the chevron back into a + under the finger. */
+    let searchOpen = false;
+    const syncLead = () => {
+      if (!leadBtn) return;
+      const open = document.activeElement === searchEl || !!discoverQuery.trim();
+      if (open === searchOpen) return;
+      searchOpen = open;
+      leadBtn.innerHTML = open ? svgIcon('chevron', 'toolbar-back-ico') : svgIcon('plus');
+      leadBtn.setAttribute('aria-label', open ? 'Close search' : 'Make something');
+      if (open) leadBtn.removeAttribute('aria-haspopup');
+      else leadBtn.setAttribute('aria-haspopup', 'dialog');
+    };
+    leadBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
+    leadBtn?.addEventListener('click', () => {
+      if (!searchOpen) { openComposeDial(); return; }
+      discoverQuery = searchEl.value = '';
+      searchEl.blur();
+      paintNow();
+      syncLead();
+    });
+    searchEl.addEventListener('focus', syncLead);
+    searchEl.addEventListener('blur', syncLead);
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with
     // it, 1 = appears somewhere, 0 = no match.
@@ -13643,6 +13671,19 @@
       .sort((a, b) => b.s - a.s || (a.u.name || '').localeCompare(b.u.name || ''))
       .map(x => x.u);
 
+    // Every post I can read that says the words: the room's (hand-addressed
+    // ones too) and my own, never a repost, a circle's or a song (those are
+    // read in their circle and in On repeat). Newest first, as posts() is.
+    const postsMatching = (q) => Store.posts().filter(p =>
+      !p.repostOf && !p.communityId && p.type !== 'song' && !Blocks.has(p.author)
+      && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
+    let discoverable = new Set();
+
+    // Searching, the people come first but don't bury the posts: the best few
+    // rows, and a More people under them for the rest. Reset per query.
+    const PEOPLE_FIRST = 4;
+    let allPeopleFor = null;
+
     // How long typing has to settle before the page rebuilds.
     const SEARCH_BEAT = 110;
 
@@ -13656,12 +13697,17 @@
       const answers = occ ? dailyAnswers(occ) : [];
       const rooms = q ? communitiesMatching(q) : communitiesInOrder();
       const roomsHtml = communitiesSectionHtml(rooms, { search: !!q });
-      const people = q ? peopleMatching(q) : [];
+      const matched = q ? peopleMatching(q) : [];
+      const people = allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
+      const morePeople = matched.length > people.length;
+      if (q) discoverable = new Set(Store.discover({ addressed: true }));
+      const found = q ? postsMatching(q) : [];
       // The markup is the description of what changed, so it signs the paint;
       // a person's row carries a tie, so their friendStatus is in it too.
       const sig = JSON.stringify([q, roomsHtml, occ && [occ.slug, answers.length],
         people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
-          isLocked(u.username), Store.friendStatus(u.username)])]);
+          isLocked(u.username), Store.friendStatus(u.username)]),
+        morePeople, found.map(p => p.id)]);
       if (bodyEl.dataset.sig === sig) return;
       bodyEl.dataset.sig = sig;
 
@@ -13669,16 +13715,31 @@
         ? `<section class="discover-people" aria-label="People">` +
             `<p class="discover-kicker">People</p>` +
             `<div class="friends-list">` +
-              people.map((u, i) => friendRowHtml(u, i, { locked: isLocked(u.username), bio: true })).join('') +
+              people.map((u, i) => friendRowHtml(u, i, { locked: isLocked(u.username) })).join('') +
             `</div>` +
+            (morePeople ? `<button class="pill-quiet discover-more" type="button">More people</button>` : '') +
           `</section>`
         : '';
-      const none = q && !rooms.length && !people.length
+      const postsHtml = found.length
+        ? `<section class="discover-posts" aria-label="Posts">` +
+            `<p class="discover-kicker">Posts</p>` +
+            `<div class="feed" id="discover-found"></div>` +
+          `</section>`
+        : '';
+      const none = q && !rooms.length && !people.length && !found.length
         ? `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>` : '';
 
-      bodyEl.innerHTML = (occ ? dailyCardEl(occ, answers) : '') +
-        roomsHtml + peopleHtml + none +
-        (q ? '' : shareAsk);
+      // Searching, the results run people, posts, circles; otherwise the page
+      // is the daily and the circles.
+      bodyEl.innerHTML = q
+        ? peopleHtml + postsHtml + roomsHtml + none
+        : (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
+      bodyEl.querySelector('.discover-more')?.addEventListener('click', () => {
+        allPeopleFor = q;
+        paintNow();
+      });
+      const foundEl = bodyEl.querySelector('#discover-found');
+      if (foundEl) syncCards(foundEl, found, wireFoundCard, null, true);
 
       // The daily's own invitation. Scoped to the daily's card: a circle's Join
       // wears the same pill (it is the daily's card, after all).
@@ -13691,6 +13752,14 @@
       // second binding), which is what lets it survive every repaint.
       wireTieList(bodyEl);
     };
+
+    // A found post's tag searches for that tag.
+    const wireFoundCard = (card) => card.querySelectorAll('.tag[data-tag]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        discoverQuery = searchEl.value = btn.dataset.tag;
+        paintNow();
+        syncLead();
+      }));
 
     // Share Tria: native share sheet where it exists, clipboard copy otherwise.
     function wireShare() {
@@ -13711,6 +13780,7 @@
       if (e.key === 'Escape' && searchEl.value) {
         discoverQuery = searchEl.value = '';
         paintNow();
+        syncLead();
       }
       // Return is "show me", and the answer is already on the page.
       if (e.key === 'Enter') searchEl.blur();
@@ -13723,7 +13793,7 @@
       searchTimer = setTimeout(() => { if (bodyEl.isConnected) paint(); }, SEARCH_BEAT);
     };
     const paintNow = () => { clearTimeout(searchTimer); paint(); };
-    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); });
+    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); syncLead(); });
 
     // A re-pull while you're standing here repaints the body in place. A quiet
     // refresh skips a live search; an explicit tab re-tap (`force`) does not.
@@ -13738,6 +13808,7 @@
     // Restore an in-flight query if a background refresh re-rendered the page.
     searchEl.value = discoverQuery;
     paint();
+    syncLead();
   }
 
   /* ── Updates — a quiet ledger, visited on your own time ────────────────────

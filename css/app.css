@@ -1832,8 +1832,11 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   appearance: none;
 }
 .discover-search-field::placeholder { color: var(--muted); opacity: 0.75; }
-.discover-search-field:focus { outline: none; border-color: var(--muted); }
-.discover-search-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* No ring and no bolder edge on focus (Zoe): the caret and the + turned
+   chevron already say the field is open. */
+.discover-search-field:focus,
+.discover-search-field:focus-visible { outline: none; }
+.discover-search-field { -webkit-tap-highlight-color: transparent; }
 /* No X in the field either: WebKit draws its own on type=search. */
 .discover-search-field::-webkit-search-cancel-button,
 .discover-search-field::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
@@ -9802,13 +9805,20 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    a circle has that a daily hasn't: a face in the corner, a stack of them, and
    the dashed card that starts one. Search adds a section of people rows. */
 .communities,
-.discover-people {
+.discover-people,
+.discover-posts {
   max-width: var(--feed-width);
   margin: 0 auto 2rem;
   padding-inline: var(--inset);
 }
 /* On a phone the view already carries the inset, as it does for the daily. */
-@media (max-width: 680px) { .communities, .discover-people { padding-inline: 0; } }
+@media (max-width: 680px) { .communities, .discover-people, .discover-posts { padding-inline: 0; } }
+/* Searching, a person is a COMPACT row (Zoe): a smaller face, half the air, no
+   bio, so a few names sit over the posts instead of a screenful of them. */
+.discover-people .friend { padding-block: 0.55rem; gap: 0.7rem; }
+.discover-people .friend-open { gap: 0.7rem; }
+.discover-people .friend .avatar { width: 40px; height: 40px; font-size: 1.3rem; }
+.discover-more { display: flex; width: 100%; min-height: 44px; border-radius: var(--radius-pill); margin-top: 0.6rem; justify-content: center; align-items: center; }
 /* A stack of cards wants less air between them than the daily's 2rem, which
    is the gap between the page's headline and whatever follows it. */
 /* ONE GAP down the whole page (Zoe, 2026-10-22: "even the spacing between
