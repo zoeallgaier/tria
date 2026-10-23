@@ -5764,7 +5764,6 @@
     const occ = todaysDaily();
     return [
       { key: 'note',     label: 'Post' },
-      { key: 'photo',    label: 'Frame' },
       { key: 'activity', label: 'Activity' },
       // Music is a row again and off the composer's bar (Zoe, 2026-10-23).
       ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
