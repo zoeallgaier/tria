@@ -9803,6 +9803,10 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .view--discover .daily-card,
 .communities .daily-card { margin: 0 0 0.95rem; }
 .view--discover .communities { margin-bottom: 0; }
+/* Less side padding on Discover's cards (Zoe, 2026-10-22: "less side padding
+   on discover cards"): the words and the full-width pill run nearer the edge. */
+.view--discover .daily-card { padding-inline: 0.8rem; }
+.view--discover .community-card-pic { right: 0.8rem; }
 
 /* A circle's face: its photo, or Discover's woven triad on the chat list's
    glyph disc when it has none. Round, like every face in the app. */
