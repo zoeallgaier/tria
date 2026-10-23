@@ -247,7 +247,7 @@ search field in that same centred slot.
 panel and openBarMenu's card alike sit 6px in from the sides and from the
 bottom of the SCREEN (not above the home indicator; the panel's foot clears it
 inside), rounded 32px up top with a foot concentric with the display's corner,
-and are ONE SURFACE: the CSS glass (thin fill, panel blur, one hairline) with
+and are ONE SURFACE: solid `--surface` and one hairline, no blur since 2026-10-23 (it loaded late), with
 the rows straight on it, edge to edge, no fill of their own, and a pressed row
 clipped by the panel's corners. A card inside the panel was tried and removed
 (Zoe: padding in padding). **The block must stay BELOW the sheet's older rules

@@ -4121,8 +4121,8 @@ body.postbar-live main { padding-bottom: 6.5rem; }
    ONE SURFACE. A floating panel, inset 6px from the sides and from the bottom
    of the screen itself (it was parked above the home indicator, and Zoe wanted
    it on the floor like the share sheet), rounded 32px up top with a foot that
-   follows the display's corner, made of the CSS glass: a
-   thin fill, the panel-tier blur, one hairline. The rows sit straight on it,
+   follows the display's corner, made solid since 2026-10-23: --surface
+   and one hairline, no blur (it loaded a beat late). The rows sit straight on it,
    edge to edge, and a pressed row's fill is clipped by the panel's own corners
    (overflow), so there is no second shape anywhere. Grab handle, bold centred
    title, rows of a 24px mark and a label with the hairline starting where the
@@ -4156,9 +4156,11 @@ body.postbar-live main { padding-bottom: 6.5rem; }
      still sits above it while the glass runs on underneath. */
   padding: 6px 0 max(8px, calc(env(safe-area-inset-bottom) - 6px));
   overflow: hidden;
-  background: var(--glass-bg-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+  /* Solid, not glass (Zoe, 2026-10-23): the blur arrived a beat after the
+     panel did, so it wasn't worth it. A flat lifted surface, one hairline. */
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: var(--glass-edge);
   /* 32px up top; the foot follows the display's own corner, concentric 6px in
      from it, on a phone with a home indicator (inset 34 gives 50). A phone
