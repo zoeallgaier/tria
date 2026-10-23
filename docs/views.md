@@ -1,5 +1,32 @@
 # Refresh, feeds and photos
 
+**In the app, the refresh is the screen's edge (2.0, trial).** A thin peach to
+rose stroke traced round the display's own rounded corners (`TriaEdgeGlow` in
+TriaChromePlugin.swift), drawn over the native bars. Two strokes leave the top
+centre and run down either side as you pull, and they **meet at the bottom at
+the threshold**, which is the "let go now" the ring's opening used to say. Let go
+and the ramp turns slowly round the closed outline (linear, 2.4s a turn) with
+the halo breathing, then fades. A resume refresh (`refreshRing.on()`) is the same
+spin at 55%, drawn in from nothing. Reduce Motion keeps the drawing (it is the
+finger's own movement) and drops the turn and the breathing.
+
+Native reads the pull straight off the web view's scroll view, so the stroke
+and the ticks move at the display's rate with no bridge traffic per frame;
+app.js sends three messages a pull (`setGlow`: `pull` on the first frame of real
+overscroll, never on a plain tap at the top, then `spin` or `idle`). The two
+sides share one number, `THRESHOLD`/`TriaEdgeGlow.threshold` (72). The first
+`setGlow` is the probe: until it resolves, and on the web always, the ring below
+is what draws, unchanged. No `ptr-hold` under the glow, since nothing is in the
+page to make room for.
+
+**Its haptics are a ratchet**: six soft detents as the strokes travel, each
+firmer than the last (0.25 rising to 0.7), a rigid click where the ends meet (with
+a swell of the halo), and one soft tap as a PULLED refresh's glow leaves. The
+resume path is silent. `UIImpactFeedbackGenerator`, not Core Haptics, because
+it obeys the System Haptics switch for us; prepared on the pull's first frame.
+The screen's corner comes from a table keyed on `nativeBounds` height
+(`_displayCornerRadius` is private API); the Air's 62 is a guess.
+
 **Pull down is the only refresh.** Five dots, one per post type in `FILTERS`
 order, arranged on a **ring**, riding the iOS rubber band: JS reads the negative
 `window.scrollY` and drives `--ptr-y`/`--ptr-p`, CSS turns progress into

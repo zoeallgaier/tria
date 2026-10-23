@@ -51,7 +51,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "dismissMenu", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPostBar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPostBarText", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "pickPhoto", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "pickPhoto", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setGlow", returnType: CAPPluginReturnPromise)
     ]
 
     /// Built on the first `setTabs` and kept for the life of the app. Nil until
@@ -83,6 +84,11 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// A post page's comment bar, built the first time one is mounted. Same
     /// availability dance again.
     private var postBar: TriaPostBarControl?
+
+    /// The refresh glow round the screen's edge, built on the first `setGlow`.
+    /// No availability dance: it is a gradient and two strokes, nothing 26 only,
+    /// so it answers on every OS the app installs on.
+    private var glow: TriaEdgeGlow?
 
     /// The last keyboard reach handed to the web, so a notification that changes
     /// nothing costs a compare. -1 until the first one, which is what makes the
@@ -486,6 +492,25 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let items = (call.getArray("items") as? [[String: Any]]) ?? []
         DispatchQueue.main.async { [weak self] in
             self?.toolbar?.fulfil(token: token, items: items)
+            call.resolve()
+        }
+    }
+
+    /// The refresh glow (2.0). `state` is `pull`, `spin` or `idle`; `quiet`
+    /// dims a spin nobody's finger started, `land` closes a pulled refresh with
+    /// a soft tap. The FIRST call is also the probe: app.js keeps the CSS ring
+    /// until one resolves, so a binary without this method still refreshes.
+    @objc func setGlow(_ call: CAPPluginCall) {
+        let state = call.getString("state") ?? "idle"
+        let quiet = call.getBool("quiet") ?? false
+        let land = call.getBool("land") ?? false
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let web = self.bridge?.webView, let window = web.window else {
+                call.reject("No window to glow in yet.")
+                return
+            }
+            if self.glow == nil { self.glow = TriaEdgeGlow(scroll: web.scrollView) }
+            self.glow?.set(state: state, quiet: quiet, land: land, in: window)
             call.resolve()
         }
     }
@@ -3889,6 +3914,308 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
                 return
             }
             self?.finish(["data": jpeg.base64EncodedString(), "type": "image/jpeg"])
+        }
+    }
+}
+
+// MARK: - The refresh glow
+
+/* 2.0: A REFRESH IS THE SCREEN'S EDGE LIGHTING UP, and this replaced the five
+   dot ring in the app. The web keeps the ring (a browser window has no rounded
+   glass to trace).
+
+   THE PULL DRAWS IT. Two strokes leave the top centre together and run down
+   either side, each as far along as the pull has got, and they MEET AT THE
+   BOTTOM exactly at the threshold. So the outline closing is "let go now", the
+   job the ring opening used to do. Let go and the ramp turns slowly round the
+   closed outline while the world re-pulls, then it fades.
+
+   NATIVE READS THE PULL ITSELF, off the web view's own scroll view, the same
+   way `TriaScrollWatch` reads the header's state. The stroke has to move with
+   the finger at the display's rate and the haptics have to land on the frame
+   the stroke reaches a mark; sixty bridge messages a second would cost both
+   (every one is a main thread round trip, see the haptics note in
+   ios-shell.md). app.js says three things per pull: pull, spin, idle.
+
+   THE HAPTICS ARE A RATCHET. Six soft detents as the strokes travel, each a
+   touch firmer than the last, then one rigid click where the ends meet, then a
+   soft landing as the glow leaves (only after a pull: a resume nobody asked
+   for stays silent). UIImpactFeedbackGenerator rather than Core Haptics on
+   purpose: it obeys Settings, Sounds & Haptics, System Haptics before we ever
+   hear about it, which is the app's standing rule, and `prepare()` on the first
+   frame of the pull wakes the Taptic Engine so the first detent isn't late.
+   Detents and not a continuous hum: a hum under the thumb reads as the phone
+   buzzing, a ratchet reads as the pull having resistance.
+
+   THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js. */
+final class TriaEdgeGlow: UIView {
+
+    /// Points of pull that arm a refresh. MUST match THRESHOLD in app.js's pull
+    /// module: that side decides whether letting go refreshes, this side draws
+    /// and clicks at the moment it will.
+    private static let threshold: CGFloat = 72
+    private static let detents = 6
+    private static let line: CGFloat = 3
+    private static let peach = UIColor(red: 1, green: 0xac / 255.0, blue: 0x68 / 255.0, alpha: 1)
+    private static let rose = UIColor(red: 1, green: 0, blue: 0x49 / 255.0, alpha: 1)
+
+    private weak var scroll: UIScrollView?
+    private var watch: NSKeyValueObservation?
+    private let ramp = CAGradientLayer()
+    private let strokes = CALayer()
+    private let left = CAShapeLayer()
+    private let right = CAShapeLayer()
+    private let detent = UIImpactFeedbackGenerator(style: .soft)
+    private let click = UIImpactFeedbackGenerator(style: .rigid)
+    private var state = "idle"
+    private var reached = 0
+    private var armed = false
+    /// Bumped by every state change, so a fade's completion that lands after a
+    /// new pull has started doesn't blank it.
+    private var generation = 0
+
+    init(scroll: UIScrollView) {
+        self.scroll = scroll
+        super.init(frame: .zero)
+        isUserInteractionEnabled = false
+        isHidden = true
+        alpha = 0
+        backgroundColor = .clear
+
+        // Conic, peach at the top and rose at the foot on BOTH sides, so the
+        // two strokes are mirror images while they draw; turning it is the spin.
+        ramp.type = .conic
+        ramp.startPoint = CGPoint(x: 0.5, y: 0.5)
+        ramp.endPoint = CGPoint(x: 0.5, y: 0)
+        ramp.colors = [Self.peach.cgColor, Self.rose.cgColor, Self.peach.cgColor]
+        ramp.locations = [0, 0.5, 1]
+        layer.addSublayer(ramp)
+
+        for s in [left, right] {
+            s.fillColor = nil
+            s.strokeColor = UIColor.black.cgColor
+            s.lineWidth = Self.line
+            s.lineCap = .round
+            s.strokeEnd = 0
+            strokes.addSublayer(s)
+        }
+        // The bloom is the MASK's shadow: a mask's shadow counts as coverage, so
+        // the ramp shows through a soft halo round the line with no blur pass.
+        strokes.shadowColor = UIColor.black.cgColor
+        strokes.shadowOpacity = 1
+        strokes.shadowOffset = .zero
+        strokes.shadowRadius = 7
+        layer.mask = strokes
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // A square on the diagonal, so turning it never shows a corner.
+        let side = hypot(bounds.width, bounds.height)
+        ramp.frame = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        strokes.frame = bounds
+        let half = Self.halfPath(in: bounds, radius: Self.cornerRadius(for: window))
+        right.path = half.cgPath
+        let mirrored = half.copy() as! UIBezierPath
+        mirrored.apply(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: bounds.width, ty: 0))
+        left.path = mirrored.cgPath
+        CATransaction.commit()
+    }
+
+    /// The right half of the screen's outline, top centre round to bottom
+    /// centre, inset by half the line so the stroke sits on the glass's edge and
+    /// stays concentric with its corners.
+    private static func halfPath(in b: CGRect, radius: CGFloat) -> UIBezierPath {
+        let i = line / 2
+        let r = max(0, radius - i)
+        let rect = b.insetBy(dx: i, dy: i)
+        let p = UIBezierPath()
+        p.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
+                 startAngle: -.pi / 2, endAngle: 0, clockwise: true)
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        p.addArc(withCenter: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
+                 startAngle: 0, endAngle: .pi / 2, clockwise: true)
+        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        return p
+    }
+
+    /// The display's corner, by panel. The exact number is only on a private
+    /// API (`_displayCornerRadius`), which is an App Store risk, so this is the
+    /// published table keyed on `nativeBounds` height (which tells the X from
+    /// the mini and the XR from the XS Max where the point size can't). A panel
+    /// this doesn't know guesses from the home indicator: square corners
+    /// without one, the commonest modern radius with one.
+    private static func cornerRadius(for window: UIWindow?) -> CGFloat {
+        let h = max(UIScreen.main.nativeBounds.width, UIScreen.main.nativeBounds.height)
+        switch h {
+        case 2436, 2688: return 39       // X, XS, 11 Pro; XS Max, 11 Pro Max
+        case 1792: return 41.5           // XR, 11
+        case 2340: return 44             // 12 mini, 13 mini
+        case 2532: return 47.33          // 12, 13, 14, 16e
+        case 2778: return 53.33          // 12/13 Pro Max, 14 Plus
+        case 2556, 2796: return 55       // 14 Pro to 16, and their Max/Plus
+        case 2622, 2868, 2736: return 62 // 16 Pro onward, Air (unverified)
+        default:
+            return (window?.safeAreaInsets.bottom ?? 0) > 0 ? 55 : 0
+        }
+    }
+
+    func set(state next: String, quiet: Bool, land: Bool, in window: UIWindow) {
+        if superview !== window {
+            removeFromSuperview()
+            window.addSubview(self)
+        }
+        frame = window.bounds
+        // Above the native bars, and above anything presented since last time.
+        window.bringSubviewToFront(self)
+        generation += 1
+        let was = state
+        state = next
+        switch next {
+        case "pull": beginPull()
+        case "spin": spin(quiet: quiet)
+        default: finish(from: was, land: land)
+        }
+    }
+
+    // MARK: pull
+
+    private func beginPull() {
+        layer.removeAllAnimations()
+        ramp.removeAllAnimations()
+        setNeedsLayout()
+        layoutIfNeeded()
+        isHidden = false
+        reached = 0
+        armed = false
+        detent.prepare()
+        click.prepare()
+        watch = scroll?.observe(\.contentOffset, options: [.initial, .new]) { [weak self] view, _ in
+            let d = -(view.contentOffset.y + view.adjustedContentInset.top)
+            self?.track(pull: max(0, d))
+        }
+    }
+
+    private func track(pull d: CGFloat) {
+        guard state == "pull" else { return }
+        let p = min(d / Self.threshold, 1)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        left.strokeEnd = p
+        right.strokeEnd = p
+        CATransaction.commit()
+        alpha = p > 0 ? 0.45 + 0.55 * p : 0
+
+        // Detents on the way out only, firmer as the pull tightens. Backing off
+        // re-arms the ones you backed off, so pulling again ticks again.
+        let step = Int(floor(p * CGFloat(Self.detents)))
+        if step > reached, step < Self.detents {
+            reached = step
+            detent.impactOccurred(intensity: 0.25 + 0.45 * p)
+            detent.prepare()
+        } else if step < reached {
+            reached = step
+        }
+
+        // The ends meeting. A little give before it un-arms, so a thumb
+        // resting on the line doesn't click twice.
+        if p >= 1, !armed {
+            armed = true
+            click.impactOccurred(intensity: 0.9)
+            click.prepare()
+            bloom()
+        } else if p < 0.9, armed {
+            armed = false
+        }
+    }
+
+    /// The halo swells once as the outline closes.
+    private func bloom() {
+        let a = CAKeyframeAnimation(keyPath: "shadowRadius")
+        a.values = [7, 14, 9]
+        a.keyTimes = [0, 0.35, 1]
+        a.duration = 0.45
+        a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        strokes.add(a, forKey: "bloom")
+    }
+
+    // MARK: spin
+
+    private func spin(quiet: Bool) {
+        watch = nil
+        setNeedsLayout()
+        layoutIfNeeded()
+        isHidden = false
+        // Close the outline from wherever the pull left it (a resume starts from
+        // nothing and draws in from the top).
+        for s in [left, right] {
+            let close = CABasicAnimation(keyPath: "strokeEnd")
+            close.fromValue = s.presentation()?.strokeEnd ?? s.strokeEnd
+            close.toValue = 1
+            close.duration = 0.35
+            close.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            s.strokeEnd = 1
+            s.add(close, forKey: "close")
+        }
+        UIView.animate(withDuration: 0.25) { self.alpha = quiet ? 0.55 : 1 }
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        // Linear, never eased: an eased spinner lurches once a turn (views.md).
+        let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+        turn.fromValue = 0
+        turn.toValue = 2 * Double.pi
+        turn.duration = 2.4
+        turn.repeatCount = .infinity
+        ramp.add(turn, forKey: "turn")
+        let breathe = CABasicAnimation(keyPath: "shadowRadius")
+        breathe.fromValue = 7
+        breathe.toValue = 11
+        breathe.duration = 1.2
+        breathe.autoreverses = true
+        breathe.repeatCount = .infinity
+        breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        strokes.add(breathe, forKey: "breathe")
+    }
+
+    // MARK: idle
+
+    private func finish(from was: String, land: Bool) {
+        watch = nil
+        guard !isHidden else { return }
+        if was == "spin", land {
+            detent.impactOccurred(intensity: 0.5)
+        }
+        let mine = generation
+        // A pull let go short retracts the way it came; a refresh fades whole.
+        if was == "pull" {
+            for s in [left, right] {
+                let back = CABasicAnimation(keyPath: "strokeEnd")
+                back.fromValue = s.presentation()?.strokeEnd ?? s.strokeEnd
+                back.toValue = 0
+                back.duration = 0.25
+                back.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                s.strokeEnd = 0
+                s.add(back, forKey: "close")
+            }
+        }
+        UIView.animate(withDuration: was == "pull" ? 0.25 : 0.5, delay: 0,
+                       options: [.beginFromCurrentState, .curveEaseOut]) {
+            self.alpha = 0
+        } completion: { _ in
+            guard mine == self.generation else { return }
+            self.isHidden = true
+            self.ramp.removeAllAnimations()
+            self.strokes.removeAllAnimations()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            self.left.strokeEnd = 0
+            self.right.strokeEnd = 0
+            CATransaction.commit()
         }
     }
 }

@@ -20344,10 +20344,27 @@
      nothing on screen said a tab was also a button, so the discoverable gesture
      was carrying the feature and the hidden one just made the app feel like it
      reloaded at random. The tab re-tap still scrolls you to the top and clears a
-     filter; it simply no longer re-pulls the world. */
+     filter; it simply no longer re-pulls the world.
+
+     IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): the ramp drawn round the
+     glass by `TriaEdgeGlow` in TriaChromePlugin.swift, which reads the pull off
+     its own scroll view and owns the haptics (a ratchet of soft detents, a click
+     where the two strokes meet, a soft landing). This side still decides WHEN:
+     it says pull on the first frame of overscroll, then spin or idle on release.
+     The ring stays the fallback until the first setGlow resolves, so a binary
+     without the method refreshes exactly as before. */
   (() => {
-    const THRESHOLD = 72;
+    const THRESHOLD = 72;   // TriaEdgeGlow.threshold has to match
     let ptr = null, pulling = false, raf = 0, busy = false, armed = false;
+    let glow = false, glowing = false;
+    const setGlow = (state, opts) => {
+      if (!glow) return;
+      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, ...opts }).catch(() => {});
+    };
+    if (nativeShell()) {
+      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state: 'idle' })
+        .then(() => { glow = true; }).catch(() => {});
+    }
     const el = () => {
       if (!ptr) {
         ptr = document.createElement('div');
@@ -20376,6 +20393,13 @@
       raf = 0;
       if (!pulling) return;
       const d = Math.max(0, -window.scrollY);
+      // Native draws and buzzes from its own reading of the pull; all it needs
+      // is to hear that one began. Only on a real overscroll, never on every
+      // touch at the top, because each message is a main thread round trip.
+      if (glow) {
+        if (d > 0 && !glowing) { glowing = true; setGlow('pull'); }
+        return;
+      }
       const box = el();
       if (d <= 0) { box.classList.remove('ptr--show', 'ptr--armed'); return; }
       const p = Math.min(d / THRESHOLD, 1);
@@ -20404,6 +20428,24 @@
       window.removeEventListener('scroll', onScroll);
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
       const d = Math.max(0, -window.scrollY);
+      if (glow) {
+        const was = glowing;
+        glowing = false;
+        if (d < THRESHOLD || busy) { if (was) setGlow('idle'); return; }
+        busy = true;
+        setGlow('spin');
+        // No ptr-hold: the glow is on the glass, not in the page, so nothing
+        // needs holding open under it.
+        try {
+          await Promise.all([
+            refreshWorld(herePath(), { force: true }),
+            new Promise(r => setTimeout(r, 650)),
+          ]);
+        } catch { /* offline pull: let go quietly */ }
+        setGlow('idle', { land: true });
+        busy = false;
+        return;
+      }
       const box = el();
       if (d >= THRESHOLD && !busy) {
         busy = true;
@@ -20443,6 +20485,8 @@
       on() {
         if (busy || pulling || !Store.isAuthed()) return false;
         busy = true;
+        // Dimmer than a pull's: nobody asked for this one.
+        if (glow) { setGlow('spin', { quiet: true }); return true; }
         const box = el();
         // The very first show also CREATES the node, and creating it and classing
         // it in the same task means the browser only ever resolves style once,
@@ -20455,6 +20499,7 @@
         return true;
       },
       off() {
+        if (glow) setGlow('idle');
         ptr?.classList.remove('ptr--spin', 'ptr--show', 'ptr--armed');
         busy = false;
       },
