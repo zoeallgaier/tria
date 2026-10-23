@@ -7553,7 +7553,9 @@
           isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`)
       : '';
     mountToolbar({
-      leading: b ? toolbarBackEl(b.href, b.label) : '',
+      // Your own profile wears My Circle's + where a visitor's back chevron
+      // would be (Zoe, 2026-10-23): the same Share sheet.
+      leading: b ? toolbarBackEl(b.href, b.label) : isSelf ? composeBtnEl('profile-compose-btn') : '',
       // The @HANDLE, since 1.8, Instagram's arrangement: the bar title is up
       // from the first frame on every page now, and the card under it already
       // says the name in big serif, so the bar says the other half of who this
@@ -7782,6 +7784,8 @@
     // looked it up that way, and the same contract Circle, Discover and Updates
     // are already on — resetToolbar clears that node on every navigation, so the
     // listener dies with it rather than accumulating.
+    document.getElementById('profile-compose-btn')
+      ?.addEventListener('click', () => openComposeDial());
     document.getElementById('profile-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: profileFilter,
