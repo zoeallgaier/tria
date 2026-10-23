@@ -5409,8 +5409,9 @@ button.poll-option:disabled { cursor: default; }
   border-radius: 50%;
   overflow: hidden;
   background: var(--surface-2);
-  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  box-shadow: var(--lit-rim), 0 10px 24px rgba(0, 0, 0, 0.18);
+  /* 2.0's hairline, THE BUTTON's one --pill-edge (Zoe): no rim, no drop. */
+  border: var(--pill-edge);
+  box-shadow: none;
 }
 .account-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .account-photo--empty { display: grid; place-items: center; }
