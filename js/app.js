@@ -12919,11 +12919,19 @@
   // circle"), the same card with its fill taken out and a dashed edge, the way
   // an empty slot is drawn. Signed out its pill is the way into an account.
   // Signed in it can be waved off (Zoe), per device like the week-of cards,
-  // and the Share sheet grows a Circle row so the door is never lost.
+  // and the Create sheet grows a Circle row so the door is never lost. A wave
+  // only lasts until the app is next opened; the THIRD one is for good (Zoe:
+  // "dismissed three times total ... to totally disappear"). The count lives
+  // on the device, the "for now" in memory, so a cold launch brings it back.
+  const START_WAVES = 3;
   const startKey = () => `tria:circle-start-dismissed:${Store.session()}`;
+  let startWavedNow = false;
+  function communityStartWaves() {
+    try { return parseInt(localStorage.getItem(startKey()), 10) || 0; } catch { return 0; }
+  }
   function communityStartDismissed() {
     if (!Store.isAuthed()) return false;
-    try { return localStorage.getItem(startKey()) === '1'; } catch { return false; }
+    return startWavedNow || communityStartWaves() >= START_WAVES;
   }
   function communityStartHtml() {
     if (communityStartDismissed()) return '';
@@ -12943,10 +12951,12 @@
   function wireCommunityStart(root) {
     root.querySelector('.community-start-x')?.addEventListener('click', (e) => {
       e.preventDefault();
-      try { localStorage.setItem(startKey(), '1'); } catch { /* private window */ }
+      const waves = communityStartWaves() + 1;
+      try { localStorage.setItem(startKey(), String(waves)); } catch { /* private window */ }
+      startWavedNow = true;
       hapticTap('LIGHT');
       e.currentTarget.closest('.community-card--start')?.remove();
-      toast('Hidden. Start one anytime from Create.');
+      toast(waves >= START_WAVES ? 'Gone for good. Start one anytime from Create.' : 'Hidden for now. Start one anytime from Create.');
     });
   }
 
