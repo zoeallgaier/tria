@@ -60,7 +60,9 @@ cards"): handle as kicker, name as the serif headline, about as the hint,
 members' faces and count in the foot, the daily's pill as Join (which joins and
 walks you in), and the circle's photo in the top corner. No eyebrows: no
 "Circles" caption, no kicker on the Start card. **Every card's pill is full
-width and 52px tall** (`.daily-card .daily-answer`, Share Tria too), and the
+width and 52px tall** (`.daily-card .daily-answer`, Share Tria too, which is
+painted CSS now and no longer a native page button), worn as hairline glass
+with a thin wash of the band, the daily tag's look (Zoe), and the
 page runs on ONE GAP, ~15px, from the search field down through every card
 (Zoe: "even the spacing between search and cards"). No hairline over Share Tria
 on Discover. Search is **circles
@@ -94,9 +96,8 @@ glass (menus, sheets) keeps its own ladder.
 **A like is a heart and nothing else** (Zoe: "remove the other types of
 reactions other than liking"). The fan, its four marks, its tick and its CSS
 are deleted; `likes.reaction` is left in the database, never read or written,
-so an old thumbs up reads as a like. **My Circle's tab is a house**
-(`ICONS.myCircle`; Zoe: "use a home icon ... now that the titles gone"), and
-the native tab bar draws it from the same markup. **The + sheet is titled
+so an old thumbs up reads as a like. My Circle's tab was a house for an afternoon and went back to the ring with
+a centre (Zoe). **The + sheet is titled
 Share** (was Create), and a song wears a music note (`ICONS.music`), not the
 speaker, which is a video's sound again.
 
@@ -278,7 +279,7 @@ longer try a native menu at all; the colour ring because the sheet shows the
 colours off and a menu row can't. See "A menu the page asks for" in
 [docs/native-chrome.md](docs/native-chrome.md).
 
-So do the page's own PRIMARY ACTS: the auth gate's submit and **Share Tria**.
+So do the page's own PRIMARY ACTS: the auth gate's submit (and **Share Tria**, until 1.9 painted it in CSS like the cards' Start, Zoe's call).
 Those sit in content that SCROLLS, which is why they could not be native until
 now — each one crosses with its position in the document and native tracks the
 web view's own `contentOffset`, clipped to the band between the bars. "Not

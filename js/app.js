@@ -248,13 +248,18 @@
     // dots; these are r 4.4 on a tighter one, so what you see is the weave.
     // Same idea, same tab, drawn so it survives being 28pt across.
     circle:  '<circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/>',
-    // A HOUSE (Zoe, 2026-10-22: "use a home icon for the circle page on nav
-    // instead of the dot and circle now that the titles gone"). The ring with a
-    // centre said "you among your people" while the page wore its name; with
-    // the name gone from the bar (1.8), the tab has to say home on its own.
-    // A pitched roof over a rounded body with a door, on the same grid and
-    // stroke as every other mark, so the native tab bar draws it from here too.
-    myCircle: '<path d="M3.8 10.6 12 4l8.2 6.6"/><path d="M6 9.2v9.3a1.5 1.5 0 0 0 1.5 1.5h2.8v-4.6a1.7 1.7 0 0 1 3.4 0V20h2.8a1.5 1.5 0 0 0 1.5-1.5V9.2"/>',
+    // A RING WITH A CENTRE (a house was tried for an afternoon on 2026-10-22
+    // and Zoe asked for this one back) — the people around you, and you in the middle of
+    // them, which is what the home feed is. The bare ring it replaces said
+    // "circle" and had no way to say WHICH circle, so it leaned entirely on
+    // being the plainest mark in the row. The centre is the reader, and that is
+    // the whole distinction between this tab and Discover's said in the drawings
+    // rather than in how busy they are: one triad has somebody at its middle and
+    // the other does not. The centre is FILLED rather than outlined so the mark
+    // has one solid thing in it at 28pt, and `stroke="none"` matters as much as
+    // the fill does: ICON_ATTRS strokes everything at 1.8, and a 1.9-radius
+    // circle stroked at 1.8 is not a dot, it is a smudge with a hole in it.
+    myCircle: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/>',
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
@@ -269,6 +274,8 @@
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
+    // Edit profile's row (Zoe, 2026-10-22: "use gear icon for edit profile").
+    gear:    '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     camera:  '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.4-2h7.2L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13" r="3.3"/>',
     comment: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
@@ -1369,7 +1376,9 @@
        coalesced. See TriaPageButton. */
     const PAGE_SEL = [
       '.auth-submit',          // the gate's submit, and Send feedback
-      '.friends-share-copy',   // Share Tria, at the foot of Discover
+      // Share Tria left (2026-10-22, Zoe: "share tria should be css like start
+      // buttons"): it is painted CSS in every shell now, the same full-width
+      // pill as the cards' Start and Join above it.
     ].join(', ');
 
     let pageIds = 0;
@@ -1381,8 +1390,8 @@
       const r = el.getBoundingClientRect();
       const styles = getComputedStyle(el);
       const { text, after } = words(el);
-      // Share Tria is the only one of the four that carries a mark. liveGlyph
-      // would do here too, but none of these ever holds two.
+      // A mark, if one ever carries one (Share Tria did, before it went back
+      // to CSS). liveGlyph would do here too, but none of these holds two.
       const mark = el.querySelector('svg');
       // The same three answers the + takes, off this button's own ::before.
       // See bandFill, and the ink note in fabSpec for why a bare one sends none.
@@ -6567,9 +6576,40 @@
     host.dataset.sig = html;
     host.innerHTML = html;
     host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
+    host.querySelector('[data-np="mine"]')?.addEventListener('click', openMySong);
     host.querySelectorAll('.np-item--post').forEach(item => {
       const post = Store.posts().find(p => String(p.id) === item.dataset.post);
       if (post) wireLikes(item, post);
+    });
+  }
+
+  // Your own square: play it, swap it for another, or take it down early.
+  function openMySong() {
+    const mine = myWeekSong();
+    if (!mine) return;
+    openSheet({
+      title: mine.song.title,
+      items: [
+        // A throwaway link, so it leaves the way every song does: the music
+        // app itself in the shell (data-out="system"), a new tab on the web.
+        { label: 'Listen', icon: 'music', run: () => {
+          const a = document.createElement('a');
+          a.href = songLink(mine.song);
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.dataset.out = 'system';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } },
+        { label: 'Change song', icon: 'pencil', run: () => goListening('#/') },
+        { label: 'Take it down', icon: 'trash', danger: true, run: async () => {
+          const res = await Store.deletePost(mine.id).catch(() => null);
+          if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t take it down, try again.'); return; }
+          hapticTap('LIGHT');
+          paintOnRepeat();
+        } },
+      ],
     });
   }
 
@@ -8003,7 +8043,7 @@
           // above it on the visitor menu's ordering, where Share genuinely is
           // the first thing you'd want; on your OWN page it is the rarer act,
           // and it was making the reader read past it.
-          { label: 'Edit profile', icon: 'pencil', run: () => { editorPushed = true; go('#/profile/edit'); } },
+          { label: 'Edit profile', icon: 'gear', run: () => { editorPushed = true; go('#/profile/edit'); } },
           /* ONE SHARE ROW (Zoe, 2026-09-22). This menu carried two, "Share
              profile" and the card, stacked one on the other — and they were
              never two decisions. They are the same intent at two fidelities, a
@@ -8030,7 +8070,7 @@
              that still asks. */
           { label: 'Share profile', icon: 'send',
             run: () => openStoryCardSheet(profileCardSpec(u), profileLink(u.username)) },
-          { label: 'Subscribe to calendar', icon: 'cal', run: openCalendarSubscribe },
+          { label: 'Connect to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
           // one of the three, and it's where the feedback form lives, so it also
@@ -12304,6 +12344,20 @@
      way in and the rail must be able to have a first user. Without
      add-song-posts.sql the rail is the old listening status (statusRailEl). */
   const ON_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
+  /* ONE SONG A WEEK (Zoe, 2026-10-22: "only allow one song a week, like the
+     old/live/current version, just with the new design and like option and new
+     publish page"). The live app's listening status was one song you had on
+     repeat, held for a week, which you could change. Same here: your song for
+     the week is your square, first on the rail where the + was, and sharing
+     another REPLACES it (the old post is deleted once the new one is out, see
+     submitPost), so nobody ever has two up at once. */
+  function myWeekSong() {
+    const me = Store.session();
+    if (!me) return null;
+    const since = new Date(Date.now() - ON_REPEAT_MS).toISOString();
+    return Store.posts().find(p => p.author === me && p.type === 'song' && p.song
+      && !p.communityId && (p._ts || '') >= since) || null;
+  }
   function songPostsOnRepeat() {
     const seen = new Set();
     const out = [];
@@ -12325,10 +12379,17 @@
   function nowPlayingEl() {
     if (!Store.songsReady()) return statusRailEl();
     const me = Store.session();
-    const items = songPostsOnRepeat();
-    if (!me && !items.length) return '';
-    const add = !me ? '' :
-      `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
+    const all = songPostsOnRepeat();
+    if (!me && !all.length) return '';
+    // Mine leads, as the + it stands in for did; everybody else follows.
+    const mine = all.find(x => x.u.username === me);
+    const items = all.filter(x => x !== mine);
+    const add = !me ? '' : mine
+      ? `<button type="button" class="np-item np-mine" data-np="mine" ` +
+          `aria-label="${esc(npFace({ ...mine.u, listening: mine.post.song }, me).label)}, your song this week">` +
+          npFace({ ...mine.u, listening: mine.post.song }, me).html +
+        `</button>`
+      : `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
           `aria-label="Share a song">` +
         `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
         `<span class="np-song">Share a song</span>` +
@@ -13836,8 +13897,7 @@
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
         `<button class="friends-share-copy publish-fill is-solid" type="button" ` +
           `aria-label="Share Tria">` +
-          svgIcon('send', 'friends-share-ico') +
-          `<span>Share Tria</span>` +
+          `<span>Share Tria</span><span class="daily-go" aria-hidden="true">→</span>` +
         `</button>` +
       `</div>`;
 
@@ -15846,6 +15906,10 @@
           `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
           `aria-label="Search a song or album, or paste a link">` +
         `<div class="song-results" id="c-song-results" aria-live="polite"></div>` +
+        (myWeekSong()
+          ? `<p class="field-hint">One song a week. This one takes the place of ` +
+              `“${esc(myWeekSong().song.title)}”.</p>`
+          : '') +
       `</div>`;
   }
 
@@ -17626,6 +17690,8 @@
     if (quotingPost) return submitQuote(errEl);
 
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
+    // The song this one replaces, read before the new one exists (myWeekSong).
+    const replacing = pubType === 'song' ? myWeekSong() : null;
     // A daily answer carries its join tag invisibly — it's the app's bookkeeping,
     // not one of the poster's words, so it never sat in the field they can see.
     // The tag goes on only if what you made is what the prompt asked for
@@ -17784,6 +17850,9 @@
     // A circle's song stays in the circle for the same reason.
     if (data.type === 'song' && data.song && res.post.audience !== 'list' && !res.post.communityId)
       Store.setListeningTo(data.song).catch(() => {});
+    // One song a week: the new one is out, so the old one comes down. Quiet
+    // and best effort; a refusal leaves two up until the next try.
+    if (replacing && replacing.id !== res.post.id) Store.deletePost(replacing.id).catch(() => {});
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // next compose opens as a plain Note until something's attached
     // An answer goes home to its question: the point of answering is seeing what

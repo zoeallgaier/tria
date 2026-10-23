@@ -6617,8 +6617,28 @@ button.poll-option:disabled { cursor: default; }
   width: 100%;
   min-height: 52px;
   margin-left: 0;
+  gap: 0.3rem;
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
   font-size: 0.95rem;
 }
+@media (hover: hover) { .friends-share-copy:hover .daily-go { transform: translateX(2px); } }
+/* HAIRLINE GLASS WITH A GRADIENT WASH (Zoe, 2026-10-22: "use the hairline
+   glass style and a gradient for css buttons, like the daily's tag KIND OF").
+   Not the solid band: the glass fill, the daily tag's hairline, and the band
+   laid over it thin (the tag runs it at 0.17; a button wants a little more to
+   read as the thing to press), with the page's own ink on top. Stated with
+   two more classes than the shared solid-CTA rule below, so it wins there
+   without a source-order dance. */
+.daily-card .daily-answer.publish-fill.is-solid,
+.friends-share .friends-share-copy.publish-fill.is-solid {
+  color: var(--text);
+  background: var(--glass-bg);
+  border: 1px solid color-mix(in srgb, var(--text) 26%, transparent);
+  box-shadow: none;
+}
+.daily-card .daily-answer.publish-fill.is-solid::before,
+.friends-share .friends-share-copy.publish-fill.is-solid::before { opacity: 0.3; }
 .daily-count:empty { display: none; }
 .daily-go { font-size: 1rem; transition: transform var(--dur-micro) var(--ease); }
 /* Already answered (one each): the invitation is spent and nothing replaces it.
@@ -7497,7 +7517,6 @@ button.poll-option:disabled { cursor: default; }
   padding: 0.45rem 1rem;
   font-size: 0.85rem;
 }
-.friends-share-ico { width: 15px; height: 15px; }
 
 /* ── Push pre-prompt — the soft ask on Updates. Still editorial (serif title,
    not a system alert), but on the same frosted-glass card material as the
@@ -10964,5 +10983,4 @@ html[data-chrome="native"] .postbar .postbar-attach {
    LAST IN THE FILE, under the same rule the block above records: an attribute
    selector carries specificity, and .publish-fill's own rules are stated later
    than most of what they beat. Restated on the CTA rather than inherited. */
-html[data-chrome="native"] .auth-submit,
-html[data-chrome="native"] .friends-share-copy { visibility: hidden; }
+html[data-chrome="native"] .auth-submit { visibility: hidden; }
