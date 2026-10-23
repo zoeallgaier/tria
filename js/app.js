@@ -13356,8 +13356,8 @@
         // thing"): an empty slot to fill, and a quiet pill, not a commit.
         feedEl.innerHTML =
           `<section class="daily-card community-card community-card--start community-first">` +
-            `<a class="daily-open" href="#/publish"><span class="daily-prompt">Say the first thing</span></a>` +
-            `<p class="daily-hint">Every circle starts with one post. Say hello, or share what got you into it.</p>` +
+            `<a class="daily-open" href="#/publish"><span class="daily-prompt">Share the first post</span></a>` +
+            `<p class="daily-hint">Every circle starts with a post. Say hello, or share a bit about yourself.</p>` +
             `<div class="daily-foot">` +
               `<a class="daily-answer pill-quiet" href="#/publish">` +
                 `Write the first post<span class="daily-go" aria-hidden="true">→</span></a>` +
