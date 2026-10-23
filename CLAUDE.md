@@ -252,7 +252,7 @@ the rows straight on it, edge to edge, no fill of their own, and a pressed row
 clipped by the panel's corners. A card inside the panel was tried and removed
 (Zoe: padding in padding). **The block must stay BELOW the sheet's older rules
 in app.css**: it once sat above them and their `.sheet-items` glass won by
-source order. Grab handle, a centred Instrument Serif title (2026-10-23), NO
+source order. Grab handle, a centred italic Instrument Serif title (2026-10-23), NO
 Cancel (a tap outside, Escape, or a pull down: `dragToClose`). A `dock`
 ("Done") is a soft pill at the panel's foot. A radio set shows a check, not a
 fade. The Create picker is that sheet's list.
