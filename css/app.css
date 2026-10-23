@@ -7503,44 +7503,47 @@ button.poll-option:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) { .notif-more:active { transform: none; } }
 
 /* ── Chats (1.7) ──────────────────────────────────────────────────────────────
-   The list is the ledger's row language exactly — flat, hairline-divided, the
-   inset carried by the row — because it is the page Updates became, and Updates
-   is its first row. A chat is bold when something in it is new, and wears the
-   same dot as the tab, in the reader's own colour. Never a number. */
+   EVERY CHAT IS ITS OWN CARD (Zoe, 2026-10-23: "give the chats the squircle
+   treatment ... the chats themselves not the photos"): a soft --surface tile
+   wearing the flat cards' corner, --radius-soft, a short gap between tiles,
+   and no hairlines. It was the ledger's row language (flat, hairline-divided)
+   until then. Updates is still the first row. A chat is bold when something in
+   it is new, and wears the same dot as the tab, in the reader's own colour.
+   Never a number. */
 .chat-list {
   list-style: none;
   margin-block: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
-/* The pinned rows run straight into the chats: one ledger, one hairline between
-   rows, and no strip of paper that reads as an empty row. */
-.chat-list--pinned + .chat-list li:first-child .chat-row { border-top: 0; }
+/* The pinned rows run straight into the chats, one gap between every tile. */
+.chat-list--pinned + .chat-list { margin-top: 6px; }
 .chat-row {
+  --row-fill: var(--surface);
   display: flex;
   align-items: center;
   gap: 0.85rem;
   width: 100%;
-  padding: 0.8rem 0;               /* on the masthead's edge, like the kickers */
+  padding: 0.75rem 0.9rem;
   color: var(--text);
   font: inherit;
   text-align: left;
-  background: none;
+  background: var(--row-fill);
   border: 0;
-  border-bottom: 1px solid var(--rule);
+  border-radius: var(--radius-soft);
   transition: background-color var(--dur-micro);
 }
-.chat-list li:first-child .chat-row { border-top: 1px solid var(--rule); }
-/* A wide screen's masthead carries --inset and a phone's doesn't, so the rows
-   (and the note and the Archived row, which sit on the same edge) take it here
-   and only here: the text lands under the title, and the hover and hairlines
-   run the column's full width, which is how Updates' rows already sat. */
+/* A wide screen's masthead carries --inset and a phone's doesn't, so the note
+   takes it here and only here and lands under the title. The tiles span the
+   column at both widths. */
 @media (min-width: 681px) {
-  .chat-row, .chat-archived-row, .chat-note { padding-inline: var(--inset); }
+  .chat-note { padding-inline: var(--inset); }
 }
 .chat-pane:not(.is-still) .chat-row { animation: rise var(--dur-slow) var(--ease) both; }
-@media (hover: hover) { .chat-row:hover { background: var(--surface); } }
+.chat-row:active { --row-fill: color-mix(in srgb, var(--text) 8%, var(--surface)); }
+@media (hover: hover) { .chat-row:hover { --row-fill: color-mix(in srgb, var(--text) 5%, var(--surface)); } }
 .chat-list li[hidden] { display: none; }
 .chat-avatar { width: 48px; height: 48px; flex-shrink: 0; font-size: 1.1rem; }
 .chat-glyph {
@@ -7557,18 +7560,10 @@ button.poll-option:disabled { cursor: default; }
   width: 34px;
   height: 34px;
   font-size: 0.8rem;
-  box-shadow: 0 0 0 2px var(--bg);
+  box-shadow: 0 0 0 2px var(--row-fill, var(--bg));
 }
 .chat-faces .chat-avatar:first-child { top: 0; left: 0; }
 .chat-faces .chat-avatar:last-child:not(:first-child) { right: 0; bottom: 0; }
-/* THE SQUIRCLE (Zoe, 2026-10-23): every face in Chats, the list's tiles (a
-   person, a pair, a circle's photo, the glyphs), a thread's head and its
-   message faces, wears album art's corner, a fifth of its own width, so a 28px
-   face and a 64px head are one shape. Two classes deep to outrank .avatar,
-   .comment-avatar and .community-pic, which all say 50%. */
-.chat-row .chat-avatar,
-.chat-head .chat-head-avatar,
-.msg-face .msg-avatar { border-radius: var(--radius-art); }
 .chat-row-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
 .chat-row-top { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
 .chat-row-name {
@@ -7814,27 +7809,23 @@ button.poll-option:disabled { cursor: default; }
 }
 @media (prefers-reduced-motion: reduce) { .msg-hearts.is-popping svg { animation: none; } }
 
-/* The Archived shelf at the foot of the chat list: a quiet disclosure row. */
-/* Straight on from the rows above it, one hairline, for the pinned rows' reason. */
-.chat-archived { margin-top: 0; }
-.chat-list + .chat-archived .chat-archived-row { border-top: 0; }
+/* The Archived shelf at the foot of the chat list: a quiet disclosure row, no
+   tile and no hairlines, its words on the tiles' text edge. */
+.chat-archived { margin-top: 6px; }
 .chat-archived-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block: 0.9rem;            /* inline is the rows' (see .chat-row) */
+  padding: 0.9rem 0.9rem;
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--muted);
   list-style: none;
   cursor: pointer;
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
 }
 .chat-archived-row::-webkit-details-marker { display: none; }
 .chat-archived-row::after { content: 'Show'; font-weight: 300; }
 .chat-archived[open] .chat-archived-row::after { content: 'Hide'; }
-.chat-archived .chat-list li:first-child .chat-row { border-top: 0; }
 .chat-archived-note { margin-top: 1rem; text-align: center; }
 
 /* ── Activities (1.7) ─────────────────────────────────────────────────────────
