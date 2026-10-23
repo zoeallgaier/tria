@@ -8299,9 +8299,9 @@ button.poll-option:disabled { cursor: default; }
    `overflow: hidden` and the panel is as tall as its rows. Here the height
    belongs to a list nobody gets to assume the length of, so the whole sheet is
    capped to the screen it is standing on, and the column under the title
-   (.sheet-items, the base sheet's own scroller) scrolls when the modes, the
-   checklist at its dvh cap and your circles don't fit. Two scrollers, no more:
-   the panel's column and the checklist inside it.
+   (.sheet-items, the base sheet's own scroller) scrolls when the modes and
+   your circles don't fit. The checklist rules above outlived the audience
+   sheet's Choose people (gone in 2.0): the chat rosters still use them.
 
    The insets are the scrim's own 0.7rem twice over, plus the notch and the home
    indicator — the scrim only pads for the second of those, and a sheet that runs

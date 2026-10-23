@@ -15737,8 +15737,9 @@
   }
 
   /* ── One row of a people checklist ────────────────────────────────────────
-     Avatar, name, @handle, tick. The AUDIENCE sheet's row and a CHAT ROSTER's
-     row are one drawing on purpose, and that is the point rather than a saving:
+     Avatar, name, @handle, tick. It was the AUDIENCE sheet's row too until 2.0
+     took Choose people out; the chat rosters keep it. The two were one drawing
+     on purpose, and that is the point rather than a saving:
      picking who can see a post and picking who is in its chat are the same act
      on the same people, so a reader who has learned one has learned the other.
      On a hand-picked plan they are not even two lists — the invite list IS the
@@ -15832,22 +15833,28 @@
      block). It arrives with the focus trap, the return of focus to the lock,
      Escape, the scrim tap, the safe-area dock and the panel-tier glass — all of
      which this was a second, worse copy of, and one (the trap) it simply did not
-     have. The checklist is the part that scrolls now, inside a capped panel, so
-     the modes and the dock hold still above and below it.
+     have. The rows scroll inside a capped panel if they outgrow it, and the
+     title and the dock hold still above and below them.
 
      AND IT COMMITS AS YOU TAP. Deferred commit is what turned an unreachable
      Done into a bug that lost the answer rather than one that looked wrong;
      taking each tap as it lands means every way out — the dock, Escape, the
      scrim, the back gesture that now sweeps it — leaves the same state, and the
      lock under the sheet updates as you go, which is feedback the card never
-     gave. The coercion is unchanged and still stated exactly once: "Choose
-     people" with nobody chosen is My circle, because an empty allowlist is a
-     post that nobody can read. */
+     gave.
+
+     NO "CHOOSE PEOPLE" SINCE 2.0 (Zoe: "remove the choose people option
+     entirely"). Circles are the way to say something to some people, so the
+     answers are Anyone, My circle, and the circles you're in. The 'list'
+     audience still exists in the database and on posts made before, and this
+     sheet is also the editor's, so a post that already goes to hand-picked
+     people shows that as its own ticked row, the people it went to, unchanged.
+     It can be left for another answer and gone back to while the sheet is up,
+     and never edited: there is no checklist to edit it with. */
   function openAudienceSheet(root, onChange, { rooms = false } = {}) {
-    const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
-      .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
-    const chosen = new Set(pubAudience.users);
     let mode = pubAudience.mode;
+    // An old hand-picked post's people, kept exactly as they were.
+    const kept = mode === 'list' ? [...pubAudience.users] : [];
     // Which circle, when the answer is one. A circle is a fourth answer to the
     // same question rather than a second control: the post is FOR its members,
     // exactly as a circle post is for your friends.
@@ -15863,18 +15870,14 @@
     // end. Nothing else writes pubAudience from here, so the fallback lives in
     // one place and cannot be half-applied.
     const commit = () => {
-      const users = [...chosen];
       if (mode === 'public') pubAudience = { mode: 'public', users: [] };
-      else if (mode === 'list' && users.length) pubAudience = { mode: 'list', users };
+      else if (mode === 'list' && kept.length) pubAudience = { mode: 'list', users: kept };
       else if (mode === 'community' && room) pubAudience = { mode: 'community', users: [], community: room };
       else pubAudience = { mode: 'circle', users: [] };
       pubAudienceTouched = true;      // an answer now, not a default
       syncAudienceLock(root);
       onChange?.();
     };
-
-    const pickRows = friends
-      .map((f, i) => pickRowHtml(f, { on: chosen.has(f.username), i })).join('');
 
     const modeBtn = (m, t, d) =>
       `<button type="button" class="aud-mode" data-mode="${m}" aria-pressed="${mode === m}">` +
@@ -15899,18 +15902,10 @@
         `<div class="aud-modes" role="group" aria-label="Who can see this">` +
           modeBtn('public', 'Anyone', 'Everyone on Tria, friend or not') +
           modeBtn('circle', 'My circle', 'Only your mutual friends') +
-          modeBtn('list', 'Choose people', 'Only who you pick') +
+          (kept.length
+            ? modeBtn('list', esc(audienceCountLabel(kept.length)), 'Only the people this went to')
+            : '') +
         `</div>` +
-
-        // Inert while folded: its rows are still in the DOM, and without this
-        // Tab and VoiceOver walk a list nobody can see.
-        `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}"${mode === 'list' ? '' : ' inert'}>` +
-          `<div class="aud-list">` +
-            (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
-          `</div>` +
-        `</div>` +
-        // Your circles, under the people picker so its checklist still opens
-        // straight beneath the row that asked for it.
         (myRooms.length
           ? `<p class="aud-communities-cap">Your circles</p>` +
             `<div class="aud-modes aud-modes--communities" role="group" aria-label="Post in a circle">` +
@@ -15918,7 +15913,6 @@
             `</div>`
           : ''),
       wire: (scrim) => {
-        const listWrap = scrim.querySelector('.aud-list-wrap');
         const modes = [...scrim.querySelectorAll('.aud-mode')];
         modes.forEach(b =>
           b.addEventListener('click', () => {
@@ -15927,27 +15921,6 @@
             modes.forEach(x =>
               x.setAttribute('aria-pressed', String(x.dataset.mode === mode
                 && (mode !== 'community' || x.dataset.room === room))));
-            // Expand/collapse the checklist (grid-rows glide, matching the About
-            // folds); re-stamp the row stagger so they cascade in fresh each
-            // time it opens.
-            listWrap.classList.toggle('is-open', mode === 'list');
-            listWrap.inert = mode !== 'list';
-            if (mode === 'list') {
-              scrim.querySelectorAll('.aud-pick').forEach((row, i) => {
-                row.style.animation = 'none';
-                void row.offsetWidth;                 // reflow so the restart takes
-                row.style.animation = '';
-                row.style.animationDelay = staggerDelay(i);
-              });
-            }
-            commit();
-          }));
-
-        scrim.querySelectorAll('.aud-pick').forEach(b =>
-          b.addEventListener('click', () => {
-            const u = b.dataset.user;
-            if (chosen.has(u)) chosen.delete(u); else chosen.add(u);
-            b.setAttribute('aria-checked', String(chosen.has(u)));
             commit();
           }));
       },
