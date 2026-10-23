@@ -3,7 +3,8 @@
 **2.0 (2026-10-22): THE BRAND IS PEACH TO ROSE, and post types have no
 colour.** Zoe: "tria's new brand color is going to be a peach to red/pink
 gradient rather than the quintet spectrum ... we can remove post types as
-colors", then "a bit more peachy rather than orange". `--brand-peach` #ffb088
+colors", then "a bit more peachy rather than orange", then "find a happy medium
+for our orange". `--brand-peach` #ffac68
 to `--brand-rose` #ff0049, 115deg, oklab, undeepened on both papers
 (tokens.css, "TRIA'S BRAND"). The logo SVGs and the Icon Composer gradient wear
 the same two. The quintet (`--type-*`, `--type-*-ink`), the four `--band-*`
@@ -21,7 +22,7 @@ What replaced them:
   Pins wash in page ink. The composer's live attach tool wears `--brand-ink`.
 - The profile's `tria` wash was turned down the same day (Zoe: "a bitttt
   intense"): `--wash-keep` 50/45, `--wash-sat` 1.1, `--wash-amt` 50%.
-- `BAND_ONE_HUE` in app.js came down to 30: the ramp spans 37 degrees now, not
+- `BAND_ONE_HUE` in app.js came down to 30: the ramp spans 44 degrees now, not
   180, and still has to read as a ramp to the native bar.
 
 Where this file says quintet, pastel, a type's hue or the four-stop band below,

@@ -70,7 +70,7 @@
 
   /* Tria's brand, peach to rose (tokens.css, --brand-peach / --brand-rose).
      It is not deepened on either paper, so there is one ramp and no scheme. */
-  const BRAND = ['#ffb088', '#ff0049'];
+  const BRAND = ['#ffac68', '#ff0049'];
   function bandStops() {
     return BRAND.slice();
   }

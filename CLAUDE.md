@@ -23,9 +23,9 @@ The same files also serve a website; that is a byproduct, not a target. See
 
 ## 2.0's brand: peach to rose (2026-10-22)
 
-**Tria's colour is one ramp, `--brand-peach` #ffb088 to `--brand-rose`
+**Tria's colour is one ramp, `--brand-peach` #ffac68 to `--brand-rose`
 #ff0049** (Zoe: "a peach to red/pink gradient rather than the quintet
-spectrum", then "more peachy rather than orange"), and **post types carry no
+spectrum", then a happy medium between peach and orange), and **post types carry no
 colour**: a glyph names a type. The quintet, the four band stops,
 `--band-deepen`, the per-type hearts and `--type-mark` are gone; `--heart`,
 `--brand-ink`/`--danger` and `--brand-mid` are what is left. The logo SVGs,

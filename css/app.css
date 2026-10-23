@@ -267,7 +267,7 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 @property --glow-wash {
   syntax: '<color>';
   inherits: true;
-  initial-value: #ffb088;
+  initial-value: #ffac68;
 }
 /* One mode left. `publish` sat beside `profile` on every rule in this block
    until the composer stopped washing altogether — the form is a sheet of paper
@@ -638,10 +638,10 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    wordmark, one element, about a second and a half of life before the curtain
    is dismissed and the node is removed. If boot ever needs those frames back,
    drop .splash-ramp's animation and the mark falls back to the band at rest. */
-@property --splash-c1 { syntax: '<color>'; inherits: false; initial-value: #ffb088; }
-@property --splash-c2 { syntax: '<color>'; inherits: false; initial-value: #ff7468; }
+@property --splash-c1 { syntax: '<color>'; inherits: false; initial-value: #ffac68; }
+@property --splash-c2 { syntax: '<color>'; inherits: false; initial-value: #ff7258; }
 @property --splash-c3 { syntax: '<color>'; inherits: false; initial-value: #ff0049; }
-@property --splash-c4 { syntax: '<color>'; inherits: false; initial-value: #ff7468; }
+@property --splash-c4 { syntax: '<color>'; inherits: false; initial-value: #ff7258; }
 @keyframes splash-cycle {
   0%   { --splash-c1: var(--brand-peach); --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-rose);  --splash-c4: var(--brand-mid); }
   25%  { --splash-c1: var(--brand-mid);   --splash-c2: var(--brand-rose);  --splash-c3: var(--brand-mid);   --splash-c4: var(--brand-peach); }

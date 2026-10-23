@@ -1042,7 +1042,7 @@
     // palest thing an accent or a brand stop ever is sits far above this.
     const BAND_GREY = 20;
     // Degrees of arc a band may span and still BE one colour. An accent spans
-    // 2 * BAND_ARC = 22; Tria's ramp, peach (20) to rose (343), spans 37 since
+    // 2 * BAND_ARC = 22; Tria's ramp, peach (27) to rose (343), spans 44 since
     // 2.0's brand, which is why this came down from 40: the quintet spanned
     // about 180 and left all the room in the world.
     const BAND_ONE_HUE = 30;

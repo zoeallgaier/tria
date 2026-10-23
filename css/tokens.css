@@ -110,14 +110,14 @@
      back to it, the same one-scheme-apart shape the hearts have.
 
      --on-type is the ink that rides the band at full strength (the chat
-     bubble): near-black, 10.1 on peach and 4.6 on rose, both opaque. The name
+     bubble): near-black, 9.7 on peach and 4.6 on rose, both opaque. The name
      is older than the brand and was kept so its callers in app.js didn't move.
 
      The band is NOT deepened on either paper. The old --band-deepen knob mixed
      each pastel toward its type's ink twin, and there are no twins now; the
      brand reads bright on purpose (see BAND_LSTAR in app.js for why a reader's
      accent is the one that gets deepened). */
-  --brand-peach: #ffb088;
+  --brand-peach: #ffac68;
   --brand-rose:  #ff0049;
   /* The middle, named once, for the two places that need a stop between the
      ends: the splash's turn (splash-cycle in app.css) and the pull-to-refresh
