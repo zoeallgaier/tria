@@ -7561,6 +7561,14 @@ button.poll-option:disabled { cursor: default; }
 }
 .chat-faces .chat-avatar:first-child { top: 0; left: 0; }
 .chat-faces .chat-avatar:last-child:not(:first-child) { right: 0; bottom: 0; }
+/* THE SQUIRCLE (Zoe, 2026-10-23): every face in Chats, the list's tiles (a
+   person, a pair, a circle's photo, the glyphs), a thread's head and its
+   message faces, wears album art's corner, a fifth of its own width, so a 28px
+   face and a 64px head are one shape. Two classes deep to outrank .avatar,
+   .comment-avatar and .community-pic, which all say 50%. */
+.chat-row .chat-avatar,
+.chat-head .chat-head-avatar,
+.msg-face .msg-avatar { border-radius: var(--radius-art); }
 .chat-row-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
 .chat-row-top { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
 .chat-row-name {
