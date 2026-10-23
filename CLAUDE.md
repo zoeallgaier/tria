@@ -108,6 +108,11 @@ profile face, `setCommunityPhoto`), take people out, and **delete it**
 changes. When the host leaves, the longest-standing member inherits; when the
 last member leaves, the circle closes the same way a delete does. Ten circles
 held per person. A circle post cannot be reposted or pinned to a profile.
+**Starting one is celebrated** (Zoe, 2026-10-23): the new circle's page opens
+with the brand's stars bursting off its face (`celebrateCircle`, cyan and green
+alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's
+one multi-beat buzz), and an empty circle offers its first post in Discover's
+dashed card with a quiet pill (`.community-first`).
 A plan posted in a circle can be answered by its members (`canJoin`), and only
 the members who answered are reminded.
 

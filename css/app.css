@@ -9926,6 +9926,45 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   border-color: color-mix(in srgb, var(--text) 24%, transparent);
 }
 a.daily-answer { text-decoration: none; }
+/* On a circle's own page, an empty room's first post (renderCommunity):
+   the same dashed card, in the feed's column. #feed is a flex column, where
+   the card's auto margins would shrink-wrap it (the .pgrid--frames trap), so
+   it takes the full width back. */
+.community-first { width: 100%; margin: 0; }
+
+/* A circle is born (celebrateCircle): Tria's own ramp in stars, the start and
+   end of the band alternating, bursting out of the circle's face and drifting
+   on, while the face itself gives one small pop. One-shot, transform and
+   opacity only. The layer is a point at the face's centre; each star flies
+   from it to --x/--y. */
+.circle-sparkles {
+  position: fixed;
+  z-index: 300;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.circle-sparkles .spark {
+  left: 0; top: 0;
+  animation: circle-fly 1.1s linear both, spark-fade 1.1s ease-in-out both;
+}
+@keyframes circle-fly {
+  0%   { transform: translate(-50%, -50%) translate(calc(var(--x) * 0.3), calc(var(--y) * 0.3)) scale(0.2) rotate(0deg);
+         animation-timing-function: cubic-bezier(0.15, 0.85, 0.3, 1); }
+  32%  { transform: translate(-50%, -50%) translate(var(--x), var(--y)) scale(1) rotate(var(--r));
+         animation-timing-function: linear; }
+  100% { transform: translate(-50%, -50%) translate(calc(var(--x) * 1.18), calc(var(--y) * 1.18 - 14px)) scale(0.45) rotate(calc(var(--r) + 30deg)); }
+}
+.community-born { animation: community-born 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes community-born {
+  0%   { transform: scale(0.92); }
+  45%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .circle-sparkles { display: none; }
+  .community-born { animation: none; }
+}
 /* Its wave-off, in the corner a circle's photo takes on the other cards, and
    above the stretched link so the tap is the X's own. */
 .community-start-x {

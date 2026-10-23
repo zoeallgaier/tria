@@ -4678,6 +4678,23 @@
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
 
+  /* THE TWINKLE: a circle just started (Zoe: "a sparkly haptic to celebrate").
+     One MEDIUM for the moment it lands, then light taps thinning out into the
+     selection generator's tiny ticks, timed to the stars of celebrateCircle so
+     the hand feels each one wink. It is the app's one multi-beat buzz, and that
+     is fine against the bridge toll above: it fires once, on a confirmed write,
+     onto a page that has just painted and is not scrolling. The web gets the
+     notification pattern; a vibration motor can't twinkle. */
+  const TWINKLE = [[0, 'MEDIUM'], [120, 'LIGHT'], [210, 'LIGHT'], [330, 'LIGHT'], [470, null], [640, null]];
+  function hapticTwinkle() {
+    if (!nativeShell()) { haptic('notification'); return; }
+    haptic('selectionStart');
+    for (const [t, style] of TWINKLE) {
+      setTimeout(() => (style ? hapticTap(style) : haptic('selectionChanged')), t);
+    }
+    setTimeout(() => haptic('selectionEnd'), 760);
+  }
+
   /* ── Outbound links in the native shell ──────────────────────────────────────
      A WKWebView will not open a second window: `window.open` returns null and a
      `target="_blank"` anchor does nothing at all — not navigate, not hand off to
@@ -11458,6 +11475,7 @@
   // The circle (the room) a compose was opened from, by id. Set by its page's
   // Post button, consumed by renderPublish.
   let pendingCommunity = null;
+  let justStartedCommunity = null;   // slug of a circle just started → celebrate it on arrival
   let answeringDaily = null;
 
   // A quote rides into the composer the same way a daily does, and for the same
@@ -13239,6 +13257,8 @@
 
   function renderCommunity(slug) {
     communityRepaint = null;
+    const born = justStartedCommunity === slug;
+    justStartedCommunity = null;
     const back = communityBackTarget();
     const first = Store.community(slug);
     if (!first) {
@@ -13331,7 +13351,23 @@
       const list = Store.communityPosts(c.id).filter(p => !Blocks.has(p.author));
       if (!list.length) {
         dropCards();
-        feedEl.innerHTML = `<p class="feed-empty">Nothing here yet. Say the first thing.</p>`;
+        // An empty room asks for its first post in the dashed card Discover
+        // starts a circle with (Zoe: "a soft cta ... with the dotted line
+        // thing"): an empty slot to fill, and a quiet pill, not a commit.
+        feedEl.innerHTML =
+          `<section class="daily-card community-card community-card--start community-first">` +
+            `<a class="daily-open" href="#/publish"><span class="daily-prompt">Say the first thing</span></a>` +
+            `<p class="daily-hint">Every circle starts with one post. Say hello, or share what got you into it.</p>` +
+            `<div class="daily-foot">` +
+              `<a class="daily-answer pill-quiet" href="#/publish">` +
+                `Write the first post<span class="daily-go" aria-hidden="true">→</span></a>` +
+            `</div>` +
+          `</section>`;
+        feedEl.querySelectorAll('.community-first a').forEach(a => a.addEventListener('click', (e) => {
+          e.preventDefault();
+          pendingCommunity = c.id;
+          go('#/publish');
+        }));
         return;
       }
       // The column Circle reads in, built as far as it is read (lazy).
@@ -13395,6 +13431,52 @@
       return paint();
     };
     paint();
+    if (born) celebrateCircle(headEl);
+  }
+
+  /* A circle is born: the twinkle in the hand, and the brand's own stars
+     bursting out of its face, alternating the ramp's two ends. Anchored like
+     celebratePost's, a fixed layer over the photo's resting box, one-shot.
+     Reduced motion keeps the twinkle (a haptic isn't motion) and drops the
+     stars. Offsets in px from the face's centre, out past its edge. */
+  const CIRCLE_SPARKS = [
+    { x: -78, y: -40, s: 20, r:  16, d:   0 },
+    { x:  70, y: -58, s: 24, r:  10, d:  40 },
+    { x:  86, y:  20, s: 16, r: -14, d:  90 },
+    { x: -66, y:  54, s: 15, r: -12, d: 120 },
+    { x:   6, y: -92, s: 18, r:  12, d: 160 },
+    { x:  34, y:  84, s: 13, r:  18, d: 200 },
+    { x: -94, y:  -2, s: 11, r: -16, d: 240 },
+    { x: -26, y: -76, s: 10, r:  14, d: 290 },
+    { x:  96, y: -18, s:  9, r: -10, d: 330 },
+    { x: -40, y:  88, s:  9, r:  20, d: 380 },
+    { x:  58, y:  62, s: 11, r: -18, d: 430 },
+    { x: -86, y: -64, s:  8, r:  12, d: 480 },
+  ];
+  function celebrateCircle(headEl) {
+    hapticTwinkle();
+    if (prefersReduced()) return;
+    setTimeout(() => {
+      const face = headEl.querySelector('.account-photo') || headEl;
+      const r = face.getBoundingClientRect();
+      if (!r.width) return;
+      face.classList.add('community-born');
+      setTimeout(() => face.classList.remove('community-born'), 700);
+      const layer = document.createElement('div');
+      layer.className = 'circle-sparkles';
+      layer.style.left = (r.left + r.width / 2) + 'px';
+      layer.style.top = (r.top + r.height / 2) + 'px';
+      CIRCLE_SPARKS.forEach((p, i) => {
+        const s = document.createElement('span');
+        s.className = 'spark';
+        s.style.cssText =
+          `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms;` +
+          `--burst:var(${i % 2 ? '--brand-end' : '--brand-start'})`;
+        layer.appendChild(s);
+      });
+      document.body.appendChild(layer);
+      setTimeout(() => layer.remove(), 1700);
+    }, 120);
   }
 
   /* STARTING ONE, and its host's editor, are the same form: a name and an about
@@ -13630,7 +13712,9 @@
           hapticEvent('ERROR');
           return;
         }
-        hapticEvent('SUCCESS');
+        // The celebration (the twinkle and the stars) waits for the circle's
+        // own page, where there is something to sparkle.
+        justStartedCommunity = slug;
         // In place of the form, so back from the new circle is where you were
         // before you started it, not a form that already did its job.
         location.replace(`#/c/${encodeURIComponent(slug)}`);
