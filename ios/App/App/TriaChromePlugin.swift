@@ -3934,7 +3934,7 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
    IT WEARS THE READER'S COLOUR, the same band every commit wears
    (`--pill-band`, resolved by `NativeChrome.glowColors` and sent with each
-   pull): an accent is its three near stops, Tria's own ramp is peach to rose,
+   pull): an accent is its three near stops, Tria's own ramp is cyan to green,
    and None is the neutral, ink-side on paper and paper-side on ink.
 
    THE PULL DRAWS IT. Two strokes leave the top centre together and run round
@@ -3988,8 +3988,8 @@ final class TriaEdgeGlow: UIView {
     /// and how many stops the mask spends on it.
     private static let fade: CGFloat = 0.38
     private static let feather = 10
-    private static let peach = UIColor(red: 1, green: 0xac / 255.0, blue: 0x68 / 255.0, alpha: 1)
-    private static let rose = UIColor(red: 1, green: 0, blue: 0x49 / 255.0, alpha: 1)
+    private static let start = UIColor(red: 0, green: 0xc9 / 255.0, blue: 0xce / 255.0, alpha: 1)
+    private static let end = UIColor(red: 0, green: 0xcc / 255.0, blue: 0x9e / 255.0, alpha: 1)
 
     private weak var scroll: UIScrollView?
     private var watch: NSKeyValueObservation?
@@ -4032,7 +4032,7 @@ final class TriaEdgeGlow: UIView {
         ramp.type = .conic
         ramp.startPoint = CGPoint(x: 0.5, y: 0.5)
         ramp.endPoint = CGPoint(x: 0.5, y: 0)
-        wear([Self.peach, Self.rose])
+        wear([Self.start, Self.end])
         lit.addSublayer(ramp)
         feather.type = .conic
         feather.startPoint = CGPoint(x: 0.5, y: 0.5)
@@ -4066,7 +4066,7 @@ final class TriaEdgeGlow: UIView {
     /// at the halfway point on either side. Repeating it keeps the turn
     /// seamless, whichever half is passing under the light.
     private func wear(_ stops: [UIColor]) {
-        var band = stops.isEmpty ? [Self.peach, Self.rose] : stops
+        var band = stops.isEmpty ? [Self.start, Self.end] : stops
         if band.count == 1 { band += band }
         let there = band.map { $0.cgColor }
         let back = Array(there.reversed().dropFirst())

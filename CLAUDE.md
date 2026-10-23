@@ -21,16 +21,19 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
-## 2.0's brand: peach to rose (2026-10-22)
+## 2.0's brand: cyan to green (2026-10-22)
 
-**Tria's colour is one ramp, `--brand-peach` #ffac68 to `--brand-rose`
-#ff0049** (Zoe: "a peach to red/pink gradient rather than the quintet
-spectrum", then a happy medium between peach and orange), and **post types carry no
-colour**: a glyph names a type. The quintet, the four band stops,
-`--band-deepen`, the per-type hearts and `--type-mark` are gone; `--heart`,
-`--brand-ink`/`--danger` and `--brand-mid` are what is left. The logo SVGs,
-the Icon Composer gradient, `storycard.js`, `gen-icons.js` and the refresh glow
-(`TriaEdgeGlow`, as its fallback) hold the same two hexes by hand. See the top of [docs/design.md](docs/design.md).
+**Tria's colour is one ramp, `--brand-start` #00c9ce to `--brand-end`
+#00cc9e** (Zoe: "these are the new ACTUAL tria brand colors", the app icon's
+Icon Composer gradient; it was peach #ffac68 to rose #ff0049 that morning, and
+the tokens were `--brand-peach`/`--brand-rose`). **Post types carry no
+colour**: a glyph names a type. **`--danger` is its own red** (#d1003c /
+#ff0049), never the brand. `--brand-ink` is the green deepened to #00735c for
+words on paper and Tria's own heart there. **Tria's ramp is recognised by its
+stops (`isBrand` in app.js), not by hue spread**: its ends are 15 degrees apart,
+narrower than an accent. The logo SVGs, storycard.js, gen-icons.js, the
+splash's `@property` values and the refresh glow (`TriaEdgeGlow`, as its
+fallback) hold the two hexes by hand. See the top of [docs/design.md](docs/design.md).
 
 ## 2.0's refresh is the screen's edge (2026-10-22, trial)
 

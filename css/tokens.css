@@ -102,34 +102,41 @@
      the logo's own (icons/wordmark.svg, the app icon), so the band, the logo
      and the icon are one colour story.
 
-     The two ends are fills. Neither is text on paper: rose measures 3.4 on
-     #edeef0, enough for a mark (a heart, a dot) and not for a word, so
-     --brand-ink is the rose deepened until it reads at 4.8, and that is what a
-     WORD in the brand colour wears (Going, a danger row, an error). On ink
-     paper the rose itself measures 4.9, so the dark block folds --brand-ink
-     back to it, the same one-scheme-apart shape the hearts have.
+     THE BRAND IS CYAN TO GREEN since 2026-10-22 (Zoe: "these are the new
+     ACTUAL tria brand colors", the app icon's own gradient, #00c9ce to
+     #00cc9e). The names went neutral with it (--brand-start / --brand-end,
+     were peach / rose): a colour in a token's name goes stale every rebrand.
+
+     The two ends are fills. Neither is text on paper: both measure 1.8 on
+     #edeef0, so --brand-ink is the green deepened until it reads at 5.0, and
+     that is what a WORD in the brand colour wears (Going, a hover) and what
+     Tria's own heart wears on paper. On ink paper the green itself measures
+     9.2, so the dark block folds --brand-ink back to it. A warning is NOT the
+     brand any more: --danger has its own red below.
 
      --on-type is the ink that rides the band at full strength (the chat
-     bubble): near-black, 9.7 on peach and 4.6 on rose, both opaque. The name
+     bubble): near-black, 8.8 on the cyan and 8.7 on the green, both opaque. The name
      is older than the brand and was kept so its callers in app.js didn't move.
 
      The band is NOT deepened on either paper. The old --band-deepen knob mixed
      each pastel toward its type's ink twin, and there are no twins now; the
      brand reads bright on purpose (see BAND_LSTAR in app.js for why a reader's
      accent is the one that gets deepened). */
-  --brand-peach: #ffac68;
-  --brand-rose:  #ff0049;
+  --brand-start: #00c9ce;
+  --brand-end:   #00cc9e;
   /* The middle, named once, for the two places that need a stop between the
      ends: the splash's turn (splash-cycle in app.css) and the pull-to-refresh
      dots. Oklab so it is the ramp's own middle and not a duller sRGB one. */
-  --brand-mid:   color-mix(in oklab, var(--brand-peach), var(--brand-rose));
-  --brand-ink:   #d1003c;
+  --brand-mid:   color-mix(in oklab, var(--brand-start), var(--brand-end));
+  --brand-ink:   #00735c;
   --on-type:     #14171a;
-  /* A word that warns: Delete, Block, an error, a taken handle. It was the
-     coral type's ink; it is the brand's ink now, under its own name, so a
-     warning reads as one thing wherever it is. */
-  --danger:      var(--brand-ink);
-  --brand-band: linear-gradient(115deg, var(--brand-peach), var(--brand-rose));
+  /* A word that warns: Delete, Block, an error, a taken handle. Its OWN red
+     since the cyan to green brand (2026-10-22): it rode --brand-ink while the
+     brand was rose, and a green Delete says the opposite of what it means.
+     These are the rose ink's measured values, kept: 4.8 on paper here, and
+     the dark block's 4.9 on ink. */
+  --danger:      #d1003c;
+  --brand-band: linear-gradient(115deg, var(--brand-start), var(--brand-end));
 
   /* What every primary-act button actually paints — the ring, the fill, the FAB.
      --user-band is stamped on <html> from the SIGNED-IN reader's accent
@@ -211,7 +218,7 @@
      SEPARATE dark value (--user-heart-dk, below) so no JS has to know the
      scheme or listen for it changing: each block picks up its own. It used to
      be six, one per post type. */
-  --heart: var(--user-heart-lt, var(--brand-rose));
+  --heart: var(--user-heart-lt, var(--brand-ink));
 
   /* GOING — the "Going" tag beside a name on a host's guest list. It is the one
      place a WORD (rather than a glyph) says somebody is coming, so it wants the
@@ -479,7 +486,7 @@
    the --spring block above, and the same reason. */
 @supports (background: linear-gradient(in oklab, #000, #fff)) {
   :root {
-    --brand-band: linear-gradient(115deg in oklab, var(--brand-peach), var(--brand-rose));
+    --brand-band: linear-gradient(115deg in oklab, var(--brand-start), var(--brand-end));
   }
 }
 
@@ -497,9 +504,10 @@
     --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
     --on-accent:    var(--bg);
 
-    /* The rose reads on ink paper as it is (4.9), so the brand's ink folds
+    /* The green reads on ink paper as it is (9.2), so the brand's ink folds
        back to it here, the way the hearts do. */
-    --brand-ink: var(--brand-rose);
+    --brand-ink: var(--brand-end);
+    --danger:    #ff0049;
 
     /* Monochrome flips: paper-side band on ink paper, near-black glyph on it.
        The chromatic fills do not flip and do not need to — see the note beside
@@ -509,8 +517,9 @@
     --user-ink:  var(--user-ink-dk);
 
     /* Dark takes --user-heart-dk, the accent at its own pastel weight, and
-       Tria's own heart is the rose on either paper. */
-    --heart: var(--user-heart-dk, var(--brand-rose));
+       Tria's own heart is the green itself here (on paper it is the deepened
+       --brand-ink: the raw green measures 1.8 there, too faint for a mark). */
+    --heart: var(--user-heart-dk, var(--brand-end));
 
     /* Dark takes the dark heart for the same reason the hearts do, and needs
        no contrast caveat: a palette hex on ink paper measures 4.14 (ruby) or

@@ -1041,11 +1041,23 @@
     // --mono-band's stops measure 12, 11, 9 on paper and 3, 6, 8 on ink; the
     // palest thing an accent or a brand stop ever is sits far above this.
     const BAND_GREY = 20;
-    // Degrees of arc a band may span and still BE one colour. An accent spans
-    // 2 * BAND_ARC = 22; Tria's ramp, peach (27) to rose (343), spans 44 since
-    // 2.0's brand, which is why this came down from 40: the quintet spanned
-    // about 180 and left all the room in the world.
-    const BAND_ONE_HUE = 30;
+    /* TRIA'S OWN RAMP, KNOWN BY ITS STOPS rather than by how far apart their
+       hues are. Hue spread used to be the test (over 30 degrees was the ramp,
+       an accent spans 2 * BAND_ARC = 22) and the cyan to green brand of
+       2026-10-22 broke it: its two ends are 15 degrees apart, NARROWER than an
+       accent, so the ramp would have crossed as a tint and the + would have
+       worn the brand instead of declining it. So the band is compared with
+       --brand-band itself, resolved once (it is the same on both papers). */
+    let brandRgb = null;
+    function isBrand(rgb) {
+      if (!brandRgb) {
+        brandRgb = splitStops(probe('background-image: var(--brand-band)').image || '')
+          .map(toRgb).map(cssToRgb).filter(Boolean);
+      }
+      const near = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) <= 6;
+      return brandRgb.length > 0 && rgb.length === brandRgb.length
+        && rgb.every((c, i) => near(c, brandRgb[i]));
+    }
     // Reduce Transparency draws the material SOLID, and a backdrop under a
     // solid material is a backdrop nobody sees — the ramp would simply vanish
     // and the default + would go colourless on the one setting that can't be
@@ -1060,15 +1072,12 @@
       if (!rgb.length) return none;
       const chroma = (c) => Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
       if (rgb.every(c => chroma(c) < BAND_GREY)) return none;
-      const hues = rgb.map(c => rgbToHsl(c.r, c.g, c.b).h * 360);
-      const arc = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
-      const spread = Math.max(...hues.map(a => Math.max(...hues.map(b => arc(a, b)))));
       /* WHICH BAND THIS IS, reported beside how it can be WORN. The two used to
          be the same answer — four hues meant a ramp — and they came apart when
          the + stopped wearing Tria's band at all (see fabSpec). The + has to
          recognise the brand ramp even on the one setting that has already
          collapsed it to a single stop. */
-      const ramp = spread > BAND_ONE_HUE;
+      const ramp = isBrand(rgb);
       if (ramp && !solidGlass()) return { colors: stops, tint: '', ramp };
       // The MIDDLE stop: for a palette pick that is the hex itself (bandAround),
       // for a photo sample the band's own weight (bandFrom).
@@ -2206,7 +2215,7 @@
 
     /* The refresh glow's colours: the reader's band, every stop, resolved the
        way the + reads it. Not through bandFill, because an outline is a line of
-       colour and not glass: an accent's three near stops, Tria's peach to rose
+       colour and not glass: an accent's three near stops, Tria's cyan to green
        and None's neutral all draw as they are. Read per pull, so a colour pick
        or a change of scheme is simply there on the next one. */
     function glowColors() {

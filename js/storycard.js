@@ -35,7 +35,7 @@
    their phone in dark mode still sends a light card unless they pick Dark, and
    a card whose colours moved with the sender's system setting would be a card
    nobody could predict. The values below are tokens.css's, copied on purpose.
-   If --brand-peach or --brand-rose change there, change them here too.
+   If --brand-start or --brand-end change there, change them here too.
 
    POSTS ONLY. The profile card and its QR came out in 2.0 (Zoe: "remove all
    the qr code bullshit ... in favor of the native share sheet"); sharing a
@@ -68,9 +68,9 @@
      doing the colouring — a white slab on a gradient reads as a screenshot. */
   const TRIA  = { card: '#edeef0', ink: '#14171a', muted: '#5c636b', plate: '#dcdfe3' };
 
-  /* Tria's brand, peach to rose (tokens.css, --brand-peach / --brand-rose).
+  /* Tria's brand, cyan to green (tokens.css, --brand-start / --brand-end).
      It is not deepened on either paper, so there is one ramp and no scheme. */
-  const BRAND = ['#ffac68', '#ff0049'];
+  const BRAND = ['#00c9ce', '#00cc9e'];
   function bandStops() {
     return BRAND.slice();
   }

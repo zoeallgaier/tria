@@ -1,5 +1,27 @@
 # Design system
 
+**THE BRAND IS CYAN TO GREEN (2026-10-22, later the same day).** Zoe: "these
+are the new ACTUAL tria brand colors", the app icon's own Icon Composer
+gradient: `--brand-start` #00c9ce to `--brand-end` #00cc9e (the tokens were
+`--brand-peach`/`--brand-rose`; the names went neutral so the next rebrand
+doesn't leave them lying). Same 115deg, oklab, undeepened. What moved with it:
+
+- `--danger` has its OWN red now (#d1003c on paper, #ff0049 on ink, the rose
+  ink's measured values): a green Delete would say the opposite.
+- `--brand-ink` is the green deepened to #00735c (5.0 on paper; folds to the
+  green, 9.2, on ink). Both ends measure 1.8 on paper, so Tria's own HEART
+  on paper wears `--brand-ink`, the green itself on ink.
+- `BAND_ONE_HUE` is gone: the two ends are 15 degrees apart, narrower than an
+  accent's 22, so app.js knows Tria's ramp by comparing the stops with
+  `--brand-band` (`isBrand`), not by hue spread.
+- Hand-held copies: storycard.js, gen-icons.js, `TriaEdgeGlow`'s fallback, the
+  splash's `@property` initial values, `icons/TriaLogoOfficial.svg`.
+  `icons/wordmark.svg` was mid-redesign in Zoe's working copy and was left to
+  her; the PNG icons are not regenerated until it lands.
+
+The note below is the peach-to-rose pass this replaced, kept for its
+reasoning. Read peach and rose as start and end.
+
 **2.0 (2026-10-22): THE BRAND IS PEACH TO ROSE, and post types have no
 colour.** Zoe: "tria's new brand color is going to be a peach to red/pink
 gradient rather than the quintet spectrum ... we can remove post types as

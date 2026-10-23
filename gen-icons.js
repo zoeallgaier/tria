@@ -34,9 +34,9 @@ const SS = 4;
 const MASK = 'data:image/svg+xml;base64,' +
   fs.readFileSync(path.join(ROOT, 'icons/wordmark.svg')).toString('base64');
 
-// Tria's brand, peach to rose (--brand-peach / --brand-rose in tokens.css),
-// the same on either paper since 2.0's brand.
-const BRAND = ['#ffac68', '#ff0049'];
+// Tria's brand, cyan to green (--brand-start / --brand-end in tokens.css),
+// the same on either paper.
+const BRAND = ['#00c9ce', '#00cc9e'];
 const LIGHT = { paper: '#edeef0', band: BRAND };
 const DARK  = { paper: '#0e1012', band: BRAND };
 

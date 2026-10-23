@@ -267,7 +267,7 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 @property --glow-wash {
   syntax: '<color>';
   inherits: true;
-  initial-value: #ffac68;
+  initial-value: #00c9ce;
 }
 /* One mode left. `publish` sat beside `profile` on every rule in this block
    until the composer stopped washing altogether — the form is a sheet of paper
@@ -400,14 +400,14 @@ body[data-ambient="tria"] {
   --wash-keep: 64%;
   --wash-sat: 1.5;
   --wash-band: linear-gradient(115deg,
-    color-mix(in srgb, var(--brand-peach) var(--wash-keep), var(--wash-tint)),
-    color-mix(in srgb, var(--brand-rose)  var(--wash-keep), var(--wash-tint)));
+    color-mix(in srgb, var(--brand-start) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--brand-end)  var(--wash-keep), var(--wash-tint)));
 }
 @supports (background: linear-gradient(in oklab, #000, #fff)) {
   body[data-ambient="tria"] {
     --wash-band: linear-gradient(115deg in oklab,
-      color-mix(in srgb, var(--brand-peach) var(--wash-keep), var(--wash-tint)),
-      color-mix(in srgb, var(--brand-rose)  var(--wash-keep), var(--wash-tint)));
+      color-mix(in srgb, var(--brand-start) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--brand-end)  var(--wash-keep), var(--wash-tint)));
   }
 }
 @media (prefers-color-scheme: dark) {
@@ -628,24 +628,24 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    keyframes instead of interpolating, which is the same reason --glow-wash
    above is registered.
 
-   The stops are named once in tokens.css (--brand-peach, --brand-mid,
-   --brand-rose), so the mark that turns them and the button that paints them
+   The stops are named once in tokens.css (--brand-start, --brand-mid,
+   --brand-end), so the mark that turns them and the button that paints them
    cannot drift apart.
 
    This is a repaint per frame of a masked gradient. It is bounded: one
    wordmark, one element, about a second and a half of life before the curtain
    is dismissed and the node is removed. If boot ever needs those frames back,
    drop .splash-ramp's animation and the mark falls back to the band at rest. */
-@property --splash-c1 { syntax: '<color>'; inherits: false; initial-value: #ffac68; }
-@property --splash-c2 { syntax: '<color>'; inherits: false; initial-value: #ff7258; }
-@property --splash-c3 { syntax: '<color>'; inherits: false; initial-value: #ff0049; }
-@property --splash-c4 { syntax: '<color>'; inherits: false; initial-value: #ff7258; }
+@property --splash-c1 { syntax: '<color>'; inherits: false; initial-value: #00c9ce; }
+@property --splash-c2 { syntax: '<color>'; inherits: false; initial-value: #00cab6; }
+@property --splash-c3 { syntax: '<color>'; inherits: false; initial-value: #00cc9e; }
+@property --splash-c4 { syntax: '<color>'; inherits: false; initial-value: #00cab6; }
 @keyframes splash-cycle {
-  0%   { --splash-c1: var(--brand-peach); --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-rose);  --splash-c4: var(--brand-mid); }
-  25%  { --splash-c1: var(--brand-mid);   --splash-c2: var(--brand-rose);  --splash-c3: var(--brand-mid);   --splash-c4: var(--brand-peach); }
-  50%  { --splash-c1: var(--brand-rose);  --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-peach); --splash-c4: var(--brand-mid); }
-  75%  { --splash-c1: var(--brand-mid);   --splash-c2: var(--brand-peach); --splash-c3: var(--brand-mid);   --splash-c4: var(--brand-rose); }
-  100% { --splash-c1: var(--brand-peach); --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-rose);  --splash-c4: var(--brand-mid); }
+  0%   { --splash-c1: var(--brand-start); --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-end);  --splash-c4: var(--brand-mid); }
+  25%  { --splash-c1: var(--brand-mid);   --splash-c2: var(--brand-end);  --splash-c3: var(--brand-mid);   --splash-c4: var(--brand-start); }
+  50%  { --splash-c1: var(--brand-end);  --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-start); --splash-c4: var(--brand-mid); }
+  75%  { --splash-c1: var(--brand-mid);   --splash-c2: var(--brand-start); --splash-c3: var(--brand-mid);   --splash-c4: var(--brand-end); }
+  100% { --splash-c1: var(--brand-start); --splash-c2: var(--brand-mid);   --splash-c3: var(--brand-end);  --splash-c4: var(--brand-mid); }
 }
 
 .splash--out {
@@ -2745,7 +2745,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
      final frame (position 0%) is solid --brand-ink, matching the resting state. */
   background: linear-gradient(115deg,
     var(--brand-ink) 0%, var(--brand-ink) 36%,
-    var(--brand-rose) 60%, var(--brand-peach) 100%);
+    var(--brand-end) 60%, var(--brand-start) 100%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
           background-clip: text;
@@ -4644,11 +4644,11 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 /* The brand, walked around the ring: peach at 12 o'clock to rose, a quarter
    step each. They were the five post types until 2.0's brand. */
-.ptr-dot:nth-child(1) { --a:   0deg; background: var(--brand-peach); }
-.ptr-dot:nth-child(2) { --a:  72deg; background: color-mix(in oklab, var(--brand-peach) 75%, var(--brand-rose)); }
+.ptr-dot:nth-child(1) { --a:   0deg; background: var(--brand-start); }
+.ptr-dot:nth-child(2) { --a:  72deg; background: color-mix(in oklab, var(--brand-start) 75%, var(--brand-end)); }
 .ptr-dot:nth-child(3) { --a: 144deg; background: var(--brand-mid); }
-.ptr-dot:nth-child(4) { --a: 216deg; background: color-mix(in oklab, var(--brand-peach) 25%, var(--brand-rose)); }
-.ptr-dot:nth-child(5) { --a: 288deg; background: var(--brand-rose); }
+.ptr-dot:nth-child(4) { --a: 216deg; background: color-mix(in oklab, var(--brand-start) 25%, var(--brand-end)); }
+.ptr-dot:nth-child(5) { --a: 288deg; background: var(--brand-end); }
 /* Under the finger the radius tracks the rubber band with no smoothing, same
    reason .ptr--show kills its own transition. Release hands it back (the rule
    below, later in source order, wins on equal specificity) so the ring settles
@@ -5056,7 +5056,7 @@ body.gate main { padding: 0; }
   transition: color var(--dur-micro), border-color var(--dur-micro);
 }
 @media (hover: hover) {
-  .poll-add-opt:hover { color: var(--brand-ink); border-color: var(--brand-rose); }
+  .poll-add-opt:hover { color: var(--brand-ink); border-color: var(--brand-end); }
 }
 .poll-add-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -5085,7 +5085,7 @@ body.gate main { padding: 0; }
 }
 button.poll-option { cursor: pointer; -webkit-appearance: none; appearance: none; }
 @media (hover: hover) {
-  button.poll-option:hover { border-color: var(--brand-rose); }
+  button.poll-option:hover { border-color: var(--brand-end); }
 }
 button.poll-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.poll-option:disabled { cursor: default; }
@@ -5115,7 +5115,7 @@ button.poll-option:disabled { cursor: default; }
   position: absolute;
   inset: 0;
   background: linear-gradient(115deg,
-    var(--brand-peach), var(--brand-rose), var(--brand-peach), var(--brand-rose));
+    var(--brand-start), var(--brand-end), var(--brand-start), var(--brand-end));
   background-size: 300% 100%;
   opacity: 0;
   transition: opacity 0.6s var(--ease);
@@ -8070,7 +8070,7 @@ button.poll-option:disabled { cursor: default; }
      flat block — same family as the publish button it feeds. */
   background:
     linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(90deg, var(--brand-peach), var(--brand-rose));
+    linear-gradient(90deg, var(--brand-start), var(--brand-end));
   transition: width var(--dur-quick) ease-out;
 }
 .post-progress-label {
@@ -8415,8 +8415,8 @@ button.poll-option:disabled { cursor: default; }
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--brand-rose);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-rose) 55%, transparent);
+  background: var(--brand-end);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-end) 55%, transparent);
   animation: trim-pulse 1.1s var(--ease-soft) infinite;
 }
 .trim--loading .trim-stage {
@@ -8424,7 +8424,7 @@ button.poll-option:disabled { cursor: default; }
   /* A soft brand sweep over the neutral placeholder — reads as "developing." */
   background-image: linear-gradient(100deg,
     transparent 38%,
-    color-mix(in srgb, var(--brand-peach) 16%, transparent) 50%,
+    color-mix(in srgb, var(--brand-start) 16%, transparent) 50%,
     transparent 62%);
   background-size: 220% 100%;
   background-repeat: no-repeat;
@@ -8436,7 +8436,7 @@ button.poll-option:disabled { cursor: default; }
   pointer-events: none;   /* no scrubbing until the preview is ready */
   background-image: linear-gradient(100deg,
     transparent 38%,
-    color-mix(in srgb, var(--brand-peach) 16%, transparent) 50%,
+    color-mix(in srgb, var(--brand-start) 16%, transparent) 50%,
     transparent 62%);
   background-size: 220% 100%;
   background-repeat: no-repeat;
@@ -8453,7 +8453,7 @@ button.poll-option:disabled { cursor: default; }
   to   { background-position: -120% 0; }
 }
 @keyframes trim-pulse {
-  0%   { transform: scale(0.85); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-rose) 55%, transparent); }
+  0%   { transform: scale(0.85); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-end) 55%, transparent); }
   70%  { transform: scale(1);    box-shadow: 0 0 0 7px transparent; }
   100% { transform: scale(0.85); box-shadow: 0 0 0 0 transparent; }
 }
@@ -8533,7 +8533,7 @@ button.poll-option:disabled { cursor: default; }
   left: 50%;
   transform: translateX(-50%);
   box-sizing: border-box;
-  border: 2px solid var(--brand-peach);
+  border: 2px solid var(--brand-start);
   border-radius: 10px;
   pointer-events: none;
   z-index: 3;
@@ -8553,7 +8553,7 @@ button.poll-option:disabled { cursor: default; }
   top: -2px;
   bottom: -2px;
   width: 22px;
-  background: var(--brand-peach);
+  background: var(--brand-start);
   pointer-events: auto;
   touch-action: none;
   cursor: ew-resize;
@@ -8569,7 +8569,7 @@ button.poll-option:disabled { cursor: default; }
   width: 3px;
   height: 20px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--brand-peach) 30%, #000);
+  background: color-mix(in srgb, var(--brand-start) 30%, #000);
 }
 .reel-playhead {
   position: absolute;
@@ -8597,7 +8597,7 @@ button.poll-option:disabled { cursor: default; }
   padding: 2px 9px;
   border-radius: 999px;
   color: var(--text);
-  background: color-mix(in srgb, var(--brand-peach) 22%, transparent);
+  background: color-mix(in srgb, var(--brand-start) 22%, transparent);
 }
 .trim-hint { color: var(--muted); font-size: .8rem; }
 
@@ -9555,8 +9555,8 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    only chromatic pixel on this page. */
 .biz-plan-feat li.biz-feat--activity { color: var(--text); font-weight: 400; }
 .biz-plan-feat li.biz-feat--activity::before {
-  background: var(--brand-rose);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-rose) 22%, transparent);
+  background: var(--brand-end);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-end) 22%, transparent);
 }
 
 /* Back to the gate (only rendered when signed out). */
