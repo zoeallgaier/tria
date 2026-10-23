@@ -248,8 +248,9 @@ panel and openBarMenu's card alike sit 6px in from the sides and from the
 bottom of the SCREEN (not above the home indicator; the panel's foot clears it
 inside), rounded 32px up top with a foot concentric with the display's corner,
 and are ONE SURFACE: solid `--surface` and one hairline, no blur since 2026-10-23 (it loaded late), with
-the rows straight on it, edge to edge, no fill of their own, and a pressed row
-clipped by the panel's corners. A card inside the panel was tried and removed
+the rows straight on it, no fill of their own, each row inset 8px from the
+panel's sides with a 24px soft corner on its pressed or chosen fill (Zoe,
+2026-10-23: "round and pad this"). A card inside the panel was tried and removed
 (Zoe: padding in padding). **The block must stay BELOW the sheet's older rules
 in app.css**: it once sat above them and their `.sheet-items` glass won by
 source order. Grab handle, a centred italic Instrument Serif title (2026-10-23), NO

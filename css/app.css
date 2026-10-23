@@ -4243,14 +4243,15 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 .sheet-ico,
 .bar-menu-ico { width: 24px; height: 24px; color: var(--text); }
-/* The press is a fill that runs to the panel's edges, which overflow clips to
-   its corners. Hover gets the same tint on a pointer. */
+/* The press is a fill, inset and rounded (see "EVERY ROW ON A PANEL" after
+   the audience block). Hover gets the same tint on a pointer. */
 .sheet-item:active,
 .bar-menu-item:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
-/* A docked answer ("Done"), never Cancel: a soft pill at the foot of the panel. */
+/* A docked answer ("Done"), never Cancel: a soft pill at the foot of the panel,
+   8px in like every row above it. */
 .sheet-cancel {
   flex-shrink: 0;
-  margin: 8px 12px 2px;
+  margin: 8px 8px 2px;
   min-height: 50px;
   padding: 0.8rem;
   border: 0;
@@ -8259,8 +8260,11 @@ button.poll-option:disabled { cursor: default; }
      questions rather than one long column of taps. On the SCROLLER rather than
      above it, so the glide reveals it instead of it appearing a frame early over
      a row that is still 0 tall, and so it holds still while the names run under
-     it (a border belongs to the box, not to the content). */
-  border-top: 1px solid var(--rule);
+     it (a border belongs to the box, not to the content). Drawn as a
+     background on the box rather than a border so it can stop where the rows'
+     text does, the way the modes' own hairlines do, instead of running to the
+     panel's sides. */
+  background: linear-gradient(var(--rule), var(--rule)) top center / calc(100% - 2 * (8px + 0.9rem)) 1px no-repeat;
   padding-top: 0.3rem;
 }
 
@@ -8341,6 +8345,31 @@ button.poll-option:disabled { cursor: default; }
 .sheet-scrim--aud .sheet {
   max-height: calc(100dvh - 1.4rem
                    - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+/* EVERY ROW ON A PANEL IS INSET AND ROUND (Zoe, 2026-10-23: "round and pad
+   this and others like it"). A chosen mode, a pressed row or a hovered one
+   used to fill edge to edge and take its corners from the panel's clip; now
+   each row sits 8px in from the panel's sides and its fill wears the soft
+   corner, 24px, concentric with the panel's 32. The text stays where it was:
+   the sheet's own rows give the 8px back out of their padding, and the
+   audience's rows (0.9rem of their own) land on that same left edge.
+   Here, after the audience block, because .aud-mode and .aud-pick are set
+   there. */
+.sheet-item,
+.bar-menu-item,
+.aud-mode,
+.aud-pick {
+  width: calc(100% - 16px);
+  margin-inline: 8px;
+  border-radius: var(--radius-soft);
+}
+.sheet-item,
+.bar-menu-item { padding-inline: calc(1.4rem - 8px); }
+.sheet-item + .sheet-item::before,
+.bar-menu-item + .bar-menu-item::before {
+  left: calc(1.4rem - 8px + 24px + 0.95rem);
+  right: calc(1.4rem - 8px);
 }
 
 /* ── Frame picker — a plain upload field ────────────────────────────────────
