@@ -7,28 +7,14 @@
     {
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "image-name" : "Image 2.svg",
-          "name" : "Image 2",
-          "opacity" : 1,
+          "glass" : true,
+          "image-name" : "wordmark.svg",
+          "name" : "wordmark",
           "position" : {
-            "scale" : 2.5,
+            "scale" : 0.42,
             "translation-in-points" : [
-              11,
-              -35
-            ]
-          }
-        },
-        {
-          "glass" : false,
-          "image-name" : "Image 3.svg",
-          "name" : "Image 3",
-          "opacity" : 0.6,
-          "position" : {
-            "scale" : 2,
-            "translation-in-points" : [
-              -333,
-              302
+              4.958161690919724,
+              -36
             ]
           }
         }

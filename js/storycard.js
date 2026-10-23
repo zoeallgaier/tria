@@ -35,8 +35,7 @@
    their phone in dark mode still sends a light card unless they pick Dark, and
    a card whose colours moved with the sender's system setting would be a card
    nobody could predict. The values below are tokens.css's, copied on purpose.
-   If the type colours or --band-deepen change there, change them here too;
-   BAND_STOPS carries the arithmetic that ties the two together.
+   If --brand-peach or --brand-rose change there, change them here too.
 
    POSTS ONLY. The profile card and its QR came out in 2.0 (Zoe: "remove all
    the qr code bullshit ... in favor of the native share sheet"); sharing a
@@ -69,26 +68,11 @@
      doing the colouring — a white slab on a gradient reads as a screenshot. */
   const TRIA  = { card: '#edeef0', ink: '#14171a', muted: '#5c636b', plate: '#dcdfe3' };
 
-  /* The four post-type colours and their inks (tokens.css). */
-  const TYPE = {
-    note:     ['#b7a6e8', '#6247b8'],
-    photo:    ['#9fd6e8', '#1d7391'],
-    activity: ['#b9df7d', '#4d7519'],
-    find:     ['#f2a58c', '#b0472a'],
-  };
-  const BAND_DEEPEN = 0.20;   /* --band-deepen */
-
-  /* The brand ramp, deepened exactly the way tokens.css deepens it: each stop
-     mixed a fifth of the way toward its OWN ink, so it darkens along its hue
-     instead of drifting grey. On dark paper tokens.css sets every --type-*-ink
-     equal to its pastel, which makes the mix a no-op and the ramp bright — a
-     decision recorded at length beside --band-deepen, not an accident, so the
-     no-op is reproduced here rather than tidied away. */
-  function bandStops(dark) {
-    return Object.keys(TYPE).map(function (k) {
-      const pair = TYPE[k];
-      return dark ? pair[0] : mix(pair[0], pair[1], BAND_DEEPEN);
-    });
+  /* Tria's brand, peach to rose (tokens.css, --brand-peach / --brand-rose).
+     It is not deepened on either paper, so there is one ramp and no scheme. */
+  const BRAND = ['#ffb088', '#ff0049'];
+  function bandStops() {
+    return BRAND.slice();
   }
 
   /* ---- Colour arithmetic ------------------------------------------------ */
@@ -97,18 +81,6 @@
     const h = hex.replace('#', '');
     const n = h.length === 3 ? h.split('').map(function (c) { return c + c; }).join('') : h;
     return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
-  }
-  /* Returns HEX, not `rgb(...)`. Canvas takes either and did not care, but
-     backgroundPair() hands these straight to Instagram, whose pasteboard keys
-     are documented as hex strings and which silently paints NO background for
-     anything else. One representation everywhere is cheaper than remembering
-     which consumer is fussy. */
-  function mix(a, b, t) {
-    const x = hexToRgb(a), y = hexToRgb(b);
-    return '#' + x.map(function (v, i) {
-      const c = Math.round(v * (1 - t) + y[i] * t);
-      return (c < 16 ? '0' : '') + c.toString(16);
-    }).join('');
   }
   /* Relative luminance, so a reader's own colour can be asked whether it wants
      black type on it. The palette is pastel today and the answer is always
@@ -310,7 +282,7 @@
 
   function backdrop(ctx, spec, m) {
     const w = m.w, h = m.h;
-    const accent = spec.accent || TYPE.note[0];
+    const accent = spec.accent || BRAND[0];
     let paper;
 
     /* The wash's radii are CSS's `120% 78%`: WIDER than the card it sits behind,
@@ -358,7 +330,7 @@
       paper.shadow = 'rgba(20, 23, 26, 0.2)';
     } else {
       paper = Object.assign({}, TRIA);
-      fill(linearGradient(ctx, 160, w, h, bandStops(false)));
+      fill(linearGradient(ctx, 160, w, h, bandStops()));
       lift(PAPER_RGB, 0.38);
       paper.shadow = 'rgba(20, 23, 26, 0.2)';
     }
@@ -366,21 +338,18 @@
   }
 
   /* THE TWO COLOURS INSTAGRAM WILL GRADIENT BETWEEN, behind the sticker. Two,
-     not four, which is their API and not a simplification made here — so Tria's
-     own ramp cannot cross over as itself and something has to choose. It takes
-     the ENDS of the ramp (lavender to peach, the order it already runs in)
-     rather than a middle pair, so the sweep behind the card reads as the whole
-     brand rather than a slice of it.
+     which is their API, and Tria's own ramp is exactly two (peach to rose), so
+     it crosses over as itself.
 
      A reader's own accent is a flat field in both stops. It is one colour by
      definition; faking a gradient out of it would invent a second colour they
      never picked. */
   function backgroundPair(spec) {
-    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
+    const accent = spec.accent || BRAND[0];
     if (spec.bg === 'dark') return [DARK.page, DARK.page];
     if (spec.bg === 'light') return [LIGHT.page, LIGHT.page];
     if (spec.bg === 'accent') return [accent, accent];
-    const stops = bandStops(false);
+    const stops = bandStops();
     return [stops[0], stops[stops.length - 1]];
   }
 
@@ -461,8 +430,8 @@
     spec = spec || {};
     const m = SIZES[spec.size] || SIZES.story;
     /* No accent set is the COMMON case, not the fallback one: most readers
-       never pick a colour, so the type's own pastel is what the disc wears. */
-    const accent = spec.accent || (TYPE[spec.type] || TYPE.note)[0];
+       never pick a colour, so the brand's peach is what the disc wears. */
+    const accent = spec.accent || BRAND[0];
 
     const canvas = document.createElement('canvas');
     canvas.width = m.w; canvas.height = m.h;

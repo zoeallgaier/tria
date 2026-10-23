@@ -18,11 +18,9 @@
 // down by sips; that is what keeps 32px a word rather than a smudge.
 //
 // The band stops are written out rather than read from tokens.css because these
-// are baked pixels: they are --band-* resolved (light mixes 20% ink into each
-// pastel, dark takes the pastel undeepened), and the ramp is the splash's own —
-// 115deg, no interpolation space, stops in order. Keep them in step with
-// css/tokens.css by hand; a drift shows up as a tile that doesn't match the
-// curtain.
+// are baked pixels: they are --brand-peach and --brand-rose, and the ramp is
+// --brand-band's own, 115deg in oklab. Keep them in step with css/tokens.css by
+// hand; a drift shows up as a tile that doesn't match the curtain.
 const { chromium } = require('playwright');
 const { execFileSync } = require('child_process');
 const path = require('path');
@@ -36,8 +34,11 @@ const SS = 4;
 const MASK = 'data:image/svg+xml;base64,' +
   fs.readFileSync(path.join(ROOT, 'icons/wordmark.svg')).toString('base64');
 
-const LIGHT = { paper: '#edeef0', band: ['#a693de', '#85c2d7', '#a3ca69', '#e59278'] };
-const DARK  = { paper: '#0e1012', band: ['#b7a6e8', '#9fd6e8', '#b9df7d', '#f2a58c'] };
+// Tria's brand, peach to rose (--brand-peach / --brand-rose in tokens.css),
+// the same on either paper since 2.0's brand.
+const BRAND = ['#ffb088', '#ff0049'];
+const LIGHT = { paper: '#edeef0', band: BRAND };
+const DARK  = { paper: '#0e1012', band: BRAND };
 
 // `width` is the mark's share of the tile.
 //   80 — the plain tiles, the inset every icon here has worn since v=289.
@@ -68,7 +69,7 @@ const doc = (px, width, theme) => `<!doctype html><meta charset="utf-8">
   .mark { width: ${width}%; aspect-ratio: 1650 / 1028;
           -webkit-mask: url('${MASK}') center / contain no-repeat;
                   mask: url('${MASK}') center / contain no-repeat;
-          background: linear-gradient(115deg, ${theme.band.join(', ')}); }
+          background: linear-gradient(115deg in oklab, ${theme.band.join(', ')}); }
 </style>
 <div class="tile"><div class="mark"></div></div>`;
 

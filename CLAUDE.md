@@ -21,6 +21,17 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## 2.0's brand: peach to rose (2026-10-22)
+
+**Tria's colour is one ramp, `--brand-peach` #ffb088 to `--brand-rose`
+#ff0049** (Zoe: "a peach to red/pink gradient rather than the quintet
+spectrum", then "more peachy rather than orange"), and **post types carry no
+colour**: a glyph names a type. The quintet, the four band stops,
+`--band-deepen`, the per-type hearts and `--type-mark` are gone; `--heart`,
+`--brand-ink`/`--danger` and `--brand-mid` are what is left. The logo SVGs,
+the Icon Composer gradient, `storycard.js` and `gen-icons.js` hold the same two
+hexes by hand. See the top of [docs/design.md](docs/design.md).
+
 ## 2.0: the version, and the web's nav (2026-10-22)
 
 **1.9 shipped as 2.0** (Zoe: circles earn it). `MARKETING_VERSION` is 2.0 and
@@ -336,7 +347,7 @@ and the whole bridge was deleted. Not native, ever: anything in a page.
 
 **The band crosses as one of three things**, sorted off the stops themselves
 (`bandFill`): a reader's accent is one colour and tints the glass, Tria's own
-ramp is four and stays a thinned gradient UNDER the material, "no colour" sends
+ramp is two (peach to rose) and stays a thinned gradient UNDER the material, "no colour" sends
 nothing and the button is plain glass wearing the system's `.label`. Only a tint
 carries its own ink; the other two take `.label`, which is how the same code is
 black on paper and white on ink. **The round + is the one control that turns

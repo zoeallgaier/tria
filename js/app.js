@@ -1042,8 +1042,10 @@
     // palest thing an accent or a brand stop ever is sits far above this.
     const BAND_GREY = 20;
     // Degrees of arc a band may span and still BE one colour. An accent spans
-    // 2 * BAND_ARC = 22; Tria's ramp spans about 180.
-    const BAND_ONE_HUE = 40;
+    // 2 * BAND_ARC = 22; Tria's ramp, peach (20) to rose (343), spans 37 since
+    // 2.0's brand, which is why this came down from 40: the quintet spanned
+    // about 180 and left all the room in the world.
+    const BAND_ONE_HUE = 30;
     // Reduce Transparency draws the material SOLID, and a backdrop under a
     // solid material is a backdrop nobody sees — the ramp would simply vanish
     // and the default + would go colourless on the one setting that can't be
@@ -2341,20 +2343,15 @@
     // 1.8's sixth (add-song-posts.sql): a music note.
     song:     'music',
   };
-  // The "All" filter's own mark — a pentad, one dot per post type in its own
-  // hue, gathered into a ring. Says "all five" literally instead of a generic
-  // four-dot grid, and it's the one place the quintet earns colour outside the
-  // chips themselves — ties the fold-out button to the rows it opens.
-  // It does NOT read --type-mark, and neither do the five rows underneath it —
-  // see the ink line in openFilterDial for why the dial as a whole opted out.
-  // Short version: this ring is the legend for the hue the button that opened
-  // it wears when a filter is on, and that hue has never folded.
+  // The "All" filter's own mark — a pentad, one dot per post type, gathered
+  // into a ring. Says "all five" literally instead of a generic four-dot grid.
+  // Each dot wore its type's hue until 2.0's brand; it is the row's ink now.
   const ICON_ALL = `<svg viewBox="0 0 24 24" aria-hidden="true">` +
-    `<circle cx="12" cy="4.6" r="2.5" fill="var(--type-note)"/>` +
-    `<circle cx="19.1" cy="9.8" r="2.5" fill="var(--type-find)"/>` +
-    `<circle cx="16.4" cy="18.2" r="2.5" fill="var(--type-photo)"/>` +
-    `<circle cx="7.6" cy="18.2" r="2.5" fill="var(--type-activity)"/>` +
-    `<circle cx="4.9" cy="9.8" r="2.5" fill="var(--type-poll)"/>` +
+    `<circle cx="12" cy="4.6" r="2.5" fill="currentColor"/>` +
+    `<circle cx="19.1" cy="9.8" r="2.5" fill="currentColor"/>` +
+    `<circle cx="16.4" cy="18.2" r="2.5" fill="currentColor"/>` +
+    `<circle cx="7.6" cy="18.2" r="2.5" fill="currentColor"/>` +
+    `<circle cx="4.9" cy="9.8" r="2.5" fill="currentColor"/>` +
   `</svg>`;
   // TYPE_HEX is gone. It held the five quintet hues as literals so the composer's
   // wash could tween between them through @property --glow-wash, and the composer
@@ -4386,7 +4383,7 @@
                  1, 2, 3 down the list: a tally nobody asked for, in the colour
                  this app reserves for who is coming to a plan. Any future call
                  site that means "no tag" has to say so with an arrow. */
-              ? `<ul class="likers-list" style="--burst:var(--heart-${burstTypeOf(post)})">` +
+              ? `<ul class="likers-list" style="--burst:var(--heart)">` +
                   `${list.map(l => likerItemHtml(l)).join('')}</ul>`
               : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
           `</div>` +
@@ -5990,25 +5987,9 @@
       // --muted, same as before, so no hue is spent on a row that doesn't name
       // one. Set inline rather than via a .type-icon-- class, whose own sizing
       // rules would fight the row's glyph box.
-      // It does NOT read --type-mark, so a picked accent leaves these alone
-      // where it still folds the + dial's glyphs to --text. Two reasons, and
-      // the second is the one that settles it.
-      //
-      // This is one of the two places a type is a CHOICE rather than a label —
-      // the composer's inferred-type mark is the other, and it opted out of
-      // --type-mark first, for the same reason: the hue is the ANSWER the row
-      // is offering, not ornament on a row that has already said its name.
-      //
-      // And the receipt was already colourful. .masthead-filter wears the
-      // active type's hue and never folded, so under a picked accent the
-      // row you tapped was ink and the mark it lit was lavender: the legend
-      // disagreeing with the thing it labels, in the one control where the two
-      // are meant to teach each other. Fold both or fold neither, and a dial
-      // whose whole job is to name the five is the wrong place to fold.
-      //
-      // Non-type rows (People, Mentions, the View switch) keep --muted, which
-      // is unchanged — no hue is spent on a row that doesn't name a type.
-      const ink = TYPE_GLYPH[f.key] ? `var(--type-${f.key}-ink)` : 'var(--muted)';
+      // Every row's glyph is --muted, type rows included: each type wore its
+      // own hue here until 2.0's brand took colour away from post types.
+      const ink = 'var(--muted)';
       return `<button class="bar-menu-item${on ? ' is-on' : ''}" type="button" ` +
           (f.action
             ? `role="menuitem" `
@@ -6035,7 +6016,7 @@
       icon: f.key === 'all' ? ICON_ALL
         : f.ico ? svgIcon(f.ico)
         : (TYPE_GLYPH[f.key] ? svgIcon(TYPE_GLYPH[f.key]) : ''),
-      ink: TYPE_GLYPH[f.key] ? `var(--type-${f.key}-ink)` : '',
+      ink: '',
       checked: !f.action && f.key === current,
       radio: !f.action,
       group: f.action ? 0 : 1,
@@ -18370,8 +18351,8 @@
      L* 74 every red is a pink, so a ruby heart on dark paper was pink and the
      likes read as two different colours across the schemes.
 
-     `ink` IS THE ONE EXCEPTION, and it is the quintet's own shape (--type-*
-     and --type-*-ink). A pastel is fine as a FILL on either paper and as a
+     `ink` IS THE ONE EXCEPTION, and it is the old quintet's shape (a pastel
+     and its -ink twin). A pastel is fine as a FILL on either paper and as a
      MARK on ink, but not as a mark on light paper: lime's hex is 1.28 against
      #edeef0, a heart you cannot see. So an accent may carry a deeper twin that
      its marks wear on paper, meaning hearts, the dot, Going and the base a
@@ -18581,7 +18562,7 @@
      80.5 and a deep 68. --on-type rides the fill thinned over dark paper, which
      measures 6.01 at L* 74 across the wheel and gives out at about 64.
 
-     The brand ramp deliberately does NOT follow this (see --band-deepen in
+     The brand ramp deliberately does NOT follow this (see TRIA'S BRAND in
      tokens.css): the brand gradient is the app signing its own name, and it
      reads bright. */
   const BAND_LSTAR = 74;
@@ -18714,7 +18695,7 @@
     // than a theme. Removing them is how the DEFAULT source is expressed: --pill-band
     // falls back to the brand ramp on its own, so there is no branch for it in
     // CSS and nothing to keep in step with tokens.css.
-    const stamp = (band, heartLt, heartDk, inkLt, inkDk, mark) => {
+    const stamp = (band, heartLt, heartDk, inkLt, inkDk) => {
       if (seq !== bandSeq) return;
       const el = document.documentElement;
       /* The splash's copy of this answer (Zoe, 2026-10-22: the logo wears your
@@ -18727,7 +18708,7 @@
         else localStorage.removeItem(SPLASH_KEY);
       } catch {}
       if (!band) {
-        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk', '--type-mark']
+        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk']
           .forEach(p => el.style.removeProperty(p));
         /* AND TRIA'S OWN RAMP IS A REPAINT TOO, which this branch used to
            return past. Removing the properties is how the default expresses
@@ -18772,44 +18753,6 @@
       el.style.setProperty('--user-ink-lt', inkLt);
       el.style.setProperty('--user-ink-dk', inkDk);
 
-      /* THE POST-TYPE MARKS GO MONOCHROME UNDER A CHOSEN COLOUR, and the split
-         is not which sources are colourful — it is which ones the QUINTET is
-         already inside.
-
-         Default is Tria's own ramp, which is four of the five type pastels; a
-         Photo accent is sampled from the reader's face and carries no claim
-         about the palette at all. Under either, five pastel type glyphs are
-         either literally the same colours the chrome is wearing or a neutral
-         party beside it, and they read as part of the app. Under a PICKED
-         accent they stop doing that: the app is one colour end to end and the
-         + dial is five other ones, so the quintet reads as five stray hues
-         rather than as a vocabulary. 'none' is the same case from the other
-         side — a reader who asked for no colour should not be handed the
-         loudest five in the app the moment they open the + .
-
-         So this is stamped for a palette pick and for 'none', and removed for
-         default and photo. Absent is the meaningful state again: every reader
-         of --type-mark writes it as a fallback around the type's own -ink, so
-         the standard colours need no branch anywhere and tokens.css never
-         learns the token exists.
-
-         It is var(--text), stamped as a var() so it resolves at the point of
-         USE and flips with the scheme on its own — near-black on paper,
-         near-white on ink, which is what "white/black" means here.
-
-         ONE READER SURVIVES: .type-icon--*, which is now only the phone's +
-         speed dial (the composer's mark opts out at the element with
-         --type-mark: initial). The FILTER DIAL opted out too — its rows and
-         ICON_ALL's pentad both take the quintet outright now, because that dial
-         is the legend for a receipt that never folded; see the ink line in
-         openFilterDial. So the rule the token still enforces is narrow and
-         deliberate: what you are about to MAKE goes mono under a chosen colour,
-         what you are choosing to LOOK AT keeps its hue. The + dial's --glow
-         BLOOM is still not a reader: it is the disc's material rather than a
-         mark, and a mono glyph reads better on it than the tinted one did. */
-      if (mark) el.style.setProperty('--type-mark', 'var(--text)');
-      else el.style.removeProperty('--type-mark');
-
       /* The native + wears this band too, and it is repainted HERE for the same
          reason the inks are stamped in this call rather than the next one: a
          fill and the chrome wearing it arriving a frame apart reads as a bug.
@@ -18817,9 +18760,8 @@
          custom property. Silent everywhere but the App Store build. */
       NativeChrome.repaint();
     };
-    // `accent` is present for a palette pick and absent for a photo sample,
-    // which is also exactly the line --type-mark wants, so it doubles as the
-    // flag. A pick is its hex everywhere (its `ink` twin for marks on paper);
+    // `accent` is present for a palette pick and absent for a photo sample.
+    // A pick is its hex everywhere (its `ink` twin for marks on paper);
     // a sample is derived, since it is an average rather than a decision.
     const set = (rgb, accent) => {
       if (!rgb) return stamp(null);
@@ -18832,10 +18774,10 @@
         const inkDk = (accent.key === 'ruby' || accent.key === 'ocean' || accent.key === 'lavender')
           ? 'var(--on-type)' : accentInk(rgb, INK_PAPER.dk);
         return stamp(bandAround(rgb), accent.ink || accent.hex, accent.hex,
-                     accentInk(rgb, INK_PAPER.lt), inkDk, true);
+                     accentInk(rgb, INK_PAPER.lt), inkDk);
       }
       const h = heartsFrom(rgb);
-      stamp(bandFrom(rgb), h.lt, h.dk, 'var(--on-type)', 'var(--on-type)', false);
+      stamp(bandFrom(rgb), h.lt, h.dk, 'var(--on-type)', 'var(--on-type)');
     };
 
     /* THREE SOURCES, and they are three because two of them were sharing an
@@ -18852,7 +18794,7 @@
     if (!me || me.accent === 'default') return set(null);
     if (me.accent === 'none') {
       return stamp('var(--mono-band)', 'var(--mono-heart)', 'var(--mono-heart)',
-                   'var(--mono-ink)', 'var(--mono-ink)', true);
+                   'var(--mono-ink)', 'var(--mono-ink)');
     }
     const picked = accentOf(me.accent);
     if (picked) return set(cssToRgb(picked.hex), picked); // synchronous, lands with the tap
