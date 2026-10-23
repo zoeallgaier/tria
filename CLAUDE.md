@@ -113,9 +113,12 @@ painted CSS now and no longer a native page button), worn as hairline glass
 with a thin wash of the band, the daily tag's look (Zoe), and the
 page runs on ONE GAP, ~15px, from the search field down through every card
 (Zoe: "even the spacing between search and cards"). No hairline over Share Tria
-on Discover. Search is **circles
-and people only** (a person matches on name, then on what they've said), never
-posts. The masonry wall and the trending tags are gone from it. **On repeat
+on Discover. Search runs **people, then posts, then circles** (Zoe, 2026-10-22, reversing
+"never posts"): people as compact rows, the best four and a More people under
+them (a person matches on name, then on what they've said), then every post you
+can read that says the words (never a repost, a circle's or a song), then
+circles. While the field holds the caret or a query, the bar's + is a back
+chevron that empties it; the field has no focus ring. The masonry wall and the trending tags are gone from it. **On repeat
 moved to My Circle** (Zoe: "add on repeat to circle feed"), over the feed and
 the week-of cards (`paintOnRepeat`), with no "On repeat" eyebrow, and it is
 your people's songs: you and your friends, never a circle's post
