@@ -2503,6 +2503,14 @@ final class TriaPostBar: UIView, TriaPostBarControl {
     private var float: CGFloat = 9.6
     private var floatKeyboard: CGFloat = 8
 
+    /// WHERE THE TAB BAR SITS, from the foot of the screen to the foot of its
+    /// capsule: measured off iOS 26's own bar on a 17 Pro. A post page has no
+    /// tab bar, and the pill floating `float` above the home indicator's strip
+    /// read as hovering ~20pt higher than the capsule it takes the place of. On
+    /// a screen with no home indicator there is no strip to sink into, and the
+    /// web's float stands.
+    private static let dock: CGFloat = 22
+
     private var keyboardUp = false
     private var lastLift: CGFloat = -1
     private var live = false
@@ -2566,7 +2574,7 @@ final class TriaPostBar: UIView, TriaPostBarControl {
         // it is the same value the system is animating, so the bar rides the
         // keyboard rather than chasing it a resize step at a time.
         let bottom = pill.bottomAnchor.constraint(equalTo: host.keyboardLayoutGuide.topAnchor,
-                                                  constant: -float)
+                                                  constant: restConstant())
         NSLayoutConstraint.activate([
             pill.centerXAnchor.constraint(equalTo: centerXAnchor),
             width, height, bottom
@@ -2582,7 +2590,7 @@ final class TriaPostBar: UIView, TriaPostBarControl {
         let wanted = spec["live"] as? Bool ?? false
         float = TriaToolbar.number(spec["float"], fallback: 9.6)
         floatKeyboard = TriaToolbar.number(spec["floatKeyboard"], fallback: 8)
-        bottomConstraint?.constant = -(keyboardUp ? floatKeyboard : float)
+        bottomConstraint?.constant = keyboardUp ? -floatKeyboard : restConstant()
 
         if !wanted {
             // Leaving the page. Give the keyboard back before going, or it stays
@@ -2668,7 +2676,19 @@ final class TriaPostBar: UIView, TriaPostBarControl {
 
     @objc private func keyboardHidden() {
         keyboardUp = false
-        bottomConstraint?.constant = -float
+        bottomConstraint?.constant = restConstant()
+    }
+
+    /// At rest the keyboard guide's top is the safe area's foot, so sinking the
+    /// pill to the tab bar's line is a constant BELOW that guide.
+    private func restConstant() -> CGFloat {
+        let safe = host?.safeAreaInsets.bottom ?? 0
+        return safe > Self.dock ? safe - Self.dock : -float
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        if !keyboardUp { bottomConstraint?.constant = restConstant() }
     }
 }
 
