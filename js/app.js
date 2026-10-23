@@ -1263,8 +1263,29 @@
       };
     }
 
+    /* NEVER MEASURE A BOUNCING BAR. The bar is position: fixed, and iOS carries
+       fixed boxes down with the rubber band, so every rect read while the page
+       is overscrolled is low by the pull. A refresh repaints the bar mid-pull,
+       so that is exactly when a push used to happen, and native kept the low
+       rects until something else touched the bar. The old ring hid it: lifting
+       ptr-hold off body at the end re-measured. The edge glow has no ptr-hold,
+       and the controls sat half an inch down. So a push in the bounce waits for
+       the page to come home and goes then. */
+    let settleWatch = null;
+    function awaitSettle() {
+      if (settleWatch) return;
+      settleWatch = () => {
+        if (window.scrollY < 0) return;
+        window.removeEventListener('scroll', settleWatch);
+        settleWatch = null;
+        scheduleToolbar();
+      };
+      window.addEventListener('scroll', settleWatch, { passive: true });
+    }
+
     function pushToolbar() {
       if (!live) return;
+      if (window.scrollY < 0) { awaitSettle(); return; }
       const bar = document.querySelector('.topbar');
       const gated = document.body.classList.contains('gate');
       // body.toolbar-live means "this bar is a page's own" — false under the
@@ -20346,15 +20367,16 @@
      reloaded at random. The tab re-tap still scrolls you to the top and clears a
      filter; it simply no longer re-pulls the world.
 
-     IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): the ramp drawn round the
-     glass by `TriaEdgeGlow` in TriaChromePlugin.swift, which reads the pull off
-     its own scroll view and owns the haptics (a ratchet of soft detents, a click
-     where the two strokes meet, a soft landing). This side still decides WHEN:
+     IN THE APP THE RING IS LIGHT AT THE TOP OF THE SCREEN (2.0): a soft bloom
+     of the brand ramp, the profile wash's cousin, drawn by `TriaRefreshGlow` in
+     TriaChromePlugin.swift, which reads the pull off its own scroll view and
+     owns the haptics (a ratchet of soft detents, a click at the threshold, a
+     soft landing). This side still decides WHEN:
      it says pull on the first frame of overscroll, then spin or idle on release.
      The ring stays the fallback until the first setGlow resolves, so a binary
      without the method refreshes exactly as before. */
   (() => {
-    const THRESHOLD = 72;   // TriaEdgeGlow.threshold has to match
+    const THRESHOLD = 72;   // TriaRefreshGlow.threshold has to match
     let ptr = null, pulling = false, raf = 0, busy = false, armed = false;
     let glow = false, glowing = false;
     const setGlow = (state, opts) => {

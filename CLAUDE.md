@@ -30,13 +30,14 @@ colour**: a glyph names a type. The quintet, the four band stops,
 `--band-deepen`, the per-type hearts and `--type-mark` are gone; `--heart`,
 `--brand-ink`/`--danger` and `--brand-mid` are what is left. The logo SVGs,
 the Icon Composer gradient, `storycard.js`, `gen-icons.js` and the refresh glow
-(`TriaEdgeGlow`) hold the same two hexes by hand. See the top of [docs/design.md](docs/design.md).
+(`TriaRefreshGlow`) hold the same two hexes by hand. See the top of [docs/design.md](docs/design.md).
 
-## 2.0's refresh is the screen's edge (2026-10-22, trial)
+## 2.0's refresh is light at the top of the screen (2026-10-22, trial)
 
-In the app, pull to refresh draws the brand ramp round the display's rounded
-edge instead of the dot ring (`TriaEdgeGlow`, `setGlow`), with a haptic ratchet
-of detents into a click where the strokes meet. The web keeps the ring. See the
+In the app, pull to refresh raises a soft bloom of the brand ramp from behind
+the top edge, built like the profile wash, instead of the dot ring
+(`TriaRefreshGlow`, `setGlow`), with a haptic ratchet of detents into a click at
+the threshold. The web keeps the ring. See the
 top of [docs/views.md](docs/views.md).
 
 ## 2.0: the version, and the web's nav (2026-10-22)

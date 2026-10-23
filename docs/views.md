@@ -1,31 +1,45 @@
 # Refresh, feeds and photos
 
-**In the app, the refresh is the screen's edge (2.0, trial).** A thin peach to
-rose stroke traced round the display's own rounded corners (`TriaEdgeGlow` in
-TriaChromePlugin.swift), drawn over the native bars. Two strokes leave the top
-centre and run down either side as you pull, and they **meet at the bottom at
-the threshold**, which is the "let go now" the ring's opening used to say. Let go
-and the ramp turns slowly round the closed outline (linear, 2.4s a turn) with
-the halo breathing, then fades. A resume refresh (`refreshRing.on()`) is the same
-spin at 55%, drawn in from nothing. Reduce Motion keeps the drawing (it is the
-finger's own movement) and drops the turn and the breathing.
+**In the app, a refresh is light rising from the top of the screen (2.0,
+trial).** A soft bloom of the brand ramp (`TriaRefreshGlow` in
+TriaChromePlugin.swift), built the way the profile wash is (Zoe: "a blurred
+glow almost like the profile gradients"): the ramp at 115deg carries the
+colour, an elliptical radial mask with a gaussian-ish falloff carries the shape
+(no blur pass). On paper each stop is mixed 72% toward white; on ink the colour
+stays whole and is SCREENED over the page (`screenBlendMode`): laid on near black
+at partial alpha it read brown, and mixed toward black, the profile wash's dark
+rule, browner still. The ellipse's centre sits just above the glass, so the
+light reads as coming from behind the top edge. It lives INSIDE the web view,
+just above its scroll view and below the native bars, so their glass bends it.
 
-Native reads the pull straight off the web view's scroll view, so the stroke
+Four beats. **Pull**: the bloom deepens and widens with the finger, eased so
+the first points already show light, with a little rubber past the threshold.
+**Arm**: one swell, with the click. **Wait**: the ramp's colours sway side to
+side (the gradient's axis moves, not the layer, which carries the mask) under a
+slow breath; eased and back and forth on purpose, this is light breathing and
+not a spinner. **Done**: it sinks back up into the edge and fades. A resume
+refresh (`refreshRing.on()`) rises at 55%. Reduce Motion keeps the pull and
+drops the sway and the breath.
+
+The first try (same day) was a gradient STROKE traced round the whole display's
+rounded corners, two strokes meeting at the bottom at the threshold. Zoe: only
+at the top, and blurred. A frame round the entire screen was too much for a
+background act.
+
+Native reads the pull straight off the web view's scroll view, so the bloom
 and the ticks move at the display's rate with no bridge traffic per frame;
 app.js sends three messages a pull (`setGlow`: `pull` on the first frame of real
 overscroll, never on a plain tap at the top, then `spin` or `idle`). The two
-sides share one number, `THRESHOLD`/`TriaEdgeGlow.threshold` (72). The first
+sides share one number, `THRESHOLD`/`TriaRefreshGlow.threshold` (72). The first
 `setGlow` is the probe: until it resolves, and on the web always, the ring below
 is what draws, unchanged. No `ptr-hold` under the glow, since nothing is in the
 page to make room for.
 
-**Its haptics are a ratchet**: six soft detents as the strokes travel, each
-firmer than the last (0.25 rising to 0.7), a rigid click where the ends meet (with
-a swell of the halo), and one soft tap as a PULLED refresh's glow leaves. The
+**Its haptics are a ratchet**: five soft detents as the pull tightens, each
+firmer than the last (0.3 rising to 0.7), a rigid click at the threshold (with
+the swell), and one soft tap as a PULLED refresh's glow leaves. The
 resume path is silent. `UIImpactFeedbackGenerator`, not Core Haptics, because
 it obeys the System Haptics switch for us; prepared on the pull's first frame.
-The screen's corner comes from a table keyed on `nativeBounds` height
-(`_displayCornerRadius` is private API); the Air's 62 is a guess.
 
 **Pull down is the only refresh.** Five dots, one per post type in `FILTERS`
 order, arranged on a **ring**, riding the iOS rubber band: JS reads the negative
