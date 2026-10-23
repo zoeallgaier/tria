@@ -15708,7 +15708,7 @@
           `aria-label="Search a song or album, or paste a link">` +
         `<div class="song-results" id="c-song-results" aria-live="polite"></div>` +
         (myWeekSong()
-          ? `<p class="field-hint">One song a week. This one takes the place of ` +
+          ? `<p class="field-hint">Music stays up for a week. This one replaces ` +
               `“${esc(myWeekSong().song.title)}”.</p>`
           : '') +
       `</div>`;
