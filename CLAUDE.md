@@ -266,7 +266,7 @@ simplified untouched.
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
 `posts.song` jsonb in the listening status's shape, minus `at`). **Posting a song
 IS having it on repeat** (Zoe, 2026-10-22): the Share sheet's Music row is its door
-(Zoe, 2026-10-23; it left the composer's attach bar, whose song button is hidden and pressed by the row), posting no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
+(Zoe, 2026-10-23), and Music is its OWN publish page, like the Daily's: the composer's `song` family (`fieldsFor('song')`), just the song search, who sees it, and Share, no headline, note, tags or attach bar, posting no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
 search (`goListening`), Share also sets the listening status (not for a
 hand-picked audience), and Discover's On repeat rail is each person's newest
 Music post (no week limit since 2.0), opening the post (`songPostsOnRepeat`).

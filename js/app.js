@@ -2753,14 +2753,8 @@
                       `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
                     `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                       `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
-                    // Music (1.8), once posts can carry a song (Store.songsReady).
-                    // Off the bar since 2026-10-23 (Zoe): a song is the Share
-                    // sheet's Music row, which presses this hidden button
-                    // (pendingAttach), so the surface is wired the one way.
-                    (Store.songsReady()
-                      ? `<button type="button" class="rt-attach" id="${idp}-add-song" ` +
-                          `aria-label="Add a song" aria-pressed="false" hidden>${svgIcon('music', 'rt-attach-ico')}</button>`
-                      : '') +
+                    // No Music button since 2026-10-23 (Zoe): a song is its
+                    // own page (fieldsFor's 'song'), reached from the Share sheet.
                     (event
                       ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
                           `aria-label="Add a place and time" aria-pressed="false">` +
@@ -5761,7 +5755,7 @@
   // in. An activity is the one that is a different act (a time, a place, who
   // is coming), so it keeps its door, and so does the Daily, which is a prompt
   // and not a type. Music left and came back (Zoe, 2026-10-23), and is now
-  // its door (with goListening's): the composer's bar lost its song button. Frame came back
+  // its door (with goListening's) to Music's own page. Frame came back
   // (Zoe, 2026-10-23): it opens the composer with the photo button pressed.
   // The Daily row is always the composer with the prompt over it (Zoe), never
   // the room, so it is there only while you have an answer left to give: one
@@ -15648,6 +15642,18 @@
         (quotingPost ? `<div class="quote-banner">${quotedCardEl(quotingPost)}</div>` : '');
     }
 
+    // MUSIC IS ITS OWN PAGE (Zoe, 2026-10-23), the way the Daily is the
+    // composer with its prompt over it: the song search open from the first
+    // frame, who hears it, and Share. No headline, no note, no tags, no attach
+    // bar, because the song is the whole post and On repeat draws nothing else.
+    if (type === 'song') {
+      return songFieldHtml({ open: true }) +
+        `<div class="field song-aud">` +
+          `<label for="c-audience">Who sees it</label>` +
+          `<div>${audienceLockHtml('c')}</div>` +
+        `</div>`;
+    }
+
     // The one field set, shared by all five types. The Note rich editor is the base
     // (headline + a contenteditable body + the H1/H2/B/I toolbar, 15k). The link row,
     // the poll's choices, the frame surface and the plan's place-and-time all ship
@@ -15663,7 +15669,6 @@
           `spellcheck="false" placeholder="https://…">` +
       `</div>` +
       pollFieldHtml() +
-      (Store.songsReady() ? songFieldHtml() : '') +
       frameFieldHtml() +
       (event ? eventFieldHtml() : '') + tags;
   }
@@ -15694,13 +15699,12 @@
       `</div>`;
   }
 
-  // The song surface (1.8), shipped hidden like the poll's and revealed by the
-  // speaker toggle, which is also what makes the post Music. The pick sits above
-  // the field once there is one, and the field stays, so changing your mind is a
-  // second search rather than a clear and a search. The words you write about it
-  // are the note above, the same as every other type.
-  function songFieldHtml() {
-    return `<div class="field song-field" id="c-song-row" hidden>` +
+  // The song surface (1.8), the whole of Music's own page since 2026-10-23
+  // (fieldsFor's 'song'). The pick sits above the field once there is one, and
+  // the field stays, so changing your mind is a second search rather than a
+  // clear and a search.
+  function songFieldHtml({ open = false } = {}) {
+    return `<div class="field song-field" id="c-song-row"${open ? '' : ' hidden'}>` +
         `<label for="c-song-q">Song</label>` +
         `<div class="song-now" id="c-song-now" hidden></div>` +
         `<input id="c-song-q" class="song-input" type="search" ` +
@@ -16015,9 +16019,13 @@
     // somebody else's post, which is not what an empty pin slot asked for.
     pinningPost = pendingPin && !quote;
     pendingPin = false;
+    // Music's own page: the Share sheet's row, Discover's + and a song pin all
+    // ask for it through pendingAttach. Never over a quote or a daily answer.
+    const song = pendingAttach === 'song' && Store.songsReady() && !quote && !daily;
+    if (song) pendingAttach = null;
     // The composer never persists a draft across navigations, so every entry opens
     // fresh: a plain Note until something's attached.
-    pubType = 'note';
+    pubType = song ? 'song' : 'note';
     // THE COMPOSER DOES NOT WASH, and getting here took two removals.
     //
     // It first carried the inferred TYPE's hue, re-tweened on every attach, which
@@ -16101,7 +16109,7 @@
     const fieldsEl = view.querySelector('#c-fields');
     const titleEl = view.querySelector('.masthead-title');
     titleEl?.classList.add('masthead-title--swap');   // hosts the outgoing ghost word
-    let family = null;              // 'base' (the one post form) | 'quote'
+    let family = null;              // 'base' (the one post form) | 'quote' | 'song'
     let lastIndType = null;         // last type the mark showed, so it only pops on a real change
     let wantLink = false;           // link row open → this post is a Find
     let wantPhoto = false;          // frame surface open → this post is a Frame
@@ -16252,6 +16260,16 @@
       // with the group switcher, and its two fields now ship hidden in this field
       // set exactly as the poll's and the frame's do. The daily flow mounts the same
       // form minus the calendar (see fieldsFor).
+      if (song) {
+        family = 'song';
+        wantSong = true;
+        fieldsEl.innerHTML = fieldsFor('song');
+        // Your friends, or Anyone: the sheet leaves your circles off, because
+        // a song is read only on My Circle.
+        wireAudienceLock(fieldsEl, null, { rooms: false });
+        wireSongField();
+        return;
+      }
       family = quote ? 'quote' : 'base';
       fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily });
       const cNote = fieldsEl.querySelector('#c-note');
@@ -16508,11 +16526,12 @@
     // gesture; the dropzone is on the page either way.
     const attach = pendingAttach;
     pendingAttach = null;
-    if (attach && family !== 'quote') fieldsEl.querySelector(ATTACH_BTN[attach])?.click();
+    if (family === 'song') fieldsEl.querySelector('#c-song-q')?.focus();
+    else if (attach && family !== 'quote') fieldsEl.querySelector(ATTACH_BTN[attach])?.click();
   }
   const ATTACH_BTN = {
     find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
-    activity: '#c-add-event', song: '#c-add-song',
+    activity: '#c-add-event',
   };
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
