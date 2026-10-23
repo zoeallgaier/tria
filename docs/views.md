@@ -1,7 +1,9 @@
 # Refresh, feeds and photos
 
-**In the app, the refresh is the screen's edge (2.0, trial).** A thin line
-(1.5pt, with a 4pt halo) traced along the display's own rounded corners
+**In the app, the refresh is the screen's edge (2.0, trial).** A glow
+spilling in off the display's own rounded corners (a 24pt stroke laid just
+past the glass so it is never seen, and only its 16pt halo shows; it was a
+1.5pt line with a 4pt halo until Zoe asked for the glow, not the line)
 (`TriaEdgeGlow` in TriaChromePlugin.swift), drawn over the native bars. Two
 strokes leave the top centre and run round the corners and down either side as
 you pull, and they **reach halfway down the screen at the threshold** (Zoe:

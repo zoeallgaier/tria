@@ -37,8 +37,8 @@ fallback) hold the two hexes by hand. See the top of [docs/design.md](docs/desig
 
 ## 2.0's refresh is the screen's edge (2026-10-22, trial)
 
-In the app, pull to refresh draws a thin line of the reader's own band round the
-display's rounded edge instead of the dot ring (`TriaEdgeGlow`, `setGlow`,
+In the app, pull to refresh glows the reader's own band in off the
+display's rounded edge (the stroke sits past the glass; only its halo shows) instead of the dot ring (`TriaEdgeGlow`, `setGlow`,
 `NativeChrome.glowColors`), with feathered tips that reach halfway down at the
 threshold, and a haptic ratchet of detents into a click there. The web keeps the ring. See the
 top of [docs/views.md](docs/views.md).

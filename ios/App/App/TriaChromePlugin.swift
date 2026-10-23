@@ -3950,7 +3950,8 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 /* 2.0: A REFRESH IS THE SCREEN'S EDGE LIGHTING UP, and this replaced the five
    dot ring in the app. The web keeps the ring (a browser window has no rounded
    glass to trace). A soft bloom at the top only, built like the profile wash,
-   was tried the same day and Zoe went back to this, thinner.
+   was tried the same day and Zoe went back to this, thinner, then asked for
+   the glow and not the line: the stroke now sits off the glass (see `line`).
 
    IT WEARS THE READER'S COLOUR, the same band every commit wears
    (`--pill-band`, resolved by `NativeChrome.glowColors` and sent with each
@@ -4000,10 +4001,14 @@ final class TriaEdgeGlow: UIView {
     /// and clicks at the moment it will.
     private static let threshold: CGFloat = 72
     private static let detents = 6
-    /// Thin on purpose (Zoe: thinner than the first 3pt). The halo does the
-    /// glowing; the line itself is a hairline of colour on the glass's edge.
-    private static let line: CGFloat = 1.5
-    private static let halo: CGFloat = 4
+    /// The stroke lies JUST PAST the display's edge, so it is never seen: only
+    /// its halo spills in off the glass (Zoe: "I want to see the glow, not the
+    /// line"). A 1.5pt hairline on the edge with a 4pt halo came first and read
+    /// as a line. The stroke is wide so the halo is bright where it enters (a
+    /// wide band's shadow is half strength at its edge; a hairline's, blurred
+    /// this far, would be a few percent), and the halo is the glow's depth.
+    private static let line: CGFloat = 24
+    private static let halo: CGFloat = 16
     /// How much of each stroke's length, at full reach, is the feathered tip,
     /// and how many stops the mask spends on it.
     private static let fade: CGFloat = 0.38
@@ -4108,7 +4113,7 @@ final class TriaEdgeGlow: UIView {
         feather.frame = lit.bounds
         strokes.frame = bounds
         let radius = Self.cornerRadius(for: window)
-        shape = (bounds.insetBy(dx: Self.line / 2, dy: Self.line / 2), max(0, radius - Self.line / 2))
+        shape = (bounds.insetBy(dx: -Self.line / 2, dy: -Self.line / 2), radius + Self.line / 2)
         let half = Self.halfPath(in: bounds, radius: radius)
         let mirrored = half.copy() as! UIBezierPath
         mirrored.apply(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: bounds.width, ty: 0))
@@ -4118,10 +4123,11 @@ final class TriaEdgeGlow: UIView {
     }
 
     /// The right half of the screen's outline, top centre round the corner and
-    /// down to halfway, inset by half the line so the stroke sits on the glass's
-    /// edge and stays concentric with its corner.
+    /// down to halfway, OUTSET by half the line so the stroke's inner edge sits
+    /// on the glass's edge (all of it off screen) and stays concentric with its
+    /// corner.
     private static func halfPath(in b: CGRect, radius: CGFloat) -> UIBezierPath {
-        let i = line / 2
+        let i = -line / 2
         let r = max(0, radius - i)
         let rect = b.insetBy(dx: i, dy: i)
         let p = UIBezierPath()
@@ -4294,7 +4300,7 @@ final class TriaEdgeGlow: UIView {
     /// The halo swells once at the threshold.
     private func bloom() {
         let a = CAKeyframeAnimation(keyPath: "shadowRadius")
-        a.values = [Self.halo, Self.halo * 2.2, Self.halo]
+        a.values = [Self.halo, Self.halo * 1.7, Self.halo]
         a.keyTimes = [0, 0.35, 1]
         a.duration = 0.45
         a.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -4322,7 +4328,7 @@ final class TriaEdgeGlow: UIView {
         ramp.add(turn, forKey: "turn")
         let breathe = CABasicAnimation(keyPath: "shadowRadius")
         breathe.fromValue = Self.halo
-        breathe.toValue = Self.halo * 1.8
+        breathe.toValue = Self.halo * 1.5
         breathe.duration = 1.2
         breathe.autoreverses = true
         breathe.repeatCount = .infinity
