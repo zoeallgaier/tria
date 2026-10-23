@@ -2734,10 +2734,11 @@
         // TAGS ARE THE FOOT (Zoe, 2026-10-23): a row of chips, one + Tag tap
         // per tag, that wraps and grows the box as it fills, with no rule over
         // it. The type tools (link → Find, photo → Frame, poll → Poll, calendar
-        // → Activity) lead the same row and the chips flow after them; the
-        // tools stay composer-only, since the editor can't change a post's
-        // type. The audience is a field of its own under the box
-        // (audienceFieldHtml).
+        // → Activity) hold the row's right corner and the chips flow on its
+        // left; the tools stay composer-only, since the editor can't change a
+        // post's type. The audience is a field of its own at the FOOT of the
+        // form, after whatever a photo or a plan opens (audienceFieldHtml,
+        // appended by fieldsFor and editFieldsFor).
         (opts.tags ? tagRowHtml(idp, opts.tags, (tools
             ? `<div class="rich-attach-tools">` +
                 `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
@@ -2755,8 +2756,7 @@
                   : '') +
               `</div>`
             : '')) : '') +
-      `</div>` +
-      (opts.lock ? audienceFieldHtml(idp) : '');
+      `</div>`;
   }
 
   // The tags row in the note box's foot: a chip per tag and a + Tag pill that
@@ -2767,11 +2767,13 @@
       `<button type="button" class="tag-chip-x" aria-label="Remove ${esc(t)}">` +
         `${svgIcon('close', 'tag-chip-x-ico')}</button></span>`;
   function tagRowHtml(idp, { value = '' } = {}, toolsHtml = '') {
-    return `<div class="tag-row" role="group" aria-label="Tags and post options">` +
+    return `<div class="tag-row">` +
+        `<div class="tag-list" role="group" aria-label="Tags">` +
+          `<input type="hidden" id="${idp}-tags" value="${esc(value)}">` +
+          parseTags(value).map(tagChipHtml).join('') +
+          `<button type="button" class="tag-add">${svgIcon('plus', 'tag-add-ico')}Tag</button>` +
+        `</div>` +
         toolsHtml +
-        `<input type="hidden" id="${idp}-tags" value="${esc(value)}">` +
-        parseTags(value).map(tagChipHtml).join('') +
-        `<button type="button" class="tag-add">${svgIcon('plus', 'tag-add-ico')}Tag</button>` +
       `</div>`;
   }
   function wireTagRow(root) {
@@ -2789,7 +2791,7 @@
       box.setAttribute('autocapitalize', 'none');
       box.setAttribute('aria-label', 'New tag');
       box.placeholder = 'tag';
-      row.insertBefore(box, add);
+      add.before(box);
       add.hidden = true;
       box.focus();
       let done = false;
@@ -5170,7 +5172,8 @@
      reason the composer leaves it off a quote too. */
   function editFieldsFor(post) {
     // A circle's post stays in its circle, so its editor has no lock to move.
-    const lock = post.type !== 'repost' && !post.communityId;
+    // Its field is the form's last, after a Find's link or a plan's place.
+    const aud = post.type !== 'repost' && !post.communityId ? audienceFieldHtml('e') : '';
     // shownTags, not post.tags: a daily answer's join tag is invisible here
     // too, and submitEdit puts it back (otherwise editing a typo in the
     // caption would quietly drop the post off the daily page).
@@ -5180,12 +5183,12 @@
       // A Find shares the Note editor (headline + rich body), same as the composer,
       // then carries the link field. Keeps create and edit identical, so a formatted
       // Find edits as rich text instead of raw markup in a flat 180-char box.
-      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, lock, tags }) +
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, tags }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
             `spellcheck="false" value="${esc(post.url || '')}" placeholder="https://…">` +
-        `</div>`;
+        `</div>` + aud;
     }
 
     if (post.type === 'activity') {
@@ -5197,7 +5200,7 @@
       // `editorPrefill` carries a legacy plain-text note across to paragraphs.
       return richNoteField('e', post.title, editorPrefill(post.note),
           'When to show up, what to bring.',
-          { tools: false, lock, tags, titlePh: 'Picnic at the park' }) +
+          { tools: false, tags, titlePh: 'Picnic at the park' }) +
         `<div class="field">` +
           `<label for="e-location">Where</label>` +
           `<input id="e-location" type="text" maxlength="120" ` +
@@ -5210,7 +5213,7 @@
             `<input id="e-time" type="time" aria-label="Time" placeholder="--:-- --" value="${esc(post.eventTime || '')}">` +
           `</div>` +
           `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
-        `</div>`;
+        `</div>` + aud;
     }
 
     // post (Note) and photo (Frame) share the rich editor — a Frame is a full post
@@ -5218,7 +5221,7 @@
     // optional; the image carries the post). Prefilled from the stored note (a
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
-    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, lock, tags });
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, tags }) + aud;
   }
 
   // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
@@ -15670,7 +15673,7 @@
     // hidden below it; an attach toggle reveals the one it names and folds the rest,
     // so the words you have already written carry across every one of those changes
     // (see applyBaseSurface in renderPublish).
-    return richNoteField('c', '', '', randomNotePlaceholder(), { lock: true, event, tags: {} }) +
+    return richNoteField('c', '', '', randomNotePlaceholder(), { event, tags: {} }) +
       `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
         `<button type="button" id="c-make-find">Make it a Find</button></p>` +
       `<div class="field" id="c-link-row" hidden>` +
@@ -15680,7 +15683,8 @@
       `</div>` +
       pollFieldHtml() +
       frameFieldHtml() +
-      (event ? eventFieldHtml() : '');
+      (event ? eventFieldHtml() : '') +
+      audienceFieldHtml('c');
   }
 
   // The poll surface, shipped hidden in the Post field set — revealed when the

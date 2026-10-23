@@ -300,7 +300,10 @@
   --radius-art: calc(var(--art-round) * 100%);
   /* The rest of the corner scale, tokenised so the ladder is enforced not
      remembered (see the design system note in CLAUDE.md). */
-  --radius-field: 12px;   /* composer + edit inputs and their grouped rows */
+  /* Every text box and the boxes that group them (2026-10-23, Zoe: extend the
+     rounded edges to input fields): the soft corner the cards wear, so a
+     one-line field reads as a pill and a tall one as a card. */
+  --radius-field: var(--radius-soft);
   --radius-card:  14px;   /* photos, and floating glass menus / cards */
   /* THE SOFT CORNER, for every flat card that sits in a page (Zoe, 2026-10-22:
      "unify everything with the more rounded edges: discover cards, quote

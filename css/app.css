@@ -4761,7 +4761,7 @@ body.gate main { padding: 0; }
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-field);
   padding: 0.7rem 0.85rem;
   transition: border-color var(--dur-micro);
 }
@@ -4790,7 +4790,7 @@ body.gate main { padding: 0; }
 .field--combo {
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-field);
   overflow: hidden;
   transition: border-color var(--dur-micro);
 }
@@ -4957,7 +4957,7 @@ body.gate main { padding: 0; }
 .rt-count.is-over { color: var(--danger); }
 
 /* The composer's type tools: link, photo, poll and calendar, in the title row
-   leading the note box's foot, ahead of the tags (2026-10-23). Each flips the post's
+   in the note box's bottom-right corner, beside the tags (2026-10-23). Each flips the post's
    inferred type; wired in wireAttachBar (renderPublish). */
 .rt-attach {
   -webkit-appearance: none;
@@ -5042,7 +5042,7 @@ body.gate main { padding: 0; }
   color: var(--muted);
   background: none;
   border: 1px dashed var(--rule);
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-field);
   cursor: pointer;
   transition: color var(--dur-micro), border-color var(--dur-micro);
 }
@@ -7962,14 +7962,13 @@ button.poll-option:disabled { cursor: default; }
 /* ── Publish (composer) — aligned to the text column; a calm stack of fields ── */
 .composer { padding-inline: var(--inset); }
 
-/* Type picker reuses the filter chips, laid out as three equal segments. */
-
 .composer .field:first-of-type { margin-top: 0; }
-/* Softer, more iOS corners on the composer's own fields — a touch rounder than the
-   shared --radius-img (8px), staying concentric under the 20px glass surfaces and
-   in step with the filled liquid-glass Post button. Scoped to the composer (which
-   the post editor wears too, its fields being the same fields) + the About page's
-   feedback form, so post photos and other --radius-img corners are untouched. */
+/* …but not the place-and-time pair's Where, the first of its own wrapper's
+   divs, which was sitting flush under the note box on every plan. */
+.composer .event-field > .field:first-of-type { margin-top: 1.1rem; }
+/* The field corner, --radius-field (the soft corner since 2026-10-23), on the
+   composer's boxes, the editor's (same fields) and the About page's feedback
+   form. Post photos keep --radius-img. */
 .composer .field input,
 .composer .field textarea,
 .composer .field--combo,
@@ -7980,8 +7979,10 @@ button.poll-option:disabled { cursor: default; }
   color: var(--danger);
   font-size: 0.85rem;
   margin-top: 1rem;
-  min-height: 1.1rem;
 }
+/* Empty, it takes no room: it held a line open between the last field and
+   Share on every compose. */
+.composer-error:empty { display: none; }
 /* Submits are compact, right-aligned actions — not full-width slabs. */
 .composer-submit {
   display: block;
@@ -8003,7 +8004,7 @@ button.poll-option:disabled { cursor: default; }
   justify-content: center;
   width: 100%;
   margin-inline: 0;
-  margin-top: 1.4rem;
+  margin-top: 1.6rem;
   min-height: 52px;
   line-height: 1;
 }
@@ -8050,18 +8051,14 @@ button.poll-option:disabled { cursor: default; }
   height: 10px;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   overflow: hidden;
 }
 .post-progress-fill {
   height: 100%;
   width: 0;
   border-radius: inherit;
-  /* Lit top rim over the brand so the fill reads as a filled bar, not a
-     flat block — same family as the publish button it feeds. */
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(90deg, var(--brand-start), var(--brand-end));
+  /* Tria's ramp, flat: 2.0 took the lit rims off everything. */
+  background: linear-gradient(90deg, var(--brand-start), var(--brand-end));
   transition: width var(--dur-quick) ease-out;
 }
 .post-progress-label {
@@ -8076,10 +8073,7 @@ button.poll-option:disabled { cursor: default; }
 }
 
 
-/* ── Audience row (activity composer) — an iOS settings-style disclosure cell:
-   "Shared with  Everyone in your circle ›". Reads as a field, opens the picker
-   sheet. (Design preview, demo-gated.) */
-/* Audience — "who sees this", under the note box since 2026-10-23, in the look
+/* Audience — "who sees this", the form's last field since 2026-10-23, in the look
    the tags field had: a label over a full-width box that reads as a field (the
    `.field input` box, same rule, radius and padding) and opens the sheet. */
 .aud-lock {
@@ -8092,7 +8086,7 @@ button.poll-option:disabled { cursor: default; }
   min-width: 0;
   padding: 0.7rem 0.85rem;
   border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-field);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -8109,17 +8103,22 @@ button.poll-option:disabled { cursor: default; }
 
 /* Tags — the note box's foot (2026-10-23): a chip per tag and a + Tag pill,
    one tap per tag, wrapping onto new lines so the box grows as they're added.
-   No rule over it (Zoe). The `.field` prefix outranks `.field input`. */
+   No rule over it (Zoe). The chips use the box's whole width and the type
+   tools ride the LAST line's right edge, the box's bottom-right corner
+   (margin-left: auto); the list is `display: contents` so its chips wrap in the
+   row's own flow. `.tag-row .tag-new` outranks `.field input`, whose box and
+   corner it is not. */
 .tag-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.25rem 0.75rem 0.6rem;
+  padding: 0.25rem 0.4rem 0.5rem 0.75rem;
 }
+.tag-list { display: contents; }
 .tag-chip,
 .tag-add,
-.field .tag-new {
+.tag-row .tag-new {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
@@ -8149,16 +8148,19 @@ button.poll-option:disabled { cursor: default; }
 .tag-add[hidden] { display: none; }
 .tag-add-ico { width: 15px; height: 15px; }
 @media (hover: hover) { .tag-add:hover { color: var(--text); border-color: var(--muted); } }
-.field .tag-new {
+.tag-row .tag-new {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
   width: 8rem;
-  padding: 0 0.75rem;
+  padding: 0 0.85rem;
   background: none;
   color: var(--text);
   border-color: var(--accent);
+  border-radius: var(--radius-pill);
 }
-.field .tag-new:focus { border-color: var(--accent); }
-/* The type tools lead the tags row, the chips flowing after them. */
-.rich-attach-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; margin-left: -0.45rem; }
+.tag-row .tag-new:focus { border-color: var(--accent); }
+.rich-attach-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; margin-left: auto; }
 
 /* Audience sheet — a clean iOS checkmark list, docked at the foot of the screen
    in the app's own sheet (openSheet, .sheet-scrim--aud below). No hard borders
@@ -9869,7 +9871,7 @@ a.daily-answer { text-decoration: none; }
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-field);
   transition: border-color var(--dur-micro);
 }
 .community-slug:focus-within { border-color: var(--accent); }
