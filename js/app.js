@@ -311,10 +311,11 @@
     bell:    '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
     // The Chats tab (1.7): a bubble with a second one peeking out behind it.
     // Leading zeros written out, because TriaSVG draws this same markup natively.
-    chats:   '<path d="M3.5 6.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2V12a2 2 0 0 1-2 2H9.5L6 17v-3h-0.5a2 2 0 0 1-2-2z"/>' +
-             '<path d="M19 8.5h0.5a1.5 1.5 0 0 1 1.5 1.5v5.5a1.5 1.5 0 0 1-1.5 1.5H19v2.5l-3-2.5h-3.5a1.5 1.5 0 0 1-1.2-0.6"/>',
+    // Rounder since 2026-10-23, the comment bubble's 3.5 corner.
+    chats:   '<path d="M3.5 8A3.5 3.5 0 0 1 7 4.5h6A3.5 3.5 0 0 1 16.5 8v2.5A3.5 3.5 0 0 1 13 14H10l-3 3v-3A3.5 3.5 0 0 1 3.5 10.5z"/>' +
+             '<path d="M18.6 8.6A2.6 2.6 0 0 1 21 11.2v3.2A2.6 2.6 0 0 1 18.6 17v2.5l-3-2.5h-2.4a2.6 2.6 0 0 1-2.1-1.1"/>',
     // New chat: one bubble with a plus in it, the Chats page's glass button.
-    newchat: '<path d="M4 6.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/><path d="M12 7.5v6"/><path d="M9 10.5h6"/>',
+    newchat: '<path d="M4 8.5A4 4 0 0 1 8 4.5h8a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-5l-4 3v-3A4 4 0 0 1 4 12.5z"/><path d="M12 7.5v6"/><path d="M9 10.5h6"/>',
     // The tray — an arrow lifting out of an open box. Worn by every share
     // affordance (a post's copy-link, a profile's Share). It replaced an
     // envelope, which promised a message you compose and send; what these
