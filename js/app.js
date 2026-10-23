@@ -13379,8 +13379,8 @@
         `<h1 class="visually-hidden">${editing ? 'Edit circle' : 'Start a circle'}</h1>` +
         `<form id="community-form" class="pf-form community-form" novalidate>` +
           (editing ? '' :
-            `<p class="community-form-lede">A room for a hobby or an interest. Anyone on Tria can find it ` +
-              `on Discover and join, and what’s posted in it is for the people inside.</p>`) +
+            `<p class="community-form-lede">Create a circle for a hobby, interest, event, etc. ` +
+              `Anyone on Tria can join via the Discover page.</p>`) +
           // Its photo, the host's to change (circle-photo-delete.sql), drawn
           // and cropped exactly as Edit profile does a face: the camera on the
           // rim, an inline square crop in its place once a file is picked.
