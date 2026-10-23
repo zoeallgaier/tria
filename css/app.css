@@ -518,12 +518,10 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    more colour stops, not a noise layer. */
 
 /* Visible keyboard focus on every interactive element. */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius);
-}
-:focus:not(:focus-visible) { outline: none; }
+/* No focus ring, anywhere (Zoe, 2026-10-22): WebKit lights :focus-visible on
+   a tap often enough that the rings read as debug outlines. The !important beats
+   every per-control ring further down. */
+:focus, :focus-visible { outline: none !important; }
 
 /* Instrument Serif is reserved for TITLES ONLY — page titles and post
    headlines. Everything else is Oxygen, leaning on weight (300 / 400 / 700)
@@ -3920,7 +3918,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
    translucent, so the glass reads through it. */
 @media (hover: hover) { .sheet-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } }
 .sheet-item:focus-visible,
-.sheet-cancel:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent); }
+.sheet-cancel:focus-visible { outline: none; }
 .sheet-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
 
 .sheet-item--danger { color: var(--danger); }
@@ -4035,10 +4033,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   line-height: 1.1;
 }
 .swatch.is-on .swatch-label { color: var(--text); font-weight: 700; }
-.swatch:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
-}
+.swatch:focus-visible { outline: none; }
 @media (hover: hover) {
   .swatch:hover .swatch-disc { transform: scale(1.07); }
   .swatch:hover .swatch-label { color: var(--text); }
@@ -8286,10 +8281,7 @@ button.poll-option:disabled { cursor: default; }
    ring, for the same reason it is inset there: an outline on a row that sits on
    glass reads as a hard edge cut into the material. */
 .aud-mode:focus-visible,
-.aud-pick:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
-}
+.aud-pick:focus-visible { outline: none; }
 .aud-empty { color: var(--muted); text-align: center; padding: 1.2rem 0; }
 @media (prefers-reduced-motion: reduce) {
   .aud-list-wrap { transition: opacity var(--dur-quick) ease; }
