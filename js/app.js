@@ -1096,6 +1096,12 @@
     function washFill(el) {
       const stops = bandStops(el);
       const fill = bandFill(stops);
+      // "No colour" paints its commits solid ink (data-band="mono" in
+      // app.css), so here they cross as that ink's tint, with the paper ink
+      // the element carries, rather than as plain glass.
+      if (document.documentElement.dataset.band === 'mono' && stops.length) {
+        return { colors: [], tint: stops[stops.length >> 1] };
+      }
       if (solidGlass() || (!fill.tint && !fill.colors.length)) return fill;
       return { colors: stops, tint: '', wash: bandAlpha(el) };
     }
@@ -19081,6 +19087,11 @@
         if (band) localStorage.setItem(SPLASH_KEY, band);
         else localStorage.removeItem(SPLASH_KEY);
       } catch {}
+      // "No colour" draws THE BUTTON in ink rather than a grey wash, which
+      // a custom property can't switch, so it is a flag too (see the
+      // data-band="mono" rules in app.css).
+      if (band === 'var(--mono-band)') el.dataset.band = 'mono';
+      else delete el.dataset.band;
       if (!band) {
         ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk']
           .forEach(p => el.style.removeProperty(p));

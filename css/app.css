@@ -1609,6 +1609,24 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .publish-fill:disabled,
 .pill-quiet:disabled { opacity: 0.6; }
+/* NO COLOUR IS INK, not grey (Zoe, 2026-10-23: "actual black white hairline
+   buttons instead of grey. everything almost looks greyed out"). --mono-band
+   washed at --pill-wash is a grey film, so a reader on None wears the page's
+   own two inks instead: a commit (and a chosen quiet one) is solid ink with
+   paper words, black on paper and white on ink, and every other button keeps
+   its glass with the hairline at full ink. The band stays a gradient on the
+   ::before at full strength, so the native send disc and the bar's commits,
+   which read it off there (bandStops, bandAlpha), draw the same solid ink.
+   data-band="mono" is stamped beside --user-band (paintBrandBand). */
+html[data-band="mono"] .publish-fill,
+html[data-band="mono"] .pill-quiet.is-on { color: var(--bg); }
+html[data-band="mono"] .publish-fill::before,
+html[data-band="mono"] .pill-quiet.is-on::before {
+  background: linear-gradient(var(--text), var(--text));
+  opacity: 1;
+}
+html[data-band="mono"] .publish-fill,
+html[data-band="mono"] .pill-quiet { border-color: var(--text); }
 /* THE FOOT: Share, ruled off from the destinations like the site's Contact,
    and pushed to the bottom of the rail. It is THE BUTTON at its commit weight
    and opens the Share sheet (openComposeDial), the same one My Circle's
