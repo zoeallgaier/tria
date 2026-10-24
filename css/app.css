@@ -2648,7 +2648,8 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    same 0.82rem bold number, growing leftward from the glyph's square. No
    background pill; the glyph carries the colour the way every other social glyph
    does. At rest it's muted like its neighbours (it's a tally you may join, not a
-   standing claim); once you're in, it takes the activity ink. */
+   standing claim); once you're in, it takes --heart, the reader's own colour,
+   the ink a like and a repost settle on (Zoe, 2026-10-23; it was --brand-ink). */
 /* Descendant-qualified, and that is load-bearing rather than tidy. This rule's
    first three declarations were written at `.card-attendees` — (0,1,0) — where
    `.card-actions button { padding: 0; justify-content: center }` at (0,1,1)
@@ -2715,15 +2716,15 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 }
 .card-attendees.going,
 .card-attendees.going:active,
-.card-attendees.going[aria-expanded="true"] { color: var(--brand-ink); }
-@media (hover: hover) { .card-attendees.going:hover { color: var(--brand-ink); } }
+.card-attendees.going[aria-expanded="true"] { color: var(--heart); }
+@media (hover: hover) { .card-attendees.going:hover { color: var(--heart); } }
 .card-attendees.going .check-arm { stroke-dashoffset: 0; stroke-width: 2.4; visibility: visible; }
 
 /* RSVP reward — the moment you join, the check DRAWS itself onto the person
    (stroke walking its path; the arm carries pathLength=1 in the icon so the dash
-   spans its real geometry) while the brand sweeps once across the count and
-   SETTLES on its ink: the sweep ends with the pure --brand-ink third of the
-   gradient in view, so the class lift is invisible. The RSVP's own
+   spans its real geometry) while a lighter wash of the reader's --heart sweeps
+   once across the count and SETTLES on it: the sweep ends with the pure --heart
+   third of the gradient in view, so the class lift is invisible. The RSVP's own
    celebration verb, deliberately not another sparkle burst. */
 .card-attendees.rsvp-inked .check-arm {
   animation: rsvp-draw 0.5s var(--ease) 0.1s both;
@@ -2734,10 +2735,11 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 }
 .card-attendees.rsvp-inked .card-attendees-count {
   /* Ink flat through 36%: at 300% size the visible window is a third, so the
-     final frame (position 0%) is solid --brand-ink, matching the resting state. */
+     final frame (position 0%) is solid --heart, matching the resting state. */
   background: linear-gradient(115deg,
-    var(--brand-ink) 0%, var(--brand-ink) 36%,
-    var(--brand-end) 60%, var(--brand-start) 100%);
+    var(--heart) 0%, var(--heart) 36%,
+    color-mix(in oklab, var(--heart) 70%, white) 60%,
+    color-mix(in oklab, var(--heart) 45%, white) 100%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
           background-clip: text;
@@ -3130,7 +3132,8 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    .card-attendees.going is a GUEST's raised hand, tags are drawn for the HOST
    alone (a guest's who's-going list carries none), and a host is never
    rsvpable -- so the glyph above this list has always been plain ink. The
-   glyph keeps the brand's ink; nothing here is left disagreeing with it.
+   lit glyph wears the reader's --heart since 2026-10-23, so the two agree
+   wherever a reader picked a colour.
 
    Not a filled pill: this list sits in the flat editorial column
    where comments live, and a row of solid chips down the right of it would read

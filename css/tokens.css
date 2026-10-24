@@ -235,11 +235,11 @@
      host's list is ordered, everyone tagged first and everyone still to answer
      after -- and not a licence to reach for --user-heart-lt on body copy.
 
-     The HEADCOUNT GLYPH deliberately does NOT read this and stays
-     --brand-ink. The two never appear together: .card-attendees.going
-     is the state of a guest who raised their hand, and only the HOST is ever
-     shown tags (a guest's who's-going list carries none), so a host's glyph is
-     never lit in the first place. */
+     The HEADCOUNT GLYPH, lit once you're going, reads --heart rather than
+     this (Zoe, 2026-10-23, "should match users color pref"; it was
+     --brand-ink): it is a mark like the heart, not a word. The two never
+     appear together anyway: .card-attendees.going is the state of a guest who
+     raised their hand, and only the HOST is ever shown tags. */
   --going-ink: var(--user-heart-lt, var(--brand-ink));
 
   /* THE UNREAD DOT — the nav's Updates tab, and the ledger's own rows, which
