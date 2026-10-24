@@ -4821,22 +4821,21 @@ body.gate main { padding: 0; }
    the Note body so the two forms' main field read as one size. There is one form
    now and its body IS the Note editor, so the selector matched nothing. Out. */
 .combo-divider { height: 1px; background: var(--rule); margin: 0 0.85rem; }
-/* Edit profile's pronouns, a short line at the head of the bio's half of the
-   box (2026-10-23), in the muted ink the card shows them in beside the
-   @handle. 16px, never less: iOS zooms the page into any field set smaller. */
+/* Edit profile's pronouns, a line of the combo box between the name and the
+   bio, ruled off from each by the same hairline (2026-10-23). 16px, never
+   less: iOS zooms the page into any field set smaller. */
 .field--combo .combo-sub {
   display: block;
   width: 100%;
   border: none;
   border-radius: 0;
   background: none;
-  color: var(--muted);
+  color: var(--text);
   font: inherit;
   font-size: 1rem;
-  padding: 0.7rem 0.85rem 0.15rem;
+  padding: 0.62rem 0.85rem;
 }
-.field--combo .combo-sub:focus { outline: none; color: var(--text); }
-.field--combo .combo-note--under { padding-top: 0.35rem; }
+.field--combo .combo-sub:focus { outline: none; }
 /* Holds the crop/trim preview once media lands — no padding of its own, so the
    empty box collapses while the upload dropzone (above it) is showing. */
 .combo-frame { display: flex; flex-direction: column; gap: 12px; }
@@ -9886,11 +9885,14 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .person-card {
   position: relative;
   flex: 0 0 auto;
-  width: 200px;
+  /* 216 and 1rem since the face grew to 80px (Zoe, 2026-10-23: "adjust the
+     padding ... to compensate"): the old 200 and 0.85rem left it tight to the
+     edges, and the extra width is what keeps 4:5 tall enough to hold it. */
+  width: 216px;
   aspect-ratio: 4 / 5;
   display: flex;
   flex-direction: column;
-  padding: 0.85rem;
+  padding: 1rem;
   border-radius: var(--radius-soft);
   background: var(--surface);
   border: 1px solid var(--rule);

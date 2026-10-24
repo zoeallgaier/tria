@@ -1471,8 +1471,8 @@ invite-only circle is created and then switched in the same tap, and a switch
 that fails says the circle is open for now. Invites are readable by the invitee
 and by the circle's members (the Invite sheet's "invited"), granted to anon so
 a signed-out read is a clean `[]`. The rows stay readable to anyone, like a
-private profile's card: the app keeps an invite-only circle off Discover and
-out of search unless you are in it or hold an invite.
+private profile's card, and Discover lists an invite-only circle with a padlock
+on its handle and no Join unless you hold an invite.
 
 **IN CODE IT IS A `community`**, in the schema, the store, app.js and the CSS
 alike, because `circle` already means your mutual friends: `posts.audience =

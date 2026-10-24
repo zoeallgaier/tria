@@ -8346,14 +8346,15 @@
               `value="${esc(u.name)}" placeholder="Display name" autocomplete="name" ` +
               `aria-label="Display name">` +
             `<div class="combo-divider" aria-hidden="true"></div>` +
-            // Pronouns ride in the bio's half of the box (Zoe, 2026-10-23: fold
-            // them into the bio), a short line over it, since the card shows
-            // them as part of who you are. The placeholder names the field, not
-            // a format, so it never reads as "she/her" expected.
+            // Pronouns are a line of the box of their own (Zoe, 2026-10-23),
+            // between the name and the bio, each part ruled off by the same
+            // hairline. The placeholder names the field, not a format, so it
+            // never reads as "she/her" expected.
             `<input id="pf-pronouns" class="combo-sub" type="text" maxlength="40" autocomplete="off" ` +
               `autocapitalize="none" value="${esc(u.pronouns || '')}" placeholder="Pronouns (optional)" ` +
               `aria-label="Pronouns">` +
-            `<textarea id="pf-bio" class="combo-note combo-note--under" rows="3" maxlength="160" ` +
+            `<div class="combo-divider" aria-hidden="true"></div>` +
+            `<textarea id="pf-bio" class="combo-note" rows="3" maxlength="160" ` +
               `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
           `</div>` +
           `<p class="field-hint field-hint--combo" id="pf-count"></p>` +
@@ -13043,9 +13044,13 @@
     const faces = me ? communityFaces(c, 4) : [];
     return `<section class="daily-card community-card" data-community="${esc(c.id)}">` +
         communityPicHtml(c, 'community-card-pic', 52) +
+        // An invite-only circle's handle wears the padlock a private profile's
+        // name does, and says where you stand with it.
         `<p class="daily-kicker">${esc(communityHandle(c))}` +
+          (c.inviteOnly ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Invite only</span>` : '') +
           (mine ? `<span class="daily-sep" aria-hidden="true">·</span>${c.owner === me ? 'Yours' : 'Joined'}`
-            : c.inviteOnly ? `<span class="daily-sep" aria-hidden="true">·</span>Invited` : '') +
+            : !c.inviteOnly ? ''
+            : `<span class="daily-sep" aria-hidden="true">·</span>${Store.canJoinCommunity(c) ? 'Invited' : 'Invite only'}`) +
         `</p>` +
         `<a class="daily-open" href="${communityRoute(c)}">` +
           `<span class="daily-prompt">${esc(c.name)}</span>` +
@@ -13061,7 +13066,7 @@
                 `<span class="daily-count">${n} ${memberWord(n)}</span>` +
               `</div>`
             : `<span class="daily-count"></span>`) +
-          (mine ? ''
+          (mine || !Store.canJoinCommunity(c) ? ''
             : `<button type="button" class="daily-answer publish-fill" data-join="${esc(c.id)}">` +
                 `Join<span class="daily-go" aria-hidden="true">→</span>` +
               `</button>`) +
@@ -13141,10 +13146,8 @@
       const x = Store.communityPulse(a.id), y = Store.communityPulse(b.id);
       return x < y ? 1 : x > y ? -1 : 0;
     };
-    // An invite-only circle is offered only to its members and to whoever
-    // holds an invite (circle-privacy.sql); its link still opens for anyone.
-    const all = Store.communities().filter(c => !(c.owner && Blocks.has(c.owner))
-      && (!c.inviteOnly || Store.inCommunity(c.id) || Store.invitedTo(c.id)));
+    // Invite-only circles are listed too (Zoe, 2026-10-23), wearing a lock.
+    const all = Store.communities().filter(c => !(c.owner && Blocks.has(c.owner)));
     const mine = all.filter(c => Store.inCommunity(c.id)).sort(byPulse);
     const rest = all.filter(c => !Store.inCommunity(c.id)).sort(byPulse);
     return mine.concat(rest);
@@ -13176,12 +13179,12 @@
       `</section>`;
   }
 
-  // What the Invite only switch means, said as what the circle IS right now,
-  // the way Edit profile's privacy hint is.
-  function communityPrivacyHint(inviteOnly) {
-    return inviteOnly
-      ? 'Only people a member invites can join. It stays off Discover for everyone else.'
-      : 'Anyone on Tria can find it on Discover and join.';
+  // The inside of the circle form's Who can join field: the audience lock's
+  // drawing, a globe for Public and a padlock for Invite only.
+  function communityJoinInner(inviteOnly) {
+    return svgIcon(inviteOnly ? 'lock' : 'globe', 'aud-lock-ico') +
+      `<span class="aud-lock-label">${inviteOnly ? 'Invite only' : 'Public'}</span>` +
+      svgIcon('chevDown', 'aud-lock-chev');
   }
 
   // What leaving costs, said before it happens. The last member closes the
@@ -13714,17 +13717,13 @@
                 `</div>` +
               `</div>` +
               `<p class="field-hint" id="cf-slug-hint"></p>`) +
-          // Who may join: Edit profile's Private account, worn by a room. The
-          // hint says what the circle IS right now, as that one does.
+          // Who may join, asked the way the composer asks who can see a post
+          // (Zoe, 2026-10-23): a field that opens a sheet of the two answers.
           (privacy
-            ? `<div class="push-toggle-row">` +
-                `<span class="push-toggle-label" id="cf-invite-label">Invite only</span>` +
-                `<button type="button" class="push-toggle" role="switch" id="cf-invite-only" ` +
-                  `aria-checked="${inviteOnlyNow}" aria-labelledby="cf-invite-label cf-invite-hint">` +
-                  `<span class="push-toggle-knob" aria-hidden="true"></span>` +
-                `</button>` +
-              `</div>` +
-              `<p class="field-hint" id="cf-invite-hint">${communityPrivacyHint(inviteOnlyNow)}</p>`
+            ? `<div class="field aud-field">` +
+                `<label for="cf-join">Who can join</label>` +
+                `<button type="button" class="aud-lock" id="cf-join">${communityJoinInner(inviteOnlyNow)}</button>` +
+              `</div>`
             : '') +
           `<p class="composer-error" id="cf-error" role="alert"></p>` +
           `<button class="composer-submit composer-post publish-fill" type="submit" id="community-save">` +
@@ -13739,8 +13738,9 @@
     const hintEl = form.querySelector('#cf-slug-hint');
     const errEl = form.querySelector('#cf-error');
     const saveBtn = form.querySelector('#community-save');
-    const inviteBtn = form.querySelector('#cf-invite-only');
-    const inviteOnly = () => !!inviteBtn && inviteBtn.getAttribute('aria-checked') === 'true';
+    const inviteBtn = form.querySelector('#cf-join');
+    let inviteOnlyPick = inviteOnlyNow;
+    const inviteOnly = () => !!inviteBtn && inviteOnlyPick;
     let slugTouched = false;
     // The photo's pending answer: a cropper while a new one is being framed, or
     // `photoOff` once Remove was pressed. Neither writes until the commit.
@@ -13774,10 +13774,32 @@
     sync();
     if (!editing && finePointer()) nameEl.focus();
 
+    // Commits as you tap, like the audience sheet: every way out leaves the
+    // same answer, and the field under the sheet changes as you go.
     inviteBtn?.addEventListener('click', () => {
-      const on = !inviteOnly();
-      inviteBtn.setAttribute('aria-checked', String(on));
-      form.querySelector('#cf-invite-hint').textContent = communityPrivacyHint(on);
+      const modeBtn = (shut, t, d) =>
+        `<button type="button" class="aud-mode" data-shut="${shut}" aria-pressed="${inviteOnlyPick === shut}">` +
+          `<span class="aud-mode-t">${t}</span><span class="aud-mode-d">${d}</span>` +
+          `<span class="aud-mode-tick" aria-hidden="true"></span>` +
+        `</button>`;
+      openSheet({
+        title: 'Who can join?',
+        dock: 'Done',
+        scrimClass: 'sheet-scrim--aud',
+        head:
+          `<div class="aud-modes" role="group" aria-label="Who can join">` +
+            modeBtn(false, 'Public', 'Anyone on Tria can join') +
+            modeBtn(true, 'Invite only', 'Only people a member invites') +
+          `</div>`,
+        wire: (scrim) => {
+          const modes = [...scrim.querySelectorAll('.aud-mode')];
+          modes.forEach(b => b.addEventListener('click', () => {
+            inviteOnlyPick = b.dataset.shut === 'true';
+            modes.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+            inviteBtn.innerHTML = communityJoinInner(inviteOnlyPick);
+          }));
+        },
+      });
     });
 
     if (photos) {

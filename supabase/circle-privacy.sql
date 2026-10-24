@@ -11,9 +11,9 @@
 --
 --   · an open circle is as before: on Discover, and anyone may join.
 --   · an invite-only circle can be joined only by someone a member invited.
---     The app keeps it off Discover for everyone else; its page still opens
---     from a link (name, about, size), the way a private profile still shows
---     its card. Its posts were already for members only (can_view_post).
+--     It is still listed on Discover, wearing a lock, and its page still
+--     opens (name, about, size), the way a private profile still shows its
+--     card. Its posts were already for members only (can_view_post).
 --
 -- AN INVITE IS STILL A DM. The circle page's Invite pill sends a friend the
 -- link (openCommunityInvite); in an invite-only circle it first records the
