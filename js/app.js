@@ -13706,6 +13706,14 @@
             `<textarea id="cf-about" class="combo-note" rows="3" maxlength="280" ` +
               `placeholder="What’s it for? (optional)" aria-label="About">${esc(editing ? editing.about : '')}</textarea>` +
           `</div>` +
+          // Who may join, asked the way the composer asks who can see a post
+          // (Zoe, 2026-10-23): a field that opens a sheet of the two answers.
+          (privacy
+            ? `<div class="field aud-field">` +
+                `<label for="cf-join">Who can join</label>` +
+                `<button type="button" class="aud-lock" id="cf-join">${communityJoinInner(inviteOnlyNow)}</button>` +
+              `</div>`
+            : '') +
           (editing
             ? `<p class="field-hint">Its link stays triaonline.com/c/${esc(editing.slug)}.</p>`
             : `<div class="field">` +
@@ -13717,14 +13725,6 @@
                 `</div>` +
               `</div>` +
               `<p class="field-hint" id="cf-slug-hint"></p>`) +
-          // Who may join, asked the way the composer asks who can see a post
-          // (Zoe, 2026-10-23): a field that opens a sheet of the two answers.
-          (privacy
-            ? `<div class="field aud-field">` +
-                `<label for="cf-join">Who can join</label>` +
-                `<button type="button" class="aud-lock" id="cf-join">${communityJoinInner(inviteOnlyNow)}</button>` +
-              `</div>`
-            : '') +
           `<p class="composer-error" id="cf-error" role="alert"></p>` +
           `<button class="composer-submit composer-post publish-fill" type="submit" id="community-save">` +
             `${editing ? 'Save' : 'Start circle'}</button>` +

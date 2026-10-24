@@ -97,12 +97,12 @@ Write your first post and, while bare, Add a photo and bio.
 
 **A circle can be INVITE ONLY** (Zoe: "add privacy options like profile
 settings ... invite only circles should be a thing"), `supabase/circle-privacy.sql`,
-**NOT run**. `communities.invite_only`, a `community_invites` table, and the
+**confirmed run** 2026-10-23. `communities.invite_only`, a `community_invites` table, and the
 rule as a BEFORE INSERT trigger on `community_members` (`community_invite_gate`),
 so neither `join_community` nor `create_community` is restated and the two
 unrun circle files can go either side of it. The host picks it on New circle
 and Edit circle in a **Who can join** field shaped like the composer's audience
-field (Public or Invite only, a sheet, `communityJoinInner`); a new one is
+field (Public or Invite only, a sheet, `communityJoinInner`), above the handle; a new one is
 created then switched (`Store.createCommunity`'s `inviteOnly`). Any member's
 Invite records the invite (`invite_to_community`, friends only) before the DM;
 the join uses it up. An invite-only circle is still on Discover with a padlock
@@ -575,10 +575,12 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   "Only the circle's host can do that." where it answered PGRST202. Were the
   column ever missing again, `Store.communityToolsReady` is false: no photo on
   New circle or in the editor, and no Delete circle in the host's menu.
-  **`circle-privacy.sql` is NOT run** (written 2026-10-23): anon
-  `GET /rest/v1/community_invites?select=user_id&limit=1` answers PGRST205
-  (a 404 in the console on every load, the probe itself) until it is, and
-  `Store.communityPrivacyReady` is false: no Invite only switch anywhere.
+  **`circle-privacy.sql` is confirmed run** (2026-10-23): anon
+  `GET /rest/v1/community_invites?select=user_id&limit=1` answered PGRST205
+  before it and `[]` after, `communities.invite_only` answers
+  `[{"invite_only":false}]`, and `set_community_privacy` answers its own 42501
+  "Only the circle's host can do that.". Were the table ever missing again,
+  `Store.communityPrivacyReady` is false: no Who can join field anywhere.
 
 ## Copy style
 
