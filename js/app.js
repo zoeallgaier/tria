@@ -5788,8 +5788,8 @@
     const faces = who.slice(0, 3).map(u => Store.user(u)).filter(Boolean);
     return `<div class="week-card week-card--circle" data-circle="${esc(c.id)}">` +
         `<a class="week-card-link" href="${communityRoute(c)}">` +
-          `<span class="week-card-kicker">${svgIcon('circle')}${esc(communityHandle(c))}</span>` +
-          `<span class="week-card-title">${esc(c.name)}</span>` +
+          // The handle is the headline: the name under it said the room twice.
+          `<span class="week-card-title">${esc(communityHandle(c))}</span>` +
           `<span class="week-card-place week-card-who">` +
             (faces.length
               ? `<span class="daily-faces" aria-hidden="true">` +
