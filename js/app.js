@@ -19088,10 +19088,6 @@
         if (band) localStorage.setItem(SPLASH_KEY, band);
         else localStorage.removeItem(SPLASH_KEY);
       } catch {}
-      // "No colour" boosts THE BUTTON's hairline and thins its wash, which
-      // --user-band can't say, so it is a flag too (tokens.css, data-band).
-      if (band === 'var(--mono-band)') el.dataset.band = 'mono';
-      else delete el.dataset.band;
       if (!band) {
         ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk']
           .forEach(p => el.style.removeProperty(p));
