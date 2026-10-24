@@ -2291,7 +2291,7 @@
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
   // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
   // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 64]];
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -5247,7 +5247,7 @@
             `<input id="e-date" type="date" placeholder="mm/dd/yyyy" value="${esc(post.eventDate || '')}">` +
             `<input id="e-time" type="time" aria-label="Time" placeholder="--:-- --" value="${esc(post.eventTime || '')}">` +
           `</div>` +
-          `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
+          `<p class="field-hint">The time is optional.</p>` +
         `</div>` + aud;
     }
 
@@ -7524,14 +7524,21 @@
     const statsRow = `<div class="account-stats">${postStat}${statSep}${friendStat}</div>`;
 
     // The in-flow action row, at the foot of the identity block. Your own
-    // profile has none — Share and Edit are rows in the ••• menu. A visitor's
-    // carries the add / requested / accept tie, unless you are already friends:
+    // carries Edit profile and Share profile (Zoe, 2026-10-23: out of the •••
+    // menu, where the row people come looking for by name was behind an
+    // unlabelled glyph). A visitor's carries the add / requested / accept tie,
+    // unless you are already friends:
     // then the tie is the toolbar's own button (see friendBadge), which keeps
     // "un-tie" a deliberate act rather than a standing button on the page.
     // Signed out there is no tie at all: a guest's card offering "Add friend"
     // promised something the tap couldn't do, and the way in is already on
     // every pitch page.
-    const action = (isSelf || areFriends || !Store.isAuthed()) ? ''
+    const action = isSelf
+      ? `<div class="account-actions">` +
+          `<a class="friend-btn pill-quiet" href="#/profile/edit" id="profile-edit">Edit profile</a>` +
+          `<button class="friend-btn pill-quiet" type="button" id="profile-share">Share profile</button>` +
+        `</div>`
+      : (areFriends || !Store.isAuthed()) ? ''
       : (() => {
           // Five pre-friend states. Two are already-done and undo on tap
           // ("Requested" on a private account, "Following" on a public one) —
@@ -7924,22 +7931,9 @@
     const moreBtn = document.getElementById('account-more');
     if (moreBtn) moreBtn.addEventListener('click', () => {
       if (isSelf) {
+        // Edit profile and Share profile left this menu for the two pills
+        // under the identity (Zoe, 2026-10-23), so what is left is the rare.
         openGlyphMenu(moreBtn, { label: 'Profile options', items: [
-          // Edit profile LEADS, and that is a discoverability fix rather than a
-          // preference. 1.3 took the standing "Edit profile" button off the
-          // identity block and folded it into this menu, so the one row here
-          // that a reader will come looking for BY NAME — the way into their
-          // photo, their bio, their colour, their notifications switch and the
-          // delete-account zone — is now behind an unlabelled glyph. Share sat
-          // above it on the visitor menu's ordering, where Share genuinely is
-          // the first thing you'd want; on your OWN page it is the rarer act,
-          // and it was making the reader read past it.
-          { label: 'Edit profile', icon: 'gear', run: () => { editorPushed = true; go('#/profile/edit'); } },
-          /* THE SYSTEM SHARE SHEET, the same as a friend's profile (Zoe,
-             2.0: "remove all the qr code bullshit and everything in favor of
-             the native share sheet"). Your own profile used to open a card
-             with a QR on it; now the link goes straight to the OS. */
-          { label: 'Share profile', icon: 'send', run: () => shareProfile(u.username) },
           { label: 'Connect to calendar', icon: 'cal', run: openCalendarSubscribe },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
@@ -7963,6 +7957,16 @@
         ],
       });
     });
+
+    // Your own two pills. Edit pushes the editor so its Save pops back here;
+    // Share is the system share sheet (Zoe, 2.0: "remove all the qr code
+    // bullshit"), the same as on a friend's profile.
+    document.getElementById('profile-edit')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      editorPushed = true;
+      go('#/profile/edit');
+    });
+    document.getElementById('profile-share')?.addEventListener('click', () => shareProfile(u.username));
 
     // The stat opens a page now rather than a modal (see renderFriends). It
     // stays a button and navigates through go(): it is one of a row of stats,
@@ -8142,7 +8146,7 @@
     const bio = opts.bio && f.bio ? `<span class="friend-bio">${esc(f.bio)}</span>` : '';
     return `<div class="friend" data-hay="${esc(hay)}" style="animation-delay:${staggerDelay(i)}">` +
         `<a class="friend-open" href="${href}">` +
-          avatarEl(f, { cls: 'friend-avatar' }) +
+          avatarEl(f, { cls: 'friend-avatar' + (opts.avatarCls ? ' ' + opts.avatarCls : '') }) +
           `<span class="friend-text">` +
             `<span class="friend-name">${esc(f.name)}${fence}</span>` +
             `<span class="friend-user">@${esc(f.username)}</span>` +
@@ -8342,21 +8346,17 @@
               `value="${esc(u.name)}" placeholder="Display name" autocomplete="name" ` +
               `aria-label="Display name">` +
             `<div class="combo-divider" aria-hidden="true"></div>` +
-            `<textarea id="pf-bio" class="combo-note" rows="3" maxlength="160" ` +
+            // Pronouns ride in the bio's half of the box (Zoe, 2026-10-23: fold
+            // them into the bio), a short line over it, since the card shows
+            // them as part of who you are. The placeholder names the field, not
+            // a format, so it never reads as "she/her" expected.
+            `<input id="pf-pronouns" class="combo-sub" type="text" maxlength="40" autocomplete="off" ` +
+              `autocapitalize="none" value="${esc(u.pronouns || '')}" placeholder="Pronouns (optional)" ` +
+              `aria-label="Pronouns">` +
+            `<textarea id="pf-bio" class="combo-note combo-note--under" rows="3" maxlength="160" ` +
               `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
           `</div>` +
           `<p class="field-hint field-hint--combo" id="pf-count"></p>` +
-          // Pronouns: one quiet field of its own rather than a third slot in the
-          // combo box above (that box is specifically title+note, mirroring the
-          // composer — a third unrelated field would break the pairing). A
-          // label names it instead of a placeholder, since a placeholder like
-          // "she/her" would read as a format the field expects rather than one
-          // example among many.
-          `<div class="field">` +
-            `<label for="pf-pronouns">Pronouns</label>` +
-            `<input id="pf-pronouns" type="text" autocomplete="off" autocapitalize="none" ` +
-              `value="${esc(u.pronouns || '')}" aria-label="Pronouns">` +
-          `</div>` +
           // Music links, notifications and privacy sit below the identity as
           // quiet settings, ordered by how far each one reaches. Songs is the
           // smallest and most local — it changes where a tap on this phone
@@ -13044,7 +13044,8 @@
     return `<section class="daily-card community-card" data-community="${esc(c.id)}">` +
         communityPicHtml(c, 'community-card-pic', 52) +
         `<p class="daily-kicker">${esc(communityHandle(c))}` +
-          (mine ? `<span class="daily-sep" aria-hidden="true">·</span>${c.owner === me ? 'Yours' : 'Joined'}` : '') +
+          (mine ? `<span class="daily-sep" aria-hidden="true">·</span>${c.owner === me ? 'Yours' : 'Joined'}`
+            : c.inviteOnly ? `<span class="daily-sep" aria-hidden="true">·</span>Invited` : '') +
         `</p>` +
         `<a class="daily-open" href="${communityRoute(c)}">` +
           `<span class="daily-prompt">${esc(c.name)}</span>` +
@@ -13140,7 +13141,10 @@
       const x = Store.communityPulse(a.id), y = Store.communityPulse(b.id);
       return x < y ? 1 : x > y ? -1 : 0;
     };
-    const all = Store.communities().filter(c => !(c.owner && Blocks.has(c.owner)));
+    // An invite-only circle is offered only to its members and to whoever
+    // holds an invite (circle-privacy.sql); its link still opens for anyone.
+    const all = Store.communities().filter(c => !(c.owner && Blocks.has(c.owner))
+      && (!c.inviteOnly || Store.inCommunity(c.id) || Store.invitedTo(c.id)));
     const mine = all.filter(c => Store.inCommunity(c.id)).sort(byPulse);
     const rest = all.filter(c => !Store.inCommunity(c.id)).sort(byPulse);
     return mine.concat(rest);
@@ -13170,6 +13174,14 @@
         list.map(communityCardHtml).join('') +
         after +
       `</section>`;
+  }
+
+  // What the Invite only switch means, said as what the circle IS right now,
+  // the way Edit profile's privacy hint is.
+  function communityPrivacyHint(inviteOnly) {
+    return inviteOnly
+      ? 'Only people a member invites can join. It stays off Discover for everyone else.'
+      : 'Anyone on Tria can find it on Discover and join.';
   }
 
   // What leaving costs, said before it happens. The last member closes the
@@ -13264,6 +13276,7 @@
     const me = Store.session();
     const inIt = new Set(Store.communityMembers(c.id));
     const invited = (u) => {
+      if (c.inviteOnly && Store.invitedTo(c.id, u)) return true;
       const dm = Store.chatsReady() && Store.chats().find(ch => ch.kind === 'direct' && ch.other === u);
       return !!dm && Store.messagesFor(dm.id).some(m => m.author === me
         && (circleInMessage(m.text) || {}).c === c);
@@ -13298,7 +13311,10 @@
             // Hands itself back on every path, rejection included.
             let res = null;
             try {
-              res = await Store.startDirectChat(u);
+              // An invite-only circle records the invite first (the fact its
+              // join gate checks), then the DM carries the link as ever.
+              res = c.inviteOnly ? await Store.inviteToCommunity(c.id, u) : { ok: true };
+              if (res && res.ok) res = await Store.startDirectChat(u);
               if (res && res.ok) res = await Store.sendMessage(res.id, circleInviteText(c));
             } catch { res = null; }
             delete row.dataset.busy;
@@ -13420,12 +13436,20 @@
         ? `<span class="account-stat">Hosted by ${host.username === me ? 'you' : esc(host.name || host.username)}</span>`
         : '';
       const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
+      // Said to its members; anyone else reads it on the pill below.
+      const fenced = c.inviteOnly && member
+        ?`<span class="account-stat-dot" aria-hidden="true">·</span><span class="account-stat">Invite only</span>` : '';
+      // An invite-only circle you hold no invite to has no Join to offer, so
+      // its place says why, quietly and untappable, the way Requested does.
       const acts = !me
         ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
         : member
           ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
             `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>`
-          : `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`;
+          : Store.canJoinCommunity(c)
+            ? `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`
+            : `<span class="friend-btn pill-quiet community-closed" aria-disabled="true">` +
+                `${svgIcon('lock')}Invite only</span>`;
       return `<div class="account-head">` +
           (c.avatar
             ? `<div class="account-photo" aria-hidden="true">` +
@@ -13439,7 +13463,7 @@
               // the bar's title already says it, and stays on a desktop.
               `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
             `</div>` +
-            (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}</div>` : '') +
+            (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}${fenced}</div>` : '') +
             (c.about ? `<p class="account-bio">${esc(c.about)}</p>` : '') +
           `</div>` +
         `</div>` +
@@ -13458,9 +13482,13 @@
           `<div class="profile-locked">` +
             svgIcon('circle', 'profile-locked-ico') +
             `<p class="profile-locked-line">What’s said here is for this circle.</p>` +
-            `<p class="profile-locked-sub">${Store.isAuthed()
-              ? 'Join to read along and say something. Anyone can.'
-              : 'Make an account, then join to read along.'}</p>` +
+            `<p class="profile-locked-sub">${!Store.isAuthed()
+              ? 'Make an account, then join to read along.'
+              : !Store.canJoinCommunity(c)
+                ? 'It’s invite only. Someone in it can invite you.'
+                : c.inviteOnly
+                  ? 'You’re invited. Join to read along and say something.'
+                  : 'Join to read along and say something. Anyone can.'}</p>` +
           `</div>`;
         return;
       }
@@ -13600,10 +13628,18 @@
   }
 
   /* STARTING ONE, and its host's editor, are the same form: a name and an about
-     in the profile editor's combo box, and (only when starting) the handle its
-     link is made of. A PAGE and not a sheet, for the reason the profile editor
-     is one: the keyboard would cover a sheet's fields. The check in the bar
-     commits, the way New chat and Edit profile commit.
+     in the composer's combo box, (only when starting) the handle its link is
+     made of, and who may join. A PAGE and not a sheet, for the reason the
+     profile editor is one: the keyboard would cover a sheet's fields.
+
+     It is THE COMPOSER'S PAGE since 2026-10-23 (Zoe: "make the page look a bit
+     more like the standard publish"): the serif nameplate kept on the page,
+     the circle's face where the composer's type mark sits (bigger, since it is
+     a picture and a control), and a full-width Start circle at the foot in
+     place of the bar's check. No lede: Discover's Start card already says what
+     a circle is for, and New activity has no explainer either. And no caret on
+     arrival, on touch: the keyboard covering half the page before anyone has
+     decided to type is the post editor's rule too.
 
      The handle follows the name as you type until you touch it, and it is the
      one thing that never changes afterwards, because a link that moves is a
@@ -13621,45 +13657,36 @@
       ? { href: communityRoute(editing), label: editing.name }
       : { href: '#/discover', label: 'Discover' };
     // The photo, on a new circle and in the host's editor alike, once the
-    // column exists (circle-photo-delete.sql).
+    // column exists (circle-photo-delete.sql). Invite only, once its table
+    // does (circle-privacy.sql).
     const photos = Store.communityToolsReady();
+    const privacy = Store.communityPrivacyReady();
     const photoFace = (src) => src
-      ? `<span class="avatar avatar--photo pf-photo-avatar" aria-hidden="true">` +
-          `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 180))}" alt="" decoding="async"></span>`
-      : `<span class="avatar pf-photo-avatar community-pf-mark" aria-hidden="true">${svgIcon('circle')}</span>`;
-    mountToolbar({
-      leading: toolbarBackEl(back.href, back.label),
-      title: editing ? 'Edit circle' : 'New circle',
-      actions: `<button type="submit" form="community-form" id="community-save" ` +
-        `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill" ` +
-        `aria-label="${editing ? 'Save changes' : 'Start circle'}">${svgIcon('check')}</button>`,
-    });
+      ? `<span class="avatar avatar--photo community-face-img" aria-hidden="true">` +
+          `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 76))}" alt="" decoding="async"></span>`
+      : `<span class="avatar community-face-img community-pf-mark" aria-hidden="true">${svgIcon('circle')}</span>`;
+    // No title in the bar: the nameplate is on the page, as on the composer.
+    mountToolbar({ leading: toolbarBackEl(back.href, back.label) });
     if (!Store.communitiesReady()) {
       view.innerHTML = `<section class="view"><p class="feed-empty">Circles aren’t switched on yet.</p></section>`;
       return;
     }
+    const faceBtn = photos
+      ? `<button type="button" class="community-face" id="cf-photo-pick" ` +
+          `aria-label="Change the circle’s photo" title="Change the circle’s photo">` +
+          `<span id="cf-photo-face">${photoFace(editing && editing.avatar)}</span>` +
+          `<span class="community-face-edit" aria-hidden="true">${svgIcon('camera')}</span>` +
+        `</button>`
+      : '';
+    const inviteOnlyNow = !!(editing && editing.inviteOnly);
     view.innerHTML =
       `<section class="view view--community-form">` +
-        `<h1 class="visually-hidden">${editing ? 'Edit circle' : 'Start a circle'}</h1>` +
-        `<form id="community-form" class="pf-form community-form" novalidate>` +
-          (editing ? '' :
-            `<p class="community-form-lede">Create a circle for a hobby, an interest or an event. ` +
-              `Anyone on Tria can join via the Discover page.</p>`) +
-          // Its photo, the host's to change (circle-photo-delete.sql), drawn
-          // and cropped exactly as Edit profile does a face: the camera on the
-          // rim, an inline square crop in its place once a file is picked.
+        mastheadEl('', editing ? 'Edit circle' : 'New circle', faceBtn, { keep: true }) +
+        `<form id="community-form" class="composer community-form" novalidate>` +
+          // The crop, in the form's own column, once a file is picked: the
+          // face in the nameplate steps aside while it is open.
           (photos
-            ? `<div class="pf-photo" id="cf-photo">` +
-                `<div class="pf-photo-figure">` +
-                  `<span id="cf-photo-face">${photoFace(editing && editing.avatar)}</span>` +
-                  `<div class="pf-photo-edit" id="cf-photo-pick" role="button" tabindex="0" ` +
-                    `aria-label="Change the circle’s photo" title="Change the circle’s photo">` +
-                    svgIcon('camera', 'pf-photo-ico') + `</div>` +
-                `</div>` +
-              `</div>` +
-              `<p class="community-photo-off"${editing && editing.avatar ? '' : ' hidden'}>` +
-                `<button type="button" id="cf-photo-off">Remove photo</button></p>` +
-              `<input id="cf-file" type="file" accept="image/*" hidden>` +
+            ? `<input id="cf-file" type="file" accept="image/*" hidden>` +
               `<div class="crop-stage" id="cf-cropstage" hidden>` +
                 `<div class="crop crop--avatar" id="cf-crop">` +
                   `<img id="cf-cropimg" alt="" draggable="false">` +
@@ -13687,7 +13714,21 @@
                 `</div>` +
               `</div>` +
               `<p class="field-hint" id="cf-slug-hint"></p>`) +
+          // Who may join: Edit profile's Private account, worn by a room. The
+          // hint says what the circle IS right now, as that one does.
+          (privacy
+            ? `<div class="push-toggle-row">` +
+                `<span class="push-toggle-label" id="cf-invite-label">Invite only</span>` +
+                `<button type="button" class="push-toggle" role="switch" id="cf-invite-only" ` +
+                  `aria-checked="${inviteOnlyNow}" aria-labelledby="cf-invite-label cf-invite-hint">` +
+                  `<span class="push-toggle-knob" aria-hidden="true"></span>` +
+                `</button>` +
+              `</div>` +
+              `<p class="field-hint" id="cf-invite-hint">${communityPrivacyHint(inviteOnlyNow)}</p>`
+            : '') +
           `<p class="composer-error" id="cf-error" role="alert"></p>` +
+          `<button class="composer-submit composer-post publish-fill" type="submit" id="community-save">` +
+            `${editing ? 'Save' : 'Start circle'}</button>` +
         `</form>` +
       `</section>`;
 
@@ -13697,22 +13738,20 @@
     const slugEl = form.querySelector('#cf-slug');
     const hintEl = form.querySelector('#cf-slug-hint');
     const errEl = form.querySelector('#cf-error');
-    const saveBtn = document.getElementById('community-save');
+    const saveBtn = form.querySelector('#community-save');
+    const inviteBtn = form.querySelector('#cf-invite-only');
+    const inviteOnly = () => !!inviteBtn && inviteBtn.getAttribute('aria-checked') === 'true';
     let slugTouched = false;
     // The photo's pending answer: a cropper while a new one is being framed, or
-    // `photoOff` once Remove was pressed. Neither writes until the check.
+    // `photoOff` once Remove was pressed. Neither writes until the commit.
     let cropper = null;
     let photoOff = false;
     stopActiveCrop = () => { if (cropper) cropper.destroy(); };
 
     const slugNow = () => (slugEl ? slugEl.value.trim().toLowerCase() : '');
-    const ready = () => {
-      const name = nameEl.value.trim();
-      if (!name) return false;
-      if (editing) return !!cropper || photoOff
-        || name !== editing.name || aboutEl.value.trim() !== editing.about;
-      return !Store.slugProblem(slugNow());
-    };
+    const changed = () => !!editing && (!!cropper || photoOff
+      || nameEl.value.trim() !== editing.name || aboutEl.value.trim() !== editing.about
+      || inviteOnly() !== !!editing.inviteOnly);
     const sync = () => {
       if (slugEl && !slugTouched) slugEl.value = Store.slugFrom(nameEl.value);
       if (hintEl) {
@@ -13723,7 +13762,6 @@
           : 'Its link, triaonline.com/c/…, which can’t change later.');
         hintEl.classList.toggle('field-hint--warn', !!problem);
       }
-      saveBtn?.classList.toggle('toolbar-commit--idle', !ready());
     };
     slugEl?.addEventListener('input', () => {
       slugTouched = true;
@@ -13734,63 +13772,84 @@
     });
     form.addEventListener('input', sync);
     sync();
-    if (!editing) requestAnimationFrame(() => nameEl.focus());
+    if (!editing && finePointer()) nameEl.focus();
+
+    inviteBtn?.addEventListener('click', () => {
+      const on = !inviteOnly();
+      inviteBtn.setAttribute('aria-checked', String(on));
+      form.querySelector('#cf-invite-hint').textContent = communityPrivacyHint(on);
+    });
 
     if (photos) {
       const file = form.querySelector('#cf-file');
       const stage = form.querySelector('#cf-cropstage');
-      const row = form.querySelector('#cf-photo');
-      const offRow = form.querySelector('.community-photo-off');
-      const face = form.querySelector('#cf-photo-face');
+      const pick = view.querySelector('#cf-photo-pick');
+      const face = view.querySelector('#cf-photo-face');
+      const hasPhoto = () => !!cropper || (!photoOff && !!(editing && editing.avatar));
       // Clearing first is what lets re-picking the same file fire `change`.
       const openPicker = () => { file.value = ''; file.click(); };
-      const pickKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } };
-      for (const el of [form.querySelector('#cf-photo-pick'), form.querySelector('#cf-replace')]) {
-        el.addEventListener('click', openPicker);
-        el.addEventListener('keydown', pickKey);
-      }
-      form.querySelector('#cf-photo-off').addEventListener('click', () => {
-        photoOff = true;
-        face.innerHTML = photoFace(null);
-        offRow.hidden = true;
-        sync();
+      // With a photo on, the face asks which: another, or none. Without one it
+      // goes straight to the picker, as Edit profile's camera does.
+      pick.addEventListener('click', () => {
+        if (!hasPhoto()) { openPicker(); return; }
+        openSheet({
+          title: 'Circle photo',
+          items: [
+            { label: 'Choose another', icon: 'camera', run: openPicker },
+            { label: 'Remove photo', icon: 'trash', danger: true, run: () => {
+              if (cropper) { cropper.destroy(); cropper = null; }
+              stage.hidden = true;
+              pick.hidden = false;
+              photoOff = !!(editing && editing.avatar);
+              face.innerHTML = photoFace(null);
+            } },
+          ],
+        });
+      });
+      const replace = form.querySelector('#cf-replace');
+      replace.addEventListener('click', openPicker);
+      replace.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); }
       });
       file.addEventListener('change', () => {
         const f = file.files && file.files[0];
         if (!f) return;
         errEl.textContent = '';
-        if (saveBtn) saveBtn.disabled = true;      // held until the crop decodes
+        saveBtn.disabled = true;      // held until the crop decodes
         const reader = new FileReader();
         reader.onerror = () => {
-          if (saveBtn) saveBtn.disabled = false;
+          saveBtn.disabled = false;
           errEl.textContent = 'Couldn’t read that file, try another photo.';
         };
         reader.onload = () => {
-          row.hidden = true;
-          offRow.hidden = true;
+          pick.hidden = true;
           stage.hidden = false;
           photoOff = false;
           if (cropper) cropper.destroy();
           cropper = initCropper(form.querySelector('#cf-crop'), form.querySelector('#cf-cropimg'), reader.result, {
-            onReady: () => { if (saveBtn) saveBtn.disabled = false; },
+            onReady: () => { saveBtn.disabled = false; },
             onError: () => {
-              if (saveBtn) saveBtn.disabled = false;
+              saveBtn.disabled = false;
               cropper = null;
               stage.hidden = true;
-              row.hidden = false;
+              pick.hidden = false;
               errEl.textContent = 'Couldn’t open that photo, try another one.';
-              sync();
             },
           });
-          sync();
         };
         reader.readAsDataURL(f);
       });
     }
 
+    // The button is always live, as the composer's Share is, and says what is
+    // missing when it is pressed too early.
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!ready() || !saveBtn || saveBtn.disabled) return;
+      if (saveBtn.disabled) return;
+      if (!nameEl.value.trim()) { errEl.textContent = 'Give it a name first.'; return; }
+      if (!editing && Store.slugProblem(slugNow())) { errEl.textContent = Store.slugProblem(slugNow()); return; }
+      // Nothing changed in the editor: Save is simply the way back.
+      if (editing && !changed()) { if (canPop) history.back(); else go(communityRoute(editing)); return; }
       if (BLOCKLIST.hits(aboutEl.value, nameEl.value)) {
         errEl.textContent = 'That looks like it breaks our community guidelines. Please revise it.';
         return;
@@ -13811,6 +13870,10 @@
           if (name !== editing.name || about !== editing.about) {
             const res = await Store.updateCommunity(editing.id, { name, about }).catch(() => null);
             if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t save that, try again.'; return; }
+          }
+          if (inviteBtn && inviteOnly() !== !!editing.inviteOnly) {
+            const res = await Store.setCommunityPrivacy(editing.id, inviteOnly()).catch(() => null);
+            if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t change who can join, try again.'; return; }
           }
           // The photo goes out behind the navigation, optimistic like a face:
           // the circle's head already wears it, and a refusal says so.
@@ -13835,7 +13898,7 @@
         }
         const slug = slugNow();
         const res = await Store.createCommunity({
-          slug, name: nameEl.value.trim(), about: aboutEl.value.trim(),
+          slug, name: nameEl.value.trim(), about: aboutEl.value.trim(), inviteOnly: inviteOnly(),
         }).catch(() => null);
         if (!res || !res.ok) {
           errEl.textContent = (res && res.error) || 'Couldn’t start that circle, try again.';
@@ -13851,6 +13914,7 @@
         // In place of the form, so back from the new circle is where you were
         // before you started it, not a form that already did its job.
         location.replace(`#/c/${encodeURIComponent(slug)}`);
+        if (res.privacyError) toast(res.privacyError);
         if (pending) pending.then(r => {
           if (!(r && r.ok)) toast((r && r.error) || 'Couldn’t save the photo, try again.');
           communityRepaint?.();
@@ -14096,7 +14160,7 @@
         ? `<section class="discover-people" aria-label="People">` +
             `<p class="discover-kicker">People</p>` +
             `<div class="friends-list">` +
-              people.map((u, i) => friendRowHtml(u, i, { locked: isLocked(u.username) })).join('') +
+              people.map((u, i) => friendRowHtml(u, i, { locked: isLocked(u.username), avatarCls: 'discover-person-avatar' })).join('') +
             `</div>` +
             (morePeople ? `<button class="pill-quiet discover-more" type="button">More people</button>` : '') +
           `</section>`
@@ -16031,8 +16095,10 @@
   // the field stays, so changing your mind is a second search rather than a
   // clear and a search.
   function songFieldHtml({ open = false } = {}) {
+    // No "Song" label on Music's own page (Zoe, 2026-10-23): the page is the
+    // song search, and the field's own placeholder and aria-label say so.
     return `<div class="field song-field" id="c-song-row"${open ? '' : ' hidden'}>` +
-        `<label for="c-song-q">Song</label>` +
+        (open ? '' : `<label for="c-song-q">Song</label>`) +
         `<div class="song-now" id="c-song-now" hidden></div>` +
         `<input id="c-song-q" class="song-input" type="search" ` +
           `placeholder="Search a song or album, or paste a link" ` +
@@ -16071,7 +16137,7 @@
             `<input id="c-date" type="date" placeholder="mm/dd/yyyy" min="${dayMT(Date.now())}">` +
             `<input id="c-time" type="time" aria-label="Time" placeholder="--:-- --">` +
           `</div>` +
-          `<p class="field-hint">Optional · dated plans sort by their day.</p>` +
+          `<p class="field-hint">The time is optional.</p>` +
         `</div>` +
       `</div>`;
   }
@@ -17893,8 +17959,10 @@
       if (!data.location) {
         errEl.textContent = 'Add a place so people know where to show up.'; return;
       }
-      if (data.eventTime && !data.eventDate) {
-        errEl.textContent = 'Add a date to go with that time.'; return;
+      // A plan needs its day (Zoe, 2026-10-23): it is what sorts it, reminds
+      // its people and puts it in their calendars. The time stays optional.
+      if (!data.eventDate) {
+        errEl.textContent = 'Add a date so people know when to show up.'; return;
       }
     } else if (pubType === 'photo') {
       // A Frame is a full post that carries a photo/clip: keep the headline and the
@@ -17993,12 +18061,13 @@
       return;
     }
     clearPostProgress();
-    // Publishing is the one thing in the app that earns the full success
-    // notification rather than an impact: it's the end of a piece of work, not
-    // an acknowledgement of a tap. A photo or clip may have been uploading for
-    // a while with the phone face-down, which is exactly when a buzz carries
-    // information a screen can't.
-    hapticEvent('SUCCESS');
+    // Publishing earns the twinkle (Zoe, 2026-10-23: the new face's sparkly
+    // haptic, on new posts too, in place of the one success buzz). It's the
+    // end of a piece of work, not an acknowledgement of a tap, and it lands
+    // while the card's own stars burst in (celebratePost). A photo or clip may
+    // have been uploading for a while with the phone face-down, which is
+    // exactly when a buzz carries information a screen can't.
+    hapticTwinkle();
     cropper = null;
     stills = [];
     videoCapture = null;
@@ -18075,7 +18144,7 @@
       if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
       return;
     }
-    hapticEvent('SUCCESS');
+    hapticTwinkle();
     quotingPost = null;
     // The quote lands at the top of the home feed and sparkles in like any other
     // post — which is the whole reason this ends the same way createPost's path
@@ -18152,8 +18221,10 @@
       if (!data.location) {
         errEl.textContent = 'Add a place so people know where to show up.'; return;
       }
-      if (data.eventTime && !data.eventDate) {
-        errEl.textContent = 'Add a date to go with that time.'; return;
+      // A plan needs its day (Zoe, 2026-10-23): it is what sorts it, reminds
+      // its people and puts it in their calendars. The time stays optional.
+      if (!data.eventDate) {
+        errEl.textContent = 'Add a date so people know when to show up.'; return;
       }
     } else if (post.type === 'note') {
       data.title = val('e-title');
@@ -18734,7 +18805,7 @@
   document.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || prefersReduced()) return;
     const el = e.target.closest?.(PRESS_TARGETS);
-    if (!el || el.disabled) return;
+    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
     pressRelease();                      // a stray press whose pointerup got lost
     // Same grammar, sized to the object: rows barely compress, buttons more.
     const w = el.offsetWidth;

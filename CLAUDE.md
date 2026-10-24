@@ -93,6 +93,36 @@ link, "Add me on Tria"); an account with no friends and no songs gets no On
 repeat rail; empty Chats offers Start a chat; your own empty profile offers
 Write your first post and, while bare, Add a photo and bio.
 
+## 2.0's second pass: invite-only circles, the circle form, the profile (2026-10-23)
+
+**A circle can be INVITE ONLY** (Zoe: "add privacy options like profile
+settings ... invite only circles should be a thing"), `supabase/circle-privacy.sql`,
+**NOT run**. `communities.invite_only`, a `community_invites` table, and the
+rule as a BEFORE INSERT trigger on `community_members` (`community_invite_gate`),
+so neither `join_community` nor `create_community` is restated and the two
+unrun circle files can go either side of it. The host flips it on New circle
+and Edit circle (a Private account switch, `communityPrivacyHint`); a new one is
+created then switched (`Store.createCommunity`'s `inviteOnly`). Any member's
+Invite records the invite (`invite_to_community`, friends only) before the DM;
+the join uses it up. An invite-only circle is off Discover and out of search
+except to members and invitees ("Invited" on its card), its link still opens,
+and a stranger's pill says "Invite only" with no tap.
+
+**New circle is the composer's page**: the serif nameplate kept on the page,
+the circle's face where the type mark sits (76px, the camera on its rim; with a
+photo on, a tap asks Choose another or Remove photo), a full-width Start circle
+(Save in the editor) at the foot, no bar check, no lede, no caret on arrival on
+touch.
+
+**Your own profile wears Edit profile and Share profile** as two quiet pills
+under the identity; the ••• keeps Connect to calendar and About. **Pronouns
+live in the bio's half of Edit profile's combo box** (`.combo-sub`, muted).
+**A plan needs a date** (the time stays optional), in the composer and the
+editor. **Publishing twinkles** (`hapticTwinkle`, was one SUCCESS). Music's
+page has no "Song" label and its pick wears the feed's 128px sleeve. Discover's
+people cards have 80px faces (the bio clamps to two lines to keep 4:5) and its
+search rows 56px.
+
 ## 2.0 is circles (2026-10-22)
 
 **A circle is a room for an interest** that anyone can start and anyone can
@@ -543,6 +573,10 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   "Only the circle's host can do that." where it answered PGRST202. Were the
   column ever missing again, `Store.communityToolsReady` is false: no photo on
   New circle or in the editor, and no Delete circle in the host's menu.
+  **`circle-privacy.sql` is NOT run** (written 2026-10-23): anon
+  `GET /rest/v1/community_invites?select=user_id&limit=1` answers PGRST205
+  (a 404 in the console on every load, the probe itself) until it is, and
+  `Store.communityPrivacyReady` is false: no Invite only switch anywhere.
 
 ## Copy style
 

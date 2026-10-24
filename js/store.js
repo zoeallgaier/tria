@@ -75,10 +75,13 @@ const Store = (() => {
   //   communitiesReady: whether add-circles.sql has run (the table answered)
   //   communityToolsReady: whether circle-photo-delete.sql has run (a circle's
   //     photo and its host's Delete)
+  //   communityInvites: [{communityId, user(username), by(username)}] — mine, and
+  //     those of circles I am in (circle-privacy.sql)
+  //   communityPrivacyReady: whether circle-privacy.sql has run (invite only)
   const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
                          communities: [], communityMembers: [], communitiesReady: false,
-                         communityToolsReady: false });
+                         communityToolsReady: false, communityInvites: [], communityPrivacyReady: false });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -353,7 +356,7 @@ const Store = (() => {
      has settled, off the frames the paint is using, and never blocks anything:
      every failure here means only that the next launch waits like it used to. */
   const KEEP_KEY = 'world';
-  const KEEP_V = 4;                    // bump when state's shape changes
+  const KEEP_V = 5;                    // bump when state's shape changes
   let keepOn = false;
   let fresh = Promise.resolve(false);  // true once a kept launch's real load changed anything
   const whenFresh = () => fresh;
@@ -599,11 +602,15 @@ const Store = (() => {
       // How many are in each circle, for a reader who can't see the rosters
       // (public-circle-counts.sql). Numbers only, never names.
       readCommunitySizes(),
+      // Invites to invite-only circles (circle-privacy.sql): mine, and those of
+      // the circles I am in. A missing table is the answer to whether a circle
+      // can be invite only yet.
+      readAll('community_invites', ['community_id', 'user_id']),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs] = read;
+    const [u, p, c, l, cl, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -726,6 +733,7 @@ const Store = (() => {
     state.blocks = (bl.data || []).map(row => nameById.get(row.blocked)).filter(Boolean);
     applyChats(ch, nameById);
     applyCommunities(cc, cm, nameById);
+    applyCommunityInvites(ci, nameById);
     if (!ct.error) state.communityToolsReady = true;
     else if (ct.error.code === '42703' || isMissing(ct.error)) state.communityToolsReady = false;
     // A missing function reads as no counts, and the page draws none.
@@ -2910,15 +2918,37 @@ const Store = (() => {
     state.communitiesReady = true;
     state.communities = (cc.data || []).map(row => ({
       id: row.id, slug: row.slug, name: row.name || row.slug, about: row.about || '',
-      avatar: row.avatar || null,
+      avatar: row.avatar || null, inviteOnly: !!row.invite_only,
       owner: nameById.get(row.owner) || null, _ts: row.created_at,
     }));
     if (!cm.error) state.communityMembers = (cm.data || []).map(row => ({
       communityId: row.community_id, user: nameById.get(row.user_id), _ts: row.joined_at,
     })).filter(x => x.user);
   }
+  // The communityToolsReady latch, read off the invites table itself.
+  function applyCommunityInvites(ci, nameById) {
+    if (!ci) return;
+    if (ci.error) {
+      if (isMissing(ci.error)) state.communityPrivacyReady = false;
+      return;
+    }
+    state.communityPrivacyReady = true;
+    state.communityInvites = (ci.data || []).map(row => ({
+      communityId: row.community_id, user: nameById.get(row.user_id),
+      by: nameById.get(row.invited_by) || null,
+    })).filter(x => x.user);
+  }
   const communitiesReady = () => !!state.communitiesReady;
   const communityToolsReady = () => !!state.communityToolsReady;
+  const communityPrivacyReady = () => !!state.communityPrivacyReady;
+  // Holds an invite to this circle: me by default, or one of my friends (the
+  // Invite sheet's question, answerable for the circles I am in).
+  const invitedTo = (id, username) => {
+    const who = username || state.session;
+    return !!who && state.communityInvites.some(x => x.communityId === id && x.user === who);
+  };
+  // May I walk in? An open circle, or an invite-only one I hold an invite to.
+  const canJoinCommunity = (c) => !!c && (!c.inviteOnly || invitedTo(c.id) || c.owner === state.session);
   const communities = () => state.communities;
   // By id or by slug: a route carries the slug, a post carries the id.
   const community = (key) => {
@@ -2983,12 +3013,15 @@ const Store = (() => {
     const mark = pendingWrites.length;
     loadsInFlight++;
     try {
-      const [cc, cm] = await Promise.all([
+      const [cc, cm, ci] = await Promise.all([
         readAll('communities', ['created_at', 'id']),
         readAll('community_members', ['community_id', 'user_id']),
+        readAll('community_invites', ['community_id', 'user_id']),
       ]);
       if (gen !== worldGen) return;
-      applyCommunities(cc, cm, nameMap());
+      const names = nameMap();
+      applyCommunities(cc, cm, names);
+      applyCommunityInvites(ci, names);
       for (const [key, fn] of pendingWrites.slice(mark)) state[key] = fn(state[key]);
     } finally {
       loadsInFlight--;
@@ -2999,13 +3032,46 @@ const Store = (() => {
     await reloadCommunities().catch(() => {});
   }
 
-  async function createCommunity({ slug, name, about }) {
+  // An invite-only circle is started and then switched, in the one tap
+  // (circle-privacy.sql keeps create_community's signature). A switch that
+  // fails leaves the circle open, and `privacyError` says so.
+  async function createCommunity({ slug, name, about, inviteOnly = false }) {
     if (!state.session) return { ok: false, error: 'You need to be signed in.' };
     const { data, error } = await sb.rpc('create_community',
       { p_slug: slug, p_name: name, p_about: about || '' });
     if (error) return { ok: false, error: communityError(error, 'Couldn’t start that circle, try again.') };
+    let privacyError = null;
+    if (inviteOnly && communityPrivacyReady()) {
+      const { error: pe } = await sb.rpc('set_community_privacy', { p_community: data, p_invite_only: true });
+      if (pe) privacyError = communityError(pe, 'Couldn’t make it invite only. It’s open for now.');
+    }
     await afterCommunityWrite();
-    return { ok: true, id: data, slug };
+    return { ok: true, id: data, slug, privacyError };
+  }
+  // The host's switch, optimistic, put back on a refusal.
+  async function setCommunityPrivacy(id, inviteOnly) {
+    const before = community(id);
+    if (!before) return { ok: false, error: 'That circle has closed.' };
+    const patch = (v) => write('communities', cs => cs.map(c =>
+      (c.id === id ? Object.assign({}, c, { inviteOnly: v }) : c)));
+    patch(!!inviteOnly);
+    const { error } = await sb.rpc('set_community_privacy', { p_community: id, p_invite_only: !!inviteOnly });
+    if (error) {
+      patch(before.inviteOnly);
+      return { ok: false, error: communityError(error, 'Couldn’t change who can join, try again.') };
+    }
+    return { ok: true };
+  }
+  // A member inviting a friend to an invite-only circle: the fact the join
+  // gate checks. The DM that carries the link is the app's, after this.
+  async function inviteToCommunity(id, username) {
+    const me = state.session;
+    if (!me) return { ok: false, error: 'You need to be signed in.' };
+    const { error } = await sb.rpc('invite_to_community', { p_community: id, p_user: idOf(username) });
+    if (error) return { ok: false, error: communityError(error, 'Couldn’t invite them, try again.') };
+    const row = { communityId: id, user: username, by: me };
+    write('communityInvites', xs => upsert(xs, row, x => x.communityId === id && x.user === username));
+    return { ok: true };
   }
   async function updateCommunity(id, { name, about }) {
     const { error } = await sb.rpc('update_community',
@@ -3028,6 +3094,8 @@ const Store = (() => {
       write('communityMembers', ms => ms.filter(m => !same(m)));
       return { ok: false, error: communityError(error, 'Couldn’t join, try again.') };
     }
+    // The invite that let me in is used up (circle-privacy.sql).
+    write('communityInvites', xs => xs.filter(x => !(x.communityId === id && x.user === me)));
     await afterCommunityWrite();
     // Its posts were fenced from this reader until a moment ago.
     await loadWorld().catch(() => {});
@@ -3885,6 +3953,7 @@ const Store = (() => {
     communityPosts, communityPulse, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,
+    communityPrivacyReady, invitedTo, canJoinCommunity, setCommunityPrivacy, inviteToCommunity,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,

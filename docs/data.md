@@ -1457,6 +1457,23 @@ photo and Delete, confirmed run 2026-10-23, probe `[{"avatar":null}]` on
 out of "existing audience and group chat features", and it is exactly those two
 things with a page in front of them.
 
+**Invite only** (`supabase/circle-privacy.sql`, 2026-10-23, NOT run when
+written). `communities.invite_only` is the host's switch (`set_community_privacy`)
+and `community_invites` holds who may walk into one. The rule is a BEFORE INSERT
+trigger on `community_members`, not a new `join_community`, for two reasons:
+every way in meets it, and `circle-join-news.sql` (which restates
+`join_community`) can be run before or after it without undoing it. A row that
+is already there passes, so `join_community`'s ON CONFLICT repair still answers
+a member quietly; the host always passes; an AFTER INSERT trigger uses the
+invite up. `create_community` keeps its three-argument signature (a fourth
+would leave an overload for `drop-circle-chats.sql` to collide with), so a new
+invite-only circle is created and then switched in the same tap, and a switch
+that fails says the circle is open for now. Invites are readable by the invitee
+and by the circle's members (the Invite sheet's "invited"), granted to anon so
+a signed-out read is a clean `[]`. The rows stay readable to anyone, like a
+private profile's card: the app keeps an invite-only circle off Discover and
+out of search unless you are in it or hold an invite.
+
 **IN CODE IT IS A `community`**, in the schema, the store, app.js and the CSS
 alike, because `circle` already means your mutual friends: `posts.audience =
 'circle'`, My Circle, `#/friends/<name>`. A row carrying `audience = 'circle'`
