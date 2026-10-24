@@ -5494,6 +5494,10 @@ button.poll-option:disabled { cursor: default; }
 /* The friends stat is a live button — opens their circle. The tap hint is a
    quiet underline on hover. */
 .account-stat--friends { cursor: pointer; }
+/* A circle's host, a link to them, worn as an @mention is (.mention): bold, in
+   the reader's own colour, so a name you can tap reads the same everywhere. */
+.account-stat-host { font-weight: 700; color: var(--mention-ink); text-decoration: none; }
+@media (hover: hover) { .account-stat-host:hover { color: var(--muted); } }
 @media (hover: hover) {
   .account-stat--friends:hover .account-stat-label {
     color: var(--text);

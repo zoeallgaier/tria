@@ -13436,7 +13436,10 @@
               `<span class="account-stat-label">${memberWord(n)}</span>` +
             `</span>`;
       const hostedBy = host
-        ? `<span class="account-stat">Hosted by ${host.username === me ? 'you' : esc(host.name || host.username)}</span>`
+        // The host's name is the way to them (Zoe, 2026-10-23), yours to your own.
+        ? `<span class="account-stat">Hosted by ` +
+            `<a class="account-stat-host" href="${host.username === me ? '#/profile' : `#/u/${esc(encodeURIComponent(host.username))}`}">` +
+            `${host.username === me ? 'you' : esc(host.name || host.username)}</a></span>`
         : '';
       const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
       // Said to its members; anyone else reads it on the pill below.
