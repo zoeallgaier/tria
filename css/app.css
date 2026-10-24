@@ -7591,6 +7591,10 @@ button.poll-option:disabled { cursor: default; }
 .chat-row--new .chat-row-name { font-weight: 700; }
 .chat-row--new .chat-row-preview { color: var(--text); font-weight: 500; }
 .chat-row--new .notif-dot { opacity: 1; }
+/* A read chat's dot leaves the row: held invisible, it kept its 7px and the
+   row's gap past the time and the preview, so their right edge sat ~20px
+   further in than the face's left. */
+.chat-row:not(.chat-row--new) .notif-dot { display: none; }
 .chat-note {
   margin-block: 0 1rem;             /* inline stays the shared column's auto */
   font-size: 0.9rem;
