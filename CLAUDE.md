@@ -167,6 +167,9 @@ alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's
 one multi-beat buzz), and **so does every new face** (Zoe, 2026-10-23): your
 own photo from Edit profile and a circle's from its editor (`celebrateArrival`);
 your own photo's stars are your `--heart`, a circle's stay the brand's.
+**A song you share lands the same stars** on your On repeat square, in your
+`--heart` (Zoe, 2026-10-24; `paintOnRepeat` takes `justPostedId`, stars only,
+since publishing already twinkled).
 The burst waits for the face to decode, and a face just uploaded keeps drawing
 its own crop for the session (`Store.localFace`, read by `sizedSrc`), so it
 never loads twice, and an empty circle offers its first post in Discover's

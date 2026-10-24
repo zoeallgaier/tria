@@ -6388,15 +6388,25 @@
     const host = view.querySelector('#np-host');
     if (!host) return;
     const html = nowPlayingEl();
-    if (host.dataset.sig === html) return;
-    host.dataset.sig = html;
-    host.innerHTML = html;
-    host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
-    host.querySelector('[data-np="mine"]')?.addEventListener('click', openMySong);
-    host.querySelectorAll('.np-item--post').forEach(item => {
-      const post = Store.posts().find(p => String(p.id) === item.dataset.post);
-      if (post) wireLikes(item, post);
-    });
+    if (host.dataset.sig !== html) {
+      host.dataset.sig = html;
+      host.innerHTML = html;
+      host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
+      host.querySelector('[data-np="mine"]')?.addEventListener('click', openMySong);
+      host.querySelectorAll('.np-item--post').forEach(item => {
+        const post = Store.posts().find(p => String(p.id) === item.dataset.post);
+        if (post) wireLikes(item, post);
+      });
+    }
+    // A song just shared is in no feed, so it lands here as your square, and
+    // the square gets a new face's stars in your --heart (Zoe: "like updating
+    // pfps"). Stars only: publishing has already twinkled. Consumed here so
+    // renderFeed doesn't look for a card that will never be drawn.
+    if (justPostedId != null && justPostedId === String(myWeekSong()?.id)) {
+      justPostedId = null;
+      const art = host.querySelector('.np-mine .np-art');
+      if (art && !prefersReduced()) setTimeout(() => burstFace(art, true), 200);
+    }
   }
 
   // Your own square: play it, swap it for another, or take it down early.
