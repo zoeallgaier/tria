@@ -2426,6 +2426,18 @@ const Store = (() => {
       const ours = edgeTs(me, u);
       evts.push({ kind: 'follow', user: u, back: !!ours && theirs > ours, _ts: theirs });
     }
+    // Someone joining a circle I host (Zoe, 2026-10-23). The whole roster is in
+    // the cache with its joined_at, so this is a read like everything above. My
+    // own row is the circle being started, not news.
+    if (state.communities.length) {
+      const rosters = groupOf(state.communityMembers, 'communityId');
+      for (const c of state.communities) {
+        if (c.owner !== me) continue;
+        for (const m of rosters.get(c.id) || NO_ROWS)
+          if (m.user !== me && m._ts)
+            evts.push({ kind: 'circlejoin', communityId: c.id, user: m.user, _ts: m._ts });
+      }
+    }
     return evts.sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
   }
 

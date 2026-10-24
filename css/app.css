@@ -9830,7 +9830,7 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .view--discover .daily-card { padding-inline: 0.8rem; }
 .view--discover .community-card-pic { right: 0.8rem; }
 
-/* PEOPLE, UNDER START A CIRCLE (Zoe, 2026-10-23). A sideways rail of 4:5 cards in
+/* PEOPLE, UNDER THE CIRCLES (Zoe, 2026-10-23; first under Start a circle). A sideways rail of 4:5 cards in
    the daily card's flat material, 200px across (Zoe: "just bios. scale cards
    appropriately"), so a phone shows one and most of the next. On a phone it
    bleeds to the screen's edges so a card scrolls off the glass rather than

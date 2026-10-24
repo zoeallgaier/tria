@@ -1477,7 +1477,7 @@ a repost of a circle post outright.
 
 **The chat.** Each circle has one chat, `kind = 'community'`, made by
 `create_community`. Its roster is the circle's, and the DATABASE keeps it so:
-`community_member_joined` seats a new member (muted), `community_member_left`
+`community_member_joined` seats a new member, `community_member_left`
 takes them out, passes the circle to the longest-standing member if the host
 left, and closes it if nobody is left. Leaving the chat on its own is refused
 ("chat members delete own" now excludes the kind), and `add_chat_members` /
@@ -1485,10 +1485,18 @@ left, and closes it if nobody is left. Leaving the chat on its own is refused
 lists cannot part. In the app, a circle chat's People is the circle's members
 sheet and its Leave is "Leave circle".
 
-**Muted on joining** is Claude's call, flagged for Zoe: a circle can be a room
-of strangers, and a buzz per message from all of them is the opposite of what
-Tria is for. The chat still bolds when something is new; it just never lights
-the tab or pushes until you unmute it.
+**Not muted on joining** (Zoe, 2026-10-23, "to simplify";
+`circle-join-news.sql`). add-circles.sql seated every member muted, the host
+of a new circle too, on the argument that a room of strangers should not buzz.
+Now a seat is a seat, and the chat's ••• mutes it. Rows seated muted before the
+migration stay muted.
+
+**The host hears who joins.** Updates draws a row per join for each circle you
+host (`Store.notifications`, kind `circlejoin`, off the roster's `joined_at`,
+which the cache already holds), walking to the circle; the push function sends
+the same news on the `community_members` insert ("Ana joined c/dnd"). Your own
+row, the circle being started, is neither. An heir inherits the ledger of every
+earlier join, since nothing records when a circle changed hands.
 
 **Where a circle's posts are read.** On the circle's page and their own post
 page, and nowhere else. `Store.feed` and `Store.postsBy` drop them (and

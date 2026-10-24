@@ -13133,16 +13133,16 @@
       .sort((a, b) => b.s - a.s).map(x => x.c);
   }
 
-  // `between` is whatever Discover puts under the Start card and over the
-  // circles themselves (the people rail); it still shows with no circles at all.
-  function communitiesSectionHtml(list, { search = false, between = '' } = {}) {
-    if (!Store.communitiesReady()) return between;
+  // `after` is whatever Discover puts under the circles themselves (the people
+  // rail); it still shows with no circles at all.
+  function communitiesSectionHtml(list, { search = false, after = '' } = {}) {
+    if (!Store.communitiesReady()) return after;
     if (search && !list.length) return '';
     return `<section class="communities" aria-label="Circles">` +
         // Searching, it is captioned like People and Posts above it.
         (search ? `<p class="discover-kicker">Circles</p>` : communityStartHtml()) +
-        between +
         list.map(communityCardHtml).join('') +
+        after +
       `</section>`;
   }
 
@@ -13432,8 +13432,7 @@
         }
         if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
         hapticTap('LIGHT');
-        // Circle chats start muted (add-circles.sql), so say where the bell is.
-        toast(`You’re in. Its chat starts muted.`);
+        toast(`You’re in.`);
         if (feedEl.isConnected) paint();
       });
     }
@@ -13956,8 +13955,8 @@
       // Whoever is on the rail now stays on it for the rest of this visit.
       rail.forEach(x => railKept.add(x.u.username));
       const railHtml = peopleRailHtml(rail);
-      // The rail sits under the Start a circle card, over the circles (Zoe).
-      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q, between: railHtml });
+      // The rail sits under the circles (Zoe, 2026-10-23; it was over them).
+      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q, after: railHtml });
       const matched = q ? peopleMatching(q) : [];
       const people = allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
       const morePeople = matched.length > people.length;
@@ -14194,8 +14193,9 @@
   function notifItemHtml(n, lastSeen) {
     const u = Store.user(n.user);
     const name = esc(u ? u.name : n.user);
-    const post = Store.posts().find(p => p.id === n.postId);
+    const post = n.postId ? Store.posts().find(p => p.id === n.postId) : null;
     const label = esc(notifPostLabel(post));
+    const room = n.communityId ? Store.community(n.communityId) : null;
     // A mention can land on a rich note, whose text IS stored HTML, so quoting it
     // raw printed "<p>" at the reader. notePlain flattens the subset back to its
     // words (and is a no-op on a comment, which is always plain). The 90-char cut
@@ -14225,6 +14225,7 @@
       // The only row here about a person rather than a post. 'back' is them
       // answering an add of yours; plain is them arriving on their own.
       n.kind === 'follow'  ? (n.back ? 'added you back' : FOLLOW_LINE) :
+      n.kind === 'circlejoin' ? `joined ${esc(room ? communityHandle(room) : 'your circle')}` :
                              n.kind === 'maybe' ? `might come to ${label}` :
                              `is going to ${label}`;
     // EVERY row about a post now walks to that POST, which is the whole reason
@@ -14234,13 +14235,15 @@
     // somebody's whole archive with a disclosure pre-opened under your thumb.
     // A follow is the one row about a person rather than a post, so it still
     // walks to them.
+    // A join walks to the circle it was a join of.
     const href =
       n.kind === 'follow' ? `#/u/${esc(encodeURIComponent(n.user))}` :
+      n.kind === 'circlejoin' ? (room ? communityRoute(room) : '#/discover') :
       post ? postRoute(post) : '#/profile';
     const fresh = n._ts && n._ts > lastSeen;
     // data-key is the row's stable identity for the reconcile in renderUpdates
     // (kind + which post + who + when) — one event, one row, across refreshes.
-    const key = esc(`${n.kind}:${n.postId || ''}:${n.user}:${n._ts || ''}`);
+    const key = esc(`${n.kind}:${n.postId || n.communityId || ''}:${n.user}:${n._ts || ''}`);
     return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
           `data-post="${esc(n.postId || '')}" data-kind="${n.kind}">` +

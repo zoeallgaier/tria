@@ -102,8 +102,9 @@ thing. Its posts are an **audience** (`posts.audience = 'community'` plus
 `posts.community_id`; the composer's lock lists your circles under the people
 picker, and a circle's Post button opens the composer aimed at it), and its talk
 is a **group chat** (`chats.kind = 'community'`) whose roster the database keeps
-equal to the circle's by trigger. Joining seats you in the chat MUTED (Claude's
-call: a room of strangers should not buzz). Leaving the chat IS leaving the
+equal to the circle's by trigger. Joining seats you in the chat UNMUTED (Zoe,
+2026-10-23, "to simplify"; it was muted), and **the host hears every join**: a
+row in Updates (`circlejoin`) and a push (`supabase/circle-join-news.sql`). Leaving the chat IS leaving the
 circle. The host can rename it, edit its about, give it a photo (cropped like a
 profile face, `setCommunityPhoto`), take people out, and **delete it**
 (`deleteCommunity`, which takes its posts and chat with it); the slug never
@@ -131,7 +132,7 @@ it was said in above its byline (`communityTagHtml`, hidden on the circle's page
 **Discover IS circles** (Zoe: "remove the posts from the Discover feed. THIS is
 the new way to discover."). It shows NO posts: today's daily, then **Circles**
 (a dashed Start a circle card, then yours, then the rest, by last sign of life,
-`Store.communityPulse`), then Share Tria. **People, under the Start a circle card and over the circles** (Zoe, 2026-10-23, `between` in `communitiesSectionHtml`): a sideways rail
+`Store.communityPulse`), then Share Tria. **People, under the circles** (Zoe, 2026-10-23, `after` in `communitiesSectionHtml`; it sat over them that morning): a sideways rail
 of 200px 4:5 cards (`peopleForRail`, `.person-card`), strangers only (no
 friend, follow or request of yours; someone who added you first stays), most
 friends in common first, then newest account; face, name, "Friends with Ana and
@@ -188,7 +189,9 @@ a centre (Zoe). **The + sheet is titled
 Share** (was Create), and a song wears a music note (`ICONS.music`), not the
 speaker, which is a video's sound again.
 
-Every rule is in `supabase/add-circles.sql` and `supabase/circle-photo-delete.sql`;
+Every rule is in `supabase/add-circles.sql`, `supabase/circle-photo-delete.sql`
+and `supabase/circle-join-news.sql` (**NOT run** as of 2026-10-23: until it is,
+joins still seat muted and the host gets no push, though Updates shows joins);
 the reasoning is in
 [docs/data.md](docs/data.md) under "Circles". **The push function changed too**
 (a circle's chat is named in a message push, a mention in a circle only reaches

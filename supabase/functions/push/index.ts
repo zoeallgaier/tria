@@ -1,7 +1,8 @@
 // Tria — push sender (Supabase Edge Function).
 //
 // Invoked by Database Webhooks on INSERT into: comments, headcount, friends,
-// and posts (posts only for @mentions in a note). It figures out WHO should be
+// messages, community_members (a join, for the circle's host), and posts
+// (posts only for @mentions in a note and reposts). It figures out WHO should be
 // notified, then delivers a push to each of that person's stored devices.
 //
 // TWO TRANSPORTS, ONE TABLE. A browser stores a Web Push subscription; the iOS
@@ -406,6 +407,26 @@ async function handle(table: string, rec: Row) {
       // pieces of news. The same person re-RSVPing is one.
       tag: `going:${post.id}`, collapse: `going:${post.id}:${rec.user_id}`,
       url: selfPost(post.id),   // the recipient hosts it
+    });
+    return;
+  }
+
+  // Somebody joined a circle (circle-join-news.sql): its host hears it. The
+  // host's own row, which create_community writes, is the circle being started.
+  // A join across a block with the host is refused by join_community, so there
+  // is nothing to check for that here.
+  if (table === 'community_members') {
+    const { data: circle } = await supabase.from('communities')
+      .select('id,slug,name,owner').eq('id', rec.community_id).maybeSingle();
+    if (!circle || !circle.owner || circle.owner === rec.user_id) return;
+    const who = await userById(rec.user_id);
+    if (!who) return;
+    await sendTo(circle.owner, {
+      title: `${who.name} joined c/${circle.slug}`,
+      body: `${circle.name || 'Your circle'} has a new member.`,
+      // Per person, like a yes to a plan: two people joining is two pieces of news.
+      tag: `circle:${circle.id}`, collapse: `join:${circle.id}:${rec.user_id}`,
+      url: `./#/c/${encodeURIComponent(circle.slug)}`,
     });
     return;
   }
