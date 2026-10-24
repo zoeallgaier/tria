@@ -522,6 +522,10 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
    a tap often enough that the rings read as debug outlines. The !important beats
    every per-control ring further down. */
 :focus, :focus-visible { outline: none !important; }
+/* And no focus STATE either: no :focus-visible rule may draw a ring, a fill or a
+   colour. A sheet or menu moves focus to its first row on open, and when the tap
+   that opened it was on a native control WebKit never saw the pointer, so it
+   calls that focus keyboard focus: Edit profile opened already lit (2026-10-23). */
 
 /* Instrument Serif is reserved for TITLES ONLY — page titles and post
    headlines. Everything else is Oxygen, leaning on weight (300 / 400 / 700)
@@ -2066,10 +2070,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 @media (hover: hover) {
   .bar-menu-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 }
-.bar-menu-item:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 30%, transparent);
-}
 /* The glyph rail. No disc, no bloom, no gradient — just the mark at text scale,
    so the column of them reads as a key beside the labels. --muted is the resting
    ink, for action rows and filter rows alike: since 2.0's brand a type has no
@@ -2380,7 +2380,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    IS the state, that's the control lying about itself. Everything below the
    guard is real state ([aria-expanded], .liked, .going) and stays out of it. */
 .card-comment[aria-expanded="true"],
-.card-comment:focus-visible { color: var(--accent); }
 @media (hover: hover) { .card-comment:hover { color: var(--accent); } }
 /* Touch's answer to that hover. The shared press engine already compresses the
    button under the finger, but it sits out under reduced motion — and it's a
@@ -2406,7 +2405,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 /* Like heart. A friend sees a fillable heart, no count. The author sees the
    count and (via --owner) opens the "who liked" list; the heart fills to the
    accent when liked / when the author's panel is open. */
-.card-like:focus-visible,
 .card-like.liked,
 /* The author's heart on the post page: lit while the who-liked section is the
    one showing, the same way the comment glyph lights for the thread. The row is
@@ -2700,7 +2698,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    off the check once you've joined. Released in .going, where the check fills the
    zone and needs the room — the card is rebuilt on RSVP, so there's no jump. */
 .card-attendees:not(.going) .card-attendees-count { margin-left: -0.55rem; }
-.card-attendees:focus-visible,
 .card-attendees[aria-expanded="true"] { color: var(--accent); }
 /* Guarded like its two neighbours — this is the third button on the row where a
    stuck hover reads as an open panel that isn't. */
@@ -2722,7 +2719,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 }
 .card-attendees.going,
 .card-attendees.going:active,
-.card-attendees.going:focus-visible,
 .card-attendees.going[aria-expanded="true"] { color: var(--brand-ink); }
 @media (hover: hover) { .card-attendees.going:hover { color: var(--brand-ink); } }
 .card-attendees.going .check-arm { stroke-dashoffset: 0; stroke-width: 2.4; visibility: visible; }
@@ -3270,10 +3266,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    phone it never changed appearance at all — not on approach, which touch hasn't
    got, and not on the press either. The press half comes out of the guard. */
 .comment-delete:active,
-.comment-delete:focus-visible {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 14%, var(--bg));
-}
 @media (hover: hover) {
   .comment-delete:hover {
     color: var(--danger);
@@ -8097,7 +8089,6 @@ button.poll-option:disabled { cursor: default; }
 .aud-lock-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aud-lock-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
 @media (hover: hover) { .aud-lock:hover { border-color: var(--muted); } }
-.aud-lock:focus-visible { outline: none; border-color: var(--accent); }
 
 /* Tags — the note box's foot (2026-10-23): a chip per tag and a + Tag pill,
    one tap per tag, wrapping onto new lines so the box grows as they're added.
