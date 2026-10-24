@@ -9832,11 +9832,11 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 @media (max-width: 680px) {
   .person-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; scroll-padding-inline: 1.15rem; }
   /* Chats and Discover are pages of tiles, and a tile wants less gutter than a
-     column of type (Zoe, 2026-10-23: "don't need as much side padding"): 10px
+     column of type (Zoe, 2026-10-23: "don't need as much side padding", then "go 14"): 14px
      a side, not the view's 1.15rem. The rail's bleed follows it. */
   .view--discover,
-  .view--chats:not(.view--newchat) { padding-inline: 0.625rem; }
-  .view--discover .person-strip { margin-inline: -0.625rem; padding-inline: 0.625rem; scroll-padding-inline: 0.625rem; }
+  .view--chats:not(.view--newchat) { padding-inline: 0.875rem; }
+  .view--discover .person-strip { margin-inline: -0.875rem; padding-inline: 0.875rem; scroll-padding-inline: 0.875rem; }
 }
 .person-card {
   position: relative;
