@@ -9912,6 +9912,10 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   border-style: dashed;
   border-color: color-mix(in srgb, var(--text) 24%, transparent);
 }
+/* Discover's cards are fill alone, no hairline (Zoe, 2026-10-23). The Start
+   card keeps its dashed edge: with no fill, the edge is all it has. */
+.view--discover .daily-card:not(.community-card--start),
+.person-card { border: 0; }
 a.daily-answer { text-decoration: none; }
 /* On a circle's own page, an empty room's first post (renderCommunity):
    the same dashed card, in the feed's column. #feed is a flex column, where
