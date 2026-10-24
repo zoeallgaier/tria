@@ -12947,13 +12947,16 @@
      A CIRCLE is a room for an interest: anyone can start one, anyone can join,
      and it lives at #/c/<slug> (the clean link is /c/<slug>, the way a subreddit
      is /r/<name>). Zoe, 2026-10-22: "use existing audience and group chat
-     features". So it is not a third kind of thing:
+     features". So it is not a third kind of thing: its posts are an AUDIENCE.
+     The composer's lock offers your circles as a fourth answer to "who can see
+     this", beside Anyone, My circle and Choose people, and can_view_post hands
+     a circle's posts to its members only.
 
-       · its posts are an AUDIENCE. The composer's lock offers your circles as a
-         fourth answer to "who can see this", beside Anyone, My circle and Choose
-         people, and can_view_post hands a circle's posts to its members only.
-       · its talk is a GROUP CHAT, kind 'community', whose roster the database
-         keeps equal to the circle's (joining seats you, leaving takes you out).
+     IT IS JUST A FEED (Zoe, 2026-10-23). It had a group chat too (chats.kind
+     'community', its roster kept equal to the circle's), and that came out:
+     a plan's chat earns its place because people have to coordinate, and a
+     circle's talk is its comments. drop-circle-chats.sql stops making them and
+     deletes the old ones; until it runs, Store.applyChats drops them unread.
 
      IN CODE A CIRCLE IS A "COMMUNITY", and the CSS calls it the same. `circle`
      already means your mutual friends here (the 'circle' audience, My Circle,
@@ -13157,10 +13160,10 @@
   // thing here a reader could not guess.
   function communityLeaveTitle(c) {
     const n = Store.communityMembers(c.id).length;
-    if (n <= 1) return `You’re the last one in ${communityHandle(c)}. Leaving closes it, and its posts and chat go with it.`;
+    if (n <= 1) return `You’re the last one in ${communityHandle(c)}. Leaving closes it, and its posts go with it.`;
     if (c.owner === Store.session())
       return `Leave ${communityHandle(c)}? It passes to whoever joined after you, and you can join again.`;
-    return `Leave ${communityHandle(c)}? You’ll leave its chat too. You can join again whenever.`;
+    return `Leave ${communityHandle(c)}? You can join again whenever.`;
   }
   async function leaveCommunity(c) {
     const closing = Store.communityMembers(c.id).length <= 1;
@@ -13172,8 +13175,7 @@
   }
 
   /* WHO IS IN IT. A sheet, the chat roster's shape (avatar, name, handle), and
-     it is the circle's own People: a circle's chat sends its People here too,
-     because the two rosters are one. Each row opens the person. The host can
+     it is the circle's own People. Each row opens the person. The host can
      take someone out, on a second tap, since there is no undo and the row is
      right under the thumb that was scrolling. */
   function openCommunityMembers(c) {
@@ -13307,7 +13309,6 @@
       label: 'Share circle', icon: 'send',
       run: () => handOver({ title: `${c.name} on Tria`, text: `${communityHandle(c)} on Tria`, url: communityLink(c) }),
     }];
-    if (member) items.push({ label: 'Invite friends', icon: 'newchat', run: () => openCommunityInvite(c) });
     if (me) items.push({ label: 'People', icon: 'friends', run: () => openCommunityMembers(c) });
     if (me && c.owner === me) items.push({
       label: 'Edit circle', icon: 'pencil',
@@ -13318,12 +13319,12 @@
     if (me && c.owner === me && Store.communityToolsReady()) items.push({
       label: 'Delete circle', icon: 'trash', danger: true,
       run: () => openSheet({
-        title: `Delete ${communityHandle(c)}? Its posts and its chat go with it, for everyone. This can’t be undone.`,
+        title: `Delete ${communityHandle(c)}? Its posts go with it, for everyone. This can’t be undone.`,
         items: [{ label: 'Delete circle', icon: 'trash', danger: true, run: async () => {
           const res = await Store.deleteCommunity(c.id).catch(() => null);
           if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t delete it, try again.'); return; }
           toast(`${communityHandle(c)} is gone.`);
-          // Not the back target: that can be the circle's own chat, which is gone too.
+          // Not the back target, which can be a page about the circle itself.
           go('#/discover');
         } }],
       }),
@@ -13401,7 +13402,7 @@
         ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
         : member
           ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
-            `<button class="friend-btn pill-quiet" type="button" id="community-chat">Chat</button>`
+            `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>`
           : `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`;
       return `<div class="account-head">` +
           (c.avatar
@@ -13412,7 +13413,9 @@
           `<div class="account-meta">` +
             `<div class="account-id">` +
               `<h1 class="account-name">${esc(c.name)}</h1>` +
-              `<p class="account-handle">${esc(communityHandle(c))}</p>` +
+              // A profile's rule: the handle steps aside at phone width, where
+              // the bar's title already says it, and stays on a desktop.
+              `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
             `</div>` +
             (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}</div>` : '') +
             (c.about ? `<p class="account-bio">${esc(c.about)}</p>` : '') +
@@ -13480,20 +13483,7 @@
         pendingCommunity = c.id;
         go('#/publish');
       });
-      headEl.querySelector('#community-chat')?.addEventListener('click', async (e) => {
-        const btn = e.currentTarget;
-        let chat = Store.communityChat(c.id);
-        // A member whose chat row went missing: joining again is the repair
-        // (join_community re-seats them and changes nothing else).
-        if (!chat && !btn.disabled) {
-          btn.disabled = true;
-          try { await Store.joinCommunity(c.id).catch(() => null); }
-          finally { btn.disabled = false; }
-          chat = Store.communityChat(c.id);
-        }
-        if (chat) go(`#/chat/${encodeURIComponent(chat.id)}`);
-        else toast('The chat isn’t ready yet, try again in a moment.');
-      });
+      headEl.querySelector('#community-invite')?.addEventListener('click', () => openCommunityInvite(c));
       const join = headEl.querySelector('#community-join');
       join?.addEventListener('click', async () => {
         if (join.disabled) return;
@@ -14620,7 +14610,6 @@
     { key: 'direct',    label: 'Direct',     ico: 'profile' },
     { key: 'group',     label: 'Groups',     ico: 'friends' },
     { key: 'activity',  label: 'Activities', ico: 'cal' },
-    { key: 'community', label: 'Circles',    ico: 'circle' },
   ];
   let chatFilter = 'all';
   // Whether the Archived shelf is open, kept across the list's repaints.
@@ -14634,11 +14623,6 @@
 
   function chatTitle(c) {
     if (c.kind === 'direct') return c.other ? displayNameOf(c.other) : 'Chat';
-    // A circle's chat is named by the circle (the title follows a rename).
-    if (c.kind === 'community') {
-      const room = Store.community(c.communityId);
-      return (room && room.name) || c.title || 'Circle';
-    }
     if (c.kind === 'activity') {
       const act = Store.posts().find(p => p.id === c.postId);
       return (act && act.title) || 'Activity';
@@ -14654,12 +14638,6 @@
     }
     if (c.kind === 'activity')
       return `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('cal')}</span>`;
-    if (c.kind === 'community') {
-      const room = Store.community(c.communityId);
-      return room && room.avatar
-        ? communityPicHtml(room, 'chat-avatar', 48)
-        : `<span class="chat-avatar chat-glyph" aria-hidden="true">${svgIcon('circle')}</span>`;
-    }
     const faces = c.members.filter(u => u !== Store.session()).slice(0, 2).map(Store.user).filter(Boolean);
     return `<span class="chat-faces" aria-hidden="true">` +
       faces.map(u => avatarEl(u, { cls: 'comment-avatar chat-avatar' })).join('') + `</span>`;
@@ -15305,17 +15283,13 @@
       items.push({ label: 'View profile', icon: 'profile', run: () => go(`#/u/${encodeURIComponent(c.other)}`) });
     if (c.kind === 'activity' && c.postId)
       items.push({ label: 'View activity', icon: 'cal', run: () => go(postRoute(c.postId)) });
-    const room = c.kind === 'community' ? Store.community(c.communityId) : null;
-    if (room) items.push({ label: 'View circle', icon: 'circle', run: () => go(communityRoute(room)) });
     const me = Store.session();
     const hosting = c.kind === 'activity' && c.host === me;
     const act = c.kind === 'activity' ? Store.posts().find(p => p.id === c.postId) : null;
     // A guest's answer, changed from inside the plan's own chat.
     if (act && !hosting && !isPastActivity(act) && canJoin(act))
       items.push({ label: 'Your RSVP', icon: 'going', run: () => openRsvpSheet(act) });
-    // A circle's chat holds the circle, so its People is the circle's roster.
-    if (room) items.push({ label: 'People', icon: 'friends', run: () => openCommunityMembers(room) });
-    else if (c.kind !== 'direct')
+    if (c.kind !== 'direct')
       items.push({ label: 'People', icon: 'friends', run: () => openChatPeopleSheet(c) });
     if (c.status === 'member') items.push({
       label: c.muted ? 'Unmute' : 'Mute', icon: c.muted ? 'sound' : 'mute',
@@ -15329,16 +15303,11 @@
       items.push({ label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(c.other, () => go('#/chats')) });
       items.push({ label: 'Report', icon: 'flag', danger: true, run: () => reportUser(c.other) });
     }
-    // A circle's chat is left by leaving the circle (the two rosters are one),
-    // so its row says so rather than offering a way out of one and not the other.
     const leave = c.kind === 'direct'
       ? { label: 'Delete chat', title: 'Delete this chat? It leaves your list, and they keep their copy.',
           act: () => Store.clearChat(c.id) }
-      : room
-        ? { label: 'Leave circle', title: communityLeaveTitle(room),
-            act: () => Store.leaveCommunity(room.id) }
-        : { label: c.kind === 'group' ? 'Leave group' : 'Leave chat', title: 'Leave this chat? You can be added back.',
-            act: () => Store.leaveChat(c.id) };
+      : { label: c.kind === 'group' ? 'Leave group' : 'Leave chat', title: 'Leave this chat? You can be added back.',
+          act: () => Store.leaveChat(c.id) };
     // The host stays in their own activity's chat.
     if (!hosting) items.push({
       label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true,

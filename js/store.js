@@ -2500,7 +2500,10 @@ const Store = (() => {
       return;
     }
     state.chatsReady = true;
-    state.chats = (c.data || []).map(row => ({
+    // A circle is just a feed since 2026-10-23 (Zoe). Its old chat is never
+    // read, so no list, dot or thread can find one, whether or not
+    // drop-circle-chats.sql has run.
+    state.chats = (c.data || []).filter(row => row.kind !== 'community').map(row => ({
       id: row.id, kind: row.kind, title: row.title || '', postId: row.post_id || null,
       communityId: row.community_id || null,
       directKey: row.direct_key || '', createdBy: nameById.get(row.created_by) || null,
@@ -2876,11 +2879,10 @@ const Store = (() => {
      (posts.audience = 'circle', My Circle) and a post carrying both words would
      be a trap. Every word a reader sees says circle.
 
-     It is two things Tria already had: an AUDIENCE (a post's audience
+     It is a thing Tria already had, an AUDIENCE: a post's audience
      'community' plus `communityId`, readable by the members, decided by
-     can_view_post) and a GROUP CHAT (kind 'community', whose roster the database
-     keeps equal to the circle's by trigger). So nothing here touches chats:
-     joining and leaving re-read them, and the chat list finds the new row.
+     can_view_post. It had a group chat too until 2026-10-23, when it became
+     just a feed (applyChats drops the old ones; drop-circle-chats.sql).
 
      Every write is an RPC, because every write has a rule behind it (who may
      rename, who may remove, the ten-circle cap, a block with the owner). The
@@ -2928,11 +2930,6 @@ const Store = (() => {
     return [c ? c._ts : '', ms.length ? ms[ms.length - 1]._ts : '', p ? p._ts : '']
       .filter(Boolean).sort().pop() || '';
   };
-  // The circle's chat, if I'm in it.
-  const communityChat = (id) => {
-    const c = state.chats.find(x => x.kind === 'community' && x.communityId === id);
-    return c ? chatView(c) : null;
-  };
   const SLUG_RE = /^[a-z0-9][a-z0-9_]{2,23}$/;
   const KEPT_SLUGS = new Set(['new', 'edit', 'tria', 'admin', 'help', 'about', 'settings', 'support', 'official']);
   // The handle a name suggests: lowercase, words joined by underscores, clipped.
@@ -2953,8 +2950,7 @@ const Store = (() => {
     if (error && ['42501', '22023', '28000'].includes(error.code) && error.message) return error.message;
     return fallback;
   }
-  // Circles and their rosters, re-read after a write. The chat list is re-read
-  // with them, because joining and leaving move a chat row too.
+  // Circles and their rosters, re-read after a write.
   async function reloadCommunities() {
     const gen = worldGen;
     const mark = pendingWrites.length;
@@ -2973,8 +2969,7 @@ const Store = (() => {
     }
   }
   async function afterCommunityWrite() {
-    await Promise.all([reloadCommunities(), reloadChats()]).catch(() => {});
-    tellChats();
+    await reloadCommunities().catch(() => {});
   }
 
   async function createCommunity({ slug, name, about }) {
@@ -2991,8 +2986,6 @@ const Store = (() => {
     if (error) return { ok: false, error: communityError(error, 'Couldn’t save that, try again.') };
     write('communities', cs => cs.map(c => (c.id === id
       ? Object.assign({}, c, { name: String(name).trim(), about: String(about || '').trim() }) : c)));
-    write('chats', cs => cs.map(c => (c.kind === 'community' && c.communityId === id
-      ? Object.assign({}, c, { title: String(name).trim() }) : c)));
     return { ok: true };
   }
   // Optimistic both ways, so the button answers on the tap; the re-read after
@@ -3050,19 +3043,14 @@ const Store = (() => {
     patch(url);
     return { ok: true };
   }
-  // The host closing a circle outright. Its posts, chat and roster go with it
-  // (the cascades in add-circles.sql), so the cache lets go of all three.
+  // The host closing a circle outright. Its posts and roster go with it (the
+  // cascades in add-circles.sql), so the cache lets go of both.
   async function deleteCommunity(id) {
     const { error } = await sb.rpc('delete_community', { p_community: id });
     if (error) return { ok: false, error: communityError(error, 'Couldn’t delete it, try again.') };
-    const chatIds = new Set(state.chats.filter(c => c.communityId === id).map(c => c.id));
     write('communities', cs => cs.filter(c => c.id !== id));
     write('communityMembers', ms => ms.filter(m => m.communityId !== id));
     write('posts', ps => ps.filter(p => p.communityId !== id));
-    write('chats', cs => cs.filter(c => !chatIds.has(c.id)));
-    write('chatMembers', ms => ms.filter(m => !chatIds.has(m.chatId)));
-    write('messages', ms => ms.filter(m => !chatIds.has(m.chatId)));
-    tellChats();
     return { ok: true };
   }
 
@@ -3865,7 +3853,7 @@ const Store = (() => {
     answerChatRequest, clearChat, leaveChat, onChats,
     // Circles (the room; `community` in code, see "Circles")
     communitiesReady, communities, community, communityMembers, inCommunity, myCommunities,
-    communityPosts, communityPulse, communityChat, slugFrom, slugProblem,
+    communityPosts, communityPulse, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,
     // Push

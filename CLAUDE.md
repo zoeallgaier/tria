@@ -100,14 +100,21 @@ join, at `#/c/<slug>` (clean link `/c/<slug>`, the way reddit has `/r/`). Zoe:
 "use existing audience and group chat features", so it is NOT a third kind of
 thing. Its posts are an **audience** (`posts.audience = 'community'` plus
 `posts.community_id`; the composer's lock lists your circles under the people
-picker, and a circle's Post button opens the composer aimed at it), and its talk
-is a **group chat** (`chats.kind = 'community'`) whose roster the database keeps
-equal to the circle's by trigger. Joining seats you in the chat UNMUTED (Zoe,
-2026-10-23, "to simplify"; it was muted), and **the host hears every join**: a
-row in Updates (`circlejoin`) and a push (`supabase/circle-join-news.sql`). Leaving the chat IS leaving the
-circle. The host can rename it, edit its about, give it a photo (cropped like a
+picker, and a circle's Post button opens the composer aimed at it). **A circle
+is just a feed: it has NO chat** (Zoe, 2026-10-23: "the chat is nice for
+activities when people need to actually coordinate but I don't see a use here
+when people can comment on posts"). It had a group chat (`chats.kind =
+'community'`, its roster kept equal to the circle's by trigger); the client
+drops those as it reads them (`Store.applyChats`), and
+`supabase/drop-circle-chats.sql` (**NOT run** as of 2026-10-23) stops making
+them and deletes the old ones with their messages. A member's two pills are
+Post and **Invite**. Its head says the name, and its `c/<slug>` follows a profile's
+@handle: hidden at phone width, where the bar's title says it
+(`.account-handle--bare`), shown on a desktop. **The host hears every join**: a
+row in Updates (`circlejoin`) and a push (`supabase/circle-join-news.sql`).
+The host can rename it, edit its about, give it a photo (cropped like a
 profile face, `setCommunityPhoto`), take people out, and **delete it**
-(`deleteCommunity`, which takes its posts and chat with it); the slug never
+(`deleteCommunity`, which takes its posts with it); the slug never
 changes. When the host leaves, the longest-standing member inherits; when the
 last member leaves, the circle closes the same way a delete does. Ten circles
 held per person. A circle post cannot be reposted or pinned to a profile.
@@ -119,7 +126,7 @@ dashed card with a quiet pill (`.community-first`). It can take its photo
 from the start: New circle carries the editor's photo and crop, sent behind the
 navigation once the circle exists. Joining says "You've joined c/<slug>."
 **An invite is a DM** (Zoe:
-"without bloating the app"): the circle's ••• has Invite friends
+"without bloating the app"): the circle page's Invite pill
 (`openCommunityInvite`, the chat roster's picker, commits per tap), which sends
 your friend "Join me in c/<slug> on Tria." with the link, and a thread draws any
 circle link as the circle under the words (`circleInMessage`, `.msg-circle`).
@@ -204,12 +211,14 @@ Share** (was Create), and a song wears a music note (`ICONS.music`), not the
 speaker, which is a video's sound again.
 
 Every rule is in `supabase/add-circles.sql`, `supabase/circle-photo-delete.sql`
-and `supabase/circle-join-news.sql` (**NOT run** as of 2026-10-23: until it is,
-joins still seat muted and the host gets no push, though Updates shows joins);
+`supabase/circle-join-news.sql` (**NOT run** as of 2026-10-23: until it is,
+the host gets no push, though Updates shows joins) and
+`supabase/drop-circle-chats.sql` (**NOT run**, see above);
 the reasoning is in
 [docs/data.md](docs/data.md) under "Circles". **The push function changed too**
-(a circle's chat is named in a message push, a mention in a circle only reaches
-members, and circle plans remind only members who answered).
+(a mention in a circle only reaches members, and circle plans remind only
+members who answered; it can still name a circle's chat in a message push,
+which is dead once drop-circle-chats.sql has run).
 
 ## 1.8 is the nav going all the way native (2026-10-21)
 

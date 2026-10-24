@@ -1475,21 +1475,22 @@ when the circle is set or changed and never when it stays the same, so somebody
 who left can still fix a typo in what they said there. The same trigger refuses
 a repost of a circle post outright.
 
-**The chat.** Each circle has one chat, `kind = 'community'`, made by
-`create_community`. Its roster is the circle's, and the DATABASE keeps it so:
-`community_member_joined` seats a new member, `community_member_left`
-takes them out, passes the circle to the longest-standing member if the host
-left, and closes it if nobody is left. Leaving the chat on its own is refused
-("chat members delete own" now excludes the kind), and `add_chat_members` /
-`remove_chat_member` refuse a circle's chat (both restated in full), so the two
-lists cannot part. In the app, a circle chat's People is the circle's members
-sheet and its Leave is "Leave circle".
+**No chat: a circle is just a feed** (Zoe, 2026-10-23: "the chat is nice for
+activities when people need to actually coordinate but I don't see a use here
+when people can comment on posts"). add-circles.sql gave each circle one chat,
+`kind = 'community'`, made by `create_community`, with its roster kept equal to
+the circle's by `community_member_joined` / `community_member_left` and both
+roster RPCs refusing it. `drop-circle-chats.sql` (NOT run as of the same day)
+restates `create_community` without the chat, drops the join trigger, and
+deletes every circle chat with its messages. The rest is left alone on purpose,
+because each piece finds no chat once they are gone: `join_community`'s seating,
+the leave trigger's seat delete, `update_community`'s rename, the roster RPCs'
+guards and the push function's naming. The client does not wait for it:
+`Store.applyChats` drops a `community` chat as it reads, so no list, dot, filter
+or thread can find one. `community_member_left` still does the real work of a
+leave: the heir when the host goes, the close when the last one does.
 
-**Not muted on joining** (Zoe, 2026-10-23, "to simplify";
-`circle-join-news.sql`). add-circles.sql seated every member muted, the host
-of a new circle too, on the argument that a room of strangers should not buzz.
-Now a seat is a seat, and the chat's ••• mutes it. Rows seated muted before the
-migration stay muted.
+A member's page wears Post and **Invite** where Post and Chat were.
 
 **The host hears who joins.** Updates draws a row per join for each circle you
 host (`Store.notifications`, kind `circlejoin`, off the roster's `joined_at`,
@@ -1532,7 +1533,7 @@ for the daily's page and a profile's frame wall.
 **The host's tools** (`circle-photo-delete.sql`). A circle can wear a photo,
 uploaded to the host's own folder in `media` like a face and set by
 `set_community_photo`; null is the triad. And the host can delete it
-(`delete_community`): the same ending as the last member leaving, posts and chat
+(`delete_community`): the same ending as the last member leaving, posts
 with it, so the delete needs no logic of its own beyond the host check. Both are
 offered only once the column answers (`Store.communityToolsReady`).
 
@@ -1553,7 +1554,7 @@ carries that post's like.
 
 **An invite is a direct message.** A circle is open, so an invite grants
 nothing and only has to arrive. A DM already arrives, with its push, the Chats
-dot and its request flow, so Invite friends (`openCommunityInvite`) is
+dot and its request flow, so the circle page's Invite (`openCommunityInvite`) is
 `startDirectChat` then `sendMessage` with the circle's link. The thread draws
 any circle link as the circle (`circleInMessage`, matched to triaonline.com or
 the page's own host, and only for a circle the cache knows). "Already invited"
