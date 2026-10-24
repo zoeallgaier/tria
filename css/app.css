@@ -1219,10 +1219,6 @@ body.toolbar-live .view { padding-top: 1rem; }
   font-size: 0.9rem;
   white-space: nowrap;
 }
-@media (hover: hover) {
-  .toolbar-cta:hover .daily-go,
-  .daily-answer:hover .daily-go { transform: translateX(2px); }
-}
 /* In the bar, the pill matches the discs beside it exactly. */
 .toolbar-cta { height: var(--toolbar-btn, 44px); }
 /* The narrowest phones, where the pill and the centred title run out of bar
@@ -6458,17 +6454,11 @@ button.poll-option:disabled { cursor: default; }
   font-weight: 700;
   font-size: 0.95rem;
 }
-@media (hover: hover) { .friends-share-copy:hover .daily-go { transform: translateX(2px); } }
 .daily-count:empty { display: none; }
-.daily-go { font-size: 1rem; transition: transform var(--dur-micro) var(--ease); }
 /* Already answered (one each): the invitation is spent and nothing replaces it.
    There's no "yours is in" line here — the faces and the count already moved when
    you posted, and a card that narrates your own action back to you is talking
    about the app instead of about the room. */
-
-@media (prefers-reduced-motion: reduce) {
-  .daily-go { transition: none; }
-}
 
 /* ── The daily's own page ─────────────────────────────────────────────────────
    Discover held to one question: the prompt as the nameplate and the answers
@@ -7547,6 +7537,12 @@ button.poll-option:disabled { cursor: default; }
   .chat-note { padding-inline: var(--inset); }
 }
 .chat-pane:not(.is-still) .chat-row { animation: rise var(--dur-slow) var(--ease) both; }
+/* Discover's cards rise in on arrival the same way (renderDiscover's paint).
+   `backwards`, not `both`: once a card has landed it keeps no transform, so a
+   page of circles doesn't hold a layer per card or trap the glass inside. */
+.discover-body:not(.is-still) :is(.daily-card, .person-rail, .friends-share) {
+  animation: rise var(--dur-slow) var(--ease) backwards;
+}
 .chat-row:active { --row-fill: color-mix(in srgb, var(--text) 8%, var(--surface)); }
 @media (hover: hover) { .chat-row:hover { --row-fill: color-mix(in srgb, var(--text) 5%, var(--surface)); } }
 .chat-list li[hidden] { display: none; }
@@ -9077,7 +9073,8 @@ button.poll-option:disabled { cursor: default; }
   /* Entrances and the tile's hover lift go. What stays is the tile face's
      opacity fade — a cross-fade isn't motion, and without it a photo would
      still pop in over its placeholder. */
-  .card, .friend, .ptile, .notif, .request-row { animation: none; }
+  .card, .friend, .ptile, .notif, .request-row,
+  .discover-body :is(.daily-card, .person-rail, .friends-share) { animation: none; }
   .ptile, .ptile:hover { transform: none; transition: none; }
 }
 

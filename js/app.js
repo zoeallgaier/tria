@@ -6475,7 +6475,7 @@
           `<p class="welcome-head">Your circle is empty, for now.</p>` +
           `<p>Add friends to see what they share, or join a circle for something you’re into.</p>` +
           `<a class="welcome-go publish-fill" href="#/discover">` +
-            `<span>Find people and circles</span><span class="daily-go" aria-hidden="true">→</span></a>` +
+            `<span>Find people and circles</span></a>` +
           `<button class="welcome-go pill-quiet" type="button" id="welcome-invite">Invite a friend</button>` +
         `</div>`;
         const me = Store.currentUser();
@@ -11603,7 +11603,7 @@
           // is talking about the app instead of the room.
           (mine ? ''
             : `<button type="button" class="daily-answer publish-fill">` +
-                `${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span>` +
+                `${DAILY_CTA}` +
               `</button>`) +
         `</div>` +
       `</section>`;
@@ -11667,7 +11667,7 @@
       title: 'Daily',
       actions: canAnswer
         ? `<button type="button" class="toolbar-cta publish-fill" id="daily-answer" data-slots="2">` +
-            `${DAILY_CTA}<span class="daily-go" aria-hidden="true">→</span>` +
+            `${DAILY_CTA}` +
           `</button>`
         : '',
     });
@@ -13068,7 +13068,7 @@
             : `<span class="daily-count"></span>`) +
           (mine || !Store.canJoinCommunity(c) ? ''
             : `<button type="button" class="daily-answer publish-fill" data-join="${esc(c.id)}">` +
-                `Join<span class="daily-go" aria-hidden="true">→</span>` +
+                `Join` +
               `</button>`) +
         `</div>` +
       `</section>`;
@@ -13103,7 +13103,7 @@
         `<div class="daily-foot">` +
           `<span class="daily-count"></span>` +
           `<a class="daily-answer publish-fill" href="${href}">` +
-            `Start your own<span class="daily-go" aria-hidden="true">→</span></a>` +
+            `Start your own</a>` +
         `</div>` +
       `</section>`;
   }
@@ -13517,7 +13517,7 @@
             `<p class="daily-hint">Every circle starts with a post. Say hello, or share a bit about yourself.</p>` +
             `<div class="daily-foot">` +
               `<a class="daily-answer pill-quiet" href="#/publish">` +
-                `Write the first post<span class="daily-go" aria-hidden="true">→</span></a>` +
+                `Write the first post</a>` +
             `</div>` +
           `</section>`;
         feedEl.querySelectorAll('.community-first a').forEach(a => a.addEventListener('click', (e) => {
@@ -13997,7 +13997,7 @@
         `<p class="friends-share-ask">Know someone who’d like it here?</p>` +
         `<button class="friends-share-copy publish-fill" type="button" ` +
           `aria-label="Share Tria">` +
-          `<span>Share Tria</span><span class="daily-go" aria-hidden="true">→</span>` +
+          `<span>Share Tria</span>` +
         `</button>` +
       `</div>`;
 
@@ -14214,11 +14214,20 @@
       const none = q && !rooms.length && !people.length && !found.length
         ? `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>` : '';
 
+      // The first paint that draws anything rises in, a beat apart, the way
+      // Chats does; every paint after it (a pull, a join, a keystroke) swaps in
+      // place without the cards rising again.
+      if (bodyEl.dataset.risen) bodyEl.classList.add('is-still');
       // Searching, the results run people, posts, circles; otherwise the page
       // is the daily, then the circles with the people rail inside them.
       bodyEl.innerHTML = q
         ? peopleHtml + postsHtml + roomsHtml + none
         : (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
+      if (!bodyEl.dataset.risen) {
+        const risers = bodyEl.querySelectorAll('.daily-card, .person-rail, .friends-share');
+        risers.forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
+        if (risers.length) bodyEl.dataset.risen = '1';
+      }
       bodyEl.querySelector('.discover-more')?.addEventListener('click', () => {
         allPeopleFor = q;
         paintNow();
