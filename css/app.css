@@ -9948,7 +9948,8 @@ a.daily-answer { text-decoration: none; }
 @media (max-width: 680px) { .community-first { margin-inline: 1.15rem; } }
 
 /* A circle is born, or a face is new (celebrateFace): Tria's own ramp in
-   stars, the start and end of the band alternating, bursting out of the face and drifting
+   stars (your own photo's are your --heart, set inline), the start and end of
+   the band alternating, bursting out of the face and drifting
    on, while the face itself gives one small pop. One-shot, transform and
    opacity only. The layer is a point at the face's centre; each star flies
    from it to --x/--y. */

@@ -7711,7 +7711,7 @@
     // ••• down the column repaints the stack above it. Only your own, because
     // nothing you can do changes what somebody else has pinned.
     pinsRepaint = isSelf ? paintPins : null;
-    if (arrivedChanged('u/' + u.username) && isSelf) celebrateFace(view.querySelector('.account'));
+    if (arrivedChanged('u/' + u.username) && isSelf) celebrateFace(view.querySelector('.account'), true);
 
     /* A SONG PIN WHOSE SONG HAS GONE is the one dangling pin no write is
        watching. A cleared song takes its pin with it (Store.setListeningTo) and
@@ -13546,8 +13546,9 @@
   }
 
   /* A circle is born, or a face is new (your own photo, a circle's): the
-     twinkle in the hand, and the brand's own stars bursting out of the face,
-     alternating the ramp's two ends. Anchored like celebratePost's, a fixed
+     twinkle in the hand, and stars bursting out of the face. A circle's are the
+     brand's own, alternating the ramp's two ends; your own photo's are your
+     heart (`own`), like every other burst that is yours (Zoe). Anchored like celebratePost's, a fixed
      layer over the photo's resting box, one-shot. It waits for the photo to
      decode (at most 600ms), so the stars never fly off a face still loading.
      Reduced motion keeps the twinkle (a haptic isn't motion) and drops the
@@ -13566,7 +13567,7 @@
     { x:  58, y:  62, s: 11, r: -18, d: 430 },
     { x: -86, y: -64, s:  8, r:  12, d: 480 },
   ];
-  function celebrateFace(root) {
+  function celebrateFace(root, own) {
     const face = root.querySelector('.account-photo') || root;
     const img = face.querySelector('img');
     const decoded = img && img.decode ? img.decode().catch(() => {}) : Promise.resolve();
@@ -13574,10 +13575,10 @@
       if (!face.isConnected) return;
       hapticTwinkle();
       if (prefersReduced()) return;
-      setTimeout(() => burstFace(face), 120);
+      setTimeout(() => burstFace(face, own), 120);
     });
   }
-  function burstFace(face) {
+  function burstFace(face, own) {
     const r = face.getBoundingClientRect();
     if (!r.width || !face.isConnected) return;
     face.classList.add('face-born');
@@ -13591,7 +13592,7 @@
       s.className = 'spark';
       s.style.cssText =
         `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms;` +
-        `--burst:var(${i % 2 ? '--brand-end' : '--brand-start'})`;
+        `--burst:var(${own ? '--heart' : i % 2 ? '--brand-end' : '--brand-start'})`;
       layer.appendChild(s);
     });
     document.body.appendChild(layer);
