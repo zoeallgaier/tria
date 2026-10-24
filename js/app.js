@@ -5751,58 +5751,6 @@
     try { return new Set(JSON.parse(localStorage.getItem(weekKey()) || '[]')); }
     catch { return new Set(); }
   }
-  /* ── What's new in your circles (2.0) ──────────────────────────────────────
-     A circle's posts stay out of My Circle, so My Circle says where something
-     was said instead: one card per circle you're in with a post you haven't
-     seen, under the plans, in the week-of card's shape. It says WHO, with the
-     daily's faces and their names, never how many (the no-count rule; Zoe
-     chose names). The mark is per device: opening the circle sets it, and so
-     does waving the card off, so a card only comes back for something newer.
-     It clears by looking, the way the dots do. Before any mark, the day you
-     joined stands in, so a busy room doesn't greet you with its history. */
-  const circleSeenKey = () => `tria:circle-seen:${Store.session()}`;
-  function circleSeen() {
-    try { return JSON.parse(localStorage.getItem(circleSeenKey()) || '{}') || {}; }
-    catch { return {}; }
-  }
-  function markCircleSeen(id) {
-    const marks = circleSeen();
-    marks[id] = new Date().toISOString();
-    try { localStorage.setItem(circleSeenKey(), JSON.stringify(marks)); } catch { /* private window */ }
-  }
-  function circleNews() {
-    const me = Store.session();
-    if (!me || !Store.communitiesReady()) return [];
-    const seen = circleSeen();
-    return Store.myCommunities().map(c => {
-      const since = Date.parse(seen[c.id] || Store.joinedCommunityAt(c.id)) || 0;
-      const fresh = Store.communityPosts(c.id)
-        .filter(p => p.author !== me && !Blocks.has(p.author) && Date.parse(p._ts) > since);
-      return fresh.length ? { c, fresh } : null;
-    }).filter(Boolean)
-      .sort((a, b) => (a.fresh[0]._ts < b.fresh[0]._ts ? 1 : a.fresh[0]._ts > b.fresh[0]._ts ? -1 : 0));
-  }
-  function circleNewsHtml({ c, fresh }) {
-    // Newest first, each person once.
-    const who = [...new Set(fresh.map(p => p.author))];
-    const faces = who.slice(0, 3).map(u => Store.user(u)).filter(Boolean);
-    return `<div class="week-card week-card--circle" data-circle="${esc(c.id)}">` +
-        `<a class="week-card-link" href="${communityRoute(c)}">` +
-          // The handle is the headline: the name under it said the room twice.
-          `<span class="week-card-title">${esc(communityHandle(c))}</span>` +
-          `<span class="week-card-place week-card-who">` +
-            (faces.length
-              ? `<span class="daily-faces" aria-hidden="true">` +
-                  faces.map(u => avatarEl(u, { cls: 'daily-face' })).join('') + `</span>`
-              : '') +
-            `<span>New from ${esc(listNames(who.map(displayNameOf)))}</span>` +
-          `</span>` +
-        `</a>` +
-        (c.avatar ? communityPicHtml(c, 'week-card-pic', 88) : '') +
-        `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
-      `</div>`;
-  }
-
   function paintWeekCards() {
     const box = view.querySelector('#week-cards');
     if (!box) return;
@@ -5818,8 +5766,7 @@
         && !isPastActivity(p) && !gone.has(String(p.id)) && !Blocks.has(p.author)
         && (p.author === me || Store.myRsvp(p.id) === 'going'))
       .sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0));
-    const news = circleNews();
-    box.hidden = !plans.length && !news.length;
+    box.hidden = !plans.length;
     box.innerHTML = plans.map(p => {
       const chat = Store.chatsReady() && Store.chats().find(c => c.postId === p.id);
       return `<div class="week-card" data-id="${esc(String(p.id))}">` +
@@ -5833,15 +5780,12 @@
             : '') +
           `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
         `</div>`;
-    }).join('') + news.map(circleNewsHtml).join('');
+    }).join('');
     box.querySelectorAll('.week-card-x').forEach(x => x.addEventListener('click', () => {
       const card = x.closest('.week-card');
-      if (card.dataset.circle) markCircleSeen(card.dataset.circle);
-      else {
-        const ids = weekDismissed();
-        ids.add(card.dataset.id);
-        try { localStorage.setItem(weekKey(), JSON.stringify([...ids].slice(-200))); } catch { /* private window */ }
-      }
+      const ids = weekDismissed();
+      ids.add(card.dataset.id);
+      try { localStorage.setItem(weekKey(), JSON.stringify([...ids].slice(-200))); } catch { /* private window */ }
       hapticTap('LIGHT');
       card.remove();
       if (!box.children.length) box.hidden = true;
@@ -13017,11 +12961,12 @@
      two different things is the bug this naming refuses to write. Every word a
      reader sees says circle, and its handle says c/.
 
-     WHERE IT IS READ. A circle's posts live on its page and on their own post
-     page. They are not in My Circle, not on Discover (which shows no posts at
-     all since 2.0) and not on the author's profile (Store.feed / discover /
-     postsBy all drop them): My Circle
-     is your friends, and a post said in a hobby circle was said to the circle.
+     WHERE IT IS READ. A circle's posts live on its page, on their own post
+     page, on the author's profile (Store.postsBy) and, when you or a friend
+     wrote them, in My Circle (Store.feed), each citing its circle over the
+     byline (communityTagHtml). RLS hands them only to members, so all of that
+     is the circles you share. Never on Discover, which shows no posts at all
+     since 2.0.
 
      The rules (who may rename, remove, the cap of ten, a block with the host,
      the hand-over when the host leaves, the circle closing when its last member
@@ -13523,8 +13468,6 @@
     const paint = () => {
       const c = Store.community(id);
       if (!c) return false;
-      // Read here, so My Circle's card for this room can go (circleNews).
-      if (Store.inCommunity(c.id)) markCircleSeen(c.id);
       headEl.innerHTML = headHtml(c);
       wireHead(c);
       paintFeed(c);

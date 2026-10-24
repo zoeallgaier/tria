@@ -955,9 +955,10 @@ const Store = (() => {
   // (can_view_original), so a missing original means the row shouldn't be drawn —
   // and it's also the honest answer for the window between a delete landing and
   // the next pull, when the cascade has taken the original but not yet this.
-  // A post addressed to a CIRCLE (the room, add-circles.sql) is not part of
-  // this feed even when a friend wrote it: My Circle is your friends, and a
-  // circle's posts are read in the circle. Same on Discover and on a profile.
+  // A post said in a CIRCLE (the room, add-circles.sql) is in this feed when you
+  // or a friend wrote it (Zoe, 2026-10-23), citing its circle over the byline.
+  // RLS hands a circle's posts only to its members, so that means the circles
+  // you share. A stranger's post in a circle stays in the circle.
   //
   // A MUSIC POST is in no feed either (Zoe, 2026-10-22: "posts for music
   // aren't needed so get rid of those"). Posting a song is putting it on
@@ -969,7 +970,7 @@ const Store = (() => {
     const circle = new Set([state.session, ...friends()]);
     const followed = new Set(following());
     return posts().filter(p =>
-      visibleRepost(p) && !p.communityId && !isSongPost(p) && (
+      visibleRepost(p) && !isSongPost(p) && (
         circle.has(p.author) ||
         (followed.has(p.author) && p.audience === 'public')));
   }
@@ -2915,13 +2916,6 @@ const Store = (() => {
   const inCommunity = (id) => !!state.session && !!id &&
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
   const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
-  // When I took my seat, so My Circle's news about a room starts there and not
-  // at the room's whole history.
-  const joinedCommunityAt = (id) => {
-    const m = (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS)
-      .find(x => x.user === state.session);
-    return m ? m._ts || '' : '';
-  };
   // Newest first, through posts() so it shares the one sort.
   const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p) && !isSongPost(p));
   // The last sign of life in a circle that this reader can see: a post (only
@@ -3870,7 +3864,7 @@ const Store = (() => {
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,
     // Circles (the room; `community` in code, see "Circles")
-    communitiesReady, communities, community, communityMembers, inCommunity, myCommunities, joinedCommunityAt,
+    communitiesReady, communities, community, communityMembers, inCommunity, myCommunities,
     communityPosts, communityPulse, communityChat, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,

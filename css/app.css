@@ -7919,11 +7919,6 @@ button.poll-option:disabled { cursor: default; }
 }
 .week-card-chat svg { width: 22px; height: 22px; }
 .week-card-x svg { width: 16px; height: 16px; }
-/* A circle's card (circleNews): the daily's faces lead its third line, whole
-   and never clipped, and the room's photo sits where a plan's chat mark does. */
-.week-card-who { gap: 0.45rem; margin-top: 0.1rem; }
-.week-card-who > .daily-faces { overflow: visible; flex-shrink: 0; }
-.week-card-pic { width: 40px; height: 40px; margin: 0 0.15rem 0 0.5rem; }
 
 /* ── Friend requests on Updates — an actionable notice sitting atop the passive
    ledger. Same hairline-row language as the ledger below (and the Friends

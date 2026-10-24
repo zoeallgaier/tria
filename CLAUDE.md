@@ -118,14 +118,7 @@ one multi-beat buzz), and an empty circle offers its first post in Discover's
 dashed card with a quiet pill (`.community-first`). It can take its photo
 from the start: New circle carries the editor's photo and crop, sent behind the
 navigation once the circle exists. Joining says "You've joined c/<slug>."
-**My Circle says where something new was said** (Zoe, 2026-10-23): under the
-week's plans, one week-of card per circle you're in with a post you haven't
-seen (`circleNews`, `circleNewsHtml`), wearing the daily's faces and **names,
-never a number** ("New from Ana and Ben", `listNames`; Zoe chose names over
-the no-count rule's exception). The mark is per device
-(`tria:circle-seen:<me>`): opening the circle sets it, and so does the card's
-x, so a card returns only for something newer. Before any mark, the day you
-joined stands in (`Store.joinedCommunityAt`). **An invite is a DM** (Zoe:
+**An invite is a DM** (Zoe:
 "without bloating the app"): the circle's ••• has Invite friends
 (`openCommunityInvite`, the chat roster's picker, commits per tap), which sends
 your friend "Join me in c/<slug> on Tria." with the link, and a thread draws any
@@ -141,10 +134,12 @@ CSS), because `circle` already means your mutual friends (the `'circle'`
 audience, My Circle). Every word on screen says circle and `c/<slug>`. Do not
 rename either side.
 
-**Where a circle's posts are read:** its page, their own post page, and **the
-author's profile** (Zoe, 2026-10-23; `Store.postsBy` keeps them now). RLS hands
-them only to members, so someone else's profile shows the circles you share.
-They are dropped from My Circle (`Store.feed`). A card says which circle it was
+**Where a circle's posts are read:** its page, their own post page, **the
+author's profile** (`Store.postsBy`) and **My Circle when you or a friend wrote
+them** (`Store.feed`) (Zoe, 2026-10-23; a top-of-feed "new in your circles" card
+was built and taken out the same day in favour of this). RLS hands them only to
+members, so it is always the circles you share; a stranger's circle post stays
+in the circle. A card says which circle it was
 said in above its byline in the repost line's style, "Posted in **c/slug**" with
 the circle's mark (`communityTagHtml`, hidden on the circle's page).
 
