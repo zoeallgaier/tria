@@ -5673,8 +5673,9 @@ button.poll-option:disabled { cursor: default; }
 }
 
 /* A song somebody posted (2.0): the square is a link out to the song and the
-   heart is the post's own like, laid over the cover's top corner (Zoe: "add a
-   like button to the corner on the on repeat section"). Two siblings in one
+   heart is the post's own like, laid over the cover's bottom right corner (Zoe:
+   "add a like button to the corner on the on repeat section", then "put the
+   music like on the bottom right corner"). Two siblings in one
    box, since a button can't sit inside a link. The heart sits on a disc of the
    bar's glass so it reads on any cover, and its 44px target is the disc plus
    the clear corner around it. */
@@ -5689,7 +5690,7 @@ button.poll-option:disabled { cursor: default; }
 }
 .card-like.np-like {
   position: absolute;
-  top: 0;
+  top: calc(132px - 44px);   /* the cover's foot, not the item's: the name and who sit under it */
   right: 0;
   z-index: 1;
   display: grid;
@@ -5706,7 +5707,7 @@ button.poll-option:disabled { cursor: default; }
 .card-like.np-like::before {
   content: '';
   position: absolute;
-  top: 6px;
+  bottom: 6px;
   right: 6px;
   width: 32px;
   height: 32px;
