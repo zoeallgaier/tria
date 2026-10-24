@@ -13529,6 +13529,14 @@
       }
       // The column Circle reads in, built as far as it is read (lazy).
       syncCards(feedEl, list, wireCard, null, true);
+      // A post in a circle lands here, not on My Circle, so the circle
+      // sparkles it in the way the home feed does (Zoe), and takes the flag so
+      // My Circle doesn't sparkle it again later.
+      if (justPostedId != null) {
+        const fresh = [...feedEl.querySelectorAll(':scope > .card')]
+          .find(card => card.dataset.id === justPostedId);
+        if (fresh) { justPostedId = null; celebratePost(fresh); }
+      }
     };
 
     // The head is rebuilt only when what it says changed: a rebuild swaps the
