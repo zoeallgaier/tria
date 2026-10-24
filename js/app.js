@@ -15300,7 +15300,7 @@
       location.href = webcal;
     };
     openSheet({
-      title: 'Your Tria calendar. Plans you host, or said going or maybe to, show up in your phone’s calendar and keep up as you RSVP.',
+      title: 'Plans you host or RSVP to, synced with your phone’s calendar',
       items: [
         { label: 'Add to Calendar', icon: 'cal', run: open },
         { label: 'Copy link', icon: 'link', run: () => {
