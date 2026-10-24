@@ -108,7 +108,12 @@ Invite records the invite (`invite_to_community`, friends only) before the DM;
 the join uses it up. An invite-only circle is still on Discover with a padlock
 on its handle ("Invited" or "Invite only" after it, no Join pill unless you
 hold an invite), and a stranger's pill on its page says "Invite only" with no
-tap. Public circles' posts are still for members only.
+tap. **A public circle's posts are readable by anyone** (Zoe: "if a circle is
+public posts should be visible"), signed in or out, through
+`supabase/circle-public-posts.sql` (**NOT run** as of 2026-10-23), which widens
+`community_reads_post` and leaves `can_view_post` alone. An invite-only
+circle's stay with its members. Likes, comments and RSVPs are still for members
+(and the author's friends), so a reader joins to take part.
 
 **New circle is the composer's page**: the serif nameplate kept on the page,
 the circle's face where the type mark sits (76px, the camera on its rim; with a
@@ -146,8 +151,9 @@ Post and **Invite**. Its head says the name, and its `c/<slug>` follows a profil
 shows its size** ("N members" on its page and its Discover card, no faces, no
 roster sheet): rosters are `authenticated`-only, so anon reads a count-only
 definer function, `community_sizes()` (`supabase/public-circle-counts.sql`,
-`Store.communitySize`), never the names. A non-member's locked feed says
-"What's said here is for this circle."  **The host hears every join**: a
+`Store.communitySize`), never the names. A non-member's feed of an
+INVITE-ONLY circle says "What's said here is for this circle."; a public one
+is simply read.  **The host hears every join**: a
 row in Updates (`circlejoin`) and a push (`supabase/circle-join-news.sql`).
 The host can rename it, edit its about, give it a photo (cropped like a
 profile face, `setCommunityPhoto`), take people out, and **delete it**
@@ -186,9 +192,9 @@ rename either side.
 **Where a circle's posts are read:** its page, their own post page, **the
 author's profile** (`Store.postsBy`) and **My Circle when you or a friend wrote
 them** (`Store.feed`) (Zoe, 2026-10-23; a top-of-feed "new in your circles" card
-was built and taken out the same day in favour of this). RLS hands them only to
-members, so it is always the circles you share; a stranger's circle post stays
-in the circle. A card says which circle it was
+was built and taken out the same day in favour of this). My Circle shows them
+only for circles you share, said in `Store.feed` since public circles opened
+their posts to RLS; a stranger's circle post stays in the circle. A card says which circle it was
 said in above its byline in the repost line's style, "Posted in **c/slug**" with
 the circle's mark (`communityTagHtml`, hidden on the circle's page).
 

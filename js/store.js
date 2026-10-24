@@ -978,9 +978,10 @@ const Store = (() => {
   // and it's also the honest answer for the window between a delete landing and
   // the next pull, when the cascade has taken the original but not yet this.
   // A post said in a CIRCLE (the room, add-circles.sql) is in this feed when you
-  // or a friend wrote it (Zoe, 2026-10-23), citing its circle over the byline.
-  // RLS hands a circle's posts only to its members, so that means the circles
-  // you share. A stranger's post in a circle stays in the circle.
+  // or a friend wrote it (Zoe, 2026-10-23), citing its circle over the byline,
+  // and only in the circles you share. RLS used to make that true by itself;
+  // since a public circle's posts are readable by anyone (circle-public-posts.sql)
+  // it is said here. A stranger's post in a circle stays in the circle.
   //
   // A MUSIC POST is in no feed either (Zoe, 2026-10-22: "posts for music
   // aren't needed so get rid of those"). Posting a song is putting it on
@@ -992,7 +993,8 @@ const Store = (() => {
     const circle = new Set([state.session, ...friends()]);
     const followed = new Set(following());
     return posts().filter(p =>
-      visibleRepost(p) && !isSongPost(p) && (
+      visibleRepost(p) && !isSongPost(p)
+      && (!p.communityId || p.author === state.session || inCommunity(p.communityId)) && (
         circle.has(p.author) ||
         (followed.has(p.author) && p.audience === 'public')));
   }
@@ -3110,8 +3112,10 @@ const Store = (() => {
       write('communityMembers', () => before);
       return { ok: false, error: communityError(error, 'Couldn’t leave, try again.') };
     }
-    // What I could read only as a member goes with me; my own posts stay.
-    write('posts', ps => ps.filter(p => p.communityId !== id || p.author === me));
+    // What I could read only as a member goes with me; my own posts stay. A
+    // public circle's are anyone's to read (circle-public-posts.sql), so they stay.
+    const shut = !!(community(id) || {}).inviteOnly;
+    if (shut) write('posts', ps => ps.filter(p => p.communityId !== id || p.author === me));
     await afterCommunityWrite();
     return { ok: true };
   }

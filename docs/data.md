@@ -1474,6 +1474,15 @@ a signed-out read is a clean `[]`. The rows stay readable to anyone, like a
 private profile's card, and Discover lists an invite-only circle with a padlock
 on its handle and no Join unless you hold an invite.
 
+**A public circle's posts are anyone's to read** (`supabase/circle-public-posts.sql`,
+2026-10-23). One helper changes: `community_reads_post` answers true for a post
+in a circle that is not invite only, or for a member. `can_view_post` is not
+restated, so its block gate is untouched and still runs first. Anon reads them
+too, as it reads a public post. My Circle keeps to the circles you share by
+saying so in `Store.feed`, since RLS no longer does it alone; leaving a public
+circle keeps its posts in the cache. Likes, comments and RSVPs stay gated in
+the client to members and the author's friends (`canSocial`, `canJoin`).
+
 **IN CODE IT IS A `community`**, in the schema, the store, app.js and the CSS
 alike, because `circle` already means your mutual friends: `posts.audience =
 'circle'`, My Circle, `#/friends/<name>`. A row carrying `audience = 'circle'`

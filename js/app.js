@@ -13478,8 +13478,10 @@
     const wireCard = (card) => card.querySelectorAll('.tag[data-tag]').forEach(btn =>
       btn.addEventListener('click', () => { discoverQuery = btn.dataset.tag; go('#/discover'); }));
 
+    // A public circle is read by anyone (circle-public-posts.sql); an
+    // invite-only one by its members.
     const paintFeed = (c) => {
-      if (!Store.inCommunity(c.id)) {
+      if (c.inviteOnly && !Store.inCommunity(c.id)) {
         dropCards();
         feedEl.innerHTML =
           `<div class="profile-locked">` +
@@ -13489,13 +13491,18 @@
               ? 'Make an account, then join to read along.'
               : !Store.canJoinCommunity(c)
                 ? 'It’s invite only. Someone in it can invite you.'
-                : c.inviteOnly
-                  ? 'You’re invited. Join to read along and say something.'
-                  : 'Join to read along and say something. Anyone can.'}</p>` +
+                : 'You’re invited. Join to read along and say something.'}</p>` +
           `</div>`;
         return;
       }
       const list = Store.communityPosts(c.id).filter(p => !Blocks.has(p.author));
+      // An empty public circle, to someone outside it: nothing to read, and
+      // the first post is a member's to write.
+      if (!list.length && !Store.inCommunity(c.id)) {
+        dropCards();
+        feedEl.innerHTML = `<p class="feed-empty">Nothing posted here yet.</p>`;
+        return;
+      }
       if (!list.length) {
         dropCards();
         // An empty room asks for its first post in the dashed card Discover
