@@ -5676,9 +5676,8 @@ button.poll-option:disabled { cursor: default; }
    heart is the post's own like, laid over the cover's bottom right corner (Zoe:
    "add a like button to the corner on the on repeat section", then "put the
    music like on the bottom right corner"). Two siblings in one
-   box, since a button can't sit inside a link. The heart sits on a disc of the
-   bar's glass so it reads on any cover, and its 44px target is the disc plus
-   the clear corner around it. */
+   box, since a button can't sit inside a link. Its 44px target is the clear
+   corner around the heart. */
 .np-item--post { position: relative; cursor: default; }
 .np-open {
   display: flex;
@@ -5700,29 +5699,17 @@ button.poll-option:disabled { cursor: default; }
   padding: 0;
   border: 0;
   background: none;
-  color: var(--text);
+  color: #fff;
   --heart-size: 18px;
   cursor: pointer;
 }
-.card-like.np-like::before {
-  content: '';
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--glass-bg-panel);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-          backdrop-filter: blur(var(--glass-blur));
-  /* A soft shadow lifts it off the cover instead of a hairline (Zoe). It lies
-     on artwork, never on paper, so one shadow serves both themes. */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
-  z-index: -1;
+/* No disc (Zoe: "no circle at all"): the heart lies bare on the cover, white
+   with a soft shadow of its own so it reads on light art and dark alike. */
+.card-like.np-like svg {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
-/* The disc is centred on the button, so the heart, its pop and its ink flood
-   all land in the middle of it with no offsets of their own. */
-.card-like.np-like svg { width: 18px; height: 18px; }
 .card-like.np-like.liked { color: var(--burst, var(--heart)); }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
