@@ -117,6 +117,13 @@ const Store = (() => {
   // Whether the last readWorld got a real answer out of the users table (see
   // readWorld and hydrate). Not part of the world, so clearWorld leaves it.
   let usersFresh = false;
+  // A face this device just cropped, by the URL it was uploaded to. The crop IS
+  // the picture, so a face drawn after the upload lands keeps drawing the bytes
+  // already on screen instead of fetching the same photo back from the server
+  // (a new circle's face blanked and loaded twice, under its own celebration).
+  // This session only; a cold launch fetches as ever.
+  const localFaces = new Map();
+  const localFace = (url) => (url && localFaces.get(url)) || null;
   function write(key, fn) {
     state[key] = fn(state[key]);
     if (loadsInFlight) pendingWrites.push([key, fn]);
@@ -133,6 +140,7 @@ const Store = (() => {
   // answering a question that no longer has an asker.
   function clearWorld() {
     stopLive();
+    localFaces.clear();
     worldGen++;
     pendingWrites = [];
     state = empty();
@@ -3059,6 +3067,7 @@ const Store = (() => {
       if (url) dropUploads([url]);
       return { ok: false, error: communityError(error, 'Couldn’t save the photo, try again.') };
     }
+    if (url) localFaces.set(url, dataURI);
     patch(url);
     return { ok: true };
   }
@@ -3113,6 +3122,7 @@ const Store = (() => {
     }
     const { error } = await sb.from('users').update({ avatar: url }).eq('id', id);
     if (error) { revert(); return { ok: false, error: 'Couldn’t save your photo.' }; }
+    if (url) localFaces.set(url, dataURI);
     patchUser(id, { avatar: url });
     return { ok: true };
   }
@@ -3879,7 +3889,7 @@ const Store = (() => {
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,
     // Profile
-    updateAvatar, updateProfile, updateAccent, setListeningTo,
+    updateAvatar, updateProfile, updateAccent, setListeningTo, localFace,
     // Pins
     setPins,
   };

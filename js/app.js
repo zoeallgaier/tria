@@ -2260,6 +2260,10 @@
   const SIZE_STEPS = [128, 256, 540, 720, 1080];
   let resizeOff = false;
   function sizedSrc(url, cssPx) {
+    // A face this device just uploaded draws its own crop, already decoded,
+    // rather than fetching itself back (Store.localFace).
+    const local = Store.localFace(url);
+    if (local) return local;
     if (!url || !cssPx || resizeOff || !url.includes(STORE_OBJECT)) return url || '';
     if (/\.(gif|mp4|mov|m4v|webm)(?=$|[?#])/i.test(url)) return url;
     const want = Math.ceil(cssPx * Math.min(3, window.devicePixelRatio || 2));
@@ -4682,9 +4686,10 @@
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
 
-  /* THE TWINKLE: a circle just started (Zoe: "a sparkly haptic to celebrate").
+  /* THE TWINKLE: a circle just started (Zoe: "a sparkly haptic to celebrate"),
+     or a face just changed (yours, or a circle's you host).
      One MEDIUM for the moment it lands, then light taps thinning out into the
-     selection generator's tiny ticks, timed to the stars of celebrateCircle so
+     selection generator's tiny ticks, timed to the stars of celebrateFace so
      the hand feels each one wink. It is the app's one multi-beat buzz, and that
      is fine against the bridge toll above: it fires once, on a confirmed write,
      onto a page that has just painted and is not scrolling. The web gets the
@@ -7706,6 +7711,7 @@
     // ••• down the column repaints the stack above it. Only your own, because
     // nothing you can do changes what somebody else has pinned.
     pinsRepaint = isSelf ? paintPins : null;
+    if (arrivedChanged('u/' + u.username) && isSelf) celebrateFace(view.querySelector('.account'));
 
     /* A SONG PIN WHOSE SONG HAS GONE is the one dangling pin no write is
        watching. A cleared song takes its pin with it (Store.setListeningTo) and
@@ -8626,6 +8632,8 @@
         // A freshly cropped photo commits alongside — optimistic (cache updates
         // synchronously), upload in the background; on failure the store reverts.
         const pendingAvatar = shot ? Store.updateAvatar(shot) : null;
+        // A new face is celebrated on the profile that wears it.
+        if (shot) celebrateArrival = 'u/' + Store.session();
         leave();
         if (pendingAvatar) pendingAvatar.then(r => { if (!r.ok) { revertedAvatar(); toast(r.error); } });
       } finally {
@@ -11497,7 +11505,15 @@
   // The circle (the room) a compose was opened from, by id. Set by its page's
   // Post button, consumed by renderPublish.
   let pendingCommunity = null;
-  let justStartedCommunity = null;   // slug of a circle just started → celebrate it on arrival
+  // The page whose face just changed ('c/<slug>' for a circle started or given
+  // a photo, 'u/<username>' for your own new photo), celebrated when it next
+  // paints. Whichever of the two pages paints first takes it, so it can't fire late.
+  let celebrateArrival = null;
+  const arrivedChanged = (key) => {
+    const hit = celebrateArrival === key;
+    celebrateArrival = null;
+    return hit;
+  };
   let answeringDaily = null;
 
   // A quote rides into the composer the same way a daily does, and for the same
@@ -13350,8 +13366,7 @@
 
   function renderCommunity(slug) {
     communityRepaint = null;
-    const born = justStartedCommunity === slug;
-    justStartedCommunity = null;
+    const born = arrivedChanged('c/' + slug);
     const back = communityBackTarget();
     const first = Store.community(slug);
     if (!first) {
@@ -13475,22 +13490,31 @@
       syncCards(feedEl, list, wireCard, null, true);
     };
 
+    // The head is rebuilt only when what it says changed: a rebuild swaps the
+    // face's <img> for a new one, which blinks, and cuts a celebration short.
+    let headNow = '';
     const paint = () => {
       const c = Store.community(id);
       if (!c) return false;
-      headEl.innerHTML = headHtml(c);
-      wireHead(c);
+      const html = headHtml(c);
+      if (html !== headNow) {
+        headEl.innerHTML = headNow = html;
+        wireHead(c);
+      }
       paintFeed(c);
       return true;
     };
 
-    function wireHead(c) {
-      headEl.querySelector('#community-members')?.addEventListener('click', () => openCommunityMembers(c));
+    function wireHead(wired) {
+      // The newest row at the tap: a head kept across repaints outlives the
+      // row it was wired with.
+      const c = Store.community(id) || wired;
+      headEl.querySelector('#community-members')?.addEventListener('click', () => openCommunityMembers(Store.community(id) || c));
       headEl.querySelector('#community-post')?.addEventListener('click', () => {
         pendingCommunity = c.id;
         go('#/publish');
       });
-      headEl.querySelector('#community-invite')?.addEventListener('click', () => openCommunityInvite(c));
+      headEl.querySelector('#community-invite')?.addEventListener('click', () => openCommunityInvite(Store.community(id) || c));
       const join = headEl.querySelector('#community-join');
       join?.addEventListener('click', async () => {
         if (join.disabled) return;
@@ -13518,12 +13542,14 @@
       return paint();
     };
     paint();
-    if (born) celebrateCircle(headEl);
+    if (born) celebrateFace(headEl);
   }
 
-  /* A circle is born: the twinkle in the hand, and the brand's own stars
-     bursting out of its face, alternating the ramp's two ends. Anchored like
-     celebratePost's, a fixed layer over the photo's resting box, one-shot.
+  /* A circle is born, or a face is new (your own photo, a circle's): the
+     twinkle in the hand, and the brand's own stars bursting out of the face,
+     alternating the ramp's two ends. Anchored like celebratePost's, a fixed
+     layer over the photo's resting box, one-shot. It waits for the photo to
+     decode (at most 600ms), so the stars never fly off a face still loading.
      Reduced motion keeps the twinkle (a haptic isn't motion) and drops the
      stars. Offsets in px from the face's centre, out past its edge. */
   const CIRCLE_SPARKS = [
@@ -13540,30 +13566,36 @@
     { x:  58, y:  62, s: 11, r: -18, d: 430 },
     { x: -86, y: -64, s:  8, r:  12, d: 480 },
   ];
-  function celebrateCircle(headEl) {
-    hapticTwinkle();
-    if (prefersReduced()) return;
-    setTimeout(() => {
-      const face = headEl.querySelector('.account-photo') || headEl;
-      const r = face.getBoundingClientRect();
-      if (!r.width) return;
-      face.classList.add('community-born');
-      setTimeout(() => face.classList.remove('community-born'), 700);
-      const layer = document.createElement('div');
-      layer.className = 'circle-sparkles';
-      layer.style.left = (r.left + r.width / 2) + 'px';
-      layer.style.top = (r.top + r.height / 2) + 'px';
-      CIRCLE_SPARKS.forEach((p, i) => {
-        const s = document.createElement('span');
-        s.className = 'spark';
-        s.style.cssText =
-          `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms;` +
-          `--burst:var(${i % 2 ? '--brand-end' : '--brand-start'})`;
-        layer.appendChild(s);
-      });
-      document.body.appendChild(layer);
-      setTimeout(() => layer.remove(), 1700);
-    }, 120);
+  function celebrateFace(root) {
+    const face = root.querySelector('.account-photo') || root;
+    const img = face.querySelector('img');
+    const decoded = img && img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+    Promise.race([decoded, new Promise(r => setTimeout(r, 600))]).then(() => {
+      if (!face.isConnected) return;
+      hapticTwinkle();
+      if (prefersReduced()) return;
+      setTimeout(() => burstFace(face), 120);
+    });
+  }
+  function burstFace(face) {
+    const r = face.getBoundingClientRect();
+    if (!r.width || !face.isConnected) return;
+    face.classList.add('face-born');
+    setTimeout(() => face.classList.remove('face-born'), 700);
+    const layer = document.createElement('div');
+    layer.className = 'circle-sparkles';
+    layer.style.left = (r.left + r.width / 2) + 'px';
+    layer.style.top = (r.top + r.height / 2) + 'px';
+    CIRCLE_SPARKS.forEach((p, i) => {
+      const s = document.createElement('span');
+      s.className = 'spark';
+      s.style.cssText =
+        `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms;` +
+        `--burst:var(${i % 2 ? '--brand-end' : '--brand-start'})`;
+      layer.appendChild(s);
+    });
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 1700);
   }
 
   /* STARTING ONE, and its host's editor, are the same form: a name and an about
@@ -13783,6 +13815,8 @@
           // the circle's head already wears it, and a refusal says so.
           const pending = shot ? Store.setCommunityPhoto(editing.id, shot)
             : photoOff ? Store.setCommunityPhoto(editing.id, null) : null;
+          // A new face is celebrated on the page that wears it.
+          if (shot) celebrateArrival = 'c/' + editing.slug;
           if (canPop) history.back(); else go(communityRoute(editing));
           if (pending) pending.then(r => {
             if (r && r.ok) { communityRepaint?.(); return; }
@@ -13809,11 +13843,14 @@
         }
         // The celebration (the twinkle and the stars) waits for the circle's
         // own page, where there is something to sparkle.
-        justStartedCommunity = slug;
+        celebrateArrival = 'c/' + slug;
+        // The photo is in the cache (synchronously, the crop itself) before the
+        // page paints, so the face the stars burst from is the one it keeps.
+        const pending = shot ? Store.setCommunityPhoto(res.id, shot) : null;
         // In place of the form, so back from the new circle is where you were
         // before you started it, not a form that already did its job.
         location.replace(`#/c/${encodeURIComponent(slug)}`);
-        if (shot) Store.setCommunityPhoto(res.id, shot).then(r => {
+        if (pending) pending.then(r => {
           if (!(r && r.ok)) toast((r && r.error) || 'Couldn’t save the photo, try again.');
           communityRepaint?.();
         }, () => {});

@@ -9947,8 +9947,8 @@ a.daily-answer { text-decoration: none; }
 .community-first { align-self: stretch; margin: 0; }
 @media (max-width: 680px) { .community-first { margin-inline: 1.15rem; } }
 
-/* A circle is born (celebrateCircle): Tria's own ramp in stars, the start and
-   end of the band alternating, bursting out of the circle's face and drifting
+/* A circle is born, or a face is new (celebrateFace): Tria's own ramp in
+   stars, the start and end of the band alternating, bursting out of the face and drifting
    on, while the face itself gives one small pop. One-shot, transform and
    opacity only. The layer is a point at the face's centre; each star flies
    from it to --x/--y. */
@@ -9970,15 +9970,15 @@ a.daily-answer { text-decoration: none; }
          animation-timing-function: linear; }
   100% { transform: translate(-50%, -50%) translate(calc(var(--x) * 1.18), calc(var(--y) * 1.18 - 14px)) scale(0.45) rotate(calc(var(--r) + 30deg)); }
 }
-.community-born { animation: community-born 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
-@keyframes community-born {
+.face-born { animation: face-born 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes face-born {
   0%   { transform: scale(0.92); }
   45%  { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
   .circle-sparkles { display: none; }
-  .community-born { animation: none; }
+  .face-born { animation: none; }
 }
 /* Its wave-off, in the corner a circle's photo takes on the other cards, and
    above the stretched link so the tap is the X's own. */
