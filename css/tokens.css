@@ -608,3 +608,13 @@
     --pill-edge: 1px solid color-mix(in srgb, var(--text) 50%, transparent);
   }
 }
+
+/* NO COLOUR, BOOSTED (Zoe, 2026-10-23: "everything almost looks greyed out").
+   --mono-band washed at 0.3 under a 26% hairline read as a disabled button, so
+   a reader on None gets a firmer hairline and a thinner film: the edge reads
+   black on paper and white on ink, and the glass stays nearly clear.
+   data-band="mono" is stamped beside --user-band (paintBrandBand). */
+html[data-band="mono"] {
+  --pill-wash: 0.12;
+  --pill-edge: 1px solid color-mix(in srgb, var(--text) 70%, transparent);
+}
