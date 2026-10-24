@@ -588,11 +588,14 @@ const Store = (() => {
       // Whether a circle can wear a photo and be deleted by its host yet
       // (circle-photo-delete.sql). The songsReady latch, once more.
       state.communityToolsReady ? { data: [], error: null } : sb.from('communities').select('avatar').limit(1),
+      // How many are in each circle, for a reader who can't see the rosters
+      // (public-circle-counts.sql). Numbers only, never names.
+      readCommunitySizes(),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct] = read;
+    const [u, p, c, l, cl, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -717,6 +720,9 @@ const Store = (() => {
     applyCommunities(cc, cm, nameById);
     if (!ct.error) state.communityToolsReady = true;
     else if (ct.error.code === '42703' || isMissing(ct.error)) state.communityToolsReady = false;
+    // A missing function reads as no counts, and the page draws none.
+    state.communitySizes = new Map((cs && !cs.error && cs.data || [])
+      .map(r => [r.community_id, Number(r.members) || 0]));
 
     // Everything written while we were waiting is newer than everything we just
     // read, so it goes back on top (see write()).
@@ -2915,6 +2921,19 @@ const Store = (() => {
   // Oldest first: the founder leads, and the order is the one ownership passes in.
   const communityMembers = (id) =>
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).map(m => m.user);
+  // How many are in a circle. A signed-in reader counts the roster it holds;
+  // a signed-out one (the public site) holds no rosters and reads the count
+  // public-circle-counts.sql hands anon instead, 0 until that is run.
+  const communitySize = (id) => (state.session
+    ? communityMembers(id).length
+    : (state.communitySizes && state.communitySizes.get(id)) || 0);
+  async function readCommunitySizes() {
+    // Asked of the auth client, like readChats: a sign-in's own load hasn't
+    // set state.session yet, and a signed-in reader has the rosters.
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) return { data: [], error: null };
+    return sb.rpc('community_sizes');
+  }
   const inCommunity = (id) => !!state.session && !!id &&
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
   const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
@@ -3852,7 +3871,7 @@ const Store = (() => {
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,
     // Circles (the room; `community` in code, see "Circles")
-    communitiesReady, communities, community, communityMembers, inCommunity, myCommunities,
+    communitiesReady, communities, community, communityMembers, communitySize, inCommunity, myCommunities,
     communityPosts, communityPulse, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,

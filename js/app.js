@@ -13027,7 +13027,8 @@
      members is a size, like a friend count, never a number to drive anywhere. */
   function communityCardHtml(c) {
     const me = Store.session();
-    const n = Store.communityMembers(c.id).length;
+    // Signed out too: a size is as public as the circle (communitySize).
+    const n = Store.communitySize(c.id);
     const mine = Store.inCommunity(c.id);
     const faces = me ? communityFaces(c, 4) : [];
     return `<section class="daily-card community-card" data-community="${esc(c.id)}">` +
@@ -13040,7 +13041,7 @@
         `</a>` +
         (c.about ? `<p class="daily-hint">${esc(c.about)}</p>` : '') +
         `<div class="daily-foot">` +
-          (n && me
+          (n
             ? `<div class="daily-answered">` +
                 (faces.length
                   ? `<div class="daily-faces" aria-hidden="true">` +
@@ -13392,14 +13393,20 @@
     const headHtml = (c) => {
       const me = Store.session();
       const member = Store.inCommunity(c.id);
-      const n = Store.communityMembers(c.id).length;
+      const n = Store.communitySize(c.id);
       const host = c.owner ? Store.user(c.owner) : null;
-      const people = me && n
-        ? `<button type="button" class="account-stat account-stat--friends" id="community-members">` +
-            `<span class="account-stat-num">${n}</span> ` +
-            `<span class="account-stat-label">${memberWord(n)}</span>` +
-          `</button>`
-        : '';
+      // Signed in it opens who they are; signed out it is only the size, since
+      // the names are for people with an account.
+      const people = !n ? ''
+        : me
+          ? `<button type="button" class="account-stat account-stat--friends" id="community-members">` +
+              `<span class="account-stat-num">${n}</span> ` +
+              `<span class="account-stat-label">${memberWord(n)}</span>` +
+            `</button>`
+          : `<span class="account-stat">` +
+              `<span class="account-stat-num">${n}</span> ` +
+              `<span class="account-stat-label">${memberWord(n)}</span>` +
+            `</span>`;
       const hostedBy = host
         ? `<span class="account-stat">Hosted by ${host.username === me ? 'you' : esc(host.name || host.username)}</span>`
         : '';
@@ -13441,7 +13448,7 @@
         feedEl.innerHTML =
           `<div class="profile-locked">` +
             svgIcon('circle', 'profile-locked-ico') +
-            `<p class="profile-locked-line">What’s said here is for the people in it.</p>` +
+            `<p class="profile-locked-line">What’s said here is for this circle.</p>` +
             `<p class="profile-locked-sub">${Store.isAuthed()
               ? 'Join to read along and say something. Anyone can.'
               : 'Make an account, then join to read along.'}</p>` +

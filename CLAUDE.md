@@ -110,7 +110,12 @@ drops those as it reads them (`Store.applyChats`), and
 them and deletes the old ones with their messages. A member's two pills are
 Post and **Invite**. Its head says the name, and its `c/<slug>` follows a profile's
 @handle: hidden at phone width, where the bar's title says it
-(`.account-handle--bare`), shown on a desktop. **The host hears every join**: a
+(`.account-handle--bare`), shown on a desktop. **Signed out, a circle still
+shows its size** ("N members" on its page and its Discover card, no faces, no
+roster sheet): rosters are `authenticated`-only, so anon reads a count-only
+definer function, `community_sizes()` (`supabase/public-circle-counts.sql`,
+`Store.communitySize`), never the names. A non-member's locked feed says
+"What's said here is for this circle."  **The host hears every join**: a
 row in Updates (`circlejoin`) and a push (`supabase/circle-join-news.sql`).
 The host can rename it, edit its about, give it a photo (cropped like a
 profile face, `setCommunityPhoto`), take people out, and **delete it**
@@ -520,6 +525,13 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `Store.communitiesReady` is false and nothing of circles shows anywhere. **Not
   confirmed: that the push function was redeployed after it** (it learned circles
   in the same commit and reads `community_members`); REST can't tell.
+  **`public-circle-counts.sql` is confirmed run** (2026-10-23): anon
+  `POST /rest/v1/rpc/community_sizes` with `{}` answers
+  `[{"community_id":…,"members":2}]` (it was a 404 minutes before), while anon
+  `community_members` still answers `[]`. Were it ever missing again, a
+  signed-out circle simply shows no count. **`drop-circle-chats.sql` can't be
+  verified over REST** (anon reads no chats, and `create_community` keeps its
+  signature); the client hides circle chats either way.
   **`circle-photo-delete.sql` is confirmed run** (2026-10-23): anon
   `GET /rest/v1/communities?select=avatar&limit=1` answered 42703 on 2026-10-22
   and `[{"avatar":null}]` now, and `set_community_photo` answers its own 42501
