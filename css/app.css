@@ -5700,14 +5700,14 @@ button.poll-option:disabled { cursor: default; }
   border: 0;
   background: none;
   color: #fff;
-  --heart-size: 18px;
+  --heart-size: 24px;
   cursor: pointer;
 }
 /* No disc (Zoe: "no circle at all"): the heart lies bare on the cover, white
    with a soft shadow of its own so it reads on light art and dark alike. */
 .card-like.np-like svg {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 .card-like.np-like.liked { color: var(--burst, var(--heart)); }
