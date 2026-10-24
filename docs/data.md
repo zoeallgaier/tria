@@ -1452,8 +1452,8 @@ DB says "Music posts aren't switched on yet." rather than "try again".
 **A circle is a room for an interest** at `#/c/<slug>`, which anyone signed in
 can start (ten held each) and anyone can join (`supabase/add-circles.sql`,
 confirmed run 2026-10-22; `supabase/circle-photo-delete.sql` adds the host's
-photo and Delete, NOT run as of the same day, probe 42703 on
-`communities.avatar`). Zoe asked for it to be built
+photo and Delete, confirmed run 2026-10-23, probe `[{"avatar":null}]` on
+`communities.avatar` where it answered 42703 the day before). Zoe asked for it to be built
 out of "existing audience and group chat features", and it is exactly those two
 things with a page in front of them.
 
@@ -1498,12 +1498,15 @@ the same news on the `community_members` insert ("Ana joined c/dnd"). Your own
 row, the circle being started, is neither. An heir inherits the ledger of every
 earlier join, since nothing records when a circle changed hands.
 
-**Where a circle's posts are read.** On the circle's page and their own post
-page, and nowhere else. `Store.feed` and `Store.postsBy` drop them (and
-`Store.discover`, which only Discover's people search still reads, for what
-someone has said): My Circle is your friends, and a post said in a hobby circle was said to
-the circle. A card says which circle it was said in above its byline
-(`communityTagHtml`), except on that circle's own page. A circle post can't be
+**Where a circle's posts are read.** On the circle's page, their own post
+page, and the author's profile. `Store.feed` drops them (and `Store.discover`,
+which only Discover's people search still reads, for what someone has said): My
+Circle is your friends, and a post said in a hobby circle was said to the
+circle. A profile is everything the person said that you can read (Zoe,
+2026-10-23), so `Store.postsBy` keeps them; RLS hands a circle's posts only to
+its members, so a profile shows the circles you share with its owner. A card
+says which circle it was said in above its byline, in the repost line's style
+("Posted in c/slug", `communityTagHtml`), except on that circle's own page. A circle post can't be
 pinned to a profile, and sharing a song into a circle doesn't set your listening
 status (the status is read by everyone).
 
@@ -1546,3 +1549,22 @@ feed (`isSongPost` in store.js filters it, and any repost of one, out of
 refuses to aim one at a circle. On repeat over My Circle reads each of your
 people's newest song post from the last seven days, and a friend's square
 carries that post's like.
+
+**News on My Circle is a mark on the device, not a row.** A circle's posts
+are read only in the circle, so My Circle carries one card per room with a post
+newer than your mark (`circleNews`). The mark lives in localStorage
+(`tria:circle-seen:<me>`, the week-of cards' habit), set by opening the circle
+or waving the card off. Before there is one, the day you joined
+(`Store.joinedCommunityAt`, the roster row's `joined_at`) stands in. A server
+read-mark would sync across devices, but it would need a table and a write on
+every visit, and the card it would protect is cheap to see twice. The card names
+who posted and never how many (the no-count rule).
+
+**An invite is a direct message.** A circle is open, so an invite grants
+nothing and only has to arrive. A DM already arrives, with its push, the Chats
+dot and its request flow, so Invite friends (`openCommunityInvite`) is
+`startDirectChat` then `sendMessage` with the circle's link. The thread draws
+any circle link as the circle (`circleInMessage`, matched to triaonline.com or
+the page's own host, and only for a circle the cache knows). "Already invited"
+is read off your own messages in that DM. There is no table, no update kind and
+no push change.

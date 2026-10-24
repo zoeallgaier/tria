@@ -7685,6 +7685,30 @@ button.poll-option:disabled { cursor: default; }
   opacity: var(--pill-alpha);
 }
 .msg--mine .msg-bubble a { color: inherit; }
+/* A circle's link in a message, drawn as the circle (circleInMessage). */
+.msg-circle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 100%;
+  padding: 0.55rem 1rem 0.55rem 0.55rem;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+.msg-circle-pic { width: 40px; height: 40px; }
+.msg-circle-text { display: flex; flex-direction: column; min-width: 0; }
+.msg-circle-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-circle-sub { font-size: 0.8rem; color: var(--muted); }
 .msg-photo {
   display: block;
   width: min(240px, 100%);
@@ -7895,6 +7919,11 @@ button.poll-option:disabled { cursor: default; }
 }
 .week-card-chat svg { width: 22px; height: 22px; }
 .week-card-x svg { width: 16px; height: 16px; }
+/* A circle's card (circleNews): the daily's faces lead its third line, whole
+   and never clipped, and the room's photo sits where a plan's chat mark does. */
+.week-card-who { gap: 0.45rem; margin-top: 0.1rem; }
+.week-card-who > .daily-faces { overflow: visible; flex-shrink: 0; }
+.week-card-pic { width: 40px; height: 40px; margin: 0 0.15rem 0 0.5rem; }
 
 /* ── Friend requests on Updates — an actionable notice sitting atop the passive
    ledger. Same hairline-row language as the ledger below (and the Friends
@@ -9976,20 +10005,22 @@ a.daily-answer { text-decoration: none; }
 .community-start-x svg { width: 16px; height: 16px; }
 .community-start-x ~ .daily-open { padding-right: 2.5rem; }
 
-/* Which circle a post was said in, over its byline (communityTagHtml). Small
-   print in the caption voice, a link in, and absent on the circle's own page,
-   where every card would be saying the page's name. */
+/* Which circle a post was said in, over its byline (communityTagHtml), in the
+   repost line's measure (.card-passed): "Posted in c/<slug>", a link in, and
+   absent on the circle's own page, where every card would be saying the page's
+   name. */
 .card-community {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
+  gap: 0.42rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
   color: var(--muted);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-decoration: none;
 }
-.card-community-ico { width: 0.95rem; height: 0.95rem; }
+.card-community b { font-weight: 700; color: inherit; }
+.card-community-ico { width: 15px; height: 15px; flex-shrink: 0; }
 @media (hover: hover) { .card-community:hover { color: var(--text); } }
 .view--community .card-community { display: none; }
 

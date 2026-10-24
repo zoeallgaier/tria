@@ -1108,9 +1108,12 @@ const Store = (() => {
     }
     return list;
   }
-  // A profile is what someone posted to their people. What they posted into a
-  // circle stays in the circle (see feed).
-  const postsBy = (username) => posts().filter(p => p.author === username && !p.communityId && !isSongPost(p));
+  // A profile is everything someone has said that you can read, circle posts
+  // included (Zoe, 2026-10-23), each citing its circle the way a repost cites
+  // its reposter. RLS hands a circle's posts only to its members, so on someone
+  // else's profile that means the circles you share. My Circle still leaves
+  // them out (see feed).
+  const postsBy = (username) => posts().filter(p => p.author === username && !isSongPost(p));
 
   // How many people a targeted post is shared with. Accurate for posts you
   // authored (RLS gives you all their allowlist rows); 0 for others' posts.
@@ -2912,6 +2915,13 @@ const Store = (() => {
   const inCommunity = (id) => !!state.session && !!id &&
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
   const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
+  // When I took my seat, so My Circle's news about a room starts there and not
+  // at the room's whole history.
+  const joinedCommunityAt = (id) => {
+    const m = (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS)
+      .find(x => x.user === state.session);
+    return m ? m._ts || '' : '';
+  };
   // Newest first, through posts() so it shares the one sort.
   const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p) && !isSongPost(p));
   // The last sign of life in a circle that this reader can see: a post (only
@@ -3860,7 +3870,7 @@ const Store = (() => {
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,
     // Circles (the room; `community` in code, see "Circles")
-    communitiesReady, communities, community, communityMembers, inCommunity, myCommunities,
+    communitiesReady, communities, community, communityMembers, inCommunity, myCommunities, joinedCommunityAt,
     communityPosts, communityPulse, communityChat, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,

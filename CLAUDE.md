@@ -115,7 +115,23 @@ held per person. A circle post cannot be reposted or pinned to a profile.
 with the brand's stars bursting off its face (`celebrateCircle`, cyan and green
 alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's
 one multi-beat buzz), and an empty circle offers its first post in Discover's
-dashed card with a quiet pill (`.community-first`).
+dashed card with a quiet pill (`.community-first`). It can take its photo
+from the start: New circle carries the editor's photo and crop, sent behind the
+navigation once the circle exists. Joining says "You've joined c/<slug>."
+**My Circle says where something new was said** (Zoe, 2026-10-23): under the
+week's plans, one week-of card per circle you're in with a post you haven't
+seen (`circleNews`, `circleNewsHtml`), wearing the daily's faces and **names,
+never a number** ("New from Ana and Ben", `listNames`; Zoe chose names over
+the no-count rule's exception). The mark is per device
+(`tria:circle-seen:<me>`): opening the circle sets it, and so does the card's
+x, so a card returns only for something newer. Before any mark, the day you
+joined stands in (`Store.joinedCommunityAt`). **An invite is a DM** (Zoe:
+"without bloating the app"): the circle's ••• has Invite friends
+(`openCommunityInvite`, the chat roster's picker, commits per tap), which sends
+your friend "Join me in c/<slug> on Tria." with the link, and a thread draws any
+circle link as the circle under the words (`circleInMessage`, `.msg-circle`).
+No table and no new update kind; a friend whose DM already holds your link for
+it shows as invited.
 A plan posted in a circle can be answered by its members (`canJoin`), and only
 the members who answered are reminded.
 
@@ -125,9 +141,12 @@ CSS), because `circle` already means your mutual friends (the `'circle'`
 audience, My Circle). Every word on screen says circle and `c/<slug>`. Do not
 rename either side.
 
-**Where a circle's posts are read:** its page and their own post page. They are
-dropped from My Circle (`Store.feed`) and from profiles (`Store.postsBy`). A card says which circle
-it was said in above its byline (`communityTagHtml`, hidden on the circle's page).
+**Where a circle's posts are read:** its page, their own post page, and **the
+author's profile** (Zoe, 2026-10-23; `Store.postsBy` keeps them now). RLS hands
+them only to members, so someone else's profile shows the circles you share.
+They are dropped from My Circle (`Store.feed`). A card says which circle it was
+said in above its byline in the repost line's style, "Posted in **c/slug**" with
+the circle's mark (`communityTagHtml`, hidden on the circle's page).
 
 **Discover IS circles** (Zoe: "remove the posts from the Discover feed. THIS is
 the new way to discover."). It shows NO posts: today's daily, then **Circles**
@@ -497,15 +516,12 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
   `Store.communitiesReady` is false and nothing of circles shows anywhere. **Not
   confirmed: that the push function was redeployed after it** (it learned circles
   in the same commit and reads `community_members`); REST can't tell.
-  **`circle-photo-delete.sql` is NOT run** (re-probed 2026-10-22 after Zoe said
-  everything was in: `communities.avatar` still 42703, and `delete_community` /
-  `set_community_photo` answer PGRST202 called with their real signatures, the
-  same as a bogus control, while `update_community` from add-circles.sql answers
-  its own 42501): anon
-  `GET /rest/v1/communities?select=avatar&limit=1` answers 42703 until it is
-  (a 400 in a boot pass's console, the one the probe makes). Until then
-  `Store.communityToolsReady` is false: no photo in the circle editor and no
-  Delete circle in the host's menu.
+  **`circle-photo-delete.sql` is confirmed run** (2026-10-23): anon
+  `GET /rest/v1/communities?select=avatar&limit=1` answered 42703 on 2026-10-22
+  and `[{"avatar":null}]` now, and `set_community_photo` answers its own 42501
+  "Only the circle's host can do that." where it answered PGRST202. Were the
+  column ever missing again, `Store.communityToolsReady` is false: no photo on
+  New circle or in the editor, and no Delete circle in the host's menu.
 
 ## Copy style
 

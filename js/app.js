@@ -2435,16 +2435,20 @@
       `</header>`;
   }
 
-  // Which circle (the room) a post was said in, above its byline, the way a
-  // subreddit names itself over a post: c/pottery, a link into it. The circle's
-  // own page hides it (.view--community .card-community), where it would say the page's name
+  // Which circle (the room) a post was said in, above its byline, worn in the
+  // repost line's style (Zoe: "with the reposts style citing"): the circle's
+  // mark where a repost has its arrows, then "Posted in c/pottery", a link in.
+  // It matters most on a profile, where circle posts sit among everything else
+  // the person said. The circle's own page hides it
+  // (.view--community .card-community), where it would say the page's name
   // over every card.
   function communityTagHtml(post) {
     if (!post.communityId) return '';
     const c = Store.community(post.communityId);
     if (!c) return '';
     return `<a class="card-community" href="${communityRoute(c)}">` +
-      svgIcon('circle', 'card-community-ico') + `<span>${esc(communityHandle(c))}</span></a>`;
+      svgIcon('circle', 'card-community-ico') +
+      `<span>Posted in <b>${esc(communityHandle(c))}</b></span></a>`;
   }
 
   // A slim single-author meta line that stands in for the byline on a profile,
@@ -5747,6 +5751,58 @@
     try { return new Set(JSON.parse(localStorage.getItem(weekKey()) || '[]')); }
     catch { return new Set(); }
   }
+  /* ── What's new in your circles (2.0) ──────────────────────────────────────
+     A circle's posts stay out of My Circle, so My Circle says where something
+     was said instead: one card per circle you're in with a post you haven't
+     seen, under the plans, in the week-of card's shape. It says WHO, with the
+     daily's faces and their names, never how many (the no-count rule; Zoe
+     chose names). The mark is per device: opening the circle sets it, and so
+     does waving the card off, so a card only comes back for something newer.
+     It clears by looking, the way the dots do. Before any mark, the day you
+     joined stands in, so a busy room doesn't greet you with its history. */
+  const circleSeenKey = () => `tria:circle-seen:${Store.session()}`;
+  function circleSeen() {
+    try { return JSON.parse(localStorage.getItem(circleSeenKey()) || '{}') || {}; }
+    catch { return {}; }
+  }
+  function markCircleSeen(id) {
+    const marks = circleSeen();
+    marks[id] = new Date().toISOString();
+    try { localStorage.setItem(circleSeenKey(), JSON.stringify(marks)); } catch { /* private window */ }
+  }
+  function circleNews() {
+    const me = Store.session();
+    if (!me || !Store.communitiesReady()) return [];
+    const seen = circleSeen();
+    return Store.myCommunities().map(c => {
+      const since = Date.parse(seen[c.id] || Store.joinedCommunityAt(c.id)) || 0;
+      const fresh = Store.communityPosts(c.id)
+        .filter(p => p.author !== me && !Blocks.has(p.author) && Date.parse(p._ts) > since);
+      return fresh.length ? { c, fresh } : null;
+    }).filter(Boolean)
+      .sort((a, b) => (a.fresh[0]._ts < b.fresh[0]._ts ? 1 : a.fresh[0]._ts > b.fresh[0]._ts ? -1 : 0));
+  }
+  function circleNewsHtml({ c, fresh }) {
+    // Newest first, each person once.
+    const who = [...new Set(fresh.map(p => p.author))];
+    const faces = who.slice(0, 3).map(u => Store.user(u)).filter(Boolean);
+    return `<div class="week-card week-card--circle" data-circle="${esc(c.id)}">` +
+        `<a class="week-card-link" href="${communityRoute(c)}">` +
+          `<span class="week-card-kicker">${svgIcon('circle')}${esc(communityHandle(c))}</span>` +
+          `<span class="week-card-title">${esc(c.name)}</span>` +
+          `<span class="week-card-place week-card-who">` +
+            (faces.length
+              ? `<span class="daily-faces" aria-hidden="true">` +
+                  faces.map(u => avatarEl(u, { cls: 'daily-face' })).join('') + `</span>`
+              : '') +
+            `<span>New from ${esc(listNames(who.map(displayNameOf)))}</span>` +
+          `</span>` +
+        `</a>` +
+        (c.avatar ? communityPicHtml(c, 'week-card-pic', 88) : '') +
+        `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
+      `</div>`;
+  }
+
   function paintWeekCards() {
     const box = view.querySelector('#week-cards');
     if (!box) return;
@@ -5762,7 +5818,8 @@
         && !isPastActivity(p) && !gone.has(String(p.id)) && !Blocks.has(p.author)
         && (p.author === me || Store.myRsvp(p.id) === 'going'))
       .sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0));
-    box.hidden = !plans.length;
+    const news = circleNews();
+    box.hidden = !plans.length && !news.length;
     box.innerHTML = plans.map(p => {
       const chat = Store.chatsReady() && Store.chats().find(c => c.postId === p.id);
       return `<div class="week-card" data-id="${esc(String(p.id))}">` +
@@ -5776,12 +5833,15 @@
             : '') +
           `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
         `</div>`;
-    }).join('');
+    }).join('') + news.map(circleNewsHtml).join('');
     box.querySelectorAll('.week-card-x').forEach(x => x.addEventListener('click', () => {
       const card = x.closest('.week-card');
-      const ids = weekDismissed();
-      ids.add(card.dataset.id);
-      try { localStorage.setItem(weekKey(), JSON.stringify([...ids].slice(-200))); } catch { /* private window */ }
+      if (card.dataset.circle) markCircleSeen(card.dataset.circle);
+      else {
+        const ids = weekDismissed();
+        ids.add(card.dataset.id);
+        try { localStorage.setItem(weekKey(), JSON.stringify([...ids].slice(-200))); } catch { /* private window */ }
+      }
       hapticTap('LIGHT');
       card.remove();
       if (!box.children.length) box.hidden = true;
@@ -7457,7 +7517,8 @@
     const list = Store.postsBy(u.username).filter(p => {
       const s = subjectOf(p);
       if (!s || Blocks.has(s.author)) return false;
-      return (s.type !== 'activity' || isSelf || isFriend || s.audience === 'public') &&
+      // A circle's plan is readable here only by its members, who can answer it.
+      return (s.type !== 'activity' || isSelf || isFriend || s.audience === 'public' || !!s.communityId) &&
         (!locked || p.audience === 'public');
     });
     const friendStatus = isSelf ? null : Store.friendStatus(u.username);
@@ -13100,7 +13161,7 @@
       finally { btn.disabled = false; }
       if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
       hapticTap('LIGHT');
-      toast('You’re in. Its chat starts muted.');
+      toast(`You’ve joined ${communityHandle(c)}.`);
       go(communityRoute(c));
     }));
   }
@@ -13227,6 +13288,73 @@
     });
   }
 
+  /* INVITING IS A MESSAGE. A circle is open, so an invite needs to grant
+     nothing: it only has to reach someone. A direct message already does, with
+     its push, its dot and its request flow, so an invite is your DM to a friend
+     carrying the circle's link, which the thread draws as the circle
+     (circleInMessage). No table, no new kind of update. The sheet is the chat
+     roster's picker and commits per tap the same way; a friend whose DM already
+     holds your link for this circle shows as invited, so nobody gets it twice. */
+  const circleInviteText = (c) => `Join me in ${communityHandle(c)} on Tria. ${communityLink(c)}`;
+  function openCommunityInvite(c) {
+    const me = Store.session();
+    const inIt = new Set(Store.communityMembers(c.id));
+    const invited = (u) => {
+      const dm = Store.chatsReady() && Store.chats().find(ch => ch.kind === 'direct' && ch.other === u);
+      return !!dm && Store.messagesFor(dm.id).some(m => m.author === me
+        && (circleInMessage(m.text) || {}).c === c);
+    };
+    const people = Store.friends()
+      .filter(u => !inIt.has(u) && !Blocks.has(u))
+      .map(u => Store.user(u)).filter(Boolean)
+      .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
+    const rows = people.map((u, i) => {
+      const sent = invited(u.username);
+      return pickRowHtml(u, { on: sent, i, note: sent ? 'invited' : '', fixed: sent });
+    }).join('');
+    openSheet({
+      title: `Invite to ${communityHandle(c)}`,
+      dock: 'Done',
+      scrimClass: 'sheet-scrim--aud',
+      head:
+        `<div class="aud-list-wrap is-open">` +
+          `<div class="aud-list">` +
+            (rows || `<p class="aud-empty">${Store.friends().length
+              ? 'Your friends are all in it already.'
+              : 'Add some friends first.'}</p>`) +
+          `</div>` +
+        `</div>`,
+      wire: (scrim) => {
+        scrim.querySelectorAll('button.aud-pick').forEach(row =>
+          row.addEventListener('click', async () => {
+            if (row.dataset.busy || row.getAttribute('aria-checked') === 'true') return;
+            const u = row.dataset.user;
+            row.dataset.busy = '1';
+            row.setAttribute('aria-checked', 'true');   // flip first
+            // Hands itself back on every path, rejection included.
+            let res = null;
+            try {
+              res = await Store.startDirectChat(u);
+              if (res && res.ok) res = await Store.sendMessage(res.id, circleInviteText(c));
+            } catch { res = null; }
+            delete row.dataset.busy;
+            if (!res || !res.ok) {
+              row.setAttribute('aria-checked', 'false');
+              toast((res && res.error) || 'Couldn’t send that, try again.');
+              return;
+            }
+            hapticTap('LIGHT');
+            // Sent is sent: the row keeps its tick and takes no second tap.
+            row.classList.add('aud-pick--fixed');
+            row.setAttribute('aria-disabled', 'true');
+            const note = row.querySelector('.friend-user');
+            if (note) note.textContent = `@${u} · invited`;
+            toast(`Invited ${displayNameOf(u)}.`);
+          }));
+      },
+    });
+  }
+
   function openCommunityMenu(c) {
     const me = Store.session();
     const member = Store.inCommunity(c.id);
@@ -13234,6 +13362,7 @@
       label: 'Share circle', icon: 'send',
       run: () => handOver({ title: `${c.name} on Tria`, text: `${communityHandle(c)} on Tria`, url: communityLink(c) }),
     }];
+    if (member) items.push({ label: 'Invite friends', icon: 'newchat', run: () => openCommunityInvite(c) });
     if (me) items.push({ label: 'People', icon: 'friends', run: () => openCommunityMembers(c) });
     if (me && c.owner === me) items.push({
       label: 'Edit circle', icon: 'pencil',
@@ -13394,6 +13523,8 @@
     const paint = () => {
       const c = Store.community(id);
       if (!c) return false;
+      // Read here, so My Circle's card for this room can go (circleNews).
+      if (Store.inCommunity(c.id)) markCircleSeen(c.id);
       headEl.innerHTML = headHtml(c);
       wireHead(c);
       paintFeed(c);
@@ -13432,7 +13563,7 @@
         }
         if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
         hapticTap('LIGHT');
-        toast(`You’re in.`);
+        toast(`You’ve joined ${communityHandle(c)}.`);
         if (feedEl.isConnected) paint();
       });
     }
@@ -13516,8 +13647,9 @@
     const back = editing
       ? { href: communityRoute(editing), label: editing.name }
       : { href: '#/discover', label: 'Discover' };
-    // Only the host's editor carries the photo, and only once the column exists.
-    const photos = !!editing && Store.communityToolsReady();
+    // The photo, on a new circle and in the host's editor alike, once the
+    // column exists (circle-photo-delete.sql).
+    const photos = Store.communityToolsReady();
     const photoFace = (src) => src
       ? `<span class="avatar avatar--photo pf-photo-avatar" aria-hidden="true">` +
           `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 180))}" alt="" decoding="async"></span>`
@@ -13538,7 +13670,7 @@
         `<h1 class="visually-hidden">${editing ? 'Edit circle' : 'Start a circle'}</h1>` +
         `<form id="community-form" class="pf-form community-form" novalidate>` +
           (editing ? '' :
-            `<p class="community-form-lede">Create a circle for a hobby, interest, event, etc. ` +
+            `<p class="community-form-lede">Create a circle for a hobby, an interest or an event. ` +
               `Anyone on Tria can join via the Discover page.</p>`) +
           // Its photo, the host's to change (circle-photo-delete.sql), drawn
           // and cropped exactly as Edit profile does a face: the camera on the
@@ -13546,13 +13678,13 @@
           (photos
             ? `<div class="pf-photo" id="cf-photo">` +
                 `<div class="pf-photo-figure">` +
-                  `<span id="cf-photo-face">${photoFace(editing.avatar)}</span>` +
+                  `<span id="cf-photo-face">${photoFace(editing && editing.avatar)}</span>` +
                   `<div class="pf-photo-edit" id="cf-photo-pick" role="button" tabindex="0" ` +
                     `aria-label="Change the circle’s photo" title="Change the circle’s photo">` +
                     svgIcon('camera', 'pf-photo-ico') + `</div>` +
                 `</div>` +
               `</div>` +
-              `<p class="community-photo-off"${editing.avatar ? '' : ' hidden'}>` +
+              `<p class="community-photo-off"${editing && editing.avatar ? '' : ' hidden'}>` +
                 `<button type="button" id="cf-photo-off">Remove photo</button></p>` +
               `<input id="cf-file" type="file" accept="image/*" hidden>` +
               `<div class="crop-stage" id="cf-cropstage" hidden>` +
@@ -13719,6 +13851,13 @@
           }, () => {});
           return;
         }
+        // A new circle's photo is cropped before anything commits too, then
+        // goes out behind the navigation once the circle exists to wear it.
+        let shot = null;
+        if (cropper) {
+          try { shot = cropper.export(512); } catch { shot = null; }
+          if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
+        }
         const slug = slugNow();
         const res = await Store.createCommunity({
           slug, name: nameEl.value.trim(), about: aboutEl.value.trim(),
@@ -13734,6 +13873,10 @@
         // In place of the form, so back from the new circle is where you were
         // before you started it, not a form that already did its job.
         location.replace(`#/c/${encodeURIComponent(slug)}`);
+        if (shot) Store.setCommunityPhoto(res.id, shot).then(r => {
+          if (!(r && r.ok)) toast((r && r.error) || 'Couldn’t save the photo, try again.');
+          communityRepaint?.();
+        }, () => {});
       } finally {
         saveBtn.disabled = false;
       }
@@ -14732,6 +14875,32 @@
     go(`#/chat/${encodeURIComponent(res.id)}`);
   }
 
+  /* A CIRCLE'S LINK IN A MESSAGE IS THE CIRCLE. An invite (openCommunityInvite)
+     is a DM carrying triaonline.com/c/<slug>, and so is any link to a circle
+     somebody pastes. The address comes out of the words and the room is drawn
+     under them, its face, name and handle, one tap from its page. A link to a
+     circle that has closed, or to anywhere else, stays the text it was. */
+  const CIRCLE_LINK_RE = /(?:https?:\/\/)?(?:www\.)?([a-z0-9.-]+(?::\d+)?)\/c\/([a-z0-9_]{3,24})(?![a-z0-9_])\/?/i;
+  function circleInMessage(text) {
+    const m = CIRCLE_LINK_RE.exec(text || '');
+    if (!m) return null;
+    const host = m[1].toLowerCase();
+    if (host !== 'triaonline.com' && host !== location.host.toLowerCase()) return null;
+    const c = Store.community(m[2]);
+    if (!c) return null;
+    return { c, rest: (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim() };
+  }
+  function msgCircleHtml(c) {
+    const n = Store.communityMembers(c.id).length;
+    return `<a class="msg-circle" href="${communityRoute(c)}">` +
+        communityPicHtml(c, 'msg-circle-pic', 88) +
+        `<span class="msg-circle-text">` +
+          `<span class="msg-circle-name">${esc(c.name)}</span>` +
+          `<span class="msg-circle-sub">${esc(communityHandle(c))}${n ? ` · ${n} ${memberWord(n)}` : ''}</span>` +
+        `</span>` +
+      `</a>`;
+  }
+
   function messageHtml(c, m, mine, run, byId) {
     const u = Store.user(m.author);
     const name = esc(u ? u.name : m.author);
@@ -14740,6 +14909,8 @@
     const replySaid = reply ? (reply.text ? notePlain(reply.text) : 'a photo') : '';
     const dims = m.image ? imageDimsFromUrl(m.image) : null;
     const href = `#/u/${esc(encodeURIComponent(m.author))}`;
+    const room = m.text ? circleInMessage(m.text) : null;
+    const said = room ? room.rest : m.text;
     return `<li class="msg${mine ? ' msg--mine' : ''}${run ? ' msg--run' : ''}" data-id="${esc(m.id)}">` +
       (mine ? '' : `<span class="msg-face">${run ? '' :
         `<a class="msg-face-link" href="${href}" aria-label="${name}">` +
@@ -14755,10 +14926,11 @@
               `<img src="${esc(sizedSrc(m.image, 240))}" alt="Photo from ${name}" loading="lazy" decoding="async">` +
             `</button>`
           : '') +
-        (m.text
+        (said
           ? `<div class="msg-bubble" role="button" tabindex="0" aria-label="Message from ${name}, options">` +
-              richText(m.text, m.author) + `</div>`
+              richText(said, m.author) + `</div>`
           : '') +
+        (room ? msgCircleHtml(room.c) : '') +
         (hearts.length
           ? `<span class="msg-hearts" role="img" aria-label="Hearted by ${esc(listNames(hearts.map(h => displayNameOf(h.user))))}">` +
               svgIcon('heart') + `</span>`
