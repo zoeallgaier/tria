@@ -5715,7 +5715,9 @@ button.poll-option:disabled { cursor: default; }
   background: var(--glass-bg-panel);
   -webkit-backdrop-filter: blur(var(--glass-blur));
           backdrop-filter: blur(var(--glass-blur));
-  border: var(--glass-edge);
+  /* A soft shadow lifts it off the cover instead of a hairline (Zoe). It lies
+     on artwork, never on paper, so one shadow serves both themes. */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
   z-index: -1;
 }
 /* The disc is centred on the button, so the heart, its pop and its ink flood
