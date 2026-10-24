@@ -7885,10 +7885,9 @@ button.poll-option:disabled { cursor: default; }
 .week-cards { display: flex; flex-direction: column; gap: 0.6rem; margin: 0 auto 1.4rem; }
 .week-cards[hidden] { display: none; }
 .week-card {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.85rem 0.4rem 0.85rem 1rem;
+  padding: 0.85rem 1rem;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-soft);
@@ -7912,8 +7911,11 @@ button.poll-option:disabled { cursor: default; }
   letter-spacing: 0.02em;
   color: var(--muted);
 }
-.week-card-kicker svg,
-.week-card-place svg { width: 14px; height: 14px; flex-shrink: 0; }
+.week-card-kicker svg { width: 14px; height: 14px; flex-shrink: 0; }
+/* The kicker and the title stop short of the X in the corner; the host's line
+   under them can run the card's width. */
+.week-card-kicker,
+.week-card-title { margin-right: 1.75rem; }
 .week-card-title {
   font-size: 1.05rem;
   font-weight: 700;
@@ -7921,29 +7923,23 @@ button.poll-option:disabled { cursor: default; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.week-card-place {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  min-width: 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-.week-card-place > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.week-card-chat,
+/* The host, in the daily card's foot (.daily-answered, .daily-face). */
+.week-card-who { margin-top: 0.45rem; }
+.week-card-who .daily-count { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .week-card-x {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  flex-shrink: 0;
   padding: 0;
   color: var(--muted);
   background: none;
   border: 0;
   border-radius: 50%;
 }
-.week-card-chat svg { width: 22px; height: 22px; }
 .week-card-x svg { width: 16px; height: 16px; }
 
 /* ── Friend requests on Updates — an actionable notice sitting atop the passive

@@ -5772,17 +5772,20 @@
         && (p.author === me || Store.myRsvp(p.id) === 'going'))
       .sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0));
     box.hidden = !plans.length;
+    // Who is hosting, worn the way the daily card wears who has answered (Zoe):
+    // the face and the name in its foot, where the address used to be. The chat
+    // is a tap away on the post's own page, so the card no longer carries it.
     box.innerHTML = plans.map(p => {
-      const chat = Store.chatsReady() && Store.chats().find(c => c.postId === p.id);
+      const u = Store.user(p.author);
       return `<div class="week-card" data-id="${esc(String(p.id))}">` +
           `<a class="week-card-link" href="${postRoute(p)}">` +
             `<span class="week-card-kicker">${svgIcon('cal')}${esc(eventWhenLabel(p.eventDate, p.eventTime))}</span>` +
             `<span class="week-card-title">${esc(p.title || 'Activity')}</span>` +
-            (p.location ? `<span class="week-card-place">${svgIcon('pin')}<span>${esc(p.location)}</span></span>` : '') +
+            `<span class="daily-answered week-card-who">` +
+              avatarEl(u || { name: p.author }, { cls: 'daily-face' }) +
+              `<span class="daily-count">${esc(u ? u.name : p.author)}</span>` +
+            `</span>` +
           `</a>` +
-          (chat
-            ? `<a class="week-card-chat" href="#/chat/${esc(encodeURIComponent(chat.id))}" aria-label="Open the chat">${svgIcon('chats')}</a>`
-            : '') +
           `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
         `</div>`;
     }).join('');
