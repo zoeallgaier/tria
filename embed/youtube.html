@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- THE APP'S YOUTUBE PLAYER, by way of the web (2.0, 2026-10-25).
+     YouTube's embed refuses to play without a Referer ("Error 153"), and the
+     app's page is capacitor://localhost, which WebKit never sends as one. So in
+     the app a Find's player is this page in an iframe, and this page, being
+     https, is a referrer YouTube accepts. The web embeds YouTube directly and
+     never loads it. See ytPlayerSrc in js/app.js.
+
+     It is NOT bundled into the app (ios-sync.sh copies index.html, css, js and
+     icons only): it has to be live on triaonline.com, so a push to main is what
+     ships it. The video rides the HASH so the id never reaches a server log. -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="robots" content="noindex">
+<title>Tria</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  iframe { display: block; border: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<script>
+  var q = new URLSearchParams(location.hash.slice(1));
+  var v = q.get('v') || '';
+  var start = q.get('start') || '';
+  if (/^[\w-]{11}$/.test(v)) {
+    var f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + v +
+      '?autoplay=1&playsinline=1&rel=0' + (/^\d+$/.test(start) ? '&start=' + start : '');
+    f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    f.title = 'YouTube video';
+    document.body.appendChild(f);
+  }
+</script>
+</body>
+</html>

@@ -1734,6 +1734,7 @@ main {
    open it. Fades return to normal the moment renderPage drops the class, so
    anything arriving later still reveals softly. */
 .page.enter .photo-frame img,
+.page.enter .card-yt-frame img,
 .page.enter .ptile-face--media img {
   transition: none;
 }
@@ -5946,6 +5947,92 @@ button.poll-option:disabled { cursor: default; }
   color: var(--heart);
 }
 .card-song-play svg { width: 18px; height: 18px; margin-inline-start: 2px; }
+
+/* ── A Find's YouTube video, on its card (2.0, 2026-10-25) ─────────────────
+   The song's and the quote's tile (a --surface fill, a --rule hairline, the
+   soft corner, 0.9rem above), an object set into the post, with the video's
+   still running to its edges on top the way a quoted Frame does. The still is
+   16:9 (a Short's own link takes the Frame's 4:5 ceiling), is shown the way a
+   photo is (held at 0 until decoded, then the settle), and wears the Frame
+   clip's glass play disc. The whole tile is the button, the .quoted-open
+   trick; once the player is up the button steps aside so the player takes its
+   own taps. clip-path as well as overflow: WebKit can leave a composited
+   child's corners unclipped by a rounded overflow box, and the player is one
+   (the deck's reason too). */
+.card-yt {
+  position: relative;
+  margin: 0.9rem 0 0;
+  overflow: hidden;
+  clip-path: inset(0 round var(--radius-soft));
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-soft);
+  background: var(--surface);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-micro);
+}
+.card-yt:not(.is-playing):active { transform: scale(0.985); }
+.card-yt + * { margin-top: 0.9rem; }
+.card-yt-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-2);
+}
+.card-yt--short .card-yt-frame { aspect-ratio: 4 / 5; }
+.card-yt-frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
+}
+.card-yt.is-loaded .card-yt-frame img { opacity: 1; transform: none; }
+.card-yt-go {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+.card-yt-player {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+.card-yt.is-playing .card-yt-go { display: none; }
+.card-yt.is-playing .frame-play { opacity: 0; }
+.card-yt-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+/* The quoted headline's serif step, two lines at most: YouTube titles run long. */
+.card-yt-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.24rem;
+  line-height: 1.16;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.card-yt-by { font-size: 0.8rem; letter-spacing: 0.02em; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .card-yt-frame img { opacity: 1; transform: none; transition: none; }
+}
 /* The pick box and the result rows set display, which beats [hidden]: an
    empty box sat in the composer before any song was picked. */
 .song-now[hidden] { display: none; }
@@ -6039,6 +6126,9 @@ button.poll-option:disabled { cursor: default; }
   max-height: 190px;
   object-fit: cover;
 }
+/* A quoted YouTube still is hqdefault, 4:3 with the frame letterboxed in it;
+   16:9 crops off exactly the bars. */
+.quoted-media--yt img { aspect-ratio: 16 / 9; }
 
 /* 30px is the app's established nested-identity size (.ptile-av wears it too),
    a clear step down from the feed byline's 40px so the two never read as peers. */

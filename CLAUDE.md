@@ -118,6 +118,23 @@ were tried under the photo and on it the same day). It is a position, not a
 tally, so the no-count rule doesn't reach it. The hand-of-cards peek is
 gone. See docs/data.md under the carousel.
 
+## A YouTube Find plays in its card (2026-10-25)
+
+**A Find whose link is a YouTube video wears a tile** (Zoe: "embed them so
+that thumbnails and everything show"): the song's and the quote's material,
+the video's still on top (16:9; a `/shorts/` link 4:5), the Frame clip's glass
+play disc, then the video's title and channel (`youTubeTileHtml`,
+`wireYouTube`, `.card-yt`). **It is read off the URL at render, nothing is
+stored**, so every Find ever posted has it. Title and channel are YouTube's
+oEmbed, kept per device (`tria:yt`); a 401/403 there makes the tile a link out
+(`data-out="system"`), and a video with no still is dropped back to the plain
+Find. The player loads only on a tap, one at a time, and `keepYouTube` carries
+a live one across a card rebuild. **In the app the player is
+`embed/youtube.html` on triaonline.com** (`ytPlayerSrc`): YouTube answers
+"Error 153" to an embed with no Referer, and WebKit never sends
+`capacitor://localhost` as one. That page is web-only (not bundled), so it
+must stay live on the site; the web embeds youtube-nocookie directly.
+
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
 **THE BUTTON.** Every button in a page is one material at two weights (Zoe:

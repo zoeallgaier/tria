@@ -3673,12 +3673,17 @@
     // A quoted Frame runs full bleed to the tile's own corner, which is why the
     // tile clips rather than padding the image: a photo inset inside a 14px box
     // would need a concentric inner radius, and at this size that curve is mud.
+    // A quoted YouTube Find shows its video's still the same way, and plays on
+    // its own card, one tap through.
+    const yt = !orig.image && orig.type === 'find' && orig.url && youTubeOf(orig.url);
     const media = orig.image
       ? `<span class="quoted-media">` +
           `<img src="${esc(sizedSrc(orig.poster || orig.image, 330))}" alt="" loading="lazy" decoding="async"` +
           (orig.tint ? ` style="background:${esc(orig.tint)}"` : '') + `>` +
         `</span>`
-      : '';
+      : yt
+        ? `<span class="quoted-media quoted-media--yt"><img src="https://i.ytimg.com/vi/${yt.id}/hqdefault.jpg" alt="" loading="lazy" decoding="async"></span>`
+        : '';
     // A poll's question stands in for a title, or the tile would be an avatar over
     // nothing: the options live on the original's card and this is an excerpt.
     const head = orig.title || (orig.poll && orig.poll.q) || '';
@@ -3858,6 +3863,7 @@
         head +
         titleHtml +
         noteHtml +
+        youTubeTileHtml(post) +
         songTileHtml(post) +
         pollWidgetHtml(post) +
         locationHtml +
@@ -3870,6 +3876,7 @@
       likersPanelHtml(post, full) +
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
+    wireYouTube(el, post);
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
@@ -3896,6 +3903,187 @@
         `</span>` +
         `<span class="card-song-play" aria-hidden="true">${svgIcon('play')}</span>` +
       `</a>`;
+  }
+
+  /* A FIND THAT IS A YOUTUBE VIDEO PLAYS IN ITS CARD (2.0, 2026-10-25, Zoe:
+     "embed them so that thumbnails and everything show"). Everything is read
+     off the link as the card is drawn and nothing is stored on the post, so
+     every Find ever posted with one wears it too. Nothing was migrated, and
+     nothing needed to be.
+
+     It is drawn as the quote's and the song's tile, an object set into the
+     post: the video's still, a glass play disc on it, then its title and
+     channel. Nothing loads YouTube's player until the tile is tapped, because
+     a feed of iframes is a feed of YouTube's whole page and a tile is one
+     picture. One plays at a time (liveYouTube).
+
+     The title and channel are YouTube's oEmbed, the endpoint the music picker
+     reads too, kept on the device (YT_KEY) so a tile seen once is whole on its
+     first frame after that. They land in a microtask, after cardSig has been
+     taken (passedCard takes it again as makeCard returns), so a card whose
+     words arrived late never reads to the feed's diff as a changed card. A
+     changed card is rebuilt, and a rebuild would stop the video under the
+     reader; keepYouTube carries a live tile across one that really happens. */
+  const YT_HOST = /^(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com$/i;
+  function youTubeOf(url) {
+    let u;
+    try { u = new URL(url); } catch { return null; }
+    let id = '';
+    if (/^youtu\.be$/i.test(u.hostname)) id = u.pathname.split('/')[1] || '';
+    else if (YT_HOST.test(u.hostname)) {
+      id = u.pathname === '/watch' ? u.searchParams.get('v') || ''
+        : (/^\/(?:shorts|embed|live|v)\/([\w-]{11})/.exec(u.pathname) || [])[1] || '';
+    }
+    if (!/^[\w-]{11}$/.test(id)) return null;   // a channel, a playlist, a search
+    // Where the sharer's link starts it: "t=1m30s", "t=2229s", "t=90", "start=90".
+    const t = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/.exec(u.searchParams.get('t') || u.searchParams.get('start') || '');
+    const start = t ? (+t[1] || 0) * 3600 + (+t[2] || 0) * 60 + (+t[3] || 0) : 0;
+    return { id, start, short: u.pathname.startsWith('/shorts/') };
+  }
+
+  /* Biggest first. A size YouTube doesn't have is a 120x90 grey placeholder
+     that decodes rather than an error (see youtubeArt), so wireYouTube steps
+     down the list until a real one lands. maxresdefault is 16:9 and covers a
+     card's column at 3x; hqdefault, which every video has, is 4:3 with the
+     frame letterboxed inside, and `cover` in a 16:9 box crops off exactly the
+     bars. A Short's own still is portrait; shared by a plain link instead, its
+     16:9 still is the frame on a blurred field, which YouTube draws for it. */
+  const ytStills = (v) => [
+    v.short ? `https://i.ytimg.com/vi/${v.id}/oardefault.jpg`
+      : `https://i.ytimg.com/vi_webp/${v.id}/maxresdefault.webp`,
+    `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+  ];
+
+  /* The web frames YouTube's player itself. The app can't: the player refuses
+     to play without a Referer ("Error 153", measured in Playwright's WebKit and
+     Chromium) and WebKit never sends capacitor://localhost as one. So the app
+     frames embed/youtube.html on triaonline.com, an https page YouTube accepts,
+     which frames the player in turn (measured the same way, from a page that
+     sends no Referer). That page has to be LIVE on the site, which a push to
+     main is. The video rides its hash, so the id never reaches a server log. */
+  function ytPlayerSrc(v) {
+    const start = v.start ? `&start=${v.start}` : '';
+    return nativeShell()
+      ? `https://triaonline.com/embed/youtube.html#v=${v.id}${start}`
+      : `https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&playsinline=1&rel=0${start}`;
+  }
+
+  function youTubeTileHtml(post) {
+    const v = post.type === 'find' && post.url && youTubeOf(post.url);
+    if (!v) return '';
+    return `<figure class="card-yt${v.short ? ' card-yt--short' : ''}" data-yt="${v.id}:${v.start}">` +
+        `<div class="card-yt-frame">` +
+          `<img src="${esc(ytStills(v)[0])}" alt="" loading="lazy" decoding="async">` +
+          `<span class="frame-play" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+        `</div>` +
+        `<button type="button" class="card-yt-go" aria-label="Play the video"></button>` +
+      `</figure>`;
+  }
+
+  // id → { title, by }, or { off: true } for one YouTube won't let us play
+  // (401 or 403: private, or its owner turned embedding off). Kept per device.
+  const YT_KEY = 'tria:yt';
+  let ytKept = null;
+  const ytAsked = new Map();   // id → the oEmbed in flight, so a feed asks once
+  function youTubeMeta(id) {
+    if (!ytKept) {
+      try { ytKept = JSON.parse(localStorage.getItem(YT_KEY) || '{}') || {}; } catch { ytKept = {}; }
+    }
+    if (ytKept[id]) return Promise.resolve(ytKept[id]);
+    if (ytAsked.has(id)) return ytAsked.get(id);
+    const ask = fetch('https://www.youtube.com/oembed?format=json&url=' +
+        encodeURIComponent('https://www.youtube.com/watch?v=' + id))
+      .then(async (res) => {
+        const m = res.ok
+          ? await res.json().then(j => ({ title: String(j.title || ''), by: String(j.author_name || '') }))
+          : res.status === 401 || res.status === 403 ? { off: true } : null;
+        if (!m) return null;
+        ytKept[id] = m;
+        const ids = Object.keys(ytKept);
+        if (ids.length > 300) delete ytKept[ids[0]];
+        try { localStorage.setItem(YT_KEY, JSON.stringify(ytKept)); } catch { /* private window */ }
+        return m;
+      })
+      .catch(() => null)
+      // Offline is not an answer: forget the miss so the next draw asks again.
+      .then((m) => { if (!m) ytAsked.delete(id); return m; });
+    ytAsked.set(id, ask);
+    return ask;
+  }
+
+  let liveYouTube = null;   // the one tile whose player is up
+  function stopYouTube(fig) {
+    fig.querySelector('.card-yt-player')?.remove();
+    fig.classList.remove('is-playing');
+    if (liveYouTube === fig) liveYouTube = null;
+  }
+
+  function wireYouTube(el, post) {
+    const fig = el.querySelector('.card-yt');
+    if (!fig) return;
+    const v = youTubeOf(post.url);
+    const im = fig.querySelector('img');
+    const stills = ytStills(v);
+    let at = 0;
+    // One handler for load and error: a real still is revealed once decoded
+    // (the photo's settle, see revealCardImage), a placeholder or a failure
+    // steps down. Out of stills, the video is gone (deleted, or a link to
+    // nothing), and the card goes back to being the plain Find it was.
+    const step = () => {
+      if (im.naturalWidth > 120) {
+        const show = () => fig.classList.add('is-loaded');
+        im.decode ? im.decode().then(show, show) : show();
+      } else if (++at < stills.length) im.src = stills[at];
+      else fig.remove();
+    };
+    im.addEventListener('load', step);
+    im.addEventListener('error', step);
+
+    fig.addEventListener('click', (e) => {
+      if (!e.target.closest('button.card-yt-go')) return;
+      if (liveYouTube && liveYouTube !== fig) stopYouTube(liveYouTube);
+      const player = document.createElement('iframe');
+      player.className = 'card-yt-player';
+      player.src = ytPlayerSrc(v);
+      player.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+      player.allowFullscreen = true;
+      player.title = fig.querySelector('.card-yt-title')?.textContent || 'YouTube video';
+      fig.querySelector('.card-yt-frame').appendChild(player);
+      fig.classList.add('is-playing');
+      liveYouTube = fig;
+      hapticTap('LIGHT');
+    });
+
+    youTubeMeta(v.id).then((m) => {
+      if (!m) return;
+      const go = fig.querySelector('.card-yt-go');
+      if (m.off) {
+        // Not ours to play, so the tile is a way to YouTube instead (the app
+        // when it's installed: see data-out in the outbound handler).
+        go?.replaceWith(Object.assign(document.createElement('a'), {
+          className: 'card-yt-go', href: post.url, target: '_blank', rel: 'noopener noreferrer',
+        }));
+        const out = fig.querySelector('a.card-yt-go');
+        out.dataset.out = 'system';
+        out.setAttribute('aria-label', 'Watch on YouTube');
+        return;
+      }
+      fig.querySelector('.card-yt-lines')?.remove();
+      fig.querySelector('.card-yt-frame').insertAdjacentHTML('afterend',
+        `<figcaption class="card-yt-lines">` +
+          `<span class="card-yt-title">${esc(m.title)}</span>` +
+          (m.by ? `<span class="card-yt-by">${esc(m.by)}</span>` : '') +
+        `</figcaption>`);
+      go?.setAttribute('aria-label', `Play ${m.title}`);
+    });
+  }
+
+  // A rebuilt card (a like or a comment landing) keeps a tile that is the same
+  // video, so the one playing goes on playing and a still isn't fetched twice.
+  function keepYouTube(old, fresh) {
+    const was = old.querySelector('.card-yt');
+    const now = fresh.querySelector('.card-yt');
+    if (was && now && was.dataset.yt === now.dataset.yt) now.replaceWith(was);
   }
 
   // A BARE repost: the original's card with a line on top. makeCard calls itself,
@@ -5098,6 +5286,7 @@
     const row = Store.posts().find(p => String(p.id) === String(el.dataset.id));
     if (!row) return null;
     const fresh = makeCard(row, { full: true, solo: false });
+    keepYouTube(el, fresh);
     fresh.style.animation = 'none';                 // no rise flash on an in-place swap
     // Roll the comment count in its new direction (up on add, down on delete).
     if (dir) odoTick(fresh.querySelector('.card-comment-count'), dir);
@@ -6343,6 +6532,7 @@
             if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
               newFig.replaceWith(oldImg.closest('.photo'));
             }
+            keepYouTube(old, fresh);
             fresh.style.animation = 'none';
             wire(fresh);
             old.replaceWith(fresh);
