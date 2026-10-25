@@ -13909,7 +13909,10 @@
      the twinkle haptic, timed off the panel having risen so the stars leave
      the charm where it rests. Two answers: wear it, or not now. "Not now"
      loses nothing; the charm is held and waits in Edit profile. With two
-     already on, wearing it means choosing which one it replaces. */
+     already on, wearing it means choosing which one it replaces. Two that
+     share a name (two sticker charms, both "Your charm") are one row, which
+     replaces the one on longest, the picker's rule (Zoe, 2026-10-25: "I
+     don't need to see it twice"). */
   function openCharmUnlock(key) {
     const c = charmOf(key);
     if (!c) return;
@@ -13920,7 +13923,7 @@
       : worn.map((k, i) => ({
           label: `Wear it instead of ${charmOf(k).name}`, icon: 'profile',
           run: wear(worn.map((x, j) => (j === i ? key : x))),
-        }));
+        })).filter((it, i, all) => all.findIndex(o => o.label === it.label) === i);
     items.push({ label: 'Not now', icon: 'close' });
     openSheet({
       title: 'New charm',
