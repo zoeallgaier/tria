@@ -13713,9 +13713,9 @@
      THE ART is outlined, in the icon set's own line: ICONS' circle, daily and
      music, and a squircle quote, two stars and a sprout drawn to match (a
      round outlined quote read as "66"). The same four trims sit close in on
-     every one, on Sunny's diagonal (top-right and bottom-left), the like burst's sparkle with a dot in one corner, a speck with
-     a star in the other, and the first three take the other diagonal (Zoe:
-     three on each). Everything is --heart, the reader's own colour, which is
+     every one, the like burst's sparkle with a dot top-right and a speck with
+     a star bottom-left, all on Sunny's diagonal and at its inset (Zoe,
+     2026-10-24). Everything is --heart, the reader's own colour, which is
      what makes it read on paper and on ink without a second rule (the hearts'
      contrast work, reused).
 
