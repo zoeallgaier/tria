@@ -75,7 +75,8 @@ kept its name and two stars), In the ring (join a circle), Founder (start
 one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **Outlined, in the icon set's line** (the circle triad,
 daily and music are ICONS'; the quote, stars and sprout are drawn to match)
 with the SAME four trims, a sparkle with a dot and a speck with a star, in
-opposite corners and close in: three charms on each diagonal (Zoe), each
+opposite corners and close in (the note's on the quote's diagonal since
+it lost its beam, so four sit top-left and bottom-right), each
 pair nudged in per charm where the icon is narrow (a `translate` on the
 trim). Sunny is a five point star and On repeat a single eighth note (Zoe,
 2026-10-24). In plain ink, `--text` via `--charm-ink`, the device's
