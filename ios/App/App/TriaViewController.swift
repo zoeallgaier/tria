@@ -47,6 +47,9 @@ class TriaViewController: CAPBridgeViewController {
            verify-plugins.sh, and neither of them covers a plugin nobody
            registered. */
         bridge?.registerPluginInstance(TriaSharePlugin())
+        // A sticker charm's sheet (TriaStickerPlugin.swift). Missing, the
+        // picker's New sticker tile falls back to the web's file picker.
+        bridge?.registerPluginInstance(TriaStickerPlugin())
     }
 
     /// `--bg` from `css/tokens.css`, in the one form CSS can't reach: light

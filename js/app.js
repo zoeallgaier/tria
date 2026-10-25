@@ -13752,13 +13752,15 @@
   ];
   /* STICKER CHARMS (Zoe, 2026-10-25): one of your own iOS photo stickers,
      the cut-out you lifted from a photo in Photos or Messages, worn as a
-     charm. There is no API onto the sticker drawer, so the picker's New
-     sticker tile is a rich field: the keyboard's sticker tab (or a paste)
-     drops the sticker in as a plain <img> (WKWebView inserts it as an image
-     while supportsAdaptiveImageGlyph is left off, its default), we redraw it
-     as a transparent PNG and upload it, and the charm is 'i:' plus its path
-     in your own media folder (Store's isSticker). No trims: a sticker brings
-     its own white edge. One at a time; the last one stays on this device
+     charm. No app can read the sticker library, so in the app the picker's
+     New sticker tile opens a native sheet (TriaStickerPlugin.swift) that
+     raises the emoji keys, where stickers live, and takes the first one
+     tapped, or cuts a photo out the way iOS makes them. A web page can do
+     neither (a hidden rich field raised the LETTER keyboard over the picker),
+     so the web takes a picture file. Either way it is redrawn as a
+     transparent PNG and uploaded, and the charm is 'i:' plus its path in your
+     own media folder (Store's isSticker). No trims: a sticker brings its own
+     white edge. One at a time; the last one stays on this device
      (STICKER_KEPT) so taking it off doesn't lose it. */
   const isCustomCharm = (key) => typeof key === 'string' && key.startsWith('i:');
   const charmOf = (key) => isCustomCharm(key)
@@ -13772,9 +13774,7 @@
       : c.art;
     return `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`;
   }
-  // A sticker as a transparent PNG no bigger than `max` a side. Drawn from the
-  // <img> the field already decoded, because the blob WebKit made for it can
-  // die with the element, so the field is only emptied after this.
+  // A sticker as a transparent PNG no bigger than `max` a side.
   async function stickerPng(source, max = 360) {
     let img = source;
     if (typeof source === 'string') { img = new Image(); img.src = source; }
@@ -13970,6 +13970,7 @@
     let worn = (me.charms || []).slice();
     let sticker = worn.find(isCustomCharm) || stickerKept(me.id);
     if (sticker) keepSticker(me.id, sticker);
+    const stickerSheet = nativeShell() && !!window.Capacitor?.isPluginAvailable?.('TriaSticker');
     const tile = (c) => {
       const has = c.custom || held.includes(c.key);
       return `<button type="button" class="charm-tile${has ? '' : ' charm-tile--locked'}" data-charm="${esc(c.key)}"` +
@@ -13987,16 +13988,17 @@
         `<p class="charm-pick-hint">Wear up to two on your photo.</p>` +
         `<div class="charm-grid">${CHARMS.map(tile).join('')}` +
           (sticker ? tile(charmOf(sticker)) : '') +
-          `<div class="charm-tile charm-tile--add">` +
+          (stickerSheet
+            ? `<button type="button" class="charm-tile charm-tile--add">`
+            : `<label class="charm-tile charm-tile--add">`) +
             `<span class="charm-add-face">${svgIcon('plus')}</span>` +
             `<span class="charm-tile-name">New sticker</span>` +
-            `<span class="charm-tile-how">From your keyboard\u2019s stickers.</span>` +
-            `<div class="charm-add-field" contenteditable="true" role="textbox" aria-label="Add one of your stickers"></div>` +
-          `</div></div>`,
+            `<span class="charm-tile-how">${stickerSheet ? 'One of yours, or a photo.' : 'Choose a picture.'}</span>` +
+            (stickerSheet ? `</button>` : `<input class="charm-add-file" type="file" accept="image/*"></label>`) +
+          `</div>`,
       wire: (scrim) => {
         const grid = scrim.querySelector('.charm-grid');
         const add = scrim.querySelector('.charm-tile--add');
-        const field = add.querySelector('.charm-add-field');
         const paint = () => grid.querySelectorAll('.charm-tile[aria-pressed]').forEach(b =>
           b.setAttribute('aria-pressed', String(worn.includes(b.dataset.charm))));
         const wear = async (next) => {
@@ -14017,12 +14019,9 @@
         const take = async (source, done) => {
           if (busy) return;
           busy = true;
-          field.blur();
           add.classList.add('is-busy');
           try {
-            const png = await stickerPng(source);
-            field.textContent = '';
-            const k = await Store.uploadSticker(png);
+            const k = await Store.uploadSticker(await stickerPng(source));
             keepSticker(me.id, k);
             grid.querySelector(`.charm-tile[data-charm="${CSS.escape(sticker || '')}"]`)?.remove();
             sticker = k;
@@ -14031,26 +14030,29 @@
           } catch {
             toast('Couldn\u2019t add that sticker.');
           } finally {
-            field.textContent = '';
             add.classList.remove('is-busy');
             busy = false;
             if (done) done();
           }
         };
-        // A sticker from the keyboard lands as an <img>; a copied one arrives
-        // as a file on paste. Anything typed is simply cleared.
-        field.addEventListener('paste', (e) => {
-          const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith('image/'));
-          if (!f) return;
-          e.preventDefault();
-          const src = URL.createObjectURL(f);
-          take(src, () => URL.revokeObjectURL(src));
-        });
-        field.addEventListener('input', () => {
-          const img = field.querySelector('img');
-          if (img) take(img);
-          else if (!busy) field.textContent = '';
-        });
+        if (stickerSheet) {
+          add.addEventListener('click', async () => {
+            if (busy) return;
+            hapticEvent('SELECT');
+            let res = null;
+            try { res = await window.Capacitor.nativePromise('TriaSticker', 'pick', {}); } catch {}
+            if (res && res.image) take('data:image/png;base64,' + res.image);
+          });
+        } else {
+          const file = add.querySelector('.charm-add-file');
+          file.addEventListener('change', () => {
+            const f = file.files && file.files[0];
+            file.value = '';
+            if (!f || !f.type.startsWith('image/')) return;
+            const src = URL.createObjectURL(f);
+            take(src, () => URL.revokeObjectURL(src));
+          });
+        }
       },
     });
   }

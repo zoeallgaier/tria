@@ -10528,7 +10528,6 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 .charm-add-face { display: grid; place-items: center; width: 56px; height: 56px; color: var(--muted); }
 .charm-add-face svg { width: 26px; height: 26px; }
 .charm-tile--add.is-busy { opacity: 0.4; pointer-events: none; }
-/* Over the whole tile, so a tap raises the keyboard and its sticker tab;
-   16px so iOS doesn't zoom. */
-.charm-add-field { position: absolute; inset: 0; opacity: 0; font-size: 16px; overflow: hidden; caret-color: transparent; outline: none; }
+/* The web's picture input, out of sight; the label around it is the tap. */
+.charm-add-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .charm-tile--locked .charm { --charm-ink: var(--muted); opacity: 0.45; }
