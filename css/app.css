@@ -2367,8 +2367,10 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 .card-passed .dot { opacity: 0.5; }
 @media (hover: hover) { .card-passed:hover { color: var(--text); } }
 /* A Frame's own card pads its byline and foot by hand (the media is full
-   bleed), so the line has to join them or it starts at the screen edge. */
-.card--photo .card-passed { padding-inline: var(--inset); }
+   bleed), so the line has to join them or it starts at the screen edge. The
+   circle line over a byline (.card-community) is the same case. */
+.card--photo .card-passed,
+.card--photo .card-community { padding-inline: var(--inset); }
 
 /* Icon-only likes/comments are a 44px square (the shared social tap target).
    When a COUNT rides along, the button grows to the left so the glyph keeps that
@@ -9285,8 +9287,12 @@ body[data-ambient="none"] .pf-row-swatch {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 
-  /* Full-width column on phones — drop the desktop asymmetric margins. */
-  .view { margin: 0; max-width: none; padding: 1.5rem 1.15rem 2rem; }
+  /* Full-width column on phones — drop the desktop asymmetric margins.
+     --gutter is the phone's side inset, 1.15rem; a page of tiles sets its own
+     (Discover, Chats and a circle's page, below), and everything that breaks
+     out of the view and pays the inset back reads it, so a bleed always meets
+     the screen's edge and the words land on the view's axis. */
+  .view { --gutter: 1.15rem; margin: 0; max-width: none; padding: 1.5rem var(--gutter) 2rem; }
   /* Same argument as the desktop rule this restates (see body.toolbar-live
      .view up in the toolbar block), at the phone's smaller scale: the bar is
      60px with a 44px control in it, so a page opening under one only needs a
@@ -9308,40 +9314,41 @@ body[data-ambient="none"] .pf-row-swatch {
      phone the title and the page's own blocks sit on the view's inset and no
      second one is wanted. */
   .masthead, .nowplaying, .daily-lede, .daily-banner { padding-inline: 0; }
-  /* The rail breaks out past .view's own 1.15rem so a square caught mid-scroll
+  /* The rail breaks out past .view's own gutter so a square caught mid-scroll
      runs to the screen edge, and opens flush with the page. */
-  .np-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; }
+  .np-strip { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); }
   /* And the identity header, which is now type on the same axis. (Its badge
      cluster used to be positioned off that inset and needed pulling back with
      it; those controls are in the toolbar as of 1.3.) */
   .account { padding-inline: 0; }
-  /* The frame wall lives inside #feed, which breaks out by 1.15rem on a phone to
+  /* The frame wall lives inside #feed, which breaks out by the gutter on a phone to
      put post photos screen-edge-to-edge. A masonry grid doesn't want that: it's
      already on Discover's axis and the card above it is on the view's, so the
      bleed is taken straight back. */
-  .pgrid--frames { padding-inline: 1.15rem; }
+  .pgrid--frames { padding-inline: var(--gutter); }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 0.5rem; }
   .masthead-kicker { margin-bottom: 0.7rem; }
   /* Entries break out of the view's side padding to sit screen-edge-to-edge;
      the hairline dividers run with them. Gap matches the divider padding so the
      line sits centered between entries. */
-  .feed { margin-inline: -1.15rem; gap: 0.9rem; }
+  .feed { margin-inline: calc(-1 * var(--gutter)); gap: 0.9rem; }
   .card--note .card-main, .card--find .card-main, .card--activity .card-main,
   .card--poll .card-main, .card--quote .card-main,
-  .card--song .card-main { padding-inline: 1.15rem; }
-  .card--photo .card-actions { padding-inline: 1.15rem; }
-  /* Thread aligns to the phone text column (1.15rem), rule still in the gutter. */
-  /* The page's own inset at phone width, matching .card-main's 1.15rem above.
+  .card--song .card-main { padding-inline: var(--gutter); }
+  .card--photo .card-actions { padding-inline: var(--gutter); }
+  /* Thread aligns to the phone text column (the gutter), rule still in the gutter. */
+  /* The page's own inset at phone width, matching .card-main's gutter above.
      This used to be the feed nesting's arithmetic (a 0.7rem gutter plus a
      compensating negative on the child); with the disclosure gone it is one
      number on one box. */
-  .comments-panel, .likers-panel, .going-panel { padding-inline: 1.15rem; }
+  .comments-panel, .likers-panel, .going-panel { padding-inline: var(--gutter); }
   /* Tighter inset to the phone text column. Tap still opens full-screen. */
-  .photo { padding-inline: 1.15rem; }
+  .photo { padding-inline: var(--gutter); }
+  .card--photo .card-community,
   .card--photo .byline,
   .card--photo .card-solometa,
   .card--photo .card-passed,
-  .card--photo .card-foot { padding-inline: 1.15rem; }
+  .card--photo .card-foot { padding-inline: var(--gutter); }
 
   /* Tapped photo goes full-bleed edge-to-edge, uncropped (portraits letterbox,
      landscapes span the full width). Drop the desktop padding + inset caps. */
@@ -9353,8 +9360,8 @@ body[data-ambient="none"] .pf-row-swatch {
   /* Content-list rows break out to the screen edges so their hovers + hairline
      dividers run full-bleed while the content keeps its inset (via padding) — the
      feed, the Friends directory, and the Updates ledger all read as one system. */
-  .friends-list, .requests-list, .notif-list { margin-inline: -1.15rem; }
-  .friend, .request-row, .notif { padding-inline: 1.15rem; }
+  .friends-list, .requests-list, .notif-list { margin-inline: calc(-1 * var(--gutter)); }
+  .friend, .request-row, .notif { padding-inline: var(--gutter); }
   /* .notif-more deliberately does NOT break out with them. The rows go full-bleed
      so their hairlines and hovers run edge to edge; the capsule at the foot is the
      one thing down there that is a shape rather than a band, and a shape that
@@ -9369,8 +9376,8 @@ body[data-ambient="none"] .pf-row-swatch {
      reach the screen edge the way Updates' do. .song-now is left out on purpose:
      it's a bordered panel, not a row — it keeps the view's margin, and its own
      padding hugs the square rather than tracking any list's inset. */
-  .song-results { margin-inline: -1.15rem; }
-  .song-hit, .pin-row { padding-inline: 1.15rem; }
+  .song-results { margin-inline: calc(-1 * var(--gutter)); }
+  .song-hit, .pin-row { padding-inline: var(--gutter); }
 
   /* Composer already sits inside the view's padding here. */
   .composer { padding-inline: 0; }
@@ -9890,13 +9897,15 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 }
 .person-strip::-webkit-scrollbar { display: none; }
 @media (max-width: 680px) {
-  .person-strip { margin-inline: -1.15rem; padding-inline: 1.15rem; scroll-padding-inline: 1.15rem; }
+  .person-strip { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
   /* Chats and Discover are pages of tiles, and a tile wants less gutter than a
      column of type (Zoe, 2026-10-23: "don't need as much side padding", then "go 14"): 14px
-     a side, not the view's 1.15rem. The rail's bleed follows it. */
+     a side, not the view's 1.15rem. The rail's bleed follows it. A circle's page
+     takes Discover's too (Zoe, 2026-10-25), so a circle opened off its card
+     keeps the card's edges, its head and its feed both. */
   .view--discover,
-  .view--chats:not(.view--newchat) { padding-inline: 0.875rem; }
-  .view--discover .person-strip { margin-inline: -0.875rem; padding-inline: 0.875rem; scroll-padding-inline: 0.875rem; }
+  .view--community,
+  .view--chats:not(.view--newchat) { --gutter: 0.875rem; }
 }
 .person-card {
   position: relative;
@@ -9986,7 +9995,7 @@ a.daily-answer { text-decoration: none; }
 /* The daily card's own side padding (1.15rem), not Discover's tighter 0.8rem:
    at 0.8rem the words and the pill read as touching the dashed edge (Zoe). */
 .community-first { align-self: stretch; margin: 0; }
-@media (max-width: 680px) { .community-first { margin-inline: 1.15rem; } }
+@media (max-width: 680px) { .community-first { margin-inline: var(--gutter); } }
 
 /* A circle is born, or a face is new (celebrateFace): Tria's own ramp in
    stars (your own photo's are your --heart, set inline), the start and end of
