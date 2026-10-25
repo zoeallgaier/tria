@@ -76,9 +76,10 @@ one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. SOLID, with
 heavy lines where a line is the shape (Zoe: "fill icons", "thicker line
 weight"), from the icon set's drawings (circle as three dots, daily, music; a
 squircle quote, stars and sprout drawn to match), and in plain ink, `--text`,
-black on paper and white on ink (Zoe: "just black or white"), never a colour with the SAME four trims, a sparkle with a dot
-and a speck with a star, in opposite corners and close in: three charms on each diagonal
-(Zoe). **Earned is never stored**, it is read off the cache
+black on paper and white on ink (Zoe: "just black or white"), never a colour. **Each icon fills its frame, with ONE small star only where
+it leaves an empty corner** (the quote, the sprout, the note; Zoe, 2026-10-24:
+the 24px pair on the Charms row was "the best charm", so the four trims a
+charm went). **Earned is never stored**, it is read off the cache
 (`charmsEarned`); only what you WEAR is a column, `users.charms` (at most two,
 `supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon
 `GET /rest/v1/users?select=charms` answers 42703; until it is,
