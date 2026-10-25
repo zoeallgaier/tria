@@ -6,7 +6,16 @@ sheet". Every Share profile row (your own included) hands `/u/<handle>` to the
 system share sheet through `shareProfile`; the profile card, `qr.js`,
 `StoryCard.codeBox`/`code`/`useEncoder` and `profileCardSpec` are deleted.
 Story cards for your own POSTS stay. Everything below about the QR and the
-profile card is history.
+profile card is history. (The QR came back on 2026-10-24 as its own sheet; see
+CLAUDE.md.)
+
+**2026-10-24: the post card has no choices and no Instagram.** Zoe: "get rid
+of the color options entirely. just light or dark, and dependent on the device
+settings", "no hairline around the post, just the light or dark bg", "remove
+share to insta option". The four backgrounds, the accent, the bare sticker
+render, `backgroundPair` and the Instagram row are gone; what below describes
+backgrounds, stickers or Stage 4's Instagram hand-off is history. The sheet is
+Save image and Copy link.
 
 Getting a Tria link to behave like a link from a real social app: open the app
 when it's installed, look like something when it's pasted, and carry an invite

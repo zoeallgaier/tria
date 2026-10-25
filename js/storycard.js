@@ -1,8 +1,8 @@
 /* STORY CARDS — one renderer, every size.
    ==========================================================================
 
-   What this draws is the picture someone posts to Instagram, Messages or
-   anywhere else that takes an image: a Tria post, on Tria's paper, with the
+   What this draws is the picture someone saves and posts to a story, Messages
+   or anywhere else that takes an image: a Tria post, on Tria's paper, with the
    handle and the address written on it. It is a CANVAS renderer and not a
    server, because Tria has no server — see docs/social-links.md. Everything
    here runs on the phone that taps Share, which also means the card can be
@@ -13,14 +13,9 @@
    (who / what / where) measured three ways, and the metrics below are the only
    place they differ.
 
-   EVERYTHING READABLE SITS INSIDE THE CARD. The card is a sticker the sender
-   can drag, resize, rotate and partly cover, and on Instagram the background is
-   a separate layer underneath it that they can replace outright. A handle
-   painted on the background is a handle that can vanish, so the background
-   carries nothing but colour.
-
    THE SAFE BAND is the whole reason the card floats rather than fills. Roughly
-   the top 250px and bottom 340px of a story are under Instagram's own chrome —
+   the top 250px and bottom 340px of a story are under a story app's own
+   chrome (Instagram's measured) —
    the close button and the camera roll up top, the reply bar and the sticker
    tray at the bottom. The card is laid out to fit BETWEEN those and is centred
    in what is left, so a caption that runs long shrinks the type rather than
@@ -28,23 +23,32 @@
 
    A POST URL IS NOT RETYPEABLE. `triaonline.com/p/8f3a2b91` cannot be read
    off someone's screen and typed into a browser, so a card carries the bare
-   domain plus the handle and lets the link sticker do the linking.
+   domain plus the handle and leaves the linking to a link sticker.
 
-   THE PALETTE IS FROZEN HERE rather than read from tokens.css, and that is
-   deliberate. A card is Tria's paper, not the reader's device: someone with
-   their phone in dark mode still sends a light card unless they pick Dark, and
-   a card whose colours moved with the sender's system setting would be a card
-   nobody could predict. The values below are tokens.css's, copied on purpose.
-   If --brand-start or --brand-end change there, change them here too.
+   LIGHT OR DARK, AND THE DEVICE DECIDES (Zoe, 2026-10-24: "get rid of the
+   color options entirely. just light or dark, and dependent on the device
+   settings"). The sheet used to offer four backgrounds (your colour, Light,
+   Dark, Tria's ramp), which was a decision put in front of somebody who had
+   only asked to share. A card is now the app as the sender sees it: the
+   post set straight on the page's paper, light or dark, with no card shape
+   under it at all. No drop shadow, no hairline, no second fill (Zoe, the same
+   day: "no hairline around the post, just the light or dark bg"); a hairline
+   was tried first and taken out before it shipped. The photo keeps the soft
+   corner. The values below are tokens.css's, copied on purpose, because a
+   canvas cannot read the cascade. If --bg, --text, --muted or --surface-2
+   change there, change them here too; --brand-start / --brand-end live in the
+   wordmark file itself.
+
+   "THE CARD" below still means the column the post is laid out in: the same
+   box, the same margins and safe band, just not painted.
 
    POSTS ONLY. The profile card and its QR came out in 2.0 (Zoe: "remove all
-   the qr code bullshit ... in favor of the native share sheet"); sharing a
-   profile hands its link to the system share sheet and draws nothing.
+   the qr code bullshit ... in favor of the native share sheet"); a profile
+   shares through its own QR sheet now (shareProfile) and draws nothing here.
 
    WIRED IN SINCE 2026-09-22. The ••• on your own post reaches this through
    openStoryCardSheet in app.js. tools/storycards.html draws every card
-   at every size against every background, and that page is a bench, not a
-   route. */
+   at every size in both schemes, and that page is a bench, not a route. */
 
 (function () {
   'use strict';
@@ -61,75 +65,24 @@
 
   /* ---- The palette ------------------------------------------------------ */
 
-  /* tokens.css, light scheme. `plate` is the empty-photo grey, --surface-2. */
-  const LIGHT = { page: '#edeef0', card: '#ffffff', ink: '#14171a', muted: '#5c636b', plate: '#e6e8ea' };
-  const DARK  = { page: '#0e1012', card: '#171a1d', ink: '#e9ebed', muted: '#969ca3', plate: '#22262b' };
-  /* Tria's own paper, which is what the card becomes when the BACKGROUND is
-     doing the colouring — a white slab on a gradient reads as a screenshot. */
-  const TRIA  = { card: '#edeef0', ink: '#14171a', muted: '#5c636b', plate: '#dcdfe3' };
+  /* tokens.css, both schemes. `page` is --bg, `plate` the empty-photo grey
+     (--surface-2). */
+  const LIGHT = { page: '#edeef0', ink: '#14171a', muted: '#5c636b', plate: '#e6e8ea' };
+  const DARK  = { page: '#0e1012', ink: '#e9ebed', muted: '#969ca3', plate: '#1f2327' };
 
-  /* Tria's brand, cyan to green (tokens.css, --brand-start / --brand-end).
-     It is not deepened on either paper, so there is one ramp and no scheme. */
-  const BRAND = ['#00c9ce', '#00cc9e'];
-  function bandStops() {
-    return BRAND.slice();
+  /* The device's scheme, asked at the moment of sharing. A spec can still name
+     one outright (the bench does), and anything else is light. */
+  function deviceScheme() {
+    try {
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch (e) { return 'light'; }
   }
-
-  /* ---- Colour arithmetic ------------------------------------------------ */
-
-  function hexToRgb(hex) {
-    const h = hex.replace('#', '');
-    const n = h.length === 3 ? h.split('').map(function (c) { return c + c; }).join('') : h;
-    return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
-  }
-  /* Relative luminance, so a reader's own colour can be asked whether it wants
-     black type on it. The palette is pastel today and the answer is always
-     black, but an accent is a hex and nothing stops a future one being deep. */
-  function luminance(hex) {
-    const c = hexToRgb(hex).map(function (v) {
-      const s = v / 255;
-      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  }
-  const inkOn = function (hex) { return luminance(hex) > 0.45 ? '#14171a' : '#f5f6f8'; };
+  const paperOf = function (spec) {
+    const scheme = spec.scheme || deviceScheme();
+    return scheme === 'dark' ? DARK : LIGHT;
+  };
 
   /* ---- Canvas helpers --------------------------------------------------- */
-
-  /* A CSS linear-gradient angle, in canvas terms. CSS measures clockwise from
-     "to top" and sizes the gradient LINE so that its perpendiculars through the
-     two corners bound the box — which is why a 160deg ramp on a tall card hits
-     its last stop right at the corner and not before. Canvas only takes two
-     points, so the line is computed here. */
-  function linearGradient(ctx, deg, w, h, stops) {
-    const rad = (deg - 90) * Math.PI / 180;
-    const dx = Math.cos(rad), dy = Math.sin(rad);
-    const len = Math.abs(w * dx) + Math.abs(h * dy);
-    const cx = w / 2, cy = h / 2;
-    const g = ctx.createLinearGradient(
-      cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2);
-    stops.forEach(function (s, i) { g.addColorStop(stops.length === 1 ? 0 : i / (stops.length - 1), s); });
-    return g;
-  }
-
-  /* An ELLIPTICAL radial wash, which canvas has no primitive for. The card sits
-     on a big flat field and the field needs a soft lift behind it or the whole
-     thing reads as a screenshot of a screenshot; a circular gradient on a 9:16
-     box pools in the middle instead. Scaling the space around the centre is the
-     cheap way to get the ellipse CSS would have drawn. */
-  function wash(ctx, w, h, cx, cy, rx, ry, rgb, alpha) {
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
-    g.addColorStop(0, 'rgba(' + rgb + ', ' + alpha + ')');
-    g.addColorStop(0.66, 'rgba(' + rgb + ', 0)');
-    g.addColorStop(1, 'rgba(' + rgb + ', 0)');
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(1, ry / rx);
-    ctx.translate(-cx, -cy);
-    ctx.fillStyle = g;
-    ctx.fillRect(-w, -h, w * 3, h * 3);
-    ctx.restore();
-  }
 
   function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
@@ -147,8 +100,10 @@
   const serif = function (size, italic) {
     return (italic ? 'italic ' : '') + '400 ' + size + 'px "Instrument Serif", Georgia, serif';
   };
-  const sans = function (size, bold) {
-    return (bold ? '700 ' : '400 ') + size + 'px Oxygen, -apple-system, sans-serif';
+  /* Oxygen at the app's three weights: 700 a name, 400 a handle, 300 a note
+     (.card-note). */
+  const sans = function (size, weight) {
+    return (weight || 400) + ' ' + size + 'px Oxygen, -apple-system, sans-serif';
   };
 
   function wrap(ctx, text, maxWidth) {
@@ -174,7 +129,7 @@
   function paragraph(ctx, text, opt) {
     let size = opt.size;
     for (;;) {
-      const font = opt.italic ? serif(size, true) : (opt.sans ? sans(size, opt.bold) : serif(size));
+      const font = opt.face(size);
       ctx.font = font;
       const lh = Math.round(size * opt.lineHeight);
       const lines = wrap(ctx, text, opt.maxWidth);
@@ -258,180 +213,143 @@
   /* ---- Metrics ---------------------------------------------------------- */
 
   /* One column measured three ways. `safeTop` / `safeBottom` are Instagram's
-     chrome and are zero everywhere the card is not a story. */
+     chrome and are zero everywhere the card is not a story; the card never
+     comes nearer an edge than `margin` either way.
+
+     The margins are the post's only frame now there is no card, so they are
+     a reading column's and no wider (they were a card's margin plus its
+     padding). A story's column is the feed's drawn about 2.75 times over, so
+     the photo's corner (`plate`) is the app's soft corner at that scale. The type is the
+     app's too: a title in the serif, a note in Oxygen Light (.card-title,
+     .card-note), each shrinking on its own as a post runs long. */
   const SIZES = {
-    story:  { w: 1080, h: 1920, safeTop: 250, safeBottom: 340, margin: 100, radius: 56,
-              pad: 84, padBottom: 64, gap: 76,
-              avatar: 84, name: 36, handle: 31, body: 76, bodyMin: 40, caption: 58,
-              prompt: 42, mark: 70, address: 29, rowGap: 48 },
-    square: { w: 1080, h: 1080, safeTop: 0, safeBottom: 0, margin: 72, radius: 52,
-              pad: 76, padBottom: 76, gap: 56,
-              avatar: 82, name: 35, handle: 30, body: 68, bodyMin: 36, caption: 50,
-              prompt: 38, mark: 66, address: 27, rowGap: 48 },
+    story:  { w: 1080, h: 1920, safeTop: 250, safeBottom: 340, margin: 40, plate: 40,
+              pad: 84, padBottom: 72, gap: 64,
+              avatar: 84, name: 36, handle: 31, title: 76, titleMin: 48, body: 50, bodyMin: 32,
+              prompt: 42, mark: 84, address: 29, rowGap: 48 },
+    square: { w: 1080, h: 1080, safeTop: 0, safeBottom: 0, margin: 36, plate: 38,
+              pad: 76, padBottom: 68, gap: 52,
+              avatar: 82, name: 35, handle: 30, title: 68, titleMin: 42, body: 46, bodyMin: 30,
+              prompt: 38, mark: 80, address: 27, rowGap: 44 },
     /* The link card is the one nobody chooses — it is what Messages and Slack
        unfurl — so it is the same column laid on its side and nothing more. */
-    link:   { w: 1200, h: 630, safeTop: 0, safeBottom: 0, margin: 56, radius: 40,
-              pad: 56, padBottom: 48, gap: 36,
-              avatar: 64, name: 28, handle: 24, body: 46, bodyMin: 26, caption: 36,
-              prompt: 28, mark: 54, address: 23, rowGap: 32 },
+    link:   { w: 1200, h: 630, safeTop: 0, safeBottom: 0, margin: 32, plate: 28,
+              pad: 52, padBottom: 44, gap: 32,
+              avatar: 64, name: 28, handle: 24, title: 46, titleMin: 28, body: 32, bodyMin: 22,
+              prompt: 28, mark: 64, address: 23, rowGap: 30 },
   };
 
-  /* ---- Backgrounds ------------------------------------------------------ */
+  /* ---- The page ------------------------------------------------------- */
 
-  const BACKDROPS = ['gradient', 'accent', 'light', 'dark'];
-
-  function backdrop(ctx, spec, m) {
-    const w = m.w, h = m.h;
-    const accent = spec.accent || BRAND[0];
-    let paper;
-
-    /* The wash's radii are CSS's `120% 78%`: WIDER than the card it sits behind,
-       on purpose, so it reads as light falling across the whole backdrop rather
-       than as a halo around the sticker. They were half this once, which put the
-       entire gradient behind the card where nobody could see it and made every
-       coloured background look flat. */
-    const PAPER_RGB = '237, 238, 240', INK_RGB = '233, 235, 237';
-    const cx = w * 0.5, cy = h * 0.34, rx = w * 1.2, ry = h * 0.78;
-
-    /* BARE leaves the canvas transparent and draws only the card, which is what
-       goes to Instagram. Their share API takes the card as a STICKER and the
-       background as two colours it gradients between itself, on a layer the
-       sender can move the sticker around on. Painting our own background into
-       the sticker would cover theirs and turn a draggable card into a flat
-       screenshot.
-
-       Still 1080x1920, deliberately, rather than cropped to the card: a sticker
-       at story dimensions is placed to fill, so the card lands exactly where the
-       layout put it, safe zones and all. A tight crop would be centred by
-       Instagram and lose that. */
-    const bare = !!spec.bare;
-    const fill = (style) => {
-      if (bare) return;
-      ctx.fillStyle = style;
-      ctx.fillRect(0, 0, w, h);
-    };
-    const lift = (rgb, alpha) => { if (!bare) wash(ctx, w, h, cx, cy, rx, ry, rgb, alpha); };
-
-    if (spec.bg === 'dark') {
-      paper = Object.assign({}, DARK);
-      fill(DARK.page);
-      lift(INK_RGB, 0.07);
-      paper.shadow = 'rgba(0, 0, 0, 0.55)';
-    } else if (spec.bg === 'light') {
-      /* The one background with no wash at all. Light IS the plain option, and
-         a lift on it just makes the paper look dirty. */
-      paper = Object.assign({}, LIGHT);
-      fill(LIGHT.page);
-      paper.shadow = 'rgba(20, 23, 26, 0.12)';
-    } else if (spec.bg === 'accent') {
-      paper = Object.assign({}, TRIA);
-      fill(accent);
-      lift(PAPER_RGB, 0.42);
-      paper.shadow = 'rgba(20, 23, 26, 0.2)';
-    } else {
-      paper = Object.assign({}, TRIA);
-      fill(linearGradient(ctx, 160, w, h, bandStops()));
-      lift(PAPER_RGB, 0.38);
-      paper.shadow = 'rgba(20, 23, 26, 0.2)';
-    }
-    return paper;
-  }
-
-  /* THE TWO COLOURS INSTAGRAM WILL GRADIENT BETWEEN, behind the sticker. Two,
-     which is their API, and Tria's own ramp is exactly two (peach to rose), so
-     it crosses over as itself.
-
-     A reader's own accent is a flat field in both stops. It is one colour by
-     definition; faking a gradient out of it would invent a second colour they
-     never picked. */
-  function backgroundPair(spec) {
-    const accent = spec.accent || BRAND[0];
-    if (spec.bg === 'dark') return [DARK.page, DARK.page];
-    if (spec.bg === 'light') return [LIGHT.page, LIGHT.page];
-    if (spec.bg === 'accent') return [accent, accent];
-    const stops = bandStops();
-    return [stops[0], stops[stops.length - 1]];
+  function backdrop(ctx, m, paper) {
+    ctx.fillStyle = paper.page;
+    ctx.fillRect(0, 0, m.w, m.h);
   }
 
   /* ---- The card --------------------------------------------------------- */
 
   /* Everything above measures; this is the only function that decides. A card
-     is a stack of blocks with ONE flexible member (the photo plate), so the
-     rest are measured first and the plate takes what is left. That ordering is
-     what keeps the card inside the safe band no matter how long the caption
-     runs — the alternative, a fixed plate with the text shrinking under it, put
-     the address under Instagram's reply bar on the third test caption. */
-  function layout(ctx, spec, m) {
-    const kind = spec.kind || 'note';
+     is a stack of blocks with ONE flexible member (the photo plate, or else the
+     note), so the rest are measured first and that one takes what is left. That
+     ordering is what keeps the card inside the safe band no matter how long the
+     caption runs — the alternative, a fixed plate with the text shrinking under
+     it, put the address under Instagram's reply bar on the third test caption. */
+  function layout(ctx, spec, m, kind) {
     const cardW = m.w - m.margin * 2;
-    /* On the photo card the plate runs to the card's own padding while the text
-       is inset further, so the words line up with the story's other cards and
-       the picture still reads as the biggest thing on it. */
+    /* The photo shares the words' column. It used to run wider, to the card's
+       edge, which read as a picture on a card; with no card it would only read
+       as a picture sticking out past the words. */
     const plated = kind === 'photo';
-    const sidePad = plated ? Math.round(m.pad / 3) : m.pad;
-    const inner = cardW - sidePad * 2;
-    const textPad = plated ? m.pad - sidePad : 0;
-    const textW = inner - textPad * 2;
+    const textW = cardW - m.pad * 2;
 
     /* Every block carries the gap that follows it, so the height measured here
        and the height actually drawn are the same sum in the same order. They
        used to be two hand-kept tallies and they drifted by one gap, which is the sort of bug that only shows up as "the mark
        sits a bit low". */
     const blocks = [];
-    const markH = Math.round(m.mark * 0.623);
+    const markH = Math.round(m.mark * 1028 / 1650);   /* the file's viewBox */
     const authorH = m.avatar;
-    const band = m.h - m.safeTop - m.safeBottom;
+    const bandTop = Math.max(m.safeTop, m.margin);
+    const band = m.h - bandTop - Math.max(m.safeBottom, m.margin);
     const fixed = m.pad + authorH + m.rowGap + m.gap + markH + m.padBottom;
     const budget = band - fixed;
     const spent = function () {
       return blocks.reduce(function (n, b) { return n + b.height + b.after; }, 0);
     };
+    const titled = !!(spec.title && spec.title.trim());
+    const noted = !!(spec.text && spec.text.trim());
+    const between = Math.round(m.rowGap * 0.4);
+    const titleFace = function (size) { return serif(size); };
+    const noteFace = function (size) { return sans(size, 300); };
 
     if (kind === 'daily') {
       /* The prompt sits ABOVE the answer, quiet and italic, because a daily
          answer read without its question is a non sequitur. */
       const prompt = paragraph(ctx, spec.prompt || '', {
         size: m.prompt, minSize: Math.round(m.prompt * 0.8), lineHeight: 1.3,
-        maxWidth: textW, maxHeight: m.prompt * 1.3 * 3, italic: true,
+        maxWidth: textW, maxHeight: m.prompt * 1.3 * 3,
+        face: function (size) { return serif(size, true); },
       });
       blocks.push({ type: 'prompt', block: prompt, height: prompt.height,
                     after: Math.round(m.rowGap * 0.66) });
     }
 
-    if (kind === 'photo') {
-      const caption = spec.text ? paragraph(ctx, spec.text, {
-        size: m.caption, minSize: Math.round(m.caption * 0.7), lineHeight: 1.22,
-        maxWidth: textW, maxHeight: m.caption * 1.22 * 3,
+    if (plated) {
+      /* A caption is the post's own two parts at a smaller size, capped at a
+         few lines each so the picture keeps the room. */
+      const title = titled ? paragraph(ctx, spec.title, {
+        size: Math.round(m.title * 0.8), minSize: m.titleMin, lineHeight: 1.14,
+        maxWidth: textW, maxHeight: Math.round(m.title * 0.8 * 1.14 * 2), face: titleFace,
       }) : null;
-      /* The plate is square and takes what nobody else claimed, capped by the
-         width it has. It is measured LAST and pushed first. */
-      const left = budget - (caption ? caption.height + m.gap : 0);
-      const side = Math.max(320, Math.min(inner, Math.floor(left)));
-      blocks.push({ type: 'plate', side: side, width: inner, height: side,
-                    after: caption ? m.gap : 0 });
-      if (caption) blocks.push({ type: 'caption', block: caption, height: caption.height, after: 0 });
+      const note = noted ? paragraph(ctx, spec.text, {
+        size: m.body, minSize: Math.round(m.body * 0.8), lineHeight: 1.45,
+        maxWidth: textW, maxHeight: Math.round(m.body * 1.45 * 3), face: noteFace,
+      }) : null;
+      const words = (title ? title.height : 0) + (note ? note.height : 0) +
+                    (title && note ? between : 0);
+      /* The plate runs the column's full width, square when there is
+         room and cropped shorter (never past 3:2) when a caption needs the
+         space. It used to stay square and SHRINK, which left a smaller picture
+         floating in the middle of the column. It is measured LAST and pushed
+         first. */
+      const left = budget - spent() - (words ? words + Math.round(m.gap * 0.75) : 0);
+      const tall = Math.max(Math.round(textW * 2 / 3), Math.min(textW, Math.floor(left)));
+      blocks.push({ type: 'plate', width: textW, height: tall,
+                    after: words ? Math.round(m.gap * 0.75) : 0 });
+      if (title) blocks.push({ type: 'title', block: title, height: title.height, after: note ? between : 0 });
+      if (note) blocks.push({ type: 'note', block: note, height: note.height, after: 0 });
     } else {
-      const body = paragraph(ctx, spec.text || '', {
-        size: m.body, minSize: m.bodyMin, lineHeight: 1.2,
-        maxWidth: textW, maxHeight: budget - spent(),
-      });
-      blocks.push({ type: 'body', block: body, height: body.height, after: 0 });
+      /* A headline is capped at three lines when a note follows it, and takes
+         the whole card when it is all there is. A note with no headline starts
+         a size up, so a one-line thought does not sit small in a big card. */
+      if (titled) {
+        const title = paragraph(ctx, spec.title, {
+          size: m.title, minSize: m.titleMin, lineHeight: 1.14, maxWidth: textW,
+          maxHeight: noted ? Math.round(m.title * 1.14 * 3) : budget - spent(), face: titleFace,
+        });
+        blocks.push({ type: 'title', block: title, height: title.height, after: noted ? between : 0 });
+      }
+      if (noted || !titled) {
+        const note = paragraph(ctx, spec.text || '', {
+          size: titled ? m.body : Math.round(m.body * 1.25), minSize: m.bodyMin, lineHeight: 1.45,
+          maxWidth: textW, maxHeight: budget - spent(), face: noteFace,
+        });
+        blocks.push({ type: 'note', block: note, height: note.height, after: 0 });
+      }
     }
 
     const height = fixed + spent();
     /* Centred in what Instagram leaves, never above it. */
-    const top = Math.max(m.safeTop, Math.round(m.safeTop + (band - height) / 2));
-    return { blocks: blocks, cardW: cardW, sidePad: sidePad, textPad: textPad, textW: textW,
-             inner: inner, height: height, top: top, left: m.margin,
+    const top = Math.max(bandTop, Math.round(bandTop + (band - height) / 2));
+    return { blocks: blocks, cardW: cardW, textW: textW,
+             height: height, top: top, left: m.margin,
              authorH: authorH, markH: markH };
   }
 
   async function render(spec) {
     spec = spec || {};
     const m = SIZES[spec.size] || SIZES.story;
-    /* No accent set is the COMMON case, not the fallback one: most readers
-       never pick a colour, so the brand's peach is what the disc wears. */
-    const accent = spec.accent || BRAND[0];
+    const paper = paperOf(spec);
 
     const canvas = document.createElement('canvas');
     canvas.width = m.w; canvas.height = m.h;
@@ -446,32 +364,25 @@
       loadImage(spec.kind === 'photo' ? spec.photo : null, true),
     ]);
 
-    const paper = backdrop(ctx, Object.assign({}, spec, { accent: accent }), m);
-    const L = layout(ctx, spec, m);
+    /* A PHOTO THAT DID NOT ARRIVE IS NOT DRAWN AS A HOLE. A bucket that refused
+       CORS, or a picture since deleted, used to leave a grey square with
+       "[ the photo ]" in it, which is the bench's placeholder reaching a real
+       story. With words to carry, the card becomes a note; with none, the plate
+       stays, empty, so the card still has a body. */
+    let kind = spec.kind || 'note';
+    if (kind === 'photo' && !photo && ((spec.title || '').trim() || (spec.text || '').trim())) kind = 'note';
 
-    /* The card, with its drop shadow. Canvas puts a shadow on the NEXT fill, so
-       it is turned off immediately after or every glyph on the card gets one. */
-    ctx.save();
-    ctx.shadowColor = paper.shadow;
-    ctx.shadowBlur = Math.round(m.w * 0.089);
-    ctx.shadowOffsetY = Math.round(m.w * 0.041);
-    roundRect(ctx, L.left, L.top, L.cardW, L.height, m.radius);
-    ctx.fillStyle = paper.card;
-    ctx.fill();
-    ctx.restore();
+    backdrop(ctx, m, paper);
+    const L = layout(ctx, spec, m, kind);
 
     ctx.save();
-    roundRect(ctx, L.left, L.top, L.cardW, L.height, m.radius);
-    ctx.clip();
-
-    const x = L.left + L.sidePad;
-    const tx = x + L.textPad;
+    const tx = L.left + m.pad;
     let y = L.top + m.pad;
 
     /* WHO. The attribution leads, on every card — a card that opens with the
        writing and names its writer underneath reads as a quote graphic, which
        is exactly the thing Tria is not. */
-    drawAuthor(ctx, tx, y, m, author, avatar, accent, paper, L.authorH);
+    drawAuthor(ctx, tx, y, m, author, avatar, paper, L.authorH);
     y += L.authorH + m.rowGap;
 
     /* WHAT. Each block draws at y and then advances by its own measured height
@@ -479,42 +390,26 @@
     L.blocks.forEach(function (b) {
       if (b.type === 'prompt') {
         drawParagraph(ctx, b.block, tx, y, paper.muted);
-      } else if (b.type === 'body' || b.type === 'caption') {
+      } else if (b.type === 'title' || b.type === 'note') {
         drawParagraph(ctx, b.block, tx, y, paper.ink);
       } else if (b.type === 'plate') {
-        const px = x + (b.width - b.side) / 2;
         ctx.save();
-        roundRect(ctx, px, y, b.side, b.side, Math.round(m.radius * 0.64));
+        roundRect(ctx, tx, y, b.width, b.height, m.plate);
         ctx.clip();
-        if (photo) drawCover(ctx, photo, px, y, b.side, b.side);
-        else {
-          ctx.fillStyle = paper.plate;
-          ctx.fillRect(px, y, b.side, b.side);
-          ctx.fillStyle = paper.muted;
-          ctx.font = sans(Math.round(m.address));
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('[ the photo ]', px + b.side / 2, y + b.side / 2);
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'alphabetic';
-        }
+        if (photo) drawCover(ctx, photo, tx, y, b.width, b.height);
+        else { ctx.fillStyle = paper.plate; ctx.fillRect(tx, y, b.width, b.height); }
         ctx.restore();
       }
       y += b.height + b.after;
     });
 
     /* WHERE. The wordmark and the address, on their own row at the foot. The
-       mark is the real file (icons/wordmark.svg, the same ink the app wears)
-       and it is small on purpose: the reader's post is the content, and this is
-       a signature, not a banner. */
-    const markH = L.markH;   /* the file is 1650 x 1028 */
+       mark is the real file (icons/wordmark.svg, the brand's cyan to green
+       baked into it) and it is small on purpose: the reader's post is the
+       content, and this is a signature, not a banner. */
+    const markH = L.markH;
     const fy = L.top + L.height - m.padBottom - markH;
-    if (mark) {
-      ctx.save();
-      ctx.globalAlpha = 0.9;
-      ctx.drawImage(mark, tx, fy, m.mark, markH);
-      ctx.restore();
-    }
+    if (mark) ctx.drawImage(mark, tx, fy, m.mark, markH);
     ctx.fillStyle = paper.muted;
     ctx.font = sans(m.address);
     ctx.textAlign = 'right';
@@ -526,19 +421,18 @@
     return canvas;
   }
 
-  /* THE DISC: the author's photo, or their initial on their colour. */
-  function disc(ctx, x, y, d, author, avatar, accent) {
+  /* THE DISC: the author's photo, or their initial the way the app sets it
+     (.avatar): the page's ink, the paper's colour, the serif. */
+  function disc(ctx, x, y, d, author, avatar, paper) {
     ctx.save();
     ctx.beginPath();
     ctx.arc(x + d / 2, y + d / 2, d / 2, 0, Math.PI * 2);
     ctx.clip();
     if (avatar) drawCover(ctx, avatar, x, y, d, d);
     else {
-      /* No photo, so the disc wears the reader's colour and their initial in
-         the app's own lettering — the same fallback the tiles use. */
-      ctx.fillStyle = accent;
+      ctx.fillStyle = paper.ink;
       ctx.fillRect(x, y, d, d);
-      ctx.fillStyle = inkOn(accent);
+      ctx.fillStyle = paper.page;
       ctx.font = serif(Math.round(d * 0.5));
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -549,18 +443,28 @@
     ctx.restore();
   }
 
-  function drawAuthor(ctx, x, y, m, author, avatar, accent, paper, d) {
-    disc(ctx, x, y, d, author, avatar, accent);
+  /* Name over @handle. Somebody with no name gets the handle alone, on the
+     disc's midline, rather than their handle printed twice. */
+  function drawAuthor(ctx, x, y, m, author, avatar, paper, d) {
+    disc(ctx, x, y, d, author, avatar, paper);
 
-    const name = m.name, handle = m.handle;
+    const handle = '@' + (author.username || '');
     const nx = x + d + Math.round(m.rowGap / 2);
     ctx.textBaseline = 'alphabetic';
+    if (!author.name) {
+      ctx.fillStyle = paper.ink;
+      ctx.font = sans(m.name, 700);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(handle, nx, y + d / 2);
+      ctx.textBaseline = 'alphabetic';
+      return;
+    }
     ctx.fillStyle = paper.ink;
-    ctx.font = sans(name, true);
-    ctx.fillText(author.name || '@' + (author.username || ''), nx, y + d / 2 - Math.round(handle * 0.2));
+    ctx.font = sans(m.name, 700);
+    ctx.fillText(author.name, nx, y + d / 2 - Math.round(m.handle * 0.2));
     ctx.fillStyle = paper.muted;
-    ctx.font = sans(handle);
-    ctx.fillText('@' + (author.username || ''), nx, y + d / 2 + handle);
+    ctx.font = sans(m.handle);
+    ctx.fillText(handle, nx, y + d / 2 + m.handle);
   }
 
   /* Both families are subsetted by unicode-range and declared `font-display:
@@ -576,11 +480,12 @@
   }
 
   function fonts(spec, m) {
-    const text = [spec.text, spec.prompt, (spec.author || {}).name,
+    const text = [spec.title, spec.text, spec.prompt, (spec.author || {}).name,
                   (spec.author || {}).username, spec.address].filter(Boolean).join(' ')
-                 + ' triaonline.com@';
+                 + ' triaonline.com@…';
     const faces = [
-      serif(m.body), serif(m.prompt, true), sans(m.name, true), sans(m.handle), sans(m.address),
+      serif(m.title), serif(m.prompt, true), sans(m.body, 300), sans(m.name, 700),
+      sans(m.handle), sans(m.address),
     ];
     return Promise.all(faces.map(function (f) { return face(f, text); }));
   }
@@ -602,8 +507,6 @@
     render: render,
     toBlob: toBlob,
     SIZES: SIZES,
-    BACKDROPS: BACKDROPS,
-    bandStops: bandStops,
-    backgroundPair: backgroundPair,
+    deviceScheme: deviceScheme,
   };
 })();

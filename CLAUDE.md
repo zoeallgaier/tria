@@ -31,7 +31,7 @@ colour**: a glyph names a type. **`--danger` is its own red** (#d1003c /
 #ff0049), never the brand. `--brand-ink` is the green deepened to #00735c for
 words on paper and Tria's own heart there. **Tria's ramp is recognised by its
 stops (`isBrand` in app.js), not by hue spread**: its ends are 15 degrees apart,
-narrower than an accent. The logo SVGs, storycard.js, gen-icons.js, the
+narrower than an accent. The logo SVGs, gen-icons.js, the
 splash's `@property` values and the refresh glow (`TriaEdgeGlow`, as its
 fallback) hold the two hexes by hand. See the top of [docs/design.md](docs/design.md).
 
@@ -91,7 +91,16 @@ zone inside the SVG, whole device pixels to a module (`qrSvg`,
 themes. **The modules are GOOEY** (Zoe, 2026-10-24): a lone module is a dot, a
 run a pill, inner corners filleted so neighbours melt, and the three eyes are
 soft squares; read back with Vision again, versions 3 to 6, both themes. `js/vendor/qr.js` is back, untouched from its checked version. Own-POST
-story cards stay. **In the app the system sheet is UIKit's** (`TriaShare.shareLink`, which
+story cards stay, and are simpler (Zoe, 2026-10-24): **no colour options**,
+the card is the device's light or dark (`StoryCard.deviceScheme`, pinned as
+the sheet opens), the post set straight on the page's paper with **no card,
+no hairline, no shadow**, the app's type (serif headline, Oxygen Light note),
+the teal wordmark at the foot, and the photo full column width with a soft
+corner. The sheet is titled Share post and is two rows, **Save image and Copy
+link: Share to Instagram is gone** (its Swift methods, Info.plist scheme and
+`metaAppId` are left with no caller). A Frame's card draws its poster, not
+the clip, and a song goes out as a link (it had no words, so its card was
+blank). **In the app the system sheet is UIKit's** (`TriaShare.shareLink`, which
 `shareOrCopy` tries first in the native shell): WKWebView's `navigator.share`
 opened nothing from a menu row, so it is only the web's now.
 

@@ -10323,62 +10323,40 @@
      answers itself — you can always see your own posts.
 
      THE LINK IS NEVER THE INVITE LINK. A card is a public surface by
-     definition, so it carries the address and, on a profile card, a QR to the
-     PROFILE, where adding someone is still a request. Zoe's firm rule, and the
-     one thing here that must not drift.
+     definition, so it carries the address of the POST, where adding someone is
+     still a request. Zoe's firm rule, and the one thing here that must not
+     drift.
 
-     ── ONE ROW IN, THREE ROWS OUT ─────────────────────────────────────────────
-     Every ••• in the app offers exactly ONE way to hand this thing over, it is
-     spelled "Share" or "Share profile" every time, and this sheet is where that
-     row lands whenever there is a picture to be made:
+     ── ONE ROW IN, TWO ROWS OUT ───────────────────────────────────────────────
+     A post's ••• offers exactly ONE way to hand it over, spelled "Share", and
+     this sheet is where that row lands whenever there is a picture to be made:
 
-       post •••     →  Share         →  Save image · Instagram · Copy link
-       profile •••  →  Share profile →  Save image · Instagram · Copy link
+       post •••  →  Share  →  Save image · Copy link
 
      Menus name INTENTS; the sheet names ACTS. That split is the whole design
      and it is what killed the two stacked Share rows, the row called "Somewhere
      else", and the label that flipped between Share link and Copy link. Where
-     there is no card to draw — somebody else's post, an activity, a poll,
-     somebody else's profile — the row keeps the same word and goes straight out
-     through handOver instead. */
+     there is no card to draw — somebody else's post, an activity, a poll, a
+     song — the row keeps the same word and goes straight out through handOver
+     instead. (A profile is its own sheet now, the QR one: shareProfile.) */
 
-  /* Is Instagram on this phone? Asked once, at boot, and not when the sheet
-     opens: the answer decides whether a ROW EXISTS and openStoryCardSheet
-     builds its rows synchronously, so an answer that arrives later arrives
-     after the row it was for. A row promising Instagram to somebody who hasn't
-     got it is a row that does nothing when tapped.
-
-     `canOpenURL` answers false for any scheme missing from
-     LSApplicationQueriesSchemes, installed or not — so forgetting the Info.plist
-     line makes Tria decide that nobody on earth has Instagram, and be unable to
-     tell that from the truth. */
-  let instagramOK = false;
-  (function probeInstagram() {
-    if (!nativeShell() || !window.Capacitor?.isPluginAvailable?.('TriaShare')) return;
-    try {
-      window.Capacitor.nativePromise('TriaShare', 'canShareToInstagram', {})
-        .then(r => { instagramOK = !!(r && r.available); })
-        .catch(() => { /* an older binary without the plugin */ });
-    } catch { /* same */ }
-  })();
-
-  /* A post, in the shape storycard.js wants. `type` is passed through even when
-     it is 'poll', which storycard has never heard of and falls back to note for
-     — better one place deciding that than two. */
+  /* A post, in the shape storycard.js wants. The title and the note travel
+     apart, because the card sets them the way the app does: the headline in
+     the serif, the note in Oxygen Light. A Frame's picture is its POSTER, never
+     the clip: an Image handed a .mov downloads the whole film to find it can't
+     draw it (cardStill makes the same choice). No colour rides along; the card
+     is the device's light or dark, decided in storycard.js. */
   function cardSpecFor(post) {
     const a = Store.user(post.author) || { username: post.author, name: post.author };
     const daily = dailyForPost(post);
-    const accent = accentOf(a.accent);
+    const still = post.image ? (isVideoUrl(post.image) ? post.poster : post.image) : null;
     return {
-      kind: daily ? 'daily' : (post.image ? 'photo' : 'note'),
-      type: post.type,
+      kind: daily ? 'daily' : (still ? 'photo' : 'note'),
       author: { name: a.name, username: a.username, avatar: a.avatar || null },
-      // A title is a heading on the card in the app; on a 1080-wide picture it
-      // is just the first line, and the serif carries both at one size.
-      text: [post.title, notePlain(post.note)].filter(Boolean).join('\n'),
+      title: post.title || '',
+      text: notePlain(post.note),
       prompt: daily ? daily.prompt : null,
-      photo: post.image || null,
-      accent: accent ? accent.hex : null,
+      photo: still || null,
       address: 'triaonline.com',
     };
   }
@@ -10391,59 +10369,42 @@
     nativeShell() && !!window.Capacitor?.isPluginAvailable?.('TriaShare');
 
   /* A BARE LINK, not the {title, text, url} payload the ••• rows carry, because
-     nothing in this sheet hands an address to the OS: the last row copies, and
-     the Instagram row copies on its way out. */
+     nothing in this sheet hands an address to the OS: the last row copies. */
   function openStoryCardSheet(base, link) {
     if (!window.StoryCard) { toast('Cards need a newer version of Tria.'); return; }
 
-    /* YOUR COLOUR LEADS ON THE OTHERS, and Tria's ramp is last (same call). A
-       post card's background is the only colour on it and it should open
-       wearing the sender's, not the house's. Where a sender has no colour of
-       their own, "Your color" is the post type's pastel — true of the pill
-       before this change and the reason the DEFAULT falls back to Tria rather
-       than opening on a colour that is nobody's. */
-    const pick = { bg: base.accent ? 'accent' : 'gradient' };
-
-    const BACKGROUNDS = [
-      ['accent', 'Your color'],
-      ['light', 'Light'],
-      ['dark', 'Dark'],
-      ['gradient', 'Tria'],
-    ];
+    /* ONE CARD, NO CHOICES (Zoe, 2026-10-24: "get rid of the color options
+       entirely. just light or dark, and dependent on the device settings").
+       The four background pills that sat under the preview are gone: the
+       scheme is read once, as the sheet opens, and pinned on the spec so the
+       preview and the saved picture are the same card even if the phone
+       turns to dark mode while the sheet is up. */
+    base = Object.assign({}, base, { scheme: StoryCard.deviceScheme() });
+    let drawn = null;
+    const draw = () => drawn || (drawn = StoryCard.render(base));
 
     // No aria-label on the frame: a bare <div> with a label and no role is not
     // announced by anything. The label goes on the canvas, which gets role="img"
-    // the moment it is mounted (see paint).
-    const head =
-      `<div class="cardshare">` +
-        `<div class="cardshare-art"></div>` +
-        `<div class="cardshare-bgs" role="group" aria-label="Background">` +
-          BACKGROUNDS.map(([key, label]) =>
-            `<button class="cardshare-bg pill-quiet${key === pick.bg ? ' is-on' : ''}" type="button" data-bg="${key}"` +
-            ` aria-pressed="${key === pick.bg}">${esc(label)}</button>`).join('') +
-        `</div>` +
-      `</div>`;
+    // the moment it is mounted (see wire).
+    const head = `<div class="cardshare"><div class="cardshare-art"></div></div>`;
 
-    // Rendered once per background and held, because a person flicking through
-    // four backgrounds should not wait for four redraws of the same card.
-    const drawn = new Map();
-    const draw = (bg) => {
-      if (drawn.has(bg)) return drawn.get(bg);
-      const made = StoryCard.render(Object.assign({}, base, { bg }));
-      drawn.set(bg, made);
-      return made;
-    };
+    /* TWO ROWS, IN THIS ORDER:
 
-    /* THREE ROWS, THE SAME THREE, IN THIS ORDER (Zoe, 2026-09-22):
+         Save image   the picture, onto this device
+         Copy link    the address, with no picture at all
 
-         Save image           the picture, onto this device
-         Share to Instagram   the picture, as a sticker, off to Instagram
-         Copy link            the address, with no picture at all
+       The picture leads because it is the thing sitting in the preview above
+       it, and it is what a reader opened this to look at. The link is the
+       plain fallback and goes last.
 
-       The picture rows lead because the picture is the thing sitting in the
-       preview above them, and it is what a reader opened this to look at. The
-       link is the plain fallback and goes last. Instagram is absent, not
-       greyed, on a phone without it.
+       SHARE TO INSTAGRAM IS GONE (Zoe, 2026-10-24: "remove share to insta
+       option"). It handed the card to Instagram Stories as a transparent
+       sticker over a background of our two colours, and copied the link on
+       the way out because no third-party app may attach the link sticker.
+       TriaShare's canShareToInstagram / shareToInstagram, the instagram
+       scheme in Info.plist and config.js's metaAppId are left with no
+       caller; git has this half (toInstagram, probeInstagram, the bare
+       render) if it is ever wanted back.
 
        COPY MEANS COPY. The last row used to change its own label — "Share link"
        where `navigator.share` exists, "Copy link" where it doesn't — which on a
@@ -10454,81 +10415,26 @@
 
        This sheet used to end in "Somewhere else" as well, which is not a place
        and not an act — it was that same tray wearing a label describing the
-       rows ABOVE it.
-
-       `extlink` on Instagram because that row LEAVES Tria, which is the one
-       thing about it worth knowing before tapping. */
-    const items = [{ label: 'Save image', icon: 'image', run: () => toSave() }];
-    if (instagramOK) items.push({ label: 'Share to Instagram', icon: 'extlink', run: () => toInstagram() });
-    items.push({ label: 'Copy link', icon: 'link', run: () => toLink() });
+       rows ABOVE it. */
+    const items = [
+      { label: 'Save image', icon: 'image', run: () => toSave() },
+      { label: 'Copy link', icon: 'link', run: () => toLink() },
+    ];
 
     openSheet({
+      title: 'Share post',
       head,
       items,
       wire: (scrim) => {
         const art = scrim.querySelector('.cardshare-art');
-        /* A LATE RENDER DOES NOT WIN. Two taps in quick succession start two
-           draws and they can land in either order, so a paint only mounts its
-           canvas if that background is still the chosen one. `isConnected`
-           alone caught the closed sheet and not this. */
-        const paint = () => {
-          const bg = pick.bg;
-          draw(bg).then((canvas) => {
-            if (!scrim.isConnected || pick.bg !== bg) return;
-            canvas.setAttribute('role', 'img');
-            canvas.setAttribute('aria-label', 'A preview of the card');
-            // Re-mounting a cached canvas re-runs the fade, which is what makes
-            // flicking through the four read as one card changing clothes
-            // rather than four cards being swapped.
-            canvas.classList.remove('is-in');
-            art.replaceChildren(canvas);
-            requestAnimationFrame(() => canvas.classList.add('is-in'));
-          }).catch(() => toast('The card could not be drawn.'));
-        };
-        scrim.querySelectorAll('.cardshare-bg').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            if (pick.bg === btn.dataset.bg) return;
-            pick.bg = btn.dataset.bg;
-            hapticTap('LIGHT');
-            scrim.querySelectorAll('.cardshare-bg').forEach((b) => {
-              b.setAttribute('aria-pressed', String(b.dataset.bg === pick.bg));
-              b.classList.toggle('is-on', b.dataset.bg === pick.bg);
-            });
-            paint();
-          });
-        });
-        paint();
+        draw().then((canvas) => {
+          if (!scrim.isConnected) return;
+          canvas.setAttribute('role', 'img');
+          canvas.setAttribute('aria-label', 'A preview of the card');
+          art.replaceChildren(canvas);
+        }).catch(() => toast('The card could not be drawn.'));
       },
     });
-
-    /* THE LINK RIDES ALONG, ALWAYS, and it is not a nicety. No third-party app
-       may attach Instagram's link sticker — only the person can, by hand — so a
-       card posted without the link is a picture of a post with no way back to
-       it. Copying at the same moment means the sticker is one paste away, and
-       the toast is the only place anyone is ever told that. */
-    function toInstagram() {
-      const cfg = window.TRIA_CONFIG || {};
-      if (!cfg.metaAppId) { toast('Instagram sharing is not set up yet.'); return; }
-      // BARE: transparent, so the card travels as a sticker over Instagram's own
-      // background layer. The profile card refuses it and paints its paper
-      // anyway, because that paper is what its code is read against. See the
-      // two notes in storycard.js.
-      StoryCard.render(Object.assign({}, base, { bg: pick.bg, bare: true }))
-        .then((canvas) => {
-          const pair = StoryCard.backgroundPair(Object.assign({}, base, { bg: pick.bg }));
-          return window.Capacitor.nativePromise('TriaShare', 'shareToInstagram', {
-            appId: cfg.metaAppId,
-            image: canvas.toDataURL('image/png'),
-            topColor: pair[0],
-            bottomColor: pair[1],
-          });
-        })
-        .then(() => copyText(link))
-        .then(() => toast('Link copied. Add it with the link sticker.'))
-        .catch((e) => {
-          toast(e && /instagram/i.test(e.message || '') ? 'Instagram wouldn\'t open.' : 'That didn\'t work.');
-        });
-    }
 
     /* ONE ROW FOR "the picture ends up on this device", with two bodies under
        it. In the app that is the camera roll, through the plugin, which is what
@@ -10546,7 +10452,7 @@
        to know why, and it leaves them with nothing to do about it. */
     function toSave() {
       if (canSavePhotos()) {
-        draw(pick.bg)
+        draw()
           .then((canvas) => window.Capacitor.nativePromise('TriaShare', 'saveToPhotos', {
             image: canvas.toDataURL('image/png'),
           }))
@@ -10566,7 +10472,7 @@
           });
         return;
       }
-      draw(pick.bg)
+      draw()
         .then((canvas) => new Promise((resolve, reject) =>
           canvas.toBlob(b => b ? resolve(b) : reject(new Error('unreadable')), 'image/png')))
         .then((blob) => { download(blob); toast('Saved.'); })
@@ -10574,9 +10480,7 @@
     }
 
     /* The address on its own, with no picture, for the times somebody opened
-       this sheet and then decided they just wanted the link. It is the same
-       clipboard write the Instagram row makes on its way out, so "Link copied."
-       means one thing in this sheet however you got there. */
+       this sheet and then decided they just wanted the link. */
     function toLink() {
       copyText(link).then(ok => toast(ok ? 'Link copied.' : 'Couldn’t copy the link.'));
     }
@@ -10667,7 +10571,9 @@
        label used to make, moved one layer down. Both branches are Share and
        both wear the share glyph. The picture frame is Save image's alone, in
        the sheet, where it names a picture and nothing else. */
-    const cardable = own && post.type !== 'activity' && post.type !== 'poll';
+    // A song has no words of its own (the track is the post), so its card came
+    // out blank: it goes out as a link too.
+    const cardable = own && post.type !== 'activity' && post.type !== 'poll' && post.type !== 'song';
     const items = [{ label: 'Share', icon: 'send', run: () => (cardable
       ? openStoryCardSheet(cardSpecFor(post), postLink(post))
       : handOver(postShare(post))) }];

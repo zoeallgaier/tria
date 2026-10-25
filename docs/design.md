@@ -14,7 +14,7 @@ doesn't leave them lying). Same 115deg, oklab, undeepened. What moved with it:
 - `BAND_ONE_HUE` is gone: the two ends are 15 degrees apart, narrower than an
   accent's 22, so app.js knows Tria's ramp by comparing the stops with
   `--brand-band` (`isBrand`), not by hue spread.
-- Hand-held copies: storycard.js, gen-icons.js, `TriaEdgeGlow`'s fallback, the
+- Hand-held copies: gen-icons.js, `TriaEdgeGlow`'s fallback, the
   splash's `@property` initial values, `icons/TriaLogoOfficial.svg`.
   `icons/wordmark.svg` was mid-redesign in Zoe's working copy and was left to
   her; the PNG icons are not regenerated until it lands.
