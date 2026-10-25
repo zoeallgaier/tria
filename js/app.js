@@ -21184,6 +21184,27 @@
     } catch { /* no listener; a tap just opens the app where it was */ }
   }
 
+  /* A universal link that opened the app: a scanned profile code, a tapped
+     triaonline.com/p/… in Messages. It was opening Tria wherever it was and
+     going no further (Zoe, 2026-10-24) until SceneDelegate learned to pass it
+     on; see the note there. The clean path becomes the hash 404.html would
+     have made of it on the web, and the same re-pull as a notification tap
+     comes first, because a link is often about something this cache predates.
+     Retained by the plugin like the push event, so a cold launch lands too. */
+  if (nativeShell()) {
+    try {
+      window.Capacitor.nativeCallback('TriaSettings', 'addListener',
+        { eventName: 'openLink' }, async (ev) => {
+          let u;
+          try { u = new URL(String(ev?.url || '')); } catch { return; }
+          const m = u.pathname.match(/^\/(p|u|c|daily|i)\/(.+?)\/?$/);
+          if (!m) return;
+          await Store.refresh();
+          go('#/' + m[1] + '/' + m[2] + u.search);
+        });
+    } catch { /* no listener; a link just opens the app where it was */ }
+  }
+
   // If the recovery event lands after the first paint (it usually resolves during
   // init, but the URL parse is async), re-route so set-new-password takes over.
   Store.onRecovery(route);

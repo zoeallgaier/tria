@@ -34,6 +34,27 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise)
     ]
 
+    /// A universal link (triaonline.com/u/…, /p/…, /c/…) that opened the app,
+    /// as an `openLink` event for app.js to route. SceneDelegate hands the link
+    /// to Capacitor's proxy; this picks it up from there. Retained until a
+    /// listener consumes it, because on a cold launch the link arrives before
+    /// app.js has booted, and `lastURL` covers a link that came in before this
+    /// plugin loaded at all.
+    override public func load() {
+        NotificationCenter.default.addObserver(self, selector: #selector(linkOpened(_:)),
+                                               name: .capacitorOpenUniversalLink, object: nil)
+        if let url = ApplicationDelegateProxy.shared.lastURL { sendLink(url) }
+    }
+
+    @objc private func linkOpened(_ note: Notification) {
+        guard let url = (note.object as? [String: Any])?["url"] as? URL else { return }
+        sendLink(url)
+    }
+
+    private func sendLink(_ url: URL) {
+        notifyListeners("openLink", data: ["url": url.absoluteString], retainUntilConsumed: true)
+    }
+
     /// Resolves once iOS has accepted the hand-off, rejects if it refuses. The
     /// caller in app.js treats a rejection as "say where to go in words
     /// instead", so silence is never an outcome — the reader always learns

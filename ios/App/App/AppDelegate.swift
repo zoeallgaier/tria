@@ -78,9 +78,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
    What did NOT move: the two APNs forwards above. A device token belongs to the
    APP, not to a window, and UIApplicationDelegate is still where APNs delivers
-   it. Both `open url` and `continue userActivity` are dead code either way —
-   Tria registers no CFBundleURLTypes and holds no associated-domains
-   entitlement, so nothing has ever called them. */
+   it. Both `open url` and `continue userActivity` above are dead code: under
+   UIScene, UIKit hands a URL or an activity to the SCENE, never to the app
+   delegate.
+
+   UNIVERSAL LINKS land here (2026-10-24). The associated-domains entitlement
+   went in on 2026-09-22 and this class stayed empty, so a scanned profile code
+   or a tapped triaonline.com/u/… link opened Tria and went nowhere: iOS
+   delivered the link to these two methods and nothing was listening. Both now
+   pass it to Capacitor's proxy, which keeps it as `lastURL` and posts
+   `.capacitorOpenUniversalLink`; TriaSettingsPlugin carries it to app.js,
+   which routes it. A cold launch brings it in `willConnectTo`, a running app in
+   `continue`. Neither touches the window, so the storyboard still builds it. */
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        connectionOptions.userActivities.forEach(forward)
+    }
+
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        forward(userActivity)
+    }
+
+    private func forward(_ activity: NSUserActivity) {
+        _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, continue: activity, restorationHandler: { _ in })
+    }
 }
