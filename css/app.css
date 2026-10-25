@@ -4410,44 +4410,34 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 .deck-card.is-loaded img { opacity: 1; transform: none; }
 .deck.is-settling .deck-card { transition: transform var(--dur-move) var(--ease); }
-/* Where you are: a dot a photo, ON the photo at its foot (Zoe, 2026-10-25:
-   "overlay the dots on the images, that way the reaction bar stays clean";
-   they sat under it for an hour). Chrome over a picture, so it wears what the
-   clip's sound toggle wears and for the same reason: a dark scrim under a
-   blur, because the page's own translucent tint vanished on a light frame.
-   White dots, the one in front nearly solid. Small, so it sits on the photo
-   rather than over it. No number (that is the lightbox's, where you went to
-   look properly) and no tap: they say, the swipe does. A later sibling of the
-   deck, so the cards slide under it and it stays put. */
-.deck-dots {
+/* Where you are: "1/4" in the photo's bottom left corner (Zoe, 2026-10-25,
+   after an hour of dots, first under the photo and then on it; the reaction
+   bar stays clean and a number says it plainly). A position, not a tally: it
+   says which photo, never what you're behind on, so the no-count rule doesn't
+   reach it. The tags' own type and pill (Zoe: "same size as tags text"), worn
+   in what the clip's sound toggle wears and for its reason: a dark scrim under
+   a blur, dark enough to read on a bright frame with no blur at all. Inside
+   the deck so it sits on the photo's corner, after the cards so they slide
+   under it, and no tap: it says, the swipe does. */
+.deck-count {
   position: absolute;
+  left: 10px;
   bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 5px;
-  padding: 5px 7px;
+  z-index: 1;
+  font-family: 'Oxygen', sans-serif;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  padding: 0.16rem 0.55rem;
   border-radius: var(--radius-pill);
-  /* Dark enough to carry the dots on a bright frame with no blur at all; the
-     blur only smooths what is behind it. */
   background: rgba(0, 0, 0, 0.4);
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   pointer-events: none;
 }
-.deck-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #fff;
-  opacity: 0.5;
-  transition: opacity var(--dur-quick) var(--ease);
-}
-.deck-dot.is-on { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .deck-card img { opacity: 1; transform: none; transition: none; }
-  .deck-dot { transition: none; }
 }
 
 /* Byline + caption inset to align with post text; the image is full-width. The

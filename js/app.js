@@ -4027,9 +4027,10 @@
 
   /* ── The deck (a carousel in the feed) ──────────────────────────────────────
      A carousel sits exactly where a single Frame does: one photo at a time, in
-     the same centred, rounded box, and a dot a photo on its foot saying how many
-     there are and which one is in front (Zoe, 2026-10-25: "have the images all
-     be centered like any other photo, and use dots"). It was dealt as a hand of
+     the same centred, rounded box, and "1/4" in its bottom left corner saying
+     which one is in front (Zoe, 2026-10-25: "have the images all be centered
+     like any other photo", then dots, then "a 1/4 on the bottom left corner",
+     the reaction bar kept clean). It was dealt as a hand of
      cards until then, the next one's edge peeking out on the right, and that
      edge pulled every photo off centre.
 
@@ -4062,11 +4063,10 @@
             `loading="lazy" decoding="async" draggable="false">` +
         `</div>`;
     }).join('');
-    const dots = set.map((_, i) => `<span class="deck-dot${i ? '' : ' is-on'}"></span>`).join('');
     return `<figure class="photo photo--deck" tabindex="0" role="button" aria-roledescription="carousel" ` +
         `aria-label="Photo 1 of ${n}. Swipe for the next, tap to enlarge.">` +
-        `<div class="deck" style="aspect-ratio:${ratio}">${cards}</div>` +
-        `<div class="deck-dots" aria-hidden="true">${dots}</div>` +
+        `<div class="deck" style="aspect-ratio:${ratio}">${cards}` +
+          `<span class="deck-count" aria-hidden="true">1/${n}</span></div>` +
       `</figure>`;
   }
 
@@ -4078,7 +4078,7 @@
     const deck = fig && fig.querySelector('.deck');
     if (!deck) return;
     const cards = [...deck.querySelectorAll('.deck-card')];
-    const dots = [...fig.querySelectorAll('.deck-dot')];
+    const count = deck.querySelector('.deck-count');
     const n = cards.length;
     let at = 0;
 
@@ -4113,7 +4113,7 @@
     const settle = (animate) => {
       deck.classList.toggle('is-settling', !!animate && !prefersReduced());
       lay(0);
-      dots.forEach((d, i) => d.classList.toggle('is-on', i === at));
+      if (count) count.textContent = `${at + 1}/${n}`;
       fig.setAttribute('aria-label', `Photo ${at + 1} of ${n}. ` +
         (at < n - 1 ? 'Swipe for the next, tap to enlarge.' : 'Tap to enlarge.'));
       load();
@@ -18858,7 +18858,7 @@
       }).catch(() => {});
     }
     // A carousel is the one place a count is the kind thing: the deck in the feed
-    // shows where you are with its dots, and this is the mode you tapped
+    // shows where you are in its corner, and this is the mode you tapped
     // into to have it plainly. "2 of 5" and two real buttons, so it can be driven
     // without a swipe at all. It says where you are, never what you're behind on.
     lbGallery = !isVideo && gallery && gallery.srcs && gallery.srcs.length > 1
