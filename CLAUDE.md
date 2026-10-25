@@ -88,7 +88,9 @@ dark on paper and light on ink, then the name and @handle, then Share link (the
 system sheet, through `handOver`) and Copy link. Level M, a four-module quiet
 zone inside the SVG, whole device pixels to a module (`qrSvg`,
 `sizeProfileCode`), and no logo or tint: it was read back with Vision in both
-themes. `js/vendor/qr.js` is back, untouched from its checked version. Own-POST
+themes. **The modules are GOOEY** (Zoe, 2026-10-24): a lone module is a dot, a
+run a pill, inner corners filleted so neighbours melt, and the three eyes are
+soft squares; read back with Vision again, versions 3 to 6, both themes. `js/vendor/qr.js` is back, untouched from its checked version. Own-POST
 story cards stay. **In the app the system sheet is UIKit's** (`TriaShare.shareLink`, which
 `shareOrCopy` tries first in the native shell): WKWebView's `navigator.share`
 opened nothing from a menu row, so it is only the web's now.

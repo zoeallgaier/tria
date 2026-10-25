@@ -9935,26 +9935,53 @@
     });
   }
 
-  // A QR matrix as one SVG path, a run of dark modules per subpath, with the
-  // four-module quiet zone inside the viewBox so the plate needs no padding.
+  // A QR matrix as one SVG path, GOOEY (Zoe, 2026-10-24): every dark module
+  // rounds the corners where it meets nothing, so a lone module is a dot and a
+  // run is a pill, and a light module tucked into a dark corner gets a fillet,
+  // so neighbours melt together like a liquid. Every module's centre keeps its
+  // colour, which is all a scanner samples. The three finder eyes are drawn
+  // whole as soft squares (ring, hole, pupil) with their 1:1:3:1:1 intact. The
+  // four-module quiet zone is inside the viewBox so the plate needs no padding.
   function qrSvg(m) {
-    const q = 4, n = m.length + q * 2;
+    const q = 4, s = m.length, n = s + q * 2, r = 0.5;
+    const eye = (x, y) => (x < 7 || x >= s - 7) && (y < 7 || y >= s - 7) && !(x >= 7 && y >= 7);
+    const on = (x, y) => x >= 0 && y >= 0 && x < s && y < s && m[y][x] && !eye(x, y);
+    const arc = (dx, dy, sweep) => `a${r} ${r} 0 0 ${sweep} ${dx} ${dy}`;
     let d = '';
-    m.forEach((row, y) => {
-      for (let x = 0; x < row.length;) {
-        if (!row[x]) { x++; continue; }
-        let run = 1;
-        while (row[x + run]) run++;
-        d += `M${x + q} ${y + q}h${run}v1h-${run}z`;
-        x += run;
+    for (let y = 0; y < s; y++) {
+      for (let x = 0; x < s; x++) {
+        if (eye(x, y)) continue;
+        const X = x + q, Y = y + q;
+        const up = on(x, y - 1), dn = on(x, y + 1), lf = on(x - 1, y), rt = on(x + 1, y);
+        if (on(x, y)) {
+          const tl = !up && !lf ? r : 0, tr = !up && !rt ? r : 0;
+          const br = !dn && !rt ? r : 0, bl = !dn && !lf ? r : 0;
+          d += `M${X + tl} ${Y}H${X + 1 - tr}` + (tr ? arc(r, r, 1) : '') +
+            `V${Y + 1 - br}` + (br ? arc(-r, r, 1) : '') +
+            `H${X + bl}` + (bl ? arc(-r, -r, 1) : '') +
+            `V${Y + tl}` + (tl ? arc(r, -r, 1) : '') + 'z';
+        } else {
+          // A fillet only in a true inner corner (the diagonal dark too), or
+          // it would meet its neighbours' rounded corners in a cusp.
+          if (up && lf && on(x - 1, y - 1)) d += `M${X} ${Y}h${r}${arc(-r, r, 0)}z`;
+          if (up && rt && on(x + 1, y - 1)) d += `M${X + 1} ${Y}v${r}${arc(-r, -r, 0)}z`;
+          if (dn && rt && on(x + 1, y + 1)) d += `M${X + 1} ${Y + 1}h${-r}${arc(r, -r, 0)}z`;
+          if (dn && lf && on(x - 1, y + 1)) d += `M${X} ${Y + 1}v${-r}${arc(r, r, 0)}z`;
+        }
       }
+    }
+    const soft = (x, y, w, k) =>
+      `M${x + k} ${y}h${w - 2 * k}a${k} ${k} 0 0 1 ${k} ${k}v${w - 2 * k}a${k} ${k} 0 0 1 ${-k} ${k}` +
+      `h${2 * k - w}a${k} ${k} 0 0 1 ${-k} ${-k}v${2 * k - w}a${k} ${k} 0 0 1 ${k} ${-k}z`;
+    [[0, 0], [s - 7, 0], [0, s - 7]].forEach(([x, y]) => {
+      d += soft(x + q, y + q, 7, 2.5) + soft(x + q + 1, y + q + 1, 5, 1.5) + soft(x + q + 2, y + q + 2, 3, 1.1);
     });
-    return `<svg class="qr-code" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" aria-hidden="true"><path d="${d}"/></svg>`;
+    return `<svg class="qr-code" viewBox="0 0 ${n} ${n}" aria-hidden="true"><path fill-rule="evenodd" d="${d}"/></svg>`;
   }
 
   // About two thirds of the panel and never past 264px, floored to a whole
-  // number of DEVICE pixels per module, so no module edge is antialiased into
-  // its neighbour on the one screen held out to be scanned.
+  // number of DEVICE pixels per module, so the grid the scanner reads lands
+  // on the screen's own pixels even though the goo's curves are antialiased.
   function sizeProfileCode(plate, modules) {
     if (!plate) return;
     const n = modules + 8;

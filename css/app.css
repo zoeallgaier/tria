@@ -8428,7 +8428,8 @@ button.poll-option:disabled { cursor: default; }
    modules in the page's ink straight on the panel, dark on paper and bright
    on ink. A light-on-dark code is allowed by ISO/IEC 18004:2015 and was read
    back with Vision both ways before it shipped. The four-module quiet zone is
-   drawn inside the SVG as empty space, so nothing crowds the code.
+   drawn inside the SVG as empty space, so nothing crowds the code. The
+   modules are gooey (qrSvg) and the gooey one was read back the same way.
    sizeProfileCode sets the exact width; the 232px is the frame before it does. */
 .qr-card {
   display: flex; flex-direction: column; align-items: center;
