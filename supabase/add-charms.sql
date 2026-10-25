@@ -27,7 +27,14 @@
 alter table public.users add column if not exists charms text[] not null default '{}';
 
 alter table public.users drop constraint if exists users_charms_valid;
+-- A charm is a known key or a custom emoji, 'e:' and the glyph.
+create or replace function public.charms_valid(c text[]) returns boolean
+language sql immutable as $$
+  select coalesce(bool_and(k = any(array['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat'])
+                          or (k like 'e:%' and char_length(k) between 3 and 18)), true)
+  from unnest(c) k
+$$;
 alter table public.users add constraint users_charms_valid check (
   cardinality(charms) <= 2
-  and charms <@ array['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat', 'ghost']::text[]
+  and public.charms_valid(charms)
 );

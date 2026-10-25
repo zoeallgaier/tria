@@ -13745,17 +13745,36 @@
       art: '<g transform="translate(9 9) scale(1.25)"><path class="cl" d="M12.00 3.30L14.41 9.58L21.13 9.93L15.90 14.17L17.64 20.67L12.00 17.00L6.36 20.67L8.10 14.17L2.87 9.93L9.59 9.58Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'repeat', name: 'On repeat', how: 'Share a song.', got: 'You shared a song.',
       art: '<g transform="translate(8.92 8.6) scale(1.3)"><g class="cl"><path d="M13.4 17.2V3.8c.7 2.7 5 3.6 5 7.6"/><circle cx="10.4" cy="17.2" r="3"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
-    // Halloween's two (Zoe, 2026-10-24): no task, held by everyone (`free`),
+    // Halloween's bat (Zoe, 2026-10-24; the ghost left for custom charms): no task, held by everyone (`free`),
     // so they never raise an unlock or join the welcome.
     { key: 'bat', name: 'Bat', free: true, how: 'Happy Halloween.', got: 'Happy Halloween.',
       art: '<g transform="translate(8.4 9.2) scale(1.3)"><path class="cl" d="M12 8.6H11.6L10.6 7L10 10.2C8.5 8.6 5.5 7.8 2.5 9C4 10 4.6 11.6 4.3 13.4C5.8 12.8 7.2 13.2 8 14.4C9 13.6 10.4 13.9 11 15.6L12 17L13 15.6C13.6 13.9 15 13.6 16 14.4C16.8 13.2 18.2 12.8 19.7 13.4C19.4 11.6 20 10 21.5 9C18.5 7.8 15.5 8.6 14 10.2L13.4 7L12.4 8.6Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
-    { key: 'ghost', name: 'Ghost', free: true, how: 'Happy Halloween.', got: 'Happy Halloween.',
-      art: '<g transform="translate(8.4 7.4) scale(1.3)"><path class="cl" d="M6 19.5V10.5A6 6 0 0 1 18 10.5V19.5L16 17.9L14 19.5L12 17.9L10 19.5L8 17.9Z"/><circle class="cf" cx="9.9" cy="11" r="0.95"/><circle class="cf" cx="14.1" cy="11" r="0.95"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
   ];
-  const charmOf = (key) => CHARMS.find(c => c.key === key) || null;
+  /* CUSTOM CHARMS (Zoe, 2026-10-25): any emoji off the iOS keyboard, stored
+     as 'e:' and the glyph, drawn in the system's own colour emoji, so it
+     arrives as Apple's sticker art and not in the line. No trims: the glyph
+     brings its own. */
+  const isCustomCharm = (key) => typeof key === 'string' && key.startsWith('e:');
+  const charmOf = (key) => isCustomCharm(key)
+    ? { key, name: 'Custom', custom: true, got: 'Your own charm.' }
+    : (CHARMS.find(c => c.key === key) || null);
   function charmSvg(key, cls) {
     const c = charmOf(key);
-    return c ? `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${c.art}</svg>` : '';
+    if (!c) return '';
+    const art = c.custom
+      ? `<text class="charm-emoji" x="24" y="25" text-anchor="middle" dominant-baseline="central" font-size="34">${esc(key.slice(2))}</text>`
+      : c.art;
+    return `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`;
+  }
+  // The one emoji out of whatever was typed: the last whole grapheme that is a pictograph.
+  function emojiFrom(text) {
+    const segs = typeof Intl !== 'undefined' && Intl.Segmenter
+      ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(x => x.segment)
+      : [...text];
+    for (let i = segs.length - 1; i >= 0; i--) {
+      if (/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(segs[i]) && segs[i].length <= 16) return segs[i];
+    }
+    return '';
   }
   // The two on someone's photo, inside the face's own positioned box.
   function charmsOnFace(u) {
@@ -13931,6 +13950,7 @@
     if (!me) return;
     const held = charmsHeld();
     let worn = (me.charms || []).slice();
+    const custom = worn.find(isCustomCharm);
     const tile = (c) => {
       const has = held.includes(c.key);
       return `<button type="button" class="charm-tile${has ? '' : ' charm-tile--locked'}" data-charm="${c.key}"` +
@@ -13946,8 +13966,28 @@
       dock: 'Done',
       head:
         `<p class="charm-pick-hint">Wear up to two on your photo.</p>` +
-        `<div class="charm-grid">${CHARMS.map(tile).join('')}</div>`,
+        `<div class="charm-grid">${CHARMS.map(tile).join('')}` +
+          `<label class="charm-tile charm-tile--custom">` +
+            `<span class="charm-custom-face">${custom ? charmSvg(custom) : svgIcon('plus')}</span>` +
+            `<span class="charm-tile-name">Custom</span>` +
+            `<input class="charm-custom-input" type="text" inputmode="text" enterkeyhint="done" autocomplete="off" aria-label="Pick an emoji">` +
+          `</label></div>`,
       wire: (scrim) => {
+        const field = scrim.querySelector('.charm-custom-input');
+        field.addEventListener('input', async () => {
+          const e = emojiFrom(field.value);
+          field.value = '';
+          if (!e) return;
+          field.blur();
+          const k = 'e:' + e;
+          const prev = worn;
+          worn = [...worn.filter(x => !isCustomCharm(x)), k].slice(-2);
+          scrim.querySelector('.charm-custom-face').innerHTML = charmSvg(k);
+          paint();
+          hapticEvent('SELECT');
+          if (!(await wearCharms(worn))) { worn = prev; paint(); }
+          if (onChange) onChange(); else repaintOwnCharms();
+        });
         const paint = () => scrim.querySelectorAll('.charm-tile[aria-pressed]').forEach(b =>
           b.setAttribute('aria-pressed', String(worn.includes(b.dataset.charm))));
         scrim.querySelectorAll('.charm-tile[aria-pressed]').forEach(b => b.addEventListener('click', async () => {

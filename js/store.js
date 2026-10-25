@@ -233,7 +233,7 @@ const Store = (() => {
   // column that doesn't exist is omitted, an empty one is []. Until it is, no
   // charm shows anywhere (Store.charmsReady), the songsReady rule.
   let hasCharmsColumn = false;
-  const CHARM_KEYS = ['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat', 'ghost'];
+  const CHARM_KEYS = ['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat'];
   function pinsFrom(v) {
     if (!Array.isArray(v)) return [];
     const out = [];
@@ -292,7 +292,7 @@ const Store = (() => {
     // client's seventh charm reads as nothing here rather than a blank).
     if ('charms' in u) {
       hasCharmsColumn = true;
-      const worn = (u.charms || []).filter(k => CHARM_KEYS.includes(k)).slice(0, 2);
+      const worn = (u.charms || []).filter(k => CHARM_KEYS.includes(k) || (typeof k === 'string' && /^e:.{1,16}$/u.test(k))).slice(0, 2);
       if (worn.length) o.charms = worn;
     }
     if ('accent' in u) { if (u.accent) o.accent = u.accent; }
@@ -3198,7 +3198,7 @@ const Store = (() => {
     if (!u) return { ok: false, error: 'You need to be signed in.' };
     const id = u.id;
     const prev = u.charms || null;
-    const value = [...new Set((list || []).filter(k => CHARM_KEYS.includes(k)))].slice(0, 2);
+    const value = [...new Set((list || []).filter(k => CHARM_KEYS.includes(k) || (typeof k === 'string' && /^e:.{1,16}$/u.test(k))))].slice(0, 2);
     patchUser(id, { charms: value.length ? value : null });
     const { error } = await sb.from('users').update({ charms: value }).eq('id', id);
     if (!error) return { ok: true };
