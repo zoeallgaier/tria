@@ -112,8 +112,9 @@ block; every break-out (`.feed`, the lists, the rails) and the padding that pays
 it back reads it, and the top bar's `--toolbar-pad` and `.auth-topbar` are the
 same 14px. Don't reintroduce a per-page gutter. **A carousel is centred like
 any Frame**: the photos stand in a row a gap apart, clipped to the box's rounded
-corners, and slide, with a dot a photo in the air over the action row (no
-number in the feed; the lightbox keeps its "2 of 5"). The hand-of-cards peek is
+corners, and slide, with a dot a photo overlaid on the photo's foot, white on a
+small dark blurred capsule, so the reaction bar stays clean (no number in the
+feed; the lightbox keeps its "2 of 5"). The hand-of-cards peek is
 gone. See docs/data.md under the carousel.
 
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)

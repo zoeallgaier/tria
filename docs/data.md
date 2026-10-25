@@ -1319,8 +1319,10 @@ address and therefore a different person, and there is no way around that.
   box shaped off the cover (4:5 to 3:2, so a swipe never changes the card's
   height) at full column width, centred like any Frame. The photos stand in a
   row a gap apart, clipped to the box's rounded corners, and slide; a dot a
-  photo sits in the air over the action row (Zoe, 2026-10-25: "have the images
-  all be centered like any other photo, and use dots"). It was dealt as a hand
+  photo sits ON the photo at its foot, white on a small dark blurred capsule
+  (Zoe, 2026-10-25: "have the images all be centered like any other photo, and
+  use dots", then "overlay the dots on the images, that way the reaction bar
+  stays clean"). It was dealt as a hand
   of cards before that, one scaled down behind and peeking into the right inset,
   no dots, and the peek pulled the photo off centre. Linear, no loop.
   A tap opens the lightbox, which pages (`pageLightbox`) with a count and arrows.

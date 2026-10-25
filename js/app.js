@@ -4027,7 +4027,7 @@
 
   /* ── The deck (a carousel in the feed) ──────────────────────────────────────
      A carousel sits exactly where a single Frame does: one photo at a time, in
-     the same centred, rounded box, and a dot a photo under it saying how many
+     the same centred, rounded box, and a dot a photo on its foot saying how many
      there are and which one is in front (Zoe, 2026-10-25: "have the images all
      be centered like any other photo, and use dots"). It was dealt as a hand of
      cards until then, the next one's edge peeking out on the right, and that

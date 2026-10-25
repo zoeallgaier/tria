@@ -4410,30 +4410,41 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 .deck-card.is-loaded img { opacity: 1; transform: none; }
 .deck.is-settling .deck-card { transition: transform var(--dur-move) var(--ease); }
-/* Where you are: a dot a photo, the one in front in the page's ink and the
-   rest the same ink, faint. They sit in the air the action row already leaves
-   under a photo, so a carousel stands exactly as tall as a single Frame. No
-   number (that is the lightbox's, where you went to look properly) and no tap:
-   they say, the swipe does. */
+/* Where you are: a dot a photo, ON the photo at its foot (Zoe, 2026-10-25:
+   "overlay the dots on the images, that way the reaction bar stays clean";
+   they sat under it for an hour). Chrome over a picture, so it wears what the
+   clip's sound toggle wears and for the same reason: a dark scrim under a
+   blur, because the page's own translucent tint vanished on a light frame.
+   White dots, the one in front nearly solid. Small, so it sits on the photo
+   rather than over it. No number (that is the lightbox's, where you went to
+   look properly) and no tap: they say, the swipe does. A later sibling of the
+   deck, so the cards slide under it and it stays put. */
 .deck-dots {
   position: absolute;
-  top: calc(100% + 7px);
-  left: 0;
-  right: 0;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  justify-content: center;
-  gap: 6px;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: var(--radius-pill);
+  /* Dark enough to carry the dots on a bright frame with no blur at all; the
+     blur only smooths what is behind it. */
+  background: rgba(0, 0, 0, 0.4);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   pointer-events: none;
 }
 .deck-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--text);
-  opacity: 0.22;
+  background: #fff;
+  opacity: 0.5;
   transition: opacity var(--dur-quick) var(--ease);
 }
-.deck-dot.is-on { opacity: 0.88; }
+.deck-dot.is-on { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .deck-card img { opacity: 1; transform: none; transition: none; }
   .deck-dot { transition: none; }
