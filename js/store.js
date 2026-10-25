@@ -3208,6 +3208,19 @@ const Store = (() => {
     return 'i:' + decodeURIComponent(path);
   }
   const stickerUrl = (key) => sb.storage.from('media').getPublicUrl(key.slice(2)).data.publicUrl;
+  // Your sticker charms are the sticker files in your own folder (storage.sql's
+  // public read lets you list it). null when Storage couldn't be asked, so a
+  // failed list never reads as "you have none".
+  async function myStickers() {
+    const u = currentUser();
+    if (!u) return [];
+    try {
+      const { data, error } = await sb.storage.from('media')
+        .list(u.id, { search: 'sticker-', limit: 100, sortBy: { column: 'name', order: 'asc' } });
+      if (error || !data) return null;
+      return data.map(f => `i:${u.id}/${f.name}`).filter(k => isSticker(k, u.id));
+    } catch { return null; }
+  }
   // A deleted sticker's file, best effort ("media delete own" scopes it to yours).
   function dropSticker(key) {
     const u = currentUser();
@@ -4016,7 +4029,7 @@ const Store = (() => {
     clearDelivered, openAppSettings,
     // Profile
     updateAvatar, updateProfile, updateAccent, setListeningTo, localFace,
-    charmsReady, updateCharms, uploadSticker, stickerUrl, dropSticker,
+    charmsReady, updateCharms, uploadSticker, stickerUrl, dropSticker, myStickers,
     // Pins
     setPins,
   };

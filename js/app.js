@@ -274,7 +274,6 @@
     // prompt that belongs to a day, and no post type's mark says that.
     daily:   '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/>',
     plus:    '<path d="M12 5v14"/><path d="M5 12h14"/>',
-    minus:   '<path d="M6 12h12"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
@@ -13762,8 +13761,7 @@
      so the web takes a picture file. Either way it is redrawn as a
      transparent PNG and uploaded, and the charm is 'i:' plus its path in your
      own media folder (Store's isSticker). No trims: a sticker brings its own
-     white edge. One at a time; the last one stays on this device
-     (STICKER_KEPT) so taking it off doesn't lose it. */
+     white edge. Up to ten are held (STICKER_MAX, below). */
   const isCustomCharm = (key) => typeof key === 'string' && key.startsWith('i:');
   const charmOf = (key) => isCustomCharm(key)
     ? { key, name: 'Your charm', custom: true, got: 'Your own charm.' }
@@ -13788,15 +13786,20 @@
     cv.getContext('2d').drawImage(img, 0, 0, w, h);
     return cv.toDataURL('image/png');
   }
-  const STICKER_KEPT = 'tria:sticker:';
-  function stickerKept(me) {
-    try { const k = localStorage.getItem(STICKER_KEPT + me); return isCustomCharm(k) ? k : null; } catch { return null; }
+  /* UP TO TEN (Zoe, 2026-10-25). Your sticker charms ARE the sticker files
+     in your own media folder (Store.myStickers), so they follow you to every
+     device and a delete is the file going. The device keeps the last list
+     (STICKERS_SEEN) only so the picker paints them at once; Storage's answer
+     corrects it a beat later. Oldest first, so a new one lands by New charm. */
+  const STICKER_MAX = 10;
+  const STICKERS_SEEN = 'tria:stickers:';
+  const stickerTime = (k) => +(/sticker-(\d+)\.png$/.exec(k)?.[1] || 0);
+  const stickerOrder = (list) => [...new Set(list.filter(isCustomCharm))].sort((a, b) => stickerTime(a) - stickerTime(b));
+  function stickersSeen(me) {
+    try { const v = JSON.parse(localStorage.getItem(STICKERS_SEEN + me) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   }
-  function keepSticker(me, k) {
-    try { localStorage.setItem(STICKER_KEPT + me, k); } catch {}
-  }
-  function forgetSticker(me) {
-    try { localStorage.removeItem(STICKER_KEPT + me); } catch {}
+  function seeStickers(me, list) {
+    try { localStorage.setItem(STICKERS_SEEN + me, JSON.stringify(list)); } catch {}
   }
 
   // The two on someone's photo, inside the face's own positioned box.
@@ -13973,8 +13976,8 @@
     if (!me) return;
     const held = charmsHeld();
     let worn = (me.charms || []).slice();
-    let sticker = worn.find(isCustomCharm) || stickerKept(me.id);
-    if (sticker) keepSticker(me.id, sticker);
+    let stickers = stickerOrder([...stickersSeen(me.id), ...worn]);
+    const gone = new Set();
     const stickerSheet = nativeShell() && !!window.Capacitor?.isPluginAvailable?.('TriaSticker');
     const tile = (c) => {
       const has = c.custom || held.includes(c.key);
@@ -13992,7 +13995,7 @@
       head:
         `<p class="charm-pick-hint">Wear up to two on your photo.</p>` +
         `<div class="charm-grid">${CHARMS.map(tile).join('')}` +
-          (sticker ? tile(charmOf(sticker)) : '') +
+          stickers.map(k => tile(charmOf(k))).join('') +
           (stickerSheet
             ? `<button type="button" class="charm-tile charm-tile--add">`
             : `<label class="charm-tile charm-tile--add">`) +
@@ -14004,6 +14007,35 @@
       wire: (scrim) => {
         const grid = scrim.querySelector('.charm-grid');
         const add = scrim.querySelector('.charm-tile--add');
+        const addHow = add.querySelector('.charm-tile-how');
+        const addFile = add.querySelector('.charm-add-file');
+        // At ten, New charm says so and points at the hold.
+        const full = () => stickers.length >= STICKER_MAX;
+        const syncAdd = () => {
+          add.classList.toggle('is-full', full());
+          add.setAttribute('aria-disabled', String(full()));
+          if (addFile) addFile.disabled = full();
+          addHow.textContent = full() ? 'You have ten. Hold one to delete it.'
+            : stickerSheet ? 'Add an emoji or sticker.' : 'Choose a picture.';
+        };
+        // Storage's list, over what this device last saw: a sticker added or
+        // deleted on another phone shows up or goes here.
+        const paintStickers = () => {
+          grid.querySelectorAll('.charm-tile[data-charm^="i:"]').forEach(b => b.remove());
+          add.insertAdjacentHTML('beforebegin', stickers.map(k => tile(charmOf(k))).join(''));
+        };
+        syncAdd();
+        Store.myStickers().then((list) => {
+          if (!list || !scrim.isConnected) return;
+          const next = stickerOrder([...list, ...stickers.filter(k => !list.includes(k) && stickerTime(k) > Date.now() - 60000),
+            ...worn]).filter(k => !gone.has(k));
+          seeStickers(me.id, next);
+          if (next.join() === stickers.join()) return;
+          stopEditing();
+          stickers = next;
+          paintStickers();
+          syncAdd();
+        });
         const paint = () => grid.querySelectorAll('.charm-tile[aria-pressed]').forEach(b =>
           b.setAttribute('aria-pressed', String(worn.includes(b.dataset.charm))));
         const wear = async (next) => {
@@ -14014,8 +14046,8 @@
           if (!(await wearCharms(worn))) { worn = prev; paint(); }
           if (onChange) onChange(); else repaintOwnCharms();
         };
-        /* HOLDING YOUR STICKER deletes it, the home screen's way (Zoe,
-           2026-10-25): it wiggles and wears a minus, the minus deletes it
+        /* HOLDING YOUR STICKER deletes it (Zoe, 2026-10-25): a red x takes
+           its check's corner, no wiggle (Zoe), the x deletes it
            (taken off your photo first, then its file), and a tap anywhere
            else puts it back. In place, because a sheet can't open over this
            one. The hold is the chat's (wireMessages): a drag is a scroll. */
@@ -14028,7 +14060,7 @@
           editing = b;
           b.classList.add('is-editing');
           b.insertAdjacentHTML('afterbegin',
-            `<span class="charm-tile-del" role="button" tabindex="0" aria-label="Delete charm">${svgIcon('minus')}</span>`);
+            `<span class="charm-tile-del" role="button" tabindex="0" aria-label="Delete charm">${svgIcon('close')}</span>`);
         };
         function stopEditing() {
           if (!editing) return;
@@ -14047,8 +14079,10 @@
             if (onChange) onChange(); else repaintOwnCharms();
           }
           hapticTap('MEDIUM');
-          forgetSticker(me.id);
-          if (sticker === k) sticker = null;
+          gone.add(k);
+          stickers = stickers.filter(x => x !== k);
+          seeStickers(me.id, stickers);
+          syncAdd();
           Store.dropSticker(k);
           b.classList.add('is-leaving');
           setTimeout(() => b.remove(), prefersReduced() ? 0 : 220);
@@ -14107,16 +14141,16 @@
         });
         let busy = false;
         const take = async (source, done) => {
-          if (busy) return;
+          if (busy || full()) { if (done) done(); return; }
           busy = true;
           add.classList.add('is-busy');
           try {
             const k = await Store.uploadSticker(await stickerPng(source));
-            keepSticker(me.id, k);
-            grid.querySelector(`.charm-tile[data-charm="${CSS.escape(sticker || '')}"]`)?.remove();
-            sticker = k;
+            stickers = [...stickers, k];
+            seeStickers(me.id, stickers);
             add.insertAdjacentHTML('beforebegin', tile(charmOf(k)));
-            await wear([...worn.filter(x => !isCustomCharm(x)), k].slice(-2));
+            syncAdd();
+            await wear([...worn, k].slice(-2));
           } catch {
             toast('Couldn\u2019t add that charm.');
           } finally {
@@ -14127,7 +14161,7 @@
         };
         if (stickerSheet) {
           add.addEventListener('click', async () => {
-            if (busy) return;
+            if (busy || full()) return;
             hapticEvent('SELECT');
             let res = null;
             try { res = await window.Capacitor.nativePromise('TriaSticker', 'pick', {}); } catch {}

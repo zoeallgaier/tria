@@ -474,7 +474,7 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         picture.image = image
         picture.transform = CGAffineTransform(scaleX: 0.4, y: 0.4)
-        hint.text = "Got it."
+        hint.text = "Added!"
         sub.text = " "
         photoButton.isEnabled = false
         UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.55, initialSpringVelocity: 0.8) {
