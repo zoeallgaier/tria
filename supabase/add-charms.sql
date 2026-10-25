@@ -29,5 +29,5 @@ alter table public.users add column if not exists charms text[] not null default
 alter table public.users drop constraint if exists users_charms_valid;
 alter table public.users add constraint users_charms_valid check (
   cardinality(charms) <= 2
-  and charms <@ array['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat']::text[]
+  and charms <@ array['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat', 'pumpkin']::text[]
 );

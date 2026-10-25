@@ -13745,6 +13745,12 @@
       art: '<g transform="translate(9 9) scale(1.25)"><path class="cl" d="M12.00 3.30L14.41 9.58L21.13 9.93L15.90 14.17L17.64 20.67L12.00 17.00L6.36 20.67L8.10 14.17L2.87 9.93L9.59 9.58Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'repeat', name: 'On repeat', how: 'Share a song.', got: 'You shared a song.',
       art: '<g transform="translate(8.92 8.6) scale(1.3)"><g class="cl"><path d="M13.4 17.2V3.8c.7 2.7 5 3.6 5 7.6"/><circle cx="10.4" cy="17.2" r="3"/></g></g><g transform="translate(5 3)"><path class="cf" d="M9.5 5.7C9.64 8.12 10.74 9.36 13.3 9.5C10.74 9.64 9.64 10.88 9.5 13.3C9.36 10.88 8.26 9.64 5.7 9.5C8.26 9.36 9.36 8.12 9.5 5.7Z"/><circle class="cf" cx="15.8" cy="5.6" r="1.1"/></g><g transform="translate(-5 -2)"><circle class="cs" cx="38.5" cy="38.5" r="1.6"/><path class="cf" d="M32.6 40L33.23 41.53L34.88 41.66L33.63 42.73L34.01 44.34L32.6 43.48L31.19 44.34L31.57 42.73L30.32 41.66L31.97 41.53Z"/></g>' },
+    // Halloween's two (Zoe, 2026-10-24): no task, held by everyone (`free`),
+    // so they never raise an unlock or join the welcome.
+    { key: 'bat', name: 'Bat', free: true, how: 'Happy Halloween.', got: 'Happy Halloween.',
+      art: '<g transform="translate(8.4 9.2) scale(1.3)"><path class="cl" d="M12 8.6H11.6L10.6 7L10 10.2C8.5 8.6 5.5 7.8 2.5 9C4 10 4.6 11.6 4.3 13.4C5.8 12.8 7.2 13.2 8 14.4C9 13.6 10.4 13.9 11 15.6L12 17L13 15.6C13.6 13.9 15 13.6 16 14.4C16.8 13.2 18.2 12.8 19.7 13.4C19.4 11.6 20 10 21.5 9C18.5 7.8 15.5 8.6 14 10.2L13.4 7L12.4 8.6Z"/></g><path class="cf" d="M9.5 5.7C9.64 8.12 10.74 9.36 13.3 9.5C10.74 9.64 9.64 10.88 9.5 13.3C9.36 10.88 8.26 9.64 5.7 9.5C8.26 9.36 9.36 8.12 9.5 5.7Z"/><circle class="cf" cx="15.8" cy="5.6" r="1.1"/><circle class="cs" cx="38.5" cy="38.5" r="1.6"/><path class="cf" d="M32.6 40L33.23 41.53L34.88 41.66L33.63 42.73L34.01 44.34L32.6 43.48L31.19 44.34L31.57 42.73L30.32 41.66L31.97 41.53Z"/>' },
+    { key: 'pumpkin', name: 'Pumpkin', free: true, how: 'Happy Halloween.', got: 'Happy Halloween.',
+      art: '<g transform="translate(8.4 8.6) scale(1.3)"><g class="cl"><path d="M12 7.5C6 7.2 3.5 10 3.5 13.5C3.5 17.2 6.5 19.8 12 19.8C17.5 19.8 20.5 17.2 20.5 13.5C20.5 10 18 7.2 12 7.5Z"/><path d="M9 8C7.4 10.5 7.4 16.8 9 19.4"/><path d="M15 8C16.6 10.5 16.6 16.8 15 19.4"/><path d="M12 7.5C12 5.8 12.6 4.6 14 4"/></g></g><path class="cf" d="M9.5 5.7C9.64 8.12 10.74 9.36 13.3 9.5C10.74 9.64 9.64 10.88 9.5 13.3C9.36 10.88 8.26 9.64 5.7 9.5C8.26 9.36 9.36 8.12 9.5 5.7Z"/><circle class="cf" cx="15.8" cy="5.6" r="1.1"/><circle class="cs" cx="38.5" cy="38.5" r="1.6"/><path class="cf" d="M32.6 40L33.23 41.53L34.88 41.66L33.63 42.73L34.01 44.34L32.6 43.48L31.19 44.34L31.57 42.73L30.32 41.66L31.97 41.53Z"/>' },
   ];
   const charmOf = (key) => CHARMS.find(c => c.key === key) || null;
   function charmSvg(key, cls) {
@@ -13772,7 +13778,7 @@
       sunny: mine.some(p => (p.tags || []).some(t => t.startsWith('daily-'))),
       repeat: mine.some(p => p.type === 'song'),
     };
-    return CHARMS.filter(c => has[c.key]).map(c => c.key);
+    return CHARMS.filter(c => has[c.key]).map(c => c.key);  // never a free one: nothing to celebrate
   }
   /* MUTUALS is the one first the cache can't see: Tria shared with a friend
      off the app (Zoe, 2026-10-24: "we need more new users"; it was your first
@@ -13803,7 +13809,7 @@
   // Earned now, celebrated here before, or worn: any of the three is held.
   function charmsHeld() {
     const u = Store.currentUser();
-    return [...new Set([...charmsEarned(), ...(charmsSeen(Store.session()) || []), ...((u && u.charms) || [])])];
+    return [...new Set([...charmsEarned(), ...CHARMS.filter(c => c.free).map(c => c.key), ...(charmsSeen(Store.session()) || []), ...((u && u.charms) || [])])];
   }
 
   /* WHEN TO LOOK. Only once the real world has landed (a kept launch paints
