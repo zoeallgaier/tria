@@ -5851,8 +5851,9 @@
       // Music is a row again and off the composer's bar (Zoe, 2026-10-23).
       ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
-      // Discover's Start a circle card, once it has been waved off.
-      ...(Store.communitiesReady() && communityStartDismissed() ? [{ key: 'circle', label: 'Circle', icon: 'circle' }] : []),
+      // Always here, beside Discover's Start a circle card, so both doors are
+      // learned (Zoe, 2026-10-24; it was there only once the card was waved off).
+      ...(Store.communitiesReady() ? [{ key: 'circle', label: 'Circle', icon: 'circle' }] : []),
     ];
   }
 
@@ -13149,11 +13150,12 @@
   // circle"), the same card with its fill taken out and a dashed edge, the way
   // an empty slot is drawn. Signed out its pill is the way into an account.
   // Signed in it can be waved off (Zoe), per device like the week-of cards,
-  // and the Share sheet grows a Circle row so the door is never lost. A wave
-  // only lasts until the app is next opened; the THIRD one is for good (Zoe:
-  // "dismissed three times total ... to totally disappear"). The count lives
-  // on the device, the "for now" in memory, so a cold launch brings it back.
-  const START_WAVES = 3;
+  // and the Share sheet's Circle row is the other door, always there. A wave
+  // only lasts until the app is next opened; the FIFTH one is for good (Zoe:
+  // "dismissed three times total ... to totally disappear", made five on
+  // 2026-10-24). The count lives on the device, the "for now" in memory, so a
+  // cold launch brings it back.
+  const START_WAVES = 5;
   const startKey = () => `tria:circle-start-dismissed:${Store.session()}`;
   let startWavedNow = false;
   function communityStartWaves() {
@@ -14085,8 +14087,8 @@
       `</div>`;
 
     // The + leads, as on My Circle, and the field takes the rest of the row.
-    // It is the Share sheet's way in here too, so a Start a circle card that
-    // has been waved off still leaves the sheet's Circle row (Zoe).
+    // It is the Share sheet's way in here too, and the sheet's Circle row
+    // stands beside the Start a circle card, waved off or not (Zoe).
     mountToolbar({
       leading: Store.isAuthed() ? composeBtnEl('discover-compose-btn') : '',
       field: searchBar,

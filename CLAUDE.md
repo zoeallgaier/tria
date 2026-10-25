@@ -211,7 +211,7 @@ the circle's mark (`communityTagHtml`, hidden on the circle's page).
 
 **Discover IS circles** (Zoe: "remove the posts from the Discover feed. THIS is
 the new way to discover."). It shows NO posts: today's daily, then **Circles**
-(a dashed Start a circle card, then yours, then the rest, by last sign of life,
+(a dashed Start a circle card, gone for good on its fifth X and always also a Circle row in the Share sheet, then yours, then the rest, by last sign of life,
 `Store.communityPulse`), then Share Tria. **People, under the circles** (Zoe, 2026-10-23, `after` in `communitiesSectionHtml`; it sat over them that morning): a sideways rail
 of 200px 4:5 cards (`peopleForRail`, `.person-card`), strangers only (no
 friend, follow or request of yours; someone who added you first stays), most
