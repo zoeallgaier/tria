@@ -13754,9 +13754,10 @@
   /* STICKER CHARMS (Zoe, 2026-10-25): one of your own iOS photo stickers,
      the cut-out you lifted from a photo in Photos or Messages, worn as a
      charm. No app can read the sticker library, so in the app the picker's
-     New sticker tile opens a native sheet (TriaStickerPlugin.swift) that
-     raises the emoji keys, where stickers live, and takes the first one
-     tapped, or cuts a photo out the way iOS makes them. A web page can do
+     New charm tile ("Add an emoji or sticker.", Zoe) opens a native sheet
+     (TriaStickerPlugin.swift) that raises the emoji keys, where stickers
+     live, and takes the first sticker or emoji tapped (an emoji drawn as a
+     picture), or cuts a photo out the way iOS makes them. A web page can do
      neither (a hidden rich field raised the LETTER keyboard over the picker),
      so the web takes a picture file. Either way it is redrawn as a
      transparent PNG and uploaded, and the charm is 'i:' plus its path in your
@@ -13765,7 +13766,7 @@
      (STICKER_KEPT) so taking it off doesn't lose it. */
   const isCustomCharm = (key) => typeof key === 'string' && key.startsWith('i:');
   const charmOf = (key) => isCustomCharm(key)
-    ? { key, name: 'Your sticker', custom: true, got: 'Your own sticker.' }
+    ? { key, name: 'Your charm', custom: true, got: 'Your own charm.' }
     : (CHARMS.find(c => c.key === key) || null);
   function charmSvg(key, cls) {
     const c = charmOf(key);
@@ -13996,8 +13997,8 @@
             ? `<button type="button" class="charm-tile charm-tile--add">`
             : `<label class="charm-tile charm-tile--add">`) +
             `<span class="charm-add-face">${svgIcon('plus')}</span>` +
-            `<span class="charm-tile-name">New sticker</span>` +
-            `<span class="charm-tile-how">${stickerSheet ? 'One of yours, or a photo.' : 'Choose a picture.'}</span>` +
+            `<span class="charm-tile-name">New charm</span>` +
+            `<span class="charm-tile-how">${stickerSheet ? 'Add an emoji or sticker.' : 'Choose a picture.'}</span>` +
             (stickerSheet ? `</button>` : `<input class="charm-add-file" type="file" accept="image/*"></label>`) +
           `</div>`,
       wire: (scrim) => {
@@ -14027,7 +14028,7 @@
           editing = b;
           b.classList.add('is-editing');
           b.insertAdjacentHTML('afterbegin',
-            `<span class="charm-tile-del" role="button" tabindex="0" aria-label="Delete sticker">${svgIcon('minus')}</span>`);
+            `<span class="charm-tile-del" role="button" tabindex="0" aria-label="Delete charm">${svgIcon('minus')}</span>`);
         };
         function stopEditing() {
           if (!editing) return;
@@ -14117,7 +14118,7 @@
             add.insertAdjacentHTML('beforebegin', tile(charmOf(k)));
             await wear([...worn.filter(x => !isCustomCharm(x)), k].slice(-2));
           } catch {
-            toast('Couldn\u2019t add that sticker.');
+            toast('Couldn\u2019t add that charm.');
           } finally {
             add.classList.remove('is-busy');
             busy = false;

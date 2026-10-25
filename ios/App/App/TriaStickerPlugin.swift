@@ -6,8 +6,9 @@ import CoreImage
 import ImageIO
 import UniformTypeIdentifiers
 
-/// A sticker charm (Zoe, 2026-10-25): one of your own iOS stickers, or a photo
-/// cut out the way iOS makes them, handed to the web as a transparent PNG.
+/// A new charm (Zoe, 2026-10-25): one of your own iOS stickers, any emoji, or
+/// a photo cut out the way iOS makes them, handed to the web as a transparent
+/// PNG. The sheet says "New charm" and "Add an emoji or sticker."
 ///
 /// ── Why it is native ────────────────────────────────────────────────────────
 ///
@@ -21,7 +22,8 @@ import UniformTypeIdentifiers
 /// the emoji keys itself (`StickerField.textInputMode`, the one widely used
 /// way, keyed off the mode's "emoji" language; if it ever stops matching, the
 /// person gets their normal keyboard and the globe key, nothing worse), sits
-/// above them, and takes the first sticker tapped: it pops into the well, the
+/// above them, and takes the first sticker tapped (or emoji, drawn big in
+/// Apple's colour emoji and trimmed to its ink): it pops into the well, the
 /// keys go down, and the sheet closes on its own. Choosing IS committing.
 ///
 /// "From a photo" is the same cut-out without the keyboard, for anyone with no
@@ -134,7 +136,7 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         view.backgroundColor = Self.surface
 
         let title = UILabel()
-        title.text = "New sticker"
+        title.text = "New charm"
         title.font = Self.serif(28)
         title.textColor = Self.ink
         title.textAlignment = .center
@@ -171,12 +173,12 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         field.translatesAutoresizingMaskIntoConstraints = false
         well.addSubview(field)
 
-        hint.text = "Tap one of your stickers."
+        hint.text = "Add an emoji or sticker."
         hint.font = Self.body(17)
         hint.textColor = Self.ink
         hint.textAlignment = .center
         hint.numberOfLines = 0
-        sub.text = "They\u{2019}re at the start of the emoji keys."
+        sub.text = "Your stickers are at the start of the emoji keys."
         sub.font = Self.body(14)
         sub.textColor = Self.muted
         sub.textAlignment = .center
@@ -268,12 +270,57 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         guard !taking else { return }
         let text = textView.attributedText ?? NSAttributedString()
         textView.attributedText = NSAttributedString()
-        guard let image = Self.sticker(in: text) else {
-            // An emoji or a letter: not a sticker. Say where they are, once more.
-            if text.length > 0 { nudge() }
-            return
+        // A sticker, else the last emoji typed, drawn as a picture; a letter
+        // gets the hint's shake.
+        if let image = Self.sticker(in: text) ?? Self.emoji(in: text.string).flatMap(Self.emojiImage) {
+            land(image)
+        } else if text.length > 0 {
+            nudge()
         }
-        land(image)
+    }
+
+    /// The last emoji in what was typed, as one whole character (a flag, a
+    /// skin tone, a family), or nil for letters and digits.
+    static func emoji(in text: String) -> String? {
+        text.last { ch in
+            guard let first = ch.unicodeScalars.first else { return false }
+            return first.properties.isEmojiPresentation ||
+                (first.properties.isEmoji && ch.unicodeScalars.count > 1)
+        }.map(String.init)
+    }
+
+    /// An emoji drawn big in Apple's colour emoji and trimmed to its own ink,
+    /// so it fills a charm the way a sticker does.
+    static func emojiImage(_ e: String) -> UIImage? {
+        let text = NSAttributedString(string: e, attributes: [.font: UIFont.systemFont(ofSize: 320)])
+        let box = text.size()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let drawn = UIGraphicsImageRenderer(size: CGSize(width: ceil(box.width), height: ceil(box.height)), format: format)
+            .image { _ in text.draw(at: .zero) }
+        guard let cg = drawn.cgImage, let ink = inkBounds(cg), let cut = cg.cropping(to: ink) else { return nil }
+        return UIImage(cgImage: cut)
+    }
+
+    /// The smallest rect holding every pixel that isn't clear.
+    static func inkBounds(_ cg: CGImage) -> CGRect? {
+        let w = cg.width, h = cg.height
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var minX = w, minY = h, maxX = -1, maxY = -1
+        for y in 0..<h {
+            for x in 0..<w where px[(y * w + x) * 4 + 3] > 8 {
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        // The bitmap's rows run top down here, the same as cropping(to:)'s.
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
     }
 
     /// The first picture in what the keyboard inserted: an adaptive image glyph
