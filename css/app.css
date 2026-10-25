@@ -269,6 +269,11 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   inherits: true;
   initial-value: #00c9ce;
 }
+/* The wash's three stops (stopsAround, WASH_ARC in app.js), registered for the
+   reason --glow-wash is: so one person's colour tweens into the next. */
+@property --wash-a { syntax: '<color>'; inherits: true; initial-value: #00c9ce; }
+@property --wash-b { syntax: '<color>'; inherits: true; initial-value: #00c9ce; }
+@property --wash-c { syntax: '<color>'; inherits: true; initial-value: #00c9ce; }
 /* One mode left. `publish` sat beside `profile` on every rule in this block
    until the composer stopped washing altogether — the form is a sheet of paper
    somebody is about to write on, and a page-sized bloom over it was lighting the
@@ -281,6 +286,20 @@ body[data-ambient="profile"] {
   --wash-sat: 2.4;                    /* chroma bought back, luminance-cheap */
   --wash-ink: color-mix(in srgb, var(--muted) 30%, var(--text));
   --wash-ink-soft: color-mix(in srgb, var(--muted) 70%, var(--text));
+  /* The colour's spectrum, each stop tinted on its own for the reason the
+     house ramp's are (see below). Declared here, where the tint lives. */
+  --wash-band: linear-gradient(115deg,
+    color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
+}
+@supports (background: linear-gradient(in oklab, #000, #fff)) {
+  body[data-ambient="profile"] {
+    --wash-band: linear-gradient(115deg in oklab,
+      color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
+  }
 }
 @media (prefers-color-scheme: dark) {
   body[data-ambient="profile"] {
@@ -318,32 +337,31 @@ body[data-ambient="profile"] .ambient {
      negative top is a position in the DOCUMENT, and the gap an over-pull opens
      is demonstrably a painted region of the web layer: body::before is what
      fills it today, which is exactly the hard edge being complained about.
-     Something painting there at z-index -1 covers it.
+     Something painting there at z-index -1 covers it. */
+  /* FROM THE TOP-RIGHT CORNER (Zoe, 2026-10-24), so the photo at the left,
+     and the charms on its rim, sit on clear paper. The bloom's core is the
+     corner (--wash-at, shared with the house ramp's copy below), and its
+     reach is the same 112% by 43vh ellipse, so it resolves to paper well
+     before the face.
 
-     --wash-rise has to clear the gradient's own reach, or the seam moves up
-     rather than closing: the colour resolves to transparent at 82% of the
-     vertical radius, i.e. 0.82 x 43vh = 35.3vh above the peak, and the peak sits
-     --wash-drop below the origin, so the last visible colour is 20.3vh above the
-     origin and the box runs 26. Past that the layer is transparent and there is
-     nothing left to step off. If either number moves, redo that sum. */
-  --wash-rise: 26vh;
-  /* How far below the document origin the bloom's core sits. It was pinned AT
-     the origin, which put the brightest band under the toolbar and clipped the
-     top half of the ellipse off the page — half the mark spent where it can't be
-     seen. 15vh lands the peak on the avatar and the name, so the colour reads at
-     the strength it is already being drawn at, without touching --wash-amt. */
-  --wash-drop: 15vh;
-  --wash-col: color-mix(in srgb, var(--glow-wash) var(--wash-keep), var(--wash-tint));
-  /* The vertical radius is 43vh and not 43%: it was a percentage of a box that
-     was exactly 100vh tall, and the box is 126 now, so the same 43% would have
-     silently grown the bloom by a quarter. Same shape as before, translated
-     down. The horizontal 112% is still a percentage, of the width, which hasn't
-     changed and shouldn't (see the asymmetry note above). */
-  background: radial-gradient(ellipse 112% 43vh at 50% calc(var(--wash-rise) + var(--wash-drop)),
-    color-mix(in srgb, var(--wash-col) var(--wash-amt), transparent), transparent 82%);
+     --wash-rise still has to clear the gradient's own reach, or the over-pull
+     seam comes back: colour resolves at 82% of the vertical radius, 0.82 x
+     43vh = 35.3vh above the core, the core sits --wash-drop (4vh) below the
+     origin, so the last colour is 31.3vh up and the box runs 32. If either
+     number moves, redo that sum. */
+  --wash-rise: 32vh;
+  --wash-drop: 4vh;
+  --wash-at: 100% calc(var(--wash-rise) + var(--wash-drop));
+  /* The band is the colour, the mask is the shape, as for the house ramp. */
+  background: var(--wash-band);
+  -webkit-mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
   filter: saturate(var(--wash-sat));
   opacity: 1;
-  transition: --glow-wash var(--dur-move) var(--ease), opacity 0.4s ease;
+  transition: --wash-a var(--dur-move) var(--ease), --wash-b var(--dur-move) var(--ease),
+    --wash-c var(--dur-move) var(--ease), opacity 0.4s ease;
   transform: translateZ(0);
 }
 /* One value now the composer's 68% is gone. It stays a token rather than a
@@ -373,8 +391,9 @@ body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
    tint-first mix. Only the colour source differs. If the shape ever changes,
    change it in both or the two washes stop being one idea.
 
-   THE RAMP IS TINTED PER STOP AND NOT AS A LAYER. --wash-col does its work with
-   a single color-mix, which a gradient can't be handed, so the obvious move is
+   THE RAMP IS TINTED PER STOP AND NOT AS A LAYER (and since 2026-10-24 an
+   accent's three stops are too, above). One colour is tinted with a single
+   color-mix, which a gradient can't be handed, so the obvious move is
    a flat --wash-tint veil laid over --brand-band — and that is not the same
    operation: a veil is one alpha over two colours of unequal luminance, so it
    lifts the peach and the rose by different amounts and the ramp comes out
@@ -421,8 +440,9 @@ body[data-ambient="tria"] .ambient {
   position: absolute;
   inset: calc(-1 * var(--wash-rise)) 0 auto 0;
   height: calc(100vh + var(--wash-rise));
-  --wash-rise: 26vh;
-  --wash-drop: 15vh;
+  --wash-rise: 32vh;
+  --wash-drop: 4vh;
+  --wash-at: 100% calc(var(--wash-rise) + var(--wash-drop));
   /* LOUDER THAN A PROFILE'S 56%, which is the opposite of where this started.
      It was set at 30% on the arithmetic that four hues at equal alpha put four
      times as much colour on screen as one — true, and beside the point, because
@@ -438,9 +458,9 @@ body[data-ambient="tria"] .ambient {
      and the colour are the same gradient, because one colour can live in a
      radial's stops and a ramp cannot. Identical ellipse, identical falloff. */
   background: var(--wash-band);
-  -webkit-mask-image: radial-gradient(ellipse 112% 43vh at 50% calc(var(--wash-rise) + var(--wash-drop)),
+  -webkit-mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
     color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
-  mask-image: radial-gradient(ellipse 112% 43vh at 50% calc(var(--wash-rise) + var(--wash-drop)),
+  mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
     color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
   filter: saturate(var(--wash-sat));
   opacity: 1;
@@ -10423,12 +10443,14 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 
 /* ── Charms (2.0, 2026-10-24) ──────────────────────────────────────────────────
    Six little firsts, worn on the rim of your photo (charmSvg, CHARMS in app.js).
-   One line, the icon set's own 1.8 in its 24 grid, every mark in --heart: the
-   reader's colour, the hearts' contrast work reused, paper and ink alike. */
-.charm { display: block; overflow: visible; }
-.charm .cl { fill: none; stroke: var(--heart); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.charm .cf { fill: var(--heart); }
-.charm .cs { fill: none; stroke: var(--heart); stroke-width: 1.4; }
+   Solid shapes (cm) and heavy lines (cl, 2.4 in the icon's 24 grid, the set's
+   own 1.8 thickened) with four small trims (cf, cs), all in --charm-ink: the
+   page's own ink, black on paper and white on ink (Zoe), never a colour. */
+.charm { --charm-ink: var(--text); display: block; overflow: visible; }
+.charm .cm { fill: var(--charm-ink); stroke: var(--charm-ink); stroke-width: 0.8; stroke-linejoin: round; }
+.charm .cl { fill: none; stroke: var(--charm-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.charm .cf { fill: var(--charm-ink); }
+.charm .cs { fill: none; stroke: var(--charm-ink); stroke-width: 1.4; }
 
 /* Worn: 44% of the face across (Zoe: "a lil bigger"), centred on the rim at
    ten thirty and four thirty (the rim's 45 degree point is 14.6% in from the
@@ -10505,4 +10527,4 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 }
 .charm-tile[aria-pressed="true"] .charm-tile-check { opacity: 1; }
 .charm-tile--locked { cursor: default; }
-.charm-tile--locked .charm { --heart: var(--muted); opacity: 0.45; }
+.charm-tile--locked .charm { --charm-ink: var(--muted); opacity: 0.45; }

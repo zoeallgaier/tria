@@ -72,11 +72,13 @@ word (a post, a squircle quote mark: an outlined round quote read as "66"),
 Mutuals (Tria shared off the app, a completed share sheet or a copied link,
 `noteShared`; it was a first friend until Zoe: "we need more new users", and
 kept its name and two stars), In the ring (join a circle), Founder (start
-one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. Outlined, in
-the icon set's line (the circle triad, daily and music are ICONS'; the quote,
-stars and sprout are drawn to match) with the SAME four trims, a sparkle with a dot
+one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. SOLID, with
+heavy lines where a line is the shape (Zoe: "fill icons", "thicker line
+weight"), from the icon set's drawings (circle as three dots, daily, music; a
+squircle quote, stars and sprout drawn to match), and in plain ink, `--text`,
+black on paper and white on ink (Zoe: "just black or white"), never a colour with the SAME four trims, a sparkle with a dot
 and a speck with a star, in opposite corners and close in: three charms on each diagonal
-(Zoe). All `--heart`. **Earned is never stored**, it is read off the cache
+(Zoe). **Earned is never stored**, it is read off the cache
 (`charmsEarned`); only what you WEAR is a column, `users.charms` (at most two,
 `supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon
 `GET /rest/v1/users?select=charms` answers 42703; until it is,
@@ -89,6 +91,12 @@ big, `celebrateFace`'s stars and twinkle, and Add to my photo or Not now (with
 two on, "Wear it instead of …"). **Edit profile is photo left, three quiet
 pills right** (New photo, Color, Charms); the camera and colour badges left
 the rim. The design canvas: https://claude.ai/artifact/12LLXUDDJ6UjcaErigtTDf
+
+**A profile's wash blooms from the TOP-RIGHT corner** (Zoe, 2026-10-24, so the
+photo and its charms sit on clear paper; `--wash-at`, both the accent and the
+house-ramp copies) and an accent's wash is its SPECTRUM, three stops 18 degrees
+of hue apart (`stopsAround`, `WASH_ARC`, `--wash-a/b/c`, each tinted on its
+own), like a daily tag's band but wider.
 
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
