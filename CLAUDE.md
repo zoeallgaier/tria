@@ -68,11 +68,14 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 ## 2.0's charms (2026-10-24)
 
 **Six little firsts**, worn on the rim of your photo (Zoe's sketch): First
-word (a post), Mutuals (a friend), In the ring (join a circle), Founder (start
-one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. Each is the
-app's own line icon (pencil, the circle triad, daily, music; two stars and a
-sprout drawn in the same line) with the SAME four trims, a sparkle with a dot
-and a speck with a star, in opposite corners: three charms on each diagonal
+word (a post, a squircle quote mark: an outlined round quote read as "66"),
+Mutuals (Tria shared off the app, a completed share sheet or a copied link,
+`noteShared`; it was a first friend until Zoe: "we need more new users", and
+kept its name and two stars), In the ring (join a circle), Founder (start
+one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. Outlined, in
+the icon set's line (the circle triad, daily and music are ICONS'; the quote,
+stars and sprout are drawn to match) with the SAME four trims, a sparkle with a dot
+and a speck with a star, in opposite corners and close in: three charms on each diagonal
 (Zoe). All `--heart`. **Earned is never stored**, it is read off the cache
 (`charmsEarned`); only what you WEAR is a column, `users.charms` (at most two,
 `supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon

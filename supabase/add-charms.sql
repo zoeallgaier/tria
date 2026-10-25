@@ -1,13 +1,15 @@
 -- Charms ────────────────────────────────────────────────────────────────────
--- Six little firsts (2.0, 2026-10-24): your first post, first friend, joining a
--- circle, starting one, answering the daily, sharing a song. Each is earned
--- once, by doing the thing, and up to two are worn on the rim of your photo.
+-- Six little firsts (2.0, 2026-10-24): your first post, sharing Tria with a
+-- friend off the app, joining a circle, starting one, answering the daily,
+-- sharing a song. Each is earned once, by doing the thing, and up to two are
+-- worn on the rim of your photo.
 --
 -- Only what you WEAR is stored. What you have EARNED is never a row: it is read
--- straight off what you have done (your posts, friends and circles, which the
--- client already holds), so there is nothing to backfill, nothing to drift from
--- the truth, and no count anywhere (Tria's no-COUNT rule). Which unlocks have
--- been celebrated lives on the device.
+-- straight off what you have done (your posts and circles, which the client
+-- already holds; a share off the app is a mark on the device), so there is
+-- nothing to backfill, nothing to drift from the truth, and no count anywhere
+-- (Tria's no-COUNT rule). Which unlocks have been celebrated lives on the
+-- device.
 --
 -- An ordered array, at most two, of known keys. The keys are the client's
 -- (CHARMS in js/app.js) and never move, the same rule as users.accent: a new

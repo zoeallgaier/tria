@@ -10019,8 +10019,13 @@
   }
 
   // Copy text to the clipboard, resolving true/false. Prefers the async
-  // Clipboard API, with an execCommand fallback for non-secure contexts.
+  // Clipboard API, with an execCommand fallback for non-secure contexts. Every
+  // caller copies a Tria link, so a copy that lands is a link leaving the app
+  // (noteShared, the Mutuals charm).
   function copyText(text) {
+    return copyRaw(text).then(ok => { if (ok) noteShared(); return ok; });
+  }
+  function copyRaw(text) {
     if (navigator.clipboard && window.isSecureContext) {
       return navigator.clipboard.writeText(text).then(() => true, () => false);
     }
@@ -10054,7 +10059,7 @@
       try { native = window.Capacitor.nativePromise('TriaShare', 'shareLink', data); }
       catch { native = Promise.reject(); }
       return native.then(
-        (r) => (r && r.completed) ? 'shared' : 'cancelled',
+        (r) => (r && r.completed) ? (noteShared(), 'shared') : 'cancelled',
         () => webShareOrCopy(data),
       );
     }
@@ -10063,7 +10068,7 @@
   function webShareOrCopy(data) {
     if (navigator.share) {
       return navigator.share(data).then(
-        () => 'shared',
+        () => (noteShared(), 'shared'),
         (err) => (err && err.name === 'AbortError')
           ? 'cancelled'
           : copyText(data.url).then(ok => ok ? 'copied' : 'cancelled'),
@@ -13699,19 +13704,20 @@
   }
 
   /* ── Charms ──────────────────────────────────────────────────────────────────
-     Six little firsts (Zoe, 2026-10-24): your first post, first friend, a circle
-     joined, a circle started, the daily answered, a song shared. Each is earned
-     once, by doing the thing, and up to two are worn on the rim of your photo,
-     the first at ten thirty and the second at four thirty (Zoe's sketch).
+     Six little firsts (Zoe, 2026-10-24): your first post, Tria shared with a
+     friend off the app, a circle joined, a circle started, the daily answered,
+     a song shared. Each is earned once, by doing the thing, and up to two are
+     worn on the rim of your photo, the first at ten thirty and the second at
+     four thirty (Zoe's sketch).
 
-     THE ART is the app's own line icon for each thing (ICONS: pencil, circle,
-     daily, music; a sprout and two stars drawn in the same line), with the same
-     four trims on every one: the like burst's sparkle with a dot in one corner,
-     a speck with a star in the other. The pencil and the two stars run corner
-     to corner, and the woven rings join them (Zoe: three on each diagonal),
-     so those three take their trims on the other diagonal. Everything is
-     --heart, the reader's own colour, which is what makes it read on paper and
-     on ink without a second rule (the hearts' contrast work, reused).
+     THE ART is outlined, in the icon set's own line: ICONS' circle, daily and
+     music, and a squircle quote, two stars and a sprout drawn to match (a
+     round outlined quote read as "66"). The same four trims sit close in on
+     every one, the like burst's sparkle with a dot in one corner, a speck with
+     a star in the other, and the first three take the other diagonal (Zoe:
+     three on each). Everything is --heart, the reader's own colour, which is
+     what makes it read on paper and on ink without a second rule (the hearts'
+     contrast work, reused).
 
      EARNED IS NEVER STORED. It is read off what you have done, which the cache
      already holds, so there is no table to backfill or drift, and no count
@@ -13728,17 +13734,17 @@
      Keys never move (users.charms stores them, add-charms.sql checks them). */
   const CHARMS = [
     { key: 'word', name: 'First word', how: 'Publish your first post.', got: 'You published your first post.',
-      art: '<g class="cl" transform="translate(8.4 8.4) scale(1.3)"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/></g><path class="cf" d="M7.5 3.5C7.64 6.04 8.81 7.36 11.5 7.5C8.81 7.64 7.64 8.96 7.5 11.5C7.36 8.96 6.19 7.64 3.5 7.5C6.19 7.36 7.36 6.04 7.5 3.5Z"/><circle class="cf" cx="14.5" cy="3.8" r="1.1"/><circle class="cs" cx="40.5" cy="40.5" r="1.7"/><path class="cf" d="M34 41.8L34.66 43.39L36.38 43.53L35.07 44.65L35.47 46.32L34 45.42L32.53 46.32L32.93 44.65L31.62 43.53L33.34 43.39Z"/>' },
-    { key: 'mutual', name: 'Mutuals', how: 'Make your first friend.', got: 'You and a friend added each other.',
-      art: '<g class="cl" transform="translate(8.4 8.4) scale(1.3)"><path d="M6.5 11.2Q7.56 14.94 11.3 16Q7.56 17.06 6.5 20.8Q5.44 17.06 1.7 16Q5.44 14.94 6.5 11.2Z"/><path d="M17.5 2.7Q18.56 6.44 22.3 7.5Q18.56 8.56 17.5 12.3Q16.44 8.56 12.7 7.5Q16.44 6.44 17.5 2.7Z"/></g><path class="cf" d="M7.5 3.5C7.64 6.04 8.81 7.36 11.5 7.5C8.81 7.64 7.64 8.96 7.5 11.5C7.36 8.96 6.19 7.64 3.5 7.5C6.19 7.36 7.36 6.04 7.5 3.5Z"/><circle class="cf" cx="14.5" cy="3.8" r="1.1"/><circle class="cs" cx="40.5" cy="40.5" r="1.7"/><path class="cf" d="M34 41.8L34.66 43.39L36.38 43.53L35.07 44.65L35.47 46.32L34 45.42L32.53 46.32L32.93 44.65L31.62 43.53L33.34 43.39Z"/>' },
+      art: '<g transform="translate(10.2 10.55) scale(1.15)"><g class="cl"><path d="M5.5 5H8.5A2 2 0 0 1 10.5 7V12.5C10.5 15.6 8.7 17.6 5.7 18.4L5.3 16.6C7.1 15.8 8.1 14.6 8.2 13H5.5A2 2 0 0 1 3.5 11V7A2 2 0 0 1 5.5 5Z"/><path d="M15.5 5H18.5A2 2 0 0 1 20.5 7V12.5C20.5 15.6 18.7 17.6 15.7 18.4L15.3 16.6C17.1 15.8 18.1 14.6 18.2 13H15.5A2 2 0 0 1 13.5 11V7A2 2 0 0 1 15.5 5Z"/></g></g><path class="cf" d="M9.5 5.7C9.64 8.12 10.74 9.36 13.3 9.5C10.74 9.64 9.64 10.88 9.5 13.3C9.36 10.88 8.26 9.64 5.7 9.5C8.26 9.36 9.36 8.12 9.5 5.7Z"/><circle class="cf" cx="15.8" cy="5.6" r="1.1"/><circle class="cs" cx="38.5" cy="38.5" r="1.6"/><path class="cf" d="M32.6 40L33.23 41.53L34.88 41.66L33.63 42.73L34.01 44.34L32.6 43.48L31.19 44.34L31.57 42.73L30.32 41.66L31.97 41.53Z"/>' },
+    { key: 'mutual', name: 'Mutuals', how: 'Share Tria with a friend.', got: 'You shared Tria with a friend.',
+      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M6.5 11.2Q7.56 14.94 11.3 16Q7.56 17.06 6.5 20.8Q5.44 17.06 1.7 16Q5.44 14.94 6.5 11.2Z"/><path class="cl" d="M17.5 2.7Q18.56 6.44 22.3 7.5Q18.56 8.56 17.5 12.3Q16.44 8.56 12.7 7.5Q16.44 6.44 17.5 2.7Z"/></g><path class="cf" d="M9.5 5.7C9.64 8.12 10.74 9.36 13.3 9.5C10.74 9.64 9.64 10.88 9.5 13.3C9.36 10.88 8.26 9.64 5.7 9.5C8.26 9.36 9.36 8.12 9.5 5.7Z"/><circle class="cf" cx="15.8" cy="5.6" r="1.1"/><circle class="cs" cx="38.5" cy="38.5" r="1.6"/><path class="cf" d="M32.6 40L33.23 41.53L34.88 41.66L33.63 42.73L34.01 44.34L32.6 43.48L31.19 44.34L31.57 42.73L30.32 41.66L31.97 41.53Z"/>' },
     { key: 'joined', name: 'In the ring', how: 'Join a circle.', got: 'You joined your first circle.',
-      art: '<g class="cl" transform="translate(8.4 7.88) scale(1.3)"><circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/></g><path class="cf" d="M7.5 3.5C7.64 6.04 8.81 7.36 11.5 7.5C8.81 7.64 7.64 8.96 7.5 11.5C7.36 8.96 6.19 7.64 3.5 7.5C6.19 7.36 7.36 6.04 7.5 3.5Z"/><circle class="cf" cx="14.5" cy="3.8" r="1.1"/><circle class="cs" cx="40.5" cy="40.5" r="1.7"/><path class="cf" d="M34 41.8L34.66 43.39L36.38 43.53L35.07 44.65L35.47 46.32L34 45.42L32.53 46.32L32.93 44.65L31.62 43.53L33.34 43.39Z"/>' },
+      art: '<g transform="translate(8.4 7.88) scale(1.3)"><g class="cl"><circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/></g></g><path class="cf" d="M9.5 5.7C9.64 8.12 10.74 9.36 13.3 9.5C10.74 9.64 9.64 10.88 9.5 13.3C9.36 10.88 8.26 9.64 5.7 9.5C8.26 9.36 9.36 8.12 9.5 5.7Z"/><circle class="cf" cx="15.8" cy="5.6" r="1.1"/><circle class="cs" cx="38.5" cy="38.5" r="1.6"/><path class="cf" d="M32.6 40L33.23 41.53L34.88 41.66L33.63 42.73L34.01 44.34L32.6 43.48L31.19 44.34L31.57 42.73L30.32 41.66L31.97 41.53Z"/>' },
     { key: 'founder', name: 'Founder', how: 'Start a circle.', got: 'You started a circle.',
-      art: '<g class="cl" transform="translate(8.4 7.75) scale(1.3)"><path d="M12 20.5V12"/><path d="M12 15C7.6 15 5 12.4 5 8.5C9.2 8.5 12 11 12 15Z"/><path d="M12 12C12 7.6 14.6 4.5 19 4.5C19 8.7 16.3 12 12 12Z"/><path d="M7.5 20.5h9"/></g><path class="cf" d="M40.5 3.5C40.64 6.04 41.81 7.36 44.5 7.5C41.81 7.64 40.64 8.96 40.5 11.5C40.36 8.96 39.19 7.64 36.5 7.5C39.19 7.36 40.36 6.04 40.5 3.5Z"/><circle class="cf" cx="33.5" cy="3.8" r="1.1"/><circle class="cs" cx="7.5" cy="40.5" r="1.7"/><path class="cf" d="M14 41.8L14.66 43.39L16.38 43.53L15.07 44.65L15.47 46.32L14 45.42L12.53 46.32L12.93 44.65L11.62 43.53L13.34 43.39Z"/>' },
+      art: '<g transform="translate(8.4 7.75) scale(1.3)"><g class="cl"><path d="M12 20.5V12"/><path d="M12 15C7.6 15 5 12.4 5 8.5C9.2 8.5 12 11 12 15Z"/><path d="M12 12C12 7.6 14.6 4.5 19 4.5C19 8.7 16.3 12 12 12Z"/><path d="M7.5 20.5h9"/></g></g><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/>' },
     { key: 'sunny', name: 'Sunny', how: 'Answer the daily.', got: 'You answered the daily.',
-      art: '<g class="cl" transform="translate(9 9) scale(1.25)"><circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/></g><path class="cf" d="M40.5 3.5C40.64 6.04 41.81 7.36 44.5 7.5C41.81 7.64 40.64 8.96 40.5 11.5C40.36 8.96 39.19 7.64 36.5 7.5C39.19 7.36 40.36 6.04 40.5 3.5Z"/><circle class="cf" cx="33.5" cy="3.8" r="1.1"/><circle class="cs" cx="7.5" cy="40.5" r="1.7"/><path class="cf" d="M14 41.8L14.66 43.39L16.38 43.53L15.07 44.65L15.47 46.32L14 45.42L12.53 46.32L12.93 44.65L11.62 43.53L13.34 43.39Z"/>' },
+      art: '<g transform="translate(9 9) scale(1.25)"><g class="cl"><circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/></g></g><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/>' },
     { key: 'repeat', name: 'On repeat', how: 'Share a song.', got: 'You shared a song.',
-      art: '<g class="cl" transform="translate(8.92 8.6) scale(1.3)"><path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/></g><path class="cf" d="M40.5 3.5C40.64 6.04 41.81 7.36 44.5 7.5C41.81 7.64 40.64 8.96 40.5 11.5C40.36 8.96 39.19 7.64 36.5 7.5C39.19 7.36 40.36 6.04 40.5 3.5Z"/><circle class="cf" cx="33.5" cy="3.8" r="1.1"/><circle class="cs" cx="7.5" cy="40.5" r="1.7"/><path class="cf" d="M14 41.8L14.66 43.39L16.38 43.53L15.07 44.65L15.47 46.32L14 45.42L12.53 46.32L12.93 44.65L11.62 43.53L13.34 43.39Z"/>' },
+      art: '<g transform="translate(8.92 8.6) scale(1.3)"><g class="cl"><path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/></g></g><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/>' },
   ];
   const charmOf = (key) => CHARMS.find(c => c.key === key) || null;
   function charmSvg(key, cls) {
@@ -13760,13 +13766,29 @@
     const rooms = Store.communitiesReady() ? Store.myCommunities() : [];
     const has = {
       word: mine.some(p => p.type !== 'song'),
-      mutual: Store.friendsOf(me).length > 0,
+      mutual: sharedTria(),
       joined: rooms.some(c => c.owner !== me),
       founder: rooms.some(c => c.owner === me),
       sunny: mine.some(p => (p.tags || []).some(t => t.startsWith('daily-'))),
       repeat: mine.some(p => p.type === 'song'),
     };
     return CHARMS.filter(c => has[c.key]).map(c => c.key);
+  }
+  /* MUTUALS is the one first the cache can't see: Tria shared with a friend
+     off the app (Zoe, 2026-10-24: "we need more new users"; it was your first
+     friend, and kept its name and its two stars). Any Tria link
+     that leaves the app counts, a completed share sheet or a copied link
+     (shareOrCopy, copyText), so it is a mark on the device, set the moment it
+     happens. */
+  const SHARED_KEY = 'tria:shared:';
+  function sharedTria() {
+    try { return localStorage.getItem(SHARED_KEY + Store.session()) === '1'; } catch { return false; }
+  }
+  function noteShared() {
+    const me = Store.session();
+    if (!me || sharedTria()) return;
+    try { localStorage.setItem(SHARED_KEY + me, '1'); } catch {}
+    noticeCharmsSoon(2200);   // after the sheet or the "Link copied" has had its say
   }
   const CHARMS_SEEN = 'tria:charms-seen:';
   function charmsSeen(me) {
