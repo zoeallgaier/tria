@@ -4026,16 +4026,17 @@
   }
 
   /* ── The deck (a carousel in the feed) ──────────────────────────────────────
-     A carousel is dealt like a hand of cards, not laid out like a filmstrip. The
-     front photo is the same cropped, rounded frame a single Frame is; the next one
-     sits behind it a size smaller with its edge showing on the right, and the one
-     after that is a thinner edge still. That edge IS the affordance: it says
-     "there's more" without a row of dots, and when nothing peeks you're on the
-     last one, which is the whole of what the dots were ever telling you.
+     A carousel sits exactly where a single Frame does: one photo at a time, in
+     the same centred, rounded box, and a dot a photo under it saying how many
+     there are and which one is in front (Zoe, 2026-10-25: "have the images all
+     be centered like any other photo, and use dots"). It was dealt as a hand of
+     cards until then, the next one's edge peeking out on the right, and that
+     edge pulled every photo off centre.
 
-     Swipe left and the front card leaves off to the left while the one behind it
-     grows into its seat; swipe right and the last one you passed comes back. It
-     does not loop: a deck you've been through ends, the way a thread does.
+     Swipe left and the photo slides off to the left as the next one slides in
+     beside it, a gap between them, both clipped to the box; swipe right and the
+     last one comes back. It does not loop: a deck you've been through ends, the
+     way a thread does.
 
      One box for the whole set, shaped off the cover (clamped between 4:5 and 3:2)
      and every photo covers it, so a swipe never changes the card's height and the
@@ -4044,8 +4045,8 @@
      in front, and there it pages with a count and arrows, which is where the
      readable, reachable version of a carousel belongs.
 
-     Only the cards that can be seen hold a bitmap (the one just passed, the front,
-     two behind). The rest keep their URL in data-src and load as they come
+     Only the cards near the front hold a bitmap (the one just passed, the front,
+     the next two). The rest keep their URL in data-src and load as they come
      forward, so a six-photo post costs a feed what three do. */
   const DECK_NEAR = 2;   // how many cards behind the front hold a bitmap (one shows, one is decoding ahead)
 
@@ -4061,9 +4062,11 @@
             `loading="lazy" decoding="async" draggable="false">` +
         `</div>`;
     }).join('');
+    const dots = set.map((_, i) => `<span class="deck-dot${i ? '' : ' is-on'}"></span>`).join('');
     return `<figure class="photo photo--deck" tabindex="0" role="button" aria-roledescription="carousel" ` +
         `aria-label="Photo 1 of ${n}. Swipe for the next, tap to enlarge.">` +
         `<div class="deck" style="aspect-ratio:${ratio}">${cards}</div>` +
+        `<div class="deck-dots" aria-hidden="true">${dots}</div>` +
       `</figure>`;
   }
 
@@ -4075,6 +4078,7 @@
     const deck = fig && fig.querySelector('.deck');
     if (!deck) return;
     const cards = [...deck.querySelectorAll('.deck-card')];
+    const dots = [...fig.querySelectorAll('.deck-dot')];
     const n = cards.length;
     let at = 0;
 
@@ -4092,52 +4096,24 @@
       if (im.getAttribute('src')) revealCardImage(c, im);
     });
 
-    const peek = () => parseFloat(getComputedStyle(deck).getPropertyValue('--deck-peek')) || 22;
-    // The seat of a card `k` places behind the front (k = 0 is the front, negative
-    // is already passed). Scaled about the card's RIGHT edge, so a card behind
-    // shrinks away from the left and only its right edge shows, pushed out by `x`.
-    // `w` is the card's width, which is how far a passed card has to travel to be gone.
-    // Only ONE card shows behind the front (Zoe, 2026-09-14): a second sliver was
-    // clutter, and the front photo is worth the room. The rest wait in the same
-    // seat, invisible, so the next one fades up into it as a swipe carries it forward.
-    const seat = (k, w, p) => {
-      if (k < 0)  return { x: -(w + p * 2), s: 1, r: -4, o: 0 };
-      if (k === 0) return { x: 0, s: 1, r: 0, o: 1 };
-      return { x: p, s: 0.92, r: 0, o: k === 1 ? 1 : 0 };
-    };
-    // A card leaving stays a solid photo for most of its way out and only fades
-    // in the last 40%; a card coming back is solid by 40% in. A linear fade had
-    // both photos half see-through across the middle of every swipe.
-    const mix = (a, b, t) => {
-      const ot = b.o < a.o ? Math.max(0, (t - 0.6) / 0.4) : Math.min(1, t / 0.4);
-      return { x: a.x + (b.x - a.x) * t, s: a.s + (b.s - a.s) * t,
-               r: a.r + (b.r - a.r) * t, o: a.o + (b.o - a.o) * ot };
-    };
-    // Lay every card out for a drag of `dx` px (0 at rest). A pull toward a card
-    // that exists carries each card part-way to its next seat; a pull past either
-    // end only leans the front card, a fifth of the finger, and comes back.
+    // The air between two photos as they pass, said once in the CSS.
+    const gap = () => parseFloat(getComputedStyle(deck).getPropertyValue('--deck-gap')) || 10;
+    // Lay every card out for a drag of `dx` px (0 at rest): each one a photo and
+    // a gap from its neighbour, the whole row carried by the finger. A pull past
+    // either end only leans the row, a fifth of the finger, and comes back.
     const lay = (dx = 0) => {
-      const w = deck.clientWidth;
-      const p = peek();
-      const t = Math.max(-1, Math.min(1, dx / (w || 1)));
-      const stuck = (t < 0 && at === n - 1) || (t > 0 && at === 0);
+      const step = deck.clientWidth + gap();
+      const stuck = (dx < 0 && at === n - 1) || (dx > 0 && at === 0);
+      const off = stuck ? dx * 0.2 : Math.max(-step, Math.min(step, dx));
       cards.forEach((c, i) => {
-        const k = i - at;
-        let q = seat(k, w, p);
-        if (stuck) { if (k === 0) q = { ...q, x: dx * 0.2 }; }
-        else if (t < 0) q = mix(q, seat(k - 1, w, p), -t);
-        else if (t > 0) q = mix(q, seat(k + 1, w, p), t);
-        c.style.transform = `translateX(${q.x.toFixed(1)}px) scale(${q.s.toFixed(4)})` +
-          (q.r ? ` rotate(${q.r.toFixed(2)}deg)` : '');
-        c.style.opacity = q.o >= 0.999 ? '' : q.o.toFixed(3);
-        // The front is on top; a passed card coming back rides over it.
-        c.style.zIndex = String(k < 0 ? n + 1 : n - k);
-        c.setAttribute('aria-hidden', k === 0 ? 'false' : 'true');
+        c.style.transform = `translateX(${((i - at) * step + off).toFixed(1)}px)`;
+        c.setAttribute('aria-hidden', i === at ? 'false' : 'true');
       });
     };
     const settle = (animate) => {
       deck.classList.toggle('is-settling', !!animate && !prefersReduced());
       lay(0);
+      dots.forEach((d, i) => d.classList.toggle('is-on', i === at));
       fig.setAttribute('aria-label', `Photo ${at + 1} of ${n}. ` +
         (at < n - 1 ? 'Swipe for the next, tap to enlarge.' : 'Tap to enlarge.'));
       load();
@@ -9603,9 +9579,9 @@
     /* THE CARD SITS IN A `.feed`, and that is the fix rather than a shortcut.
        A post has to measure exactly as it does at home, and the feed's width is
        not one number — it is `max-width: var(--feed-width)` on desktop AND a
-       `margin-inline: -1.15rem` on phones, which is how a card bleeds to the
-       screen edge past `.view`'s own padding. Written out here it was neither:
-       the card took the view's 1.15rem inset (so its text column measured 316px
+       `margin-inline` of minus the `--gutter` on phones, which is how a card
+       bleeds to the screen edge past `.view`'s own padding. Written out here it
+       was neither: the card took the view's inset (then 1.15rem) (so its text column measured 316px
        against the feed's 353 — squished, by exactly twice that padding) and on a
        wide screen it took no cap at all (836px against the feed's 660). Same
        class, same measurements, nothing left to drift. */
@@ -18880,7 +18856,7 @@
       }).catch(() => {});
     }
     // A carousel is the one place a count is the kind thing: the deck in the feed
-    // shows where you are with its peeking edge, and this is the mode you tapped
+    // shows where you are with its dots, and this is the mode you tapped
     // into to have it plainly. "2 of 5" and two real buttons, so it can be driven
     // without a swipe at all. It says where you are, never what you're behind on.
     lbGallery = !isVideo && gallery && gallery.srcs && gallery.srcs.length > 1

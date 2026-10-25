@@ -104,6 +104,18 @@ house-ramp copies) and an accent's wash is its SPECTRUM, three stops 18 degrees
 of hue apart (`stopsAround`, `WASH_ARC`, `--wash-a/b/c`, each tinted on its
 own), like a daily tag's band but wider.
 
+## One gutter, and a carousel that sits like a photo (2026-10-25)
+
+**Every page on a phone has the same 14px side inset** (Zoe: "all pages /feeds
+should have the same padding"), one token, `--gutter` on `.view` in the phone
+block; every break-out (`.feed`, the lists, the rails) and the padding that pays
+it back reads it, and the top bar's `--toolbar-pad` and `.auth-topbar` are the
+same 14px. Don't reintroduce a per-page gutter. **A carousel is centred like
+any Frame**: the photos stand in a row a gap apart, clipped to the box's rounded
+corners, and slide, with a dot a photo in the air over the action row (no
+number in the feed; the lightbox keeps its "2 of 5"). The hand-of-cards peek is
+gone. See docs/data.md under the carousel.
+
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
 **THE BUTTON.** Every button in a page is one material at two weights (Zoe:

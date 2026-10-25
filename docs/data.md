@@ -1317,8 +1317,12 @@ address and therefore a different person, and there is no way around that.
   "Carousels aren’t switched on yet" and takes its uploads back. In the feed it
   is a DECK (`deckHtml` / `wireDeck` in app.js): the front photo cropped into one
   box shaped off the cover (4:5 to 3:2, so a swipe never changes the card's
-  height) at full column width like any Frame, ONE card behind it scaled down
-  and peeking into the right inset, linear, no dots.
+  height) at full column width, centred like any Frame. The photos stand in a
+  row a gap apart, clipped to the box's rounded corners, and slide; a dot a
+  photo sits in the air over the action row (Zoe, 2026-10-25: "have the images
+  all be centered like any other photo, and use dots"). It was dealt as a hand
+  of cards before that, one scaled down behind and peeking into the right inset,
+  no dots, and the peek pulled the photo off centre. Linear, no loop.
   A tap opens the lightbox, which pages (`pageLightbox`) with a count and arrows.
   The composer's file input is `multiple`; several files or "Add more" build the
   set (`stills`), a single file is the old Frame path. Push notifications: see `supabase/PUSH-SETUP.md`; the Edge Function's

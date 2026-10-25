@@ -4362,20 +4362,23 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   .photo-frame img { opacity: 1; transform: none; transition: none; }
 }
 /* ── The deck: a carousel in the feed (deckHtml / wireDeck in app.js) ──────────
-   One box shaped off the cover; every card covers it, so a swipe never changes
-   the post's height. The front card is the WHOLE box, exactly where a single
-   Frame sits, so the photo is as big and as centred as any other and the last
-   card has no lopsided gap. The one card behind is scaled about its right edge
-   and pushed `--deck-peek` out past it, into the page's side inset (phone 1.15rem,
-   so the peek must stay under ~18px). The outer ring in the page's own
-   colour is the gap between two cards in a hand — flat, no drop shadow, the same
-   material as the frame a single photo sits in. JS writes each card's transform;
-   `.is-settling` is what lets it spring there instead of snapping. */
+   Exactly where a single Frame sits (Zoe, 2026-10-25): one box shaped off the
+   cover, every photo covering it, so a swipe never changes the post's height,
+   and the photo in front IS the box, centred like any other. The photos stand
+   in a row a gap apart and the box clips them to its own rounded corners, so
+   the next one is out of sight until a swipe brings it in; nothing peeks.
+   `.is-settling` is what lets a release glide home instead of snapping, on the
+   signature ease-out with no overshoot: an overshoot would flash the next
+   photo's edge, which is the peek this replaced. */
 .photo--deck { cursor: pointer; }
 .deck {
-  --deck-peek: 12px;
+  --deck-gap: 10px;
   position: relative;
   width: 100%;
+  /* clip-path, not overflow + radius: WebKit can leave a composited child's
+     corners unclipped by a rounded overflow box, and every card here is one
+     while it moves. */
+  clip-path: inset(0 round var(--radius-card));
   touch-action: pan-y;          /* the page keeps the vertical scroll; sideways is ours */
   -webkit-user-select: none;
   user-select: none;
@@ -4390,8 +4393,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   border-radius: var(--radius-card);
   overflow: hidden;
   background: var(--ph-fill, var(--surface-2));
-  box-shadow: inset 0 0 0 1px var(--rule), 0 0 0 2px var(--bg);
-  transform-origin: 100% 50%;
+  box-shadow: inset 0 0 0 1px var(--rule);
 }
 .deck-card img {
   position: absolute;
@@ -4407,11 +4409,34 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
 }
 .deck-card.is-loaded img { opacity: 1; transform: none; }
-.deck.is-settling .deck-card {
-  transition: transform var(--dur-move) var(--spring), opacity var(--dur-quick) var(--ease);
+.deck.is-settling .deck-card { transition: transform var(--dur-move) var(--ease); }
+/* Where you are: a dot a photo, the one in front in the page's ink and the
+   rest the same ink, faint. They sit in the air the action row already leaves
+   under a photo, so a carousel stands exactly as tall as a single Frame. No
+   number (that is the lightbox's, where you went to look properly) and no tap:
+   they say, the swipe does. */
+.deck-dots {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
 }
+.deck-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+  opacity: 0.22;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.deck-dot.is-on { opacity: 0.88; }
 @media (prefers-reduced-motion: reduce) {
   .deck-card img { opacity: 1; transform: none; transition: none; }
+  .deck-dot { transition: none; }
 }
 
 /* Byline + caption inset to align with post text; the image is full-width. The
@@ -5761,7 +5786,7 @@ button.poll-option:disabled { cursor: default; }
    --inset, not a smaller number of its own: these are list rows, not boxes (no
    border, no fill until hover), so on a wide screen they take the same inset the
    Updates ledger's rows take. On a phone the list breaks out and this drops to
-   1.15rem — see the phone block; the two together put the row's content on the
+   the gutter — see the phone block; the two together put the row's content on the
    view's own axis, which is where every other list in the app sits. */
 .song-now,
 .song-hit,
@@ -9100,7 +9125,7 @@ body[data-ambient="none"] .pf-row-swatch {
   .topbar {
     /* Past the notch, then half the button row — see the token's own note. */
     --toolbar-mid: calc(env(safe-area-inset-top) + var(--topbar-h) / 2);
-    --toolbar-pad: 1.15rem;
+    --toolbar-pad: 0.875rem;         /* the pages' --gutter, so the bar's ends meet the content's */
     top: 0;                          /* undo the desktop float inset */
     left: 0;
     z-index: 100;
@@ -9288,11 +9313,13 @@ body[data-ambient="none"] .pf-row-swatch {
   }
 
   /* Full-width column on phones — drop the desktop asymmetric margins.
-     --gutter is the phone's side inset, 1.15rem; a page of tiles sets its own
-     (Discover, Chats and a circle's page, below), and everything that breaks
-     out of the view and pays the inset back reads it, so a bleed always meets
-     the screen's edge and the words land on the view's axis. */
-  .view { --gutter: 1.15rem; margin: 0; max-width: none; padding: 1.5rem var(--gutter) 2rem; }
+     --gutter is the phone's side inset, 14px on EVERY page (Zoe, 2026-10-25:
+     "all pages/feeds should have the same padding"; it was 1.15rem, with
+     Discover and Chats alone at 14 since 2026-10-23, "go 14"). Everything that
+     breaks out of the view and pays the inset back reads it, so a bleed always
+     meets the screen's edge and the words land on the view's axis. The top
+     bar's --toolbar-pad is the same 14px. */
+  .view { --gutter: 0.875rem; margin: 0; max-width: none; padding: 1.5rem var(--gutter) 2rem; }
   /* Same argument as the desktop rule this restates (see body.toolbar-live
      .view up in the toolbar block), at the phone's smaller scale: the bar is
      60px with a 44px control in it, so a page opening under one only needs a
@@ -9370,7 +9397,7 @@ body[data-ambient="none"] .pf-row-swatch {
 
   /* The picker lists break out with the rest of them. --inset is a desktop
      measure; a row that keeps it on a phone is sitting 2.75rem in, level with the
-     masthead's own serif, while every other list in the app sits at 1.15rem. So
+     masthead's own serif, while every other list in the app sits at the gutter. So
      the list takes the same break-out and the row pays the inset back as padding
      — content lands on the ledger's axis, and the pin list's hairlines and hovers
      reach the screen edge the way Updates' do. .song-now is left out on purpose:
@@ -9799,7 +9826,7 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: calc(env(safe-area-inset-top) + 0.75rem) 1.15rem 0.75rem;
+  padding: calc(env(safe-area-inset-top) + 0.75rem) 0.875rem 0.75rem;   /* the pages' 14px */
   /* Same scroll edge effect as the signed-in topbar, so the gated pages don't
      hand a first-time visitor a different bar from the one they'll live with. */
   background: linear-gradient(
@@ -9898,14 +9925,6 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .person-strip::-webkit-scrollbar { display: none; }
 @media (max-width: 680px) {
   .person-strip { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
-  /* Chats and Discover are pages of tiles, and a tile wants less gutter than a
-     column of type (Zoe, 2026-10-23: "don't need as much side padding", then "go 14"): 14px
-     a side, not the view's 1.15rem. The rail's bleed follows it. A circle's page
-     takes Discover's too (Zoe, 2026-10-25), so a circle opened off its card
-     keeps the card's edges, its head and its feed both. */
-  .view--discover,
-  .view--community,
-  .view--chats:not(.view--newchat) { --gutter: 0.875rem; }
 }
 .person-card {
   position: relative;
