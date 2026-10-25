@@ -8921,12 +8921,19 @@ button.poll-option:disabled { cursor: default; }
 }
 .pf-row-ico { width: 19px; height: 19px; flex: none; }
 .pf-row-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The current colour, as a dot: the setting shown, not named. */
+/* The current colour, as a dot: the setting shown, not named. A picked or
+   sampled hue is --glow-photo; Tria's own (the default) sets none and washes
+   the page with the ramp (data-ambient="tria"), so the dot wears the ramp; a
+   picked None is an empty ring, which is what no colour looks like. */
 .pf-row-swatch {
   width: 19px; height: 19px; flex: none;
   border-radius: 50%;
-  background: var(--glow-photo, var(--muted));
+  background: var(--glow-photo, var(--brand-band));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+body[data-ambient="none"] .pf-row-swatch {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
 }
 .pf-row-worn { display: flex; flex: none; }
 .pf-row-worn .charm--mini { width: 24px; height: 24px; }
