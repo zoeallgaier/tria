@@ -13710,15 +13710,17 @@
      worn on the rim of your photo, the first at ten thirty and the second at
      four thirty (Zoe's sketch).
 
-     THE ART is solid (Zoe, 2026-10-24: "fill icons", then "thicker line
-     weight"): ICONS' circle, daily and music filled in, a squircle quote, two
-     stars and a sprout drawn to match (a round outlined quote read as "66").
-     Each icon fills its frame, and only the three that leave an empty corner
-     take one small star there, Mutuals' own shape: the quote, the sprout and
-     the note (Zoe: the 24px pair on Edit profile's Charms row was "the best
-     charm", so four trims a charm went). Everything is the page's own ink,
-     --text: black on paper, white on ink (Zoe: "just black or white"), so a
-     charm reads on any photo and in anyone's colour.
+     THE ART is pixel art (Zoe, 2026-10-24: "like Susan Kare icons ... in 16bit
+     style"): each charm is a 16 by 16 grid of ink, `px` below, one '#' a
+     pixel, drawn as runs of rects with crispEdges so it stays square at every
+     size. The shapes are the solid set's (a squircle quote, two sparkles,
+     three dots, a sprout, the sun, beamed notes), and the quote, the sprout
+     and the note keep one small star in their empty corner. A pixel vine
+     around the whole photo was tried and dropped the same day (Zoe: "stick
+     to icons more than flourish"). Everything is the page's own ink, --text:
+     black on paper, white on ink (Zoe: "just black or white"). WORN, a charm
+     wears a one pixel paper edge, a sprite's outline, which is what lifts it
+     off any photo (it was a blurred drop shadow).
 
      EARNED IS NEVER STORED. It is read off what you have done, which the cache
      already holds, so there is no table to backfill or drift, and no count
@@ -13735,22 +13737,155 @@
      Keys never move (users.charms stores them, add-charms.sql checks them). */
   const CHARMS = [
     { key: 'word', name: 'First word', how: 'Publish your first post.', got: 'You published your first post.',
-      art: '<g transform="translate(1.4 1.93) scale(1.75)"><path class="cm" d="M5.5 5H8.5A2 2 0 0 1 10.5 7V12.5C10.5 15.6 8.7 17.6 5.7 18.4L5.3 16.6C7.1 15.8 8.1 14.6 8.2 13H5.5A2 2 0 0 1 3.5 11V7A2 2 0 0 1 5.5 5Z"/><path class="cm" d="M15.5 5H18.5A2 2 0 0 1 20.5 7V12.5C20.5 15.6 18.7 17.6 15.7 18.4L15.3 16.6C17.1 15.8 18.1 14.6 18.2 13H15.5A2 2 0 0 1 13.5 11V7A2 2 0 0 1 15.5 5Z"/></g><path class="cm" d="M37.8 33.2Q38.77 36.63 42.2 37.6Q38.77 38.57 37.8 42Q36.83 38.57 33.4 37.6Q36.83 36.63 37.8 33.2Z"/>' },
+      px: [
+        '................',
+        '................',
+        '..####...####...',
+        '.######.######..',
+        '.######.######..',
+        '.######.######..',
+        '.######.######..',
+        '..#####..#####..',
+        '.....##.....##..',
+        '....##.....##...',
+        '..###.....###...',
+        '................',
+        '.............#..',
+        '............###.',
+        '.............#..',
+        '................',
+      ] },
     { key: 'mutual', name: 'Mutuals', how: 'Share Tria with a friend.', got: 'You shared Tria with a friend.',
-      art: '<g transform="translate(4.8 5.2) scale(1.6)"><path class="cm" d="M6.5 11Q7.6 14.9 11.5 16Q7.6 17.1 6.5 21Q5.4 17.1 1.5 16Q5.4 14.9 6.5 11Z"/><path class="cm" d="M17.5 2.5Q18.6 6.4 22.5 7.5Q18.6 8.6 17.5 12.5Q16.4 8.6 12.5 7.5Q16.4 6.4 17.5 2.5Z"/></g>' },
+      px: [
+        '................',
+        '..........#.....',
+        '..........#.....',
+        '.........###....',
+        '........#####...',
+        '......#########.',
+        '........#####...',
+        '....#....###....',
+        '....#.....#.....',
+        '...###....#.....',
+        '.#######........',
+        '...###..........',
+        '....#...........',
+        '....#...........',
+        '................',
+        '................',
+      ] },
     { key: 'joined', name: 'In the ring', how: 'Join a circle.', got: 'You joined your first circle.',
-      art: '<g transform="translate(0 -1.2) scale(2)"><circle class="cm" cx="7.8" cy="9.2" r="3.3"/><circle class="cm" cx="16.2" cy="9.2" r="3.3"/><circle class="cm" cx="12" cy="16.5" r="3.3"/></g>' },
+      px: [
+        '................',
+        '................',
+        '..####...####...',
+        '.#.####.#.####..',
+        '.######.######..',
+        '.######.######..',
+        '.######.######..',
+        '..####...####...',
+        '................',
+        '......####......',
+        '.....#.####.....',
+        '.....######.....',
+        '.....######.....',
+        '.....######.....',
+        '......####......',
+        '................',
+      ] },
     { key: 'founder', name: 'Founder', how: 'Start a circle.', got: 'You started a circle.',
-      art: '<g transform="translate(4 2.5) scale(1.8)"><path class="cl" d="M12 20.5V12"/><path class="cl" d="M7.5 20.5h9"/><path class="cm" d="M12 15C7.6 15 5 12.4 5 8.5C9.2 8.5 12 11 12 15Z"/><path class="cm" d="M12 12C12 7.6 14.6 4.5 19 4.5C19 8.7 16.3 12 12 12Z"/></g><path class="cm" d="M10.4 5.8Q11.37 9.23 14.8 10.2Q11.37 11.17 10.4 14.6Q9.43 11.17 6 10.2Q9.43 9.23 10.4 5.8Z"/>' },
+      px: [
+        '................',
+        '..#........###..',
+        '.###.....######.',
+        '..#.....#######.',
+        '........######..',
+        '.......######...',
+        '.###...####.....',
+        '.#####.##.......',
+        '.########.......',
+        '..#######.......',
+        '....#####.......',
+        '.......##.......',
+        '.......##.......',
+        '.....######.....',
+        '...##########...',
+        '................',
+      ] },
     { key: 'sunny', name: 'Sunny', how: 'Answer the daily.', got: 'You answered the daily.',
-      art: '<g transform="translate(3 3) scale(1.75)"><circle class="cm" cx="12" cy="12" r="4.6"/><path class="cl" d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/></g>' },
+      px: [
+        '................',
+        '.......##.......',
+        '.......##.......',
+        '..##........##..',
+        '..##..####..##..',
+        '.....######.....',
+        '....#.######....',
+        '.##.########.##.',
+        '.##.########.##.',
+        '....########....',
+        '.....######.....',
+        '..##..####..##..',
+        '..##........##..',
+        '.......##.......',
+        '.......##.......',
+        '................',
+      ] },
     { key: 'repeat', name: 'On repeat', how: 'Share a song.', got: 'You shared a song.',
-      art: '<g transform="translate(4.72 3.27) scale(1.8)"><path class="cl" d="M9 17.5V6l10-2.2v11.5"/><circle class="cm" cx="6.6" cy="17.5" r="2.9"/><circle class="cm" cx="16.6" cy="15.3" r="2.9"/></g><path class="cm" d="M10.8 5.8Q11.77 9.23 15.2 10.2Q11.77 11.17 10.8 14.6Q9.83 11.17 6.4 10.2Q9.83 9.23 10.8 5.8Z"/>' },
+      px: [
+        '................',
+        '..#........###..',
+        '.###....######..',
+        '..#..######..#..',
+        '.....###.....#..',
+        '.....#.......#..',
+        '.....#.......#..',
+        '.....#.......#..',
+        '.....#.......#..',
+        '.....#....####..',
+        '.....#...#####..',
+        '..####...####...',
+        '.#####....##....',
+        '.####...........',
+        '..##............',
+        '................',
+      ] },
   ];
   const charmOf = (key) => CHARMS.find(c => c.key === key) || null;
+  // One path per layer, a rect per run of pixels, so the art stays sharp at any
+  // size (shape-rendering crispEdges) and adjacent pixels never seam.
+  const pixelPath = (on, w, h) => {
+    let d = '';
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!on(x, y)) continue;
+        let n = 1;
+        while (x + n < w && on(x + n, y)) n++;
+        d += `M${x} ${y}h${n}v1h-${n}z`;
+        x += n;
+      }
+    }
+    return d;
+  };
+  const charmArt = {};
+  function charmPaths(c) {
+    if (charmArt[c.key]) return charmArt[c.key];
+    const ink = (x, y) => x >= 0 && y >= 0 && x < 16 && y < 16 && c.px[y][x] === '#';
+    // The paper edge: every pixel touching the ink, corners included.
+    const edge = (x, y) => !ink(x, y) && [-1, 0, 1].some(dy => [-1, 0, 1].some(dx => ink(x + dx, y + dy)));
+    return (charmArt[c.key] = {
+      ink: pixelPath(ink, 16, 16),
+      edge: pixelPath((x, y) => edge(x - 1, y - 1), 18, 18),
+    });
+  }
   function charmSvg(key, cls) {
     const c = charmOf(key);
-    return c ? `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${c.art}</svg>` : '';
+    if (!c) return '';
+    const art = charmPaths(c);
+    const worn = /charm--worn/.test(cls || '');
+    return `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="${worn ? '-1 -1 18 18' : '0 0 16 16'}" shape-rendering="crispEdges" aria-hidden="true">` +
+      (worn ? `<path class="charm-edge" transform="translate(-1 -1)" d="${art.edge}"/>` : '') +
+      `<path class="charm-ink" d="${art.ink}"/></svg>`;
   }
   // The two on someone's photo, inside the face's own positioned box.
   function charmsOnFace(u) {

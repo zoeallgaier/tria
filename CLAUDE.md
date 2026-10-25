@@ -72,14 +72,16 @@ word (a post, a squircle quote mark: an outlined round quote read as "66"),
 Mutuals (Tria shared off the app, a completed share sheet or a copied link,
 `noteShared`; it was a first friend until Zoe: "we need more new users", and
 kept its name and two stars), In the ring (join a circle), Founder (start
-one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. SOLID, with
-heavy lines where a line is the shape (Zoe: "fill icons", "thicker line
-weight"), from the icon set's drawings (circle as three dots, daily, music; a
-squircle quote, stars and sprout drawn to match), and in plain ink, `--text`,
-black on paper and white on ink (Zoe: "just black or white"), never a colour. **Each icon fills its frame, with ONE small star only where
-it leaves an empty corner** (the quote, the sprout, the note; Zoe, 2026-10-24:
-the 24px pair on the Charms row was "the best charm", so the four trims a
-charm went). **Earned is never stored**, it is read off the cache
+one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **PIXEL ART** (Zoe, 2026-10-24: "like Susan Kare icons
+... in 16bit style"): each charm is a 16 by 16 ASCII grid (`px`, '#' is ink),
+drawn as runs of rects with crispEdges (`pixelPath`, `charmPaths`), the solid
+set's shapes redrawn in pixels with a one-pixel shine on the round ones, and
+one small star in the empty corner of the quote, the sprout and the note. In
+plain ink, `--text`, never a colour (Zoe: "just black or white"). Worn, a charm
+wears a ONE PIXEL PAPER EDGE (`.charm-edge`, `--bg`), a sprite's outline, which
+replaced the blurred drop shadow. A pixel vine framing the whole photo was
+built and dropped the same day (Zoe: "stick to icons more than flourish").
+Sizes that are multiples of 16 keep the pixels even (tiles 64, hero 128). **Earned is never stored**, it is read off the cache
 (`charmsEarned`); only what you WEAR is a column, `users.charms` (at most two,
 `supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon
 `GET /rest/v1/users?select=charms` answers 42703; until it is,
