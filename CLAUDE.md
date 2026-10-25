@@ -72,16 +72,17 @@ word (a post, a squircle quote mark: an outlined round quote read as "66"),
 Mutuals (Tria shared off the app, a completed share sheet or a copied link,
 `noteShared`; it was a first friend until Zoe: "we need more new users", and
 kept its name and two stars), In the ring (join a circle), Founder (start
-one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **PIXEL ART** (Zoe, 2026-10-24: "like Susan Kare icons
-... in 16bit style"): each charm is a 16 by 16 ASCII grid (`px`, '#' is ink),
-drawn as runs of rects with crispEdges (`pixelPath`, `charmPaths`), the solid
-set's shapes redrawn in pixels with a one-pixel shine on the round ones, and
-one small star in the empty corner of the quote, the sprout and the note. In
-plain ink, `--text`, never a colour (Zoe: "just black or white"). Worn, a charm
-wears a ONE PIXEL PAPER EDGE (`.charm-edge`, `--bg`), a sprite's outline, which
-replaced the blurred drop shadow. A pixel vine framing the whole photo was
-built and dropped the same day (Zoe: "stick to icons more than flourish").
-Sizes that are multiples of 16 keep the pixels even (tiles 64, hero 128). **Earned is never stored**, it is read off the cache
+one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **Outlined, in the icon set's line** (the circle triad,
+daily and music are ICONS'; the quote, stars and sprout are drawn to match)
+with the SAME four trims, a sparkle with a dot and a speck with a star, in
+opposite corners and close in: three charms on each diagonal (Zoe), each
+pair nudged in per charm where the icon is narrow (a `translate` on the
+trim). Sunny is a five point star and On repeat a single eighth note (Zoe,
+2026-10-24). In plain ink, `--text` via `--charm-ink`, the device's
+opposite: black on paper, white on ink, never `--heart`. This is 523aa77's art, restored on 2026-10-24 (Zoe: "go back to
+the second outline tria style icons") after a solid pass in plain ink, a
+simpler one with fewer trims, and Susan Kare style pixel art (all in git:
+dee25a8, 9615480, d9727e0). **Earned is never stored**, it is read off the cache
 (`charmsEarned`); only what you WEAR is a column, `users.charms` (at most two,
 `supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon
 `GET /rest/v1/users?select=charms` answers 42703; until it is,

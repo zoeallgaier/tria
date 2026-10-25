@@ -8957,7 +8957,7 @@ body[data-ambient="none"] .pf-row-swatch {
 }
 .pf-row-worn { display: flex; flex: none; }
 .pf-row-worn .charm--mini { width: 24px; height: 24px; }
-.pf-row-worn .charm--mini + .charm--mini { margin-left: 4px; }
+.pf-row-worn .charm--mini + .charm--mini { margin-left: -5px; }
 
 /* The profile editor is a PAGE (#/profile/edit), not a modal — see the note over
    renderEditProfile for the three things that were wrong with the card. What it
@@ -10443,27 +10443,28 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 
 /* ── Charms (2.0, 2026-10-24) ──────────────────────────────────────────────────
    Six little firsts, worn on the rim of your photo (charmSvg, CHARMS in app.js).
-   Pixel art in --charm-ink: the page's own ink, black on paper and white on
-   ink (Zoe), never a colour. The art is a 16 grid, so a size that is a
-   multiple of 16 keeps every pixel the same width. */
+   One line, the icon set's own 1.8 in its 24 grid, every mark in --heart: the
+   reader's colour, the hearts' contrast work reused, paper and ink alike. */
 .charm { --charm-ink: var(--text); display: block; overflow: visible; }
-.charm-ink { fill: var(--charm-ink); }
-.charm-edge { fill: var(--bg); }
+.charm .cl { fill: none; stroke: var(--charm-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.charm .cf { fill: var(--charm-ink); }
+.charm .cs { fill: none; stroke: var(--charm-ink); stroke-width: 1.4; }
 
-/* Worn: the art 40% of the face across, its box 45% for the one pixel paper
-   edge around it (a sprite's outline, which separates it from the photo; it
-   was a blurred drop shadow), centred on the rim at ten thirty and four
-   thirty (the rim's 45 degree point is 14.6% in from the box, less half the
-   box). */
+/* Worn: 44% of the face across (Zoe: "a lil bigger"), centred on the rim at
+   ten thirty and four thirty (the rim's 45 degree point is 14.6% in from the
+   box, less half the charm), lifted off the photo by the page's own paper
+   fading out from the line: one tight shadow to separate, one wide one to
+   fade (Zoe: "more fade"). */
 .charm-face { position: relative; flex: 0 0 clamp(120px, 37%, 160px); }
 .charm-face > .account-photo { width: 100%; }
 .charm--worn {
   position: absolute;
-  width: 45%; height: 45%;
+  width: 44%; height: 44%;
   pointer-events: none;
+  filter: drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 6px var(--bg));
 }
-.charm--worn-a { left: -7.9%; top: -7.9%; }
-.charm--worn-b { left: 62.9%; top: 62.9%; }
+.charm--worn-a { left: -7.4%; top: -7.4%; }
+.charm--worn-b { left: 63.4%; top: 63.4%; }
 
 /* An unlock: the charm big, its name in the serif, what earned it. */
 .charm-unlock {
@@ -10472,7 +10473,7 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
   padding: 0.4rem 1rem 0.9rem;
   text-align: center;
 }
-.charm--hero { width: 128px; height: 128px; margin-bottom: 0.2rem; }
+.charm--hero { width: 120px; height: 120px; margin-bottom: 0.2rem; }
 .charm-unlock-name {
   margin: 0;
   font-family: 'Instrument Serif', 'Times New Roman', serif;
@@ -10490,7 +10491,7 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
   display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
   font-size: 0.82rem; color: var(--text);
 }
-.charm-welcome-item .charm { width: 64px; height: 64px; }
+.charm-welcome-item .charm { width: 60px; height: 60px; }
 
 /* The picker: three across, held in colour, the rest a quiet outline with how
    each is earned. A worn one takes the sheet's chosen fill and a check. */
