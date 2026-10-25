@@ -8422,6 +8422,32 @@ button.poll-option:disabled { cursor: default; }
   right: calc(1.4rem - 8px);
 }
 
+/* SHARE PROFILE'S CODE (2026-10-24), the head of its sheet over Share link
+   and Copy link. The code is the only thing drawn, like a PNG cut out of its
+   page (Zoe: "can the QR itself be bright, without a second background?"):
+   modules in the page's ink straight on the panel, dark on paper and bright
+   on ink. A light-on-dark code is allowed by ISO/IEC 18004:2015 and was read
+   back with Vision both ways before it shipped. The four-module quiet zone is
+   drawn inside the SVG as empty space, so nothing crowds the code.
+   sizeProfileCode sets the exact width; the 232px is the frame before it does. */
+.qr-card {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 1.5rem 18px;
+  text-align: center;
+}
+.qr-plate {
+  width: 232px; height: 232px;
+  color: var(--text);
+}
+.qr-code { display: block; width: 100%; height: 100%; fill: currentColor; }
+.qr-name {
+  margin: 2px 0 0;
+  font-size: 1.08rem; font-weight: 700; line-height: 1.25;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.qr-handle { margin: 2px 0 0; font-size: 0.95rem; color: var(--muted); }
+
 /* ── Frame picker — a plain upload field ────────────────────────────────────
    Same frame + fill as every other composer field (.field input/textarea) —
    a field that happens to hold an upload prompt instead of text, not a separate

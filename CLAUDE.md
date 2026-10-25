@@ -79,9 +79,17 @@ dead phone FAB and speed dial, the dead `.modal` system and the native
 page-button bridge are deleted. The native bar's commits wear the same wash
 (`washFill` → `spec.wash` in `TriaBand.apply`). See docs/design.md's top.
 
-**Share profile is the system share sheet**, on your own profile too (Zoe:
-"remove all the qr code bullshit"). The profile card, its QR, `js/vendor/qr.js`
-and `profileCardSpec` are gone; own-POST story cards stay. **In the app the sheet is UIKit's** (`TriaShare.shareLink`, which
+**Share profile is a QR sheet** (Zoe, 2026-10-24: "add QR sharing instead of
+the apple share sheet"; it was the system sheet from 2.0's "remove all the qr
+code bullshit", which took out the story-card profile card and its four
+backgrounds). `shareProfile` opens one `openSheet`: the code with NO plate
+behind it, in the page's ink (Zoe: "bright, without a second background"), so
+dark on paper and light on ink, then the name and @handle, then Share link (the
+system sheet, through `handOver`) and Copy link. Level M, a four-module quiet
+zone inside the SVG, whole device pixels to a module (`qrSvg`,
+`sizeProfileCode`), and no logo or tint: it was read back with Vision in both
+themes. `js/vendor/qr.js` is back, untouched from its checked version. Own-POST
+story cards stay. **In the app the system sheet is UIKit's** (`TriaShare.shareLink`, which
 `shareOrCopy` tries first in the native shell): WKWebView's `navigator.share`
 opened nothing from a menu row, so it is only the web's now.
 

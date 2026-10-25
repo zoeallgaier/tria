@@ -9889,18 +9889,76 @@
     });
   }
 
-  /* A profile's link, to the system share sheet, from every place that offers
-     it: your own •••, a friend's tie menu, a non-friend's •••. Somebody else's
-     profile is a recommendation, never "Join me on Tria", because the app does
-     not speak in your voice about a person you don't share an account with. */
+  /* A profile's QR, from every place that offers Share profile: your own
+     profile's pill, a friend's tie menu, a non-friend's •••. (Zoe, 2026-10-24:
+     "add QR sharing instead of the apple share sheet". It was the system sheet
+     since 2.0, after the story card and its four backgrounds came out.)
+
+     THE SHEET IS THE CODE. The code in the page's ink with no plate behind it
+     (Zoe: "bright, without a second background"), the name and @handle under
+     it, and two rows: Share link hands the same address to the system sheet,
+     Copy link to the clipboard. No logo in the middle and no tint, because it
+     is held out to somebody else's camera: level M, a four-module quiet zone,
+     whole device pixels to a module (sizeProfileCode), and light on dark in
+     dark mode, which ISO/IEC 18004:2015 allows and Vision reads.
+
+     The code points at the PROFILE, never at an invite: whoever scans it lands
+     somewhere that still asks. Somebody else's profile is a recommendation,
+     never "Join me on Tria", because the app does not speak in your voice
+     about a person you don't share an account with. Without the encoder, or
+     past its ceiling, the link goes straight to the system sheet as before. */
   function shareProfile(username) {
     const u = Store.user(username);
     const who = u ? u.name : '@' + username;
-    handOver({
-      title: `@${username} on Tria`,
-      text: `${who} on Tria`,
-      url: profileLink(username),
+    const url = profileLink(username);
+    const payload = { title: `@${username} on Tria`, text: `${who} on Tria`, url };
+    let code = null;
+    try { code = window.QR ? QR.encode(url) : null; } catch { code = null; }
+    if (!code) { handOver(payload); return; }
+    openSheet({
+      title: 'Share profile',
+      head:
+        `<div class="qr-card">` +
+          `<div class="qr-plate" role="img" aria-label="${esc(`QR code for @${username}’s profile`)}">${qrSvg(code)}</div>` +
+          (u && u.name ? `<p class="qr-name">${esc(u.name)}</p>` : '') +
+          `<p class="qr-handle">@${esc(username)}</p>` +
+        `</div>`,
+      wire: (scrim) => sizeProfileCode(scrim.querySelector('.qr-plate'), code.length),
+      items: [
+        { label: 'Share link', icon: 'send', run: () => handOver(payload) },
+        { label: 'Copy link', icon: 'link', run: () =>
+          copyText(url).then(ok => toast(ok ? 'Link copied' : 'Couldn’t copy the link.')) },
+      ],
     });
+  }
+
+  // A QR matrix as one SVG path, a run of dark modules per subpath, with the
+  // four-module quiet zone inside the viewBox so the plate needs no padding.
+  function qrSvg(m) {
+    const q = 4, n = m.length + q * 2;
+    let d = '';
+    m.forEach((row, y) => {
+      for (let x = 0; x < row.length;) {
+        if (!row[x]) { x++; continue; }
+        let run = 1;
+        while (row[x + run]) run++;
+        d += `M${x + q} ${y + q}h${run}v1h-${run}z`;
+        x += run;
+      }
+    });
+    return `<svg class="qr-code" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" aria-hidden="true"><path d="${d}"/></svg>`;
+  }
+
+  // About two thirds of the panel and never past 264px, floored to a whole
+  // number of DEVICE pixels per module, so no module edge is antialiased into
+  // its neighbour on the one screen held out to be scanned.
+  function sizeProfileCode(plate, modules) {
+    if (!plate) return;
+    const n = modules + 8;
+    const dpr = window.devicePixelRatio || 1;
+    const room = Math.min(264, (plate.parentElement.clientWidth || 340) * 0.66);
+    const unit = Math.max(1, Math.floor((room * dpr) / n)) / dpr;
+    plate.style.width = plate.style.height = `${unit * n}px`;
   }
 
   // Copy text to the clipboard, resolving true/false. Prefers the async
