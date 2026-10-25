@@ -10525,9 +10525,10 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 }
 .charm-tile[aria-pressed="true"] .charm-tile-check { opacity: 1; }
 .charm-tile--locked { cursor: default; }
-.charm-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
-.charm-tile--custom { position: relative; }
-.charm-custom-face { display: grid; place-items: center; width: 56px; height: 56px; color: var(--muted); }
-/* Over the whole tile, so a tap raises the emoji keyboard; 16px so iOS doesn't zoom. */
-.charm-custom-input { position: absolute; inset: 0; opacity: 0; font-size: 16px; border: 0; caret-color: transparent; }
+.charm-add-face { display: grid; place-items: center; width: 56px; height: 56px; color: var(--muted); }
+.charm-add-face svg { width: 26px; height: 26px; }
+.charm-tile--add.is-busy { opacity: 0.4; pointer-events: none; }
+/* Over the whole tile, so a tap raises the keyboard and its sticker tab;
+   16px so iOS doesn't zoom. */
+.charm-add-field { position: absolute; inset: 0; opacity: 0; font-size: 16px; overflow: hidden; caret-color: transparent; outline: none; }
 .charm-tile--locked .charm { --charm-ink: var(--muted); opacity: 0.45; }

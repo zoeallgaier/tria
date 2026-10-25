@@ -234,6 +234,11 @@ const Store = (() => {
   // charm shows anywhere (Store.charmsReady), the songsReady rule.
   let hasCharmsColumn = false;
   const CHARM_KEYS = ['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat'];
+  // A sticker charm is 'i:' and the path of a PNG in the wearer's OWN media
+  // folder (add-charms.sql checks the same), never a URL: a free URL would
+  // have every viewer's device fetch from wherever its wearer liked.
+  const isSticker = (k, uid) => typeof k === 'string' && !!uid &&
+    k.startsWith(`i:${uid}/sticker-`) && /^i:[0-9a-f-]{36}\/sticker-\d+\.png$/.test(k);
   function pinsFrom(v) {
     if (!Array.isArray(v)) return [];
     const out = [];
@@ -292,7 +297,7 @@ const Store = (() => {
     // client's seventh charm reads as nothing here rather than a blank).
     if ('charms' in u) {
       hasCharmsColumn = true;
-      const worn = (u.charms || []).filter(k => CHARM_KEYS.includes(k) || (typeof k === 'string' && /^e:.{1,16}$/u.test(k))).slice(0, 2);
+      const worn = (u.charms || []).filter(k => CHARM_KEYS.includes(k) || isSticker(k, u.id)).slice(0, 2);
       if (worn.length) o.charms = worn;
     }
     if ('accent' in u) { if (u.accent) o.accent = u.accent; }
@@ -3193,12 +3198,22 @@ const Store = (() => {
   // second at four thirty). Optimistic and synchronous before the first await,
   // like updateAccent, so the face repaints under the sheet as you pick.
   const charmsReady = () => hasCharmsColumn;
+  // A sticker charm's picture (app.js's stickerPng), uploaded like any photo
+  // and handed back as its charm key. Old ones stay, like old avatars; the
+  // account's delete clears the folder.
+  async function uploadSticker(dataURI) {
+    const url = await uploadMedia(dataURI, 'sticker', { contentType: 'image/png', ext: 'png' });
+    const path = /\/object\/public\/media\/(.+)$/.exec(url)?.[1];
+    if (!path) throw new Error('No sticker path.');
+    return 'i:' + decodeURIComponent(path);
+  }
+  const stickerUrl = (key) => sb.storage.from('media').getPublicUrl(key.slice(2)).data.publicUrl;
   async function updateCharms(list) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
     const id = u.id;
     const prev = u.charms || null;
-    const value = [...new Set((list || []).filter(k => CHARM_KEYS.includes(k) || (typeof k === 'string' && /^e:.{1,16}$/u.test(k))))].slice(0, 2);
+    const value = [...new Set((list || []).filter(k => CHARM_KEYS.includes(k) || isSticker(k, id)))].slice(0, 2);
     patchUser(id, { charms: value.length ? value : null });
     const { error } = await sb.from('users').update({ charms: value }).eq('id', id);
     if (!error) return { ok: true };
@@ -3995,7 +4010,7 @@ const Store = (() => {
     clearDelivered, openAppSettings,
     // Profile
     updateAvatar, updateProfile, updateAccent, setListeningTo, localFace,
-    charmsReady, updateCharms,
+    charmsReady, updateCharms, uploadSticker, stickerUrl,
     // Pins
     setPins,
   };

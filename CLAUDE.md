@@ -84,7 +84,7 @@ opposite: black on paper, white on ink, never `--heart`. This is 523aa77's art, 
 the second outline tria style icons") after a solid pass in plain ink, a
 simpler one with fewer trims, and Susan Kare style pixel art (all in git:
 dee25a8, 9615480, d9727e0). **Earned is never stored**, it is read off the cache
-(`charmsEarned`). **Custom charms** (2026-10-25): the picker's Custom tile takes any emoji off the iOS keyboard, worn as `'e:'` plus the glyph in Apple's colour emoji (`isCustomCharm`, `emojiFrom`); the ghost left for it, the bat stays. Only what you WEAR is a column, `users.charms` (at most two,
+(`charmsEarned`). **Sticker charms** (2026-10-25, Zoe: iMessage photo stickers, not emoji): the picker's New sticker tile is an invisible rich field; a photo sticker from the keyboard's sticker tab (or a paste) lands as an `<img>`, is redrawn as a PNG (`stickerPng`), uploaded (`Store.uploadSticker`), and worn as `'i:'` plus its path in the wearer's OWN media folder, never a URL (`isSticker` in store.js, `charms_valid(charms, id)` in add-charms.sql). Your last sticker stays a toggle tile on the device (`tria:sticker:<id>`). The ghost left for it, the bat stays. Only what you WEAR is a column, `users.charms` (at most two,
 `supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon
 `GET /rest/v1/users?select=charms` answers 42703; until it is,
 `Store.charmsReady` is false and nothing of charms shows). Celebrated unlocks
