@@ -8878,89 +8878,59 @@ button.poll-option:disabled { cursor: default; }
   .crop-replace:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 28%, transparent); }
 }
 
-/* Profile editor's photo: a big centred avatar with a camera badge at its corner.
-   Tapping the badge picks a file, which hides this row and reveals the inline crop
-   below. */
-/* This circle and the crop frame that replaces it share an axis, so picking a
-   photo grows the circle in place rather than moving it sideways. They no longer
-   share a SIZE: the crop frame is a working surface and takes the column (see
-   .crop--avatar), while this one stays --pf-avatar, below. */
+/* Profile editor's photo: the avatar at the left with its three settings beside
+   it (New photo, Color, Charms). New photo, or a tap on the face, picks a file,
+   which hides this row and reveals the inline crop below, centred in the column
+   because the crop frame is a working surface and takes the column's width (see
+   .crop--avatar), while the resting face stays --pf-avatar, below. */
 .pf-photo {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 1.25rem;
   margin-bottom: 1rem;
 }
 .pf-photo[hidden] { display: none; }
 .pf-photo-figure { position: relative; display: inline-block; }
 .pf-photo-avatar { width: var(--pf-avatar); height: var(--pf-avatar); font-size: clamp(4.7rem, 14vw, 5.7rem); }
-.pf-photo-edit {
-  position: absolute;
-  /* Percentages, not a fixed -2px, because the circle is now a vw clamp. A badge
-     pinned to the corner of the BOUNDING BOX sits further and further off the
-     arc as the radius grows — at 116px it read as attached, at 172px it floated.
-     5% of the box is roughly where the 45-degree edge is at both ends of the
-     clamp, so it stays tucked into the rim at every width. */
-  right: 5%; bottom: 5%;
-  /* 40, not 34. Both of these are the whole control — there is no label beside
-     them and no row to widen the target — and at 34 the pair read as annotations
-     on the photo rather than as the two things you came here to press. 40 is
-     also where the ring glyph stops being a suggestion of a circle. */
-  width: 40px; height: 40px;
-  display: grid; place-items: center;
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 2px solid var(--bg);
+/* PHOTO LEFT, ITS SETTINGS RIGHT (Zoe's sketch, 2026-10-24). The camera and
+   the colour ring were badges on the rim; they are labelled quiet pills beside
+   the face now, and the rim is where charms are worn. Geometry only, the pills
+   are .pill-quiet. */
+.pf-photo-figure .pf-photo-avatar { cursor: pointer; }
+.pf-photo-rows {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.pf-row {
+  height: 46px;
+  width: 100%;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0 1rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  text-align: left;
+}
+.pf-row-ico { width: 19px; height: 19px; flex: none; }
+.pf-row-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The current colour, as a dot: the setting shown, not named. */
+.pf-row-swatch {
+  width: 19px; height: 19px; flex: none;
   border-radius: 50%;
-  cursor: pointer;             /* role=button div, not <button> — no free cursor */
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: background-color var(--dur-micro), transform 0.12s;
+  background: var(--glow-photo, var(--muted));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
 }
-.pf-photo-ico { width: 19px; height: 19px; }
-@media (hover: hover) { .pf-photo-edit:hover { background: var(--accent-press); } }
-
-/* The colour badge, mirrored across the circle from the camera: same size, same
-   5% inset, same arc. A pair, because they change the two things this photo says
-   about you — which picture, and what colour the page it lands on is.
-
-   Unfilled where the camera is filled. The camera is the page's one commit-ish
-   action (it opens the file picker, which is how a photo gets here at all); this
-   opens a menu, so it takes the quieter outline treatment and lets the COLOUR do
-   the talking — the glyph is a ring with one half filled, so the badge is a
-   swatch of the thing it sets. --glow-photo is whatever hue the profile is
-   currently wearing, from a swatch or sampled off the photo, and it is live:
-   picking in the sheet repaints the property, so this badge changes under your
-   thumb.
-
-   Mixed half-and-half with --text rather than used raw, and that one line is the
-   light/dark safety on this element. The palette is pastel — around 0.78
-   lightness — which as a bare 1.8px stroke and a small filled half does not clear
-   3:1 against a near-white disc: measured, lime lands at 2.94:1 raw. --text is near-black in
-   light and near-white in dark, so mixing toward it darkens the glyph on paper
-   and lightens it on ink from a single declaration, and the hue survives both.
-   At 52% the light range is 3.80-5.43:1 and dark is 10.97-14.08:1. Falls back to
-   --muted, which is already ink, when no colour is set. */
-.pf-photo-accent {
-  position: absolute;
-  left: 5%; bottom: 5%;
-  width: 40px; height: 40px;
-  display: grid; place-items: center;
-  color: color-mix(in srgb, var(--glow-photo, var(--muted)) 52%, var(--text));
-  background: var(--bg);
-  border: 2px solid var(--bg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 52%, transparent);
-  border-radius: 50%;
-  cursor: pointer;             /* role=button div, not <button> — no free cursor */
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: color var(--dur-micro), box-shadow var(--dur-micro), transform 0.12s;
-}
-.pf-accent-ico { width: 19px; height: 19px; }
-@media (hover: hover) {
-  .pf-photo-accent:hover { box-shadow: inset 0 0 0 1px currentColor; }
-}
+.pf-row-worn { display: flex; flex: none; }
+.pf-row-worn .charm--mini { width: 24px; height: 24px; }
+.pf-row-worn .charm--mini + .charm--mini { margin-left: -5px; }
 
 /* The profile editor is a PAGE (#/profile/edit), not a modal — see the note over
    renderEditProfile for the three things that were wrong with the card. What it
@@ -8987,6 +8957,9 @@ button.poll-option:disabled { cursor: default; }
 /* The resting avatar's size. The crop frame read it too until it was too small
    to crop in comfortably, and has its own width now (.crop--avatar). */
 .pf-form, .pf-photo { --pf-avatar: clamp(148px, 44vw, 180px); }
+/* Beside its three rows the resting face takes about a third of a phone. */
+.pf-photo { --pf-avatar: clamp(112px, 33vw, 150px); }
+.pf-photo-figure { flex: none; }
 /* The editor's own "← Profile" was a <button> and not a link, because leaving it
    pops the entry instead of pushing a new one, and it needed the UA button
    chrome stripped to pass for the text link beside it. Both facts survive in the
@@ -10439,3 +10412,88 @@ html[data-shell="installed"],
 html[data-shell="installed"] * { scrollbar-width: none; }
 html[data-shell="installed"]::-webkit-scrollbar,
 html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
+
+
+/* ── Charms (2.0, 2026-10-24) ──────────────────────────────────────────────────
+   Six little firsts, worn on the rim of your photo (charmSvg, CHARMS in app.js).
+   One line, the icon set's own 1.8 in its 24 grid, every mark in --heart: the
+   reader's colour, the hearts' contrast work reused, paper and ink alike. */
+.charm { display: block; overflow: visible; }
+.charm .cl { fill: none; stroke: var(--heart); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.charm .cf { fill: var(--heart); }
+.charm .cs { fill: none; stroke: var(--heart); stroke-width: 1.4; }
+
+/* Worn: a third of the face across, centred on the rim at ten thirty and four
+   thirty, lifted off the photo by an edge of the page's own paper (three thin
+   shadows in --bg make a die-cut outline a single blur can't). */
+.charm-face { position: relative; flex: 0 0 clamp(120px, 37%, 160px); }
+.charm-face > .account-photo { width: 100%; }
+.charm--worn {
+  position: absolute;
+  width: 36%; height: 36%;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 1.5px var(--bg));
+}
+.charm--worn-a { left: -3.4%; top: -3.4%; }
+.charm--worn-b { left: 67.4%; top: 67.4%; }
+
+/* An unlock: the charm big, its name in the serif, what earned it. */
+.charm-unlock {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 1rem 0.9rem;
+  text-align: center;
+}
+.charm--hero { width: 120px; height: 120px; margin-bottom: 0.2rem; }
+.charm-unlock-name {
+  margin: 0;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.9rem; line-height: 1.1;
+  color: var(--text);
+}
+.charm-unlock-got { margin: 0; font-size: 0.98rem; color: var(--muted); }
+
+/* The one sheet an existing account gets. */
+.charm-welcome { padding: 0.2rem 1rem 0.8rem; text-align: center; }
+.charm-welcome-lede { margin: 0 auto 0.9rem; max-width: 30ch; line-height: 1.45; color: var(--muted); }
+.charm-welcome-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 0.6rem; }
+.charm-welcome-item {
+  width: 76px;
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  font-size: 0.82rem; color: var(--text);
+}
+.charm-welcome-item .charm { width: 60px; height: 60px; }
+
+/* The picker: three across, held in colour, the rest a quiet outline with how
+   each is earned. A worn one takes the sheet's chosen fill and a check. */
+.charm-pick-hint { margin: 0 0 0.5rem; text-align: center; font-size: 0.92rem; color: var(--muted); }
+.charm-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0 0.5rem 0.5rem;
+}
+.charm-tile {
+  position: relative;
+  appearance: none; -webkit-appearance: none;
+  border: 0; background: transparent;
+  font: inherit; color: var(--text);
+  border-radius: var(--radius-soft);
+  padding: 0.6rem 0.3rem 0.7rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.charm-tile .charm { width: 64px; height: 64px; }
+.charm-tile-name { font-size: 0.86rem; }
+.charm-tile-how { font-size: 0.74rem; line-height: 1.3; color: var(--muted); }
+.charm-tile[aria-pressed="true"] { background: color-mix(in srgb, var(--heart) 14%, transparent); }
+.charm-tile-check {
+  position: absolute; top: 0.55rem; right: 0.6rem;
+  width: 16px; height: 16px;
+  color: var(--heart);
+  opacity: 0;
+}
+.charm-tile[aria-pressed="true"] .charm-tile-check { opacity: 1; }
+.charm-tile--locked { cursor: default; }
+.charm-tile--locked .charm { --heart: var(--muted); opacity: 0.45; }

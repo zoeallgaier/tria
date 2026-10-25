@@ -399,6 +399,8 @@
     // A song (Zoe, 2026-10-22: "use a music note for posting a song instead of
     // the sound icon"). Two beamed notes; the speaker above is a video's sound.
     music:   '<path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/>',
+    // Edit profile's Charms row: the like burst's sparkle, and a small one.
+    charm:   '<path d="M10 3c.4 4.6 2.4 6.6 7 7-4.6.4-6.6 2.4-7 7-.4-4.6-2.4-6.6-7-7 4.6-.4 6.6-2.4 7-7z"/><path d="M18 14.5c.2 2 1 2.8 3 3-2 .2-2.8 1-3 3-.2-2-1-2.8-3-3 2-.2 2.8-1 3-3z"/>',
     mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
     // Filled triangle — the play affordance on a Frame video that hasn't started.
     // Optically centred IN THE PATH, and only here: the bbox (x 7 → 18.5) sits 0.75
@@ -7678,11 +7680,15 @@
         // used to float in this block's corner are in the toolbar above it.
         `<div class="account">` +
           `<div class="account-head">` +
+            // Charms sit on the rim, so they hang off a box around the photo
+            // rather than inside it: the photo's own circle clips.
+            (charmsOnFace(u) ? `<div class="charm-face">` : '') +
             `<div class="account-photo${u.avatar ? '' : ' account-photo--empty'}">` +
               (u.avatar
                 ? `<img src="${esc(sizedSrc(u.avatar, 130))}" crossorigin="anonymous" alt="" decoding="async">`
                 : `<span class="account-photo-initial" aria-hidden="true">${esc(initialOf(u.name || u.username))}</span>`) +
             `</div>` +
+            (charmsOnFace(u) ? charmsOnFace(u) + `</div>` : '') +
             // The identity column, all on one left axis: name+handle, an inline
             // "N posts · N friends" stat line, then the bio (wraps in place, any
             // length). A short or missing bio simply centres the column against
@@ -7942,6 +7948,7 @@
       else await Store.addFriend(u.username);
       hapticTap('LIGHT');
       renderUser(username);      // reflect the new state in place
+      noticeCharmsSoon();
     });
 
     // The ••• glyph on the profile header: your own carries Edit profile, Share
@@ -8116,7 +8123,7 @@
       const drop = btn.dataset.status === 'sent' || btn.dataset.status === 'following';
       btn.disabled = true;
       const ok = await (drop ? Store.removeFriend(name) : Store.addFriend(name)).then(() => true, () => false);
-      if (ok) hapticTap('LIGHT');
+      if (ok) { hapticTap('LIGHT'); noticeCharmsSoon(); }
       // Every path hands the control back, a rejected write included: a row left
       // disabled by one dropped connection is a control that does nothing,
       // forever, with nothing on screen to say why.
@@ -8324,22 +8331,34 @@
           // page where you SET it, and a colour is the one setting you cannot
           // read off a control — you have to watch it land on something.
           //
-          // Two badges on the rim, and they are a pair on purpose: the camera at
-          // bottom-right changes the picture, the half-filled ring at bottom-left
-          // changes the colour, both tucked into the same arc at the same size.
-          // The ring's fill takes the current colour, so the control displays the
-          // setting rather than describing it.
+          // PHOTO LEFT, ITS THREE SETTINGS RIGHT (Zoe's sketch, 2026-10-24): New
+          // photo, Color and Charms as quiet pills beside the face, where the
+          // camera and the colour ring used to be badges on its rim. The rim is
+          // the charms' now, and three labelled rows say what they do where two
+          // unlabelled badges had to be learned. The colour row's dot is the
+          // current colour, so it still shows the setting rather than naming it,
+          // and the charms row carries the two you wear. The face itself still
+          // picks a photo.
           `<div class="pf-photo" id="pf-photo">` +
-            `<div class="pf-photo-figure">` +
+            `<div class="pf-photo-figure" id="pf-figure">` +
               avatarEl(u, { cls: 'pf-photo-avatar' }) +
-              // Div, not <button>: kills the iOS standalone native pressed-fill
-              // flash on this filled badge (same fix as the composer dropzone).
-              `<div class="pf-photo-edit" id="pf-photo-pick" role="button" tabindex="0" ` +
-                `aria-label="Change your photo" title="Change your photo">` +
-                svgIcon('camera', 'pf-photo-ico') + `</div>` +
-              `<div class="pf-photo-accent" id="pf-accent" role="button" tabindex="0" ` +
-                `aria-label="Profile color" title="Profile color">` +
-                svgIcon('tint', 'pf-accent-ico') + `</div>` +
+              charmsOnFace(u) +
+            `</div>` +
+            `<div class="pf-photo-rows">` +
+              `<button type="button" class="pill-quiet pf-row" id="pf-photo-pick">` +
+                svgIcon('camera', 'pf-row-ico') +
+                `<span class="pf-row-label">${u.avatar ? 'New photo' : 'Add photo'}</span></button>` +
+              `<button type="button" class="pill-quiet pf-row" id="pf-accent">` +
+                `<span class="pf-row-swatch" aria-hidden="true"></span>` +
+                `<span class="pf-row-label">Color</span></button>` +
+              (Store.charmsReady()
+                ? `<button type="button" class="pill-quiet pf-row" id="pf-charms">` +
+                    svgIcon('charm', 'pf-row-ico') +
+                    `<span class="pf-row-label">Charms</span>` +
+                    `<span class="pf-row-worn" id="pf-charms-worn">` +
+                      ((u.charms || []).map(k => charmSvg(k, 'charm--mini')).join('')) +
+                    `</span></button>`
+                : '') +
             `</div>` +
           `</div>` +
           `<input id="pf-file" type="file" accept="image/*" hidden>` +
@@ -8557,7 +8576,7 @@
       ? 'Drag to move, scroll to zoom.'
       : 'Drag to move, pinch to zoom.';
 
-    const pfPick = view.querySelector('#pf-photo-pick');   // role=button div, not <button>
+    const pfPick = view.querySelector('#pf-photo-pick');
     const pfReplace = view.querySelector('#pf-replace');
     // Clearing the input first is what makes re-picking the SAME file fire
     // `change` again — otherwise choosing the photo you just chose does nothing,
@@ -8565,17 +8584,23 @@
     const openPicker = () => { pfFile.value = ''; pfFile.click(); };
     const pickKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } };
     pfPick.addEventListener('click', openPicker);
-    pfPick.addEventListener('keydown', pickKey);
+    // The face is the photo, so a tap on it picks one too (a pointer's way in;
+    // the row beside it is the keyboard's and the screen reader's).
+    view.querySelector('#pf-figure .pf-photo-avatar').addEventListener('click', openPicker);
 
-    // The colour ring on the opposite rim. Same role=button div as the camera, for
-    // the same reason (iOS standalone flashes a native pressed fill on a filled
-    // <button>), so it needs the same keyboard pair the camera gets.
-    const pfAccent = view.querySelector('#pf-accent');
-    const openAccent = () => openAccentSheet();
-    pfAccent.addEventListener('click', openAccent);
-    pfAccent.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccent(); }
-    });
+    view.querySelector('#pf-accent').addEventListener('click', () => openAccentSheet());
+
+    // Charms: the picker saves as you tap, so this page repaints the face and
+    // the row's two under the sheet rather than waiting for Save.
+    const pfFigure = view.querySelector('#pf-figure');
+    view.querySelector('#pf-charms')?.addEventListener('click', () => openCharmPicker(() => {
+      const me = Store.currentUser();
+      if (!me || !pfFigure.isConnected) return;
+      pfFigure.querySelectorAll('.charm--worn').forEach(n => n.remove());
+      pfFigure.insertAdjacentHTML('beforeend', charmsOnFace(me));
+      const worn = view.querySelector('#pf-charms-worn');
+      if (worn) worn.innerHTML = (me.charms || []).map(k => charmSvg(k, 'charm--mini')).join('');
+    }));
     pfReplace.addEventListener('click', openPicker);
     pfReplace.addEventListener('keydown', pickKey);
 
@@ -13602,6 +13627,7 @@
         hapticTap('LIGHT');
         toast(`You’ve joined ${communityHandle(c)}.`);
         if (feedEl.isConnected) paint();
+        noticeCharmsSoon(2400);   // after the toast has had its say
       });
     }
 
@@ -13670,6 +13696,243 @@
     });
     document.body.appendChild(layer);
     setTimeout(() => layer.remove(), 1700);
+  }
+
+  /* ── Charms ──────────────────────────────────────────────────────────────────
+     Six little firsts (Zoe, 2026-10-24): your first post, first friend, a circle
+     joined, a circle started, the daily answered, a song shared. Each is earned
+     once, by doing the thing, and up to two are worn on the rim of your photo,
+     the first at ten thirty and the second at four thirty (Zoe's sketch).
+
+     THE ART is the app's own line icon for each thing (ICONS: pencil, circle,
+     daily, music; a sprout and two stars drawn in the same line), with the same
+     four trims on every one: the like burst's sparkle with a dot in one corner,
+     a speck with a star in the other. The pencil and the two stars run corner
+     to corner, and the woven rings join them (Zoe: three on each diagonal),
+     so those three take their trims on the other diagonal. Everything is
+     --heart, the reader's own colour, which is what makes it read on paper and
+     on ink without a second rule (the hearts' contrast work, reused).
+
+     EARNED IS NEVER STORED. It is read off what you have done, which the cache
+     already holds, so there is no table to backfill or drift, and no count
+     (the no-COUNT rule): only what you WEAR is a column (add-charms.sql). Which
+     unlocks were celebrated lives on the device, and once celebrated a charm
+     stays held there even if the post behind it is deleted.
+
+     EXISTING ACCOUNTS meet charms with things already done. They get ONE sheet
+     saying so ("you've already earned these"), never six "your first post!"
+     sheets for posts from last year: the first look on a device takes what is
+     earned as a baseline, and only what is earned after it is an unlock. A
+     device that finds you already wearing charms baselines without a word.
+
+     Keys never move (users.charms stores them, add-charms.sql checks them). */
+  const CHARMS = [
+    { key: 'word', name: 'First word', how: 'Publish your first post.', got: 'You published your first post.',
+      art: '<g class="cl" transform="translate(8.4 8.4) scale(1.3)"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/></g><path class="cf" d="M7.5 3.5C7.64 6.04 8.81 7.36 11.5 7.5C8.81 7.64 7.64 8.96 7.5 11.5C7.36 8.96 6.19 7.64 3.5 7.5C6.19 7.36 7.36 6.04 7.5 3.5Z"/><circle class="cf" cx="14.5" cy="3.8" r="1.1"/><circle class="cs" cx="40.5" cy="40.5" r="1.7"/><path class="cf" d="M34 41.8L34.66 43.39L36.38 43.53L35.07 44.65L35.47 46.32L34 45.42L32.53 46.32L32.93 44.65L31.62 43.53L33.34 43.39Z"/>' },
+    { key: 'mutual', name: 'Mutuals', how: 'Make your first friend.', got: 'You and a friend added each other.',
+      art: '<g class="cl" transform="translate(8.4 8.4) scale(1.3)"><path d="M6.5 11.2Q7.56 14.94 11.3 16Q7.56 17.06 6.5 20.8Q5.44 17.06 1.7 16Q5.44 14.94 6.5 11.2Z"/><path d="M17.5 2.7Q18.56 6.44 22.3 7.5Q18.56 8.56 17.5 12.3Q16.44 8.56 12.7 7.5Q16.44 6.44 17.5 2.7Z"/></g><path class="cf" d="M7.5 3.5C7.64 6.04 8.81 7.36 11.5 7.5C8.81 7.64 7.64 8.96 7.5 11.5C7.36 8.96 6.19 7.64 3.5 7.5C6.19 7.36 7.36 6.04 7.5 3.5Z"/><circle class="cf" cx="14.5" cy="3.8" r="1.1"/><circle class="cs" cx="40.5" cy="40.5" r="1.7"/><path class="cf" d="M34 41.8L34.66 43.39L36.38 43.53L35.07 44.65L35.47 46.32L34 45.42L32.53 46.32L32.93 44.65L31.62 43.53L33.34 43.39Z"/>' },
+    { key: 'joined', name: 'In the ring', how: 'Join a circle.', got: 'You joined your first circle.',
+      art: '<g class="cl" transform="translate(8.4 7.88) scale(1.3)"><circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/></g><path class="cf" d="M7.5 3.5C7.64 6.04 8.81 7.36 11.5 7.5C8.81 7.64 7.64 8.96 7.5 11.5C7.36 8.96 6.19 7.64 3.5 7.5C6.19 7.36 7.36 6.04 7.5 3.5Z"/><circle class="cf" cx="14.5" cy="3.8" r="1.1"/><circle class="cs" cx="40.5" cy="40.5" r="1.7"/><path class="cf" d="M34 41.8L34.66 43.39L36.38 43.53L35.07 44.65L35.47 46.32L34 45.42L32.53 46.32L32.93 44.65L31.62 43.53L33.34 43.39Z"/>' },
+    { key: 'founder', name: 'Founder', how: 'Start a circle.', got: 'You started a circle.',
+      art: '<g class="cl" transform="translate(8.4 7.75) scale(1.3)"><path d="M12 20.5V12"/><path d="M12 15C7.6 15 5 12.4 5 8.5C9.2 8.5 12 11 12 15Z"/><path d="M12 12C12 7.6 14.6 4.5 19 4.5C19 8.7 16.3 12 12 12Z"/><path d="M7.5 20.5h9"/></g><path class="cf" d="M40.5 3.5C40.64 6.04 41.81 7.36 44.5 7.5C41.81 7.64 40.64 8.96 40.5 11.5C40.36 8.96 39.19 7.64 36.5 7.5C39.19 7.36 40.36 6.04 40.5 3.5Z"/><circle class="cf" cx="33.5" cy="3.8" r="1.1"/><circle class="cs" cx="7.5" cy="40.5" r="1.7"/><path class="cf" d="M14 41.8L14.66 43.39L16.38 43.53L15.07 44.65L15.47 46.32L14 45.42L12.53 46.32L12.93 44.65L11.62 43.53L13.34 43.39Z"/>' },
+    { key: 'sunny', name: 'Sunny', how: 'Answer the daily.', got: 'You answered the daily.',
+      art: '<g class="cl" transform="translate(9 9) scale(1.25)"><circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/></g><path class="cf" d="M40.5 3.5C40.64 6.04 41.81 7.36 44.5 7.5C41.81 7.64 40.64 8.96 40.5 11.5C40.36 8.96 39.19 7.64 36.5 7.5C39.19 7.36 40.36 6.04 40.5 3.5Z"/><circle class="cf" cx="33.5" cy="3.8" r="1.1"/><circle class="cs" cx="7.5" cy="40.5" r="1.7"/><path class="cf" d="M14 41.8L14.66 43.39L16.38 43.53L15.07 44.65L15.47 46.32L14 45.42L12.53 46.32L12.93 44.65L11.62 43.53L13.34 43.39Z"/>' },
+    { key: 'repeat', name: 'On repeat', how: 'Share a song.', got: 'You shared a song.',
+      art: '<g class="cl" transform="translate(8.92 8.6) scale(1.3)"><path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/></g><path class="cf" d="M40.5 3.5C40.64 6.04 41.81 7.36 44.5 7.5C41.81 7.64 40.64 8.96 40.5 11.5C40.36 8.96 39.19 7.64 36.5 7.5C39.19 7.36 40.36 6.04 40.5 3.5Z"/><circle class="cf" cx="33.5" cy="3.8" r="1.1"/><circle class="cs" cx="7.5" cy="40.5" r="1.7"/><path class="cf" d="M14 41.8L14.66 43.39L16.38 43.53L15.07 44.65L15.47 46.32L14 45.42L12.53 46.32L12.93 44.65L11.62 43.53L13.34 43.39Z"/>' },
+  ];
+  const charmOf = (key) => CHARMS.find(c => c.key === key) || null;
+  function charmSvg(key, cls) {
+    const c = charmOf(key);
+    return c ? `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${c.art}</svg>` : '';
+  }
+  // The two on someone's photo, inside the face's own positioned box.
+  function charmsOnFace(u) {
+    if (!Store.charmsReady() || !u || !u.charms || !u.charms.length) return '';
+    return u.charms.map((k, i) => charmSvg(k, `charm--worn charm--worn-${i ? 'b' : 'a'}`)).join('');
+  }
+
+  // What you have done, read off the cache. A repost is passing something on,
+  // not saying it, so it earns nothing; a song is its own charm, not a word.
+  function charmsEarned() {
+    const me = Store.session();
+    if (!me) return [];
+    const mine = Store.posts().filter(p => p.author === me && !p.repostOf);
+    const rooms = Store.communitiesReady() ? Store.myCommunities() : [];
+    const has = {
+      word: mine.some(p => p.type !== 'song'),
+      mutual: Store.friendsOf(me).length > 0,
+      joined: rooms.some(c => c.owner !== me),
+      founder: rooms.some(c => c.owner === me),
+      sunny: mine.some(p => (p.tags || []).some(t => t.startsWith('daily-'))),
+      repeat: mine.some(p => p.type === 'song'),
+    };
+    return CHARMS.filter(c => has[c.key]).map(c => c.key);
+  }
+  const CHARMS_SEEN = 'tria:charms-seen:';
+  function charmsSeen(me) {
+    try {
+      const v = JSON.parse(localStorage.getItem(CHARMS_SEEN + me) || 'null');
+      return Array.isArray(v) ? v : null;
+    } catch { return null; }
+  }
+  function setCharmsSeen(me, list) {
+    try { localStorage.setItem(CHARMS_SEEN + me, JSON.stringify([...new Set(list)])); } catch {}
+  }
+  // Earned now, celebrated here before, or worn: any of the three is held.
+  function charmsHeld() {
+    const u = Store.currentUser();
+    return [...new Set([...charmsEarned(), ...(charmsSeen(Store.session()) || []), ...((u && u.charms) || [])])];
+  }
+
+  /* WHEN TO LOOK. Only once the real world has landed (a kept launch paints
+     last week's first, and a baseline taken off that would celebrate this
+     week's posts as firsts), a beat after a page settles, and only on a page
+     you are reading: never over an editor, a composer or a field holding the
+     caret. One sheet at a time; the next unlock waits for the next look. */
+  let charmsLive = false;
+  let charmTimer = null;
+  function noticeCharmsSoon(wait = 1400) {
+    clearTimeout(charmTimer);
+    charmTimer = setTimeout(noticeCharms, wait);
+  }
+  function charmRoom(path) {
+    if (['#/', '#/discover', '#/updates', '#/chats', '#/profile'].includes(path)) return true;
+    if (/^#\/(u|p|daily)\//.test(path)) return true;
+    return /^#\/c\/[^/]+$/.test(path) && path !== '#/c/new';
+  }
+  function noticeCharms() {
+    if (!charmsLive || !Store.isAuthed() || !Store.charmsReady() || sheetOpen || typing()) return;
+    if (!charmRoom((location.hash || '#/').split('?')[0])) return;
+    const me = Store.session();
+    const u = Store.currentUser();
+    if (!me || !u) return;
+    const earned = charmsEarned();
+    const worn = u.charms || [];
+    const seen = charmsSeen(me);
+    if (!seen) {
+      setCharmsSeen(me, [...earned, ...worn]);
+      if (earned.length && !worn.length) openCharmWelcome(earned);
+      return;
+    }
+    const next = earned.find(k => !seen.includes(k));
+    if (!next) return;
+    setCharmsSeen(me, [...seen, next]);
+    openCharmUnlock(next);
+  }
+
+  // Your own face, wherever it is drawn big, after a charm goes on or off.
+  function repaintOwnCharms() {
+    const here = (location.hash || '#/').split('?')[0];
+    if (here === '#/profile' || here === '#/u/' + encodeURIComponent(Store.session())) route();
+  }
+  async function wearCharms(list) {
+    const res = await Store.updateCharms(list);
+    if (!res.ok) { toast(res.error); return false; }
+    return true;
+  }
+
+  /* AN UNLOCK is the secondary menu (openSheet), the charm big in your colour,
+     and the arrival of a new face: celebrateFace's stars in your --heart and
+     the twinkle haptic, timed off the panel having risen so the stars leave
+     the charm where it rests. Two answers: wear it, or not now. "Not now"
+     loses nothing; the charm is held and waits in Edit profile. With two
+     already on, wearing it means choosing which one it replaces. */
+  function openCharmUnlock(key) {
+    const c = charmOf(key);
+    if (!c) return;
+    const worn = (Store.currentUser() || {}).charms || [];
+    const wear = (list) => async () => { if (await wearCharms(list)) { hapticTap('LIGHT'); repaintOwnCharms(); } };
+    const items = worn.length < 2
+      ? [{ label: 'Add to my photo', icon: 'profile', run: wear([...worn, key]) }]
+      : worn.map((k, i) => ({
+          label: `Wear it instead of ${charmOf(k).name}`, icon: 'profile',
+          run: wear(worn.map((x, j) => (j === i ? key : x))),
+        }));
+    items.push({ label: 'Not now', icon: 'close' });
+    openSheet({
+      title: 'New charm',
+      head:
+        `<div class="charm-unlock">` +
+          charmSvg(key, 'charm--hero') +
+          `<p class="charm-unlock-name">${esc(c.name)}</p>` +
+          `<p class="charm-unlock-got">${esc(c.got)}</p>` +
+        `</div>`,
+      items,
+      wire: (scrim) => {
+        const hero = scrim.querySelector('.charm--hero');
+        setTimeout(() => { if (hero && hero.isConnected) celebrateFace(hero, true); }, 320);
+      },
+    });
+  }
+
+  // The one sheet an existing account gets: what you have already done, said
+  // as already done.
+  function openCharmWelcome(earned) {
+    const one = earned.length === 1;
+    openSheet({
+      title: 'Charms',
+      head:
+        `<div class="charm-welcome">` +
+          `<p class="charm-welcome-lede">Something new. Charms mark your firsts on Tria, ` +
+            `and you’ve already earned ${one ? 'this one' : 'these'}.</p>` +
+          `<div class="charm-welcome-row">` +
+            earned.map(k =>
+              `<span class="charm-welcome-item">${charmSvg(k)}<span>${esc(charmOf(k).name)}</span></span>`).join('') +
+          `</div>` +
+        `</div>`,
+      items: [
+        { label: one ? 'Add to my photo' : 'Choose for my photo', icon: 'profile',
+          run: one ? async () => { if (await wearCharms(earned)) { hapticTap('LIGHT'); repaintOwnCharms(); } }
+                   : () => openCharmPicker() },
+        { label: 'Not now', icon: 'close' },
+      ],
+      wire: (scrim) => {
+        const row = scrim.querySelector('.charm-welcome-row');
+        setTimeout(() => { if (row && row.isConnected) celebrateFace(row, true); }, 320);
+      },
+    });
+  }
+
+  /* THE PICKER, from Edit profile's Charms row (and the welcome). Every charm,
+     held ones in your colour and the rest as a quiet outline that says how it
+     is earned. A tap puts one on or takes it off, saved as you go (the colour
+     sheet's rule), so the foot is Done, not Cancel. A third replaces the one
+     that has been on longest. */
+  function openCharmPicker(onChange) {
+    const me = Store.currentUser();
+    if (!me) return;
+    const held = charmsHeld();
+    let worn = (me.charms || []).slice();
+    const tile = (c) => {
+      const has = held.includes(c.key);
+      return `<button type="button" class="charm-tile${has ? '' : ' charm-tile--locked'}" data-charm="${c.key}"` +
+          (has ? ` aria-pressed="${worn.includes(c.key)}"` : ' disabled') + `>` +
+        (has ? svgIcon('check', 'charm-tile-check') : '') +
+        charmSvg(c.key) +
+        `<span class="charm-tile-name">${esc(c.name)}</span>` +
+        (has ? '' : `<span class="charm-tile-how">${esc(c.how)}</span>`) +
+      `</button>`;
+    };
+    openSheet({
+      title: 'Charms',
+      dock: 'Done',
+      head:
+        `<p class="charm-pick-hint">Wear up to two on your photo.</p>` +
+        `<div class="charm-grid">${CHARMS.map(tile).join('')}</div>`,
+      wire: (scrim) => {
+        const paint = () => scrim.querySelectorAll('.charm-tile[aria-pressed]').forEach(b =>
+          b.setAttribute('aria-pressed', String(worn.includes(b.dataset.charm))));
+        scrim.querySelectorAll('.charm-tile[aria-pressed]').forEach(b => b.addEventListener('click', async () => {
+          const k = b.dataset.charm;
+          const prev = worn;
+          worn = worn.includes(k) ? worn.filter(x => x !== k) : [...worn, k].slice(-2);
+          paint();
+          hapticEvent('SELECT');
+          if (!(await wearCharms(worn))) { worn = prev; paint(); }
+          if (onChange) onChange(); else repaintOwnCharms();
+        }));
+      },
+    });
   }
 
   /* STARTING ONE, and its host's editor, are the same form: a name and an about
@@ -15769,6 +16032,7 @@
           if (ok) hapticTap('LIGHT');
           btn.disabled = false;              // or a dropped write leaves the row dead
           renderUpdates();
+          if (ok) noticeCharmsSoon();
         }));
       scope.querySelectorAll('.request-ignore').forEach(btn =>
         btn.addEventListener('click', async () => {
@@ -18859,7 +19123,7 @@
     '.masthead-filter', '.request-ignore', '.push-ask-dismiss',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.
-    '.toolbar-btn', '.pf-photo-edit', '.nav-link',
+    '.toolbar-btn', '.nav-link',
     // THE BUTTON, both weights: every pill in a page presses the same way.
     '.publish-fill', '.pill-quiet',
   ].join(', ');
@@ -20009,6 +20273,7 @@
     // holding, which is the one thing in the bar that outlives its own markup.
     resetPostBar();
     renderFn();
+    noticeCharmsSoon();
 
     // Rows mounted BY a navigation do not play their entrance. This is the other
     // half of what the old fade was covering for, and without it "instant" just
@@ -20724,6 +20989,7 @@
     if (!changed && owedPaint !== path) return;    // nothing new, and nothing owed
     warmImages();   // new friends/posts may have brought new avatars + photos
     await showWorld(path, { force, hold, seq });
+    noticeCharmsSoon();
   }
 
   // The paint half, split out because it can land later than the pull that earned
@@ -21253,6 +21519,9 @@
       else if (['#/', '#/discover', '#/updates', '#/chats'].includes(path)) showWorld(path, { hold: false });
       else if (!typing()) route();
     });
+    // Charms take their baseline off the real world, never a kept one.
+    Store.whenFresh().then(() => { charmsLive = true; noticeCharmsSoon(); },
+                           () => { charmsLive = true; });
     // Native push housekeeping, after init because it needs the signed-in user:
     // read the OS permission into the cache the push UI renders from, and if push
     // is already on, re-register — APNs tokens rotate, and a stale one fails

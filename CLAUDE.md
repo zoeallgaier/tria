@@ -65,6 +65,28 @@ hidden at desktop width the same way. On `#/updates` the sidebar lights that
 row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
+## 2.0's charms (2026-10-24)
+
+**Six little firsts**, worn on the rim of your photo (Zoe's sketch): First
+word (a post), Mutuals (a friend), In the ring (join a circle), Founder (start
+one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. Each is the
+app's own line icon (pencil, the circle triad, daily, music; two stars and a
+sprout drawn in the same line) with the SAME four trims, a sparkle with a dot
+and a speck with a star, in opposite corners: three charms on each diagonal
+(Zoe). All `--heart`. **Earned is never stored**, it is read off the cache
+(`charmsEarned`); only what you WEAR is a column, `users.charms` (at most two,
+`supabase/add-charms.sql`, **NOT run** as of 2026-10-24: anon
+`GET /rest/v1/users?select=charms` answers 42703; until it is,
+`Store.charmsReady` is false and nothing of charms shows). Celebrated unlocks
+live on the device (`tria:charms-seen:<user>`). **An existing account gets ONE
+welcome sheet** ("you've already earned these"), never an unlock per old
+post: the first look on a device baselines, and only after the real world has
+landed (`charmsLive`, off `whenFresh`). An unlock is `openSheet` with the charm
+big, `celebrateFace`'s stars and twinkle, and Add to my photo or Not now (with
+two on, "Wear it instead of …"). **Edit profile is photo left, three quiet
+pills right** (New photo, Color, Charms); the camera and colour badges left
+the rim. The design canvas: https://claude.ai/artifact/12LLXUDDJ6UjcaErigtTDf
+
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
 **THE BUTTON.** Every button in a page is one material at two weights (Zoe:

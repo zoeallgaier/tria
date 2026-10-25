@@ -229,6 +229,11 @@ const Store = (() => {
      thing. */
   const PIN_MAX = 3;
   let hasPinsColumn = false;
+  // Whether add-charms.sql has run, by the same `in` test as hasPinsColumn: a
+  // column that doesn't exist is omitted, an empty one is []. Until it is, no
+  // charm shows anywhere (Store.charmsReady), the songsReady rule.
+  let hasCharmsColumn = false;
+  const CHARM_KEYS = ['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat'];
   function pinsFrom(v) {
     if (!Array.isArray(v)) return [];
     const out = [];
@@ -283,6 +288,13 @@ const Store = (() => {
     // DB run the migration?". Consulting the device mirror on a null would make
     // "from my photo" unpickable on a migrated DB: clearing the choice writes
     // null, and the mirror would keep handing the old colour straight back.
+    // Charms worn on the photo, at most two, unknown keys dropped (a newer
+    // client's seventh charm reads as nothing here rather than a blank).
+    if ('charms' in u) {
+      hasCharmsColumn = true;
+      const worn = (u.charms || []).filter(k => CHARM_KEYS.includes(k)).slice(0, 2);
+      if (worn.length) o.charms = worn;
+    }
     if ('accent' in u) { if (u.accent) o.accent = u.accent; }
     else {
       const mine = localAccent();
@@ -3177,6 +3189,23 @@ const Store = (() => {
     return o;
   }));
 
+  // The charms worn on your photo, in order (the first sits at ten thirty, the
+  // second at four thirty). Optimistic and synchronous before the first await,
+  // like updateAccent, so the face repaints under the sheet as you pick.
+  const charmsReady = () => hasCharmsColumn;
+  async function updateCharms(list) {
+    const u = currentUser();
+    if (!u) return { ok: false, error: 'You need to be signed in.' };
+    const id = u.id;
+    const prev = u.charms || null;
+    const value = [...new Set((list || []).filter(k => CHARM_KEYS.includes(k)))].slice(0, 2);
+    patchUser(id, { charms: value.length ? value : null });
+    const { error } = await sb.from('users').update({ charms: value }).eq('id', id);
+    if (!error) return { ok: true };
+    patchUser(id, { charms: prev });
+    return { ok: false, error: 'Couldn\u2019t save your charms.' };
+  }
+
   // Set (or clear) the signed-in user's avatar — a cropped square that gets
   // uploaded to Storage (see uploadImage), or null to fall back to the initial tile.
   // Optimistic: the cache is updated to the local crop synchronously (before the
@@ -3966,6 +3995,7 @@ const Store = (() => {
     clearDelivered, openAppSettings,
     // Profile
     updateAvatar, updateProfile, updateAccent, setListeningTo, localFace,
+    charmsReady, updateCharms,
     // Pins
     setPins,
   };
