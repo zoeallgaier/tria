@@ -55,8 +55,8 @@ over label, the current tab on a soft neutral capsule, and it **tucks on a read
 down** with the header (`nav--tucked`, set in `syncToolbarReading`; back on a
 scroll up and at a page's foot). **Desktop:** the inset glass sidebar, its
 wordmark ruled off by a hairline (`.nav-head`), the same neutral capsule for
-where you are, and **Share** at the foot, ruled off (`.nav-foot`). **One
-Share per shell:** the sidebar's Share opens the Share sheet
+where you are, and **New** at the foot, ruled off (`.nav-foot`). **One
+New per shell:** the sidebar's New opens the New sheet
 (`openComposeDial`, the old "+ Post" linked straight to the composer), and My
 Circle's compose mark is hidden at desktop width outside the native shell. **Updates is a sidebar row on
 desktop** (Zoe), after Chats, with the bell's dot (NAV's `rail` entry: hidden
@@ -211,7 +211,7 @@ the circle's mark (`communityTagHtml`, hidden on the circle's page).
 
 **Discover IS circles** (Zoe: "remove the posts from the Discover feed. THIS is
 the new way to discover."). It shows NO posts: today's daily, then **Circles**
-(a dashed Start a circle card, gone for good on its fifth X and always also a Circle row in the Share sheet, then yours, then the rest, by last sign of life,
+(a dashed Start a circle card, gone for good on its fifth X and always also a Circle row in the New sheet, then yours, then the rest, by last sign of life,
 `Store.communityPulse`), then Share Tria. **People, under the circles** (Zoe, 2026-10-23, `after` in `communitiesSectionHtml`; it sat over them that morning): a sideways rail
 of 200px 4:5 cards (`peopleForRail`, `.person-card`), strangers only (no
 friend, follow or request of yours; someone who added you first stays), most
@@ -266,7 +266,7 @@ reactions other than liking"). The fan, its four marks, its tick and its CSS
 are deleted; `likes.reaction` is left in the database, never read or written,
 so an old thumbs up reads as a like. My Circle's tab was a house for an afternoon and went back to the ring with
 a centre (Zoe). **The + sheet is titled
-Share** (was Create), and a song wears a music note (`ICONS.music`), not the
+New** (was Create, then Share), and a song wears a music note (`ICONS.music`), not the
 speaker, which is a video's sound again.
 
 Every rule is in `supabase/add-circles.sql`, `supabase/circle-photo-delete.sql`
@@ -293,7 +293,7 @@ the foot of a page mid-scroll).
 
 **The + left the tab bar for My Circle's top bar** (and your own profile's, 2026-10-23), Instagram-style: the
 compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled Share since 2.0): Post (the Note's pencil), Activity (Frame left it 2026-10-23, Zoe; a photo is the composer's attach bar),
+trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled New since 2026-10-24, Share before it: a circle is created, not shared): Post (the Note's pencil), Activity (Frame left it 2026-10-23, Zoe; a photo is the composer's attach bar),
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on
@@ -365,7 +365,7 @@ simplified untouched.
 
 **Music is a sixth post type, `song`** (`supabase/add-song-posts.sql`, a
 `posts.song` jsonb in the listening status's shape, minus `at`). **Posting a song
-IS having it on repeat** (Zoe, 2026-10-22): the Share sheet's Music row is its door
+IS having it on repeat** (Zoe, 2026-10-22): the New sheet's Music row is its door
 (Zoe, 2026-10-23), and Music is its OWN publish page, like the Daily's: the composer's `song` family (`fieldsFor('song')`), just the song search and Share, no headline, note, tags, attach bar or audience (always your circle), posting no longer auto-pins it, every way in (Discover's +, a profile's song pin) opens the composer's song
 search (`goListening`), Share also sets the listening status (not for a
 hand-picked audience), and Discover's On repeat rail is each person's newest

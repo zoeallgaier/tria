@@ -1605,9 +1605,9 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .publish-fill:disabled,
 .pill-quiet:disabled { opacity: 0.6; }
-/* THE FOOT: Share, ruled off from the destinations like the site's Contact,
+/* THE FOOT: New, ruled off from the destinations like the site's Contact,
    and pushed to the bottom of the rail. It is THE BUTTON at its commit weight
-   and opens the Share sheet (openComposeDial), the same one My Circle's
+   and opens the New sheet (openComposeDial), the same one My Circle's
    compose mark opens on a phone. Hidden on the composer, which has its own. */
 .nav-foot {
   margin-top: auto;
@@ -1627,7 +1627,7 @@ body.toolbar-live .view { padding-top: 1rem; }
   cursor: pointer;
 }
 .nav--compose .nav-foot { visibility: hidden; }
-/* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's Share
+/* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's New
    is on every page, so the same act on My Circle's bar would be a second door. */
 @media (min-width: 681px) { html:not([data-chrome="native"]) .toolbar-compose { display: none; } }
 /* THE SAME FOR THE BELL: at desktop width Updates is a row in the sidebar

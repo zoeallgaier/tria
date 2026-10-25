@@ -559,10 +559,10 @@
     // aria-current flips. ONE DOM, TWO SHAPES (2.0, after zoeallgaier.com's own
     // nav): on a phone the four destinations are a floating glass tab bar, icon
     // over label; on desktop .nav-pill is display:contents and the sidebar sees
-    // a flat column, headed by the wordmark and footed by Share, each ruled off
+    // a flat column, headed by the wordmark and footed by New, each ruled off
     // with a hairline. The head and the foot are display:none on a phone.
     //
-    // SHARE IS THE SIDEBAR'S FOOT, and it is the same Share sheet My Circle's
+    // NEW IS THE SIDEBAR'S FOOT, and it is the same New sheet My Circle's
     // compose mark opens (openComposeDial), not a link to the composer. It was
     // "+ Post" straight to #/publish while the bar's mark opened the sheet: two
     // ways in that did different things. At desktop width the bar's mark is
@@ -577,7 +577,7 @@
         `<div class="nav-pill">` + NAV.map(link).join('') + `</div>` +
         `<div class="nav-foot">` +
           `<button class="nav-link nav-publish publish-fill" type="button" aria-haspopup="dialog">` +
-            svgIcon('compose', 'nav-ico') + `<span class="nav-label">Share</span>` +
+            svgIcon('compose', 'nav-ico') + `<span class="nav-label">New</span>` +
           `</button>` +
         `</div>`;
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
@@ -2757,7 +2757,7 @@
                 `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                   `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
                 // No Music button since 2026-10-23 (Zoe): a song is its
-                // own page (fieldsFor's 'song'), reached from the Share sheet.
+                // own page (fieldsFor's 'song'), reached from the New sheet.
                 (event
                   ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
                       `aria-label="Add a place and time" aria-pressed="false">` +
@@ -5815,7 +5815,7 @@
      The note mark opens the DIAL, which is back: Post, Activity, and today's
      Daily. Each row is a shortcut into the one composer (pendingAttach), so
      the composer is still the only form there is. */
-  // My Circle's and Discover's, the same + opening the same Share sheet.
+  // My Circle's and Discover's, the same + opening the same New sheet.
   function composeBtnEl(id = 'home-compose-btn') {
     return `<button class="toolbar-btn toolbar-compose" type="button" id="${id}" ` +
         `aria-haspopup="dialog" aria-label="Make something">` +
@@ -5861,9 +5861,11 @@
      sheet with one row per thing you can make, the type's mark and its name.
      It was a card dropped from the button, then a share-sheet grid of pastel
      tiles, and Zoe pointed at Instagram's sheet for the last word. Titled
-     Share since 2026-10-22 (Zoe: "change create menu title to share"), the
-     word the composer's own button says. Each row is a shortcut into the one
-     composer (pendingAttach). */
+     Share on 2026-10-22 (Zoe: "change create menu title to share"), the
+     word the composer's own button says, and New on 2026-10-24 (Zoe: a
+     circle is "created not shared"), so every row reads as New post, New
+     activity, New circle. Each row is a shortcut into the one composer
+     (pendingAttach). */
   function openComposeDial() {
     const occ = todaysDaily();
     const run = (row) => {
@@ -5874,7 +5876,7 @@
       go('#/publish');
     };
     openSheet({
-      title: 'Share',
+      title: 'New',
       items: composeRows().map((row) => ({
         label: row.label,
         // The type's own mark (TYPE_GLYPH), the vocabulary the composer's
@@ -7654,7 +7656,7 @@
       : '';
     mountToolbar({
       // Your own profile wears My Circle's + where a visitor's back chevron
-      // would be (Zoe, 2026-10-23): the same Share sheet.
+      // would be (Zoe, 2026-10-23): the same New sheet.
       leading: b ? toolbarBackEl(b.href, b.label) : isSelf ? composeBtnEl('profile-compose-btn') : '',
       // The @HANDLE, since 1.8, Instagram's arrangement: the bar title is up
       // from the first frame on every page now, and the card under it already
@@ -13150,7 +13152,7 @@
   // circle"), the same card with its fill taken out and a dashed edge, the way
   // an empty slot is drawn. Signed out its pill is the way into an account.
   // Signed in it can be waved off (Zoe), per device like the week-of cards,
-  // and the Share sheet's Circle row is the other door, always there. A wave
+  // and the New sheet's Circle row is the other door, always there. A wave
   // only lasts until the app is next opened; the FIFTH one is for good (Zoe:
   // "dismissed three times total ... to totally disappear", made five on
   // 2026-10-24). The count lives on the device, the "for now" in memory, so a
@@ -13188,7 +13190,7 @@
       startWavedNow = true;
       hapticTap('LIGHT');
       e.currentTarget.closest('.community-card--start')?.remove();
-      toast(waves >= START_WAVES ? 'Gone for good. Start one anytime from Share.' : 'Hidden for now. Start one anytime from Share.');
+      toast(waves >= START_WAVES ? 'Gone for good. Start one anytime from New.' : 'Hidden for now. Start one anytime from New.');
     });
   }
 
@@ -14087,7 +14089,7 @@
       `</div>`;
 
     // The + leads, as on My Circle, and the field takes the rest of the row.
-    // It is the Share sheet's way in here too, and the sheet's Circle row
+    // It is the New sheet's way in here too, and the sheet's Circle row
     // stands beside the Start a circle card, waved off or not (Zoe).
     mountToolbar({
       leading: Store.isAuthed() ? composeBtnEl('discover-compose-btn') : '',
@@ -16541,7 +16543,7 @@
     // somebody else's post, which is not what an empty pin slot asked for.
     pinningPost = pendingPin && !quote;
     pendingPin = false;
-    // Music's own page: the Share sheet's row, Discover's + and a song pin all
+    // Music's own page: the New sheet's row, Discover's + and a song pin all
     // ask for it through pendingAttach. Never over a quote or a daily answer.
     const song = pendingAttach === 'song' && Store.songsReady() && !quote && !daily;
     if (song) pendingAttach = null;
