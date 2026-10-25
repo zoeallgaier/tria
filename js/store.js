@@ -3208,6 +3208,12 @@ const Store = (() => {
     return 'i:' + decodeURIComponent(path);
   }
   const stickerUrl = (key) => sb.storage.from('media').getPublicUrl(key.slice(2)).data.publicUrl;
+  // A deleted sticker's file, best effort ("media delete own" scopes it to yours).
+  function dropSticker(key) {
+    const u = currentUser();
+    if (!u || !isSticker(key, u.id)) return;
+    sb.storage.from('media').remove([key.slice(2)]).catch(() => {});
+  }
   async function updateCharms(list) {
     const u = currentUser();
     if (!u) return { ok: false, error: 'You need to be signed in.' };
@@ -4010,7 +4016,7 @@ const Store = (() => {
     clearDelivered, openAppSettings,
     // Profile
     updateAvatar, updateProfile, updateAccent, setListeningTo, localFace,
-    charmsReady, updateCharms, uploadSticker, stickerUrl,
+    charmsReady, updateCharms, uploadSticker, stickerUrl, dropSticker,
     // Pins
     setPins,
   };

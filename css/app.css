@@ -10528,6 +10528,24 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 .charm-add-face { display: grid; place-items: center; width: 56px; height: 56px; color: var(--muted); }
 .charm-add-face svg { width: 26px; height: 26px; }
 .charm-tile--add.is-busy { opacity: 0.4; pointer-events: none; }
+/* Your sticker, held: it wiggles and wears a minus in the corner, the home
+   screen's way. No callout or selection on the hold. */
+.charm-tile[data-charm^="i:"] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.charm-tile.is-editing .charm { animation: charm-wiggle 0.28s ease-in-out infinite alternate; }
+@keyframes charm-wiggle { from { transform: rotate(-3.5deg); } to { transform: rotate(3.5deg); } }
+.charm-tile-del {
+  position: absolute; top: 0.35rem; left: 0.4rem; z-index: 1;
+  display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--danger); color: #fff;
+  animation: charm-del-in 0.2s cubic-bezier(.2, 1.4, .5, 1);
+}
+.charm-tile-del svg { width: 16px; height: 16px; stroke-width: 2.6; }
+@keyframes charm-del-in { from { transform: scale(0.3); opacity: 0; } }
+.charm-tile.is-leaving { transition: transform 0.22s ease-in, opacity 0.22s ease-in; transform: scale(0.6); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .charm-tile.is-editing .charm, .charm-tile-del { animation: none; }
+}
 /* The web's picture input, out of sight; the label around it is the tap. */
 .charm-add-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .charm-tile--locked .charm { --charm-ink: var(--muted); opacity: 0.45; }

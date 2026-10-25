@@ -274,6 +274,7 @@
     // prompt that belongs to a day, and no post type's mark says that.
     daily:   '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/>',
     plus:    '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    minus:   '<path d="M6 12h12"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
@@ -13793,6 +13794,9 @@
   function keepSticker(me, k) {
     try { localStorage.setItem(STICKER_KEPT + me, k); } catch {}
   }
+  function forgetSticker(me) {
+    try { localStorage.removeItem(STICKER_KEPT + me); } catch {}
+  }
 
   // The two on someone's photo, inside the face's own positioned box.
   function charmsOnFace(u) {
@@ -14009,7 +14013,92 @@
           if (!(await wearCharms(worn))) { worn = prev; paint(); }
           if (onChange) onChange(); else repaintOwnCharms();
         };
+        /* HOLDING YOUR STICKER deletes it, the home screen's way (Zoe,
+           2026-10-25): it wiggles and wears a minus, the minus deletes it
+           (taken off your photo first, then its file), and a tap anywhere
+           else puts it back. In place, because a sheet can't open over this
+           one. The hold is the chat's (wireMessages): a drag is a scroll. */
+        const HOLD_MS = 450;
+        let hold = null;
+        let editing = null;
+        const startEditing = (b) => {
+          if (editing === b) return;
+          stopEditing();
+          editing = b;
+          b.classList.add('is-editing');
+          b.insertAdjacentHTML('afterbegin',
+            `<span class="charm-tile-del" role="button" tabindex="0" aria-label="Delete sticker">${svgIcon('minus')}</span>`);
+        };
+        function stopEditing() {
+          if (!editing) return;
+          editing.classList.remove('is-editing');
+          editing.querySelector('.charm-tile-del')?.remove();
+          editing = null;
+        }
+        const deleteSticker = async (b) => {
+          const k = b.dataset.charm;
+          stopEditing();
+          if (worn.includes(k)) {
+            const prev = worn;
+            worn = worn.filter(x => x !== k);
+            paint();
+            if (!(await wearCharms(worn))) { worn = prev; paint(); return; }
+            if (onChange) onChange(); else repaintOwnCharms();
+          }
+          hapticTap('MEDIUM');
+          forgetSticker(me.id);
+          if (sticker === k) sticker = null;
+          Store.dropSticker(k);
+          b.classList.add('is-leaving');
+          setTimeout(() => b.remove(), prefersReduced() ? 0 : 220);
+        };
+        grid.addEventListener('pointerdown', (e) => {
+          // A new press spends the last hold, whether or not WebKit sent the
+          // click a long press may or may not end in.
+          if (hold) clearTimeout(hold.timer);
+          hold = null;
+          const b = e.target.closest('.charm-tile[data-charm^="i:"]');
+          if (!b || e.target.closest('.charm-tile-del')) return;
+          const mine = { x: e.clientX, y: e.clientY, fired: false, timer: 0 };
+          mine.timer = setTimeout(() => {
+            mine.fired = true;
+            hapticTap('LIGHT');
+            startEditing(b);
+          }, HOLD_MS);
+          hold = mine;
+        });
+        const letGo = (e) => {
+          if (!hold || hold.fired) return;
+          if (e.type === 'pointermove' && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) < 10) return;
+          clearTimeout(hold.timer);
+        };
+        grid.addEventListener('pointermove', letGo, { passive: true });
+        grid.addEventListener('pointerup', letGo);
+        grid.addEventListener('pointercancel', letGo);
+        // A right click on a desktop is the hold.
+        grid.addEventListener('contextmenu', (e) => {
+          const b = e.target.closest('.charm-tile[data-charm^="i:"]');
+          if (!b) return;
+          e.preventDefault();
+          startEditing(b);
+        });
+        grid.addEventListener('keydown', (e) => {
+          if (e.target.closest('.charm-tile-del') && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            deleteSticker(e.target.closest('.charm-tile'));
+          } else if (e.key === 'Escape' && editing) {
+            e.stopPropagation();
+            stopEditing();
+          }
+        });
+        scrim.addEventListener('click', (e) => {
+          if (editing && !grid.contains(e.target)) stopEditing();
+        });
         grid.addEventListener('click', (e) => {
+          if (hold && hold.fired) { hold = null; return; }   // the hold already answered
+          const del = e.target.closest('.charm-tile-del');
+          if (del) { deleteSticker(del.closest('.charm-tile')); return; }
+          if (editing) { stopEditing(); return; }            // a tap puts it back, and does nothing else
           const b = e.target.closest('.charm-tile[aria-pressed]');
           if (!b) return;
           const k = b.dataset.charm;
