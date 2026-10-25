@@ -6871,13 +6871,15 @@
     .replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '').slice(0, 20);
 
-  function wireHandle(form) {
+  // `suggested`: the handle already in the field is the app's offer (the claim
+  // screen's guess off the email), so the name may still write over it.
+  function wireHandle(form, { suggested = false } = {}) {
     const nameEl = form.querySelector('#f-name');
     const userEl = form.querySelector('#f-user');
     const hintEl = form.querySelector('.field-hint--combo');
     if (!nameEl || !userEl || !hintEl) return;
     const rest = hintEl.textContent;
-    let touched = !!userEl.value;
+    let touched = !!userEl.value && !suggested;
     let seq = 0, timer = 0;
     const check = () => {
       clearTimeout(timer);
@@ -6966,7 +6968,7 @@
 
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
-    wireHandle(document.getElementById('claim-form'));
+    wireHandle(document.getElementById('claim-form'), { suggested: true });
 
     document.getElementById('claim-form').addEventListener('submit', async (e) => {
       e.preventDefault();

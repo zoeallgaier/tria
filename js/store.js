@@ -456,7 +456,10 @@ const Store = (() => {
     // NOT checked for availability here: a field that clears itself under the
     // person who has started typing in it is worse than a taken handle, which
     // claimProfile already names in a sentence they can act on.
-    const guess = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+    // Hide My Email's local part is Apple's random string, not the person's, so
+    // it is no handle to offer.
+    const relay = /@privaterelay\.appleid\.com$/i.test(email);
+    const guess = relay ? '' : email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
     return { email, name, username: /^[a-z0-9_]{2,20}$/.test(guess) ? guess : '' };
   }
 
