@@ -111,6 +111,17 @@
 
   var ZOE = { name: 'Zoe', username: 'zoe', avatar: null };
 
+  /* A rich note as the app hands it over (cardBlocks in app.js): headings and
+     paragraphs, long enough to run past any card and fade. */
+  var ESSAY = [
+    { kind: 'p', text: 'Every town has a street that everyone walks down without deciding to. Ours is Main, which is not a joke, and it runs from the bakery to the river in about nine minutes if nobody stops you.' },
+    { kind: 'h2', text: 'The bakery' },
+    { kind: 'p', text: LONG },
+    { kind: 'h1', text: 'What the river knows' },
+    { kind: 'p', text: 'Nobody swims in it. Everybody has an opinion about whether you could. ' + LONG },
+    { kind: 'p', text: LONG },
+  ];
+
   var SPECS = [
     { label: 'Note, story', spec: { kind: 'note', size: 'story', author: ZOE, text: SHORT } },
     { label: 'Headline and note, story', spec: { kind: 'note', size: 'story', author: ZOE,
@@ -123,6 +134,11 @@
     { label: 'Note, link preview', spec: { kind: 'note', size: 'link', author: ZOE, text: SHORT } },
     { label: 'A long one, story', spec: { kind: 'note', size: 'story', author: ZOE,
         title: 'On not taking the photo', text: LONG + ' ' + LONG } },
+    { label: 'An essay, story', spec: { kind: 'note', size: 'story', author: ZOE,
+        title: 'Notes on a small town', blocks: ESSAY } },
+    { label: 'An essay, square', spec: { kind: 'note', size: 'square', author: ZOE, blocks: ESSAY } },
+    { label: 'Photo, long caption', spec: { kind: 'photo', size: 'story', author: ZOE,
+        title: 'The bakery wall', text: LONG } },
   ];
 
   var LABELS = { light: 'Light', dark: 'Dark' };

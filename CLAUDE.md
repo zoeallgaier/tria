@@ -100,7 +100,10 @@ corner. The sheet is titled Share post and is two rows, **Save image and Copy
 link: Share to Instagram is gone** (its Swift methods, Info.plist scheme and
 `metaAppId` are left with no caller). A Frame's card draws its poster, not
 the clip, and a song goes out as a link (it had no words, so its card was
-blank). **In the app the system sheet is UIKit's** (`TriaShare.shareLink`, which
+blank). **An essay is set as an essay**: the note crosses as its h1/h2/p
+blocks (`cardBlocks`, `FLOW` in storycard.js), shrinks only to a readable
+floor (`bodyMin`), and past it fades out under the feed's Read more curve and
+ends on a whole line with an ellipsis. **In the app the system sheet is UIKit's** (`TriaShare.shareLink`, which
 `shareOrCopy` tries first in the native shell): WKWebView's `navigator.share`
 opened nothing from a menu row, so it is only the web's now.
 

@@ -10347,7 +10347,21 @@
      the serif, the note in Oxygen Light. A Frame's picture is its POSTER, never
      the clip: an Image handed a .mov downloads the whole film to find it can't
      draw it (cardStill makes the same choice). No colour rides along; the card
-     is the device's light or dark, decided in storycard.js. */
+     is the device's light or dark, decided in storycard.js.
+
+     The note goes as BLOCKS, its headings and paragraphs kept apart, not as
+     notePlain's one run of words: an essay on a card is set as an essay (see
+     FLOW in storycard.js). A plain note's lines are its paragraphs, as
+     noteParas reads them in a feed. */
+  const cardBlocks = (note) => {
+    if (!note) return [];
+    if (!isRichNote(note)) return noteParas(note).map(text => ({ kind: 'p', text }));
+    return Array.from(parseNoteHtml(note).childNodes).map((n) => {
+      const tag = (n.nodeName || '').toLowerCase();
+      return { kind: tag === 'h1' || tag === 'h2' ? tag : 'p',
+               text: (n.textContent || '').replace(/\s+/g, ' ').trim() };
+    }).filter(b => b.text);
+  };
   function cardSpecFor(post) {
     const a = Store.user(post.author) || { username: post.author, name: post.author };
     const daily = dailyForPost(post);
@@ -10356,7 +10370,7 @@
       kind: daily ? 'daily' : (still ? 'photo' : 'note'),
       author: { name: a.name, username: a.username, avatar: a.avatar || null },
       title: post.title || '',
-      text: notePlain(post.note),
+      blocks: cardBlocks(post.note),
       prompt: daily ? daily.prompt : null,
       photo: still || null,
       address: 'triaonline.com',

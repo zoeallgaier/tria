@@ -168,6 +168,135 @@
     });
   }
 
+  /* ---- The note: an essay's blocks ------------------------------------- */
+
+  /* A NOTE IS BLOCKS, NOT A STRING. Tria is built for long posts, and a rich
+     note is headings and paragraphs (h1, h2, p: the composer's whole subset).
+     It used to reach the card squashed into one run of words, every break
+     gone, so an essay came out as a wall. Each block is set the way the app
+     sets it (.card-h1 upright serif, .card-h2 italic serif, .card-note Oxygen
+     Light), every measure a multiple of the paragraph size `s`, so the whole
+     note shrinks as one thing. */
+  const FLOW = {
+    h1: function (s) { return { font: serif(Math.round(s * 1.5)), lh: Math.round(s * 1.5 * 1.16), before: 0.95 }; },
+    h2: function (s) { return { font: serif(Math.round(s * 1.22), true), lh: Math.round(s * 1.22 * 1.2), before: 0.75 }; },
+    p:  function (s) { return { font: sans(s, 300), lh: Math.round(s * 1.45), before: 0.7 }; },
+  };
+
+  /* A spec may carry `blocks` ([{ kind, text }]) or plain `text`, whose lines
+     are its paragraphs (the bench, a caption). */
+  function noteBlocks(spec) {
+    if (spec.blocks && spec.blocks.length) {
+      return spec.blocks.filter(function (b) { return b && String(b.text || '').trim(); });
+    }
+    return String(spec.text || '').split(/\n+/).map(function (t) { return t.trim(); })
+      .filter(Boolean).map(function (t) { return { kind: 'p', text: t }; });
+  }
+
+  function measureFlow(ctx, blocks, s, maxWidth) {
+    const items = [];
+    let y = 0, prev = null;
+    blocks.forEach(function (b) {
+      const st = (FLOW[b.kind] || FLOW.p)(s);
+      if (prev) {
+        /* A paragraph tucks in under its heading; anything else keeps its own
+           air above it (app.css, the rules after .card-h2). */
+        const tuck = b.kind === 'p' && prev !== 'p';
+        y += Math.round(s * (tuck ? 0.3 : st.before));
+      }
+      ctx.font = st.font;
+      const lines = wrap(ctx, b.text, maxWidth);
+      items.push({ kind: b.kind, font: st.font, lh: st.lh, lines: lines, y: y });
+      y += lines.length * st.lh;
+      prev = b.kind;
+    });
+    return { items: items, full: y };
+  }
+
+  /* FIT, THEN FADE. The note shrinks toward a floor that is still easy to read
+     on a phone held at arm's length, and no further. What does not fit at the
+     floor is not cut with an ellipsis or shrunk to a grey texture: it runs on
+     under the app's own Read more fade (.readmore-clip, ink to 58% and out to
+     nothing), so the card says "there is more" the way a long post says it in
+     a feed, and the link is where the rest is. */
+  function flowFit(ctx, blocks, opt) {
+    let s = opt.size;
+    for (;;) {
+      const f = measureFlow(ctx, blocks, s, opt.maxWidth);
+      if (f.full <= opt.maxHeight) return { items: f.items, size: s, clipped: false, height: f.full };
+      if (s <= opt.minSize) {
+        /* THE CUT LANDS ON A WHOLE LINE, and never on a heading. Cut anywhere
+           else and the tops of the next line's letters peek out under the
+           fade's last few percent; end on a heading and the fade promises a
+           section that never starts. */
+        let cut = 0, at = null;
+        f.items.forEach(function (it) {
+          if (it.kind !== 'p') return;
+          it.lines.forEach(function (line, i) {
+            const bottom = it.y + (i + 1) * it.lh;
+            if (bottom <= opt.maxHeight && bottom > cut) { cut = bottom; at = { it: it, i: i }; }
+          });
+        });
+        /* AND IT ENDS IN AN ELLIPSIS (Zoe, 2026-10-24: "include a ... at the
+           end of the text for clarity"). The fade alone can read as a picture
+           that faded; the ellipsis says the words go on. The line gives up
+           whole words until it fits with the mark, and a full stop it ended
+           on goes, so a paragraph's last line never reads "worse.…". */
+        if (at) {
+          ctx.font = at.it.font;
+          const words = at.it.lines[at.i].split(' ');
+          let last = words.join(' ').replace(/[\s,.;:!?]+$/, '');
+          while (words.length > 1 && ctx.measureText(last + '…').width > opt.maxWidth) {
+            words.pop();
+            last = words.join(' ').replace(/[\s,.;:!?]+$/, '');
+          }
+          at.it.lines[at.i] = last + '…';
+        }
+        return { items: f.items, size: s, clipped: true,
+                 height: cut || Math.max(0, Math.floor(opt.maxHeight)) };
+      }
+      s -= 2;
+    }
+  }
+
+  function drawFlow(ctx, f, x, y, width, colour) {
+    const paint = function (c, ox, oy) {
+      c.fillStyle = colour;
+      c.textAlign = 'left';
+      c.textBaseline = 'alphabetic';
+      f.items.forEach(function (it) {
+        c.font = it.font;
+        it.lines.forEach(function (line, i) {
+          c.fillText(line, ox, oy + it.y + i * it.lh + it.lh * 0.76);
+        });
+      });
+    };
+    if (!f.clipped) { paint(ctx, x, y); return; }
+    /* Drawn on its own layer so the fade takes the words and nothing under
+       them. The layer is a little wider than the column, so an italic heading
+       leaning past its edge keeps its overhang. */
+    const bleed = Math.round(f.size * 0.4);
+    const layer = document.createElement('canvas');
+    layer.width = width + bleed * 2;
+    layer.height = Math.max(1, f.height);
+    const c = layer.getContext('2d');
+    paint(c, bleed, 0);
+    /* The app's curve is 58% solid over a six-line teaser, so the fade is
+       about two and a half lines long; over a whole story's worth of essay it
+       is held to that, not stretched to 42% of the column. Its clear end sits
+       just past the cut rather than on it, so the last line, the one carrying
+       the ellipsis, is faint and still legible. */
+    const line = f.size * 1.45;
+    const run = Math.min(f.height * 0.42, line * 2.6);
+    const g = c.createLinearGradient(0, f.height - run, 0, f.height + line * 0.6);
+    g.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    c.globalCompositeOperation = 'destination-in';
+    c.fillStyle = g;
+    c.fillRect(0, 0, layer.width, layer.height);
+    ctx.drawImage(layer, x - bleed, y);
+  }
+
   /* ---- Images ----------------------------------------------------------- */
 
   function loadImage(src, cors) {
@@ -225,17 +354,17 @@
   const SIZES = {
     story:  { w: 1080, h: 1920, safeTop: 250, safeBottom: 340, margin: 40, plate: 40,
               pad: 84, padBottom: 72, gap: 64,
-              avatar: 84, name: 36, handle: 31, title: 76, titleMin: 48, body: 50, bodyMin: 32,
+              avatar: 84, name: 36, handle: 31, title: 76, titleMin: 48, body: 50, bodyMin: 42,
               prompt: 42, mark: 84, address: 29, rowGap: 48 },
     square: { w: 1080, h: 1080, safeTop: 0, safeBottom: 0, margin: 36, plate: 38,
               pad: 76, padBottom: 68, gap: 52,
-              avatar: 82, name: 35, handle: 30, title: 68, titleMin: 42, body: 46, bodyMin: 30,
+              avatar: 82, name: 35, handle: 30, title: 68, titleMin: 42, body: 46, bodyMin: 38,
               prompt: 38, mark: 80, address: 27, rowGap: 44 },
     /* The link card is the one nobody chooses — it is what Messages and Slack
        unfurl — so it is the same column laid on its side and nothing more. */
     link:   { w: 1200, h: 630, safeTop: 0, safeBottom: 0, margin: 32, plate: 28,
               pad: 52, padBottom: 44, gap: 32,
-              avatar: 64, name: 28, handle: 24, title: 46, titleMin: 28, body: 32, bodyMin: 22,
+              avatar: 64, name: 28, handle: 24, title: 46, titleMin: 28, body: 32, bodyMin: 26,
               prompt: 28, mark: 64, address: 23, rowGap: 30 },
   };
 
@@ -277,10 +406,10 @@
       return blocks.reduce(function (n, b) { return n + b.height + b.after; }, 0);
     };
     const titled = !!(spec.title && spec.title.trim());
-    const noted = !!(spec.text && spec.text.trim());
+    const note = noteBlocks(spec);
+    const noted = note.length > 0;
     const between = Math.round(m.rowGap * 0.4);
     const titleFace = function (size) { return serif(size); };
-    const noteFace = function (size) { return sans(size, 300); };
 
     if (kind === 'daily') {
       /* The prompt sits ABOVE the answer, quiet and italic, because a daily
@@ -295,33 +424,35 @@
     }
 
     if (plated) {
-      /* A caption is the post's own two parts at a smaller size, capped at a
-         few lines each so the picture keeps the room. */
+      /* A caption is the post's own two parts at a smaller size: a headline of
+         two lines at most, and the note held to four lines' room, fading past
+         it, so the picture keeps the space. */
       const title = titled ? paragraph(ctx, spec.title, {
         size: Math.round(m.title * 0.8), minSize: m.titleMin, lineHeight: 1.14,
         maxWidth: textW, maxHeight: Math.round(m.title * 0.8 * 1.14 * 2), face: titleFace,
       }) : null;
-      const note = noted ? paragraph(ctx, spec.text, {
-        size: m.body, minSize: Math.round(m.body * 0.8), lineHeight: 1.45,
-        maxWidth: textW, maxHeight: Math.round(m.body * 1.45 * 3), face: noteFace,
+      const words = noted ? flowFit(ctx, note, {
+        size: m.body, minSize: m.bodyMin, maxWidth: textW,
+        maxHeight: Math.round(m.body * 1.45 * 4),
       }) : null;
-      const words = (title ? title.height : 0) + (note ? note.height : 0) +
-                    (title && note ? between : 0);
+      const said = (title ? title.height : 0) + (words ? words.height : 0) +
+                   (title && words ? between : 0);
       /* The plate runs the column's full width, square when there is
          room and cropped shorter (never past 3:2) when a caption needs the
          space. It used to stay square and SHRINK, which left a smaller picture
          floating in the middle of the column. It is measured LAST and pushed
          first. */
-      const left = budget - spent() - (words ? words + Math.round(m.gap * 0.75) : 0);
+      const left = budget - spent() - (said ? said + Math.round(m.gap * 0.75) : 0);
       const tall = Math.max(Math.round(textW * 2 / 3), Math.min(textW, Math.floor(left)));
       blocks.push({ type: 'plate', width: textW, height: tall,
-                    after: words ? Math.round(m.gap * 0.75) : 0 });
-      if (title) blocks.push({ type: 'title', block: title, height: title.height, after: note ? between : 0 });
-      if (note) blocks.push({ type: 'note', block: note, height: note.height, after: 0 });
+                    after: said ? Math.round(m.gap * 0.75) : 0 });
+      if (title) blocks.push({ type: 'title', block: title, height: title.height, after: words ? between : 0 });
+      if (words) blocks.push({ type: 'flow', flow: words, height: words.height, after: 0 });
     } else {
       /* A headline is capped at three lines when a note follows it, and takes
          the whole card when it is all there is. A note with no headline starts
-         a size up, so a one-line thought does not sit small in a big card. */
+         a size up, so a one-line thought does not sit small in a big card;
+         a long one comes down to the floor and fades from there. */
       if (titled) {
         const title = paragraph(ctx, spec.title, {
           size: m.title, minSize: m.titleMin, lineHeight: 1.14, maxWidth: textW,
@@ -329,12 +460,12 @@
         });
         blocks.push({ type: 'title', block: title, height: title.height, after: noted ? between : 0 });
       }
-      if (noted || !titled) {
-        const note = paragraph(ctx, spec.text || '', {
-          size: titled ? m.body : Math.round(m.body * 1.25), minSize: m.bodyMin, lineHeight: 1.45,
-          maxWidth: textW, maxHeight: budget - spent(), face: noteFace,
+      if (noted) {
+        const words = flowFit(ctx, note, {
+          size: titled ? m.body : Math.round(m.body * 1.25), minSize: m.bodyMin,
+          maxWidth: textW, maxHeight: budget - spent(),
         });
-        blocks.push({ type: 'note', block: note, height: note.height, after: 0 });
+        blocks.push({ type: 'flow', flow: words, height: words.height, after: 0 });
       }
     }
 
@@ -370,7 +501,7 @@
        story. With words to carry, the card becomes a note; with none, the plate
        stays, empty, so the card still has a body. */
     let kind = spec.kind || 'note';
-    if (kind === 'photo' && !photo && ((spec.title || '').trim() || (spec.text || '').trim())) kind = 'note';
+    if (kind === 'photo' && !photo && ((spec.title || '').trim() || noteBlocks(spec).length)) kind = 'note';
 
     backdrop(ctx, m, paper);
     const L = layout(ctx, spec, m, kind);
@@ -390,8 +521,10 @@
     L.blocks.forEach(function (b) {
       if (b.type === 'prompt') {
         drawParagraph(ctx, b.block, tx, y, paper.muted);
-      } else if (b.type === 'title' || b.type === 'note') {
+      } else if (b.type === 'title') {
         drawParagraph(ctx, b.block, tx, y, paper.ink);
+      } else if (b.type === 'flow') {
+        drawFlow(ctx, b.flow, tx, y, L.textW, paper.ink);
       } else if (b.type === 'plate') {
         ctx.save();
         roundRect(ctx, tx, y, b.width, b.height, m.plate);
@@ -480,7 +613,8 @@
   }
 
   function fonts(spec, m) {
-    const text = [spec.title, spec.text, spec.prompt, (spec.author || {}).name,
+    const text = [spec.title, spec.text, spec.prompt,
+                  (spec.blocks || []).map(function (b) { return b.text; }).join(' '), (spec.author || {}).name,
                   (spec.author || {}).username, spec.address].filter(Boolean).join(' ')
                  + ' triaonline.com@…';
     const faces = [
