@@ -883,6 +883,32 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
                 item?.accessibilityValue = nil
             }
         }
+        DispatchQueue.main.async { [weak self] in self?.shrinkBadges() }
+    }
+
+    /* THE BADGE, CUT DOWN TO THE BELL'S DOT (2026-10-25, Zoe: "oversized").
+       An empty badge is a count badge with no count: 18pt, sized for a digit,
+       and nothing public shrinks it on 26. A badge font set on the item is
+       ignored, one set on the bar's appearance is ignored too (and its colour
+       overrides `badgeColor`), and a scale on the view is undone, because the
+       bar sets the badge's FRAME to 18 by 18 on every layout. Its layer's mask
+       is the one thing the bar leaves alone, so the badge is clipped to a
+       6.5pt circle on the glyph's top-trailing shoulder, inside its own round.
+       The view is `_UIBarBadgeView`, one in the row and one under the lens,
+       reused when the dot clears and comes back (measured on the 26.5
+       simulator). Should the name ever change, the dot is the system's 18pt
+       badge again, which is where this started. */
+    private func shrinkBadges() {
+        controller.tabBar.layoutIfNeeded()
+        func walk(_ view: UIView) {
+            if NSStringFromClass(type(of: view)) == "_UIBarBadgeView", view.layer.mask == nil {
+                let mark = CAShapeLayer()
+                mark.path = UIBezierPath(ovalIn: CGRect(x: 1.25, y: 3.75, width: 6.5, height: 6.5)).cgPath
+                view.layer.mask = mark
+            }
+            view.subviews.forEach(walk)
+        }
+        walk(controller.tabBar)
     }
 
     /// Which destination is lit. A route no tab names (a friend's profile, a

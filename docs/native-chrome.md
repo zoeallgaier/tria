@@ -282,9 +282,17 @@ Four decisions inside it:
   no "none" state, and the tab you came from is the honest answer on a pushed
   page.
 - **The dot is the system's unnumbered badge** (`badgeValue = ""`, `badgeColor`
-  from `--dot`). It is bigger than the web's 6.5px dot. Drawing a custom one
-  would mean baking it into the item's image and giving up the system's
-  inking, so it is the system's mark until Zoe says otherwise.
+  from `--dot`), **clipped to the bell's 6.5pt** (2026-10-25, Zoe: "oversized").
+  The empty badge is a count badge with no count, 18pt, and nothing public
+  shrinks it on 26: a badge font on the item is ignored, one on the bar's
+  appearance is ignored and its colour beats `badgeColor`, and a scale is undone
+  because the bar resets the badge's frame to 18 by 18 on every layout. So
+  `shrinkBadges` masks each `_UIBarBadgeView` (one in the row, one under the
+  lens) to a 6.5pt circle on the glyph's top-trailing shoulder. Measured on the
+  26.5 simulator: it holds through a tab change, the dot clearing and coming
+  back (the view is reused), and light to dark. Not measured: the bar folding
+  under a real drag. If the private name ever changes, the badge is simply 18pt
+  again.
 - **The reserve only grows** (`report`): a folded bar is shorter, and a reserve
   that shrank with it would move the foot of the page mid-scroll.
 
