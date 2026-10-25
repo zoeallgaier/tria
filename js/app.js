@@ -13711,11 +13711,17 @@
      four thirty (Zoe's sketch).
 
      THE ART is outlined, in the icon set's own line: ICONS' circle, daily and
-     music, and a squircle quote, two stars and a sprout drawn to match (a
-     round outlined quote read as "66"). The same four trims sit close in on
-     every one, the like burst's sparkle with a dot top-right and a speck with
-     a star bottom-left, all on Sunny's diagonal and at its inset (Zoe,
-     2026-10-24). Everything is --heart, the reader's own colour, which is
+     music, and a spiral, two stars and a sprout drawn to match. First word's
+     spiral (Zoe, 2026-10-25: "a cute spiral instead of quotes") is a curl
+     that opens as it goes, r = 0.5 + 0.42t + 0.035t² over 1.85 turns, its
+     tail falling into the free bottom-right corner, as twelve cubics. The
+     same four trims sit close in on every one, the like burst's sparkle with
+     a dot top-right and a speck with a star bottom-left, all on Sunny's
+     diagonal and at its inset (Zoe, 2026-10-24), except Mutuals: its stars
+     grew a touch (Zoe, 2026-10-25) and sit a little closer, and its trims
+     sit a unit further out, so each pair clears them by about 2.3 (Sunny's
+     nearer pair clears by 2.1; the old sparkle all but touched, 0.4).
+     Everything is --heart, the reader's own colour, which is
      what makes it read on paper and on ink without a second rule (the hearts'
      contrast work, reused).
 
@@ -13734,9 +13740,9 @@
      Keys never move (users.charms stores them, add-charms.sql checks them). */
   const CHARMS = [
     { key: 'word', name: 'First word', how: 'Publish your first post.', got: 'You published your first post.',
-      art: '<g transform="translate(10.2 10.55) scale(1.15)"><g class="cl"><path d="M5.5 5H8.5A2 2 0 0 1 10.5 7V12.5C10.5 15.6 8.7 17.6 5.7 18.4L5.3 16.6C7.1 15.8 8.1 14.6 8.2 13H5.5A2 2 0 0 1 3.5 11V7A2 2 0 0 1 5.5 5Z"/><path d="M15.5 5H18.5A2 2 0 0 1 20.5 7V12.5C20.5 15.6 18.7 17.6 15.7 18.4L15.3 16.6C17.1 15.8 18.1 14.6 18.2 13H15.5A2 2 0 0 1 13.5 11V7A2 2 0 0 1 15.5 5Z"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M10.44 14.03C10.34 14.21 10.07 14.38 9.73 14.34C9.39 14.29 9 14.03 8.82 13.56C8.64 13.09 8.7 12.43 9.12 11.9C9.55 11.37 10.34 10.99 11.22 11.08C12.1 11.18 13.04 11.78 13.53 12.78C14.02 13.77 14.02 15.15 13.33 16.32C12.64 17.49 11.24 18.4 9.62 18.48C7.99 18.55 6.18 17.76 5.05 16.22C3.91 14.68 3.51 12.4 4.27 10.31C5.03 8.21 6.96 6.37 9.44 5.75C11.93 5.13 14.91 5.8 17.07 7.75C19.23 9.7 20.49 12.92 20.03 16.18"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'mutual', name: 'Mutuals', how: 'Share Tria with a friend.', got: 'You shared Tria with a friend.',
-      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M6.5 11.2Q7.56 14.94 11.3 16Q7.56 17.06 6.5 20.8Q5.44 17.06 1.7 16Q5.44 14.94 6.5 11.2Z"/><path class="cl" d="M17.5 2.7Q18.56 6.44 22.3 7.5Q18.56 8.56 17.5 12.3Q16.44 8.56 12.7 7.5Q16.44 6.44 17.5 2.7Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M7.1 10.05Q8.31 14.34 12.6 15.55Q8.31 16.76 7.1 21.05Q5.89 16.76 1.6 15.55Q5.89 14.34 7.1 10.05Z"/><path class="cl" d="M16.9 2.45Q18.11 6.74 22.4 7.95Q18.11 9.16 16.9 13.45Q15.69 9.16 11.4 7.95Q15.69 6.74 16.9 2.45Z"/></g><g transform="translate(-1 1)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(1 -1)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'joined', name: 'In the ring', how: 'Join a circle.', got: 'You joined your first circle.',
       art: '<g transform="translate(8.4 7.88) scale(1.3)"><g class="cl"><circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'founder', name: 'Founder', how: 'Start a circle.', got: 'You started a circle.',

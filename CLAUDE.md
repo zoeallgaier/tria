@@ -68,17 +68,17 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 ## 2.0's charms (2026-10-24)
 
 **Six little firsts**, worn on the rim of your photo (Zoe's sketch): First
-word (a post, a squircle quote mark: an outlined round quote read as "66"),
+word (a post, a cute spiral since 2026-10-25, Zoe: "instead of quotes"; it
+was an outlined round quote read as "66"),
 Mutuals (Tria shared off the app, a completed share sheet or a copied link,
 `noteShared`; it was a first friend until Zoe: "we need more new users", and
-kept its name and two stars), In the ring (join a circle), Founder (start
+kept its name and two stars, a touch bigger since 2026-10-25), In the ring (join a circle), Founder (start
 one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **Outlined, in the icon set's line** (the circle triad,
-daily and music are ICONS'; the quote, stars and sprout are drawn to match)
+daily and music are ICONS'; the spiral, stars and sprout are drawn to match)
 with the SAME four trims, a sparkle with a dot and a speck with a star, in
-opposite corners and close in (the note's on the quote's diagonal since
-it lost its beam, so four sit top-left and bottom-right), each
-pair nudged in per charm where the icon is narrow (a `translate` on the
-trim). Sunny is a five point star and On repeat a single eighth note (Zoe,
+opposite corners and close in (on Sunny's diagonal, top-right and
+bottom-left), each pair nudged in per charm (a `translate` on the
+trim): two units in on most, one on Mutuals, whose bigger stars need the room. Sunny is a five point star and On repeat a single eighth note (Zoe,
 2026-10-24). In plain ink, `--text` via `--charm-ink`, the device's
 opposite: black on paper, white on ink, never `--heart`. This is 523aa77's art, restored on 2026-10-24 (Zoe: "go back to
 the second outline tria style icons") after a solid pass in plain ink, a
