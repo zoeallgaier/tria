@@ -13688,9 +13688,11 @@
 
      THE ART is outlined, in the icon set's own line: ICONS' circle, daily and
      music, and a spiral, two stars and a sprout drawn to match. First word's
-     spiral (Zoe, 2026-10-25: "a cute spiral instead of quotes") is a curl
-     that opens as it goes, r = 0.5 + 0.42t + 0.035t² over 1.85 turns, its
-     tail falling into the free bottom-right corner, as twelve cubics. The
+     spiral (Zoe, 2026-10-25: "a cute spiral instead of quotes", then
+     "deeper tighter") is an even one, r = 0.25 + 0.42t over three turns
+     (a curl opening over 1.85 turns came first), its tail falling into the
+     free bottom-right corner, as twenty cubics. The gap between turns is
+     under one line wide and still opens at 24px on a 3x screen. The
      same four trims sit close in on every one, the like burst's sparkle with
      a dot top-right and a speck with a star bottom-left, all on Sunny's
      diagonal and at its inset (Zoe, 2026-10-24), except Mutuals: its stars
@@ -13716,7 +13718,7 @@
      Keys never move (users.charms stores them, add-charms.sql checks them). */
   const CHARMS = [
     { key: 'word', name: 'First word', how: 'Publish your first post.', got: 'You published your first post.',
-      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M10.44 14.03C10.34 14.21 10.07 14.38 9.73 14.34C9.39 14.29 9 14.03 8.82 13.56C8.64 13.09 8.7 12.43 9.12 11.9C9.55 11.37 10.34 10.99 11.22 11.08C12.1 11.18 13.04 11.78 13.53 12.78C14.02 13.77 14.02 15.15 13.33 16.32C12.64 17.49 11.24 18.4 9.62 18.48C7.99 18.55 6.18 17.76 5.05 16.22C3.91 14.68 3.51 12.4 4.27 10.31C5.03 8.21 6.96 6.37 9.44 5.75C11.93 5.13 14.91 5.8 17.07 7.75C19.23 9.7 20.49 12.92 20.03 16.18"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M11.58 12.74C11.67 12.86 11.68 13.1 11.52 13.28C11.36 13.46 11.04 13.58 10.7 13.48C10.36 13.38 10.02 13.06 9.9 12.61C9.79 12.15 9.91 11.57 10.32 11.14C10.72 10.71 11.4 10.45 12.1 10.56C12.81 10.68 13.51 11.18 13.86 11.93C14.22 12.69 14.2 13.69 13.72 14.52C13.24 15.35 12.3 15.98 11.22 16.07C10.14 16.17 8.96 15.71 8.18 14.79C7.4 13.87 7.06 12.51 7.39 11.22C7.72 9.93 8.72 8.76 10.07 8.23C11.43 7.71 13.1 7.85 14.42 8.72C15.74 9.58 16.66 11.15 16.73 12.85C16.81 14.54 16.01 16.33 14.58 17.46C13.15 18.59 11.1 19.01 9.23 18.47C7.35 17.93 5.71 16.42 5.01 14.47C4.32 12.52 4.6 10.17 5.84 8.36C7.09 6.55 9.28 5.34 11.6 5.29C13.92 5.24 16.31 6.36 17.78 8.31C19.26 10.26 19.77 12.99 19.02 15.45"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'mutual', name: 'Mutuals', how: 'Share Tria with a friend.', got: 'You shared Tria with a friend.',
       art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M7.1 10.05Q8.31 14.34 12.6 15.55Q8.31 16.76 7.1 21.05Q5.89 16.76 1.6 15.55Q5.89 14.34 7.1 10.05Z"/><path class="cl" d="M16.9 2.45Q18.11 6.74 22.4 7.95Q18.11 9.16 16.9 13.45Q15.69 9.16 11.4 7.95Q15.69 6.74 16.9 2.45Z"/></g><g transform="translate(-1 1)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(1 -1)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'joined', name: 'In the ring', how: 'Join a circle.', got: 'You joined your first circle.',

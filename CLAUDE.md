@@ -68,8 +68,8 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 ## 2.0's charms (2026-10-24)
 
 **Six little firsts**, worn on the rim of your photo (Zoe's sketch): First
-word (a post, a cute spiral since 2026-10-25, Zoe: "instead of quotes"; it
-was an outlined round quote read as "66"),
+word (a post, a cute spiral since 2026-10-25, Zoe: "instead of quotes", then
+"deeper tighter", three even turns; it was an outlined round quote read as "66"),
 Mutuals (Tria shared off the app, a completed share sheet or a copied link,
 `noteShared`; it was a first friend until Zoe: "we need more new users", and
 kept its name and two stars, a touch bigger since 2026-10-25), In the ring (join a circle), Founder (start
