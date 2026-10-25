@@ -233,7 +233,7 @@ const Store = (() => {
   // column that doesn't exist is omitted, an empty one is []. Until it is, no
   // charm shows anywhere (Store.charmsReady), the songsReady rule.
   let hasCharmsColumn = false;
-  const CHARM_KEYS = ['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat'];
+  const CHARM_KEYS = ['word', 'mutual', 'joined', 'founder', 'sunny', 'repeat', 'bat', 'ghost'];
   function pinsFrom(v) {
     if (!Array.isArray(v)) return [];
     const out = [];
