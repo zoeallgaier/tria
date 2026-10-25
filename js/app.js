@@ -13772,7 +13772,7 @@
     const art = c.custom
       ? `<image href="${esc(sizedSrc(Store.stickerUrl(key), 120))}" x="2" y="2" width="44" height="44" preserveAspectRatio="xMidYMid meet"/>`
       : c.art;
-    return `<svg class="charm${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`;
+    return `<svg class="charm${c.custom ? ' charm--sticker' : ''}${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`;
   }
   // A sticker as a transparent PNG no bigger than `max` a side.
   async function stickerPng(source, max = 360) {

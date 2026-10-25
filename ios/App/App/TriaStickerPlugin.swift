@@ -28,7 +28,8 @@ import UniformTypeIdentifiers
 ///
 /// "From a photo" is the same cut-out without the keyboard, for anyone with no
 /// stickers yet: Vision's foreground mask (iOS 17, the request behind Photos'
-/// own lift-subject) and a white edge drawn round it, like a sticker's.
+/// own lift-subject). Whatever arrives, sticker, emoji or photo, leaves with
+/// the same white edge drawn round it (`edged`, `outlined`).
 @objc(TriaStickerPlugin)
 public class TriaStickerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "TriaStickerPlugin"
@@ -273,7 +274,7 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         // A sticker, else the last emoji typed, drawn as a picture; a letter
         // gets the hint's shake.
         if let image = Self.sticker(in: text) ?? Self.emoji(in: text.string).flatMap(Self.emojiImage) {
-            land(image)
+            land(Self.edged(image))
         } else if text.length > 0 {
             nudge()
         }
@@ -427,6 +428,14 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
                                                             croppedToInstancesExtent: true)
         else { return nil }
         return outlined(CIImage(cvPixelBuffer: buffer))
+    }
+
+    /// Every charm the sheet makes wears the photo cut-out's white edge, a
+    /// sticker or an emoji too (Zoe, 2026-10-25: "standardize that"), so they
+    /// all read as one set on a face, where they no longer wear a halo.
+    static func edged(_ image: UIImage) -> UIImage {
+        guard let cg = image.cgImage else { return image }
+        return outlined(CIImage(cgImage: cg)) ?? image
     }
 
     /// A sticker's white edge: the cut-out's own alpha grown by a few percent
