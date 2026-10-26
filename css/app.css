@@ -5919,7 +5919,10 @@ button.poll-option:disabled { cursor: default; }
 /* The one-time tip under the rail wears a week card (.week-card, This week's
    plans), gone for good on its x or the first hold. Its title is a sentence,
    so it may wrap where a plan's name ends in an ellipsis. */
-.week-card.np-hint { margin-top: 0.9rem; transition: opacity var(--dur-quick) var(--ease); }
+/* Cards here keep Discover's one gap (0.95rem, Zoe 2026-10-26): rail to tip,
+   tip to a plan, plan to plan. */
+.week-card.np-hint { margin-top: 0.95rem; transition: opacity var(--dur-quick) var(--ease); }
+.np-host:has(.np-hint):has(+ .week-cards:not([hidden])) .nowplaying { margin-bottom: 0.95rem; }
 .np-hint .week-card-title { white-space: normal; }
 .np-hint.is-leaving { opacity: 0; }
 
@@ -8280,7 +8283,7 @@ button.poll-option:disabled { cursor: default; }
    is doing that block's centring too: a shorthand this late in the file beats
    the shared `margin-inline`, and without it the column capped but hugged the
    left edge, off the feed's axis. */
-.week-cards { display: flex; flex-direction: column; gap: 0.6rem; margin: 0 auto 1.4rem; }
+.week-cards { display: flex; flex-direction: column; gap: 0.95rem; margin: 0 auto 1.4rem; }
 .week-cards[hidden] { display: none; }
 .week-card {
   position: relative;
