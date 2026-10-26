@@ -118,6 +118,17 @@ were tried under the photo and on it the same day). It is a position, not a
 tally, so the no-count rule doesn't reach it. The hand-of-cards peek is
 gone. See docs/data.md under the carousel.
 
+## Discover's search has a filter (2026-10-25)
+
+**While search is open, a filter slides in on the field's right** (Zoe): the
+sliders disc in a slot that widens on the signature ease while the disc springs
+in (`.discover-filter-slot`, `syncOpen` in `renderDiscover`). Its sheet is All,
+**People**, then the post types without Music (`discoverType`). People is
+everyone who matches; a type is its posts only; with nothing typed, either is
+everything of its kind. A pick keeps the search open, washes the reader's band
+into the disc, and the placeholder says "Search frames". The chevron or Escape
+clears the words and the filter together.
+
 ## A YouTube Find plays in its card (2026-10-25)
 
 **A Find whose link is a YouTube video wears a tile** (Zoe: "embed them so

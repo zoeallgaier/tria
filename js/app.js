@@ -13182,6 +13182,7 @@
      friends page offers. That is the one use of post text left on this page,
      and it shows a person, not the post. */
   let discoverQuery = '';     // live search over circles and people
+  let discoverType = 'all';   // the search's post type, picked from its filter (2026-10-25)
   let discoverRepaint = null; // set while Discover is mounted: repaint the body in place
   // The router still asks this on the way out. Discover had a grid to re-deal on
   // a width change and has none now, so nothing ever sets it.
@@ -14721,13 +14722,30 @@
     /* SEARCH IS THE HEADER (1.8). One field, always open, coming and going with
        the header itself. It is web in every shell (see mountToolbar's `field`).
        Empty is the whole page; typing turns it into results: people first, as
-       compact rows, then posts, then circles (Zoe). */
+       compact rows, then posts, then circles (Zoe).
+
+       WHILE IT IS OPEN A FILTER COMES IN ON ITS RIGHT (Zoe, 2026-10-25), the
+       sliders disc the other pages wear, in the field's own row: its slot opens
+       and the field's end eases over to make room (.discover-filter-slot). It
+       narrows the search to People or one post type, leaving out the rest, and
+       with nothing typed it is everyone, or every post of that type you can
+       read. A song is never searched, so Music isn't offered. */
+    const typeFilters = [FILTERS[0], { key: 'people', label: 'People', ico: 'friends' },
+      ...FILTERS.slice(1).filter(f => f.key !== 'song')];
+    const placeholderFor = (type) => type === 'all' ? 'Search people, posts and circles'
+      : `Search ${type === 'people' ? 'people' : TYPE_PLURAL[type]}`;
+    const openAtMount = !!discoverQuery.trim() || discoverType !== 'all';
     const searchBar =
       `<div class="discover-search" role="search">` +
         `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
         `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
           `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
-          `placeholder="Search people, posts and circles" aria-label="Search Tria">` +
+          `placeholder="${esc(placeholderFor(discoverType))}" aria-label="Search Tria">` +
+        // Open from the first frame when a search is already standing, so a
+        // re-render doesn't play the arrival again.
+        `<span class="discover-filter-slot${openAtMount ? ' is-open' : ''}">` +
+          filterBtnEl('discover-filter-btn', discoverType, 'Filter the search') +
+        `</span>` +
       `</div>`;
 
     // The + leads, as on My Circle, and the field takes the rest of the row.
@@ -14751,33 +14769,72 @@
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
     const leadBtn = document.getElementById('discover-compose-btn');
+    const filterBtn = document.getElementById('discover-filter-btn');
 
     /* WHILE SEARCH IS OPEN THE + IS A WAY BACK (Zoe). Open is the field holding
-       the caret or a query: the + turns into the back chevron, and pressing it
-       empties the field, drops the keyboard and puts the + back. Its mousedown
-       is swallowed so the tap doesn't blur the field first, which would turn
-       the chevron back into a + under the finger. */
-    let searchOpen = false;
-    const syncLead = () => {
-      if (!leadBtn) return;
-      const open = document.activeElement === searchEl || !!discoverQuery.trim();
+       the caret or a query, or a type picked, or the filter in hand (its sheet
+       up, or the focus handed back to it as the sheet closes): the + turns into
+       the back chevron and the filter slides in, and pressing the chevron
+       empties the field and the filter, drops the keyboard and puts the + back.
+       Both buttons swallow their mousedown so the tap doesn't blur the field
+       first, which would close the search under the finger. */
+    let searchOpen = null;
+    const syncOpen = () => {
+      const open = document.activeElement === searchEl || document.activeElement === filterBtn
+        || filterBtn?.getAttribute('aria-expanded') === 'true'
+        || !!discoverQuery.trim() || discoverType !== 'all';
       if (open === searchOpen) return;
       searchOpen = open;
+      if (filterBtn) {
+        filterBtn.parentElement.classList.toggle('is-open', open);
+        filterBtn.tabIndex = open ? 0 : -1;
+        filterBtn.setAttribute('aria-hidden', String(!open));
+      }
+      if (!leadBtn) return;
       leadBtn.innerHTML = open ? svgIcon('chevron', 'toolbar-back-ico') : svgIcon('plus');
       leadBtn.setAttribute('aria-label', open ? 'Close search' : 'Make something');
       if (open) leadBtn.removeAttribute('aria-haspopup');
       else leadBtn.setAttribute('aria-haspopup', 'dialog');
     };
+    const setType = (key) => {
+      discoverType = key;
+      syncFilterBtn('discover-filter-btn', key);
+      searchEl.placeholder = placeholderFor(key);
+    };
+    // Empties the bar: the words, the type and the caret.
+    const closeSearch = () => {
+      discoverQuery = searchEl.value = '';
+      setType('all');
+      if (document.activeElement === searchEl || document.activeElement === filterBtn) document.activeElement.blur();
+      paintNow();
+      syncOpen();
+    };
     leadBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
     leadBtn?.addEventListener('click', () => {
       if (!searchOpen) { openComposeDial(); return; }
-      discoverQuery = searchEl.value = '';
-      searchEl.blur();
-      paintNow();
-      syncLead();
+      closeSearch();
     });
-    searchEl.addEventListener('focus', syncLead);
-    searchEl.addEventListener('blur', syncLead);
+    filterBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
+    filterBtn?.addEventListener('click', (e) => {
+      openFilterDial(e.currentTarget, {
+        current: discoverType,
+        filters: typeFilters,
+        label: 'Filter the search',
+        onPick: (key) => {
+          if (key === discoverType) return;
+          setType(key);
+          paintNow();
+          syncOpen();
+        },
+      });
+      // The keyboard goes down for the sheet. The sheet is up by now (its
+      // button says so), so the search stays open through the blur.
+      searchEl.blur();
+    });
+    [searchEl, filterBtn].forEach(el => {
+      el?.addEventListener('focus', syncOpen);
+      el?.addEventListener('blur', syncOpen);
+    });
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with
     // it, 1 = appears somewhere, 0 = no match.
@@ -14811,8 +14868,10 @@
     // Every post I can read that says the words: the room's (hand-addressed
     // ones too) and my own, never a repost, a circle's or a song (those are
     // read in their circle and in On repeat). Newest first, as posts() is.
-    const postsMatching = (q) => Store.posts().filter(p =>
+    // A picked type narrows it to that type; an empty query is all of them.
+    const postsMatching = (q, type) => Store.posts().filter(p =>
       !p.repostOf && !p.communityId && p.type !== 'song' && !Blocks.has(p.author)
+      && (type === 'all' || p.type === type)
       && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
     let discoverable = new Set();
 
@@ -14888,25 +14947,30 @@
       lockCache.clear();
       saidCache = null;
       const q = discoverQuery.trim().toLowerCase();
+      // A picked type is a search on its own, with or without words.
+      const type = discoverType;
+      const searching = !!q || type !== 'all';
       // Today's daily stays out of search: you asked a question, and the page
       // owes you an answer rather than a card.
-      const occ = q ? null : todaysDaily();
+      const occ = searching ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
-      const rooms = q ? communitiesMatching(q) : communitiesInOrder();
-      const rail = q ? [] : peopleForRail();
+      // People, or a post type, has no circles in it.
+      const rooms = type !== 'all' ? [] : q ? communitiesMatching(q) : communitiesInOrder();
+      const rail = searching ? [] : peopleForRail();
       // Whoever is on the rail now stays on it for the rest of this visit.
       rail.forEach(x => railKept.add(x.u.username));
       const railHtml = peopleRailHtml(rail);
       // The rail sits under the circles (Zoe, 2026-10-23; it was over them).
-      const roomsHtml = communitiesSectionHtml(rooms, { search: !!q, after: railHtml });
-      const matched = q ? peopleMatching(q) : [];
-      const people = allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
+      const roomsHtml = communitiesSectionHtml(rooms, { search: searching, after: railHtml });
+      // Under People it is everyone who matches, at once (everyone, unsearched).
+      const matched = type === 'people' || (q && type === 'all') ? peopleMatching(q) : [];
+      const people = type === 'people' || allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
       const morePeople = matched.length > people.length;
-      if (q) discoverable = new Set(Store.discover({ addressed: true }));
-      const found = q ? postsMatching(q) : [];
+      if (searching) discoverable = new Set(Store.discover({ addressed: true }));
+      const found = searching && type !== 'people' ? postsMatching(q, type) : [];
       // The markup is the description of what changed, so it signs the paint;
       // a person's row carries a tie, so their friendStatus is in it too.
-      const sig = JSON.stringify([q, roomsHtml, occ && [occ.slug, answers.length],
+      const sig = JSON.stringify([q, type, roomsHtml, occ && [occ.slug, answers.length],
         people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
           isLocked(u.username), Store.friendStatus(u.username)]),
         morePeople, found.map(p => p.id)]);
@@ -14922,14 +14986,20 @@
             (morePeople ? `<button class="pill-quiet discover-more" type="button">More people</button>` : '') +
           `</section>`
         : '';
+      // Under a type, the kicker is the type's own name.
+      const postsLabel = type === 'all' || type === 'people' ? 'Posts' : FILTERS.find(f => f.key === type).label;
       const postsHtml = found.length
-        ? `<section class="discover-posts" aria-label="Posts">` +
-            `<p class="discover-kicker">Posts</p>` +
+        ? `<section class="discover-posts" aria-label="${postsLabel}">` +
+            `<p class="discover-kicker">${postsLabel}</p>` +
             `<div class="feed" id="discover-found"></div>` +
           `</section>`
         : '';
-      const none = q && !rooms.length && !people.length && !found.length
-        ? `<p class="feed-empty">Nothing matches “${esc(discoverQuery.trim())}”.</p>` : '';
+      const said = esc(discoverQuery.trim());
+      const none = searching && !rooms.length && !people.length && !found.length
+        ? `<p class="feed-empty">${type === 'all' ? `Nothing matches “${said}”.`
+            : type === 'people' ? (q ? `No one matches “${said}”.` : 'No one here yet.')
+            : q ? `No ${TYPE_PLURAL[type]} match “${said}”.`
+            : `No ${TYPE_PLURAL[type]} to see yet.`}</p>` : '';
 
       // The first paint that draws anything rises in, a beat apart, the way
       // Chats does; every paint after it (a pull, a join, a keystroke) swaps in
@@ -14937,7 +15007,7 @@
       if (bodyEl.dataset.risen) bodyEl.classList.add('is-still');
       // Searching, the results run people, posts, circles; otherwise the page
       // is the daily, then the circles with the people rail inside them.
-      bodyEl.innerHTML = q
+      bodyEl.innerHTML = searching
         ? peopleHtml + postsHtml + roomsHtml + none
         : (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
       if (!bodyEl.dataset.risen) {
@@ -14958,7 +15028,7 @@
         ?.addEventListener('click', () => answerDaily(occ));
       wireCommunityJoins(bodyEl);
       wireCommunityStart(bodyEl);
-      if (!q) wireShare();
+      if (!searching) wireShare();
       // The Add on a person's row. It binds to the BODY, once (it refuses a
       // second binding), which is what lets it survive every repaint.
       wireTieList(bodyEl);
@@ -14969,7 +15039,7 @@
       btn.addEventListener('click', () => {
         discoverQuery = searchEl.value = btn.dataset.tag;
         paintNow();
-        syncLead();
+        syncOpen();
       }));
 
     // Share Tria: native share sheet where it exists, clipboard copy otherwise.
@@ -14988,10 +15058,11 @@
 
     // Escape empties the bar, the one way out a keyboard reader has without an X.
     searchEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && searchEl.value) {
+      if (e.key === 'Escape' && (searchEl.value || discoverType !== 'all')) {
         discoverQuery = searchEl.value = '';
+        setType('all');
         paintNow();
-        syncLead();
+        syncOpen();
       }
       // Return is "show me", and the answer is already on the page.
       if (e.key === 'Enter') searchEl.blur();
@@ -15004,7 +15075,7 @@
       searchTimer = setTimeout(() => { if (bodyEl.isConnected) paint(); }, SEARCH_BEAT);
     };
     const paintNow = () => { clearTimeout(searchTimer); paint(); };
-    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); syncLead(); });
+    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); syncOpen(); });
 
     // A re-pull while you're standing here repaints the body in place. A quiet
     // refresh skips a live search; an explicit tab re-tap (`force`) does not.
@@ -15012,14 +15083,14 @@
     // Discover from scratch.
     discoverRepaint = (force) => {
       if (!bodyEl.isConnected) return false;
-      if (force || !discoverQuery.trim()) paintNow();
+      if (force || (!discoverQuery.trim() && discoverType === 'all')) paintNow();
       return true;
     };
 
     // Restore an in-flight query if a background refresh re-rendered the page.
     searchEl.value = discoverQuery;
     paint();
-    syncLead();
+    syncOpen();
   }
 
   /* ── Updates — a quiet ledger, visited on your own time ────────────────────

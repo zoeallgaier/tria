@@ -1829,7 +1829,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 @media (min-width: 681px) {
   .toolbar-field .discover-search { max-width: var(--feed-width); margin-inline: auto; }
 }
-.discover-search { position: relative; }
+.discover-search { position: relative; display: flex; align-items: center; }
 .discover-search-ico {
   position: absolute;
   left: 0.95rem;
@@ -1842,6 +1842,8 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 .discover-search-ico svg { width: 20px; height: 20px; }
 .discover-search-field {
   display: block;
+  flex: 1 1 0;
+  min-width: 0;
   width: 100%;
   /* 44px tall: the HIG floor for the target, met by the field itself. */
   min-height: 44px;
@@ -1865,6 +1867,86 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 /* No X in the field either: WebKit draws its own on type=search. */
 .discover-search-field::-webkit-search-cancel-button,
 .discover-search-field::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+
+/* ── The search's filter, in on the right (2026-10-25) ────────────────────────
+   Zoe: while search is open, filter it by post type, the icon coming in on the
+   right. The disc is the other pages' filter (.masthead-filter, .toolbar-btn,
+   bare at the top like the + across from it) in a SLOT at the field's end. Shut,
+   the slot is no width and the field runs to the edge. Open (.is-open, syncOpen
+   in app.js), the slot widens by a disc and a gap on the signature ease, so the
+   field's end glides over as one move, and the disc rides in from the edge on
+   the spring, its glyph sharpening out of a blur the way the bar's title
+   arrives. Leaving is the same move back, all on the calm ease.
+
+   The slot, not the disc, is what changes width: a disc whose width moved
+   would be an oval for the length of the move. */
+.discover-filter-slot {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  width: 0;
+  pointer-events: none;
+  transition: width var(--dur-move) var(--ease);
+}
+.discover-filter-slot.is-open {
+  width: calc(var(--toolbar-btn) + var(--toolbar-gap));
+  pointer-events: auto;
+}
+/* Two classes and the bar, to outrank .masthead-filter's and .toolbar-btn's
+   own transitions and the bare rule's, and restating what they move. */
+.topbar .discover-filter-slot .masthead-filter {
+  isolation: isolate;               /* keeps the band's z-index:-1 inside the disc */
+  opacity: 0;
+  transform: translateX(calc(var(--toolbar-gap) + 14px)) scale(0.55);
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-move) var(--ease),
+    color var(--dur-micro), background-color var(--dur-quick) var(--ease),
+    border-color var(--dur-quick) var(--ease);
+}
+.topbar .discover-filter-slot.is-open .masthead-filter {
+  opacity: 1;
+  transform: none;
+  transition: opacity var(--dur-quick) var(--ease) 0.04s, transform var(--dur-slow) var(--spring),
+    color var(--dur-micro), background-color var(--dur-quick) var(--ease),
+    border-color var(--dur-quick) var(--ease);
+}
+.discover-filter-slot .masthead-filter-ico {
+  filter: blur(3px);
+  transition: filter var(--dur-move) var(--ease);
+}
+.discover-filter-slot.is-open .masthead-filter-ico { filter: none; }
+/* A TYPE PICKED WEARS THE READER'S BAND, washed into the disc as a chosen
+   .pill-quiet is (their colour, Tria's ramp or the neutral, at --pill-wash),
+   blooming from the middle on the spring. The other filters say "on" in ink
+   alone, which the bare bar at the top of a page can't show: a bare glyph is
+   already in ink. So this one keeps its hairline and glass even bare. */
+.discover-filter-slot .masthead-filter::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--pill-band);
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-move) var(--ease);
+}
+.topbar .discover-filter-slot .masthead-filter[data-active] {
+  color: var(--text);
+  background: var(--glass-bg);
+  border: var(--pill-edge);
+}
+.discover-filter-slot .masthead-filter[data-active]::before {
+  opacity: var(--pill-wash);
+  transform: none;
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-slow) var(--spring);
+}
+@media (prefers-reduced-motion: reduce) {
+  .discover-filter-slot { transition: none; }
+  .topbar .discover-filter-slot .masthead-filter,
+  .topbar .discover-filter-slot.is-open .masthead-filter { transform: none; transition: opacity var(--dur-quick) ease; }
+  .discover-filter-slot .masthead-filter-ico { filter: none; transition: none; }
+  .discover-filter-slot .masthead-filter::before { transform: none; }
+}
 
 
 /* The New-post masthead's reactive type mark: a coloured type-icon in the same
