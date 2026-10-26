@@ -14030,8 +14030,8 @@
      neither (a hidden rich field raised the LETTER keyboard over the picker),
      so the web takes a picture file. Either way it is redrawn as a
      transparent PNG and uploaded, and the charm is 'i:' plus its path in your
-     own media folder (Store's isSticker). No trims: a sticker brings its own
-     white edge. Up to ten are held (STICKER_MAX, below). */
+     own media folder (Store's isSticker). No trims and no edge: a sticker
+     is worn as it is. Up to ten are held (STICKER_MAX, below). */
   const isCustomCharm = (key) => typeof key === 'string' && key.startsWith('i:');
   const charmOf = (key) => isCustomCharm(key)
     ? { key, name: 'Your charm', custom: true, got: 'Your own charm.' }

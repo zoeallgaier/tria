@@ -28,8 +28,8 @@ import UniformTypeIdentifiers
 ///
 /// "From a photo" is the same cut-out without the keyboard, for anyone with no
 /// stickers yet: Vision's foreground mask (iOS 17, the request behind Photos'
-/// own lift-subject). Whatever arrives, sticker, emoji or photo, leaves with
-/// the same white edge drawn round it (`edged`, `outlined`).
+/// own lift-subject). Whatever arrives, sticker, emoji or photo, leaves as it
+/// is, with no edge drawn round it.
 @objc(TriaStickerPlugin)
 public class TriaStickerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "TriaStickerPlugin"
@@ -274,7 +274,7 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         // A sticker, else the last emoji typed, drawn as a picture; a letter
         // gets the hint's shake.
         if let image = Self.sticker(in: text) ?? Self.emoji(in: text.string).flatMap(Self.emojiImage) {
-            land(Self.edged(image))
+            land(image)
         } else if text.length > 0 {
             nudge()
         }
@@ -414,8 +414,7 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         }
     }
 
-    /// Vision's foreground mask, every subject it finds, cropped to them, with
-    /// a white edge. Off the main thread (the caller's queue is the loader's).
+    /// Vision's foreground mask, every subject it finds, cropped to them. Off the main thread (the caller's queue is the loader's).
     @available(iOS 17.0, *)
     static func lift(_ image: UIImage) -> UIImage? {
         let upright = capped(image, to: 1600)
@@ -427,35 +426,14 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
               let buffer = try? result.generateMaskedImage(ofInstances: result.allInstances, from: handler,
                                                             croppedToInstancesExtent: true)
         else { return nil }
-        return outlined(CIImage(cvPixelBuffer: buffer))
+        return rendered(CIImage(cvPixelBuffer: buffer))
     }
 
-    /// Every charm the sheet makes wears the photo cut-out's white edge, a
-    /// sticker or an emoji too (Zoe, 2026-10-25: "standardize that"), so they
-    /// all read as one set on a face, where they no longer wear a halo.
-    static func edged(_ image: UIImage) -> UIImage {
-        guard let cg = image.cgImage else { return image }
-        return outlined(CIImage(cgImage: cg)) ?? image
-    }
-
-    /// A sticker's white edge: the cut-out's own alpha grown by a few percent
-    /// of its size, softened a hair, filled white, and the cut-out laid on top.
-    static func outlined(_ cut: CIImage) -> UIImage? {
-        let r = max(4, (max(cut.extent.width, cut.extent.height) * 0.03).rounded())
-        let pad = r * 2
-        let moved = cut.transformed(by: CGAffineTransform(translationX: pad - cut.extent.minX, y: pad - cut.extent.minY))
-        let canvas = CGRect(x: 0, y: 0, width: cut.extent.width + pad * 2, height: cut.extent.height + pad * 2)
-        let grown = moved
-            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: r])
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.2])
-            .cropped(to: canvas)
-        let edge = CIImage(color: .white).cropped(to: canvas)
-            .applyingFilter("CIBlendWithAlphaMask", parameters: [
-                kCIInputMaskImageKey: grown,
-                kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: canvas),
-            ])
-        let out = moved.composited(over: edge).cropped(to: canvas)
-        guard let cg = CIContext().createCGImage(out, from: canvas) else { return nil }
+    /// The cut-out as a picture, its own alpha and nothing round it: no
+    /// charm wears a white edge (Zoe, 2026-10-25: "remove the white outline").
+    static func rendered(_ cut: CIImage) -> UIImage? {
+        let box = cut.extent
+        guard let cg = CIContext().createCGImage(cut, from: box) else { return nil }
         return UIImage(cgImage: cg)
     }
 

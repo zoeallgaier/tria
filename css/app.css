@@ -10806,8 +10806,8 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
   filter: drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 6px var(--bg));
 }
 .charm--worn-a { left: -5.4%; top: -5.4%; }
-/* A sticker charm wears its own white edge (the native sheet draws it on
-   every one), so it needs no halo; the halo is for the line charms. */
+/* A sticker charm is worn as it is, with no halo and no edge; the halo is
+   for the line charms. */
 .charm--worn.charm--sticker { filter: none; }
 .charm--worn-b { left: 65.4%; top: 65.4%; }
 
