@@ -6174,10 +6174,10 @@ button.poll-option:disabled { cursor: default; }
 .compose-circle .daily-card { pointer-events: none; }
 .compose-circle-x {
   position: absolute;
-  /* Centred on the box's own corner (Zoe: "the actual corner"), half of
-     its 30px out each way. */
-  top: -15px;
-  right: -15px;
+  /* On the box's own corner (Zoe: "the actual corner"), then 3px in
+     toward the card each way (Zoe). */
+  top: -12px;
+  right: -12px;
   z-index: 2;
   margin: 0;   /* it follows .card-circle, whose + * spacing would drop it */
   display: grid;
