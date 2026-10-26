@@ -6573,7 +6573,9 @@
       host.querySelector('[data-np="mine"]')?.addEventListener('click', openMySong);
       host.querySelectorAll('.np-item--post').forEach(item => {
         const post = Store.posts().find(p => String(p.id) === item.dataset.post);
-        if (post) wireLikes(item, post);
+        if (!post) return;
+        wireLikes(item, post);
+        item.querySelector('.np-reply')?.addEventListener('click', (e) => replyToSong(post, e.currentTarget));
       });
     }
     // A song just shared is in no feed, so it lands here as your square, and
@@ -6615,6 +6617,40 @@
         } },
       ],
     });
+  }
+
+  /* A SONG TAKES A REPLY, and the reply is a message (Zoe, 2026-10-25: "if
+     likes are already there..."). Not a comment: a Music post has no page and
+     no feed to hold a thread, it is gone in a week, and what people say about
+     somebody's song is said to them. So the bubble beside the heart opens your
+     DM with the friend, the song waiting on the bar as a reply waits, and the
+     caret already in the field. What goes is your words and the song's own
+     link, which the thread draws as the song (songInMessage). No table and no
+     new kind of update: the DM's push and dot carry it. The chat's chevron pops
+     back to My Circle rather than to Chats (chatPopsTo), since that is where
+     the reader came from. */
+  let songReply = null;   // { chatId, post } for the chat this tap opens
+  let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
+  async function replyToSong(post, btn) {
+    if (btn.dataset.busy) return;
+    hapticTap('LIGHT');
+    const dm = Store.chats().find(ch => ch.kind === 'direct' && ch.other === post.author
+      && ch.status === 'member' && !ch.archived);
+    let id = dm && dm.id;
+    if (!id) {
+      // Hands itself back on every path, rejection included.
+      btn.dataset.busy = '1';
+      btn.classList.add('is-busy');
+      const res = await Store.startDirectChat(post.author).catch(() => null);
+      delete btn.dataset.busy;
+      btn.classList.remove('is-busy');
+      if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
+      id = res.id;
+    }
+    rememberSong(post.song);
+    songReply = { chatId: id, post };
+    chatPopsTo = id;
+    go(`#/chat/${encodeURIComponent(id)}`);
   }
 
   function renderFeed() {
@@ -12428,6 +12464,10 @@
           `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" ` +
             `rel="noopener noreferrer" data-out="system" aria-label="${esc(f.label)}">${f.html}</a>` +
           (u.username !== me && Store.isAuthed() ? likeToggleHtml(post).replace('class="card-like', 'class="card-like np-like') : '') +
+          (u.username !== me && canMessage(u.username)
+            ? `<button class="np-reply" type="button" aria-label="Reply to ${esc(u.name || u.username)}’s song">` +
+                svgIcon('comment') + `</button>`
+            : '') +
         `</div>`;
     };
     return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
@@ -15600,7 +15640,11 @@
   function chatPreview(c) {
     const m = c.last;
     if (!m) return c.kind === 'direct' ? 'Say hi.' : 'Nothing said yet.';
-    const said = m.text ? notePlain(m.text) : (m.image ? 'Sent a photo.' : '');
+    // A song's link is drawn as the song in the thread, so here it is the words
+    // around it, or the fact of it.
+    const words = m.text ? m.text.replace(SONG_IN_TEXT, '').trim() : '';
+    const said = words ? notePlain(words)
+      : m.text ? 'Sent a song.' : (m.image ? 'Sent a photo.' : '');
     const who = m.author === Store.session() ? 'You: '
       : c.kind === 'direct' ? '' : `${displayNameOf(m.author)}: `;
     const line = who + said;
@@ -15768,6 +15812,76 @@
       `</a>`;
   }
 
+  /* A SONG'S LINK IN A MESSAGE IS THE SONG, the way a circle's is the circle.
+     A reply to somebody's song (replyToSong) carries the song's own link under
+     the words, and so does any Apple Music, Spotify or YouTube Music link
+     pasted into a chat. The thread draws the record above the words, where a
+     photo sits, and a tap opens it in the READER's service (songLink), not the
+     sender's. What the record is comes off the link: a Music post holding it,
+     then this device's memory of it (SONGS_KEY, written whenever one is seen,
+     so a reply outlives the post it answered, which is replaced within the
+     week), then the picker's own reading of a pasted link (resolveSongUrl),
+     remembered and painted once it lands. A link none of those can read stays
+     the text it was. */
+  const SONG_IN_TEXT = /https?:\/\/(?:open\.spotify\.com|(?:[a-z]+\.)?music\.apple\.com|music\.youtube\.com)\/\S+/i;
+  const SONGS_KEY = 'tria:songs';
+  // The one link that names a song: its own, or for a typed-in title a search
+  // for it, which still lands in a music app.
+  const songOwnLink = (s) => s.apple || s.spotify || s.youtube
+    || MUSIC_SEARCH.apple([s.title, s.artist].filter(Boolean).join(' '));
+  let songMemo = null;
+  function songMemory() {
+    if (songMemo) return songMemo;
+    songMemo = new Map();
+    try { for (const [k, v] of JSON.parse(localStorage.getItem(SONGS_KEY) || '[]')) songMemo.set(k, v); }
+    catch { /* private mode, or a bad write: start clean */ }
+    return songMemo;
+  }
+  function rememberSong(s, link = s && songOwnLink(s)) {
+    if (!s || !s.title || !link) return;
+    const memo = songMemory();
+    const keep = { title: s.title, artist: s.artist || '', art: s.art || '',
+      apple: s.apple || '', spotify: s.spotify || '', youtube: s.youtube || '', kind: s.kind || '' };
+    if (JSON.stringify(memo.get(link)) === JSON.stringify(keep)) return;
+    memo.delete(link);
+    memo.set(link, keep);
+    while (memo.size > 150) memo.delete(memo.keys().next().value);   // oldest first
+    try { localStorage.setItem(SONGS_KEY, JSON.stringify([...memo])); } catch { /* full or private */ }
+  }
+  const songAsking = new Set();
+  function songInMessage(text) {
+    const m = SONG_IN_TEXT.exec(text || '');
+    if (!m) return null;
+    const link = m[0];
+    const rest = (text.slice(0, m.index) + text.slice(m.index + link.length)).trim();
+    const post = Store.posts().find(p => p.type === 'song' && p.song && songOwnLink(p.song) === link);
+    if (post) { rememberSong(post.song, link); return { s: post.song, rest }; }
+    const known = songMemory().get(link);
+    if (known) return { s: known, rest };
+    if (!songAsking.has(link)) {
+      songAsking.add(link);
+      resolveSongUrl(link).then((s) => {
+        if (!s || !s.title) return;
+        rememberSong(s, link);
+        if (chatLive) chatLive();
+      }, () => {});
+    }
+    return null;
+  }
+  function msgSongHtml(s) {
+    const sub = songSub(s);
+    return `<a class="msg-song" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
+        `data-out="system" aria-label="${esc(['Listen to ' + s.title, songSub(s, ', ')].filter(Boolean).join(', '))}">` +
+        `<span class="song-art msg-song-art${s.art ? ' pin-cover' : ''}"${s.art
+          ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+        `<span class="song-lines" aria-hidden="true">` +
+          `<span class="song-title">${esc(s.title)}</span>` +
+          (sub ? `<span class="song-artist">${esc(sub)}</span>` : '') +
+        `</span>` +
+        `<span class="card-song-play msg-song-play" aria-hidden="true">${svgIcon('play')}</span>` +
+      `</a>`;
+  }
+
   function messageHtml(c, m, mine, run, byId) {
     const u = Store.user(m.author);
     const name = esc(u ? u.name : m.author);
@@ -15777,7 +15891,8 @@
     const dims = m.image ? imageDimsFromUrl(m.image) : null;
     const href = `#/u/${esc(encodeURIComponent(m.author))}`;
     const room = m.text ? circleInMessage(m.text) : null;
-    const said = room ? room.rest : m.text;
+    const tune = m.text && !room ? songInMessage(m.text) : null;
+    const said = room ? room.rest : tune ? tune.rest : m.text;
     return `<li class="msg${mine ? ' msg--mine' : ''}${run ? ' msg--run' : ''}" data-id="${esc(m.id)}">` +
       (mine ? '' : `<span class="msg-face">${run ? '' :
         `<a class="msg-face-link" href="${href}" aria-label="${name}">` +
@@ -15793,6 +15908,7 @@
               `<img src="${esc(sizedSrc(m.image, 240))}" alt="Photo from ${name}" loading="lazy" decoding="async">` +
             `</button>`
           : '') +
+        (tune ? msgSongHtml(tune.s) : '') +
         (said
           ? `<div class="msg-bubble" role="button" tabindex="0" aria-label="Message from ${name}, options">` +
               richText(said, m.author) + `</div>`
@@ -15988,10 +16104,12 @@
   }
 
   function setChatReply(m) {
+    // One thing answered at a time: a message, or a song.
+    if (m) setChatSong(null);
     chatReply = m || null;
     const bar = postBarEl();
     if (!bar) return;
-    let tray = bar.querySelector('.postbar-reply');
+    let tray = bar.querySelector('.postbar-reply:not(.postbar-song)');
     if (!m) { if (tray) tray.remove(); return; }
     if (!tray) {
       // Worn as the photo tray, so it hangs over the bar by the same rules in
@@ -16014,6 +16132,53 @@
     const field = bar.querySelector('textarea');
     if (field) {
       field.focus();
+      NativeChrome.postBarText(field.value, field.value.length, true);
+    }
+  }
+
+  /* The song a reply answers (replyToSong), waiting over the bar the way a
+     message being answered does: the same glass chip, worn with the sleeve,
+     and the field asking to reply to its owner. The send carries the song's
+     link under the words; the chip's X takes it back and leaves a plain DM. */
+  let chatSong = null;   // { post } while one waits
+  function setChatSong(post) {
+    chatSong = post ? { post } : null;
+    const bar = postBarEl();
+    if (!bar) return;
+    const field = bar.querySelector('textarea');
+    let tray = bar.querySelector('.postbar-song');
+    if (!post) {
+      if (tray) tray.remove();
+      if (field && field.dataset.place) {
+        field.setAttribute('placeholder', field.dataset.place);
+        delete field.dataset.place;
+        NativeChrome.sync();
+      }
+      return;
+    }
+    setChatReply(null);
+    if (!tray) {
+      tray = document.createElement('div');
+      tray.className = 'postbar-attach postbar-reply postbar-song';
+      bar.appendChild(tray);
+    }
+    const s = post.song;
+    const who = displayNameOf(post.author);
+    tray.innerHTML =
+      `<div class="postbar-reply-chip postbar-song-chip">` +
+        `<span class="postbar-song-art${s.art ? ' pin-cover' : ''}"${s.art
+          ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+        `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> song:${esc(s.title)}</span>` +
+        `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the song">${svgIcon('close')}</button>` +
+      `</div>`;
+    const x = tray.querySelector('.postbar-reply-x');
+    x.addEventListener('mousedown', (e) => e.preventDefault());
+    x.addEventListener('click', () => setChatSong(null));
+    if (field) {
+      if (!field.dataset.place) field.dataset.place = field.getAttribute('placeholder') || '';
+      field.setAttribute('placeholder', `Reply to ${who}…`);
+      field.focus();
+      NativeChrome.sync();
       NativeChrome.postBarText(field.value, field.value.length, true);
     }
   }
@@ -16272,8 +16437,15 @@
   function renderChat(id) {
     const c = Store.chat(id);
     chatReply = null;
+    chatSong = null;
+    // Reached from a song's reply, the chevron pops back to My Circle, the
+    // way the editors' does (a pushed entry is there to pop).
+    const pops = chatPopsTo === id;
+    chatPopsTo = pops ? id : null;
+    const answering = songReply && songReply.chatId === id ? songReply.post : null;
+    songReply = null;
     mountToolbar({
-      leading: toolbarBackEl('#/chats', 'Chats'),
+      leading: pops ? toolbarBackEl('', 'My Circle', 'chat-back') : toolbarBackEl('#/chats', 'Chats'),
       // Not esc()'d: setToolbarTitle assigns textContent (see renderPost).
       title: c ? chatTitle(c) : 'Chat',
       actions: c
@@ -16330,6 +16502,10 @@
     chatLive = () => repaint(false);
 
     wireMessages(section, c.id);
+    document.getElementById('chat-back')?.addEventListener('click', () => {
+      chatPopsTo = null;
+      history.back();
+    });
     document.getElementById('chat-more')?.addEventListener('click', () => {
       const now = Store.chat(c.id);
       if (now) openChatMenu(now);
@@ -16354,8 +16530,12 @@
       deny.addEventListener('click', () => answer(false));
     } else if (c.status === 'member' && !c.archived) {
       mountPostBar(null, {
-        submit: (text, photo) => Store.sendMessage(c.id, text, photo, chatReply && chatReply.id),
-        onSent: () => { setChatReply(null); repaint(true); },
+        // A song being answered goes as its link under the words, which the
+        // thread draws as the record (songInMessage).
+        submit: (text, photo) => Store.sendMessage(c.id,
+          chatSong ? `${String(text || '').trim()}\n${songOwnLink(chatSong.post.song)}`.trim() : text,
+          photo, chatReply && chatReply.id),
+        onSent: () => { setChatReply(null); setChatSong(null); repaint(true); },
         /* NOT SMOOTH, and that is the keyboard's doing. The reserve the keys
            demand lands a beat after this (setKbInset) and scrolls the page by
            what it just took; a tween still in flight when that arrives is two
@@ -16365,6 +16545,9 @@
            through the history first. */
         onFocus: () => toBottom(false),
       });
+      // The song waits on the bar with the caret in the field, once the native
+      // bar has been told the page has one.
+      if (answering) requestAnimationFrame(() => { if (section.isConnected) setChatSong(answering); });
     }
 
     // Open on the newest message, after the router has settled the scroll.
@@ -19620,7 +19803,7 @@
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
     '.sheet-item', '.sheet-cancel',
-    '.postbar-send', '.comment-delete', 'button.comment-like',
+    '.postbar-send', '.comment-delete', 'button.comment-like', '.np-reply',
     '.masthead-filter', '.request-ignore', '.push-ask-dismiss',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.

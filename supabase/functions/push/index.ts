@@ -116,6 +116,8 @@ function postLabel(post: Row | null): string {
   if (t) { const s = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t; return `“${s}”`; }
   return post?.type === 'photo' ? 'your frame' : 'your post';
 }
+// The app's SONG_IN_TEXT: a music service's link in a message.
+const SONG_IN_TEXT = /https?:\/\/(?:open\.spotify\.com|(?:[a-z]+\.)?music\.apple\.com|music\.youtube\.com)\/\S+/i;
 function snip(t: string, n = 90) { t = (t || '').trim(); return t.length > n ? t.slice(0, n).trimEnd() + '…' : t; }
 
 // ── APNs ─────────────────────────────────────────────────────────────────────
@@ -330,7 +332,11 @@ async function handle(table: string, rec: Row) {
       const act = await postById(chat.post_id);
       where = (act && act.title) || 'an activity chat';
     }
-    const body = snip(rec.body) || (rec.image ? 'Sent a photo.' : '');
+    // A song's link is drawn as the song in the app (songInMessage), so the
+    // push says the words around it, or that a song came.
+    const song = SONG_IN_TEXT.test(rec.body || '');
+    const words = String(rec.body || '').replace(SONG_IN_TEXT, '').trim();
+    const body = snip(words) || (song ? 'Sent a song.' : rec.image ? 'Sent a photo.' : '');
     for (const m of members || []) {
       if (m.user_id === rec.author || m.muted || m.status === 'denied' || blocked.has(m.user_id)) continue;
       await sendTo(m.user_id, {

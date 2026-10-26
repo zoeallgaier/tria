@@ -5843,8 +5843,11 @@ button.poll-option:disabled { cursor: default; }
    sit 40px apart, so the glyphs read as one little bar in the corner. */
 .np-reply {
   position: absolute;
-  top: calc(132px - 44px);
-  right: 38px;
+  /* 4px down and 4px in from where its box would sit beside the heart's: the
+     bubble's ink rides high and left in its 24 grid, so this is the optical
+     match to the heart (Zoe, 2026-10-25). */
+  top: calc(132px - 44px + 4px);
+  right: 34px;
   z-index: 1;
   display: grid;
   place-items: center;
@@ -5859,8 +5862,8 @@ button.poll-option:disabled { cursor: default; }
   transition: opacity var(--dur-quick) var(--ease);
 }
 .np-reply svg {
-  width: 26px;
-  height: 26px;
+  width: 29px;
+  height: 29px;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 /* Opening a chat that isn't there yet takes a round trip: the mark breathes. */
