@@ -3051,42 +3051,59 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   line-height: 1.5;
   color: var(--text);
   font-weight: 300;
+  /* A paragraph is LINES (a poem's stanza, joined by <br>), and a line keeps
+     its leading spaces, a poem's indent: the editor is pre-wrap, so this is
+     what the writer saw. Long words still wrap. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
-.card-note:last-child { margin-bottom: 0; }
-/* Paragraph rhythm when a note carries more than one block (long posts). */
-.card-note + .card-note { margin-top: 0.7rem; }
+
+/* ── A note's rhythm (2026-10-26) ──────────────────────────────────────────────
+   ONE SCALE, read by the feed, the editor below and the story card (FLOW in
+   storycard.js): a line is the body's 1.5, a paragraph (or a poem's stanza) is
+   one rem of air, and a heading opens a section with MORE air above it than
+   any paragraph gap and tucks its text in close under it, so it belongs to
+   what follows. Every gap is a top margin and nothing has a bottom one, so the
+   sum never depends on whether margins collapse. It was 0.7rem between
+   paragraphs and 0.75rem over an H2, so a heading read as one more paragraph. */
+.card-note + .card-note { margin-top: 1rem; }
 
 /* ── Rich-note headings + emphasis (blog-style Notes) ──────────────────────────
    Headings are titles, so they stay in Instrument Serif (the "serif = titles"
    rule): H1 upright, a step under the post title; H2 the italic serif voice, a
    step under that. Inline bold/italic ride the Oxygen body — 700 reads loud
-   against the 300 note weight. Same styles power the WYSIWYG editor below, so the
+   against the 300 note weight. The editor's h1/h2 share these rules, so the
    feed and the field render identically. */
-.card-h1 {
+.card-h1, .rich-note h1 {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;                 /* match the post title (no synthetic bold) */
   font-size: clamp(1.4rem, 2.2vw, 1.62rem);
   line-height: 1.16;
   color: var(--text);
-  margin: 0 0 0.4rem;
+  margin: 0;
 }
-.card-h2 {
+.card-h2, .rich-note h2 {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
   font-style: italic;
   font-size: clamp(1.15rem, 1.8vw, 1.3rem);
   line-height: 1.2;
   color: var(--text);
-  margin: 0 0 0.35rem;
+  margin: 0;
 }
-/* A heading after any preceding block gets extra air above it, so sections
-   breathe; a paragraph directly under its heading tucks in close. */
-:where(.card-note, .card-h1, .card-h2) + .card-h1 { margin-top: 0.95rem; }
-:where(.card-note, .card-h1, .card-h2) + .card-h2 { margin-top: 0.75rem; }
-:where(.card-h1, .card-h2) + .card-note { margin-top: 0.3rem; }
-.card-h1:last-child, .card-h2:last-child { margin-bottom: 0; }
+:is(.card-note, .card-h1, .card-h2) + .card-h1 { margin-top: 1.6rem; }
+:is(.card-note, .card-h1, .card-h2) + .card-h2 { margin-top: 1.35rem; }
+:is(.card-h1, .card-h2) + .card-note { margin-top: 0.4rem; }
+/* A subheading under its heading, or a heading run onto a second line. */
+.card-h1 + .card-h2 { margin-top: 0.4rem; }
+.card-h1 + .card-h1, .card-h2 + .card-h2 { margin-top: 0.15rem; }
+/* Under the post's title a heading is its dek, a step clear of it. Inside the
+   Read more clip (its own formatting context) the gap adds to the title's. */
+.card-title + :is(.card-h1, .card-h2) { margin-top: 0.8rem; }
+.card-title + .readmore > .readmore-clip > :is(.card-h1, .card-h2):first-child { margin-top: 0.25rem; }
 .card-note strong, .card-note b { font-weight: 700; }
 .card-note em, .card-note i { font-style: italic; }
+
 
 /* ── Long notes — "Read more" ─────────────────────────────────────────────────
    A feed card shows a teaser: the note renders intact and its height is clamped,
@@ -5057,23 +5074,26 @@ body.gate main { padding: 0; }
   opacity: 0.6;
   pointer-events: none;
 }
-.rich-note h1 {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-weight: 400;
-  font-size: 1.5rem;
-  line-height: 1.2;
-  margin: 0.1rem 0 0.3rem;
-}
-.rich-note h2 {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-weight: 400;
-  font-style: italic;
-  font-size: 1.25rem;
-  line-height: 1.2;
-  margin: 0.1rem 0 0.3rem;
-}
-.rich-note p { margin: 0 0 0.45rem; }
-.rich-note > :last-child { margin-bottom: 0; }
+/* The field reads a block as a LINE (see richItems): lines sit flush, and a
+   blank one (`.is-blank`, kept by wireRichEditor, since a CSS selector can't
+   tell `<div><br></div>` from a line of words ending in a <br>) is drawn one
+   rem tall, the paragraph gap it posts as. The headings wear the feed's own
+   rules (above, with .card-h1) and the same air; a blank line beside a heading
+   or another blank posts as nothing, so it gives back what it would add. */
+.field--rich .rich-note { line-height: 1.5; font-weight: 300; }
+.rich-note :is(p, div) { margin: 0; }
+.rich-note .is-blank { line-height: 1rem; }
+.rich-note > * + h1 { margin-top: 1.6rem; }
+.rich-note > * + h2 { margin-top: 1.35rem; }
+.rich-note > .is-blank + h1 { margin-top: 0.6rem; }
+.rich-note > .is-blank + h2 { margin-top: 0.35rem; }
+.rich-note > :is(h1, h2) + :not(h1, h2, .is-blank) { margin-top: 0.4rem; }
+.rich-note > h1 + h2 { margin-top: 0.4rem; }
+.rich-note > h1 + h1, .rich-note > h2 + h2 { margin-top: 0.15rem; }
+.rich-note > :is(h1, h2) + .is-blank,
+.rich-note > .is-blank + .is-blank,
+.rich-note > .is-blank:first-child { line-height: 0; }
+.rich-note > :is(h1, h2) + .is-blank + :not(h1, h2, .is-blank) { margin-top: 0.4rem; }
 .rich-note strong, .rich-note b { font-weight: 700; }
 .rich-note em, .rich-note i { font-style: italic; }
 

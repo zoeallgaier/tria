@@ -2559,21 +2559,24 @@
   // showed were run together the moment the post was published — and the words
   // either side of the break were joined without so much as a gap.
   //
-  // So a break becomes a "\n" SENTINEL here and richBlocks splits blocks on it.
+  // So a break becomes a "\n" SENTINEL here and richItems splits blocks on it.
   // Both directions share this walk, so the fix lands on capture AND on render:
   // a note already stored with a swallowed break comes back correct the next
   // time it paints, with no migration.
   const BREAK = '\n';
 
   // A break inside emphasis has to close and reopen the tag, or the split in
-  // richBlocks would hand one block half a <strong> and the next block the rest.
+  // richItems would hand one line half a <strong> and the next line the rest.
   const breakInline = (tag, inner) =>
     inner.split(BREAK).map(s => (s.trim() ? `<${tag}>${s}</${tag}>` : s)).join(BREAK);
 
   // Walk a node's children, emitting only bold/italic inline tags; each text node
   // passes through `textFn` (esc for storage, richText for display — so mentions
   // link only when rendering). Unknown elements are flattened to their text: a
-  // pasted <span style> or stray <font> keeps its words, loses its markup.
+  // pasted <span style> or stray <font> keeps its words, loses its markup. A
+  // block nested in a block (WebKit does it now and then) is a line of its own,
+  // not words glued to the line before it; its own trailing <br> is the engine's
+  // placeholder, so an empty one is exactly one blank line.
   function richInline(node, textFn) {
     let out = '';
     node.childNodes.forEach((n) => {
@@ -2585,7 +2588,10 @@
       } else if (tag === 'em' || tag === 'i') {
         out += breakInline('em', richInline(n, textFn));
       } else if (tag === 'br') {
-        out += BREAK;                           // a visual line, split out in richBlocks
+        out += BREAK;                           // a visual line, split out in richItems
+      } else if (/^(div|p|h1|h2|li|blockquote)$/.test(tag)) {
+        if (out && !out.endsWith(BREAK)) out += BREAK;
+        out += richInline(n, textFn).replace(/\n$/, '') + BREAK;
       } else if (tag === 'script' || tag === 'style') {
         // Drop entirely: never surface script/style text, even escaped.
       } else {
@@ -2595,33 +2601,46 @@
     return out;
   }
 
-  // Split a root (the live editor, or parsed stored HTML) into normalised blocks:
-  // bare / <div> / <p> lines become paragraphs, <h1>/<h2> stay headings, and
-  // text-empty blocks are dropped. `cls` maps a tag → its render class (null for
-  // the storage + editor form, which carries no classes).
-  function richBlocks(root, textFn, cls) {
+  /* A NOTE IS PARAGRAPHS OF LINES. Read a root (the live editor, or parsed
+     stored HTML) into its blocks, each `{ tag, lines }`: a heading is one line,
+     a paragraph is every line in it, which is a poem's stanza or a prose
+     paragraph's one long line. The walk used to make EVERY line a paragraph
+     and throw blank lines away, so a stanza and the break between two stanzas
+     drew the same, and a poem lost its shape the moment it posted.
+
+     THE TWO ROOTS READ A BLOCK DIFFERENTLY, and `asLines` says which this is.
+     In the editor a block is a LINE (WebKit wraps each Return in a <div>, and a
+     blank line is `<div><br></div>`), so lines run on into one paragraph until
+     a blank line ends it: what the editor shows is what posts. In storage a
+     block is already a paragraph, its lines joined by <br>, so a note stored
+     before this (a <p> per Return) keeps the paragraph gaps it always had. A
+     run of blank lines is one break, and one beside a heading is none (the
+     heading's own air does that job). A line keeps its leading spaces, a
+     poem's indent; its trailing ones go. */
+  function richItems(root, textFn, asLines) {
     const out = [];
-    const emit = (tag, node) => {
-      const c = cls && cls[tag] ? ` class="${cls[tag]}"` : '';
-      // One block in, one block per LINE out: richInline leaves a BREAK wherever
-      // the reader saw a new line, whatever the engine encoded it as. A run of
-      // them is one break (a blank line is spacing, not an empty paragraph).
-      richInline(node, textFn).split(/\n+/).forEach((line) => {
-        if (!line.replace(/<[^>]+>/g, '').trim()) return;   // no real text → skip
-        out.push(`<${tag}${c}>${line}</${tag}>`);
+    let para = null;
+    const end = () => { if (para) out.push(para); para = null; };
+    const read = (tag, node) => {
+      // A trailing break is the engine's placeholder holding a block open (or
+      // the last line's own end), never a blank line of its own.
+      richInline(node, textFn).replace(/\n$/, '').split(BREAK).forEach((line) => {
+        if (!line.replace(/<[^>]+>/g, '').trim()) { end(); return; }   // a blank line
+        line = line.replace(/\s+$/, '');
+        if (tag !== 'p') { end(); out.push({ tag, lines: [line] }); return; }
+        (para = para || { tag: 'p', lines: [] }).lines.push(line);
       });
+      if (!asLines) end();
     };
-    const kids = Array.from(root.childNodes);
     const blockLevel = (n) => n.nodeType === 1 && /^(div|p|h1|h2)$/i.test(n.tagName);
-    if (!kids.some(blockLevel)) { emit('p', root); return out; }   // one loose line, no wrappers
     let buf = document.createElement('p');
-    const flush = () => { if (buf.childNodes.length) { emit('p', buf); buf = document.createElement('p'); } };
-    kids.forEach((n) => {
-      if (n.nodeType === 1 && /^h[12]$/i.test(n.tagName)) { flush(); emit(n.tagName.toLowerCase(), n); }
-      else if (blockLevel(n)) { flush(); emit('p', n); }
-      else buf.appendChild(n.cloneNode(true));
+    const flush = () => { if (buf.childNodes.length) { read('p', buf); buf = document.createElement('p'); } };
+    root.childNodes.forEach((n) => {
+      if (!blockLevel(n)) { buf.appendChild(n.cloneNode(true)); return; }
+      flush();
+      read(/^h[12]$/i.test(n.tagName) ? n.tagName.toLowerCase() : 'p', n);
     });
-    flush();
+    flush(); end();
     return out;
   }
 
@@ -2630,8 +2649,13 @@
   const parseNoteHtml = (html) =>
     new DOMParser().parseFromString(String(html || ''), 'text/html').body;
 
+  // An item as HTML. `cls` maps a tag to its render class (null for the storage
+  // form, which carries no classes).
+  const itemHtml = (it, cls) =>
+    `<${it.tag}${cls && cls[it.tag] ? ` class="${cls[it.tag]}"` : ''}>${it.lines.join('<br>')}</${it.tag}>`;
+
   // compose → storage: clean HTML, every text run escaped, mentions kept as tokens.
-  const serializeNote = (editor) => richBlocks(editor, esc, null).join('');
+  const serializeNote = (editor) => richItems(editor, esc, true).map(it => itemHtml(it)).join('');
 
   // storage → feed: same walk, but text flows through richText (so @mentions link)
   // and blocks carry render classes. Safe to inject: fixed tags, all text escaped.
@@ -2641,7 +2665,8 @@
   // external-link glyph, placed at the true end of the visible text).
   const RICH_CLASS = { h1: 'card-h1', h2: 'card-h2', p: 'card-note' };
   const renderRichNote = (html, author, opts = {}) => {
-    const blocks = richBlocks(parseNoteHtml(html), (t) => richText(t, author, opts), RICH_CLASS);
+    const blocks = richItems(parseNoteHtml(html), (t) => richText(t, author, opts), false)
+      .map(it => itemHtml(it, RICH_CLASS));
     if (opts.trailingIcon && blocks.length) {
       const last = blocks.length - 1;
       blocks[last] = blocks[last].replace(/<\/(h1|h2|p)>$/, `${opts.trailingIcon}</$1>`);
@@ -2649,12 +2674,18 @@
     return blocks.join('');
   };
 
-  // storage/legacy → editor: clean editable HTML (no classes, no links). A legacy
-  // plain-text note becomes paragraphs; a rich note re-walks to the same subset.
-  const editorPrefill = (note) =>
-    !note ? ''
-      : isRichNote(note) ? richBlocks(parseNoteHtml(note), esc, null).join('')
-      : noteParas(note).map((p) => `<p>${esc(p)}</p>`).join('');
+  // storage/legacy → editor: clean editable HTML (no classes, no links), in the
+  // EDITOR's reading, a block per line: a paragraph's lines become a <p> each and
+  // a blank `<p><br></p>` stands between two paragraphs, so the field shows the
+  // gaps the feed does and serializes back to the same note.
+  const editorPrefill = (note) => {
+    if (!note) return '';
+    const items = isRichNote(note)
+      ? richItems(parseNoteHtml(note), esc, false)
+      : noteParas(note).map(lines => ({ tag: 'p', lines: lines.map(esc) }));
+    return items.map((it, i) => it.tag !== 'p' ? itemHtml(it)
+      : (i && items[i - 1].tag === 'p' ? '<p><br></p>' : '') + it.lines.map(l => `<p>${l}</p>`).join('')).join('');
+  };
 
   // Read a note field's value whether it's a plain textarea (find/photo/activity
   // captions) or the rich contenteditable (a Note, → its stored HTML subset, ''
@@ -2701,9 +2732,10 @@
     // emphasis tags would otherwise trip the teaser on a short, formatted note).
     // A caption written as many short lines (a recipe, a list) blows past the
     // teaser's ~6-line clamp well under the character threshold, so also gate on
-    // how many paragraph/heading blocks it renders as — whichever trips first.
+    // how many lines it renders as (a heading, or a paragraph's every line, so a
+    // poem's stanza counts as the lines it is) — whichever trips first.
     const plainLen = rich ? post.note.replace(/<[^>]+>/g, '').length : post.note.length;
-    const blockCount = rich ? (body.match(/<(?:h1|h2|p)[ >]/g) || []).length : noteParas(post.note).length;
+    const blockCount = (body.match(/<(?:h1|h2|p)[ >]|<br>/g) || []).length;
     if (full) return body;                                   // the page never clamps
     if (plainLen <= READMORE_MIN && blockCount < READMORE_MIN_BLOCKS) return body;
 
@@ -2877,9 +2909,20 @@
 
     const syncEmpty = () => {
       // Collapse a field left holding only a stray <br>/empty block back to truly
-      // empty, so the placeholder shows and formatBlock/typing start clean.
-      if (!editor.textContent.trim() && editor.innerHTML !== '') editor.innerHTML = '';
-      editor.classList.toggle('is-empty', !editor.textContent.trim());
+      // empty, so the placeholder shows and formatBlock/typing start clean. An
+      // empty HEADING is not stray: it is H1 or H2 pressed on an empty note,
+      // waiting for its words, and wiping it made a note impossible to start
+      // with a heading (and drew the placeholder over its caret).
+      const bare = !editor.textContent.trim() && !editor.querySelector('h1, h2');
+      if (bare && editor.innerHTML !== '') editor.innerHTML = '';
+      editor.classList.toggle('is-empty', bare);
+      // A blank line is drawn as the paragraph gap it posts as (.is-blank in
+      // app.css). Only a change is written, so typing doesn't churn the DOM; a
+      // class WebKit clones onto the next line on Return is put right here too.
+      editor.querySelectorAll(':scope > p, :scope > div').forEach((b) => {
+        const blank = !b.textContent.trim();
+        if (b.classList.contains('is-blank') !== blank) b.classList.toggle('is-blank', blank);
+      });
     };
     const syncCount = () => {
       if (!countEl) return;
@@ -3857,9 +3900,8 @@
       ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
           (isRichNote(post.note)
             ? renderRichNote(post.note, post.author, { link: false, trailingIcon: external ? extIcon : '' })
-            : noteParas(post.note).map((p, i, arr) =>
-                `<p class="card-note">${richText(p, post.author, { link: false })}${i === arr.length - 1 && external
-                  ? extIcon : ''}</p>`).join('')) +
+            : noteParas(post.note).map(lines => notePara(lines, post.author, { link: false })).join('')
+                .replace(/<\/p>$/, external ? `${extIcon}</p>` : '</p>')) +
         `</a>`
       : cardNoteHtml(post, full);
 
@@ -10721,16 +10763,18 @@
 
      The note goes as BLOCKS, its headings and paragraphs kept apart, not as
      notePlain's one run of words: an essay on a card is set as an essay (see
-     FLOW in storycard.js). A plain note's lines are its paragraphs, as
-     noteParas reads them in a feed. */
+     FLOW in storycard.js). A paragraph's lines cross as "\n", so a poem's
+     stanzas keep their shape there too (storycard.js's wrap breaks on them). */
   const cardBlocks = (note) => {
     if (!note) return [];
-    if (!isRichNote(note)) return noteParas(note).map(text => ({ kind: 'p', text }));
-    return Array.from(parseNoteHtml(note).childNodes).map((n) => {
-      const tag = (n.nodeName || '').toLowerCase();
-      return { kind: tag === 'h1' || tag === 'h2' ? tag : 'p',
-               text: (n.textContent || '').replace(/\s+/g, ' ').trim() };
-    }).filter(b => b.text);
+    const items = isRichNote(note)
+      ? richItems(parseNoteHtml(note), esc, false)
+      : noteParas(note).map(lines => ({ tag: 'p', lines: lines.map(esc) }));
+    const plainLine = (l) => l.replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ').trim();
+    return items.map(it => ({ kind: it.tag, text: it.lines.map(plainLine).filter(Boolean).join('\n') }))
+      .filter(b => b.text);
   };
   function cardSpecFor(post) {
     const a = Store.user(post.author) || { username: post.author, name: post.author };
@@ -15458,8 +15502,9 @@
     if (!note) return '';
     const hit = notePlainCache.get(note);
     if (hit !== undefined) return hit;
+    // A <br> is a space first, or a stanza's two lines fuse into one word.
     const text = isRichNote(note)
-      ? Array.from(parseNoteHtml(note).childNodes).map(n => n.textContent || '').join(' ')
+      ? Array.from(parseNoteHtml(note.replace(/<br\s*\/?>/gi, ' ')).childNodes).map(n => n.textContent || '').join(' ')
       : note;
     const out = text.replace(/\s+/g, ' ').trim();
     if (notePlainCache.size >= NOTE_PLAIN_MAX) notePlainCache.clear();

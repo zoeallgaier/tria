@@ -178,9 +178,9 @@
      Light), every measure a multiple of the paragraph size `s`, so the whole
      note shrinks as one thing. */
   const FLOW = {
-    h1: function (s) { return { font: serif(Math.round(s * 1.5)), lh: Math.round(s * 1.5 * 1.16), before: 0.95 }; },
-    h2: function (s) { return { font: serif(Math.round(s * 1.22), true), lh: Math.round(s * 1.22 * 1.2), before: 0.75 }; },
-    p:  function (s) { return { font: sans(s, 300), lh: Math.round(s * 1.45), before: 0.7 }; },
+    h1: function (s) { return { font: serif(Math.round(s * 1.5)), lh: Math.round(s * 1.5 * 1.16), before: 1.6 }; },
+    h2: function (s) { return { font: serif(Math.round(s * 1.22), true), lh: Math.round(s * 1.22 * 1.2), before: 1.35 }; },
+    p:  function (s) { return { font: sans(s, 300), lh: Math.round(s * 1.45), before: 1 }; },
   };
 
   /* A spec may carry `blocks` ([{ kind, text }]) or plain `text`, whose lines
@@ -199,10 +199,12 @@
     blocks.forEach(function (b) {
       const st = (FLOW[b.kind] || FLOW.p)(s);
       if (prev) {
-        /* A paragraph tucks in under its heading; anything else keeps its own
-           air above it (app.css, the rules after .card-h2). */
-        const tuck = b.kind === 'p' && prev !== 'p';
-        y += Math.round(s * (tuck ? 0.3 : st.before));
+        /* A paragraph tucks in under its heading, a subheading under its
+           heading; anything else keeps its own air above it ("A note's
+           rhythm" in app.css). A paragraph's lines, a poem's stanza, arrive
+           joined by "\n" and wrap breaks on them. */
+        const tuck = prev !== 'p' && (b.kind === 'p' || (prev === 'h1' && b.kind === 'h2'));
+        y += Math.round(s * (tuck ? 0.4 : st.before));
       }
       ctx.font = st.font;
       const lines = wrap(ctx, b.text, maxWidth);

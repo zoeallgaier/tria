@@ -163,6 +163,21 @@ itself): the audience sheet leaves it off (`except` on `wireAudienceLock`,
 `attachedCircle`), and a post already aimed at it falls back to the default
 as its card goes on.
 
+## A note is paragraphs of lines (2026-10-26)
+
+**A Return is a line, a blank line ends a paragraph** (a poem's stanza), in
+the editor, the feed and the story card alike (`richItems`, `noteParas`). A
+note stores a stanza as ONE `<p>` with `<br>`s; every Return used to become its
+own `<p>` and blank lines were dropped, so a poem's stanzas posted as evenly
+spaced lines. The editor reads a block as a line (`asLines`), storage reads it
+as a paragraph, so old notes keep their gaps and older builds draw a `<br>` as
+a paragraph break. **One spacing scale** ("A note's rhythm" in app.css, mirrored
+by `.rich-note` and `FLOW` in storycard.js): 1rem between paragraphs, 1.6rem
+over an H1 and 1.35rem over an H2, 0.4rem under a heading, top margins only.
+The editor marks a blank line `.is-blank` and draws it at that 1rem. A line
+keeps its indent (`.card-note` is pre-wrap). The push function's `plain()`
+learned `<br>` too, so it needs a redeploy.
+
 ## Repost inherits, quote chooses (2026-10-26)
 
 **The repost sheet is two rows, Repost (or Undo repost) and Quote** (Zoe: "use
