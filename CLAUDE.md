@@ -163,6 +163,21 @@ itself): the audience sheet leaves it off (`except` on `wireAudienceLock`,
 `attachedCircle`), and a post already aimed at it falls back to the default
 as its card goes on.
 
+## Repost to a circle (2026-10-26)
+
+**The repost sheet is Repost, Quote, then Repost to a circle** (Zoe), the last
+only over a PUBLIC post and while you are in a circle (`Store.repostableToCircle`).
+It opens your circles as the invite sheet's rows, a circle's face for a friend's,
+each tap committing or taking back a bare repost INTO that circle
+(`openRepostToCircle`, `createRepost`/`undoRepost`'s `communityId`), drawn
+"You reposted in c/slug" (`.card-passed-room`, hidden on the circle's page).
+A friends-only post can't go (it would widen the author's audience), and a
+circle's own post still stays in its circle. The rules are
+`supabase/repost-to-circle.sql` (**NOT run** as of 2026-10-26); until it runs
+no circle row shows (`circleRepostsReady`, a once-a-session ask of
+`repost_insert_ok`, which answered `false` on 2026-10-26). My Circle draws one
+bare repost per person per post. See docs/data.md under reposts.
+
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
 **THE BUTTON.** Every button in a page is one material at two weights (Zoe:

@@ -849,6 +849,27 @@ address and therefore a different person, and there is no way around that.
   theirs, which can be nobody. That is correct, not a bug, and the sheet says so
   (`Only the friends you share will see it.`).
 
+  **A PUBLIC POST CAN BE REPOSTED INTO A CIRCLE** (Zoe, 2026-10-26,
+  `supabase/repost-to-circle.sql`, NOT run when written). The repost sheet's
+  third row, Repost to a circle, opens your circles as the invite sheet's rows,
+  each tap committing: a bare repost row with `audience = 'community'` and the
+  circle's `community_id`, drawn "You reposted in c/slug" over the post (the
+  "in" part hidden on that circle's own page). It is the one place a repost
+  does not copy its original's audience, and that is only allowed over a
+  PUBLIC original: every member of every circle could already read it, so
+  "never widen" still holds. A friends-only post would reach only members who
+  are also the author's friends (the read gate) and stays out; a circle's own
+  post still stays in its circle. The file restates `repost_insert_ok` (same
+  signature) and `posts_community_guard`, and makes `posts_one_bare_repost`
+  one bare row per person per post PER PLACE (a null circle is your feed), so
+  the feed toggle and each circle's tick are separate; `myBare` keys the same
+  way. My Circle draws one bare repost per person per post (the newest), so
+  passing a post to your friends and into a circle you share doesn't show it
+  twice. Until the file runs the row isn't offered: `circleRepostsReady` asks
+  `repost_insert_ok(<a public post>, 'community')` once a session, `false`
+  before, `true` after (2026-10-26: `false`, with `'public'` answering `true`).
+  Quoting into a circle is not built.
+
   **YOU MAY REPOST AND QUOTE YOUR OWN POSTS**, as of 1.4. `Store.repostable` had
   copied `toggleLike`'s no-self rule on the reading that passing your own thing
   along is talking to yourself; that is wrong about what a repost is for here,
