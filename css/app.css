@@ -8172,29 +8172,33 @@ button.poll-option:disabled { cursor: default; }
 /* The reply chip rides the photo tray's own placement (it carries
    .postbar-attach), and stacks above a waiting photo when there is one. */
 .postbar.has-photo .postbar-reply { margin-bottom: calc(88px + 1.2rem); }
+/* THE CHIP IS THE BAR'S OWN SIZE (Zoe, 2026-10-26): .postbar-attach already
+   spans the form's column, so the chip fills it, and it stands as tall as the
+   resting bar (the 44px disc plus 0.4rem around it, plus the hairline) with the
+   bar's corner and the field's type size. */
 .postbar-reply-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  max-width: 100%;
-  margin-left: 0.4rem;
-  padding: 0.4rem 0.4rem 0.4rem 0.85rem;
-  font-size: 0.85rem;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: calc(44px + 0.8rem + 2px);
+  padding: 0.4rem 0.6rem 0.4rem 1rem;
+  font-size: 1rem;
   color: var(--text);
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: var(--glass-edge);
-  border-radius: var(--radius-pill);
+  border-radius: calc(44px / 2 + 0.4rem + 1px);
   box-shadow: var(--glass-lift);
   pointer-events: auto;
 }
-.postbar-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.postbar-reply-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .postbar-reply-x {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   padding: 0;
   color: var(--muted);
@@ -8205,15 +8209,15 @@ button.poll-option:disabled { cursor: default; }
 /* The song a reply answers (setChatSong): the same chip, led by its sleeve,
    rising onto the bar on the spring as the thread opens. */
 .postbar-song-chip {
-  gap: 0.55rem;
-  padding-left: 0.35rem;
+  gap: 0.65rem;
+  padding-left: 0.4rem;
   animation: postbar-song-in 0.5s var(--spring) both;
 }
 .postbar-song-art {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-art);
+  width: 44px;
+  height: 44px;
+  border-radius: calc(44px * var(--art-round));   /* the sleeve's own 20%, as tall as the bar's disc */
   background: var(--glass-bg-panel) center / cover no-repeat;
 }
 @keyframes postbar-song-in {
