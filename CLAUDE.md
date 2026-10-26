@@ -298,7 +298,9 @@ from the start: New circle carries the editor's photo and crop, sent behind the
 navigation once the circle exists. Joining says "You've joined c/<slug>."
 **An invite is a DM** (Zoe:
 "without bloating the app"): the circle page's Invite pill
-(`openCommunityInvite`, the chat roster's picker, commits per tap), which sends
+(`openCommunityInvite`, the chat roster's picker; since 2026-10-26 a tap only
+ticks a friend and the dock turns from Done into Send invites, its words rolling
+over and the band washing in, then sends them in one go), which sends
 your friend "Join me in c/<slug> on Tria." with the link, and a thread draws any
 circle link as the circle under the words (`circleInMessage`, `.msg-circle`).
 No table and no new update kind; a friend whose DM already holds your link for

@@ -3660,9 +3660,15 @@
     // makes that swap: renderUser draws the same page either way, but only one of
     // the two lights the Profile tab.
     const href = mine ? '#/profile' : `#/u/${esc(encodeURIComponent(post.author))}`;
+    // Passed along INTO a circle (repost-to-circle.sql), the line says which,
+    // the way a circle's own post says "Posted in". Hidden on that circle's
+    // page with .card-community, where it would name the page over every card.
+    const room = post.communityId && Store.community(post.communityId);
     return `<a class="card-passed" href="${href}">` +
         svgIcon('repost') +
-        `<span><b>${name}</b> reposted</span>` +
+        `<span><b>${name}</b> reposted` +
+          (room ? `<span class="card-passed-room"> in <b>${esc(communityHandle(room))}</b></span>` : '') +
+        `</span>` +
         `<span class="dot">·</span>` +
         `<span>${esc(niceDate(post.date))}</span>` +
       `</a>`;
@@ -10367,8 +10373,10 @@
   // `scrimClass` exists for those callers too (see .sheet-scrim--see-through and
   // .sheet-scrim--aud). `dock` renames the button at the foot: it still only
   // closes, but on a panel that has already taken every answer as it was tapped,
-  // "Cancel" is a word for something that cannot happen.
-  function openSheet({ title, items, head, wire, scrimClass, dock, rowsFirst }) {
+  // "Cancel" is a word for something that cannot happen. `onDock(close)` takes
+  // the dock's tap instead, for the one sheet whose dock commits (the circle
+  // invite's Send invites).
+  function openSheet({ title, items, head, wire, scrimClass, dock, onDock, rowsFirst }) {
     if (sheetOpen) return;
     sheetOpen = true;
     items = items || [];
@@ -10432,7 +10440,7 @@
     }
 
     scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
-    scrim.querySelector('.sheet-cancel')?.addEventListener('click', () => close());
+    scrim.querySelector('.sheet-cancel')?.addEventListener('click', () => (onDock ? onDock(close) : close()));
     scrim.querySelectorAll('.sheet-item').forEach(btn =>
       btn.addEventListener('click', () => {
         const it = items[+btn.dataset.i];
@@ -10905,9 +10913,14 @@
   // Two rows, and the first one changes. A bare repost is a toggle you can take
   // back; a quote is a post of yours and comes out through its own ••• like
   // anything else you wrote, so it is never listed here as something to undo.
+  // A third, Repost to a circle, when the post is public and you are in one
+  // (Store.repostableToCircle); it opens the circle picker.
   function openRepostMenu(post) {
     const orig = Store.originalOf(post) || post;
     const on = Store.repostedByMe(orig.id);
+    const rooms = Store.repostableToCircle(orig)
+      ? [{ label: 'Repost to a circle', icon: 'circle', run: () => openRepostToCircle(orig) }]
+      : [];
     openSheet({
       items: [
         on
@@ -10937,7 +10950,62 @@
               celebrateRepost(orig.id);
             } },
         { label: 'Quote', icon: 'pencil', run: () => { pendingQuote = orig; go('#/publish'); } },
+        ...rooms,
       ],
+    });
+  }
+
+  // REPOST TO A CIRCLE: your circles as the invite sheet's rows, a circle's
+  // face where a friend's sits, and each tap commits (Zoe, 2026-10-26). A tick
+  // is the post passed along into that circle, and tapping a ticked row takes
+  // it back out, the glyph's own toggle once per circle. It lands as a bare
+  // repost in the circle's feed, "You reposted in c/slug" over the post.
+  function openRepostToCircle(orig) {
+    const rooms = Store.myCommunities().slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const rowHtml = (c, i) =>
+      `<button type="button" class="aud-pick" role="checkbox" ` +
+          `aria-checked="${Store.myCircleRepost(orig.id, c.id)}" data-room="${esc(c.id)}" ` +
+          `style="animation-delay:${staggerDelay(i)}">` +
+        communityPicHtml(c, 'aud-avatar', 88) +
+        `<span class="friend-text">` +
+          `<span class="friend-name">${esc(c.name)}</span>` +
+          `<span class="friend-user">${esc(communityHandle(c))}</span>` +
+        `</span>` +
+        `<span class="aud-check" aria-hidden="true"></span>` +
+      `</button>`;
+    openSheet({
+      title: 'Repost to a circle',
+      dock: 'Done',
+      scrimClass: 'sheet-scrim--aud',
+      head:
+        `<div class="aud-list-wrap is-open">` +
+          `<div class="aud-list">${rooms.map(rowHtml).join('')}</div>` +
+        `</div>`,
+      wire: (scrim) => {
+        scrim.querySelectorAll('button.aud-pick').forEach(row =>
+          row.addEventListener('click', async () => {
+            if (row.dataset.busy) return;
+            const c = Store.community(row.dataset.room);
+            if (!c) return;
+            const was = row.getAttribute('aria-checked') === 'true';
+            row.dataset.busy = '1';
+            row.setAttribute('aria-checked', String(!was));   // flip first
+            // Hands itself back on every path, rejection included.
+            const res = await (was
+              ? Store.undoRepost(orig.id, c.id)
+              : Store.createRepost(orig.id, { communityId: c.id })).catch(() => null);
+            delete row.dataset.busy;
+            if (!res || res.ok === false) {
+              row.setAttribute('aria-checked', String(was));
+              toast((res && res.error) || (was ? 'Couldn’t undo that, try again.' : 'Couldn’t repost, try again.'));
+              return;
+            }
+            hapticTap('LIGHT');
+            toast(was ? `Taken out of ${communityHandle(c)}.` : `Reposted to ${communityHandle(c)}.`);
+            refreshPostViews();
+          }));
+      },
     });
   }
 
@@ -13583,10 +13651,24 @@
      nothing: it only has to reach someone. A direct message already does, with
      its push, its dot and its request flow, so an invite is your DM to a friend
      carrying the circle's link, which the thread draws as the circle
-     (circleInMessage). No table, no new kind of update. The sheet is the chat
-     roster's picker and commits per tap the same way; a friend whose DM already
-     holds your link for this circle shows as invited, so nobody gets it twice. */
+     (circleInMessage). No table, no new kind of update. A friend whose DM
+     already holds your link for this circle shows as invited, so nobody gets
+     it twice.
+
+     PICK, THEN SEND (Zoe, 2026-10-26: "allow for multiselection, and have the
+     done button turn into a send invites button"). A tap ticks a friend and
+     sends nothing; the dock says Done while nobody is ticked and becomes Send
+     invite or Send invites the moment someone is, its words rolling over and
+     the reader's band washing in under them (.sheet-scrim--invite). The sends
+     go one friend at a time, each row settling into "invited" as its DM lands,
+     so the list ticks down in a little cascade; then the sheet goes. A friend
+     whose send failed stays ticked and the dock comes back, so a retry is one
+     tap. It used to commit per tap, the chat roster's way. */
   const circleInviteText = (c) => `Join me in ${communityHandle(c)} on Tria. ${communityLink(c)}`;
+  const namesSaid = (names) =>
+    names.length <= 2 ? names.join(' and ')
+      : names.length === 3 ? `${names[0]}, ${names[1]} and ${names[2]}`
+      : `${names[0]}, ${names[1]} and others`;
   function openCommunityInvite(c) {
     const me = Store.session();
     const inIt = new Set(Store.communityMembers(c.id));
@@ -13604,10 +13686,52 @@
       const sent = invited(u.username);
       return pickRowHtml(u, { on: sent, i, note: sent ? 'invited' : '', fixed: sent });
     }).join('');
+    const chosen = new Set();
+    let sending = false;
+    let dockBtn = null, label = null;
+    const dockWord = () => sending ? 'Sending…'
+      : !chosen.size ? 'Done'
+      : chosen.size === 1 ? 'Send invite' : 'Send invites';
+    // The words roll: the old ones lift away as the new rise in under them.
+    // Send invite to Send invites is the same act, so the s just lands.
+    const syncDock = () => {
+      if (!dockBtn) return;
+      const word = dockWord();
+      dockBtn.classList.toggle('is-send', chosen.size > 0);
+      dockBtn.disabled = sending;
+      if (label.textContent === word) return;
+      if (label.textContent.startsWith('Send invite') && word.startsWith('Send invite')) {
+        label.textContent = word;
+        return;
+      }
+      const old = label;
+      label = document.createElement('span');
+      label.className = 'sheet-dock-word';
+      label.textContent = word;
+      dockBtn.append(label);
+      if (prefersReduced() || !old.animate) { old.remove(); return; }
+      old.classList.add('is-leaving');
+      old.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-9px)' }],
+        { duration: 200, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' })
+        .finished.then(() => old.remove(), () => old.remove());
+      label.animate([{ opacity: 0, transform: 'translateY(9px)' }, { opacity: 1, transform: 'none' }],
+        { duration: 320, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+    };
+    const sendTo = async (u) => {
+      // Hands itself back on every path, rejection included.
+      try {
+        // An invite-only circle records the invite first (the fact its join
+        // gate checks), then the DM carries the link as ever.
+        let res = c.inviteOnly ? await Store.inviteToCommunity(c.id, u) : { ok: true };
+        if (res && res.ok) res = await Store.startDirectChat(u);
+        if (res && res.ok) res = await Store.sendMessage(res.id, circleInviteText(c));
+        return res || { ok: false };
+      } catch { return { ok: false }; }
+    };
     openSheet({
       title: `Invite to ${communityHandle(c)}`,
       dock: 'Done',
-      scrimClass: 'sheet-scrim--aud',
+      scrimClass: 'sheet-scrim--aud sheet-scrim--invite',
       // First, the whole room at once: a post to your circle carrying the
       // circle as its card (circleOfFind), in the composer so you can say why.
       rowsFirst: true,
@@ -13623,35 +13747,55 @@
               : 'Add some friends first.'}</p>`) +
           `</div>` +
         `</div>`,
-      wire: (scrim) => {
-        scrim.querySelectorAll('button.aud-pick').forEach(row =>
-          row.addEventListener('click', async () => {
-            if (row.dataset.busy || row.getAttribute('aria-checked') === 'true') return;
-            const u = row.dataset.user;
-            row.dataset.busy = '1';
-            row.setAttribute('aria-checked', 'true');   // flip first
-            // Hands itself back on every path, rejection included.
-            let res = null;
-            try {
-              // An invite-only circle records the invite first (the fact its
-              // join gate checks), then the DM carries the link as ever.
-              res = c.inviteOnly ? await Store.inviteToCommunity(c.id, u) : { ok: true };
-              if (res && res.ok) res = await Store.startDirectChat(u);
-              if (res && res.ok) res = await Store.sendMessage(res.id, circleInviteText(c));
-            } catch { res = null; }
-            delete row.dataset.busy;
-            if (!res || !res.ok) {
-              row.setAttribute('aria-checked', 'false');
-              toast((res && res.error) || 'Couldn’t send that, try again.');
-              return;
-            }
-            hapticTap('LIGHT');
-            // Sent is sent: the row keeps its tick and takes no second tap.
-            row.classList.add('aud-pick--fixed');
+      onDock: async (close) => {
+        if (sending) return;
+        if (!chosen.size) { close(); return; }
+        sending = true;
+        syncDock();
+        const sent = [];
+        let error = '';
+        for (const u of [...chosen]) {
+          const row = dockBtn.closest('.sheet').querySelector(`button.aud-pick[data-user="${CSS.escape(u)}"]`);
+          const res = await sendTo(u);
+          if (!res.ok) { error = error || res.error || 'Couldn’t send that, try again.'; continue; }
+          chosen.delete(u);
+          sent.push(u);
+          // Sent is sent: the row keeps its tick and takes no second tap.
+          if (row) {
+            row.classList.add('aud-pick--fixed', 'is-sent');
             row.setAttribute('aria-disabled', 'true');
             const note = row.querySelector('.friend-user');
             if (note) note.textContent = `@${u} · invited`;
-            toast(`Invited ${displayNameOf(u)}.`);
+          }
+        }
+        sending = false;
+        if (sent.length) hapticEvent('SUCCESS');
+        if (error) {
+          syncDock();
+          toast(sent.length
+            ? `Invited ${namesSaid(sent.map(displayNameOf))}. ${error}`
+            : error);
+          return;
+        }
+        toast(`Invited ${namesSaid(sent.map(displayNameOf))}.`);
+        // A beat for the last tick to land before the sheet goes.
+        setTimeout(() => close(), prefersReduced() ? 0 : 320);
+      },
+      wire: (scrim) => {
+        dockBtn = scrim.querySelector('.sheet-cancel');
+        if (dockBtn) {
+          label = document.createElement('span');
+          label.className = 'sheet-dock-word';
+          label.textContent = dockBtn.textContent;
+          dockBtn.replaceChildren(label);
+        }
+        scrim.querySelectorAll('button.aud-pick').forEach(row =>
+          row.addEventListener('click', () => {
+            if (sending || row.classList.contains('aud-pick--fixed')) return;
+            const u = row.dataset.user;
+            if (chosen.has(u)) chosen.delete(u); else chosen.add(u);
+            row.setAttribute('aria-checked', String(chosen.has(u)));
+            syncDock();
           }));
       },
     });

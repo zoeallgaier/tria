@@ -4342,6 +4342,51 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   backdrop-filter: none;
   box-shadow: none;
 }
+/* THE INVITE SHEET'S DOCK COMMITS (openCommunityInvite, 2026-10-26). Done
+   while nobody is ticked; Send invites once someone is, and then it wears a
+   commit's look: the reader's band washes in under the words at --pill-wash
+   and the hairline comes up, both on the quick ease so it blooms rather than
+   switches. The words roll in syncDock (old and new share one grid cell, so
+   the pill never jumps), and a tick pops on the spring as it lands. */
+.sheet-scrim--invite .sheet-cancel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow var(--dur-quick) var(--ease-soft), opacity var(--dur-quick) var(--ease-soft);
+}
+.sheet-scrim--invite .sheet-cancel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--pill-band);
+  opacity: 0;
+  transition: opacity var(--dur-move) var(--ease);
+}
+.sheet-scrim--invite .sheet-cancel.is-send { box-shadow: inset 0 0 0 1px var(--rule); }
+.sheet-scrim--invite .sheet-cancel.is-send::before { opacity: var(--pill-wash); }
+.sheet-scrim--invite .sheet-cancel:disabled { opacity: 1; cursor: default; }
+.sheet-dock-word { grid-area: 1 / 1; display: block; }
+.sheet-dock-word.is-leaving { pointer-events: none; }
+.sheet-scrim--invite button.aud-pick:not(.aud-pick--fixed)[aria-checked="true"] .aud-check {
+  animation: invite-tick 0.42s var(--spring) both;
+}
+/* A sent row keeps its tick at full strength for the beat before the sheet
+   goes: it is a receipt, not a control that can't be had. */
+.sheet-scrim--invite .aud-pick.is-sent .aud-check { opacity: 1; }
+@keyframes invite-tick {
+  0%   { transform: scale(0.6); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-scrim--invite .sheet-cancel,
+  .sheet-scrim--invite .sheet-cancel::before { transition: none; }
+  .sheet-scrim--invite button.aud-pick[aria-checked="true"] .aud-check { animation: none; }
+}
 /* A radio set says its pick with a check at the row's end, Instagram's way,
    and the fade it used before is off: in a flat list of full-strength rows a
    faded one reads as disabled. */
@@ -10401,7 +10446,8 @@ a.daily-answer { text-decoration: none; }
 .card-community b { font-weight: 700; color: inherit; }
 .card-community-ico { width: 15px; height: 15px; flex-shrink: 0; }
 @media (hover: hover) { .card-community:hover { color: var(--text); } }
-.view--community .card-community { display: none; }
+.view--community .card-community,
+.view--community .card-passed-room { display: none; }
 
 /* The circle's page: the profile's identity block, with its photo where a
    face goes, or the triad when it has none. */
