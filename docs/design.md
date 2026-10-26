@@ -744,8 +744,9 @@ load-bearing. Measured on the simulator: 1 while bare, 1 while tucked, 0.8 under
 a painted bar, at exactly the 62pt inset's height.
 
 **Corner scale:** 3px incidental (`--radius`) · 8px small containers
-(`--radius-img`) · 12px composer inputs (`--radius-field`) · 14px photos + glass
-menus/cards (`--radius-card`) · 18px nav rail (`--radius-nav`) · 20px glass
+(`--radius-img`) · 12px composer inputs (`--radius-field`) · 14px glass
+menus/cards (`--radius-card`) · 24px feed photos, carousels, YouTube tiles and
+flat cards (`--radius-soft`, since 2026-10-25) · 18px nav rail (`--radius-nav`) · 20px glass
 modals (`--radius-modal`) · 999px pills (`--radius-pill`). **Nested corners are
 concentric:** a child that reaches its parent's corner takes the parent's radius
 *minus* the padding between them, so the two curves stay parallel instead of the

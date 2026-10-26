@@ -4408,7 +4408,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   position: relative;
   display: block;
   width: 100%;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   background: var(--ph-fill, var(--surface-2));
   box-shadow: inset 0 0 0 1px var(--rule);
 }
@@ -4420,7 +4420,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   display: block;
   width: 100%;
   height: auto;
-  border-radius: var(--radius-card);   /* self-clip: Safari clips a plain <img>'s own corners cleanly */
+  border-radius: var(--radius-soft);   /* self-clip: Safari clips a plain <img>'s own corners cleanly */
   opacity: 0;
   transform: scale(1.02);
   transform-origin: center;
@@ -4461,7 +4461,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   /* clip-path, not overflow + radius: WebKit can leave a composited child's
      corners unclipped by a rounded overflow box, and every card here is one
      while it moves. */
-  clip-path: inset(0 round var(--radius-card));
+  clip-path: inset(0 round var(--radius-soft));
   touch-action: pan-y;          /* the page keeps the vertical scroll; sideways is ours */
   -webkit-user-select: none;
   user-select: none;
@@ -4473,7 +4473,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   bottom: 0;
   left: 0;
   right: 0;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-soft);
   overflow: hidden;
   background: var(--ph-fill, var(--surface-2));
   box-shadow: inset 0 0 0 1px var(--rule);
@@ -5837,6 +5837,36 @@ button.poll-option:disabled { cursor: default; }
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 .card-like.np-like.liked { color: var(--burst, var(--heart)); }
+/* THE REPLY (2026-10-25): a bare speech bubble just inside the heart, the
+   feed's own pair laid on the cover, white with the heart's shadow. It opens
+   your DM with the song waiting on the bar (replyToSong). The two 44px targets
+   sit 40px apart, so the glyphs read as one little bar in the corner. */
+.np-reply {
+  position: absolute;
+  top: calc(132px - 44px);
+  right: 38px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.np-reply svg {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+}
+/* Opening a chat that isn't there yet takes a round trip: the mark breathes. */
+.np-reply.is-busy { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
+@keyframes np-reply-wait { to { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .np-reply.is-busy { animation: none; opacity: 0.6; } }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
@@ -7940,6 +7970,37 @@ button.poll-option:disabled { cursor: default; }
   white-space: nowrap;
 }
 .msg-circle-sub { font-size: 0.8rem; color: var(--muted); }
+/* A song's link in a message, drawn as the song (songInMessage): the feed's
+   Music tile at the thread's scale, a 56px sleeve, the serif title, the play
+   disc in the reader's --heart. Concentric like .card-song: the corner is the
+   sleeve's plus the pad. It sits where a photo does, above the words. */
+.msg-song {
+  --msg-art: 56px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: min(290px, 100%);
+  padding: 0.5rem 0.65rem 0.5rem 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--msg-art) * var(--art-round) + 0.5rem);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  transition: transform var(--dur-micro);
+}
+.msg-song:active { transform: scale(0.985); }
+.msg-song-art { width: var(--msg-art); height: var(--msg-art); }
+.msg-song .song-lines { flex: 1 1 auto; gap: 0.15rem; }
+.msg-song .song-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.14rem;
+  line-height: 1.15;
+}
+.msg-song-play { width: 2.1rem; height: 2.1rem; }
+.msg-song-play svg { width: 15px; height: 15px; }
 .msg-photo {
   display: block;
   width: min(240px, 100%);
@@ -8024,6 +8085,24 @@ button.poll-option:disabled { cursor: default; }
   border: 0;
 }
 .postbar-reply-x svg { width: 14px; height: 14px; }
+/* The song a reply answers (setChatSong): the same chip, led by its sleeve,
+   rising onto the bar on the spring as the thread opens. */
+.postbar-song-chip {
+  gap: 0.55rem;
+  padding-left: 0.35rem;
+  animation: postbar-song-in 0.5s var(--spring) both;
+}
+.postbar-song-art {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-art);
+  background: var(--glass-bg-panel) center / cover no-repeat;
+}
+@keyframes postbar-song-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) { .postbar-song-chip { animation: none; } }
 
 /* A message takes a double tap (heart) and a hold (its menu), so the page's text
    selection and callout stand down on it, and a tap doesn't wait on zoom. Copy

@@ -304,13 +304,14 @@
      rounded edges to input fields): the soft corner the cards wear, so a
      one-line field reads as a pill and a tall one as a card. */
   --radius-field: var(--radius-soft);
-  --radius-card:  14px;   /* photos, and floating glass menus / cards */
+  --radius-card:  14px;   /* floating glass menus / cards (feed photos are --radius-soft) */
   /* THE SOFT CORNER, for every flat card that sits in a page (Zoe, 2026-10-22:
      "unify everything with the more rounded edges: discover cards, quote
      reposts, updates soft ask, pinned posts etc. so everything has that
      cutesy roundedness"): the daily and circle cards, a quoted post, the push
-     ask, a profile's pins, the week-of cards, a chat request. Floating glass
-     (menus, sheets) keeps its own ladder. */
+     ask, a profile's pins, the week-of cards, a chat request, and since 2026-10-25
+     every photo and carousel in a feed, to match the YouTube tile (Zoe).
+     Floating glass (menus, sheets) keeps its own ladder. */
   --radius-soft:  24px;
   --radius-nav:   18px;   /* the nav rail */
   --radius-modal: 20px;   /* glass modals + sheets */
