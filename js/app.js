@@ -2484,14 +2484,26 @@
   const READMORE_MIN = 320;   // notes shorter than this are shown whole
   const READMORE_MIN_BLOCKS = 5;   // …or with fewer paragraph/heading blocks than this
 
-  // Split a legacy plain-text note into paragraphs. ONE newline is enough, the
-  // same rule the rich walk keeps (see BREAK): a textarea soft-wraps on its own,
-  // so a "\n" in there is a Return somebody pressed and a line they saw. Blank
-  // lines collapse into the one break they read as.
-  const noteParas = (text) =>
-    String(text || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
+  // Split a legacy plain-text note into paragraphs, each a list of its LINES, the
+  // same reading the rich walk gives (see richItems): a "\n" is a Return somebody
+  // pressed and a line they saw, so it stays a line, and a BLANK line is what ends
+  // a paragraph (a poem's stanza). It used to make every line a paragraph, so a
+  // stanza and the break between two stanzas drew the same. A run of blank lines
+  // is one break. A line keeps its leading spaces (a poem's indent); its trailing
+  // ones go.
+  const noteParas = (text) => {
+    const paras = [];
+    let lines = [];
+    String(text || '').split('\n').forEach((l) => {
+      if (l.trim()) lines.push(l.replace(/\s+$/, ''));
+      else if (lines.length) { paras.push(lines); lines = []; }
+    });
+    if (lines.length) paras.push(lines);
+    return paras;
+  };
 
-  const notePara = (p, author) => `<p class="card-note">${richText(p, author)}</p>`;
+  const notePara = (lines, author, opts) =>
+    `<p class="card-note">${lines.map(l => richText(l, author, opts)).join('<br>')}</p>`;
 
   // ── @mentions ──────────────────────────────────────────────────────────────
   // Tags live as plain "@username" inside note/comment text (no schema). At
@@ -4931,6 +4943,8 @@
     if (!nativeShell()) return;
     const a = e.target.closest?.('a[target="_blank"]');
     if (!a) return;
+    // A hold on it already answered (an On repeat square: wireSongHold).
+    if (a.dataset.held) { delete a.dataset.held; e.preventDefault(); return; }
     const href = a.getAttribute('href') || '';
     if (!/^https?:\/\//i.test(href)) return;   // in-app routes navigate normally
     e.preventDefault();
@@ -6626,8 +6640,9 @@
         const post = Store.posts().find(p => String(p.id) === item.dataset.post);
         if (!post) return;
         wireLikes(item, post);
-        item.querySelector('.np-reply')?.addEventListener('click', (e) => replyToSong(post, e.currentTarget));
+        if (item.dataset.reply) wireSongHold(item, post);
       });
+      host.querySelector('.np-hint-x')?.addEventListener('click', dismissSongHint);
     }
     // A song just shared is in no feed, so it lands here as your square, and
     // the square gets a new face's stars in your --heart (Zoe: "like updating
@@ -6680,6 +6695,69 @@
      new kind of update: the DM's push and dot carry it. The chat's chevron pops
      back to My Circle rather than to Chats (chatPopsTo), since that is where
      the reader came from. */
+  /* HOLD THE SLEEVE TO REPLY (Zoe, 2026-10-26: "remove the replies icon, hold
+     an album art to reply instead for a cleaner look"). The bubble beside the
+     heart is gone; a tap on a friend's cover still plays it, a hold opens the
+     DM. A right click is the hold on a desktop. The tap a hold may end in is
+     spent through `data-held`, which the outbound handler reads first, since
+     it listens at the document in capture and would open the song. */
+  function wireSongHold(item, post) {
+    const HOLD_MS = 450;
+    const open = item.querySelector('.np-open');
+    if (!open) return;
+    let press = null;
+    const reply = () => { dismissSongHint(); replyToSong(post, item); };
+    open.addEventListener('pointerdown', (e) => {
+      if (press) clearTimeout(press.timer);
+      delete open.dataset.held;   // a click a past hold never got spends nothing
+      const mine = { x: e.clientX, y: e.clientY, timer: 0 };
+      mine.timer = setTimeout(() => {
+        open.dataset.held = '1';
+        hapticTap('LIGHT');
+        reply();
+      }, HOLD_MS);
+      press = mine;
+    });
+    // A drag is a scroll of the rail or the page, not a hold.
+    const letGo = (e) => {
+      if (!press) return;
+      if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
+      clearTimeout(press.timer);
+      press = null;
+    };
+    open.addEventListener('pointermove', letGo, { passive: true });
+    open.addEventListener('pointerup', letGo);
+    open.addEventListener('pointercancel', letGo);
+    open.addEventListener('click', (e) => {
+      if (!open.dataset.held) return;
+      delete open.dataset.held;
+      e.preventDefault();
+    });
+    open.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (press) { clearTimeout(press.timer); press = null; }
+      if (open.dataset.held) return;   // a touch hold already answered
+      reply();
+    });
+  }
+
+  /* The way in to it is told ONCE (Zoe: "a soft cta tutorial for first time
+     users, dismissable once"): a quiet line under the rail, the first time it
+     holds a square you can reply to, until its x or the first hold. Per
+     device, like the week cards' waves. */
+  const songHintKey = () => `tria:song-hint-seen:${Store.session()}`;
+  function songHintSeen() {
+    try { return !!localStorage.getItem(songHintKey()); } catch { return true; }
+  }
+  function dismissSongHint() {
+    if (songHintSeen()) return;
+    try { localStorage.setItem(songHintKey(), '1'); } catch { /* private window */ }
+    const hint = view.querySelector('.np-hint');
+    if (!hint) return;
+    hint.classList.add('is-leaving');
+    setTimeout(() => hint.remove(), prefersReduced() ? 0 : 220);
+  }
+
   let songReply = null;   // { chatId, post } for the chat this tap opens
   let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
   async function replyToSong(post, btn) {
@@ -12518,20 +12596,26 @@
       `</button>`;
     // The square is a link out and the heart a button, side by side in one
     // box (a button can't sit inside a link), the heart laid over the art.
+    // A friend's cover held is a reply (wireSongHold); there is no glyph for it.
+    let canReply = false;
     const square = ({ u, post }) => {
       const f = npFace({ ...u, listening: post.song }, me);
-      return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}">` +
-          `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" ` +
-            `rel="noopener noreferrer" data-out="system" aria-label="${esc(f.label)}">${f.html}</a>` +
+      const reply = u.username !== me && canMessage(u.username);
+      if (reply) canReply = true;
+      return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}"${reply ? ' data-reply="1"' : ''}>` +
+          `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" draggable="false" ` +
+            `rel="noopener noreferrer" data-out="system" aria-label="${esc(f.label)}"` +
+            `${reply ? ` aria-description="Hold to reply to ${esc(u.name || u.username)}"` : ''}>${f.html}</a>` +
           (u.username !== me && Store.isAuthed() ? likeToggleHtml(post).replace('class="card-like', 'class="card-like np-like') : '') +
-          (u.username !== me && canMessage(u.username)
-            ? `<button class="np-reply" type="button" aria-label="Reply to ${esc(u.name || u.username)}’s song">` +
-                svgIcon('comment') + `</button>`
-            : '') +
         `</div>`;
     };
+    const strip = items.map(square).join('');
+    const hint = canReply && !songHintSeen()
+      ? `<p class="np-hint">${svgIcon('comment')}<span>Hold a friend’s song to reply.</span>` +
+          `<button class="np-hint-x" type="button" aria-label="Got it">${svgIcon('close')}</button></p>`
+      : '';
     return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
-        `<div class="np-strip">${add}${items.map(square).join('')}</div>` +
+        `<div class="np-strip">${add}${strip}</div>${hint}` +
       `</section>`;
   }
 
@@ -20073,7 +20157,7 @@
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
     '.sheet-item', '.sheet-cancel',
-    '.postbar-send', '.comment-delete', 'button.comment-like', '.np-reply',
+    '.postbar-send', '.comment-delete', 'button.comment-like',
     '.masthead-filter', '.request-ignore', '.push-ask-dismiss',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.

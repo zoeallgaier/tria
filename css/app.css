@@ -5882,39 +5882,48 @@ button.poll-option:disabled { cursor: default; }
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 .card-like.np-like.liked { color: var(--burst, var(--heart)); }
-/* THE REPLY (2026-10-25): a bare speech bubble just inside the heart, the
-   feed's own pair laid on the cover, white with the heart's shadow. It opens
-   your DM with the song waiting on the bar (replyToSong). The two 44px targets
-   sit 40px apart, so the glyphs read as one little bar in the corner. */
-.np-reply {
-  position: absolute;
-  /* 3px down and 4px in from where its box would sit beside the heart's: the
-     bubble's ink rides high and left in its 24 grid, so this is the optical
-     match to the heart (Zoe, 2026-10-25). */
-  top: calc(132px - 44px + 3px);
-  right: 34px;
-  z-index: 1;
+/* THE REPLY is a hold on the cover (2026-10-26, Zoe: "remove the replies
+   icon, hold an album art to reply instead"), wireSongHold in app.js. The
+   cover must not raise iOS's own link preview or select its words under a
+   held finger. */
+.np-item[data-reply] .np-open {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
+.np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
+@keyframes np-reply-wait { to { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .np-item.is-busy .np-art { animation: none; opacity: 0.6; } }
+
+/* The one-time tip under the rail: a quiet line in the caption's voice, a
+   bubble leading and an x trailing, gone for good on the x or the first hold. */
+.np-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.7rem 0 0;
+  font-size: var(--kicker);
+  color: var(--muted);
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.np-hint > svg { flex: 0 0 auto; width: 16px; height: 16px; }
+.np-hint span { flex: 1 1 auto; min-width: 0; }
+.np-hint-x {
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   width: 44px;
   height: 44px;
+  margin: -14px -14px -14px 0;
   padding: 0;
   border: 0;
   background: none;
-  color: #fff;
+  color: var(--muted);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: opacity var(--dur-quick) var(--ease);
 }
-.np-reply svg {
-  width: 29px;
-  height: 29px;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
-}
-/* Opening a chat that isn't there yet takes a round trip: the mark breathes. */
-.np-reply.is-busy { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
-@keyframes np-reply-wait { to { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .np-reply.is-busy { animation: none; opacity: 0.6; } }
+.np-hint-x svg { width: 14px; height: 14px; }
+.np-hint.is-leaving { opacity: 0; }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
