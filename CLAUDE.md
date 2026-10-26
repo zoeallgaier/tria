@@ -163,20 +163,26 @@ itself): the audience sheet leaves it off (`except` on `wireAudienceLock`,
 `attachedCircle`), and a post already aimed at it falls back to the default
 as its card goes on.
 
-## Repost to a circle (2026-10-26)
+## Repost inherits, quote chooses (2026-10-26)
 
-**The repost sheet is Repost, Quote, then Repost to a circle** (Zoe), the last
-only over a PUBLIC post and while you are in a circle (`Store.repostableToCircle`).
-It opens your circles as the invite sheet's rows, a circle's face for a friend's,
-each tap committing or taking back a bare repost INTO that circle
-(`openRepostToCircle`, `createRepost`/`undoRepost`'s `communityId`), drawn
-"You reposted in c/slug" (`.card-passed-room`, hidden on the circle's page).
-A friends-only post can't go (it would widen the author's audience), and a
-circle's own post still stays in its circle. The rules are
-`supabase/repost-to-circle.sql` (**NOT run** as of 2026-10-26); until it runs
-no circle row shows (`circleRepostsReady`, a once-a-session ask of
-`repost_insert_ok`, which answered `false` on 2026-10-26). My Circle draws one
-bare repost per person per post. See docs/data.md under reposts.
+**The repost sheet is two rows, Repost (or Undo repost) and Quote** (Zoe: "use
+the quote post menu to add the audience feature"). A **bare repost wears its
+original's audience exactly, circle and all**: a circle's post is reposted
+inside that circle, so it needs you to be a member (`Store.canRepost`). A
+**quote** has the composer's audience field and picks from what is honest
+(`Store.quoteAudience`): over a post anyone can read (public, or in a PUBLIC
+circle) every audience and every circle you're in, so a quote is how a post
+goes into a circle or out of one; a friends-only post's quote is fixed to My
+circle and an invite-only circle's to that circle, the field still with a
+hint saying why (`audienceFixedHtml`). A quote in a circle starts there. The
+Repost to a circle row and its picker are gone. The rules are
+`supabase/repost-audience.sql` (**NOT run** as of 2026-10-26; it replaces
+repost-to-circle.sql, whose REVERTED version the live DB had run). Until it
+runs (`Store.repostRulesReady`, a once-a-session ask of
+`repost_insert_ok(<public post>, 'list')`) a circle's post has no repost glyph
+and a quote wears its original's audience. **The push function changed too**
+(`canRead`: a quote's push only reaches the original's author when the quote
+does), so it needs a redeploy. See docs/data.md under reposts.
 
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
@@ -245,7 +251,8 @@ on its handle ("Invited" or "Invite only" after it, no Join pill unless you
 hold an invite), and a stranger's pill on its page says "Invite only" with no
 tap. **A public circle's posts are readable by anyone** (Zoe: "if a circle is
 public posts should be visible"), signed in or out, through
-`supabase/circle-public-posts.sql` (**NOT run** as of 2026-10-23), which widens
+`supabase/circle-public-posts.sql` (**confirmed run** 2026-10-26: anon reads
+`audience=eq.community` rows from public circles), which widens
 `community_reads_post` and leaves `can_view_post` alone. An invite-only
 circle's stay with its members. Likes, comments and RSVPs are still for members
 (and the author's friends), so a reader joins to take part.
@@ -295,7 +302,9 @@ profile face, `setCommunityPhoto`), take people out, and **delete it**
 (`deleteCommunity`, which takes its posts with it); the slug never
 changes. When the host leaves, the longest-standing member inherits; when the
 last member leaves, the circle closes the same way a delete does. Ten circles
-held per person. A circle post cannot be reposted or pinned to a profile.
+held per person. A circle post is reposted inside its circle and quoted out
+of it only when the circle is public (see Repost inherits, quote chooses); it
+cannot be pinned to a profile.
 **Starting one is celebrated** (Zoe, 2026-10-23): the new circle's page opens
 with the brand's stars bursting off its face (`celebrateFace`, cyan and green
 alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's

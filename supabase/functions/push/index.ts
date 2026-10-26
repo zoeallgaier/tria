@@ -93,6 +93,33 @@ async function areFriends(a: string, b: string) {
   return (data?.length ?? 0) >= 2;
 }
 
+// Could this person read this post row? can_view_post's audience arms, asked
+// before a push quotes the row's words at somebody: since a quote picks its
+// audience (repost-audience.sql), the original's author may not be in it.
+// A 'list' post's allowlist is written just AFTER the row this webhook fires
+// on, so an empty list is asked once more a moment later before it reads as no.
+async function canRead(rec: Row, userId: string): Promise<boolean> {
+  if (rec.author === userId) return true;
+  const aud = (rec.audience as string) || 'circle';
+  if (aud === 'public') return true;
+  if (aud === 'circle') return areFriends(userId, rec.author as string);
+  if (aud === 'community') {
+    const circle = rec.community_id as string;
+    if (!circle) return false;
+    if (await inCircle(circle, userId)) return true;
+    const { data } = await supabase.from('communities').select('invite_only').eq('id', circle).maybeSingle();
+    return !!data && !data.invite_only;   // a public circle is read by anyone
+  }
+  if (aud === 'list') {
+    for (let i = 0; i < 2; i++) {
+      const { data } = await supabase.from('post_audience').select('user_id').eq('post_id', rec.id);
+      if (data && data.length) return data.some((r) => r.user_id === userId);
+      if (i === 0) await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  return false;
+}
+
 // A note may be stored as the client's small HTML subset (<h1>/<h2>/<p>/<strong>/
 // <em>, see richNote in app.js), so anything that quotes one in an alert has to
 // flatten it first or the reader gets "<p>" in their lock screen. Block ends
@@ -359,12 +386,13 @@ async function handle(table: string, rec: Row) {
     // repost carries no note at all, and that guard is what makes the mention
     // scan cheap for every other post.
     //
-    // The original's author gets the news, unless it's their own row. Nothing
-    // extra is checked here: RLS is not what gated this, the INSERT policy was —
-    // if the row exists, the reposter was allowed to make it.
+    // The original's author gets the news, unless it's their own row, and only
+    // when they can read it: a quote picks its audience now, and its words are
+    // in the push (canRead). The INSERT policy already settled that the
+    // reposter was allowed to make the row.
     if (rec.repost_of) {
       const orig = await postById(rec.repost_of as string);
-      if (orig && orig.author !== rec.author) {
+      if (orig && orig.author !== rec.author && (await canRead(rec, orig.author))) {
         await sendTo(orig.author, {
           title: `${author.name} reposted`,
           // A quote says what they said; a bare repost names the post instead,
@@ -386,8 +414,9 @@ async function handle(table: string, rec: Row) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
-      // A post in a circle is for its members (see circleOf).
-      if (rec.community_id && !(await inCircle(rec.community_id as string, u.id))) continue;
+      // A post in an invite-only circle is for its members, a hand-addressed
+      // one for its list (canRead).
+      if (!(await canRead(rec, u.id))) continue;
       await sendTo(u.id, {
         title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)),
         tag: `post:${rec.id}`, collapse: `post:${rec.id}:${u.id}`,

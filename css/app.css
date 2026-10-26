@@ -8526,6 +8526,10 @@ button.poll-option:disabled { cursor: default; }
 .aud-lock-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aud-lock-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
 @media (hover: hover) { .aud-lock:hover { border-color: var(--muted); } }
+/* A quote's audience when it isn't the reader's to choose: the same box, still
+   (an <output>, no chevron), with a field hint under it saying why. */
+.aud-lock--fixed { cursor: default; }
+@media (hover: hover) { .aud-lock--fixed:hover { border-color: var(--rule); } }
 
 /* Tags — the note box's foot (2026-10-23): a chip per tag and a + Tag pill,
    one tap per tag, wrapping onto new lines so the box grows as they're added.

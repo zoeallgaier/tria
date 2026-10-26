@@ -849,26 +849,43 @@ address and therefore a different person, and there is no way around that.
   theirs, which can be nobody. That is correct, not a bug, and the sheet says so
   (`Only the friends you share will see it.`).
 
-  **A PUBLIC POST CAN BE REPOSTED INTO A CIRCLE** (Zoe, 2026-10-26,
-  `supabase/repost-to-circle.sql`, NOT run when written). The repost sheet's
-  third row, Repost to a circle, opens your circles as the invite sheet's rows,
-  each tap committing: a bare repost row with `audience = 'community'` and the
-  circle's `community_id`, drawn "You reposted in c/slug" over the post (the
-  "in" part hidden on that circle's own page). It is the one place a repost
-  does not copy its original's audience, and that is only allowed over a
-  PUBLIC original: every member of every circle could already read it, so
-  "never widen" still holds. A friends-only post would reach only members who
-  are also the author's friends (the read gate) and stays out; a circle's own
-  post still stays in its circle. The file restates `repost_insert_ok` (same
-  signature) and `posts_community_guard`, and makes `posts_one_bare_repost`
-  one bare row per person per post PER PLACE (a null circle is your feed), so
-  the feed toggle and each circle's tick are separate; `myBare` keys the same
-  way. My Circle draws one bare repost per person per post (the newest), so
-  passing a post to your friends and into a circle you share doesn't show it
-  twice. Until the file runs the row isn't offered: `circleRepostsReady` asks
-  `repost_insert_ok(<a public post>, 'community')` once a session, `false`
-  before, `true` after (2026-10-26: `false`, with `'public'` answering `true`).
-  Quoting into a circle is not built.
+  **A REPOST INHERITS, A QUOTE CHOOSES** (Zoe, 2026-10-26: "tap repost, menu
+  with repost & quote options, and use the quote post menu to add the
+  audience feature", `supabase/repost-audience.sql`, which replaces the
+  retired `repost-to-circle.sql`). The repost sheet is two rows again,
+  Repost (or Undo repost) and Quote. A **bare repost** wears its original's
+  audience exactly, CIRCLE AND ALL: a post said in a circle is reposted inside
+  that circle (it bumps it there and reaches My Circle for friends who share
+  it), so a bare repost of one needs you to be a member (`Store.canRepost`).
+  A **quote** gets the composer's audience field, last as on any post, and
+  picks from what is honest (`Store.quoteAudience`): over a post ANYONE can
+  read (public, or any post in a public circle) the whole sheet, Anyone, My
+  circle, Choose people and every circle you're in; over a friends-only post
+  a fixed "My circle" ("A friends-only post stays with friends."); over an
+  invite-only circle's post a fixed that circle. "Honest" because the read
+  gate already makes widening impossible: a wider audience would only draw a
+  card for nobody. A quote to a circle you're in starts there; over a public
+  post it takes your own default. A quote said in a circle wears "Posted in
+  c/slug", and a quoted circle post's tile names its circle in its meta.
+
+  The SQL: `post_open_to_all(post)` (public outside a circle, or in a circle
+  that isn't invite only), `repost_insert_ok` admits the original's audience
+  or, over an open post, any audience, and `posts_community_guard` lets a
+  repost into a circle only when it is the original's own circle or the
+  original is open. `posts_one_bare_repost` stays per person, per post, per
+  place, so the bare rows the retired circle picker made remain valid;
+  `myBare` holds a list per post and Undo deletes every one. My Circle still
+  draws one bare repost per person per post. **The live DB had run the
+  REVERTED 5233b57 version of repost-to-circle.sql** (probed 2026-10-26:
+  `repost_insert_ok(<public circle post>, 'public')` answered `true`, and its
+  guard refused every repost inside a circle); `repost-audience.sql` is safe
+  over either version. Until it runs (`Store.repostRulesReady`, a
+  once-a-session `repost_insert_ok(<public post>, 'list')`, `false` before,
+  `true` after) a circle's post shows no repost glyph and a quote wears its
+  original's audience. **The push function checks the reader too**
+  (`canRead`): the original's author hears about a quote only if it reaches
+  them, since its words are in the push, and a mention in a hand-addressed
+  post only reaches the list.
 
   **YOU MAY REPOST AND QUOTE YOUR OWN POSTS**, as of 1.4. `Store.repostable` had
   copied `toggleLike`'s no-self rule on the reading that passing your own thing
@@ -1503,7 +1520,7 @@ private profile's card, and Discover lists an invite-only circle with a padlock
 on its handle and no Join unless you hold an invite.
 
 **A public circle's posts are anyone's to read** (`supabase/circle-public-posts.sql`,
-2026-10-23). One helper changes: `community_reads_post` answers true for a post
+2026-10-23, confirmed run 2026-10-26). One helper changes: `community_reads_post` answers true for a post
 in a circle that is not invite only, or for a member. `can_view_post` is not
 restated, so its block gate is untouched and still runs first. Anon reads them
 too, as it reads a public post. My Circle keeps to the circles you share by

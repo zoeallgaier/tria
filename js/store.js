@@ -147,7 +147,7 @@ const Store = (() => {
     worldGen++;
     pendingWrites = [];
     state = empty();
-    circleReposts = null;
+    repostRules = null;
   }
 
   // ── Row → view-shape mappers ───────────────────────────────────────────────
@@ -767,7 +767,7 @@ const Store = (() => {
     // Signed in before add-chats.sql ran, and it has run since: this is the
     // first pull that can open the channel.
     startLive();
-    probeCircleReposts();
+    probeRepostRules();
   }
 
   // Re-pull the whole world on demand (nav re-taps, the app foregrounding).
@@ -1012,10 +1012,10 @@ const Store = (() => {
   // out with it (and a song can't be reposted any more, see repostable).
   const isSongPost = (p) => p.type === 'song' || (p.repostOf && (originalOf(p) || {}).type === 'song');
   //
-  // ONE BARE REPOST PER PERSON PER POST. Since a public post can be passed
-  // along into a circle as well as to your friends (repost-to-circle.sql),
-  // one person can hold several bare rows for the same post; the feed draws
-  // the newest and lets the rest go, so the card isn't read twice.
+  // ONE BARE REPOST PER PERSON PER POST. A bare repost has one place now (its
+  // original's, repost-audience.sql), but the Repost to a circle row of
+  // 2026-10-26 left some people holding a second; the feed draws the newest
+  // and lets the rest go, so the card isn't read twice.
   function feed() {
     const circle = new Set([state.session, ...friends()]);
     const followed = new Set(following());
@@ -1058,11 +1058,10 @@ const Store = (() => {
   // Safe to bake state.session into the index because the two can't part: signing
   // in or out goes through loadWorld / clearWorld, and both replace state.posts.
   //
-  // Keyed by PLACE too (repost-to-circle.sql): the key is the post, then the
-  // circle it was passed into, '' for your own feed. The glyph's toggle is the
-  // '' row; the circle sheet's ticks are the others (myCircleRepost).
+  // A LIST per post: a bare repost has one place, its original's, but the
+  // retired Repost to a circle row could leave a second in a circle, and Undo
+  // takes back every one of them (undoRepost).
   const bareIndex = new WeakMap();
-  const bareKey = (postId, communityId) => postId + '\n' + (communityId || '');
   function myBare(rows) {
     let m = bareIndex.get(rows);
     if (!m) {
@@ -1072,7 +1071,7 @@ const Store = (() => {
       // for the toggle's row or "Undo repost" would offer to delete it.
       for (const p of rows)
         if (p.repostOf && !p.note && !p.title && p.author === state.session)
-          m.set(bareKey(p.repostOf, p.communityId), p);
+          m.set(p.repostOf, (m.get(p.repostOf) || []).concat(p));
       bareIndex.set(rows, m);
     }
     return m;
@@ -1104,44 +1103,62 @@ const Store = (() => {
   function repostable(post) {
     if (!post || !state.session) return false;
     const target = originalOf(post) || post;
-    // A circle's post stays in its circle (posts_community_guard refuses it),
-    // and a song stays in On repeat (see isSongPost).
-    return (target.audience || 'circle') !== 'list' && !target.communityId && target.type !== 'song';
+    // A song stays in On repeat (see isSongPost). A circle's post waits on
+    // repost-audience.sql, which is what lets a repost land in a circle.
+    if ((target.audience || 'circle') === 'list' || target.type === 'song') return false;
+    return !target.communityId || repostRulesReady();
   }
-  function myRepostOf(postId, communityId) {
+  // Can I pass it along BARE? A bare repost wears its original's place, circle
+  // and all (repost-audience.sql), so a circle's post needs you in that circle:
+  // reading a public circle doesn't make you one of its members.
+  function canRepost(post) {
+    if (!repostable(post)) return false;
+    const target = originalOf(post) || post;
+    return !target.communityId || inCommunity(target.communityId);
+  }
+  // Where may a QUOTE of this go? null when it can't be quoted at all. `place`
+  // is the original's own (what a bare repost wears, and the quote's audience
+  // when it is fixed), `open` says the composer may offer every audience,
+  // circles included: true over a post anyone can read, a public one or one in
+  // a public circle, so no reader of the quote is left looking at nothing. A
+  // friends-only post's quote stays with friends, an invite-only circle's in
+  // that circle. Missing circle rows read as invite only, the closed answer.
+  function quoteAudience(post) {
+    if (!repostable(post)) return null;
+    const target = originalOf(post) || post;
+    const place = { mode: target.audience || 'circle', community: target.communityId || null };
+    if (target.communityId) {
+      const c = community(target.communityId);
+      if (c && !c.inviteOnly) return { open: true, place };
+      return inCommunity(target.communityId) ? { open: false, place } : null;
+    }
+    return { open: place.mode === 'public' && repostRulesReady(), place };
+  }
+  function myRepostOf(postId) {
     const seed = byId(state.posts).get(postId);
-    return myBare(state.posts).get(bareKey((seed && seed.repostOf) || postId, communityId)) || null;
+    const rows = myBare(state.posts).get((seed && seed.repostOf) || postId);
+    return (rows && rows[0]) || null;
   }
   const repostedByMe = (postId) => !!myRepostOf(postId);
-  const myCircleRepost = (postId, communityId) => !!communityId && !!myRepostOf(postId, communityId);
 
-  // Can I pass this along INTO one of my circles? A public post only: it is
-  // already readable by every member of every circle, so a circle is no wider
-  // than what the post asked for (repost-to-circle.sql says why a friends-only
-  // one can't). Not a circle's own post, not a song, and only once the file
-  // has run (circleRepostsReady) and you are in a circle to put it in.
-  function repostableToCircle(post) {
-    if (!repostable(post) || !circleRepostsReady() || !myCommunities().length) return false;
-    const target = originalOf(post) || post;
-    return target.audience === 'public';
-  }
-  // Has repost-to-circle.sql run? Asked once a session, of the function the
-  // insert policy itself calls, about a public post the cache holds: it answers
-  // false before the file and true after. Kept off `state` (it is a question
-  // about the server, not part of the world) and cleared with it.
-  let circleReposts = null;
-  let circleRepostsAsking = false;
-  function probeCircleReposts() {
-    if (circleReposts !== null || circleRepostsAsking || !state.session) return;
+  // Has repost-audience.sql run? Asked once a session, of the function the
+  // insert policy itself calls, about a public post the cache holds: a quote to
+  // a hand-picked list over it answers false before the file and true after.
+  // Kept off `state` (it is a question about the server, not part of the
+  // world) and cleared with it.
+  let repostRules = null;
+  let repostRulesAsking = false;
+  function probeRepostRules() {
+    if (repostRules !== null || repostRulesAsking || !state.session) return;
     const p = state.posts.find(x => x.audience === 'public' && !x.repostOf && !x.communityId);
     if (!p) return;
-    circleRepostsAsking = true;
-    sb.rpc('repost_insert_ok', { p_repost_of: p.id, p_audience: 'community' })
-      .then(({ data, error }) => { if (!error) circleReposts = data === true; })
+    repostRulesAsking = true;
+    sb.rpc('repost_insert_ok', { p_repost_of: p.id, p_audience: 'list' })
+      .then(({ data, error }) => { if (!error) repostRules = data === true; })
       .catch(() => {})
-      .finally(() => { circleRepostsAsking = false; });
+      .finally(() => { repostRulesAsking = false; });
   }
-  const circleRepostsReady = () => circleReposts === true;
+  const repostRulesReady = () => repostRules === true;
 
   // Discover: everything on Tria you're allowed to see that isn't yours, newest
   // first. This used to mean "public posts only", which was the right shape
@@ -1945,47 +1962,57 @@ const Store = (() => {
     return { ok: true, post };
   }
 
-  // Pass a post along. `note` empty is a bare repost, `note` set is a quote.
+  // Pass a post along. `note` and `title` empty is a bare repost, either set
+  // is a quote.
   //
-  // The audience is COPIED from the original and never chosen: that is the whole
-  // "inherit, never widen" rule, and the insert policy enforces the same equality
-  // server-side, so a hand-rolled request can't do better. One consequence worth
-  // understanding before reading a bug report about it: reposting a 'circle' post
-  // reaches only the INTERSECTION of your circle and theirs, because the reader
-  // still has to pass can_view_original on the original. That can be nobody. It
-  // is the correct answer rather than something to route around.
-  //
-  // `communityId` passes it along INTO a circle instead (repost-to-circle.sql):
-  // the one place the audience isn't copied, and only over a public post, which
-  // every member could read anyway.
-  async function createRepost(postId, { note, title, communityId } = {}) {
+  // A BARE repost's audience is COPIED from the original and never chosen,
+  // circle included: that is "inherit, never widen", and the insert policy
+  // enforces the same equality server-side. A QUOTE may choose (`audience`,
+  // `audienceUsers`, `communityId`, the composer's own answer) when its
+  // original is open to everyone (quoteAudience); otherwise it is copied too.
+  // repost-audience.sql holds the same rule, so a hand-rolled request can't
+  // do better. Worth knowing before a bug report: a 'circle' post's repost
+  // reaches only the INTERSECTION of your circle and theirs, because the
+  // reader still has to pass can_view_original on the original. That can be
+  // nobody. It is the correct answer rather than something to route around.
+  async function createRepost(postId, { note, title, audience, audienceUsers, communityId } = {}) {
     const me = state.session;
     if (!me) return { ok: false, error: 'Sign in first.' };
     const seed = byId(state.posts).get(postId);
     const target = originalOf(seed) || seed;      // a chain collapses to its first
     if (!target) return { ok: false, error: 'That post isn’t here any more.' };
-    if (!repostable(target)) return { ok: false, error: 'That post can’t be reposted.' };
-    if (communityId && !(repostableToCircle(target) && inCommunity(communityId)))
-      return { ok: false, error: 'That post can’t go to a circle.' };
 
     const body = String(note || '').trim();
     const head = String(title || '').trim();
-    const row = {
-      author: idOf(me),
-      type: 'repost',
-      repost_of: target.id,
-      audience: communityId ? 'community' : (target.audience || 'circle'),
-      tags: [],
-    };
-    if (communityId) row.community_id = communityId;
+    const quote = !!(body || head);
+    const q = quoteAudience(target);
+    if (quote ? !q : !canRepost(target)) return { ok: false, error: 'That post can’t be reposted.' };
+
+    const row = { author: idOf(me), type: 'repost', repost_of: target.id, tags: [] };
+    let targetIds = [];
+    let place = q ? q.place : { mode: target.audience || 'circle', community: target.communityId || null };
+    if (quote && q.open && audience) {
+      // createPost's coercions: "Choose people" with nobody chosen is your
+      // circle, and a circle you've left since the composer opened is too.
+      targetIds = (audience === 'list' ? (audienceUsers || []) : []).map(idOf).filter(Boolean);
+      place = audience === 'public' ? { mode: 'public' }
+        : targetIds.length ? { mode: 'list' }
+        : audience === 'community' && communityId && inCommunity(communityId)
+          ? { mode: 'community', community: communityId }
+          : { mode: 'circle' };
+    }
+    if (place.mode === 'community' && !inCommunity(place.community))
+      return { ok: false, error: 'Join the circle to post in it.' };
+    row.audience = place.mode;
+    if (place.mode === 'community') row.community_id = place.community;
     if (body) row.note = body;
     if (head) row.title = head;
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
     if (error) {
-      // The unique index on (author, repost_of) for bare rows: a double tap, or
-      // two devices. Not a failure — the repost they wanted already exists.
-      if (!body && !head && /duplicate|unique/i.test(error.message || ''))
+      // The unique index on bare rows: a double tap, or two devices. Not a
+      // failure, the repost they wanted already exists.
+      if (!quote && /duplicate|unique/i.test(error.message || ''))
         return { ok: true, post: null };
       // The toast can only say "try again", which is the right words for a reader
       // and useless for anyone debugging. The real Postgres message is the whole
@@ -1995,20 +2022,34 @@ const Store = (() => {
       console.warn('[tria] repost failed:', error.code || '', error.message || error);
       return { ok: false, error: 'Couldn’t repost, try again.' };
     }
+    // A quote to hand-picked people: the allowlist, or no quote at all, for
+    // createPost's reason (a 'list' row with no list is visible to its author only).
+    if (targetIds.length) {
+      const { error: aerr } = await sb.from('post_audience')
+        .insert(targetIds.map(uid => ({ post_id: inserted.id, user_id: uid })));
+      if (aerr) {
+        await sb.from('posts').delete().eq('id', inserted.id);
+        return { ok: false, error: 'Couldn’t set who can see it, try again.' };
+      }
+      const rows = targetIds.map(uid => ({ postId: inserted.id, userId: uid }));
+      write('audience', a => a.filter(x => x.postId !== inserted.id).concat(rows));
+    }
     const post = mapPost(inserted, nameMap());
     write('posts', ps => upsert(ps, post, x => x.id === post.id));
     return { ok: true, post };
   }
 
-  // Take back a BARE repost. A quote is an ordinary post of yours and comes out
-  // through deletePost, from its own ••• menu, like anything else you wrote.
-  // `communityId` takes back the one passed into that circle instead.
-  async function undoRepost(postId, communityId) {
-    const mine = myRepostOf(postId, communityId);
-    if (!mine) return { ok: true };
-    const { error } = await sb.from('posts').delete().eq('id', mine.id);
+  // Take back a BARE repost, from everywhere it was passed (see myBare). A
+  // quote is an ordinary post of yours and comes out through deletePost, from
+  // its own ••• menu, like anything else you wrote.
+  async function undoRepost(postId) {
+    const seed = byId(state.posts).get(postId);
+    const mine = myBare(state.posts).get((seed && seed.repostOf) || postId) || [];
+    if (!mine.length) return { ok: true };
+    const ids = mine.map(p => p.id);
+    const { error } = await sb.from('posts').delete().in('id', ids);
     if (error) return { ok: false, error: 'Couldn’t undo that, try again.' };
-    write('posts', ps => ps.filter(p => p.id !== mine.id));
+    write('posts', ps => ps.filter(p => !ids.includes(p.id)));
     return { ok: true };
   }
 
@@ -4057,7 +4098,7 @@ const Store = (() => {
     createPost, deletePost, updatePost,
     // Reposts
     createRepost, undoRepost, originalOf, repostable, repostedByMe, myRepostOf,
-    repostableToCircle, myCircleRepost, circleRepostsReady,
+    canRepost, quoteAudience, repostRulesReady,
     // Comments
     commentsFor, addComment, deleteComment,
     // Likes

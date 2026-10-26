@@ -3524,7 +3524,7 @@
   // quintet naming a type is exactly the quintet's job. 'repost' isn't one, so it
   // has no colour to lend here.
   function repostBtnHtml(post) {
-    if (!Store.repostable(post)) return '';
+    if (!Store.canRepost(post) && !Store.quoteAudience(post) && !Store.repostedByMe(post.id)) return '';
     const target = Store.originalOf(post) || post;
     const on = Store.repostedByMe(target.id);
     return `<button class="card-repost${on ? ' reposted' : ''}" type="button" ` +
@@ -3636,7 +3636,7 @@
   // post rather than an act of passing one along: it has a byline, a sentence,
   // its own page, its own likes and its own thread. A bare repost has none of
   // those, because it IS the original wearing one extra line.
-  const isQuote = (p) => !!(p && p.repostOf && p.note);
+  const isQuote = (p) => !!(p && p.repostOf && (p.note || p.title));
 
   // The colour a post bursts in. 'repost' names no colour — the quintet is types
   // and that isn't one — so anything painting in a post's hue asks what the post
@@ -3660,7 +3660,7 @@
     // makes that swap: renderUser draws the same page either way, but only one of
     // the two lights the Profile tab.
     const href = mine ? '#/profile' : `#/u/${esc(encodeURIComponent(post.author))}`;
-    // Passed along INTO a circle (repost-to-circle.sql), the line says which,
+    // Passed along INTO a circle (repost-audience.sql), the line says which,
     // the way a circle's own post says "Posted in". Hidden on that circle's
     // page with .card-community, where it would name the page over every card.
     const room = post.communityId && Store.community(post.communityId);
@@ -3681,7 +3681,10 @@
   function quotedCardEl(orig) {
     const u = Store.user(orig.author);
     const name = esc(u ? u.name : orig.author);
-    const domain = findWhere(orig);
+    // Where it was said, when that was a circle: a quote can carry a circle's
+    // post out to people who have never been in it.
+    const room = orig.communityId && Store.community(orig.communityId);
+    const domain = findWhere(orig) || (room ? esc(communityHandle(room)) : '');
     const meta = esc(niceDate(orig.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
     // A quoted Frame runs full bleed to the tile's own corner, which is why the
@@ -4178,6 +4181,8 @@
     el.dataset.tags = '';
     el.innerHTML =
       `<div class="card-main">` +
+        // A quote said in a circle cites it like any circle post does.
+        communityTagHtml(post) +
         (opts.solo ? soloMetaEl(post) : bylineEl(post)) +
         // A quote takes a headline like any other post. Plain, never a link: the
         // destination a reader wants from here is the quoted post, and the tile
@@ -10910,103 +10915,46 @@
 
   // Tapping the circle. A sheet, like the card's ••• beside it.
   //
-  // Two rows, and the first one changes. A bare repost is a toggle you can take
-  // back; a quote is a post of yours and comes out through its own ••• like
-  // anything else you wrote, so it is never listed here as something to undo.
-  // A third, Repost to a circle, when the post is public and you are in one
-  // (Store.repostableToCircle); it opens the circle picker.
+  // Two rows, Repost and Quote (Zoe, 2026-10-26), and the first one changes. A
+  // bare repost is a toggle you can take back, and it goes where the post was
+  // said, circle and all (Store.canRepost). A quote is a post of yours, so it is
+  // where you choose who reads it: the composer's audience field
+  // (Store.quoteAudience). It comes out through its own ••• like anything else
+  // you wrote, so it is never listed here as something to undo.
   function openRepostMenu(post) {
     const orig = Store.originalOf(post) || post;
     const on = Store.repostedByMe(orig.id);
-    const rooms = Store.repostableToCircle(orig)
-      ? [{ label: 'Repost to a circle', icon: 'circle', run: () => openRepostToCircle(orig) }]
-      : [];
-    openSheet({
-      items: [
-        on
-          ? { label: 'Undo repost', icon: 'repost', run: async () => {
-              const res = await Store.undoRepost(orig.id);
-              if (res && res.ok === false) { toast(res.error || 'Couldn’t undo that, try again.'); return; }
-              hapticTap('LIGHT');
-              refreshPostViews();
-            } }
-          : { label: 'Repost', icon: 'repost', run: async () => {
-              const res = await Store.createRepost(orig.id);
-              if (!res || res.ok === false) { toast((res && res.error) || 'Couldn’t repost, try again.'); return; }
-              // LIGHT, on the confirmed write, like every other haptic here.
-              hapticTap('LIGHT');
-              // REPAINT FIRST, THEN SPARKLE. These two ran the other way round
-              // and the burst was never once visible — not dim, not brief,
-              // absent. refreshPostViews rebuilds the original's card (its button
-              // has just flipped to .reposted, so the innerHTML signature
-              // syncCards compares has changed) and burstSparkles appends its
-              // layer INSIDE that button, so the stars were added and destroyed
-              // in the same millisecond with no frame between them. Measured, not
-              // reasoned: a MutationObserver caught the add and the remove on the
-              // same timestamp. Anything that decorates a node a re-render can
-              // replace has to run after the re-render, and the re-render here is
-              // synchronous, so there is no window to sneak into.
-              refreshPostViews();
-              celebrateRepost(orig.id);
-            } },
-        { label: 'Quote', icon: 'pencil', run: () => { pendingQuote = orig; go('#/publish'); } },
-        ...rooms,
-      ],
-    });
-  }
-
-  // REPOST TO A CIRCLE: your circles as the invite sheet's rows, a circle's
-  // face where a friend's sits, and each tap commits (Zoe, 2026-10-26). A tick
-  // is the post passed along into that circle, and tapping a ticked row takes
-  // it back out, the glyph's own toggle once per circle. It lands as a bare
-  // repost in the circle's feed, "You reposted in c/slug" over the post.
-  function openRepostToCircle(orig) {
-    const rooms = Store.myCommunities().slice()
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const rowHtml = (c, i) =>
-      `<button type="button" class="aud-pick" role="checkbox" ` +
-          `aria-checked="${Store.myCircleRepost(orig.id, c.id)}" data-room="${esc(c.id)}" ` +
-          `style="animation-delay:${staggerDelay(i)}">` +
-        communityPicHtml(c, 'aud-avatar', 88) +
-        `<span class="friend-text">` +
-          `<span class="friend-name">${esc(c.name)}</span>` +
-          `<span class="friend-user">${esc(communityHandle(c))}</span>` +
-        `</span>` +
-        `<span class="aud-check" aria-hidden="true"></span>` +
-      `</button>`;
-    openSheet({
-      title: 'Repost to a circle',
-      dock: 'Done',
-      scrimClass: 'sheet-scrim--aud',
-      head:
-        `<div class="aud-list-wrap is-open">` +
-          `<div class="aud-list">${rooms.map(rowHtml).join('')}</div>` +
-        `</div>`,
-      wire: (scrim) => {
-        scrim.querySelectorAll('button.aud-pick').forEach(row =>
-          row.addEventListener('click', async () => {
-            if (row.dataset.busy) return;
-            const c = Store.community(row.dataset.room);
-            if (!c) return;
-            const was = row.getAttribute('aria-checked') === 'true';
-            row.dataset.busy = '1';
-            row.setAttribute('aria-checked', String(!was));   // flip first
-            // Hands itself back on every path, rejection included.
-            const res = await (was
-              ? Store.undoRepost(orig.id, c.id)
-              : Store.createRepost(orig.id, { communityId: c.id })).catch(() => null);
-            delete row.dataset.busy;
-            if (!res || res.ok === false) {
-              row.setAttribute('aria-checked', String(was));
-              toast((res && res.error) || (was ? 'Couldn’t undo that, try again.' : 'Couldn’t repost, try again.'));
-              return;
-            }
-            hapticTap('LIGHT');
-            toast(was ? `Taken out of ${communityHandle(c)}.` : `Reposted to ${communityHandle(c)}.`);
-            refreshPostViews();
-          }));
-      },
-    });
+    const items = [];
+    if (on)
+      items.push({ label: 'Undo repost', icon: 'repost', run: async () => {
+        const res = await Store.undoRepost(orig.id);
+        if (res && res.ok === false) { toast(res.error || 'Couldn’t undo that, try again.'); return; }
+        hapticTap('LIGHT');
+        refreshPostViews();
+      } });
+    else if (Store.canRepost(orig))
+      items.push({ label: 'Repost', icon: 'repost', run: async () => {
+        const res = await Store.createRepost(orig.id);
+        if (!res || res.ok === false) { toast((res && res.error) || 'Couldn’t repost, try again.'); return; }
+        // LIGHT, on the confirmed write, like every other haptic here.
+        hapticTap('LIGHT');
+        // REPAINT FIRST, THEN SPARKLE. These two ran the other way round
+        // and the burst was never once visible — not dim, not brief,
+        // absent. refreshPostViews rebuilds the original's card (its button
+        // has just flipped to .reposted, so the innerHTML signature
+        // syncCards compares has changed) and burstSparkles appends its
+        // layer INSIDE that button, so the stars were added and destroyed
+        // in the same millisecond with no frame between them. Measured, not
+        // reasoned: a MutationObserver caught the add and the remove on the
+        // same timestamp. Anything that decorates a node a re-render can
+        // replace has to run after the re-render, and the re-render here is
+        // synchronous, so there is no window to sneak into.
+        refreshPostViews();
+        celebrateRepost(orig.id);
+      } });
+    if (Store.quoteAudience(orig))
+      items.push({ label: 'Quote', icon: 'pencil', run: () => { pendingQuote = orig; go('#/publish'); } });
+    if (items.length) openSheet({ items });
   }
 
   // The tap target for the circle, delegated at the document like the ••• beside
@@ -17240,18 +17188,23 @@
     // A QUOTE is the ordinary note field — headline and all, like any other post —
     // followed by the thing it is about. What it does NOT get is the attach bar,
     // the link row, the poll, the frame or tags: those make a post of your own,
-    // and this one is about somebody else's. The audience isn't offered either,
-    // because it is copied from the original and cannot be widened (see
-    // Store.createRepost and reposts.sql), so a picker would either lie or do
-    // nothing.
+    // and this one is about somebody else's.
+    //
+    // It DOES get the audience, last as on every post (Zoe, 2026-10-26): a quote
+    // is how a post goes somewhere new, into a circle or out of one. The whole
+    // sheet over a post anyone can read; over one that isn't, the field shows
+    // where the quote goes and why, and doesn't open (Store.quoteAudience, and
+    // repost-audience.sql for the rule).
     //
     // The quoted post sits BELOW the field rather than above it. Above, it read as
     // a header the form hung off; below, the page is what it actually is — you
     // write, and the thing you are writing about is underneath, in the same order
     // the published card puts them.
     if (type === 'quote') {
+      const q = quotingPost && Store.quoteAudience(quotingPost);
       return richNoteField('c', '', '', 'Say something about it.', { tools: false }) +
-        (quotingPost ? `<div class="quote-banner">${quotedCardEl(quotingPost)}</div>` : '');
+        (quotingPost ? `<div class="quote-banner">${quotedCardEl(quotingPost)}</div>` : '') +
+        (q && q.open ? audienceFieldHtml('c') : audienceFixedHtml('c', quotingPost));
     }
 
     // MUSIC IS ITS OWN PAGE (Zoe, 2026-10-23), the way the Daily is the
@@ -17409,14 +17362,29 @@
     }
     return audienceCountLabel(pubAudience.users.length);   // 'list'
   }
-  function audienceLockInner() {
+  function audienceLockInner({ chevron = true } = {}) {
     // A circle (the room) wears Discover's woven triad, the mark circles are
     // found under; the other three keep the globe and the padlock.
     const glyph = pubAudience.mode === 'public' ? 'globe'
       : pubAudience.mode === 'community' ? 'circle' : 'lock';
     return svgIcon(glyph, 'aud-lock-ico') +
       `<span class="aud-lock-label">${esc(audienceLockText())}</span>` +
-      svgIcon('chevDown', 'aud-lock-chev');
+      (chevron ? svgIcon('chevDown', 'aud-lock-chev') : '');
+  }
+  // A quote whose audience isn't the reader's to choose: the same box, still,
+  // with no chevron, and a line saying why. It reads pubAudience like the lock,
+  // which mountFields has set to the original's place before this draws.
+  function audienceFixedHtml(idp, orig) {
+    const c = orig && orig.communityId && Store.community(orig.communityId);
+    const why = c ? `Posts in ${communityHandle(c)} stay in ${communityHandle(c)}.`
+      : orig && (orig.audience || 'circle') === 'circle' ? 'A friends-only post stays with friends.'
+      : '';
+    return `<div class="field aud-field">` +
+        `<label for="${idp}-audience">Who can see this</label>` +
+        `<output class="aud-lock aud-lock--fixed" id="${idp}-audience">` +
+          audienceLockInner({ chevron: false }) + `</output>` +
+        (why ? `<p class="field-hint">${esc(why)}</p>` : '') +
+      `</div>`;
   }
   // Under the note box since 2026-10-23, where the tags field was, and in its
   // look: a label and a full-width box that reads as a field and opens the
@@ -17876,14 +17844,24 @@
         pubAudience = { mode: 'community', users: [], community: room };
         pubAudienceTouched = true;
       }
+      // A quote starts where its post was said when that is a circle you're in
+      // (the talk is there; Anyone is one tap away when the circle is public),
+      // and stays there when the post isn't open to everyone. Over a public
+      // post it takes your own default like any post.
+      const qa = quote && Store.quoteAudience(quote);
+      if (qa && (!qa.open || (qa.place.community && Store.inCommunity(qa.place.community)))) {
+        pubAudience = qa.place.community
+          ? { mode: 'community', users: [], community: qa.place.community }
+          : { mode: qa.place.mode, users: [] };
+        pubAudienceTouched = true;
+      }
       const submitBtn = view.querySelector('.composer-submit');
       if (submitBtn) submitBtn.disabled = false;
-      // A quote is the one family left: one note field, no attach bar, no audience
-      // lock (the audience is the original's and can't be changed), no type
-      // inference. Everything else is the single form — the activity family went
-      // with the group switcher, and its two fields now ship hidden in this field
-      // set exactly as the poll's and the frame's do. The daily flow mounts the same
-      // form minus the calendar (see fieldsFor).
+      // A quote is the one family left: one note field, the audience, no attach
+      // bar, no type inference. Everything else is the single form — the
+      // activity family went with the group switcher, and its two fields now
+      // ship hidden in this field set exactly as the poll's and the frame's do.
+      // The daily flow mounts the same form minus the calendar (see fieldsFor).
       if (song) {
         family = 'song';
         wantSong = true;
@@ -17916,6 +17894,10 @@
           except: () => pubType === 'find' && attachedCircle(),
         });
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
+      } else if (qa && qa.open) {
+        // Every circle you're in, the one the post was said in included: a quote
+        // there is the post talked about where it lives.
+        wireAudienceLock(fieldsEl, null, { rooms: true });
       }
       applyBaseSurface();
     }
@@ -19195,7 +19177,7 @@
     const val = (id) => (document.getElementById(id)?.value || '').trim();
 
     // A quote leaves here early: it writes a repost row, not a post, so none of
-    // the type inference, audience picking or media upload below applies to it.
+    // the type inference or media upload below applies to it.
     // What it keeps is the shape of the ending — the same blocklist gate, the same
     // SUCCESS haptic, the same justPostedId so the card sparkles in on arrival.
     if (quotingPost) return submitQuote(errEl);
@@ -19401,10 +19383,11 @@
     go('#/');
   }
 
-  // Publish a quote. Short because there is so little to decide: the audience is
-  // the original's, the type is 'repost', there is no media and there are no tags.
-  // What is left is the sentence, the same guidelines gate every other post goes
-  // through, and the same ending.
+  // Publish a quote. Short because there is so little to decide: the type is
+  // 'repost', there is no media and there are no tags. What is left is the
+  // sentence, who reads it (pubAudience, which Store.createRepost only honours
+  // where the original allows it), the same guidelines gate every other post
+  // goes through, and the same ending.
   async function submitQuote(errEl) {
     const orig = quotingPost;
     const note = readNoteField('c-note');
@@ -19421,7 +19404,12 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
     errEl.textContent = '';
 
-    const res = await Store.createRepost(orig.id, { note, title }).catch(() => null);
+    const res = await Store.createRepost(orig.id, {
+      note, title,
+      audience: pubAudience.mode,
+      audienceUsers: pubAudience.users,
+      communityId: pubAudience.community || null,
+    }).catch(() => null);
     if (!res || res.ok === false) {
       errEl.textContent = (res && res.error) || 'Couldn’t repost, try again.';
       hapticEvent('ERROR');
