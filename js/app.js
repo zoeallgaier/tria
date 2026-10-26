@@ -16168,7 +16168,7 @@
       `<div class="postbar-reply-chip postbar-song-chip">` +
         `<span class="postbar-song-art${s.art ? ' pin-cover' : ''}"${s.art
           ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
-        `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> song:${esc(s.title)}</span>` +
+        `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> song: ${esc(s.title)}</span>` +
         `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the song">${svgIcon('close')}</button>` +
       `</div>`;
     const x = tray.querySelector('.postbar-reply-x');
