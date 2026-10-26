@@ -15,34 +15,31 @@
 --   · a BARE repost wears its original's audience exactly, circle and all. A
 --     friends-only post goes to your friends, a public one to anyone, a post in
 --     a circle stays in that circle (it bumps it there, and reaches My Circle
---     for the friends who share it). No choice, so no choice can be wrong.
---   · a QUOTE picks its audience in the composer, from what is HONEST: what
---     every reader of the quote could already read. A post that anyone can read
---     (a public post, or any post in a public circle) can be quoted to anyone,
---     to your circle, to people you pick, or into any circle you're in. A
---     friends-only post's quote stays with your friends, and a post in an
---     invite-only circle is quoted inside that circle only.
+--     for the friends who share it). The client never offers it a choice.
+--   · a QUOTE picks its audience in the composer, any of them (Zoe, 2026-10-26:
+--     "I should be able to choose the audience on quotes"): Anyone, your circle,
+--     people you pick, or any circle you're in, whatever the original was.
 --
--- WHY "HONEST" AND NOT "ANYTHING". The read gate (can_view_original, reposts.sql)
--- already makes widening impossible: a reader sees a repost only if they can see
--- its original too. So a wider audience never leaks, it just draws a card for
--- nobody, a friends-only post quoted to Anyone reaches only the author's friends
--- and reads as broken to everyone else. These rules refuse what would draw that
--- way, so the composer can offer exactly what the database takes.
+-- WHY ANY AUDIENCE IS SAFE. The read gate (can_view_original, reposts.sql) is
+-- what keeps "never widen" true: a reader sees a repost only if they can see
+-- its original too. So a friends-only post quoted to Anyone reaches only the
+-- people who were already the author's friends, and an invite-only circle's
+-- post quoted to Anyone reaches only that circle's members. The audience you
+-- pick narrows who reads your words; it never opens the original. The composer
+-- says so under the field when the original is the narrower of the two.
 --
 -- Unchanged: a hand-addressed ('list') post is never passed along (its list is
 -- its author's), a chain collapses to its first original, and you can only post
 -- into a circle you are in.
 --
 -- Three pieces:
---   1. repost_insert_ok (the insert policy's write gate, same signature).
---   2. posts_community_guard (the circle trigger): which circle a repost may
---      land in, since (1) can't see community_id.
---   3. posts_one_bare_repost stays per person, per post, per place. A bare
---      repost now has exactly one place (its original's), so this is one per
---      post in practice; it stays keyed by place so rows made by the short-lived
---      Repost to a circle row today remain valid. The client's Undo takes back
---      every bare row of yours for the post.
+--   1. repost_insert_ok (the insert policy's write gate, same signature) stops
+--      requiring the original's audience: only the list and chain rules remain.
+--   2. posts_community_guard (the circle trigger) stops refusing a repost in a
+--      circle; its membership check is all that's left.
+--   3. posts_one_bare_repost stays per person, per post, per place, so rows
+--      made by the short-lived Repost to a circle row today remain valid. The
+--      client's Undo takes back every bare row of yours for the post.
 --
 -- VERIFY over REST, read-only, with any public post's id (anon
 -- GET /rest/v1/posts?select=id&audience=eq.public&type=neq.repost&community_id=is.null&limit=1):
@@ -54,31 +51,14 @@
 -- wear their original's audience and a circle's post isn't offered at all.
 
 
--- Can everyone who could read a quote already read this post? A public post
--- outside a circle, or any post in a public circle (circle-public-posts.sql).
--- security definer for can_view_post's reason: it reads posts and communities
--- as the owner, so a policy that calls it never re-enters RLS.
-create or replace function public.post_open_to_all(p_post uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-      from public.posts o
-      left join public.communities c on c.id = o.community_id
-     where o.id = p_post
-       and ((o.community_id is null and o.audience = 'public')
-            or (o.community_id is not null and c.id is not null and not c.invite_only))
-  );
-$$;
-grant execute on function public.post_open_to_all(uuid) to anon, authenticated;
+-- The helper an earlier draft of this file defined. Never run, but drop it in
+-- case: nothing calls it.
+drop function if exists public.post_open_to_all(uuid);
 
 
 -- 1. The write gate. Same signature as reposts.sql's, so the policy that calls
---    it ("posts insert own") is untouched.
+--    it ("posts insert own") is untouched. can_view_original, beside it in
+--    that policy, still makes you able to see what you point at.
 create or replace function public.repost_insert_ok(p_repost_of uuid, p_audience text)
 returns boolean
 language sql
@@ -92,30 +72,18 @@ as $$
      where o.id = p_repost_of
        and o.audience <> 'list'          -- a hand-addressed post isn't yours to re-send
        and o.type <> 'repost'            -- a chain collapses to its first original
-       and (o.audience = p_audience      -- inherit: a bare repost, or a quote kept in place
-            or public.post_open_to_all(o.id))   -- or anywhere, over a post anyone can read
   );
 $$;
 grant execute on function public.repost_insert_ok(uuid, text) to anon, authenticated;
 
 
--- 2. The circle trigger. Restated in full from add-circles.sql; its first and
---    last checks are unchanged, the repost arm in the middle is new.
---
---    A repost INTO a circle lands in its original's own circle, or in any
---    circle over a post anyone can read. Without the first half, (1)'s
---    "o.audience = p_audience" would let an invite-only circle's post into a
---    DIFFERENT circle, whose members can't read the original.
+-- 2. The circle trigger. Restated in full from add-circles.sql, minus its
+--    repost arm: a repost lands in any circle you're in, and the read gate
+--    decides who there can read it.
 create or replace function public.posts_community_guard()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.community_id is null then return new; end if;
-  if new.repost_of is not null
-     and not public.post_open_to_all(new.repost_of)
-     and not exists (select 1 from public.posts o
-                      where o.id = new.repost_of and o.community_id = new.community_id) then
-    raise exception 'That post stays where it was posted.' using errcode = '42501';
-  end if;
   if (tg_op = 'INSERT' or new.community_id is distinct from old.community_id)
      and not exists (select 1 from public.community_members
                       where community_id = new.community_id and user_id = auth.uid()) then
@@ -138,20 +106,22 @@ create unique index if not exists posts_one_bare_repost
 
 
 -- Quick sanity (ok = 1 each).
-select 'post_open_to_all fn' as check, count(*) as ok
-  from pg_proc where proname = 'post_open_to_all'
-union all
-select 'repost_insert_ok asks post_open_to_all', count(*)
+select 'repost_insert_ok keeps only list and chain' as check, count(*) as ok
   from pg_proc where proname = 'repost_insert_ok'
-   and pg_get_functiondef(oid) like '%post_open_to_all%'
+   and pg_get_functiondef(oid) not like '%o.audience = p_audience%'
+   and pg_get_functiondef(oid) like '%<> ''list''%'
 union all
-select 'guard keeps a closed circle''s post home', count(*)
+select 'guard has no repost arm', count(*)
   from pg_proc where proname = 'posts_community_guard'
-   and pg_get_functiondef(oid) like '%stays where it was posted%'
+   and pg_get_functiondef(oid) not like '%repost_of%'
 union all
 select 'bare index is per place', count(*)
   from pg_indexes where schemaname = 'public' and indexname = 'posts_one_bare_repost'
    and indexdef like '%community_id%'
+union all
+select 'read policy keeps the double gate', count(*)
+  from pg_policies where tablename = 'posts' and policyname = 'posts read visible'
+   and qual like '%can_view_original%'
 union all
 select 'can_view_post keeps is_blocked_pair', count(*)
   from pg_proc where proname = 'can_view_post'

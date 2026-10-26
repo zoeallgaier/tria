@@ -95,7 +95,9 @@ async function areFriends(a: string, b: string) {
 
 // Could this person read this post row? can_view_post's audience arms, asked
 // before a push quotes the row's words at somebody: since a quote picks its
-// audience (repost-audience.sql), the original's author may not be in it.
+// audience (repost-audience.sql), the original's author may not be in it, and
+// a quote is read only by people who can read its original as well
+// (can_view_original), so a mention in one asks of both rows.
 // A 'list' post's allowlist is written just AFTER the row this webhook fires
 // on, so an empty list is asked once more a moment later before it reads as no.
 async function canRead(rec: Row, userId: string): Promise<boolean> {
@@ -415,8 +417,13 @@ async function handle(table: string, rec: Row) {
       if (!u || u.id === rec.author) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
       // A post in an invite-only circle is for its members, a hand-addressed
-      // one for its list (canRead).
+      // one for its list (canRead), and a quote for who can read its original.
       if (!(await canRead(rec, u.id))) continue;
+      if (rec.repost_of) {
+        const { data: orig } = await supabase.from('posts')
+          .select('id,author,audience,community_id').eq('id', rec.repost_of).maybeSingle();
+        if (!orig || !(await canRead(orig, u.id))) continue;
+      }
       await sendTo(u.id, {
         title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)),
         tag: `post:${rec.id}`, collapse: `post:${rec.id}:${u.id}`,

@@ -169,20 +169,24 @@ as its card goes on.
 the quote post menu to add the audience feature"). A **bare repost wears its
 original's audience exactly, circle and all**: a circle's post is reposted
 inside that circle, so it needs you to be a member (`Store.canRepost`). A
-**quote** has the composer's audience field and picks from what is honest
-(`Store.quoteAudience`): over a post anyone can read (public, or in a PUBLIC
-circle) every audience and every circle you're in, so a quote is how a post
-goes into a circle or out of one; a friends-only post's quote is fixed to My
-circle and an invite-only circle's to that circle, the field still with a
-hint saying why (`audienceFixedHtml`). A quote in a circle starts there. The
-Repost to a circle row and its picker are gone. The rules are
+**quote** has the composer's audience field, ALL of it, whatever the original
+was (Zoe: "I should be able to choose the audience on quotes"): Anyone, My
+circle, Choose people, any circle you're in. So a quote is how a post goes into
+a circle or out of one. The read gate (`can_view_original`) still holds a quote
+to the people who can read its original, so over a friends-only or
+invite-only-circle post a line under the field says who that is
+(`quoteReachHint`: "Only Ana's friends will see it.", "Only people in c/x will
+see it."). A quote starts in its post's circle when you're in it, and with your
+friends over a friends-only post. The Repost to a circle row and its picker
+are gone. The rules are
 `supabase/repost-audience.sql` (**NOT run** as of 2026-10-26; it replaces
 repost-to-circle.sql, whose REVERTED version the live DB had run). Until it
 runs (`Store.repostRulesReady`, a once-a-session ask of
 `repost_insert_ok(<public post>, 'list')`) a circle's post has no repost glyph
-and a quote wears its original's audience. **The push function changed too**
+and a quote's field is fixed to its original's audience. **The push function changed too**
 (`canRead`: a quote's push only reaches the original's author when the quote
-does), so it needs a redeploy. See docs/data.md under reposts.
+does, and a mention in a quote only someone who can read both), so it needs a
+redeploy. See docs/data.md under reposts.
 
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
@@ -302,9 +306,9 @@ profile face, `setCommunityPhoto`), take people out, and **delete it**
 (`deleteCommunity`, which takes its posts with it); the slug never
 changes. When the host leaves, the longest-standing member inherits; when the
 last member leaves, the circle closes the same way a delete does. Ten circles
-held per person. A circle post is reposted inside its circle and quoted out
-of it only when the circle is public (see Repost inherits, quote chooses); it
-cannot be pinned to a profile.
+held per person. A circle post is reposted inside its circle and quoted
+anywhere (see Repost inherits, quote chooses); it cannot be pinned to a
+profile.
 **Starting one is celebrated** (Zoe, 2026-10-23): the new circle's page opens
 with the brand's stars bursting off its face (`celebrateFace`, cyan and green
 alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's

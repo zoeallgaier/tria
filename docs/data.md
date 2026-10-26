@@ -858,22 +858,25 @@ address and therefore a different person, and there is no way around that.
   that circle (it bumps it there and reaches My Circle for friends who share
   it), so a bare repost of one needs you to be a member (`Store.canRepost`).
   A **quote** gets the composer's audience field, last as on any post, and
-  picks from what is honest (`Store.quoteAudience`): over a post ANYONE can
-  read (public, or any post in a public circle) the whole sheet, Anyone, My
-  circle, Choose people and every circle you're in; over a friends-only post
-  a fixed "My circle" ("A friends-only post stays with friends."); over an
-  invite-only circle's post a fixed that circle. "Honest" because the read
-  gate already makes widening impossible: a wider audience would only draw a
-  card for nobody. A quote to a circle you're in starts there; over a public
-  post it takes your own default. A quote said in a circle wears "Posted in
-  c/slug", and a quoted circle post's tile names its circle in its meta.
+  ALL of it whatever the original was (Zoe, 2026-10-26: "I should be able to
+  choose the audience on quotes"): Anyone, My circle, Choose people and every
+  circle you're in. That is safe because the read gate already makes widening
+  impossible: a reader sees a quote only if they can read its original, so the
+  pick narrows who reads your words and never opens the post. Over a narrow
+  original (friends-only, or in an invite-only circle, `quoteAudience`'s
+  `narrow`) a line under the field says who that leaves (`quoteReachHint`).
+  A quote starts in its post's circle when you're in it, and with your friends
+  over a friends-only post; over a public post it takes your own default. A
+  quote said in a circle wears "Posted in c/slug", and a quoted circle post's
+  tile names its circle in its meta.
 
-  The SQL: `post_open_to_all(post)` (public outside a circle, or in a circle
-  that isn't invite only), `repost_insert_ok` admits the original's audience
-  or, over an open post, any audience, and `posts_community_guard` lets a
-  repost into a circle only when it is the original's own circle or the
-  original is open. `posts_one_bare_repost` stays per person, per post, per
-  place, so the bare rows the retired circle picker made remain valid;
+  The SQL: `repost_insert_ok` keeps only the list and chain rules (no
+  audience equality), and `posts_community_guard` loses its repost arm, so a
+  repost lands in any circle you're in. A bare repost's "inherit" is the
+  client's (`createRepost`): a hand-rolled wider one only draws for people
+  who could read the original anyway. `posts_one_bare_repost` stays per
+  person, per post, per place, so the bare rows the retired circle picker made
+  remain valid;
   `myBare` holds a list per post and Undo deletes every one. My Circle still
   draws one bare repost per person per post. **The live DB had run the
   REVERTED 5233b57 version of repost-to-circle.sql** (probed 2026-10-26:
@@ -881,11 +884,11 @@ address and therefore a different person, and there is no way around that.
   guard refused every repost inside a circle); `repost-audience.sql` is safe
   over either version. Until it runs (`Store.repostRulesReady`, a
   once-a-session `repost_insert_ok(<public post>, 'list')`, `false` before,
-  `true` after) a circle's post shows no repost glyph and a quote wears its
-  original's audience. **The push function checks the reader too**
+  `true` after) a circle's post shows no repost glyph and a quote's field is
+  fixed to its original's audience. **The push function checks the reader too**
   (`canRead`): the original's author hears about a quote only if it reaches
-  them, since its words are in the push, and a mention in a hand-addressed
-  post only reaches the list.
+  them, since its words are in the push; a mention in a hand-addressed post
+  only reaches the list, and one in a quote only someone who can read both.
 
   **YOU MAY REPOST AND QUOTE YOUR OWN POSTS**, as of 1.4. `Store.repostable` had
   copied `toggleLike`'s no-self rule on the reading that passing your own thing

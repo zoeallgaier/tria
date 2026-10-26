@@ -17190,11 +17190,12 @@
     // the link row, the poll, the frame or tags: those make a post of your own,
     // and this one is about somebody else's.
     //
-    // It DOES get the audience, last as on every post (Zoe, 2026-10-26): a quote
-    // is how a post goes somewhere new, into a circle or out of one. The whole
-    // sheet over a post anyone can read; over one that isn't, the field shows
-    // where the quote goes and why, and doesn't open (Store.quoteAudience, and
-    // repost-audience.sql for the rule).
+    // It DOES get the audience, last as on every post, and all of it (Zoe,
+    // 2026-10-26): a quote is how a post goes somewhere new, into a circle or
+    // out of one. Over a post that reaches fewer people than that, the read
+    // gate holds the quote to them, and a line under the field says who
+    // (quoteReachHint). Before repost-audience.sql runs the field is fixed to
+    // the original's audience (Store.quoteAudience).
     //
     // The quoted post sits BELOW the field rather than above it. Above, it read as
     // a header the form hung off; below, the page is what it actually is — you
@@ -17204,7 +17205,9 @@
       const q = quotingPost && Store.quoteAudience(quotingPost);
       return richNoteField('c', '', '', 'Say something about it.', { tools: false }) +
         (quotingPost ? `<div class="quote-banner">${quotedCardEl(quotingPost)}</div>` : '') +
-        (q && q.open ? audienceFieldHtml('c') : audienceFixedHtml('c', quotingPost));
+        (q && q.open
+          ? audienceFieldHtml('c', quoteReachHint(quotingPost))
+          : audienceFixedHtml('c', quotingPost));
     }
 
     // MUSIC IS ITS OWN PAGE (Zoe, 2026-10-23), the way the Daily is the
@@ -17374,6 +17377,19 @@
   // A quote whose audience isn't the reader's to choose: the same box, still,
   // with no chevron, and a line saying why. It reads pubAudience like the lock,
   // which mountFields has set to the original's place before this draws.
+  // Who a quote of a narrow post can reach, whatever its audience: the people
+  // who can read the original (can_view_original). '' when that's anyone.
+  function quoteReachHint(orig) {
+    const q = Store.quoteAudience(orig);
+    if (!q || !q.narrow) return '';
+    if (orig.communityId) {
+      const c = Store.community(orig.communityId);
+      return `Only people in ${c ? communityHandle(c) : 'its circle'} will see it.`;
+    }
+    if (orig.author === Store.session()) return 'Only your friends will see it.';
+    const u = Store.user(orig.author);
+    return `Only ${u ? u.name : orig.author}’s friends will see it.`;
+  }
   function audienceFixedHtml(idp, orig) {
     const c = orig && orig.communityId && Store.community(orig.communityId);
     const why = c ? `Posts in ${communityHandle(c)} stay in ${communityHandle(c)}.`
@@ -17389,11 +17405,13 @@
   // Under the note box since 2026-10-23, where the tags field was, and in its
   // look: a label and a full-width box that reads as a field and opens the
   // sheet. Still the one `.aud-lock` on the page, so the wiring is unchanged.
-  function audienceFieldHtml(idp) {
+  // `hint` is a quote's reach (quoteReachHint), a line under the box.
+  function audienceFieldHtml(idp, hint = '') {
     return `<div class="field aud-field">` +
         `<label for="${idp}-audience">Who can see this</label>` +
         `<button type="button" class="aud-lock" id="${idp}-audience">` +
           audienceLockInner() + `</button>` +
+        (hint ? `<p class="field-hint">${esc(hint)}</p>` : '') +
       `</div>`;
   }
   // `onChange` is the editor's, and it is not optional there: the lock is a
@@ -17844,12 +17862,13 @@
         pubAudience = { mode: 'community', users: [], community: room };
         pubAudienceTouched = true;
       }
-      // A quote starts where its post was said when that is a circle you're in
-      // (the talk is there; Anyone is one tap away when the circle is public),
-      // and stays there when the post isn't open to everyone. Over a public
-      // post it takes your own default like any post.
+      // A quote STARTS where its post was said: in its circle when you're in
+      // it (the talk is there), with your friends over a friends-only post
+      // (who it can reach anyway), and wherever it must go before
+      // repost-audience.sql. Every one is a start, not a rule: the sheet
+      // moves it. Over a public post it takes your own default like any post.
       const qa = quote && Store.quoteAudience(quote);
-      if (qa && (!qa.open || (qa.place.community && Store.inCommunity(qa.place.community)))) {
+      if (qa && (qa.place.community ? Store.inCommunity(qa.place.community) : (!qa.open || qa.narrow))) {
         pubAudience = qa.place.community
           ? { mode: 'community', users: [], community: qa.place.community }
           : { mode: qa.place.mode, users: [] };

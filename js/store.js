@@ -1116,23 +1116,22 @@ const Store = (() => {
     const target = originalOf(post) || post;
     return !target.communityId || inCommunity(target.communityId);
   }
-  // Where may a QUOTE of this go? null when it can't be quoted at all. `place`
-  // is the original's own (what a bare repost wears, and the quote's audience
-  // when it is fixed), `open` says the composer may offer every audience,
-  // circles included: true over a post anyone can read, a public one or one in
-  // a public circle, so no reader of the quote is left looking at nothing. A
-  // friends-only post's quote stays with friends, an invite-only circle's in
-  // that circle. Missing circle rows read as invite only, the closed answer.
+  // Where may a QUOTE of this go? null when it can't be quoted at all. `open`
+  // says the composer offers every audience (Zoe, 2026-10-26: "I should be able
+  // to choose the audience on quotes"), which it does once repost-audience.sql
+  // has run; before, a quote wears `place`, the original's own, as a bare
+  // repost does. `narrow` says the original reaches fewer people than an
+  // audience might: a friends-only post, or one in an invite-only circle (a
+  // missing circle row reads as invite only, the closed answer). The read gate
+  // holds a quote of one to the people who can read the original, whatever
+  // was picked, and the composer says so.
   function quoteAudience(post) {
     if (!repostable(post)) return null;
     const target = originalOf(post) || post;
     const place = { mode: target.audience || 'circle', community: target.communityId || null };
-    if (target.communityId) {
-      const c = community(target.communityId);
-      if (c && !c.inviteOnly) return { open: true, place };
-      return inCommunity(target.communityId) ? { open: false, place } : null;
-    }
-    return { open: place.mode === 'public' && repostRulesReady(), place };
+    const c = target.communityId && community(target.communityId);
+    const narrow = target.communityId ? !(c && !c.inviteOnly) : place.mode !== 'public';
+    return { open: repostRulesReady(), place, narrow };
   }
   function myRepostOf(postId) {
     const seed = byId(state.posts).get(postId);
