@@ -5843,10 +5843,10 @@ button.poll-option:disabled { cursor: default; }
    sit 40px apart, so the glyphs read as one little bar in the corner. */
 .np-reply {
   position: absolute;
-  /* 4px down and 4px in from where its box would sit beside the heart's: the
+  /* 3px down and 4px in from where its box would sit beside the heart's: the
      bubble's ink rides high and left in its 24 grid, so this is the optical
      match to the heart (Zoe, 2026-10-25). */
-  top: calc(132px - 44px + 4px);
+  top: calc(132px - 44px + 3px);
   right: 34px;
   z-index: 1;
   display: grid;
