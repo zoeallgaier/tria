@@ -5660,6 +5660,7 @@
     if (titleEl) titleEl.textContent = '';
     if (actions) actions.innerHTML = '';
     setToolbarSides(0);
+    headerHeld = false;
     document.querySelector('.topbar')?.classList.remove('topbar--title-visible', 'topbar--searching');
     // The native capsule's hooks go with the page that wired them, so a late
     // keystroke from a search that is leaving can't land on the next route. The
@@ -5793,7 +5794,19 @@
   // above; one rule everywhere outranked it. The header leaves on the way down
   // and is back on the way up, on every route. Kept as a function because the
   // native bar still takes the answer as `holdHeader`.
-  function holdsHeader() { return false; }
+  //
+  // EXCEPT AN OPEN SEARCH (Zoe, 2026-10-25: "sticky"). While Discover's field
+  // holds the caret, words or a filter, the header stays put: a filtered list
+  // read under a bar that had dropped its blur (the field held on by its focus,
+  // the material gone) looked bare, and a search that tucked and came back on
+  // every flick was jumpy. Discover's syncOpen holds it; a navigation lets go.
+  let headerHeld = false;
+  function holdsHeader() { return headerHeld; }
+  function holdHeader(on) {
+    if (on === headerHeld) return;
+    headerHeld = on;
+    syncToolbarReading(true);
+  }
   let barLastY = 0;
   let barReading = false;
   // `placed` is the router's own jump — see syncTopbar. It takes the new
@@ -14860,6 +14873,7 @@
         || !!discoverQuery.trim() || discoverType !== 'all';
       if (open === searchOpen) return;
       searchOpen = open;
+      holdHeader(open);
       if (filterBtn) {
         filterBtn.parentElement.classList.toggle('is-open', open);
         filterBtn.tabIndex = open ? 0 : -1;
