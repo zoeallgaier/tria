@@ -859,7 +859,7 @@ address and therefore a different person, and there is no way around that.
   PUBLIC original: every member of every circle could already read it, so
   "never widen" still holds. A friends-only post would reach only members who
   are also the author's friends (the read gate) and stays out; a circle's own
-  post doesn't go into another circle. The file restates `repost_insert_ok` (same
+  post still stays in its circle. The file restates `repost_insert_ok` (same
   signature) and `posts_community_guard`, and makes `posts_one_bare_repost`
   one bare row per person per post PER PLACE (a null circle is your feed), so
   the feed toggle and each circle's tick are separate; `myBare` keys the same
@@ -869,16 +869,6 @@ address and therefore a different person, and there is no way around that.
   `repost_insert_ok(<a public post>, 'community')` once a session, `false`
   before, `true` after (2026-10-26: `false`, with `'public'` answering `true`).
   Quoting into a circle is not built.
-
-  **AND A PUBLIC CIRCLE'S POST CAN BE REPOSTED OUT** (Zoe, 2026-10-26, the
-  same file). Repost and Quote on a post said in a circle that is not invite
-  only, to your own feed, the row wearing `'public'`: since
-  `circle-public-posts.sql` (confirmed run 2026-10-26, anon reads circle posts)
-  anyone could read it already, so nothing widens. The passed-along card reads
-  "Ana reposted" over the original's own "Posted in c/slug". An invite-only
-  circle's post stays in its circle, and a circle turned invite only later
-  hides its reposts from outsiders on the next read (`can_view_original`).
-  `outOfCommunity` in store.js; it rides the same `circleRepostsReady`.
 
   **YOU MAY REPOST AND QUOTE YOUR OWN POSTS**, as of 1.4. `Store.repostable` had
   copied `toggleLike`'s no-self rule on the reading that passing your own thing
@@ -1537,8 +1527,7 @@ per the rule at `chat-roster.sql`. Who may put a post INTO a circle is a trigger
 (`posts_community_guard`) rather than a policy rewrite: membership is checked
 when the circle is set or changed and never when it stays the same, so somebody
 who left can still fix a typo in what they said there. The same trigger refuses
-a repost of a circle post outright, until `repost-to-circle.sql` (NOT run as
-of 2026-10-26) lets a public circle's post out to your feed, see reposts.
+a repost of a circle post outright.
 
 **No chat: a circle is just a feed** (Zoe, 2026-10-23: "the chat is nice for
 activities when people need to actually coordinate but I don't see a use here

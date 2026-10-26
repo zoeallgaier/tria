@@ -171,12 +171,10 @@ It opens your circles as the invite sheet's rows, a circle's face for a friend's
 each tap committing or taking back a bare repost INTO that circle
 (`openRepostToCircle`, `createRepost`/`undoRepost`'s `communityId`), drawn
 "You reposted in c/slug" (`.card-passed-room`, hidden on the circle's page).
-A friends-only post can't go (it would widen the author's audience). **A
-public circle's post can be reposted and quoted OUT to your feed** (Zoe,
-2026-10-26), worn as `'public'` since anyone can read it already
-(`outOfCommunity`); an invite-only circle's stays in its circle. The rules are
+A friends-only post can't go (it would widen the author's audience), and a
+circle's own post still stays in its circle. The rules are
 `supabase/repost-to-circle.sql` (**NOT run** as of 2026-10-26); until it runs
-no circle row shows and no circle post can be reposted (`circleRepostsReady`, a once-a-session ask of
+no circle row shows (`circleRepostsReady`, a once-a-session ask of
 `repost_insert_ok`, which answered `false` on 2026-10-26). My Circle draws one
 bare repost per person per post. See docs/data.md under reposts.
 
@@ -247,8 +245,7 @@ on its handle ("Invited" or "Invite only" after it, no Join pill unless you
 hold an invite), and a stranger's pill on its page says "Invite only" with no
 tap. **A public circle's posts are readable by anyone** (Zoe: "if a circle is
 public posts should be visible"), signed in or out, through
-`supabase/circle-public-posts.sql` (**confirmed run** 2026-10-26: anon
-`GET /rest/v1/posts?select=id&audience=eq.community` answers rows), which widens
+`supabase/circle-public-posts.sql` (**NOT run** as of 2026-10-23), which widens
 `community_reads_post` and leaves `can_view_post` alone. An invite-only
 circle's stay with its members. Likes, comments and RSVPs are still for members
 (and the author's friends), so a reader joins to take part.
@@ -298,8 +295,7 @@ profile face, `setCommunityPhoto`), take people out, and **delete it**
 (`deleteCommunity`, which takes its posts with it); the slug never
 changes. When the host leaves, the longest-standing member inherits; when the
 last member leaves, the circle closes the same way a delete does. Ten circles
-held per person. A circle post cannot be pinned to a profile, and only a
-public circle's can be reposted (out to your feed, see Repost to a circle).
+held per person. A circle post cannot be reposted or pinned to a profile.
 **Starting one is celebrated** (Zoe, 2026-10-23): the new circle's page opens
 with the brand's stars bursting off its face (`celebrateFace`, cyan and green
 alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's
