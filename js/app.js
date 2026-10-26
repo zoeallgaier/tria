@@ -3867,19 +3867,22 @@
             : 'Shared privately'}</span></p>`
       : '';
 
+    // A YouTube Find's tags sit over its video (Zoe, 2026-10-26), with the
+    // words they label, not under the tile.
+    const ytHtml = youTubeTileHtml(post);
     el.innerHTML =
       `<div class="card-main">` +
         head +
         titleHtml +
         noteHtml +
-        youTubeTileHtml(post) +
+        (ytHtml ? tagChips(post) + ytHtml : '') +
         (room ? circleTileHtml(room) : '') +
         songTileHtml(post) +
         pollWidgetHtml(post) +
         locationHtml +
         whenHtml +
         audienceHtml +
-        tagChips(post) +
+        (ytHtml ? '' : tagChips(post)) +
         actions +
       `</div>` +
       goingPanelHtml(post, full) +
