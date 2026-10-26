@@ -5916,12 +5916,16 @@
   /* ── This week (1.7) ─────────────────────────────────────────────────────────
      The plans you are going to in the next seven days (today included), stacked
      on top of My Circle, soonest first. Yours to host count: a host is going.
-     Each one can be waved off, per device, and stays off; the list is short and
-     it empties itself as the days pass, so there is nothing to catch up on. */
+     Each one can be waved off, per device, FOR THE DAY (Zoe, 2026-10-25: "a
+     daily reminder"): it is back the next morning until the plan is over. The
+     store is id to the day it was waved off, and a day gone by is dropped; the
+     old store, a list of ids waved off for good, reads as nothing. */
   const weekKey = () => `tria:week-dismissed:${Store.session()}`;
   function weekDismissed() {
-    try { return new Set(JSON.parse(localStorage.getItem(weekKey()) || '[]')); }
-    catch { return new Set(); }
+    try {
+      const saved = JSON.parse(localStorage.getItem(weekKey()) || '{}');
+      return saved && !Array.isArray(saved) && typeof saved === 'object' ? saved : {};
+    } catch { return {}; }
   }
   function paintWeekCards() {
     const box = view.querySelector('#week-cards');
@@ -5931,7 +5935,8 @@
     last.setUTCDate(last.getUTCDate() + 6);
     const until = last.toISOString().slice(0, 10);
     const me = Store.session();
-    const gone = weekDismissed();
+    const waved = weekDismissed();
+    const gone = new Set(Object.keys(waved).filter(id => waved[id] === today));
     const when = (p) => p.eventDate + (p.eventTime || '');
     const plans = Store.posts()
       .filter(p => p.type === 'activity' && p.eventDate && p.eventDate >= today && p.eventDate <= until
@@ -5958,9 +5963,11 @@
     }).join('');
     box.querySelectorAll('.week-card-x').forEach(x => x.addEventListener('click', () => {
       const card = x.closest('.week-card');
-      const ids = weekDismissed();
-      ids.add(card.dataset.id);
-      try { localStorage.setItem(weekKey(), JSON.stringify([...ids].slice(-200))); } catch { /* private window */ }
+      const day = dayMT(Date.now());
+      const waved = weekDismissed();
+      for (const id of Object.keys(waved)) if (waved[id] !== day) delete waved[id];
+      waved[card.dataset.id] = day;
+      try { localStorage.setItem(weekKey(), JSON.stringify(waved)); } catch { /* private window */ }
       hapticTap('LIGHT');
       card.remove();
       if (!box.children.length) box.hidden = true;
