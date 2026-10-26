@@ -1104,9 +1104,19 @@ const Store = (() => {
   function repostable(post) {
     if (!post || !state.session) return false;
     const target = originalOf(post) || post;
-    // A circle's post stays in its circle (posts_community_guard refuses it),
-    // and a song stays in On repeat (see isSongPost).
-    return (target.audience || 'circle') !== 'list' && !target.communityId && target.type !== 'song';
+    // A song stays in On repeat (see isSongPost), and a circle's post goes
+    // out only from a public circle (outOfCommunity).
+    return (target.audience || 'circle') !== 'list' && target.type !== 'song'
+      && (!target.communityId || outOfCommunity(target));
+  }
+  // Can this circle's post be passed along to my feed? Only a PUBLIC circle's,
+  // which anyone can read already (circle-public-posts.sql), and only once
+  // repost-to-circle.sql has taught the write gate so (circleRepostsReady).
+  // The repost wears 'public' (createRepost); an invite-only circle's post
+  // stays in its circle.
+  function outOfCommunity(post) {
+    const c = community(post.communityId);
+    return !!c && !c.inviteOnly && circleRepostsReady();
   }
   function myRepostOf(postId, communityId) {
     const seed = byId(state.posts).get(postId);
@@ -1956,8 +1966,9 @@ const Store = (() => {
   // is the correct answer rather than something to route around.
   //
   // `communityId` passes it along INTO a circle instead (repost-to-circle.sql):
-  // the one place the audience isn't copied, and only over a public post, which
-  // every member could read anyway.
+  // one of the two places the audience isn't copied, and only over a public
+  // post, which every member could read anyway. The other is a public circle's
+  // post passed OUT to your feed, which wears 'public' (outOfCommunity).
   async function createRepost(postId, { note, title, communityId } = {}) {
     const me = state.session;
     if (!me) return { ok: false, error: 'Sign in first.' };
@@ -1974,7 +1985,9 @@ const Store = (() => {
       author: idOf(me),
       type: 'repost',
       repost_of: target.id,
-      audience: communityId ? 'community' : (target.audience || 'circle'),
+      // Out of a public circle, the repost wears 'public' (outOfCommunity).
+      audience: communityId ? 'community'
+        : target.communityId ? 'public' : (target.audience || 'circle'),
       tags: [],
     };
     if (communityId) row.community_id = communityId;

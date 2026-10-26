@@ -1,13 +1,24 @@
--- Tria — repost to a circle (2.0)
--- Run once in the Supabase dashboard → SQL Editor, AFTER reposts.sql and
--- add-circles.sql. Additive + idempotent, so a re-run is harmless.
+-- Tria — repost to a circle, and out of one (2.0)
+-- Run once in the Supabase dashboard → SQL Editor, AFTER reposts.sql,
+-- add-circles.sql and circle-privacy.sql (it reads communities.invite_only).
+-- Additive + idempotent, so a re-run is harmless.
 --
 -- Zoe, 2026-10-26: "build out repost to circle along with repost and quote".
 -- The repost sheet gets a third row, Repost to a circle, and its pick passes
 -- the post along INTO one of your circles: a repost row whose audience is
 -- 'community' and whose community_id is the circle.
 --
--- WHICH POSTS. Only a PUBLIC one. reposts.sql's rule is "inherit, never
+-- And the other way (Zoe, 2026-10-26, "go for it"): a post said in a PUBLIC
+-- circle can be reposted and quoted OUT, to your own feed. Since
+-- circle-public-posts.sql (confirmed run 2026-10-26: anon reads circle posts)
+-- a public circle's post is readable by anyone, signed in or out, so a repost
+-- of it to your friends widens nothing. The repost wears 'public', which is
+-- what the original already is in all but name. An INVITE-ONLY circle's post
+-- still stays in its circle, and if a public circle turns invite only later,
+-- can_view_original hides the reposts from everyone outside it on the next
+-- read, so nothing leaks.
+--
+-- WHICH POSTS GO IN. Only a PUBLIC one. reposts.sql's rule is "inherit, never
 -- widen": a repost wears its original's audience exactly. A circle is a
 -- different audience from anyone's friends, so a 'circle' post reposted into
 -- one would be a door out of the author's friends (and, through the read
@@ -15,35 +26,43 @@
 -- as a broken card). A public post is already readable by every member of
 -- every circle, so putting it in front of one widens nothing. A hand-addressed
 -- post stays refused, a chain still collapses to its first original, and a
--- post that was SAID in a circle still stays in its circle.
+-- post that was SAID in a circle doesn't go into another one.
 --
 -- Three pieces, each a restatement of something reposts.sql or
 -- add-circles.sql already owns:
 --
 --   1. repost_insert_ok (the insert policy's write gate) admits audience
---      'community' over a public original. Same signature, so the policy that
---      calls it is untouched.
+--      'community' over a public original, and audience 'public' over a
+--      public circle's post. Same signature, so the policy that calls it is
+--      untouched.
 --   2. posts_community_guard (the circle trigger) stops refusing every repost
 --      in a circle and refuses only one whose original isn't public and
---      outside a circle. The membership check is unchanged: you can only post
---      into a circle you are in.
+--      outside a circle. A repost OUT of a circle carries no circle, so the
+--      trigger lets it by on its first line and (1) is its whole rule. The
+--      membership check is unchanged: you can only post into a circle you
+--      are in.
 --   3. posts_one_bare_repost becomes one bare repost per person per post PER
 --      PLACE, so passing a post along to your friends and into a circle (or
 --      two circles) are separate toggles. The client keys the same way
 --      (myBare / myCircleRepost in js/store.js).
 --
--- Until this runs the app offers no circle row at all: it asks
--- repost_insert_ok the question below once a session (circleRepostsReady).
+-- Until this runs the app offers no circle row and no repost on a circle's
+-- post: it asks repost_insert_ok the question below once a session
+-- (circleRepostsReady).
 --
 -- VERIFY over REST, read-only, with any public post's id:
 --   curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/repost_insert_ok" \
 --     -H "apikey: $ANON" -H "Content-Type: application/json" \
 --     -d '{"p_repost_of":"<a public post id>","p_audience":"community"}'
--- answers false before this file and true after.
+-- answers false before this file and true after. And with a post from a
+-- public circle (anon GET /rest/v1/posts?select=id&audience=eq.community):
+--     -d '{"p_repost_of":"<that post's id>","p_audience":"public"}'
+-- answers false before and true after.
 
 
 -- 1. The write gate. Copied from reposts.sql with the audience arm widened
---    and the circle arm added; every other line is unchanged.
+--    both ways (into a circle over a public post, out of a public circle as
+--    public); the list and chain lines are unchanged.
 create or replace function public.repost_insert_ok(p_repost_of uuid, p_audience text)
 returns boolean
 language sql
@@ -55,11 +74,16 @@ as $$
     select 1
       from public.posts o
      where o.id = p_repost_of
-       and (o.audience = p_audience      -- wears the original's audience exactly
-            or (p_audience = 'community' and o.audience = 'public'))  -- or a circle, over a public post
        and o.audience <> 'list'          -- a hand-addressed post isn't yours to re-send
        and o.type <> 'repost'            -- a chain collapses to its first original
-       and o.community_id is null        -- a circle's post stays in its circle
+       and (
+         (o.community_id is null
+          and (o.audience = p_audience   -- wears the original's audience exactly
+               or (p_audience = 'community' and o.audience = 'public')))  -- or a circle, over a public post
+         or (p_audience = 'public'       -- or out to your feed, from a public circle
+             and exists (select 1 from public.communities c
+                          where c.id = o.community_id and not c.invite_only))
+       )
   );
 $$;
 
@@ -102,6 +126,10 @@ create unique index if not exists posts_one_bare_repost
 select 'repost_insert_ok admits a circle' as check, count(*) as ok
   from pg_proc where proname = 'repost_insert_ok'
    and pg_get_functiondef(oid) like '%p_audience = ''community''%'
+union all
+select 'repost_insert_ok lets a public circle out', count(*)
+  from pg_proc where proname = 'repost_insert_ok'
+   and pg_get_functiondef(oid) like '%invite_only%'
 union all
 select 'guard admits a public repost', count(*)
   from pg_proc where proname = 'posts_community_guard'
