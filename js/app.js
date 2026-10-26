@@ -6784,10 +6784,11 @@
   }
 
   /* The way in to it is told ONCE (Zoe: "a soft cta tutorial for first time
-     users, dismissable once"): a quiet line under the rail, the first time it
-     holds a square you can reply to, until its x or the first hold. Per
-     device, like the week cards' waves. */
-  const songHintKey = () => `tria:song-hint-seen:${Store.session()}`;
+     users, dismissable once"): a week card under the rail (Zoe: "use the
+     existing activity card style"), the first time it holds a square you can
+     reply to, until its x or the first hold. Per device, like the week cards'
+     waves. The key is v2 because the first draft's line had been waved off. */
+  const songHintKey = () => `tria:song-hint-seen:v2:${Store.session()}`;
   function songHintSeen() {
     try { return !!localStorage.getItem(songHintKey()); } catch { return true; }
   }
@@ -12655,8 +12656,13 @@
     };
     const strip = items.map(square).join('');
     const hint = canReply && !songHintSeen()
-      ? `<p class="np-hint">${svgIcon('comment')}<span>Hold a friend’s song to reply.</span>` +
-          `<button class="np-hint-x" type="button" aria-label="Got it">${svgIcon('close')}</button></p>`
+      ? `<div class="week-card np-hint">` +
+          `<div class="week-card-link">` +
+            `<span class="week-card-kicker">${svgIcon('comment')}Replies</span>` +
+            `<span class="week-card-title">Hold a friend’s song to reply.</span>` +
+          `</div>` +
+          `<button class="week-card-x np-hint-x" type="button" aria-label="Got it">${svgIcon('close')}</button>` +
+        `</div>`
       : '';
     return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
         `<div class="np-strip">${add}${strip}</div>${hint}` +

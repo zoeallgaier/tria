@@ -5916,33 +5916,11 @@ button.poll-option:disabled { cursor: default; }
 @keyframes np-reply-wait { to { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .np-item.is-busy .np-art { animation: none; opacity: 0.6; } }
 
-/* The one-time tip under the rail: a quiet line in the caption's voice, a
-   bubble leading and an x trailing, gone for good on the x or the first hold. */
-.np-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0.7rem 0 0;
-  font-size: var(--kicker);
-  color: var(--muted);
-  transition: opacity var(--dur-quick) var(--ease);
-}
-.np-hint > svg { flex: 0 0 auto; width: 16px; height: 16px; }
-.np-hint span { flex: 1 1 auto; min-width: 0; }
-.np-hint-x {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  margin: -14px -14px -14px 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-}
-.np-hint-x svg { width: 14px; height: 14px; }
+/* The one-time tip under the rail wears a week card (.week-card, This week's
+   plans), gone for good on its x or the first hold. Its title is a sentence,
+   so it may wrap where a plan's name ends in an ellipsis. */
+.week-card.np-hint { margin-top: 0.9rem; transition: opacity var(--dur-quick) var(--ease); }
+.np-hint .week-card-title { white-space: normal; }
 .np-hint.is-leaving { opacity: 0; }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
