@@ -2421,13 +2421,21 @@
       `aria-label="More" title="More">${svgIcon('dots')}</button>`;
   }
 
+  // Where a Find points, for the meta line: its domain, or for a circle's own
+  // link the circle's handle (circleOfFind), which is where it really goes.
+  function findWhere(post) {
+    if (post.type !== 'find' || !post.url) return '';
+    const c = circleOfFind(post);
+    return esc(c ? communityHandle(c) : domainOf(post.url));
+  }
+
   // Byline (identity) — avatar + profile name, with the date (and a find's
   // domain) beneath, and the type-tag at the right. Leads every entry. No
   // @usernames; profile names only.
   function bylineEl(post) {
     const u = Store.user(post.author);
     const name = esc(u ? u.name : post.author);
-    const domain = post.type === 'find' && post.url ? esc(domainOf(post.url)) : '';
+    const domain = findWhere(post);
     const meta = esc(niceDate(post.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
     return `<header class="byline">` +
@@ -2461,7 +2469,7 @@
   // where the header already establishes whose column this is. Just the date
   // (and a find's domain) — no repeated avatar + name down the page.
   function soloMetaEl(post) {
-    const domain = post.type === 'find' && post.url ? esc(domainOf(post.url)) : '';
+    const domain = findWhere(post);
     const meta = esc(niceDate(post.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
     return `<p class="card-solometa"><span>${meta}</span></p>`;
@@ -3667,7 +3675,7 @@
   function quotedCardEl(orig) {
     const u = Store.user(orig.author);
     const name = esc(u ? u.name : orig.author);
-    const domain = orig.type === 'find' && orig.url ? esc(domainOf(orig.url)) : '';
+    const domain = findWhere(orig);
     const meta = esc(niceDate(orig.date)) +
       (domain ? ` <span class="dot">·</span> ${domain}` : '');
     // A quoted Frame runs full bleed to the tile's own corner, which is why the
@@ -3809,8 +3817,9 @@
     // The type shows as the left rule + the domain; no badge (kept editorial).
     // Headline as an <h2> (page title is the h1) for a clean heading outline.
     const external = /^https?:\/\//.test(post.url || '');
+    const room = circleOfFind(post);
     const titleHtml = post.title
-      ? (post.url
+      ? (post.url && !room
           ? `<h2 class="card-title"><a href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
               `${esc(post.title)}${external ? `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>` : ''}</a></h2>`
           : `<h2 class="card-title">${esc(post.title)}</h2>`)
@@ -3821,7 +3830,7 @@
     // whole — the Read-more clamp would nest a button inside the anchor. Covers
     // a rich caption (headings/emphasis) same as a plain one — renderRichNote's
     // { link: false } keeps a @mention from nesting its own <a> in here too.
-    const linkedNote = post.type === 'find' && post.url && !post.title && post.note;
+    const linkedNote = post.type === 'find' && post.url && !room && !post.title && post.note;
     const extIcon = `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>`;
     const noteHtml = linkedNote
       ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
@@ -3864,6 +3873,7 @@
         titleHtml +
         noteHtml +
         youTubeTileHtml(post) +
+        (room ? circleTileHtml(room) : '') +
         songTileHtml(post) +
         pollWidgetHtml(post) +
         locationHtml +
@@ -3877,6 +3887,7 @@
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
     wireYouTube(el, post);
+    if (room) wireCommunityJoins(el);
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
@@ -3904,6 +3915,19 @@
         `<span class="card-song-play" aria-hidden="true">${svgIcon('play')}</span>` +
       `</a>`;
   }
+
+  /* A FIND THAT IS A CIRCLE IS THE CIRCLE'S CARD (2.0, 2026-10-25, Zoe: a
+     circle's Invite sheet leads with a post to your feed, "posted as a card").
+     The way a YouTube link is its video, read off the URL as the card is drawn
+     and nothing stored, so any Find ever posted with a circle's link wears it,
+     and a pasted one in the composer turns into it too. It is Discover's card
+     for the circle (communityCardHtml), set into the post where a quote's tile
+     sits, Join pill and all: a friend reads why you're in it, then steps in
+     from the feed. A circle that has closed leaves the plain Find. */
+  function circleOfFind(post) {
+    return post.type === 'find' && post.url ? (circleInMessage(post.url) || {}).c || null : null;
+  }
+  const circleTileHtml = (c) => `<div class="card-circle">${communityCardHtml(c)}</div>`;
 
   /* A FIND THAT IS A YOUTUBE VIDEO PLAYS IN ITS CARD (2.0, 2026-10-25, Zoe:
      "embed them so that thumbnails and everything show"). Everything is read
@@ -10328,7 +10352,7 @@
   // .sheet-scrim--aud). `dock` renames the button at the foot: it still only
   // closes, but on a panel that has already taken every answer as it was tapped,
   // "Cancel" is a word for something that cannot happen.
-  function openSheet({ title, items, head, wire, scrimClass, dock }) {
+  function openSheet({ title, items, head, wire, scrimClass, dock, rowsFirst }) {
     if (sheetOpen) return;
     sheetOpen = true;
     items = items || [];
@@ -10348,7 +10372,7 @@
       `<div class="sheet" role="dialog" aria-modal="true"${title ? ` aria-label="${esc(title)}"` : ''}>` +
         `<span class="sheet-grab" aria-hidden="true"></span>` +
         (title ? `<p class="sheet-title">${esc(title)}</p>` : '') +
-        `<div class="sheet-items">${head || ''}${rows}</div>` +
+        `<div class="sheet-items">${rowsFirst ? rows + (head || '') : (head || '') + rows}</div>` +
         (dock ? `<button class="sheet-cancel" type="button">${esc(dock)}</button>` : '') +
       `</div>`;
     document.body.appendChild(scrim);
@@ -11792,6 +11816,10 @@
   // `pinningPost` outlives that render because submitComposer is what reads it.
   let pendingPin = false;
   let pinningPost = false;
+  // A circle's Invite sheet (openCommunityInvite) sends you here with the
+  // circle attached as a card: a Find holding its link, drawn as the circle.
+  // One-shot like the rest, read once by the next renderPublish.
+  let pendingCircleShare = null;
   // A row of My Circle's compose dial (openComposeDial): which attachment the
   // composer should open as it mounts, so "Poll" lands on a form with the
   // choices already out. One-shot like the three above, and never the type
@@ -13564,6 +13592,13 @@
       title: `Invite to ${communityHandle(c)}`,
       dock: 'Done',
       scrimClass: 'sheet-scrim--aud',
+      // First, the whole room at once: a post to your feed carrying the
+      // circle as its card (circleOfFind), in the composer so you can say why.
+      rowsFirst: true,
+      items: [{ label: 'Post to your feed', icon: 'compose', run: () => {
+        pendingCircleShare = c.id;
+        go('#/publish');
+      } }],
       head:
         `<div class="aud-list-wrap is-open">` +
           `<div class="aud-list">` +
@@ -17444,6 +17479,10 @@
     // ask for it through pendingAttach. Never over a quote or a daily answer.
     const song = pendingAttach === 'song' && Store.songsReady() && !quote && !daily;
     if (song) pendingAttach = null;
+    // A circle to post about, never over the three above.
+    const sharing = !quote && !daily && !song && pendingCircleShare
+      ? Store.community(pendingCircleShare) : null;
+    pendingCircleShare = null;
     // The composer never persists a draft across navigations, so every entry opens
     // fresh: a plain Note until something's attached.
     pubType = song ? 'song' : 'note';
@@ -17698,6 +17737,7 @@
       wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
       wireTagRow(fieldsEl);
       if (family !== 'quote') {
+        wireCircleLink();
         wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the field set
         wireWhenHints(fieldsEl);           // …and so do the date and time inputs
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
@@ -17759,7 +17799,7 @@
         wantLink = !wantLink;
         document.getElementById('c-error').textContent = '';
         if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); foldSong(); }
-        else { const u = fieldsEl.querySelector('#c-url'); if (u) u.value = ''; }
+        else { const u = fieldsEl.querySelector('#c-url'); if (u) { u.value = ''; u.dispatchEvent(new Event('input')); } }
         applyBaseSurface();
         syncType();
       });
@@ -17899,6 +17939,49 @@
       renumber();
     }
 
+    // A circle's link in the link row IS the circle: the field steps aside for
+    // the card the post will wear (circleTileHtml), with an x that takes it off
+    // again. Arriving from a circle's Invite sheet lands here already holding
+    // it; a pasted one turns into it the same way.
+    function wireCircleLink() {
+      const row = fieldsEl.querySelector('#c-link-row');
+      const url = fieldsEl.querySelector('#c-url');
+      if (!row || !url) return;
+      row.insertAdjacentHTML('beforeend', `<div class="compose-circle" id="c-circle" hidden></div>`);
+      const tile = row.querySelector('#c-circle');
+      let shown = null;
+      const sync = () => {
+        const c = circleOfFind({ type: 'find', url: url.value.trim() });
+        row.classList.toggle('field--circle', !!c);
+        tile.hidden = !c;
+        if (c === shown) return;
+        shown = c;
+        tile.innerHTML = c
+          ? circleTileHtml(c) +
+            `<button type="button" class="compose-circle-x" aria-label="Remove ${esc(communityHandle(c))}">` +
+              svgIcon('close') + `</button>`
+          : '';
+        tile.querySelector('.compose-circle-x')?.addEventListener('click', () => {
+          url.value = '';
+          wantLink = false;
+          sync();
+          applyBaseSurface();
+          syncType();
+          hapticTap('LIGHT');
+          fieldsEl.querySelector('#c-note')?.focus();
+        });
+      };
+      url.addEventListener('input', sync);
+      if (sharing) {
+        wantLink = true;
+        // The canonical address, never this page's own origin, so the card
+        // reads in every shell (circleInMessage knows triaonline.com).
+        url.value = 'https://triaonline.com/c/' + encodeURIComponent(sharing.slug);
+        fieldsEl.querySelector('#c-note')?.setAttribute('data-placeholder', 'Say why it’s worth joining.');
+      }
+      sync();
+    }
+
     // The Note body's link sense: a URL typed straight into the body offers to lift
     // it into the link field and make the post a Find, instead of leaving the link
     // buried in prose. One quiet promotion, nothing retyped.
@@ -17925,7 +18008,7 @@
         wantLink = true;
         applyBaseSurface();               // reveals the link row
         const url = fieldsEl.querySelector('#c-url');
-        if (url) { url.value = link; url.focus(); }
+        if (url) { url.value = link; url.dispatchEvent(new Event('input')); url.focus(); }
         syncType();
         nudge.hidden = true;
       });

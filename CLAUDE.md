@@ -146,6 +146,19 @@ a live one across a card rebuild. **In the app the player is
 `capacitor://localhost` as one. That page is web-only (not bundled), so it
 must stay live on the site; the web embeds youtube-nocookie directly.
 
+## A circle can be posted to your feed (2026-10-25)
+
+**A circle's Invite sheet leads with Post to your feed** (Zoe: "posted as a
+card"), above the friend picker (`openSheet`'s `rowsFirst`). It opens the
+composer holding the circle (`pendingCircleShare`) as a Find whose link is
+`https://triaonline.com/c/<slug>`, and **any Find whose link is a circle draws
+as Discover's card for it** (`circleOfFind`, `circleTileHtml`, `.card-circle`),
+Join pill and all, read off the URL like the YouTube tile, so nothing is
+stored and a pasted circle link turns into the card too. In the composer the
+link field steps aside for the inert card, with an x on its top right corner
+that takes it off (`wireCircleLink`, `.compose-circle`); the byline names
+`c/<slug>` where a Find says its domain (`findWhere`).
+
 ## 2.0's polish pass: one button, one share, a first run (2026-10-22)
 
 **THE BUTTON.** Every button in a page is one material at two weights (Zoe:

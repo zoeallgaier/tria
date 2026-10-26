@@ -6148,6 +6148,65 @@ button.poll-option:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   .card-yt-frame img { opacity: 1; transform: none; transition: none; }
 }
+
+/* ── A Find that is a circle, on its card (2.0, 2026-10-25) ───────────────
+   Discover's own card for the circle (circleTileHtml), set into the post where
+   the YouTube tile sits: the same 0.9rem above, the same soft corner, and the
+   whole card the way in. Discover's margins and column cap belong to a page,
+   so they come off here, and it presses like the tile does. */
+.card-circle { margin: 0.9rem 0 0; }
+.card-circle + * { margin-top: 0.9rem; }
+.card-circle .daily-card {
+  max-width: none;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-micro);
+}
+.card-circle .daily-card:has(.daily-open:active) { transform: scale(0.985); }
+
+/* In the composer it is the attachment, not a door: the card is inert (its
+   link and Join would walk you off a half-written post) and an x on its top
+   right corner takes it off (Zoe), clear of the circle's round photo, the link field stepping aside while it is on. */
+.field--circle > label,
+.field--circle > #c-url { display: none; }
+.compose-circle { position: relative; }
+.compose-circle .card-circle { margin: 0; }
+.compose-circle .daily-card { pointer-events: none; }
+.compose-circle-x {
+  position: absolute;
+  /* Centred on the box's own corner (Zoe: "the actual corner"), half of
+     its 30px out each way. */
+  top: -15px;
+  right: -15px;
+  z-index: 2;
+  margin: 0;   /* it follows .card-circle, whose + * spacing would drop it */
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  animation: compose-circle-x-in var(--dur-move) var(--spring) both;
+}
+.compose-circle-x svg { width: 14px; height: 14px; }
+.compose-circle:not([hidden]) .card-circle {
+  animation: compose-circle-in var(--dur-move) var(--ease) both;
+}
+@keyframes compose-circle-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+@keyframes compose-circle-x-in {
+  from { opacity: 0; transform: scale(0.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-circle .daily-card,
+  .compose-circle .card-circle,
+  .compose-circle-x { animation: none; transition: none; }
+}
 /* The pick box and the result rows set display, which beats [hidden]: an
    empty box sat in the composer before any song was picked. */
 .song-now[hidden] { display: none; }
