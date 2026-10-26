@@ -13592,10 +13592,10 @@
       title: `Invite to ${communityHandle(c)}`,
       dock: 'Done',
       scrimClass: 'sheet-scrim--aud',
-      // First, the whole room at once: a post to your feed carrying the
+      // First, the whole room at once: a post to your circle carrying the
       // circle as its card (circleOfFind), in the composer so you can say why.
       rowsFirst: true,
-      items: [{ label: 'Post to your feed', icon: 'compose', run: () => {
+      items: [{ label: 'Post to your circle', icon: 'compose', run: () => {
         pendingCircleShare = c.id;
         go('#/publish');
       } }],
@@ -17274,10 +17274,11 @@
   // `rooms` puts your circles (the rooms, see renderCommunity) in the sheet.
   // The composer's lock asks for them; the editor's does not, because a posted
   // post moving into a circle, or out of one, is a different act from choosing
-  // who reads something you are about to say.
-  function wireAudienceLock(root, onChange, { rooms = false } = {}) {
+  // who reads something you are about to say. `except` names one circle to
+  // leave off: the one a post is about (circleOfFind), which needs no telling.
+  function wireAudienceLock(root, onChange, { rooms = false, except = null } = {}) {
     const btn = root.querySelector('.aud-lock');
-    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange, { rooms }));
+    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange, { rooms, except }));
   }
   function syncAudienceLock(scope) {
     const btn = (scope || document).querySelector('.aud-lock');
@@ -17312,7 +17313,7 @@
      gave. The coercion is unchanged and still stated exactly once: "Choose
      people" with nobody chosen is My circle, because an empty allowlist is a
      post that nobody can read. */
-  function openAudienceSheet(root, onChange, { rooms = false } = {}) {
+  function openAudienceSheet(root, onChange, { rooms = false, except = null } = {}) {
     const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
       .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
     const chosen = new Set(pubAudience.users);
@@ -17325,8 +17326,10 @@
     // open, because a song can't go to a circle (see submit) and the sheet
     // shouldn't offer what the post button would then refuse.
     const offerRooms = typeof rooms === 'function' ? rooms() : rooms;
+    const skip = typeof except === 'function' ? except() : except;
     const myRooms = offerRooms && Store.communitiesReady()
-      ? Store.myCommunities().slice().sort((a, b) => a.name.localeCompare(b.name)) : [];
+      ? Store.myCommunities().filter(c => c.id !== skip)
+        .sort((a, b) => a.name.localeCompare(b.name)) : [];
 
     // What used to be the Done handler, run on every tap instead of once at the
     // end. Nothing else writes pubAudience from here, so the fallback lives in
@@ -17745,7 +17748,12 @@
         wireAttachBar();
         // The lock rides the attach bar's bottom-left. A song is read only on
         // My Circle, so the sheet leaves your circles off while one is attached.
-        wireAudienceLock(fieldsEl, null, { rooms: () => pubType !== 'song' });
+        wireAudienceLock(fieldsEl, null, {
+          rooms: () => pubType !== 'song',
+          // A circle's card goes to people who aren't in it yet, so the
+          // circle itself is never offered as its audience.
+          except: () => pubType === 'find' && attachedCircle(),
+        });
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       }
       applyBaseSurface();
@@ -17943,6 +17951,10 @@
     // the card the post will wear (circleTileHtml), with an x that takes it off
     // again. Arriving from a circle's Invite sheet lands here already holding
     // it; a pasted one turns into it the same way.
+    const attachedCircle = () => {
+      const url = fieldsEl.querySelector('#c-url');
+      return url ? (circleOfFind({ type: 'find', url: url.value.trim() }) || {}).id || null : null;
+    };
     function wireCircleLink() {
       const row = fieldsEl.querySelector('#c-link-row');
       const url = fieldsEl.querySelector('#c-url');
@@ -17956,6 +17968,13 @@
         tile.hidden = !c;
         if (c === shown) return;
         shown = c;
+        // Aimed at this very circle before its card went on: that answer no
+        // longer stands, so the lock goes back to its default.
+        if (c && pubAudience.mode === 'community' && pubAudience.community === c.id) {
+          pubAudience = { mode: defaultAudience(), users: [] };
+          pubAudienceTouched = false;
+          syncAudienceLock(fieldsEl);
+        }
         tile.innerHTML = c
           ? circleTileHtml(c) +
             `<button type="button" class="compose-circle-x" aria-label="Remove ${esc(communityHandle(c))}">` +
