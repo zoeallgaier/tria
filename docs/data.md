@@ -866,7 +866,12 @@ address and therefore a different person, and there is no way around that.
   original (friends-only, or in an invite-only circle, `quoteAudience`'s
   `narrow`) a line under the field says who that leaves (`quoteReachHint`).
   A quote starts in its post's circle when you're in it, and with your friends
-  over a friends-only post; over a public post it takes your own default. A
+  over a friends-only post; over a public post it takes your own default.
+  **Someone else's friends-only post has no repost glyph at all** (Zoe,
+  2026-10-26, `repostable`): either act would reach only the author's own
+  friends, so a private account's circle is never widened, and the glyph
+  promised a reach it couldn't have. Your own friends-only post still
+  reposts and quotes, to bump it for your friends. A
   quote said in a circle wears "Posted in c/slug", and a quoted circle post's
   tile names its circle in its meta.
 

@@ -190,9 +190,12 @@ circle, Choose people, any circle you're in. So a quote is how a post goes into
 a circle or out of one. The read gate (`can_view_original`) still holds a quote
 to the people who can read its original, so over a friends-only or
 invite-only-circle post a line under the field says who that is
-(`quoteReachHint`: "Only Ana's friends will see it.", "Only people in c/x will
+(`quoteReachHint`: "Only your friends will see it.", "Only people in c/x will
 see it."). A quote starts in its post's circle when you're in it, and with your
-friends over a friends-only post. The Repost to a circle row and its picker
+friends over a friends-only post. **Someone else's friends-only post has no
+repost glyph** (Zoe, 2026-10-26, `repostable`): it could only reach the author's
+own friends, so a private circle is never widened and the glyph would promise
+what it can't do. Your own still reposts. The Repost to a circle row and its picker
 are gone. The rules are
 `supabase/repost-audience.sql` (**NOT run** as of 2026-10-26; it replaces
 repost-to-circle.sql, whose REVERTED version the live DB had run). Until it

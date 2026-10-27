@@ -1106,6 +1106,12 @@ const Store = (() => {
     // A song stays in On repeat (see isSongPost). A circle's post waits on
     // repost-audience.sql, which is what lets a repost land in a circle.
     if ((target.audience || 'circle') === 'list' || target.type === 'song') return false;
+    // Someone else's friends-only post goes nowhere new (Zoe, 2026-10-26): the
+    // read gate holds a repost or a quote of it to the author's own friends, so
+    // a private account's circle is never widened, and a glyph would promise a
+    // reach it can't have. Your own still bumps it for your friends.
+    if (!target.communityId && (target.audience || 'circle') === 'circle' &&
+        target.author !== state.session) return false;
     return !target.communityId || repostRulesReady();
   }
   // Can I pass it along BARE? A bare repost wears its original's place, circle

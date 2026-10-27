@@ -17680,9 +17680,8 @@
       const c = Store.community(orig.communityId);
       return `Only people in ${c ? communityHandle(c) : 'its circle'} will see it.`;
     }
-    if (orig.author === Store.session()) return 'Only your friends will see it.';
-    const u = Store.user(orig.author);
-    return `Only ${u ? u.name : orig.author}’s friends will see it.`;
+    // Only your own friends-only post can be quoted (Store.repostable).
+    return 'Only your friends will see it.';
   }
   function audienceFixedHtml(idp, orig) {
     const c = orig && orig.communityId && Store.community(orig.communityId);
