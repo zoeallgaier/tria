@@ -4973,6 +4973,9 @@
     if (!nativeShell()) return;
     const a = e.target.closest?.('a[target="_blank"]');
     if (!a) return;
+    // A link that reads its own taps (an On repeat cover: wireSongGestures)
+    // only leaves when it says so, by `data-go` on the click it sends itself.
+    if (a.dataset.taps && !a.dataset.go) return;
     const href = a.getAttribute('href') || '';
     if (!/^https?:\/\//i.test(href)) return;   // in-app routes navigate normally
     e.preventDefault();
@@ -6668,7 +6671,7 @@
         const post = Store.posts().find(p => String(p.id) === item.dataset.post);
         if (!post) return;
         wireLikes(item, post);
-        item.querySelector('.np-reply')?.addEventListener('click', (e) => replyToSong(post, e.currentTarget));
+        wireSongGestures(item, post);
       });
     }
     // A song just shared is in no feed, so it lands here as your square, and
@@ -6722,6 +6725,145 @@
      new kind of update: the DM's push and dot carry it. The chat's chevron pops
      back to My Circle rather than to Chats (chatPopsTo), since that is where
      the reader came from. */
+  /* A FRIEND'S COVER TAKES THREE GESTURES (Zoe, 2026-10-26: "double tap to
+     like a song and hold down to reply"). The speech bubble beside the heart is
+     gone; the heart stays, since it says whether you have.
+       · tap → the song, once the double tap window has passed
+       · double tap → like it, with a big heart popping on the cover. Only ever
+         ADDS, as a double tap on a message does; the corner heart takes it back.
+       · hold → reply (if you can message them), the sleeve sinking under the
+         finger as the hold charges, then a buzz and straight to the chat.
+     A right click is the hold on a desktop, and Enter on the focused cover
+     plays it at once.
+
+     THE HOLD OPENS THE CHAT WITH THE FINGER STILL DOWN, so a clear,
+     unselectable shield lies over the window until it lifts, with
+     `html.is-song-hold` standing every selection and callout down: otherwise
+     iOS's own long press lands on whatever of the thread is under the finger (a
+     word selected, a loupe, a message's hold menu). The lift is heard on the
+     cover (a touch keeps reporting to the node it started on, detached or not),
+     the window and the shield, with a timer for a lift nobody hears.
+
+     The cover's anchor reads its own clicks (`data-taps`), so the outbound
+     handler leaves it alone until the single tap is settled and the cover
+     clicks itself with `data-go`. */
+  function wireSongGestures(item, post) {
+    const HOLD_MS = 420;
+    const DOUBLE_MS = 280;
+    const open = item.querySelector('.np-open');
+    if (!open) return;
+    const canReply = !!item.dataset.reply;
+    const root = document.documentElement;
+    const LIFTS = ['pointerup', 'pointercancel', 'touchend', 'touchcancel'];
+    let press = null;
+    let shield = null;
+    let lastTap = 0;
+    let tapTimer = 0;
+
+    const play = () => {
+      if (!open.isConnected) return;
+      open.dataset.go = '1';
+      open.click();
+      delete open.dataset.go;
+    };
+    const like = () => {
+      popSongHeart(item);
+      const btn = item.querySelector('.card-like.np-like');
+      if (btn && !shownReaction(btn)) btn.click();   // the heart's own snap, buzz and sparkles
+      else hapticTap('LIGHT');
+    };
+    const lift = () => {
+      for (const t of [open, window]) for (const ev of LIFTS) t.removeEventListener(ev, lift, true);
+      if (press) clearTimeout(press.timer);
+      item.classList.remove('is-pressing');
+      try { window.getSelection()?.removeAllRanges(); } catch { /* nothing selected */ }
+      // Down a beat later, past the click a lift may still send.
+      const was = shield;
+      shield = null;
+      setTimeout(() => { was?.remove(); root.classList.remove('is-song-hold'); }, 120);
+    };
+    const hold = (mine) => {
+      mine.fired = true;
+      item.classList.remove('is-pressing');
+      root.classList.add('is-song-hold');
+      if (mine.touch) {
+        shield = document.createElement('div');
+        shield.className = 'hold-shield';
+        shield.setAttribute('aria-hidden', 'true');
+        for (const ev of LIFTS) shield.addEventListener(ev, lift, true);
+        document.body.appendChild(shield);
+        for (const t of [open, window]) for (const ev of LIFTS) t.addEventListener(ev, lift, true);
+        mine.timer = setTimeout(lift, 2500);   // a lift nobody heard still lets go
+      } else {
+        setTimeout(lift, 0);
+      }
+      replyToSong(post, item);   // buzzes as it goes
+    };
+
+    open.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      if (press) clearTimeout(press.timer);
+      const mine = { x: e.clientX, y: e.clientY, fired: false, touch: e.pointerType !== 'mouse', timer: 0 };
+      if (canReply) {
+        item.classList.add('is-pressing');
+        mine.timer = setTimeout(() => hold(mine), HOLD_MS);
+      }
+      press = mine;
+    });
+    // A drag is a scroll of the rail or the page, not a hold. Once the hold
+    // has answered, only the lift is listened for.
+    const letGo = (e) => {
+      if (!press || press.fired) return;
+      if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
+      clearTimeout(press.timer);
+      item.classList.remove('is-pressing');
+      if (e.type !== 'pointerup') press = null;   // a scroll's click is no tap
+    };
+    open.addEventListener('pointermove', letGo, { passive: true });
+    open.addEventListener('pointerup', letGo);
+    open.addEventListener('pointercancel', letGo);
+
+    open.addEventListener('click', (e) => {
+      if (open.dataset.go) return;   // the settled tap, on its way out
+      e.preventDefault();
+      if (e.detail === 0) { play(); return; }   // Enter on a focused cover
+      const was = press;
+      press = null;
+      if (was && was.fired) return;   // the hold already answered
+      const now = Date.now();
+      if (now - lastTap < DOUBLE_MS) {
+        lastTap = 0;
+        clearTimeout(tapTimer);
+        like();
+        return;
+      }
+      lastTap = now;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(play, DOUBLE_MS);
+    });
+    open.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (!canReply || (press && press.touch)) return;   // a finger's hold has its timer
+      if (press) clearTimeout(press.timer);
+      press = null;
+      replyToSong(post, item);
+    });
+  }
+
+  // The double tap's heart: big and white on the cover, springing in and
+  // drifting off. Laid over the item, not inside the link it would relabel.
+  function popSongHeart(item) {
+    item.querySelector('.np-heart-pop')?.remove();
+    const pop = document.createElement('span');
+    pop.className = 'np-heart-pop';
+    pop.setAttribute('aria-hidden', 'true');
+    pop.innerHTML = svgIcon('heart');
+    item.appendChild(pop);
+    const done = () => pop.remove();
+    pop.addEventListener('animationend', done, { once: true });
+    setTimeout(done, 1200);
+  }
+
   let songReply = null;   // { chatId, post } for the chat this tap opens
   let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
   async function replyToSong(post, btn) {
@@ -12562,16 +12704,17 @@
       `</button>`;
     // The square is a link out and the heart a button, side by side in one
     // box (a button can't sit inside a link), the heart laid over the art.
+    // A friend's cover reads its own taps: double tap likes, a hold replies
+    // (wireSongGestures). There is no glyph for the reply.
     const square = ({ u, post }) => {
       const f = npFace({ ...u, listening: post.song }, me);
-      return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}">` +
-          `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" ` +
-            `rel="noopener noreferrer" data-out="system" aria-label="${esc(f.label)}">${f.html}</a>` +
-          (u.username !== me && Store.isAuthed() ? likeToggleHtml(post).replace('class="card-like', 'class="card-like np-like') : '') +
-          (u.username !== me && canMessage(u.username)
-            ? `<button class="np-reply" type="button" aria-label="Reply to ${esc(u.name || u.username)}’s song">` +
-                svgIcon('comment') + `</button>`
-            : '') +
+      const friend = u.username !== me && Store.isAuthed();
+      const reply = friend && canMessage(u.username);
+      return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}"${reply ? ' data-reply="1"' : ''}>` +
+          `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" draggable="false" ` +
+            `rel="noopener noreferrer" data-out="system"${friend ? ' data-taps="1"' : ''} aria-label="${esc(f.label)}"` +
+            `${friend ? ` aria-description="Double tap to like${reply ? ', hold to reply' : ''}"` : ''}>${f.html}</a>` +
+          (friend ? likeToggleHtml(post).replace('class="card-like', 'class="card-like np-like') : '') +
         `</div>`;
     };
     return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
@@ -20118,7 +20261,7 @@
   const PRESS_TARGETS = [
     '.card-social button', '.card-menu', '.going-out',
     '.sheet-item', '.sheet-cancel',
-    '.postbar-send', '.comment-delete', 'button.comment-like', '.np-reply',
+    '.postbar-send', '.comment-delete', 'button.comment-like',
     '.masthead-filter', '.request-ignore', '.push-ask-dismiss',
     // One entry covers every toolbar control (back chevron, search, •••, the
     // friends tie) — they're one component.

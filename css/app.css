@@ -5902,39 +5902,90 @@ button.poll-option:disabled { cursor: default; }
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 .card-like.np-like.liked { color: var(--burst, var(--heart)); }
-/* THE REPLY (2026-10-25): a bare speech bubble just inside the heart, the
-   feed's own pair laid on the cover, white with the heart's shadow. It opens
-   your DM with the song waiting on the bar (replyToSong). The two 44px targets
-   sit 40px apart, so the glyphs read as one little bar in the corner. */
-.np-reply {
+/* A FRIEND'S COVER IS ITS OWN GESTURES (2026-10-26, Zoe: "double tap to like
+   a song and hold down to reply"), wireSongGestures in app.js. The speech
+   bubble that sat beside the heart is gone. The rail must not raise iOS's link
+   preview, select a word or zoom under a finger; a tap doesn't wait on zoom. */
+.np-strip {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.np-open[data-taps] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+/* THE HOLD CHARGES: the sleeve sinks under the finger across the hold's own
+   420ms (a beat late, so a flick along the rail never dips it), and springs
+   back the moment the finger lets go or the hold lands. */
+.np-item .np-art {
+  transition: transform 0.32s var(--spring);
+  will-change: transform;
+}
+.np-item.is-pressing .np-art {
+  transform: scale(0.92);
+  transition: transform 0.36s cubic-bezier(0.3, 0, 0.2, 1) 0.06s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .np-item .np-art, .np-item.is-pressing .np-art { transform: none; transition: none; }
+}
+/* While a hold is down, nothing on the page selects or raises a callout, so
+   the thread it opens never inherits the gesture. Fields are left alone: the
+   chat's bar takes the caret as it opens. The shield is the clear layer the
+   finger lands on meanwhile. */
+html.is-song-hold,
+html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+.hold-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* THE DOUBLE TAP'S HEART: big, white and shadowed like the corner one,
+   springing up from the cover's centre, settling, then drifting off. Transform
+   and opacity only. */
+.np-heart-pop {
   position: absolute;
-  /* 3px down and 4px in from where its box would sit beside the heart's: the
-     bubble's ink rides high and left in its 24 grid, so this is the optical
-     match to the heart (Zoe, 2026-10-25). */
-  top: calc(132px - 44px + 3px);
-  right: 34px;
-  z-index: 1;
+  top: 0;
+  left: 0;
+  z-index: 2;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
+  width: 132px;
+  height: 132px;
   color: #fff;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: opacity var(--dur-quick) var(--ease);
+  pointer-events: none;
 }
-.np-reply svg {
-  width: 29px;
-  height: 29px;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+.np-heart-pop svg {
+  width: 58px;
+  height: 58px;
+  fill: currentColor;
+  stroke: none;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+  animation: np-heart-pop 0.85s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
-/* Opening a chat that isn't there yet takes a round trip: the mark breathes. */
-.np-reply.is-busy { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
+@keyframes np-heart-pop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  20%  { transform: scale(1.14); opacity: 1; }
+  34%  { transform: scale(0.95); }
+  46%  { transform: scale(1); }
+  72%  { transform: scale(1) translateY(0); opacity: 1; }
+  100% { transform: scale(0.9) translateY(-14px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; }
+  @keyframes np-heart-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+}
+/* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
+.np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
 @keyframes np-reply-wait { to { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .np-reply.is-busy { animation: none; opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { .np-item.is-busy .np-art { animation: none; opacity: 0.6; } }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
@@ -8182,29 +8233,33 @@ button.poll-option:disabled { cursor: default; }
 /* The reply chip rides the photo tray's own placement (it carries
    .postbar-attach), and stacks above a waiting photo when there is one. */
 .postbar.has-photo .postbar-reply { margin-bottom: calc(88px + 1.2rem); }
+/* THE CHIP IS THE BAR'S OWN SIZE (Zoe, 2026-10-26): .postbar-attach already
+   spans the form's column, so the chip fills it, and it stands as tall as the
+   resting bar (the 44px disc plus 0.4rem around it, plus the hairline) with the
+   bar's corner and the field's type size. */
 .postbar-reply-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  max-width: 100%;
-  margin-left: 0.4rem;
-  padding: 0.4rem 0.4rem 0.4rem 0.85rem;
-  font-size: 0.85rem;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: calc(44px + 0.8rem + 2px);
+  padding: 0.4rem 0.6rem 0.4rem 1rem;
+  font-size: 1rem;
   color: var(--text);
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: var(--glass-edge);
-  border-radius: var(--radius-pill);
+  border-radius: calc(44px / 2 + 0.4rem + 1px);
   box-shadow: var(--glass-lift);
   pointer-events: auto;
 }
-.postbar-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.postbar-reply-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .postbar-reply-x {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   padding: 0;
   color: var(--muted);
@@ -8215,15 +8270,15 @@ button.poll-option:disabled { cursor: default; }
 /* The song a reply answers (setChatSong): the same chip, led by its sleeve,
    rising onto the bar on the spring as the thread opens. */
 .postbar-song-chip {
-  gap: 0.55rem;
-  padding-left: 0.35rem;
+  gap: 0.65rem;
+  padding-left: 0.4rem;
   animation: postbar-song-in 0.5s var(--spring) both;
 }
 .postbar-song-art {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-art);
+  width: 44px;
+  height: 44px;
+  border-radius: calc(44px * var(--art-round));   /* the sleeve's own 20%, as tall as the bar's disc */
   background: var(--glass-bg-panel) center / cover no-repeat;
 }
 @keyframes postbar-song-in {
@@ -8234,6 +8289,23 @@ button.poll-option:disabled { cursor: default; }
 /* A message takes a double tap (heart) and a hold (its menu), so the page's text
    selection and callout stand down on it, and a tap doesn't wait on zoom. Copy
    is in the hold menu. */
+/* THE WHOLE THREAD, not just its bubbles: a long press beside a bubble
+   selected a song card, a face or a photo in a block of blue. Nothing in a
+   thread is for selecting (Copy is in a message's menu). */
+.view--chat,
+.msg-list {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.view--chat img,
+.msg-list img { -webkit-user-drag: none; }
+.view--chat input,
+.view--chat textarea,
+.view--chat [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
 .msg-bubble,
 .msg-photo {
   -webkit-user-select: none;
