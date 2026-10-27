@@ -5922,8 +5922,8 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 }
 /* THE DOUBLE TAP'S HEART: big, white and shadowed, springing up from the
    cover's centre with the like's own sparkles (burstSparkles) bursting off it
-   in white, then gliding softly down into the bottom right corner and shrinking
-   to the resting heart, which takes over exactly where it lands (Zoe,
+   in white, then shrinking in place and only then gliding softly down into
+   the bottom right corner onto the resting heart, which takes over exactly where it lands (Zoe,
    2026-10-26: "softly smoothly move into the corner, make it small"). The glide's
    end is the resting heart's box: centre 66px to 116px (an 8px inset on a 16px
    heart), 58px to 16px. Transform and opacity only. */
@@ -5955,7 +5955,11 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   16%  { transform: scale(1.12); opacity: 1; animation-timing-function: ease-in-out; }
   27%  { transform: scale(0.96); animation-timing-function: ease-in-out; }
   36%  { transform: scale(1); }
-  50%  { transform: translate(0, 0) scale(1); animation-timing-function: cubic-bezier(0.55, 0, 0.25, 1); }
+  /* Then it recedes in place first, and only once it is small does it travel,
+     so the shrink reads as depth and the glide as a small thing landing (Zoe:
+     "scale first then position"). */
+  42%  { transform: translate(0, 0) scale(1); animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1); }
+  66%  { transform: translate(0, 0) scale(0.276); animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1); }
   100% { transform: translate(50px, 50px) scale(0.276); opacity: 1; }
 }
 /* The like at rest: small, white, shadowed, bare in the corner, nothing to tap. */

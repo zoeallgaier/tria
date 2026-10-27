@@ -408,8 +408,8 @@ heart a like glides into, so a double tap only adds. **A friend's cover is gestu
 to like a song and hold down to reply"; the speech bubble is gone): a tap plays
 it once the 280ms double tap window passes, a double tap likes it (only adds)
 with a big white heart springing up on the cover and the like's sparkles
-bursting off it in white, then gliding softly into the bottom right corner and
-staying there small (16px, white, `.np-liked`, worn as `is-liked` so a like
+bursting off it in white, then shrinking in place and only then gliding
+softly into the bottom right corner, staying there small (16px, white, `.np-liked`, worn as `is-liked` so a like
 never rebuilds the rail mid-glide; `popSongHeart`), and a hold (420ms, the sleeve sinking as it charges) opens your DM
 with the song on the bar, a clear `.hold-shield` taking the finger until it
 lifts so the thread inherits nothing (`wireSongGestures`, `replyToSong`; a
