@@ -6908,7 +6908,7 @@
   // corner, shrinking to the small resting heart (.np-liked) it hands over to.
   // `is-landing` keeps the resting one hidden until the glide arrives on it.
   // Laid over the item, not inside the link it would relabel.
-  const SONG_LAND_MS = 1150;   // the np-heart-land animation's length
+  const SONG_LAND_MS = 1200;   // past np-heart-glide's end: its 0.54s delay plus 0.62s
   function popSongHeart(item) {
     item.querySelector('.np-heart-pop')?.remove();
     clearTimeout(item._land);

@@ -5946,21 +5946,33 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   fill: currentColor;
   stroke: none;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
-  animation: np-heart-land 1.15s both;
+  /* Two tracks on the separate `scale` and `translate` properties, so each
+     eases on its own clock. Scale leads and position follows, overlapping (Zoe:
+     "scale into position keyframes should overlap ... and ease"): the glide
+     sets off a third of the way into the shrink, so the heart curves into the
+     corner as it gets smaller, and nothing ever stops dead between them. Both
+     ease in and out. */
+  will-change: scale, translate;
+  animation:
+    np-heart-scale 1.08s both,
+    np-heart-glide 0.62s cubic-bezier(0.4, 0, 0.2, 1) 0.54s both;
 }
 .np-heart-pop .like-sparkles { transform: scale(2.6); }
 .np-heart-pop .spark { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.3)); }
-@keyframes np-heart-land {
-  0%   { transform: scale(0.3); opacity: 0; animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
-  16%  { transform: scale(1.12); opacity: 1; animation-timing-function: ease-in-out; }
-  27%  { transform: scale(0.96); animation-timing-function: ease-in-out; }
-  36%  { transform: scale(1); }
-  /* Then it recedes in place first, and only once it is small does it travel,
-     so the shrink reads as depth and the glide as a small thing landing (Zoe:
-     "scale first then position"). */
-  42%  { transform: translate(0, 0) scale(1); animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1); }
-  66%  { transform: translate(0, 0) scale(0.276); animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1); }
-  100% { transform: translate(50px, 50px) scale(0.276); opacity: 1; }
+@keyframes np-heart-scale {
+  0%   { scale: 0.3; opacity: 0; animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
+  15%  { scale: 1.1; opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  27%  { scale: 0.97; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  37%  { scale: 1; }
+  /* The recede: in from rest and out to rest, so it leaves the settle and meets
+     the corner without a bump. */
+  43%  { scale: 1; animation-timing-function: cubic-bezier(0.42, 0, 0.2, 1); }
+  76%  { scale: 0.276; }
+  100% { scale: 0.276; opacity: 1; }
+}
+@keyframes np-heart-glide {
+  from { translate: 0 0; }
+  to   { translate: 50px 50px; }
 }
 /* The like at rest: small, white, shadowed, bare in the corner, nothing to tap. */
 .np-liked {
@@ -5988,7 +6000,7 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 .np-item .np-liked { transition: transform 0.32s var(--spring); }
 .np-item.is-pressing .np-liked { transform: translate(-4px, -4px) scale(0.92); transition: transform 0.36s cubic-bezier(0.3, 0, 0.2, 1) 0.06s; }
 @media (prefers-reduced-motion: reduce) {
-  .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; }
+  .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; will-change: auto; }
   @keyframes np-heart-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
   .np-item.is-pressing .np-liked { transform: none; }
 }
