@@ -6740,29 +6740,59 @@
   /* HOLD THE SLEEVE TO REPLY (Zoe, 2026-10-26: "remove the replies icon, hold
      an album art to reply instead for a cleaner look"). The bubble beside the
      heart is gone; a tap on a friend's cover still plays it, a hold opens the
-     DM. A right click is the hold on a desktop. The tap a hold may end in is
-     spent through `data-held`, which the outbound handler reads first, since
-     it listens at the document in capture and would open the song. */
+     DM. A right click is the hold on a desktop.
+
+     THE HOLD ANSWERS AT ONCE AND LEAVES ON THE LIFT. It used to walk to the
+     chat the moment the timer fired, with the finger still down, and iOS's own
+     long press then landed on whatever of the thread was under it: a word
+     selected, a loupe, a message's hold menu, depending on where you held (Zoe,
+     on the simulator: "bugs out in chat depending on where you hold it"). So at
+     450ms it buzzes and the sleeve presses in, `html.is-song-hold` stands every
+     selection and callout down, and the chat opens on pointerup or
+     pointercancel (WebKit may claim a long touch and cancel it), heard at the
+     window since the finger can wander off the square. The tap a hold may end
+     in is spent through `data-held`, which the outbound handler reads first,
+     since it listens at the document in capture and would open the song. */
   function wireSongHold(item, post) {
     const HOLD_MS = 450;
     const open = item.querySelector('.np-open');
     if (!open) return;
     let press = null;
+    const root = document.documentElement;
     const reply = () => { dismissSongHint(); replyToSong(post, item); };
+    const release = () => {
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+      if (!press || !press.fired) return;
+      clearTimeout(press.timer);
+      press = null;
+      item.classList.remove('is-held');
+      try { window.getSelection()?.removeAllRanges(); } catch { /* nothing selected */ }
+      reply();
+      // Down a beat after the page has changed under the finger's ghost.
+      setTimeout(() => root.classList.remove('is-song-hold'), 400);
+    };
     open.addEventListener('pointerdown', (e) => {
       if (press) clearTimeout(press.timer);
       delete open.dataset.held;   // a click a past hold never got spends nothing
-      const mine = { x: e.clientX, y: e.clientY, timer: 0 };
+      const mine = { x: e.clientX, y: e.clientY, fired: false, touch: e.pointerType !== 'mouse', timer: 0 };
       mine.timer = setTimeout(() => {
+        mine.fired = true;
         open.dataset.held = '1';
+        root.classList.add('is-song-hold');
+        item.classList.add('is-held');
         hapticTap('LIGHT');
-        reply();
+        window.addEventListener('pointerup', release, true);
+        window.addEventListener('pointercancel', release, true);
+        // A lift the window never hears still lets go.
+        mine.timer = setTimeout(release, 2500);
       }, HOLD_MS);
       press = mine;
     });
-    // A drag is a scroll of the rail or the page, not a hold.
+    // A drag is a scroll of the rail or the page, not a hold. Once the hold
+    // has answered, nothing short of the lift takes it back.
     const letGo = (e) => {
-      if (!press) return;
+      if (!press || press.fired) return;
       if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
       clearTimeout(press.timer);
       press = null;
@@ -6775,10 +6805,12 @@
       delete open.dataset.held;
       e.preventDefault();
     });
+    // A right click is the hold on a desktop. A touch's own context menu (if
+    // WebKit sends one) is only swallowed: the timer above answers a finger.
     open.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (press && press.touch) return;
       if (press) { clearTimeout(press.timer); press = null; }
-      if (open.dataset.held) return;   // a touch hold already answered
       reply();
     });
   }

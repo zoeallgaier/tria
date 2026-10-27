@@ -5906,11 +5906,25 @@ button.poll-option:disabled { cursor: default; }
    icon, hold an album art to reply instead"), wireSongHold in app.js. The
    cover must not raise iOS's own link preview or select its words under a
    held finger. */
-.np-item[data-reply] .np-open {
+/* The whole rail, not just a held square: a long touch on a name under a
+   cover, or the gap between two, must not start a selection either. */
+.np-strip {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
+/* While a hold is down (wireSongHold), nothing on the page selects or raises a
+   callout, so the thread that opens on the lift never inherits the gesture. */
+html.is-song-hold,
+html.is-song-hold * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+/* The hold answered: the sleeve presses in until the lift opens the chat. */
+.np-item .np-art { transition: transform var(--dur-quick) var(--ease); }
+.np-item.is-held .np-art { transform: scale(0.94); }
+@media (prefers-reduced-motion: reduce) { .np-item.is-held .np-art { transform: none; opacity: 0.7; } }
 /* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
 .np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
 @keyframes np-reply-wait { to { opacity: 0.45; } }
