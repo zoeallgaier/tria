@@ -6670,7 +6670,6 @@
       host.querySelectorAll('.np-item--post').forEach(item => {
         const post = Store.posts().find(p => String(p.id) === item.dataset.post);
         if (!post) return;
-        wireLikes(item, post);
         wireSongGestures(item, post);
       });
     }
@@ -6726,12 +6725,14 @@
      back to My Circle rather than to Chats (chatPopsTo), since that is where
      the reader came from. */
   /* A FRIEND'S COVER TAKES THREE GESTURES (Zoe, 2026-10-26: "double tap to
-     like a song and hold down to reply"). The speech bubble beside the heart is
-     gone; the heart stays, since it says whether you have.
+     like a song and hold down to reply"). The speech bubble and the corner heart
+     are gone: the cover is bare.
        · tap → the song, once the double tap window has passed
-       · double tap → like it, the like's own sparkles bursting off the cover
-         (Zoe: "use our sparkle animation"). Only ever ADDS, as a double tap on
-         a message does; the corner heart takes it back.
+       · double tap → like it: a big white heart springs up on the cover with
+         the like's own sparkles bursting off it, in white (Zoe: "white heart is
+         fine just use the sparkle on it"). There is NO corner heart (Zoe: "no
+         colored corner icon"), so a like here is never shown at rest, and a
+         double tap only ever ADDS, as one on a message does.
        · hold → reply (if you can message them), the sleeve sinking under the
          finger as the hold charges, then a buzz and straight to the chat.
      A right click is the hold on a desktop, and Enter on the focused cover
@@ -6774,11 +6775,12 @@
       open.click();
       delete open.dataset.go;
     };
+    // Moves first and asks after, the way every heart does (wireHeart); a
+    // refusal has nothing on the cover to put back.
     const like = () => {
-      sparkleSong(item);
-      const btn = item.querySelector('.card-like.np-like');
-      if (btn && !shownReaction(btn)) btn.click();   // the heart's own snap, buzz and sparkles
-      else hapticTap('LIGHT');
+      popSongHeart(item);
+      hapticTap('LIGHT');
+      if (!Store.reactionOf(post.id)) Store.setReaction(post.id, 'heart').catch(() => {});
     };
     let lifted = null;   // resolves songHoldLift once the finger is up
     const lift = () => {
@@ -6868,17 +6870,18 @@
     });
   }
 
-  // The double tap's burst: the like's own sparkles (burstSparkles), scaled up
-  // to the cover and centred on it. Laid over the item, not inside the link.
-  function sparkleSong(item) {
-    let host = item.querySelector('.np-sparkle');
-    if (!host) {
-      host = document.createElement('span');
-      host.className = 'np-sparkle';
-      host.setAttribute('aria-hidden', 'true');
-      item.appendChild(host);
-    }
-    burstSparkles(host);
+  // The double tap's heart: big and white on the cover, springing in and
+  // drifting off, the like's sparkles bursting off it as it peaks. Laid over
+  // the item, not inside the link it would relabel.
+  function popSongHeart(item) {
+    item.querySelector('.np-heart-pop')?.remove();
+    const pop = document.createElement('span');
+    pop.className = 'np-heart-pop';
+    pop.setAttribute('aria-hidden', 'true');
+    pop.innerHTML = svgIcon('heart');
+    item.appendChild(pop);
+    setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 110);
+    setTimeout(() => pop.remove(), 1000);
   }
 
   let songHoldLift = null;   // a hold's finger still down: the caret waits on it (wireSongGestures)
@@ -12732,7 +12735,6 @@
           `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" draggable="false" ` +
             `rel="noopener noreferrer" data-out="system"${friend ? ' data-taps="1"' : ''} aria-label="${esc(f.label)}"` +
             `${friend ? ` aria-description="Double tap to like${reply ? ', hold to reply' : ''}"` : ''}>${f.html}</a>` +
-          (friend ? likeToggleHtml(post).replace('class="card-like', 'class="card-like np-like') : '') +
         `</div>`;
     };
     return `<section class="nowplaying" aria-label="What people have on repeat this week">` +

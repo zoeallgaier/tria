@@ -5863,12 +5863,9 @@ button.poll-option:disabled { cursor: default; }
   text-overflow: ellipsis;
 }
 
-/* A song somebody posted (2.0): the square is a link out to the song and the
-   heart is the post's own like, laid over the cover's bottom right corner (Zoe:
-   "add a like button to the corner on the on repeat section", then "put the
-   music like on the bottom right corner"). Two siblings in one
-   box, since a button can't sit inside a link. Its 44px target is the clear
-   corner around the heart. */
+/* A song somebody posted (2.0): the square is a link out to the song. A
+   friend's cover is bare (Zoe, 2026-10-26: "no colored corner icon"); a double
+   tap likes it and a hold replies (wireSongGestures). */
 .np-item--post { position: relative; cursor: default; }
 .np-open {
   display: flex;
@@ -5878,30 +5875,6 @@ button.poll-option:disabled { cursor: default; }
   color: inherit;
   text-decoration: none;
 }
-.card-like.np-like {
-  position: absolute;
-  top: calc(132px - 44px);   /* the cover's foot, not the item's: the name and who sit under it */
-  right: 0;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #fff;
-  --heart-size: 28px;
-  cursor: pointer;
-}
-/* No disc (Zoe: "no circle at all"): the heart lies bare on the cover, white
-   with a soft shadow of its own so it reads on light art and dark alike. */
-.card-like.np-like svg {
-  width: 28px;
-  height: 28px;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
-}
-.card-like.np-like.liked { color: var(--burst, var(--heart)); }
 /* A FRIEND'S COVER IS ITS OWN GESTURES (2026-10-26, Zoe: "double tap to like
    a song and hold down to reply"), wireSongGestures in app.js. The speech
    bubble that sat beside the heart is gone. The rail must not raise iOS's link
@@ -5947,19 +5920,45 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
-/* THE DOUBLE TAP'S BURST is the like's own sparkles (burstSparkles), in the
-   heart's colour, laid over the cover and scaled up to it from its centre. */
-.np-sparkle {
+/* THE DOUBLE TAP'S HEART: big, white and shadowed, springing up from the
+   cover's centre, settling, then drifting off, with the like's own sparkles
+   (burstSparkles) bursting off it in white, scaled up to its size. Transform
+   and opacity only. */
+.np-heart-pop {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 2;
+  display: grid;
+  place-items: center;
   width: 132px;
   height: 132px;
+  color: #fff;
   pointer-events: none;
-  --burst: var(--heart);
+  --burst: #fff;
 }
-.np-sparkle .like-sparkles { transform: scale(3); }
+.np-heart-pop svg {
+  width: 58px;
+  height: 58px;
+  fill: currentColor;
+  stroke: none;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+  animation: np-heart-pop 0.85s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.np-heart-pop .like-sparkles { transform: scale(2.6); }
+.np-heart-pop .spark { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.3)); }
+@keyframes np-heart-pop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  20%  { transform: scale(1.14); opacity: 1; }
+  34%  { transform: scale(0.95); }
+  46%  { transform: scale(1); }
+  72%  { transform: scale(1) translateY(0); opacity: 1; }
+  100% { transform: scale(0.9) translateY(-14px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; }
+  @keyframes np-heart-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+}
 /* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
 .np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
 @keyframes np-reply-wait { to { opacity: 0.45; } }

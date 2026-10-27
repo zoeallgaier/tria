@@ -402,12 +402,13 @@ newest Music post from the last seven days. **A Music post is in no feed**
 (`isSongPost` in store.js: not My Circle, not a profile, not a circle, and it
 can't be reposted or aimed at a circle), so On repeat is the only place a song
 is read. A square opens the song itself, and a friend's square carries the
-post's own like as a heart on a glass disc in the cover's corner (`.np-like`,
-`wireLikes`). **A friend's cover is gestures** (Zoe, 2026-10-26: "double tap
+post's own like, given by a double tap: there is NO corner heart (Zoe,
+2026-10-26: "no colored corner icon"), so a like is never shown at rest and a
+double tap only adds. **A friend's cover is gestures** (Zoe, 2026-10-26: "double tap
 to like a song and hold down to reply"; the speech bubble is gone): a tap plays
 it once the 280ms double tap window passes, a double tap likes it (only adds)
-with the like's own sparkles scaled up over the cover (`sparkleSong`, Zoe: no
-big heart), and a hold (420ms, the sleeve sinking as it charges) opens your DM
+with a big white heart springing up on the cover and the like's sparkles
+bursting off it in white (`popSongHeart`), and a hold (420ms, the sleeve sinking as it charges) opens your DM
 with the song on the bar, a clear `.hold-shield` taking the finger until it
 lifts so the thread inherits nothing (`wireSongGestures`, `replyToSong`; a
 right click on a desktop). **The keys wait for the lift** (`songHoldLift`,
