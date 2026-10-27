@@ -5914,12 +5914,26 @@ button.poll-option:disabled { cursor: default; }
   user-select: none;
 }
 /* While a hold is down (wireSongHold), nothing on the page selects or raises a
-   callout, so the thread that opens on the lift never inherits the gesture. */
+   callout, so the thread it opens never inherits the gesture. Fields are left
+   alone: the chat's bar takes the caret as it opens, and WebKit will not type
+   into a field that can't select. The shield is the layer the finger lands on
+   meanwhile: clear, over everything, and nothing to select. */
 html.is-song-hold,
-html.is-song-hold * {
+html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   -webkit-touch-callout: none !important;
   -webkit-user-select: none !important;
   user-select: none !important;
+}
+.hold-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 /* The hold answered: the sleeve presses in until the lift opens the chat. */
 .np-item .np-art { transition: transform var(--dur-quick) var(--ease); }
@@ -8242,6 +8256,24 @@ html.is-song-hold * {
 /* A message takes a double tap (heart) and a hold (its menu), so the page's text
    selection and callout stand down on it, and a tap doesn't wait on zoom. Copy
    is in the hold menu. */
+/* THE WHOLE THREAD, not just its bubbles (2026-10-26): a long press beside a
+   bubble selected a song card, a circle card, a face or a photo in a block of
+   blue. Nothing in a thread is for selecting (Copy is in a message's menu), and
+   no image there can be dragged out. */
+.view--chat,
+.msg-list {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.view--chat img,
+.msg-list img { -webkit-user-drag: none; }
+.view--chat input,
+.view--chat textarea,
+.view--chat [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
 .msg-bubble,
 .msg-photo {
   -webkit-user-select: none;

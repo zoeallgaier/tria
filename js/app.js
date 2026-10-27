@@ -6742,35 +6742,38 @@
      heart is gone; a tap on a friend's cover still plays it, a hold opens the
      DM. A right click is the hold on a desktop.
 
-     THE HOLD ANSWERS AT ONCE AND LEAVES ON THE LIFT. It used to walk to the
-     chat the moment the timer fired, with the finger still down, and iOS's own
-     long press then landed on whatever of the thread was under it: a word
-     selected, a loupe, a message's hold menu, depending on where you held (Zoe,
-     on the simulator: "bugs out in chat depending on where you hold it"). So at
-     450ms it buzzes and the sleeve presses in, `html.is-song-hold` stands every
-     selection and callout down, and the chat opens on pointerup or
-     pointercancel (WebKit may claim a long touch and cancel it), heard at the
-     window since the finger can wander off the square. The tap a hold may end
-     in is spent through `data-held`, which the outbound handler reads first,
-     since it listens at the document in capture and would open the song. */
+     THE HOLD OPENS THE CHAT AT ONCE, AND A SHIELD TAKES THE FINGER. Walking to
+     the chat with the finger still down let iOS's own long press land on
+     whatever of the thread was under it: a word selected, a loupe, a message's
+     hold menu, depending on where you held (Zoe, on the simulator: "bugs out in
+     chat depending on where you hold it"). Waiting for the lift fixed it and
+     felt slow (Zoe: "more automatic like before"). So at 450ms it buzzes and
+     goes, and until the finger lifts a clear, unselectable layer lies over the
+     whole window (`.hold-shield`) with `html.is-song-hold` standing every
+     selection and callout down, so the gesture has nothing to land on. The
+     lift is heard on the square itself (a touch keeps reporting to the node it
+     started on, detached or not), on the window and on the shield, with a
+     timer for a lift nobody hears. The tap a hold may end in is spent through
+     `data-held`, which the outbound handler reads first, since it listens at
+     the document in capture and would open the song. */
   function wireSongHold(item, post) {
     const HOLD_MS = 450;
     const open = item.querySelector('.np-open');
     if (!open) return;
     let press = null;
     const root = document.documentElement;
-    const reply = () => { dismissSongHint(); replyToSong(post, item); };
-    const release = () => {
-      window.removeEventListener('pointerup', release, true);
-      window.removeEventListener('pointercancel', release, true);
-      if (!press || !press.fired) return;
-      clearTimeout(press.timer);
+    const LIFTS = ['pointerup', 'pointercancel', 'touchend', 'touchcancel'];
+    let shield = null;
+    const lift = () => {
+      for (const t of [open, window]) for (const ev of LIFTS) t.removeEventListener(ev, lift, true);
+      clearTimeout(press?.timer);
       press = null;
       item.classList.remove('is-held');
       try { window.getSelection()?.removeAllRanges(); } catch { /* nothing selected */ }
-      reply();
-      // Down a beat after the page has changed under the finger's ghost.
-      setTimeout(() => root.classList.remove('is-song-hold'), 400);
+      // Down a beat later, past the click a lift may still send.
+      const was = shield;
+      shield = null;
+      setTimeout(() => { was?.remove(); root.classList.remove('is-song-hold'); }, 120);
     };
     open.addEventListener('pointerdown', (e) => {
       if (press) clearTimeout(press.timer);
@@ -6782,15 +6785,23 @@
         root.classList.add('is-song-hold');
         item.classList.add('is-held');
         hapticTap('LIGHT');
-        window.addEventListener('pointerup', release, true);
-        window.addEventListener('pointercancel', release, true);
-        // A lift the window never hears still lets go.
-        mine.timer = setTimeout(release, 2500);
+        if (mine.touch) {
+          shield = document.createElement('div');
+          shield.className = 'hold-shield';
+          shield.setAttribute('aria-hidden', 'true');
+          for (const ev of LIFTS) shield.addEventListener(ev, lift, true);
+          document.body.appendChild(shield);
+          for (const t of [open, window]) for (const ev of LIFTS) t.addEventListener(ev, lift, true);
+          mine.timer = setTimeout(lift, 2500);   // a lift nobody heard still lets go
+        } else {
+          setTimeout(lift, 0);
+        }
+        reply();
       }, HOLD_MS);
       press = mine;
     });
     // A drag is a scroll of the rail or the page, not a hold. Once the hold
-    // has answered, nothing short of the lift takes it back.
+    // has answered, only the lift is listened for.
     const letGo = (e) => {
       if (!press || press.fired) return;
       if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
