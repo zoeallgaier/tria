@@ -6674,6 +6674,13 @@
       });
       host.querySelector('.np-hint-x')?.addEventListener('click', dismissSongHint);
     }
+    // A like is worn as a class, not markup, so a like never rebuilds the rail
+    // under the heart gliding into its corner (popSongHeart).
+    host.querySelectorAll('.np-item--post').forEach(item => {
+      if (item.classList.contains('is-landing')) return;
+      const post = Store.posts().find(p => String(p.id) === item.dataset.post);
+      item.classList.toggle('is-liked', !!(post && Store.reactionOf(post.id)));
+    });
     // A song just shared is in no feed, so it lands here as your square, and
     // the square gets a new face's stars in your --heart (Zoe: "like updating
     // pfps"). Stars only: publishing has already twinkled. Consumed here so
@@ -6731,9 +6738,10 @@
        · tap → the song, once the double tap window has passed
        · double tap → like it: a big white heart springs up on the cover with
          the like's own sparkles bursting off it, in white (Zoe: "white heart is
-         fine just use the sparkle on it"). There is NO corner heart (Zoe: "no
-         colored corner icon"), so a like here is never shown at rest, and a
-         double tap only ever ADDS, as one on a message does.
+         fine just use the sparkle on it"), then glides softly into the
+         cover's corner and stays there small, white, as the like (Zoe). There
+         is no coloured corner heart and nothing to tap there, so a double tap
+         only ever ADDS, as one on a message does.
        · hold → reply (if you can message them), the sleeve sinking under the
          finger as the hold charges, then a buzz and straight to the chat.
      A right click is the hold on a desktop, and Enter on the focused cover
@@ -6782,7 +6790,10 @@
       dismissSongHint();
       popSongHeart(item);
       hapticTap('LIGHT');
-      if (!Store.reactionOf(post.id)) Store.setReaction(post.id, 'heart').catch(() => {});
+      if (Store.reactionOf(post.id)) return;
+      Store.setReaction(post.id, 'heart').then(
+        (res) => { if (!res || !res.ok) item.classList.remove('is-liked'); },
+        () => item.classList.remove('is-liked'));
     };
     let lifted = null;   // resolves songHoldLift once the finger is up
     const lift = () => {
@@ -6892,18 +6903,26 @@
     setTimeout(() => hint.remove(), prefersReduced() ? 0 : 220);
   }
 
-  // The double tap's heart: big and white on the cover, springing in and
-  // drifting off, the like's sparkles bursting off it as it peaks. Laid over
-  // the item, not inside the link it would relabel.
+  // The double tap's heart: big and white on the cover, springing in with the
+  // like's sparkles bursting off it as it peaks, then gliding down into the
+  // corner, shrinking to the small resting heart (.np-liked) it hands over to.
+  // `is-landing` keeps the resting one hidden until the glide arrives on it.
+  // Laid over the item, not inside the link it would relabel.
+  const SONG_LAND_MS = 1150;   // the np-heart-land animation's length
   function popSongHeart(item) {
     item.querySelector('.np-heart-pop')?.remove();
+    clearTimeout(item._land);
     const pop = document.createElement('span');
     pop.className = 'np-heart-pop';
     pop.setAttribute('aria-hidden', 'true');
     pop.innerHTML = svgIcon('heart');
+    item.classList.add('is-landing', 'is-liked');
     item.appendChild(pop);
     setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 110);
-    setTimeout(() => pop.remove(), 1000);
+    item._land = setTimeout(() => {
+      pop.remove();
+      item.classList.remove('is-landing');
+    }, prefersReduced() ? 600 : SONG_LAND_MS);
   }
 
   let songHoldLift = null;   // a hold's finger still down: the caret waits on it (wireSongGestures)
@@ -12760,6 +12779,7 @@
           `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" draggable="false" ` +
             `rel="noopener noreferrer" data-out="system"${friend ? ' data-taps="1"' : ''} aria-label="${esc(f.label)}"` +
             `${friend ? ` aria-description="Double tap to like${reply ? ', hold to reply' : ''}"` : ''}>${f.html}</a>` +
+          (friend ? `<span class="np-liked" aria-hidden="true">${svgIcon('heart')}</span>` : '') +
         `</div>`;
     };
     const strip = items.map(square).join('');
