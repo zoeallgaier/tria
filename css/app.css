@@ -5033,10 +5033,10 @@ body.gate main { padding: 0; }
 .field--combo .combo-userinput:focus { outline: none; }
 .field-hint--combo { margin-top: 0.4rem; }
 /* Edit profile's bio count, inside the box (2026-10-27): a tag in the foot's
-   bottom-right corner, the composer's tag-row padding and tag size. */
+   bottom-left corner, where the composer's tags start, at their padding and size. */
 .combo-foot {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 0 0.4rem 0.5rem 0.75rem;
 }
 .combo-count {
