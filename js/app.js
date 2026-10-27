@@ -6909,8 +6909,8 @@
      this new way to like and reply"): a week card under the rail, its title in
      the page's own weight rather than a plan's bold, there until its x or the
      first double tap or hold. Per device and reader, like the week cards'
-     waves. v3: the earlier hold-only tip's keys were waved off. */
-  const songHintKey = () => `tria:song-hint-seen:v3:${Store.session()}`;
+     waves. v4: shown once more so it can be seen again (v3 and the hold-only tip before it were waved off). */
+  const songHintKey = () => `tria:song-hint-seen:v4:${Store.session()}`;
   function songHintSeen() {
     try { return !!localStorage.getItem(songHintKey()); } catch { return true; }
   }
