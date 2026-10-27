@@ -5033,12 +5033,13 @@ body.gate main { padding: 0; }
 .field--combo .combo-userinput:focus { outline: none; }
 .field-hint--combo { margin-top: 0.4rem; }
 /* Edit profile's bio count, inside the box (2026-10-27): a quiet number in
-   the foot's bottom-left corner, where the composer's tags start, at their
-   size. No pill (Zoe), so it lines up with the bio's own text. */
+   the foot's bottom-left corner, where the composer's tags start, at the
+   field hint's size it had under the box. No pill (Zoe), so it lines up with
+   the bio's own text. */
 .combo-foot { padding: 0 0.85rem 0.6rem; }
 .combo-count {
   display: block;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }

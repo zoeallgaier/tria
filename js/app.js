@@ -8923,8 +8923,8 @@
             `<div class="combo-divider" aria-hidden="true"></div>` +
             `<textarea id="pf-bio" class="combo-note" rows="3" maxlength="160" ` +
               `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
-            // The bio's count rides IN the box's foot, at the composer's
-            // tag size in its bottom-left corner, where their tags start (Zoe,
+            // The bio's count rides IN the box's foot, in its bottom-left
+            // corner, where the composer's tags start (Zoe,
             // 2026-10-27: "like tags on the publish field").
             `<div class="combo-foot">` +
               `<span class="combo-count" id="pf-count" aria-hidden="true"></span>` +
