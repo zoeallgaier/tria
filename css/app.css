@@ -5947,41 +5947,19 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
-/* THE DOUBLE TAP'S HEART: big, white and shadowed like the corner one,
-   springing up from the cover's centre, settling, then drifting off. Transform
-   and opacity only. */
-.np-heart-pop {
+/* THE DOUBLE TAP'S BURST is the like's own sparkles (burstSparkles), in the
+   heart's colour, laid over the cover and scaled up to it from its centre. */
+.np-sparkle {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 2;
-  display: grid;
-  place-items: center;
   width: 132px;
   height: 132px;
-  color: #fff;
   pointer-events: none;
+  --burst: var(--heart);
 }
-.np-heart-pop svg {
-  width: 58px;
-  height: 58px;
-  fill: currentColor;
-  stroke: none;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
-  animation: np-heart-pop 0.85s cubic-bezier(0.2, 0.8, 0.3, 1) both;
-}
-@keyframes np-heart-pop {
-  0%   { transform: scale(0.3); opacity: 0; }
-  20%  { transform: scale(1.14); opacity: 1; }
-  34%  { transform: scale(0.95); }
-  46%  { transform: scale(1); }
-  72%  { transform: scale(1) translateY(0); opacity: 1; }
-  100% { transform: scale(0.9) translateY(-14px); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; }
-  @keyframes np-heart-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
-}
+.np-sparkle .like-sparkles { transform: scale(3); }
 /* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
 .np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
 @keyframes np-reply-wait { to { opacity: 0.45; } }

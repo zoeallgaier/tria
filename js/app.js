@@ -6729,8 +6729,9 @@
      like a song and hold down to reply"). The speech bubble beside the heart is
      gone; the heart stays, since it says whether you have.
        · tap → the song, once the double tap window has passed
-       · double tap → like it, with a big heart popping on the cover. Only ever
-         ADDS, as a double tap on a message does; the corner heart takes it back.
+       · double tap → like it, the like's own sparkles bursting off the cover
+         (Zoe: "use our sparkle animation"). Only ever ADDS, as a double tap on
+         a message does; the corner heart takes it back.
        · hold → reply (if you can message them), the sleeve sinking under the
          finger as the hold charges, then a buzz and straight to the chat.
      A right click is the hold on a desktop, and Enter on the focused cover
@@ -6743,6 +6744,13 @@
      word selected, a loupe, a message's hold menu). The lift is heard on the
      cover (a touch keeps reporting to the node it started on, detached or not),
      the window and the shield, with a timer for a lift nobody hears.
+
+     AND THE CARET WAITS FOR THE LIFT (Zoe: "the keyboard quickly appears then
+     disappears when holding"). The chat's bar focused its field while the
+     finger was still down, and the lift then landed in the web view as a tap,
+     which took first responder back from the native field and dropped the
+     keys. So the shield swallows the lift (no click, no focus change), and
+     setChatSong waits on `songHoldLift` before it raises the keyboard.
 
      The cover's anchor reads its own clicks (`data-taps`), so the outbound
      handler leaves it alone until the single tap is settled and the cover
@@ -6767,11 +6775,12 @@
       delete open.dataset.go;
     };
     const like = () => {
-      popSongHeart(item);
+      sparkleSong(item);
       const btn = item.querySelector('.card-like.np-like');
       if (btn && !shownReaction(btn)) btn.click();   // the heart's own snap, buzz and sparkles
       else hapticTap('LIGHT');
     };
+    let lifted = null;   // resolves songHoldLift once the finger is up
     const lift = () => {
       for (const t of [open, window]) for (const ev of LIFTS) t.removeEventListener(ev, lift, true);
       if (press) clearTimeout(press.timer);
@@ -6780,10 +6789,15 @@
       // Down a beat later, past the click a lift may still send.
       const was = shield;
       shield = null;
-      setTimeout(() => { was?.remove(); root.classList.remove('is-song-hold'); }, 120);
+      setTimeout(() => {
+        was?.remove();
+        root.classList.remove('is-song-hold');
+        if (lifted) { lifted(); lifted = null; }
+      }, 120);
     };
     const hold = (mine) => {
       mine.fired = true;
+      songHoldLift = new Promise((res) => { lifted = () => { songHoldLift = null; res(); }; });
       item.classList.remove('is-pressing');
       root.classList.add('is-song-hold');
       if (mine.touch) {
@@ -6791,6 +6805,10 @@
         shield.className = 'hold-shield';
         shield.setAttribute('aria-hidden', 'true');
         for (const ev of LIFTS) shield.addEventListener(ev, lift, true);
+        // The lift's own tap is spent here, so WebKit never turns it into a
+        // click or a focus change that would take the keys back.
+        shield.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+        shield.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); }, true);
         document.body.appendChild(shield);
         for (const t of [open, window]) for (const ev of LIFTS) t.addEventListener(ev, lift, true);
         mine.timer = setTimeout(lift, 2500);   // a lift nobody heard still lets go
@@ -6850,20 +6868,20 @@
     });
   }
 
-  // The double tap's heart: big and white on the cover, springing in and
-  // drifting off. Laid over the item, not inside the link it would relabel.
-  function popSongHeart(item) {
-    item.querySelector('.np-heart-pop')?.remove();
-    const pop = document.createElement('span');
-    pop.className = 'np-heart-pop';
-    pop.setAttribute('aria-hidden', 'true');
-    pop.innerHTML = svgIcon('heart');
-    item.appendChild(pop);
-    const done = () => pop.remove();
-    pop.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 1200);
+  // The double tap's burst: the like's own sparkles (burstSparkles), scaled up
+  // to the cover and centred on it. Laid over the item, not inside the link.
+  function sparkleSong(item) {
+    let host = item.querySelector('.np-sparkle');
+    if (!host) {
+      host = document.createElement('span');
+      host.className = 'np-sparkle';
+      host.setAttribute('aria-hidden', 'true');
+      item.appendChild(host);
+    }
+    burstSparkles(host);
   }
 
+  let songHoldLift = null;   // a hold's finger still down: the caret waits on it (wireSongGestures)
   let songReply = null;   // { chatId, post } for the chat this tap opens
   let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
   async function replyToSong(post, btn) {
@@ -16509,9 +16527,16 @@
     if (field) {
       if (!field.dataset.place) field.dataset.place = field.getAttribute('placeholder') || '';
       field.setAttribute('placeholder', `Reply to ${who}…`);
-      field.focus();
       NativeChrome.sync();
-      NativeChrome.postBarText(field.value, field.value.length, true);
+      // Reached by a hold, the keys wait for the finger to lift (see
+      // wireSongGestures): raised under it, the lift took them back down.
+      const raise = () => {
+        if (!field.isConnected || !chatSong || chatSong.post !== post) return;
+        field.focus();
+        NativeChrome.postBarText(field.value, field.value.length, true);
+      };
+      if (songHoldLift) songHoldLift.then(() => requestAnimationFrame(raise));
+      else raise();
     }
   }
 

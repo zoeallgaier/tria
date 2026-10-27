@@ -406,11 +406,13 @@ post's own like as a heart on a glass disc in the cover's corner (`.np-like`,
 `wireLikes`). **A friend's cover is gestures** (Zoe, 2026-10-26: "double tap
 to like a song and hold down to reply"; the speech bubble is gone): a tap plays
 it once the 280ms double tap window passes, a double tap likes it (only adds)
-with a big white heart popping on the cover (`popSongHeart`), and a hold
-(420ms, the sleeve sinking as it charges) opens your DM with the song on the
-bar, a clear `.hold-shield` taking the finger until it lifts so the thread
-inherits nothing (`wireSongGestures`, `replyToSong`; a right click on a
-desktop). The anchor wears `data-taps`, which the outbound handler leaves alone
+with the like's own sparkles scaled up over the cover (`sparkleSong`, Zoe: no
+big heart), and a hold (420ms, the sleeve sinking as it charges) opens your DM
+with the song on the bar, a clear `.hold-shield` taking the finger until it
+lifts so the thread inherits nothing (`wireSongGestures`, `replyToSong`; a
+right click on a desktop). **The keys wait for the lift** (`songHoldLift`,
+read by `setChatSong`): raised under the finger, the lift landed in the web
+view as a tap and took them straight back down. The anchor wears `data-taps`, which the outbound handler leaves alone
 until the cover clicks itself with `data-go`. **The reply chip over a chat's bar
 is the bar's own size** (full width, as tall, its corner and type). The
 listening status (`freshSong`) still has no week, so a song
