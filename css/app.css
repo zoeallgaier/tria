@@ -5776,6 +5776,10 @@ button.poll-option:disabled { cursor: default; }
      horizontal swipe is the back navigation. Same reasoning as .dtags-rail,
      touch-action left alone so a finger here can still scroll the page. */
   overscroll-behavior-x: contain;
+  /* Sideways only: the rail never takes a vertical scroll of its own (a
+     sparkle or a shadow past its box would otherwise make it one), so an
+     upward flick on it is always the page's. */
+  overflow-y: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   /* The squares carry no vertical padding of their own, so the rail's own box
@@ -5886,7 +5890,7 @@ button.poll-option:disabled { cursor: default; }
 }
 .np-open[data-taps] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 /* THE HOLD CHARGES: the sleeve sinks under the finger across the hold's own
-   420ms (a beat late, so a flick along the rail never dips it), and springs
+   380ms (a beat late, so a flick along the rail never dips it), and springs
    back the moment the finger lets go or the hold lands. */
 .np-item .np-art {
   transition: transform 0.32s var(--spring);
@@ -5894,7 +5898,7 @@ button.poll-option:disabled { cursor: default; }
 }
 .np-item.is-pressing .np-art {
   transform: scale(0.92);
-  transition: transform 0.36s cubic-bezier(0.3, 0, 0.2, 1) 0.06s;
+  transition: transform 0.32s cubic-bezier(0.3, 0, 0.2, 1) 0.06s;   /* lands with the 380ms hold */
 }
 @media (prefers-reduced-motion: reduce) {
   .np-item .np-art, .np-item.is-pressing .np-art { transform: none; transition: none; }
@@ -5998,7 +6002,7 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 .np-item.is-landing .np-liked { opacity: 0; }
 /* The resting heart rides the sleeve's hold press with it. */
 .np-item .np-liked { transition: transform 0.32s var(--spring); }
-.np-item.is-pressing .np-liked { transform: translate(-4px, -4px) scale(0.92); transition: transform 0.36s cubic-bezier(0.3, 0, 0.2, 1) 0.06s; }
+.np-item.is-pressing .np-liked { transform: translate(-4px, -4px) scale(0.92); transition: transform 0.32s cubic-bezier(0.3, 0, 0.2, 1) 0.06s; }
 @media (prefers-reduced-motion: reduce) {
   .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; will-change: auto; }
   @keyframes np-heart-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }

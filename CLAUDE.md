@@ -411,7 +411,7 @@ with a big white heart springing up on the cover and the like's sparkles
 bursting off it in white, then shrinking with the glide into the bottom right
 corner overlapping it (separate `scale` and `translate` tracks, each eased),
 staying there small (16px, white, `.np-liked`, worn as `is-liked` so a like
-never rebuilds the rail mid-glide; `popSongHeart`), and a hold (420ms, the sleeve sinking as it charges) opens your DM
+never rebuilds the rail mid-glide; `popSongHeart`), and a hold (380ms, the sleeve sinking as it charges; a finger still past 140ms is a hold, so its first wander is spent and nothing scrolls under it) opens your DM
 with the song on the bar, a clear `.hold-shield` taking the finger until it
 lifts so the thread inherits nothing (`wireSongGestures`, `replyToSong`; a
 right click on a desktop). **The keys wait for the lift** (`songHoldLift`,

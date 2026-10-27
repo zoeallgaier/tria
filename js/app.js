@@ -6766,8 +6766,10 @@
      handler leaves it alone until the single tap is settled and the cover
      clicks itself with `data-go`. */
   function wireSongGestures(item, post) {
-    const HOLD_MS = 420;
-    const DOUBLE_MS = 280;
+    const HOLD_MS = 380;
+    const DOUBLE_MS = 300;
+    const SLOP = 10;       // px a finger may wander and still be a hold or a tap
+    const STILL_MS = 140;  // held this still this long, it is a hold, not a swipe
     const open = item.querySelector('.np-open');
     if (!open) return;
     const canReply = !!item.dataset.reply;
@@ -6808,10 +6810,12 @@
         was?.remove();
         root.classList.remove('is-song-hold');
         if (lifted) { lifted(); lifted = null; }
-      }, 120);
+      }, 90);
     };
     const hold = (mine) => {
+      if (press !== mine || !open.isConnected) return;
       mine.fired = true;
+      clearTimeout(tapTimer);   // a tap then a hold is a hold, the song stays put
       dismissSongHint();
       songHoldLift = new Promise((res) => { lifted = () => { songHoldLift = null; res(); }; });
       item.classList.remove('is-pressing');
@@ -6837,7 +6841,7 @@
     open.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
       if (press) clearTimeout(press.timer);
-      const mine = { x: e.clientX, y: e.clientY, fired: false, touch: e.pointerType !== 'mouse', timer: 0 };
+      const mine = { x: e.clientX, y: e.clientY, t0: e.timeStamp, fired: false, touch: e.pointerType !== 'mouse', timer: 0 };
       if (canReply) {
         item.classList.add('is-pressing');
         mine.timer = setTimeout(() => hold(mine), HOLD_MS);
@@ -6848,7 +6852,7 @@
     // has answered, only the lift is listened for.
     const letGo = (e) => {
       if (!press || press.fired) return;
-      if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
+      if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < SLOP) return;
       clearTimeout(press.timer);
       item.classList.remove('is-pressing');
       if (e.type !== 'pointerup') press = null;   // a scroll's click is no tap
@@ -6856,6 +6860,20 @@
     open.addEventListener('pointermove', letGo, { passive: true });
     open.addEventListener('pointerup', letGo);
     open.addEventListener('pointercancel', letGo);
+    /* A HOLD NEVER SCROLLS. A finger that has sat still past STILL_MS is
+       holding, so its first wander is spent here: WebKit then commits the whole
+       touch to no scroll, the page and rail stay put under the charge (no
+       pointercancel to kill it a few px in), and the move past SLOP still lets
+       the hold go through pointermove. A swipe moves well inside STILL_MS and
+       scrolls as ever. Once the hold has fired nothing under the finger moves
+       while the chat opens. Listened for on the cover itself: a touch keeps
+       reporting to the node it began on, even detached. */
+    open.addEventListener('touchmove', (e) => {
+      if (!press || !press.touch || !canReply) return;
+      if (press.fired || e.timeStamp - press.t0 > STILL_MS) {
+        if (e.cancelable) e.preventDefault();
+      }
+    }, { passive: false });
 
     open.addEventListener('click', (e) => {
       if (open.dataset.go) return;   // the settled tap, on its way out
@@ -6873,7 +6891,9 @@
       }
       lastTap = now;
       clearTimeout(tapTimer);
-      tapTimer = setTimeout(play, DOUBLE_MS);
+      // A finger back down when the window closes is a second press, which is
+      // its own tap, double tap or hold: the first never plays under it.
+      tapTimer = setTimeout(() => { if (!press) play(); }, DOUBLE_MS);
     });
     open.addEventListener('contextmenu', (e) => {
       e.preventDefault();
