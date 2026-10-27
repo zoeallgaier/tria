@@ -8923,8 +8923,13 @@
             `<div class="combo-divider" aria-hidden="true"></div>` +
             `<textarea id="pf-bio" class="combo-note" rows="3" maxlength="160" ` +
               `placeholder="A line about you (optional)." aria-label="Bio">${esc(u.bio || '')}</textarea>` +
+            // The bio's count rides IN the box's foot, a tag at the
+            // composer's tag size in its bottom-right corner (Zoe,
+            // 2026-10-27: "like tags on the publish field").
+            `<div class="combo-foot">` +
+              `<span class="tag combo-count" id="pf-count" aria-hidden="true"></span>` +
+            `</div>` +
           `</div>` +
-          `<p class="field-hint field-hint--combo" id="pf-count"></p>` +
           // Music links, notifications and privacy sit below the identity as
           // quiet settings, ordered by how far each one reaches. Songs is the
           // smallest and most local — it changes where a tap on this phone
@@ -9085,7 +9090,8 @@
 
     // A quiet live count so the 160-char bio ceiling never feels like a surprise.
     const updateCount = () => {
-      countEl.textContent = `${bioEl.value.length} / 160`;
+      countEl.textContent = `${bioEl.value.length}/160`;
+      countEl.classList.toggle('is-full', bioEl.value.length >= 160);
     };
     bioEl.addEventListener('input', updateCount);
     updateCount();
