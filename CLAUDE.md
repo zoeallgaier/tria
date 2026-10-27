@@ -413,7 +413,10 @@ with the song on the bar, a clear `.hold-shield` taking the finger until it
 lifts so the thread inherits nothing (`wireSongGestures`, `replyToSong`; a
 right click on a desktop). **The keys wait for the lift** (`songHoldLift`,
 read by `setChatSong`): raised under the finger, the lift landed in the web
-view as a tap and took them straight back down. The anchor wears `data-taps`, which the outbound handler leaves alone
+view as a tap and took them straight back down. **The gestures are told once** (Zoe: "a quiet
+soft cta"): a week card under the rail, its title in the page's weight, gone
+for good on its x or the first double tap or hold
+(`tria:song-hint-seen:v3:<user>`, `.np-hint`, `dismissSongHint`). The anchor wears `data-taps`, which the outbound handler leaves alone
 until the cover clicks itself with `data-go`. **The reply chip over a chat's bar
 is the bar's own size** (full width, as tall, its corner and type). The
 listening status (`freshSong`) still has no week, so a song

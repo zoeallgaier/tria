@@ -6672,6 +6672,7 @@
         if (!post) return;
         wireSongGestures(item, post);
       });
+      host.querySelector('.np-hint-x')?.addEventListener('click', dismissSongHint);
     }
     // A song just shared is in no feed, so it lands here as your square, and
     // the square gets a new face's stars in your --heart (Zoe: "like updating
@@ -6778,6 +6779,7 @@
     // Moves first and asks after, the way every heart does (wireHeart); a
     // refusal has nothing on the cover to put back.
     const like = () => {
+      dismissSongHint();
       popSongHeart(item);
       hapticTap('LIGHT');
       if (!Store.reactionOf(post.id)) Store.setReaction(post.id, 'heart').catch(() => {});
@@ -6799,6 +6801,7 @@
     };
     const hold = (mine) => {
       mine.fired = true;
+      dismissSongHint();
       songHoldLift = new Promise((res) => { lifted = () => { songHoldLift = null; res(); }; });
       item.classList.remove('is-pressing');
       root.classList.add('is-song-hold');
@@ -6866,8 +6869,27 @@
       if (!canReply || (press && press.touch)) return;   // a finger's hold has its timer
       if (press) clearTimeout(press.timer);
       press = null;
+      dismissSongHint();
       replyToSong(post, item);
     });
+  }
+
+  /* The gestures are told ONCE (Zoe, 2026-10-26: "a quiet soft cta to explain
+     this new way to like and reply"): a week card under the rail, its title in
+     the page's own weight rather than a plan's bold, there until its x or the
+     first double tap or hold. Per device and reader, like the week cards'
+     waves. v3: the earlier hold-only tip's keys were waved off. */
+  const songHintKey = () => `tria:song-hint-seen:v3:${Store.session()}`;
+  function songHintSeen() {
+    try { return !!localStorage.getItem(songHintKey()); } catch { return true; }
+  }
+  function dismissSongHint() {
+    if (songHintSeen()) return;
+    try { localStorage.setItem(songHintKey(), '1'); } catch { /* private window */ }
+    const hint = view.querySelector('.np-hint');
+    if (!hint) return;
+    hint.classList.add('is-leaving');
+    setTimeout(() => hint.remove(), prefersReduced() ? 0 : 220);
   }
 
   // The double tap's heart: big and white on the cover, springing in and
@@ -12727,18 +12749,31 @@
     // box (a button can't sit inside a link), the heart laid over the art.
     // A friend's cover reads its own taps: double tap likes, a hold replies
     // (wireSongGestures). There is no glyph for the reply.
+    let anyFriend = false, anyReply = false;
     const square = ({ u, post }) => {
       const f = npFace({ ...u, listening: post.song }, me);
       const friend = u.username !== me && Store.isAuthed();
       const reply = friend && canMessage(u.username);
+      if (friend) anyFriend = true;
+      if (reply) anyReply = true;
       return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}"${reply ? ' data-reply="1"' : ''}>` +
           `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" draggable="false" ` +
             `rel="noopener noreferrer" data-out="system"${friend ? ' data-taps="1"' : ''} aria-label="${esc(f.label)}"` +
             `${friend ? ` aria-description="Double tap to like${reply ? ', hold to reply' : ''}"` : ''}>${f.html}</a>` +
         `</div>`;
     };
+    const strip = items.map(square).join('');
+    const hint = anyFriend && !songHintSeen()
+      ? `<div class="week-card np-hint">` +
+          `<div class="week-card-link">` +
+            `<span class="week-card-kicker">${svgIcon('music')}On repeat</span>` +
+            `<span class="week-card-title">Double tap a friend’s song to like it${anyReply ? ', hold it to reply' : ''}.</span>` +
+          `</div>` +
+          `<button class="week-card-x np-hint-x" type="button" aria-label="Got it">${svgIcon('close')}</button>` +
+        `</div>`
+      : '';
     return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
-        `<div class="np-strip">${add}${items.map(square).join('')}</div>` +
+        `<div class="np-strip">${add}${strip}</div>${hint}` +
       `</section>`;
   }
 
