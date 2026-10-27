@@ -5902,57 +5902,39 @@ button.poll-option:disabled { cursor: default; }
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 .card-like.np-like.liked { color: var(--burst, var(--heart)); }
-/* THE REPLY is a hold on the cover (2026-10-26, Zoe: "remove the replies
-   icon, hold an album art to reply instead"), wireSongHold in app.js. The
-   cover must not raise iOS's own link preview or select its words under a
-   held finger. */
-/* The whole rail, not just a held square: a long touch on a name under a
-   cover, or the gap between two, must not start a selection either. */
-.np-strip {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-/* While a hold is down (wireSongHold), nothing on the page selects or raises a
-   callout, so the thread it opens never inherits the gesture. Fields are left
-   alone: the chat's bar takes the caret as it opens, and WebKit will not type
-   into a field that can't select. The shield is the layer the finger lands on
-   meanwhile: clear, over everything, and nothing to select. */
-html.is-song-hold,
-html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-}
-.hold-shield {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  background: transparent;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: none;
+/* THE REPLY (2026-10-25): a bare speech bubble just inside the heart, the
+   feed's own pair laid on the cover, white with the heart's shadow. It opens
+   your DM with the song waiting on the bar (replyToSong). The two 44px targets
+   sit 40px apart, so the glyphs read as one little bar in the corner. */
+.np-reply {
+  position: absolute;
+  /* 3px down and 4px in from where its box would sit beside the heart's: the
+     bubble's ink rides high and left in its 24 grid, so this is the optical
+     match to the heart (Zoe, 2026-10-25). */
+  top: calc(132px - 44px + 3px);
+  right: 34px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: opacity var(--dur-quick) var(--ease);
 }
-/* The hold answered: the sleeve presses in until the lift opens the chat. */
-.np-item .np-art { transition: transform var(--dur-quick) var(--ease); }
-.np-item.is-held .np-art { transform: scale(0.94); }
-@media (prefers-reduced-motion: reduce) { .np-item.is-held .np-art { transform: none; opacity: 0.7; } }
-/* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
-.np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
+.np-reply svg {
+  width: 29px;
+  height: 29px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+}
+/* Opening a chat that isn't there yet takes a round trip: the mark breathes. */
+.np-reply.is-busy { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
 @keyframes np-reply-wait { to { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .np-item.is-busy .np-art { animation: none; opacity: 0.6; } }
-
-/* The one-time tip under the rail wears a week card (.week-card, This week's
-   plans), gone for good on its x or the first hold. Its title is a sentence,
-   so it may wrap where a plan's name ends in an ellipsis. */
-/* Cards here keep Discover's one gap (0.95rem, Zoe 2026-10-26): rail to tip,
-   tip to a plan, plan to plan. */
-.week-card.np-hint { margin-top: 0.95rem; transition: opacity var(--dur-quick) var(--ease); }
-.np-host:has(.np-hint):has(+ .week-cards:not([hidden])) .nowplaying { margin-bottom: 0.95rem; }
-.np-hint .week-card-title { white-space: normal; }
-.np-hint.is-leaving { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .np-reply.is-busy { animation: none; opacity: 0.6; } }
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
@@ -8200,33 +8182,29 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 /* The reply chip rides the photo tray's own placement (it carries
    .postbar-attach), and stacks above a waiting photo when there is one. */
 .postbar.has-photo .postbar-reply { margin-bottom: calc(88px + 1.2rem); }
-/* THE CHIP IS THE BAR'S OWN SIZE (Zoe, 2026-10-26): .postbar-attach already
-   spans the form's column, so the chip fills it, and it stands as tall as the
-   resting bar (the 44px disc plus 0.4rem around it, plus the hairline) with the
-   bar's corner and the field's type size. */
 .postbar-reply-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  min-height: calc(44px + 0.8rem + 2px);
-  padding: 0.4rem 0.6rem 0.4rem 1rem;
-  font-size: 1rem;
+  gap: 0.4rem;
+  max-width: 100%;
+  margin-left: 0.4rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.85rem;
+  font-size: 0.85rem;
   color: var(--text);
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: var(--glass-edge);
-  border-radius: calc(44px / 2 + 0.4rem + 1px);
+  border-radius: var(--radius-pill);
   box-shadow: var(--glass-lift);
   pointer-events: auto;
 }
-.postbar-reply-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.postbar-reply-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .postbar-reply-x {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
   padding: 0;
   color: var(--muted);
@@ -8237,15 +8215,15 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 /* The song a reply answers (setChatSong): the same chip, led by its sleeve,
    rising onto the bar on the spring as the thread opens. */
 .postbar-song-chip {
-  gap: 0.65rem;
-  padding-left: 0.4rem;
+  gap: 0.55rem;
+  padding-left: 0.35rem;
   animation: postbar-song-in 0.5s var(--spring) both;
 }
 .postbar-song-art {
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: calc(44px * var(--art-round));   /* the sleeve's own 20%, as tall as the bar's disc */
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-art);
   background: var(--glass-bg-panel) center / cover no-repeat;
 }
 @keyframes postbar-song-in {
@@ -8256,24 +8234,6 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 /* A message takes a double tap (heart) and a hold (its menu), so the page's text
    selection and callout stand down on it, and a tap doesn't wait on zoom. Copy
    is in the hold menu. */
-/* THE WHOLE THREAD, not just its bubbles (2026-10-26): a long press beside a
-   bubble selected a song card, a circle card, a face or a photo in a block of
-   blue. Nothing in a thread is for selecting (Copy is in a message's menu), and
-   no image there can be dragged out. */
-.view--chat,
-.msg-list {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-.view--chat img,
-.msg-list img { -webkit-user-drag: none; }
-.view--chat input,
-.view--chat textarea,
-.view--chat [contenteditable] {
-  -webkit-user-select: text;
-  user-select: text;
-}
 .msg-bubble,
 .msg-photo {
   -webkit-user-select: none;
@@ -8333,7 +8293,7 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
    is doing that block's centring too: a shorthand this late in the file beats
    the shared `margin-inline`, and without it the column capped but hugged the
    left edge, off the feed's axis. */
-.week-cards { display: flex; flex-direction: column; gap: 0.95rem; margin: 0 auto 1.4rem; }
+.week-cards { display: flex; flex-direction: column; gap: 0.6rem; margin: 0 auto 1.4rem; }
 .week-cards[hidden] { display: none; }
 .week-card {
   position: relative;

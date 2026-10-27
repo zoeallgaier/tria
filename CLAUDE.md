@@ -403,11 +403,7 @@ newest Music post from the last seven days. **A Music post is in no feed**
 can't be reposted or aimed at a circle), so On repeat is the only place a song
 is read. A square opens the song itself, and a friend's square carries the
 post's own like as a heart on a glass disc in the cover's corner (`.np-like`,
-`wireLikes`). **Holding a friend's cover replies** (Zoe, 2026-10-26: the speech
-bubble beside the heart is gone), opening your DM with the song on the bar
-(`wireSongHold`, `replyToSong`; a right click on a desktop), and a week card
-under the rail says so once, until its x or the first hold
-(`tria:song-hint-seen:v2:<user>`, `.np-hint`). The listening status (`freshSong`) still has no week, so a song
+`wireLikes`). The listening status (`freshSong`) still has no week, so a song
 pin doesn't blank.
 
 **Album art is rounder** (Zoe: "round the edges much more of all album art,
