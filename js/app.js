@@ -5859,8 +5859,12 @@
   // read under a bar that had dropped its blur (the field held on by its focus,
   // the material gone) looked bare, and a search that tucked and came back on
   // every flick was jumpy. Discover's syncOpen holds it; a navigation lets go.
+  //
+  // AND A CHAT (Zoe, 2026-10-26: "doesn't need to disappear"): a thread is a
+  // conversation, read up as much as down, and its header names who you are
+  // talking to, so it stays put on every scroll.
   let headerHeld = false;
-  function holdsHeader() { return headerHeld; }
+  function holdsHeader() { return headerHeld || location.hash.startsWith('#/chat/'); }
   function holdHeader(on) {
     if (on === headerHeld) return;
     headerHeld = on;

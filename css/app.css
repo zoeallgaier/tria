@@ -8312,7 +8312,7 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
-  border-radius: calc(44px * var(--art-round));   /* the sleeve's own 20%, as tall as the bar's disc */
+  border-radius: 50%;   /* a round crop, as tall as the bar's disc (Zoe, 2026-10-26) */
   background: var(--glass-bg-panel) center / cover no-repeat;
 }
 @keyframes postbar-song-in {
