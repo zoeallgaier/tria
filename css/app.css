@@ -10437,7 +10437,64 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .person-card-open::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 /* 80px, was 60 (Zoe, 2026-10-23: larger faces on the people cards). The bio
    gives up a line for it (see its clamp), so the card keeps its 4:5. */
-.person-card-avatar.avatar { flex-shrink: 0; width: 80px; height: 80px; font-size: 2.4rem; margin-bottom: 0.5rem; }
+/* The face's box carries the charms (charmsOnFace), the way .charm-face does
+   on a profile; the 40% and the rim offsets are the profile's, read off it. */
+.person-card-face { position: relative; flex-shrink: 0; align-self: flex-start; width: 80px; height: 80px; margin-bottom: 0.5rem; }
+.person-card-avatar.avatar { width: 80px; height: 80px; font-size: 2.4rem; }
+/* The card is surface, not page paper, so the line charms' halo is too. */
+.person-card .charm--worn:not(.charm--sticker) { filter: drop-shadow(0 0 1px var(--surface)) drop-shadow(0 0 6px var(--surface)); }
+
+/* THE PERSON'S WASH, in the card's top-right corner (washPersonCard): the
+   profile's bloom at a card's size, same tint-first mix per stop, same
+   saturation buy-back, same 82% falloff, so the face and its charms sit on
+   clear paper as they do on the page. .person-card--tria is the house ramp
+   for someone who never picked; None wears nothing. */
+.person-card {
+  isolation: isolate;
+  --wash-tint: #fff;
+  --wash-keep: 60%;
+  --wash-sat: 2.4;
+  --wash-amt: 56%;
+}
+.person-card--tria {
+  --wash-a: var(--brand-start);
+  --wash-b: color-mix(in srgb, var(--brand-start), var(--brand-end));
+  --wash-c: var(--brand-end);
+  --wash-keep: 64%;
+  --wash-sat: 1.5;
+  --wash-amt: 60%;
+}
+@media (prefers-color-scheme: dark) {
+  .person-card { --wash-tint: #000; --wash-keep: 52%; --wash-sat: 2.2; }
+  .person-card--tria { --wash-keep: 56%; --wash-sat: 1.5; }
+}
+.person-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg,
+    color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
+  -webkit-mask-image: radial-gradient(ellipse 78% 55% at 100% 0,
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  mask-image: radial-gradient(ellipse 78% 55% at 100% 0,
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  filter: saturate(var(--wash-sat));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+@supports (background: linear-gradient(in oklab, #000, #fff)) {
+  .person-card::before {
+    background: linear-gradient(115deg in oklab,
+      color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
+  }
+}
+:is(.person-card--wash, .person-card--tria)::before { opacity: 1; }
 .person-card-name,
 .person-card-sub {
   display: block;

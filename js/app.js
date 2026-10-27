@@ -15394,15 +15394,35 @@
       const fence = locked
         ? svgIcon('lock', 'ptile-lock') + `<span class="visually-hidden"> Private account</span>` : '';
       const bio = u.bio || (locked ? 'Private account' : '');
-      return `<article class="person-card">` +
+      return `<article class="person-card" data-user="${esc(u.username)}">` +
           `<a class="person-card-open" href="#/u/${encodeURIComponent(u.username)}">` +
-            avatarEl(u, { cls: 'person-card-avatar' }) +
+            // The face is a positioned box, as on a profile, so the charms can
+            // hang off its rim: the photo's own circle clips.
+            `<span class="person-card-face">` + avatarEl(u, { cls: 'person-card-avatar' }) + charmsOnFace(u) + `</span>` +
             `<span class="person-card-name">${esc(u.name || u.username)}${fence}</span>` +
             `<span class="person-card-sub">${esc(inCommonLine(common) || '@' + u.username)}</span>` +
             `<span class="person-card-bio${u.bio ? '' : ' person-card-bio--quiet'}">${esc(bio)}</span>` +
           `</a>` +
           `<span class="friend-slot person-card-slot">${tieHtml(u)}</span>` +
         `</article>`;
+    };
+    // A card wears its person's wash, the profile's own bloom from the
+    // top-right corner (paintWash's rule): a palette pick at once, a photo's
+    // colour once it is sampled, Tria's ramp for someone who never picked, and
+    // paper for None. Its own resolve, not withAccent, whose one shared seq
+    // would let only the last card on the rail answer.
+    const washPersonCard = (card) => {
+      const u = Store.user(card.dataset.user);
+      if (!u || u.accent === 'none') return;
+      const wear = (css) => {
+        const rgb = css && cssToRgb(css);
+        if (rgb) stopsAround(rgb, WASH_ARC).forEach((c, i) => card.style.setProperty('--wash-' + 'abc'[i], c));
+        card.classList.add(rgb ? 'person-card--wash' : 'person-card--tria');
+      };
+      const picked = u.accent !== 'default' && accentCss(u.accent);
+      if (picked) return wear(picked);
+      if (u.accent === 'default' || !u.avatar) return wear(null);
+      sampleColor(sizedSrc(u.avatar, 40)).then(rgb => { if (card.isConnected) wear(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`); });
     };
     const peopleRailHtml = (people) => {
       if (!people.length) return '';
@@ -15501,6 +15521,7 @@
       if (!searching) wireShare();
       // The Add on a person's row. It binds to the BODY, once (it refuses a
       // second binding), which is what lets it survive every repaint.
+      bodyEl.querySelectorAll('.person-card[data-user]').forEach(washPersonCard);
       wireTieList(bodyEl);
     };
 
