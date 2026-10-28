@@ -70,7 +70,7 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 **Edit profile's App icon color row** (Zoe, under Open songs in, the app only)
 switches the home screen icon between Tria's own, the nine accents and None, picked
 in the Theme sheet's swatches (`swatchHtml`): the source row is Tria, **My
-theme** and **None**. My theme (its disc three blooms, gold, blush and cyan, off three sides over an oklch base, `themeWheel`; a rainbow band was "nyancat") follows the profile's theme on this device
+theme** and **None**. My theme (its disc the early quartet, 1.3's lavender, blue, green and orange band, as four soft corner blooms over an oklch conic, `themeWheel`; a rainbow band was "nyancat") follows the profile's theme on this device
 (`tria:icon-theme`, `themeIconKey`: a photo takes the nearest accent by hue),
 re-iconing after a theme change saves (`applyAccent`). None is the black and
 white icon, `--mono-band`'s ends, white on the dark icon (an appearance

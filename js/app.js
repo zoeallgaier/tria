@@ -9059,8 +9059,9 @@
           }, () => { setIconFollows(was); toast('Couldn’t change the icon.'); }));
       };
       // The Theme sheet's shape (Zoe: "use the same menu as the profile
-      // colors"): three sources over the nine, Tria, My theme (a three
-      // colour bloom, since it is whichever you wear, themeWheel) and None, the
+      // colors"): three sources over the nine, Tria, My theme (the early
+      // quartet in four blooms, since it is whichever you wear, themeWheel)
+      // and None, the
       // black and white icon, struck through like the Theme sheet's None. A
       // colour's disc is the icon's own band, deeper than the palette's for
       // the light four (ICON_DEEPER).
@@ -10934,18 +10935,21 @@
      gen-alt-icons.js's; the light four are deeper there, and ICON_DEEPER
      is its DEEPER by hand so the picker's discs match. */
   const ICON_FOLLOW_KEY = 'tria:icon-theme';
-  // My theme's disc: three colours blooming off three sides of the circle,
-  // gold top left, blush right, cyan below (Zoe: "modern radial gradient,
-  // three colors on each side"), over a base blended in oklch so the seams
-  // stay vivid instead of going grey. A rainbow band and a conic wheel were
-  // tried first.
+  // My theme's disc: the early days' quartet (Zoe, 2026-10-27), 1.3's
+  // brand band before 2.0's rebrand, its four stops as they were painted
+  // (lavender, blue, green, orange, each the type pastel deepened 20% toward
+  // its ink). Each blooms off its own corner, in the band's order round the
+  // circle, over a conic base in the same order blended in oklch, so no seam
+  // goes grey; the blooms are wide enough to hide the conic's centre. A
+  // rainbow band ("nyancat") and a three colour bloom were tried first.
   const themeWheel = () => {
-    const [a, b, c] = [ICON_DEEPER.amber, accentCss('rose'), ICON_DEEPER.cyan];
+    const [l, b, g, o] = ['#a693de', '#85c2d7', '#a3ca69', '#e59278'];
     const oklch = CSS.supports('background-image', 'linear-gradient(in oklch, red, blue)');
-    return `radial-gradient(circle at 15% 20%, ${a} 0%, transparent 58%), ` +
-      `radial-gradient(circle at 90% 35%, ${b} 0%, transparent 58%), ` +
-      `radial-gradient(circle at 35% 100%, ${c} 0%, transparent 62%), ` +
-      `linear-gradient(${oklch ? 'in oklch ' : ''}150deg, ${a}, ${b}, ${c})`;
+    return `radial-gradient(circle at 12% 18%, ${l} 0%, transparent 80%), ` +
+      `radial-gradient(circle at 92% 22%, ${b} 0%, transparent 80%), ` +
+      `radial-gradient(circle at 85% 95%, ${g} 0%, transparent 80%), ` +
+      `radial-gradient(circle at 10% 88%, ${o} 0%, transparent 80%), ` +
+      `conic-gradient(${oklch ? 'in oklch ' : ''}from 315deg, ${l}, ${b} 25%, ${g} 50%, ${o} 75%, ${l})`;
   };
   const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
   const iconFollows = () => {
