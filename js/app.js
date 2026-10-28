@@ -10935,12 +10935,12 @@
      is its DEEPER by hand so the picker's discs match. */
   const ICON_FOLLOW_KEY = 'tria:icon-theme';
   // My theme's disc: three colours blooming off three sides of the circle,
-  // gold top left, blush right, ocean below (Zoe: "modern radial gradient,
+  // gold top left, blush right, cyan below (Zoe: "modern radial gradient,
   // three colors on each side"), over a base blended in oklch so the seams
   // stay vivid instead of going grey. A rainbow band and a conic wheel were
   // tried first.
   const themeWheel = () => {
-    const [a, b, c] = [ICON_DEEPER.amber, accentCss('rose'), accentCss('ocean')];
+    const [a, b, c] = [ICON_DEEPER.amber, accentCss('rose'), ICON_DEEPER.cyan];
     const oklch = CSS.supports('background-image', 'linear-gradient(in oklch, red, blue)');
     return `radial-gradient(circle at 15% 20%, ${a} 0%, transparent 58%), ` +
       `radial-gradient(circle at 90% 35%, ${b} 0%, transparent 58%), ` +
