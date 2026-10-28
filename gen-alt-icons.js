@@ -81,6 +81,19 @@ const color = (rgb) => 'srgb:' + rgb.map(v => v.toFixed(5)).join(',') + ',1.0000
 
 const icon = JSON.parse(fs.readFileSync(path.join(SRC, 'icon.json'), 'utf8'));
 
+// NONE is no colour: the neutral, --mono-band's ends, dark on the light icon
+// and light on the dark one (an appearance specialization), the way the theme
+// None wears the paper's opposite.
+const MONO = { light: ['#3b4147', '#1b1f24'], dark: ['#f5f6f8', '#d5d8dd'] };
+const ramp = (pair) => ({ 'linear-gradient': pair.map(h => color(hexRgb(h))) });
+const write = (key, out) => {
+  const dest = path.join(DIR, `TriaAppIcon-${key}.icon`);
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.cpSync(SRC, dest, { recursive: true });
+  fs.writeFileSync(path.join(dest, 'icon.json'), JSON.stringify(out, null, 2) + '\n');
+  console.log('wrote', path.relative(__dirname, dest));
+};
+
 for (const [key, hex] of ACCENTS) {
   const rgb = hexRgb(DEEPER[key] || hex);
   const out = JSON.parse(JSON.stringify(icon));
@@ -93,9 +106,22 @@ for (const [key, hex] of ACCENTS) {
       }
     }
   }
-  const dest = path.join(DIR, `TriaAppIcon-${key}.icon`);
-  fs.rmSync(dest, { recursive: true, force: true });
-  fs.cpSync(SRC, dest, { recursive: true });
-  fs.writeFileSync(path.join(dest, 'icon.json'), JSON.stringify(out, null, 2) + '\n');
-  console.log('wrote', path.relative(__dirname, dest));
+  write(key, out);
+}
+
+{
+  const out = JSON.parse(JSON.stringify(icon));
+  for (const group of out.groups) {
+    for (const layer of group.layers) {
+      if (!layer.fill) continue;
+      const grad = !!layer.fill['linear-gradient'];
+      const tone = (mode) => grad ? ramp(MONO[mode]) : { solid: color(hexRgb(MONO[mode][1])) };
+      delete layer.fill;
+      layer['fill-specializations'] = [
+        { value: tone('light') },
+        { appearance: 'dark', value: tone('dark') },
+      ];
+    }
+  }
+  write('none', out);
 }

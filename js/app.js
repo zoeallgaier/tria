@@ -9031,16 +9031,16 @@
       });
     });
 
-    // Tria's own, then the nine accents, each built as TriaAppIcon-<key>. It
-    // commits on the tap like the songs row, and iOS says so in its own alert.
+    // Tria's own, then the nine accents, each built as TriaAppIcon-<key>, and
+    // My theme, which follows the profile's (see APP ICON below). It commits
+    // on the tap like the songs row, and iOS says so in its own alert.
     const iconRow = view.querySelector('#icon-row');
     if (iconRow) {
       const iconValEl = view.querySelector('#icon-value');
-      // gen-alt-icons.js's DEEPER, by hand: the light four, deepened on the icon.
-      const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
-      const ICON_CHOICES = [{ key: '', label: 'Tria' }]
+      const ICON_CHOICES = [{ key: '', label: 'Tria' }, { key: 'none', label: 'None' }]
         .concat(ACCENTS.map(a => ({ key: a.key, label: a.label })));
-      const iconLabel = (key) => (ICON_CHOICES.find(c => c.key === key) || ICON_CHOICES[0]).label;
+      const iconLabel = (key) => iconFollows() ? 'My theme'
+        : (ICON_CHOICES.find(c => c.key === key) || ICON_CHOICES[0]).label;
       let iconNow = '';
       window.Capacitor.nativePromise('TriaSettings', 'appIcon', {}).then((res) => {
         if (!res || !res.supported) return;
@@ -9048,30 +9048,35 @@
         iconValEl.textContent = iconLabel(iconNow);
         iconRow.hidden = false;
       }, () => {});
-      const pickIcon = (key) => {
-        if (key === iconNow) return;
-        window.Capacitor.nativePromise('TriaSettings', 'setAppIcon',
-          { name: key ? 'TriaAppIcon-' + key : '' }).then(() => {
-          iconNow = key;
-          iconValEl.textContent = iconLabel(key);
-          hapticEvent('SELECT');
-        }, () => toast('Couldn’t change the icon.'));
+      const pickIcon = (key, follow) => {
+        const was = iconFollows();
+        setIconFollows(follow);
+        (follow ? themeIconKey(Store.currentUser()) : Promise.resolve(key)).then(k =>
+          (k === iconNow ? Promise.resolve() : setAppIcon(k)).then(() => {
+            iconNow = k;
+            iconValEl.textContent = iconLabel(k);
+            hapticEvent('SELECT');
+          }, () => { setIconFollows(was); toast('Couldn’t change the icon.'); }));
       };
-      // The profile colour picker's swatches (Zoe: "use the same menu as
-      // the profile colors"): Tria alone in the source row, then the nine.
-      // A disc wears the icon's own band, deeper than the palette's for the
-      // light four (ICON_DEEPER).
+      // The Theme sheet's shape (Zoe: "use the same menu as the profile
+      // colors"): three sources over the nine, Tria, My theme (wearing
+      // whatever band you wear now, as the Theme pill does) and None, the
+      // black and white icon, struck through like the Theme sheet's None. A
+      // colour's disc is the icon's own band, deeper than the palette's for
+      // the light four (ICON_DEEPER).
       view.querySelector('#icon-pick').addEventListener('click', () => {
-        const src = (c) => ({ key: c.key, label: c.label, css: c.key
-          ? bandAround(cssToRgb(ICON_DEEPER[c.key] || accentCss(c.key)))
-          : 'var(--brand-band)' });
-        const now = iconNow || 'tria';
+        const now = iconFollows() ? 'theme' : (iconNow || 'tria');
         const head =
-          `<div class="swatches swatches--source swatches--one" role="group" aria-label="Tria">` +
-            swatchHtml({ ...src(ICON_CHOICES[0]), key: 'tria' }, now) +
+          `<div class="swatches swatches--source" role="group" aria-label="Icon source">` +
+            swatchHtml({ key: 'tria', label: 'Tria', css: 'var(--brand-band)' }, now) +
+            swatchHtml({ key: 'theme', label: 'My theme',
+              css: document.body.dataset.ambient === 'none'
+                ? 'var(--mono-band)' : 'var(--glow-photo, var(--brand-band))' }, now) +
+            swatchHtml({ key: 'none', label: 'None' }, now) +
           `</div>` +
           `<div class="swatches" role="group" aria-label="Colors">` +
-            ICON_CHOICES.slice(1).map(c => swatchHtml(src(c), now)).join('') +
+            ICON_CHOICES.slice(2).map(c => swatchHtml({ key: c.key, label: c.label,
+              css: bandAround(cssToRgb(ICON_DEEPER[c.key] || accentCss(c.key))) }, now)).join('') +
           `</div>`;
         openSheet({
           title: 'App icon color',
@@ -9079,8 +9084,9 @@
           wire: (scrim, close) => {
             scrim.querySelectorAll('.swatch').forEach(btn =>
               btn.addEventListener('click', () => {
-                const key = btn.dataset.accent === 'tria' ? '' : btn.dataset.accent;
-                close(() => pickIcon(key));
+                const k = btn.dataset.accent;
+                if (k === now) { close(); return; }
+                close(() => pickIcon(k === 'tria' || k === 'theme' ? '' : k, k === 'theme'));
               }));
           },
         });
@@ -10921,6 +10927,44 @@
       `<span class="swatch-label">${esc(src.label)}</span>` +
     `</button>`;
 
+  /* THE APP ICON wears Tria's own, one of the nine, or MY THEME (Zoe,
+     2026-10-27), which follows the profile's: an accent is itself, Tria is
+     Tria's own, None the black and white icon, and a photo takes the accent
+     nearest its colour in hue. Following is per DEVICE, like the icon itself, and a theme change
+     re-icons after it saves (applyAccent), so iOS's "You have changed the
+     icon" alert lands on a pick the reader just made. The nine icons are
+     gen-alt-icons.js's; the light four are deeper there, and ICON_DEEPER
+     is its DEEPER by hand so the picker's discs match. */
+  const ICON_FOLLOW_KEY = 'tria:icon-theme';
+  const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
+  const iconFollows = () => {
+    try { return localStorage.getItem(ICON_FOLLOW_KEY) === '1'; } catch { return false; }
+  };
+  const setIconFollows = (on) => {
+    try {
+      if (on) localStorage.setItem(ICON_FOLLOW_KEY, '1');
+      else localStorage.removeItem(ICON_FOLLOW_KEY);
+    } catch { /* private mode; it follows for the session */ }
+  };
+  const setAppIcon = (key) => window.Capacitor.nativePromise('TriaSettings', 'setAppIcon',
+    { name: key ? 'TriaAppIcon-' + key : '' });
+  const nearestAccent = (rgb) => {
+    const h = rgbToHsl(rgb.r, rgb.g, rgb.b).h;
+    let best = '', far = 2;
+    for (const a of ACCENTS) {
+      const c = cssToRgb(a.hex);
+      const d = Math.abs(h - rgbToHsl(c.r, c.g, c.b).h);
+      if (Math.min(d, 1 - d) < far) { far = Math.min(d, 1 - d); best = a.key; }
+    }
+    return best;
+  };
+  function themeIconKey(me) {
+    if (!me) return Promise.resolve('');
+    if (accentOf(me.accent) || me.accent === 'none') return Promise.resolve(me.accent);
+    if (me.accent || !me.avatar) return Promise.resolve('');
+    return sampleColor(sizedSrc(me.avatar, 40)).then(rgb => (rgb ? nearestAccent(rgb) : ''));
+  }
+
   /* THE PICK ITSELF, what a swatch MEANS. It is the only thing in the
      picker that changes anything, so it lives apart from the drawing. */
   function applyAccent(key, current) {
@@ -10943,6 +10987,9 @@
       if (!r.ok) toast(r.error);
       paintWash(Store.currentUser(), 'profile');   // confirmed, or store reverted it
       paintBrandBand();
+      if (r.ok && nativeShell() && iconFollows()) {
+        themeIconKey(Store.currentUser()).then(setAppIcon).catch(() => {});
+      }
     });
   }
 

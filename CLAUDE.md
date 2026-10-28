@@ -68,9 +68,13 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 ## The app icon comes in every accent (2026-10-27)
 
 **Edit profile's App icon color row** (Zoe, under Open songs in, the app only)
-switches the home screen icon between Tria's own and the nine accents, picked
-in the profile colour picker's swatches (`swatchHtml`, Tria alone in the source
-row). Amber (gold), lime, jade and cyan are DEEPER on the icon than in the
+switches the home screen icon between Tria's own, the nine accents and None, picked
+in the Theme sheet's swatches (`swatchHtml`): the source row is Tria, **My
+theme** and **None**. My theme follows the profile's theme on this device
+(`tria:icon-theme`, `themeIconKey`: a photo takes the nearest accent by hue),
+re-iconing after a theme change saves (`applyAccent`). None is the black and
+white icon, `--mono-band`'s ends, white on the dark icon (an appearance
+specialization in its icon.json). Amber (gold), lime, jade and cyan are DEEPER on the icon than in the
 palette, so they read on white (`DEEPER` in the script, `ICON_DEEPER` in
 app.js, kept equal by hand). iOS can
 only switch to icons built into the binary, so each is an Icon Composer file,

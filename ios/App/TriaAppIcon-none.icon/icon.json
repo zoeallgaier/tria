@@ -1,0 +1,79 @@
+{
+  "color-space-for-untagged-svg-colors": "display-p3",
+  "fill": {
+    "solid": "gray:1.00000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "Image 10.png",
+          "name": "Image 10",
+          "opacity": 0.2,
+          "position": {
+            "scale": 0.62,
+            "translation-in-points": [
+              351,
+              313
+            ]
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.10588,0.12157,0.14118,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.83529,0.84706,0.86667,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "Image 5.png",
+          "name": "Image 5",
+          "position": {
+            "scale": 0.47,
+            "translation-in-points": [
+              10,
+              -42
+            ]
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "linear-gradient": [
+                  "srgb:0.23137,0.25490,0.27843,1.00000",
+                  "srgb:0.10588,0.12157,0.14118,1.00000"
+                ]
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "linear-gradient": [
+                  "srgb:0.96078,0.96471,0.97255,1.00000",
+                  "srgb:0.83529,0.84706,0.86667,1.00000"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

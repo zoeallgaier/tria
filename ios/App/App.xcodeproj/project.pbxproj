@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		103E22D8300827C5000121BB /* TriaAppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 103E22D7300827C5000121BB /* TriaAppIcon.icon */; };
+		A1C0FFEE0000000000000109 /* TriaAppIcon-none.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000009 /* TriaAppIcon-none.icon */; };
 		A1C0FFEE0000000000000108 /* TriaAppIcon-lavender.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000008 /* TriaAppIcon-lavender.icon */; };
 		A1C0FFEE0000000000000107 /* TriaAppIcon-ocean.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000007 /* TriaAppIcon-ocean.icon */; };
 		A1C0FFEE0000000000000106 /* TriaAppIcon-cyan.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000006 /* TriaAppIcon-cyan.icon */; };
@@ -37,6 +38,7 @@
 
 /* Begin PBXFileReference section */
 		103E22D7300827C5000121BB /* TriaAppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = TriaAppIcon.icon; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000009 /* TriaAppIcon-none.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-none.icon"; sourceTree = "<group>"; };
 		A1C0FFEE0000000000000008 /* TriaAppIcon-lavender.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-lavender.icon"; sourceTree = "<group>"; };
 		A1C0FFEE0000000000000007 /* TriaAppIcon-ocean.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-ocean.icon"; sourceTree = "<group>"; };
 		A1C0FFEE0000000000000006 /* TriaAppIcon-cyan.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-cyan.icon"; sourceTree = "<group>"; };
@@ -83,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				103E22D7300827C5000121BB /* TriaAppIcon.icon */,
+				A1C0FFEE0000000000000009 /* TriaAppIcon-none.icon */,
 				A1C0FFEE0000000000000008 /* TriaAppIcon-lavender.icon */,
 				A1C0FFEE0000000000000007 /* TriaAppIcon-ocean.icon */,
 				A1C0FFEE0000000000000006 /* TriaAppIcon-cyan.icon */,
@@ -205,6 +208,7 @@
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				103E22D8300827C5000121BB /* TriaAppIcon.icon in Resources */,
+				A1C0FFEE0000000000000109 /* TriaAppIcon-none.icon in Resources */,
 				A1C0FFEE0000000000000108 /* TriaAppIcon-lavender.icon in Resources */,
 				A1C0FFEE0000000000000107 /* TriaAppIcon-ocean.icon in Resources */,
 				A1C0FFEE0000000000000106 /* TriaAppIcon-cyan.icon in Resources */,
@@ -412,7 +416,7 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = TriaAppIcon;
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "TriaAppIcon-ruby TriaAppIcon-rose TriaAppIcon-coral TriaAppIcon-amber TriaAppIcon-lime TriaAppIcon-jade TriaAppIcon-cyan TriaAppIcon-ocean TriaAppIcon-lavender";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "TriaAppIcon-ruby TriaAppIcon-rose TriaAppIcon-coral TriaAppIcon-amber TriaAppIcon-lime TriaAppIcon-jade TriaAppIcon-cyan TriaAppIcon-ocean TriaAppIcon-lavender TriaAppIcon-none";
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -440,7 +444,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = TriaAppIcon;
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "TriaAppIcon-ruby TriaAppIcon-rose TriaAppIcon-coral TriaAppIcon-amber TriaAppIcon-lime TriaAppIcon-jade TriaAppIcon-cyan TriaAppIcon-ocean TriaAppIcon-lavender";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "TriaAppIcon-ruby TriaAppIcon-rose TriaAppIcon-coral TriaAppIcon-amber TriaAppIcon-lime TriaAppIcon-jade TriaAppIcon-cyan TriaAppIcon-ocean TriaAppIcon-lavender TriaAppIcon-none";
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
