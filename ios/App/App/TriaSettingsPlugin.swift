@@ -31,7 +31,9 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openExternal", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "appIcon", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setAppIcon", returnType: CAPPluginReturnPromise)
     ]
 
     /// A universal link (triaonline.com/u/…, /p/…, /c/…) that opened the app,
@@ -148,6 +150,36 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
                 URL(string: scheme + "://").map { UIApplication.shared.canOpenURL($0) } ?? false
             }
             call.resolve(["spotify": installed("spotify"), "youtube": installed("youtubemusic")])
+        }
+    }
+
+    /// Which icon is on the home screen: `""` for Tria's own, otherwise the
+    /// alternate's name (`TriaAppIcon-<accent key>`, see gen-alt-icons.js).
+    @objc func appIcon(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            call.resolve([
+                "name": UIApplication.shared.alternateIconName ?? "",
+                "supported": UIApplication.shared.supportsAlternateIcons
+            ])
+        }
+    }
+
+    /// Switch the home screen icon. iOS answers with its own alert ("You have
+    /// changed the icon for Tria"), which no public API can hold back, so this
+    /// is only ever called from a pick the reader made on purpose. `""` puts
+    /// Tria's own back.
+    @objc func setAppIcon(_ call: CAPPluginCall) {
+        let raw = call.getString("name") ?? ""
+        let name: String? = raw.isEmpty ? nil : raw
+        DispatchQueue.main.async {
+            guard UIApplication.shared.supportsAlternateIcons else {
+                call.reject("This phone can’t change Tria’s icon.")
+                return
+            }
+            if UIApplication.shared.alternateIconName == name { call.resolve(); return }
+            UIApplication.shared.setAlternateIconName(name) { error in
+                if let error = error { call.reject(error.localizedDescription) } else { call.resolve() }
+            }
         }
     }
 }

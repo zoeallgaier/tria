@@ -8956,6 +8956,19 @@
               svgIcon('chevron') +
             `</button>` +
           `</div>` +
+          // The home screen icon in any accent (Zoe, 2026-10-27), the app only:
+          // iOS can switch between icons built into the binary and nothing
+          // else (gen-alt-icons.js). Hidden until the plugin says it can.
+          (nativeShell()
+            ? `<div class="push-toggle-row" id="icon-row" hidden>` +
+                `<span class="push-toggle-label" id="icon-label">App icon</span>` +
+                `<button type="button" class="music-pick" id="icon-pick" ` +
+                  `aria-labelledby="icon-label" aria-haspopup="menu">` +
+                  `<span id="icon-value">Tria</span>` +
+                  svgIcon('chevron') +
+                `</button>` +
+              `</div>`
+            : '') +
           pushToggleHtml() +
           `<div class="push-toggle-row">` +
             `<span class="push-toggle-label" id="privacy-label">Private account</span>` +
@@ -9017,6 +9030,42 @@
         })),
       });
     });
+
+    // Tria's own, then the nine accents, each built as TriaAppIcon-<key>. It
+    // commits on the tap like the songs row, and iOS says so in its own alert.
+    const iconRow = view.querySelector('#icon-row');
+    if (iconRow) {
+      const iconValEl = view.querySelector('#icon-value');
+      const ICON_CHOICES = [{ key: '', label: 'Tria' }]
+        .concat(ACCENTS.map(a => ({ key: a.key, label: a.label })));
+      const iconLabel = (key) => (ICON_CHOICES.find(c => c.key === key) || ICON_CHOICES[0]).label;
+      let iconNow = '';
+      window.Capacitor.nativePromise('TriaSettings', 'appIcon', {}).then((res) => {
+        if (!res || !res.supported) return;
+        iconNow = (res.name || '').replace(/^TriaAppIcon-/, '');
+        iconValEl.textContent = iconLabel(iconNow);
+        iconRow.hidden = false;
+      }, () => {});
+      const pickIcon = (key) => {
+        if (key === iconNow) return;
+        window.Capacitor.nativePromise('TriaSettings', 'setAppIcon',
+          { name: key ? 'TriaAppIcon-' + key : '' }).then(() => {
+          iconNow = key;
+          iconValEl.textContent = iconLabel(key);
+          hapticEvent('SELECT');
+        }, () => toast('Couldn’t change the icon.'));
+      };
+      view.querySelector('#icon-pick').addEventListener('click', () => {
+        openSheet({
+          title: 'App icon',
+          items: ICON_CHOICES.map(c => ({
+            label: c.label,
+            icon: c.key === iconNow ? 'check' : 'blank',
+            run: () => pickIcon(c.key),
+          })),
+        });
+      });
+    }
 
     // A plain UI switch — it holds its state until Save commits it alongside the
     // words (Cancel discards it, same as name/bio).

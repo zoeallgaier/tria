@@ -1,0 +1,66 @@
+{
+  "color-space-for-untagged-svg-colors": "display-p3",
+  "fill": {
+    "solid": "gray:1.00000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "fill": {
+            "solid": "srgb:0.32941,0.90980,0.61176,1.00000"
+          },
+          "glass": false,
+          "image-name": "Image 10.png",
+          "name": "Image 10",
+          "opacity": 0.2,
+          "position": {
+            "scale": 0.62,
+            "translation-in-points": [
+              351,
+              313
+            ]
+          }
+        },
+        {
+          "fill": {
+            "linear-gradient": [
+              "srgb:0.32941,0.90980,0.68431,1.00000",
+              "srgb:0.32941,0.90980,0.53922,1.00000"
+            ],
+            "orientation": {
+              "start": {
+                "x": 0.5000000000000001,
+                "y": 0
+              },
+              "stop": {
+                "x": 0,
+                "y": 1
+              }
+            }
+          },
+          "image-name": "Image 5.png",
+          "name": "Image 5",
+          "position": {
+            "scale": 0.47,
+            "translation-in-points": [
+              10,
+              -42
+            ]
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

@@ -65,6 +65,19 @@ hidden at desktop width the same way. On `#/updates` the sidebar lights that
 row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
+## The app icon comes in every accent (2026-10-27)
+
+**Edit profile's App icon row** (Zoe, under Open songs in, the app only)
+switches the home screen icon between Tria's own and the nine accents. iOS can
+only switch to icons built into the binary, so each is an Icon Composer file,
+`ios/App/TriaAppIcon-<key>.icon`, made by **`node gen-alt-icons.js`** from
+TriaAppIcon.icon with its two fills swapped (the wordmark a 15 degree ramp
+around the accent, the rings the accent). **Redraw the icon, rerun it.** The
+project lists them in `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`;
+`TriaSettings.appIcon`/`setAppIcon` do the switch. iOS shows its own "You have
+changed the icon" alert on every switch, and no public API holds it back, so it
+is a pick, never automatic with the profile colour.
+
 ## 2.0's charms (2026-10-24)
 
 **Six little firsts**, worn on the rim of your photo (Zoe's sketch): First

@@ -8,6 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		103E22D8300827C5000121BB /* TriaAppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 103E22D7300827C5000121BB /* TriaAppIcon.icon */; };
+		A1C0FFEE0000000000000108 /* TriaAppIcon-lavender.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000008 /* TriaAppIcon-lavender.icon */; };
+		A1C0FFEE0000000000000107 /* TriaAppIcon-ocean.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000007 /* TriaAppIcon-ocean.icon */; };
+		A1C0FFEE0000000000000106 /* TriaAppIcon-cyan.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000006 /* TriaAppIcon-cyan.icon */; };
+		A1C0FFEE0000000000000105 /* TriaAppIcon-jade.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000005 /* TriaAppIcon-jade.icon */; };
+		A1C0FFEE0000000000000104 /* TriaAppIcon-lime.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000004 /* TriaAppIcon-lime.icon */; };
+		A1C0FFEE0000000000000103 /* TriaAppIcon-amber.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000003 /* TriaAppIcon-amber.icon */; };
+		A1C0FFEE0000000000000102 /* TriaAppIcon-coral.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000002 /* TriaAppIcon-coral.icon */; };
+		A1C0FFEE0000000000000101 /* TriaAppIcon-rose.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000001 /* TriaAppIcon-rose.icon */; };
+		A1C0FFEE0000000000000100 /* TriaAppIcon-ruby.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000000 /* TriaAppIcon-ruby.icon */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -28,6 +37,15 @@
 
 /* Begin PBXFileReference section */
 		103E22D7300827C5000121BB /* TriaAppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = TriaAppIcon.icon; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000008 /* TriaAppIcon-lavender.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-lavender.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000007 /* TriaAppIcon-ocean.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-ocean.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000006 /* TriaAppIcon-cyan.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-cyan.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000005 /* TriaAppIcon-jade.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-jade.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000004 /* TriaAppIcon-lime.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-lime.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000003 /* TriaAppIcon-amber.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-amber.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000002 /* TriaAppIcon-coral.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-coral.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000001 /* TriaAppIcon-rose.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-rose.icon"; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000000 /* TriaAppIcon-ruby.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "TriaAppIcon-ruby.icon"; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,6 +83,15 @@
 			isa = PBXGroup;
 			children = (
 				103E22D7300827C5000121BB /* TriaAppIcon.icon */,
+				A1C0FFEE0000000000000008 /* TriaAppIcon-lavender.icon */,
+				A1C0FFEE0000000000000007 /* TriaAppIcon-ocean.icon */,
+				A1C0FFEE0000000000000006 /* TriaAppIcon-cyan.icon */,
+				A1C0FFEE0000000000000005 /* TriaAppIcon-jade.icon */,
+				A1C0FFEE0000000000000004 /* TriaAppIcon-lime.icon */,
+				A1C0FFEE0000000000000003 /* TriaAppIcon-amber.icon */,
+				A1C0FFEE0000000000000002 /* TriaAppIcon-coral.icon */,
+				A1C0FFEE0000000000000001 /* TriaAppIcon-rose.icon */,
+				A1C0FFEE0000000000000000 /* TriaAppIcon-ruby.icon */,
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
@@ -178,6 +205,15 @@
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				103E22D8300827C5000121BB /* TriaAppIcon.icon in Resources */,
+				A1C0FFEE0000000000000108 /* TriaAppIcon-lavender.icon in Resources */,
+				A1C0FFEE0000000000000107 /* TriaAppIcon-ocean.icon in Resources */,
+				A1C0FFEE0000000000000106 /* TriaAppIcon-cyan.icon in Resources */,
+				A1C0FFEE0000000000000105 /* TriaAppIcon-jade.icon in Resources */,
+				A1C0FFEE0000000000000104 /* TriaAppIcon-lime.icon in Resources */,
+				A1C0FFEE0000000000000103 /* TriaAppIcon-amber.icon in Resources */,
+				A1C0FFEE0000000000000102 /* TriaAppIcon-coral.icon in Resources */,
+				A1C0FFEE0000000000000101 /* TriaAppIcon-rose.icon in Resources */,
+				A1C0FFEE0000000000000100 /* TriaAppIcon-ruby.icon in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
 				TR1A0009000000000000009 /* Oxygen-Bold.ttf in Resources */,
 				TR1A0011000000000000011 /* Oxygen-Regular.ttf in Resources */,
@@ -376,6 +412,7 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = TriaAppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "TriaAppIcon-ruby TriaAppIcon-rose TriaAppIcon-coral TriaAppIcon-amber TriaAppIcon-lime TriaAppIcon-jade TriaAppIcon-cyan TriaAppIcon-ocean TriaAppIcon-lavender";
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -403,6 +440,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = TriaAppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "TriaAppIcon-ruby TriaAppIcon-rose TriaAppIcon-coral TriaAppIcon-amber TriaAppIcon-lime TriaAppIcon-jade TriaAppIcon-cyan TriaAppIcon-ocean TriaAppIcon-lavender";
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
