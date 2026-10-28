@@ -6498,6 +6498,10 @@
       onRow: (btn, close) => {
         const it = items[+btn.dataset.i];
         if (it && it.danger) hapticEvent('WARNING');
+        // A `now` row runs inside the tap, before the close: the clipboard
+        // only answers a user gesture, and a timer 220ms later is not one
+        // (WebKit refused every Copy link: "Couldn't copy the link.").
+        if (it && it.now && it.run) { it.run(); close(); return; }
         close(() => { if (it && it.run) it.run(); });
       },
     });
@@ -10497,7 +10501,7 @@
       wire: (scrim) => sizeProfileCode(scrim.querySelector('.qr-plate'), code.length),
       items: [
         { label: 'Share link', icon: 'send', run: () => handOver(payload) },
-        { label: 'Copy link', icon: 'link', run: () =>
+        { label: 'Copy link', icon: 'link', now: true, run: () =>
           copyText(url).then(ok => toast(ok ? 'Link copied' : 'Couldn’t copy the link.')) },
       ],
     });
@@ -10568,8 +10572,11 @@
   }
   function copyRaw(text) {
     if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text).then(() => true, () => false);
+      return navigator.clipboard.writeText(text).then(() => true, () => copyByHand(text));
     }
+    return copyByHand(text);
+  }
+  function copyByHand(text) {
     return new Promise((resolve) => {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -10735,6 +10742,10 @@
         // not a receipt for something done. Blocking, deleting and reporting all
         // route through here, so this is the single place it belongs.
         if (it && it.danger) hapticEvent('WARNING');
+        // A `now` row runs inside the tap, before the close: the clipboard
+        // only answers a user gesture, and a timer 220ms later is not one
+        // (WebKit refused every Copy link: "Couldn't copy the link.").
+        if (it && it.now && it.run) { it.run(); close(); return; }
         close(() => { if (it && it.run) it.run(); });
       }));
     if (wire) wire(scrim, close);
@@ -11009,7 +11020,7 @@
        rows ABOVE it. */
     const items = [
       { label: 'Save image', icon: 'image', run: () => toSave() },
-      { label: 'Copy link', icon: 'link', run: () => toLink() },
+      { label: 'Copy link', icon: 'link', now: true, run: () => toLink() },
     ];
 
     openSheet({
@@ -16681,7 +16692,7 @@
     });
     if (canWrite) items.push({ label: 'Reply', icon: 'comment', run: () => setChatReply(m) });
     if (m.text && navigator.clipboard) items.push({
-      label: 'Copy', icon: 'link',
+      label: 'Copy', icon: 'link', now: true,
       run: () => navigator.clipboard.writeText(m.text).then(() => toast('Copied.'), () => {}),
     });
     if (mine) items.push({
@@ -16726,7 +16737,7 @@
       title: 'Plans you host or RSVP to, synced with your phone’s calendar',
       items: [
         { label: 'Add to Calendar', icon: 'cal', run: open },
-        { label: 'Copy link', icon: 'link', run: () => {
+        { label: 'Copy link', icon: 'link', now: true, run: () => {
           if (!navigator.clipboard) { toast('Couldn’t copy the link.'); return; }
           navigator.clipboard.writeText(res.url).then(() => toast('Link copied.'), () => toast('Couldn’t copy the link.'));
         } },
