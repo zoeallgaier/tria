@@ -1527,7 +1527,10 @@ body.toolbar-live .view { padding-top: 1rem; }
   padding: 0 0 1.1rem 0.75rem;
   border-bottom: 1px solid var(--rule);
 }
-.nav-brand { width: 3.8rem; }
+/* The mark wears the READER'S band (Zoe, 2026-10-27), like the splash:
+   --pill-band is their accent, the neutral on "no colour", and Tria's own ramp
+   signed out or on the default. */
+.nav-brand { width: 3.8rem; background: var(--pill-band); }
 
 .nav-link {
   display: flex;
