@@ -5707,6 +5707,9 @@ button.poll-option:disabled { cursor: default; }
   line-height: 1.5;
   color: var(--text);
 }
+/* A blank line in a bio is a paragraph, spaced like a note's (1rem). */
+.account-bio p { margin: 0; }
+.account-bio p + p { margin-top: 1rem; }
 
 /* ── Discover — the masonry grid of people ─────────────────────────────────
    One surface, two columns, ragged. Each tile is a person faced by whatever

@@ -79,6 +79,11 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  // A bio (or a circle's about) is a note's rhythm in miniature: a Return is a
+  // line, a blank line ends a paragraph. Plain text in, `<p>`s with `<br>`s out.
+  const parasHtml = (s) => String(s ?? '').trim().split(/\n[ \t]*\n\s*/)
+    .map(p => `<p>${p.split('\n').map(esc).join('<br>')}</p>`).join('');
+
   const prefersReduced = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -8163,7 +8168,7 @@
     // Bio always rides in the identity column beside the photo, on the same left
     // axis as the name/stats/action — short or long, it just wraps in place (no
     // character-count threshold, no jump to a separate full-width slot).
-    const bio = u.bio ? `<p class="account-bio">${esc(u.bio)}</p>` : '';
+    const bio = u.bio ? `<div class="account-bio">${parasHtml(u.bio)}</div>` : '';
 
     // Your own profile is a tab, so it has no back: the nav pill below already
     // says where you are and there is nothing to return to. A visitor's was
@@ -14173,7 +14178,7 @@
               `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
             `</div>` +
             (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}${fenced}</div>` : '') +
-            (c.about ? `<p class="account-bio">${esc(c.about)}</p>` : '') +
+            (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
           `</div>` +
         `</div>` +
         `<div class="account-actions">${acts}</div>`;
