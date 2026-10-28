@@ -9059,9 +9059,8 @@
           }, () => { setIconFollows(was); toast('Couldn’t change the icon.'); }));
       };
       // The Theme sheet's shape (Zoe: "use the same menu as the profile
-      // colors"): three sources over the nine, Tria, My theme (the whole
-      // palette as a band, Zoe: "a gradient that captures most of the color
-      // spectrum", since it is whichever you wear) and None, the
+      // colors"): three sources over the nine, Tria, My theme (a three
+      // colour bloom, since it is whichever you wear, themeWheel) and None, the
       // black and white icon, struck through like the Theme sheet's None. A
       // colour's disc is the icon's own band, deeper than the palette's for
       // the light four (ICON_DEEPER).
@@ -10935,12 +10934,19 @@
      gen-alt-icons.js's; the light four are deeper there, and ICON_DEEPER
      is its DEEPER by hand so the picker's discs match. */
   const ICON_FOLLOW_KEY = 'tria:icon-theme';
-  // My theme's disc: all nine in hue order across the brand band's 115deg,
-  // the stops held 10% in from the ends so the circle's corners don't crop off
-  // ruby and blush. (A conic wheel pinched to a point in the middle.)
-  const themeWheel = () => 'linear-gradient(115deg, ' +
-    ['ruby', 'coral', 'amber', 'lime', 'jade', 'cyan', 'ocean', 'lavender', 'rose']
-      .map((k, i) => `${ICON_DEEPER[k] || accentCss(k)} ${10 + i * 10}%`).join(', ') + ')';
+  // My theme's disc: three colours blooming off three sides of the circle,
+  // gold top left, blush right, ocean below (Zoe: "modern radial gradient,
+  // three colors on each side"), over a base blended in oklch so the seams
+  // stay vivid instead of going grey. A rainbow band and a conic wheel were
+  // tried first.
+  const themeWheel = () => {
+    const [a, b, c] = [ICON_DEEPER.amber, accentCss('rose'), accentCss('ocean')];
+    const oklch = CSS.supports('background-image', 'linear-gradient(in oklch, red, blue)');
+    return `radial-gradient(circle at 15% 20%, ${a} 0%, transparent 58%), ` +
+      `radial-gradient(circle at 90% 35%, ${b} 0%, transparent 58%), ` +
+      `radial-gradient(circle at 35% 100%, ${c} 0%, transparent 62%), ` +
+      `linear-gradient(${oklch ? 'in oklch ' : ''}150deg, ${a}, ${b}, ${c})`;
+  };
   const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
   const iconFollows = () => {
     try { return localStorage.getItem(ICON_FOLLOW_KEY) === '1'; } catch { return false; }
