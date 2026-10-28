@@ -67,8 +67,12 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 
 ## The app icon comes in every accent (2026-10-27)
 
-**Edit profile's App icon row** (Zoe, under Open songs in, the app only)
-switches the home screen icon between Tria's own and the nine accents. iOS can
+**Edit profile's App icon color row** (Zoe, under Open songs in, the app only)
+switches the home screen icon between Tria's own and the nine accents, picked
+in the profile colour picker's swatches (`swatchHtml`, Tria alone in the source
+row). Amber (gold), lime, jade and cyan are DEEPER on the icon than in the
+palette, so they read on white (`DEEPER` in the script, `ICON_DEEPER` in
+app.js, kept equal by hand). iOS can
 only switch to icons built into the binary, so each is an Icon Composer file,
 `ios/App/TriaAppIcon-<key>.icon`, made by **`node gen-alt-icons.js`** from
 TriaAppIcon.icon with its two fills swapped (the wordmark a 15 degree ramp
@@ -108,7 +112,7 @@ post: the first look on a device baselines, and only after the real world has
 landed (`charmsLive`, off `whenFresh`). An unlock is `openSheet` with the charm
 big, `celebrateFace`'s stars and twinkle, and Add to my photo or Not now (with
 two on, "Wear it instead of …"). **Edit profile is photo left, three quiet
-pills right** (New photo, Color, Charms); the camera and colour badges left
+pills right** (New photo, Theme, Charms; Color until Zoe renamed it Theme, 2026-10-27); the camera and colour badges left
 the rim. The design canvas: https://claude.ai/artifact/12LLXUDDJ6UjcaErigtTDf
 
 **A profile's wash blooms from the TOP-RIGHT corner** (Zoe, 2026-10-24, so the

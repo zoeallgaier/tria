@@ -3,7 +3,7 @@
 //
 //   node gen-alt-icons.js
 //
-// iOS can only switch to an icon that is in the binary, so the App icon row in
+// iOS can only switch to an icon that is in the binary, so the App icon color row in
 // Edit profile needs one Icon Composer file per colour. They are copies of
 // Tria's own with the two fills swapped: the wordmark's gradient becomes a
 // narrow ramp around the accent, 15 degrees across like the brand's own
@@ -33,6 +33,16 @@ const ACCENTS = [
   ['ocean',    '#367df8'],
   ['lavender', '#8564e8'],
 ];
+// The light four are deepened ON THE ICON only (Zoe, 2026-10-27: "yellow is
+// pretty tough to read"): on the icon's white the palette's pastel amber and
+// lime washed out, and jade and cyan nearly did. Amber leans gold. The
+// profile colours themselves are untouched.
+const DEEPER = {
+  amber: '#e5a000',
+  lime:  '#7fbf1f',
+  jade:  '#2bc77a',
+  cyan:  '#14c3d4',
+};
 const ARC = 7.5;   // each side of the accent: the brand's ramp is 15 degrees end to end
 
 const hexRgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
@@ -72,7 +82,7 @@ const color = (rgb) => 'srgb:' + rgb.map(v => v.toFixed(5)).join(',') + ',1.0000
 const icon = JSON.parse(fs.readFileSync(path.join(SRC, 'icon.json'), 'utf8'));
 
 for (const [key, hex] of ACCENTS) {
-  const rgb = hexRgb(hex);
+  const rgb = hexRgb(DEEPER[key] || hex);
   const out = JSON.parse(JSON.stringify(icon));
   for (const group of out.groups) {
     for (const layer of group.layers) {

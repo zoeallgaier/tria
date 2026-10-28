@@ -8889,7 +8889,7 @@
                 `<span class="pf-row-label">${u.avatar ? 'New photo' : 'Add photo'}</span></button>` +
               `<button type="button" class="pill-quiet pf-row" id="pf-accent">` +
                 `<span class="pf-row-swatch" aria-hidden="true"></span>` +
-                `<span class="pf-row-label">Color</span></button>` +
+                `<span class="pf-row-label">Theme</span></button>` +
               (Store.charmsReady()
                 ? `<button type="button" class="pill-quiet pf-row" id="pf-charms">` +
                     svgIcon('charm', 'pf-row-ico') +
@@ -8961,7 +8961,7 @@
           // else (gen-alt-icons.js). Hidden until the plugin says it can.
           (nativeShell()
             ? `<div class="push-toggle-row" id="icon-row" hidden>` +
-                `<span class="push-toggle-label" id="icon-label">App icon</span>` +
+                `<span class="push-toggle-label" id="icon-label">App icon color</span>` +
                 `<button type="button" class="music-pick" id="icon-pick" ` +
                   `aria-labelledby="icon-label" aria-haspopup="menu">` +
                   `<span id="icon-value">Tria</span>` +
@@ -9036,6 +9036,8 @@
     const iconRow = view.querySelector('#icon-row');
     if (iconRow) {
       const iconValEl = view.querySelector('#icon-value');
+      // gen-alt-icons.js's DEEPER, by hand: the light four, deepened on the icon.
+      const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
       const ICON_CHOICES = [{ key: '', label: 'Tria' }]
         .concat(ACCENTS.map(a => ({ key: a.key, label: a.label })));
       const iconLabel = (key) => (ICON_CHOICES.find(c => c.key === key) || ICON_CHOICES[0]).label;
@@ -9055,14 +9057,32 @@
           hapticEvent('SELECT');
         }, () => toast('Couldn’t change the icon.'));
       };
+      // The profile colour picker's swatches (Zoe: "use the same menu as
+      // the profile colors"): Tria alone in the source row, then the nine.
+      // A disc wears the icon's own band, deeper than the palette's for the
+      // light four (ICON_DEEPER).
       view.querySelector('#icon-pick').addEventListener('click', () => {
+        const src = (c) => ({ key: c.key, label: c.label, css: c.key
+          ? bandAround(cssToRgb(ICON_DEEPER[c.key] || accentCss(c.key)))
+          : 'var(--brand-band)' });
+        const now = iconNow || 'tria';
+        const head =
+          `<div class="swatches swatches--source swatches--one" role="group" aria-label="Tria">` +
+            swatchHtml({ ...src(ICON_CHOICES[0]), key: 'tria' }, now) +
+          `</div>` +
+          `<div class="swatches" role="group" aria-label="Colors">` +
+            ICON_CHOICES.slice(1).map(c => swatchHtml(src(c), now)).join('') +
+          `</div>`;
         openSheet({
-          title: 'App icon',
-          items: ICON_CHOICES.map(c => ({
-            label: c.label,
-            icon: c.key === iconNow ? 'check' : 'blank',
-            run: () => pickIcon(c.key),
-          })),
+          title: 'App icon color',
+          head,
+          wire: (scrim, close) => {
+            scrim.querySelectorAll('.swatch').forEach(btn =>
+              btn.addEventListener('click', () => {
+                const key = btn.dataset.accent === 'tria' ? '' : btn.dataset.accent;
+                close(() => pickIcon(key));
+              }));
+          },
         });
       });
     }
@@ -10870,18 +10890,12 @@
     // "not this one" about the eleven; it cannot say "this one" about a disc
     // that might be a photograph of anything, which is the case the two rings
     // were drawn for in the first place.
-    const swatch = (src) =>
-      `<button class="swatch${src.key === current ? ' is-on' : ''}" type="button" ` +
-        `role="menuitemradio" aria-checked="${src.key === current}" data-accent="${src.key}" ` +
-        `title="${esc(src.label)}">` +
-        `<span class="swatch-disc"${src.css ? ` style="background-image:${esc(src.css)}"` : ''}></span>` +
-        `<span class="swatch-label">${esc(src.label)}</span>` +
-      `</button>`;
+    const swatch = (src) => swatchHtml(src, current);
 
     // The wash needs no preview — it repaints live on the page behind the
     // see-through scrim, which is the whole reason this is a sheet.
     const head =
-      `<div class="swatches swatches--source" role="group" aria-label="Color source">` +
+      `<div class="swatches swatches--source" role="group" aria-label="Theme source">` +
         sources.filter(x => !x.group).map(swatch).join('') +
       `</div>` +
       `<div class="swatches" role="group" aria-label="Colors">` +
@@ -10897,6 +10911,15 @@
       },
     });
   }
+
+  // One swatch of the colour picker; the App icon color sheet draws the same.
+  const swatchHtml = (src, current) =>
+    `<button class="swatch${src.key === current ? ' is-on' : ''}" type="button" ` +
+      `role="menuitemradio" aria-checked="${src.key === current}" data-accent="${src.key}" ` +
+      `title="${esc(src.label)}">` +
+      `<span class="swatch-disc"${src.css ? ` style="background-image:${esc(src.css)}"` : ''}></span>` +
+      `<span class="swatch-label">${esc(src.label)}</span>` +
+    `</button>`;
 
   /* THE PICK ITSELF, what a swatch MEANS. It is the only thing in the
      picker that changes anything, so it lives apart from the drawing. */
