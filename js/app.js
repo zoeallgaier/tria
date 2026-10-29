@@ -2101,7 +2101,8 @@
       // bottom of the screen belongs to the comment bar — the same two facts
       // body.gate and body.postbar-live already state to the stylesheet.
       const chrome = !gated && !overlaid()
-        && !document.body.classList.contains('postbar-live');
+        && !document.body.classList.contains('postbar-live')
+        && !document.body.classList.contains('welcome-live');
       const fab = !(nav && nav.classList.contains('nav--compose'));
       if (activeRoute !== told.route) {
         told.route = activeRoute;
@@ -8795,9 +8796,12 @@
         `Activities are visible to your circle by default.`;
   }
 
-  function renderEditProfile() {
+  // `welcome` is the first run's first step (#/welcome): the same form, held
+  // to the face, the theme, the charms and the words, with Next at its foot.
+  function renderEditProfile({ welcome = false } = {}) {
     const u = Store.currentUser();
     if (!u) { go('#/'); return; }
+    if (welcome) document.body.classList.add('welcome-live');
     // Consumed on arrival, the way renderPublish consumes pendingDaily: the flag
     // belonged to the tap that came here, not to the page.
     const canPop = editorPushed;
@@ -8833,7 +8837,8 @@
     // toolbarBackEl with no href, which is what that branch was built for: the
     // editor's exit pops rather than pushes, and the <button> that buys is also
     // the element whose glyph gets swapped in place.
-    mountToolbar({
+    if (welcome) mountToolbar({ title: 'Make it yours' });
+    else mountToolbar({
       leading: toolbarBackEl('', 'Profile', 'pf-cancel'),
       title: 'Edit profile',
       // `form=` is the whole reason a submit button can live out here: the bar
@@ -8862,7 +8867,10 @@
         // heading at all and no way to say what it is. It must NOT match
         // BIG_TITLE_SEL: there is still nothing for the bar's copy to hide
         // behind, and it goes on showing from the moment the page lands.
-        `<h1 class="visually-hidden">Edit profile</h1>` +
+        (welcome
+          ? `<h1 class="visually-hidden">Make it yours</h1>` +
+            `<p class="welcome-lede">A face, a name and a color your friends will know you by.</p>`
+          : `<h1 class="visually-hidden">Edit profile</h1>`) +
         `<form id="pf-form" class="pf-form" novalidate>` +
           // The photo sits in its own colour: the profile gradient, the same
           // --glow-photo the identity card wears, washed out from behind the
@@ -8948,6 +8956,10 @@
           //
           // The first two don't wait for Save. Neither is part of the profile
           // being edited, so Cancel has nothing to take back from either.
+          //
+          // The first run keeps them all in the DOM, hidden, so every wire
+          // below still finds its element and privacy saves as it stands.
+          `<div class="pf-settings"${welcome ? ' hidden' : ''}>` +
           `<div class="push-toggle-row">` +
             `<span class="push-toggle-label" id="music-label">Open songs in</span>` +
             `<button type="button" class="music-pick" id="music-pick" ` +
@@ -8981,7 +8993,13 @@
           // The hint states what the profile *is* right now, not what the switch
           // would do — one less translation step between the control and reality.
           `<p class="field-hint" id="privacy-hint">${privacyHint(u.private !== false)}</p>` +
+          `</div>` +
           `<p class="composer-error" id="pf-error" role="alert"></p>` +
+          (welcome
+            ? `<div class="welcome-foot">` +
+                `<button type="submit" class="publish-fill welcome-next" id="pf-next">Next</button>` +
+              `</div>`
+            : '') +
           // The commit row is in the bar now (see mountToolbar above), so the
           // error line is followed by the account zone and nothing else.
           //
@@ -8990,7 +9008,7 @@
           // sits left (coral danger tint, App Store 5.1.1(v) requires the
           // option — still guarded by the confirm sheet); Log out sits right, in
           // the more reachable spot, since it's the one tapped often.
-          `<div class="pf-account">` +
+          `<div class="pf-account"${welcome ? ' hidden' : ''}>` +
             `<button type="button" class="pf-account-btn pill-quiet pf-delete" id="pf-delete">` +
               svgIcon('trash') + `Delete account</button>` +
             `<button type="button" class="pf-account-btn pill-quiet pf-logout" id="pf-logout">` +
@@ -9108,14 +9126,16 @@
     // one genuine advantage, given away for nothing. A cold arrival (a bookmark,
     // a reload on this hash) has no entry to pop, so it navigates instead.
     const leave = () => {
-      if (canPop) history.back();
+      if (welcome) go('#/welcome/circles');
+      else if (canPop) history.back();
       else go('#/profile');
     };
     // getElementById, not view.querySelector: the leading control lives in
-    // #toolbar-page, which is outside #view.
+    // #toolbar-page, which is outside #view. The first run has no leading
+    // control, and its commit is Next in the page.
     const pfLeaveBtn = document.getElementById('pf-cancel');
-    const pfSaveBtn = document.getElementById('pf-save');
-    pfLeaveBtn.addEventListener('click', leave);
+    const pfSaveBtn = welcome ? view.querySelector('#pf-next') : document.getElementById('pf-save');
+    pfLeaveBtn?.addEventListener('click', leave);
 
     // What "unsaved" means on this page, and it is narrower than "you touched
     // something". The three fields the form HOLDS — name, bio, privacy — plus a
@@ -9145,6 +9165,7 @@
     // out of the tab order and the a11y tree, so "not there" is true for a
     // keyboard and a screen reader too.
     function syncAnswers() {
+      if (welcome) return;   // Next is always there: it saves or it moves on
       const dirty = pfDirty();
       pfLeaveBtn.innerHTML = dirty ? svgIcon('close') : svgIcon('chevron', 'toolbar-back-ico');
       pfLeaveBtn.setAttribute('aria-label', dirty ? 'Discard changes' : 'Back to Profile');
@@ -9266,7 +9287,7 @@
       // isn't: Enter in the name field still lands here. Nothing to write, so
       // don't — a no-op round trip that ends in leave() would read as the app
       // having saved something.
-      if (!pfDirty()) return;
+      if (!pfDirty()) { if (welcome) leave(); return; }
       // Take the crop BEFORE anything commits. Save is already held until the
       // image decodes, so this is the belt to that pair of braces — but the
       // failure it catches was silent and expensive: export() used to throw
@@ -9296,7 +9317,7 @@
         // synchronously), upload in the background; on failure the store reverts.
         const pendingAvatar = shot ? Store.updateAvatar(shot) : null;
         // A new face is celebrated on the profile that wears it.
-        if (shot) celebrateArrival = 'u/' + Store.session();
+        if (shot && !welcome) celebrateArrival = 'u/' + Store.session();
         leave();
         if (pendingAvatar) pendingAvatar.then(r => { if (!r.ok) { revertedAvatar(); toast(r.error); } });
       } finally {
@@ -9343,7 +9364,7 @@
     // Desktop only — on touch, opening the keyboard the moment the page lands
     // covers half of it before anyone has decided to type (see the same guard on
     // the post edit form).
-    if (finePointer()) {
+    if (finePointer() && !welcome) {
       nameEl.focus();
       nameEl.select();
     }
@@ -13805,7 +13826,9 @@
      A member's card drops the pill, the way an answered daily does, and says so
      in the kicker instead; the whole card is a link either way. A count of
      members is a size, like a friend count, never a number to drive anywhere. */
-  function communityCardHtml(c) {
+  // `pick` is the first run's card (renderWelcomeCircles): its name is not a
+  // door out of the flow, and its pill is a Join that toggles to Joined.
+  function communityCardHtml(c, { pick = false } = {}) {
     const me = Store.session();
     // Signed out too: a size is as public as the circle (communitySize).
     const n = Store.communitySize(c.id);
@@ -13821,9 +13844,11 @@
             : !c.inviteOnly ? ''
             : `<span class="daily-sep" aria-hidden="true">·</span>${Store.canJoinCommunity(c) ? 'Invited' : 'Invite only'}`) +
         `</p>` +
-        `<a class="daily-open" href="${communityRoute(c)}">` +
-          `<span class="daily-prompt">${esc(c.name)}</span>` +
-        `</a>` +
+        (pick
+          ? `<div class="daily-open"><span class="daily-prompt">${esc(c.name)}</span></div>`
+          : `<a class="daily-open" href="${communityRoute(c)}">` +
+              `<span class="daily-prompt">${esc(c.name)}</span>` +
+            `</a>`) +
         (c.about ? `<p class="daily-hint">${esc(c.about)}</p>` : '') +
         `<div class="daily-foot">` +
           (n
@@ -13835,7 +13860,8 @@
                 `<span class="daily-count">${n} ${memberWord(n)}</span>` +
               `</div>`
             : `<span class="daily-count"></span>`) +
-          (mine || !Store.canJoinCommunity(c) ? ''
+          (pick ? welcomePillHtml(c.id, mine)
+            : mine || !Store.canJoinCommunity(c) ? ''
             : `<button type="button" class="daily-answer publish-fill" data-join="${esc(c.id)}">` +
                 `Join` +
               `</button>`) +
@@ -13907,6 +13933,105 @@
     }));
   }
 
+  /* THE FIRST RUN (Zoe, 2026-10-28): a new account is made yours, then finds
+     its circles, then lands on My Circle. Two steps, #/welcome (Edit profile's
+     form, held to the face, the theme, the charms and the words) and
+     #/welcome/circles (every circle you can join, a tap each), with the tab bar
+     put away so the steps are the whole screen.
+
+     WHO IS NEW is read off the world, not stored: an account a few days old
+     with no friend, no circle and no post, which is every way in (a password,
+     Apple or Google, a confirmed email logged into on another day) without a
+     flag on any of them. Done marks it seen on this device; asked once a
+     session, so a private window that can't keep the mark still gets home. */
+  const WELCOME_DAYS = 3;
+  const welcomeKey = () => `tria:welcomed:${Store.session()}`;
+  let welcomeAsked = false;
+  function needsWelcome() {
+    const u = Store.currentUser();
+    if (welcomeAsked || !u || !Store.isAuthed() || !u.joined) return false;
+    if (Date.now() - Date.parse(u.joined) > WELCOME_DAYS * 864e5) return false;
+    try { if (localStorage.getItem(welcomeKey())) return false; } catch { /* private window */ }
+    return Store.friends().length === 0
+      && !Store.communities().some(c => Store.inCommunity(c.id))
+      && Store.postsBy(u.username).length === 0;
+  }
+  function finishWelcome() {
+    welcomeAsked = true;
+    try { localStorage.setItem(welcomeKey(), '1'); } catch { /* private window */ }
+  }
+
+  function welcomePillHtml(id, joined) {
+    return `<button type="button" class="daily-answer ${joined ? 'pill-quiet is-on' : 'publish-fill'}" ` +
+        `data-pick="${esc(id)}" aria-pressed="${joined}">` +
+        (joined ? svgIcon('check', 'welcome-pick-ico') + 'Joined' : 'Join') +
+      `</button>`;
+  }
+
+  function renderWelcomeCircles() {
+    if (!Store.currentUser()) { go('#/'); return; }
+    document.body.classList.add('welcome-live');
+    mountToolbar({
+      leading: toolbarBackEl('#/welcome', 'Make it yours'),
+      title: 'Find your circles',
+    });
+    // Public circles first by life, then any you were invited to; one you
+    // can't join isn't offered here (Discover still shows it).
+    const list = Store.communitiesReady()
+      ? communitiesInOrder().filter(c => Store.inCommunity(c.id) || Store.canJoinCommunity(c))
+      : [];
+    view.innerHTML =
+      `<section class="view welcome">` +
+        `<h1 class="visually-hidden">Find your circles</h1>` +
+        `<p class="welcome-lede">` +
+          (list.length
+            ? 'Join a few for what you’re into. Their posts are yours to read and answer.'
+            : 'There are no circles to join yet. Start the first one, or come back soon.') +
+        `</p>` +
+        `<section class="communities welcome-circles" aria-label="Circles">` +
+          list.map(c => communityCardHtml(c, { pick: true })).join('') +
+        `</section>` +
+        `<div class="welcome-foot">` +
+          `<button type="button" class="publish-fill welcome-next" id="welcome-done"></button>` +
+          `<a class="welcome-start" href="#/c/new" id="welcome-start">Start your own circle</a>` +
+        `</div>` +
+      `</section>`;
+
+    const doneBtn = view.querySelector('#welcome-done');
+    const syncDone = () => {
+      doneBtn.textContent = list.some(c => Store.inCommunity(c.id)) ? 'Done' : 'Not now';
+    };
+    syncDone();
+    doneBtn.addEventListener('click', () => { finishWelcome(); go('#/'); });
+    view.querySelector('#welcome-start').addEventListener('click', finishWelcome);
+
+    // A tap joins in place, a second takes it back: nothing here walks you out
+    // of the flow. Leaving can close a circle you are the last one in, so a
+    // circle with nobody else in it isn't let go of from here.
+    view.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      const id = btn.dataset.pick;
+      const joined = Store.inCommunity(id);
+      if (joined && Store.communityMembers(id).length <= 1) return;
+      btn.disabled = true;
+      let res = null;
+      try {
+        res = await (joined ? Store.leaveCommunity(id) : Store.joinCommunity(id)).catch(() => null);
+      } finally { btn.disabled = false; }
+      if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
+      hapticTap('LIGHT');
+      if (!btn.isConnected) return;
+      // In place, so the listener stays on it: the same pill, its other face.
+      const t = document.createElement('div');
+      t.innerHTML = welcomePillHtml(id, !joined);
+      const next = t.firstElementChild;
+      btn.className = next.className;
+      btn.innerHTML = next.innerHTML;
+      btn.setAttribute('aria-pressed', String(!joined));
+      syncDone();
+    }));
+  }
+
   // Discover's order: the circles you are in, liveliest first, then the rest,
   // liveliest first. "Liveliest" is the last sign of life this reader can see
   // (Store.communityPulse): a post (only members see those), a join, or the day
@@ -13944,7 +14069,7 @@
     return `<section class="communities" aria-label="Circles">` +
         // Searching, it is captioned like People and Posts above it.
         (search ? `<p class="discover-kicker">Circles</p>` : communityStartHtml()) +
-        list.map(communityCardHtml).join('') +
+        list.map(c => communityCardHtml(c)).join('') +
         after +
       `</section>`;
   }
@@ -21154,7 +21279,7 @@
 
   function applyAmbient(path) {
     const body = document.body;
-    if (path === '#/profile/edit') { paintWash(Store.currentUser(), 'profile'); return; }
+    if (path === '#/profile/edit' || path === '#/welcome') { paintWash(Store.currentUser(), 'profile'); return; }
     let user = null;
     if (path.startsWith('#/u/')) user = Store.user(decodeURIComponent(path.slice(4)));
     else if (path === '#/profile') user = Store.currentUser();
@@ -21709,6 +21834,8 @@
     // drops the visualViewport listeners the keyboard tracker may still be
     // holding, which is the one thing in the bar that outlives its own markup.
     resetPostBar();
+    // The first run puts the tab bar away; its two steps say so again.
+    document.body.classList.remove('welcome-live');
     renderFn();
     noticeCharmsSoon();
 
@@ -22065,6 +22192,17 @@
 
     const hash = location.hash || '#/';
     const path = hash.split('?')[0];
+    // A new account's first look at home is the first run instead, once a
+    // session (needsWelcome). replace, so back from it isn't an empty home.
+    if (path === '#/' && needsWelcome()) {
+      welcomeAsked = true;
+      // Nothing earned before the first run is a "you've already earned
+      // these": a new account baselines empty, so its first circle is an unlock.
+      const me = Store.session();
+      if (me && !charmsSeen(me)) setCharmsSeen(me, []);
+      location.replace('#/welcome');
+      return;
+    }
     // A copied post link USED to carry ?p=<id> onto the author's profile, and
     // links minted before 1.3 are still out there in messages and inboxes — so
     // the query is now a redirect to the post's own page rather than a spotlight.
@@ -22206,6 +22344,8 @@
         case '#/chats/requests': renderChatRequests(); break;
         case '#/profile': renderUser(Store.session()); break;
         case '#/profile/edit': renderEditProfile(); break;
+        case '#/welcome': renderEditProfile({ welcome: true }); break;
+        case '#/welcome/circles': renderWelcomeCircles(); break;
         case '#/publish': renderPublish(); break;
         case '#/listening': renderListening(); break;
         case '#/about':   renderAbout(false); break;

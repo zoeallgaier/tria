@@ -65,6 +65,21 @@ hidden at desktop width the same way. On `#/updates` the sidebar lights that
 row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
+## A new account has a first run (2026-10-28)
+
+**Sign up, make it yours, find your circles, then home** (Zoe). `#/welcome`
+is Edit profile's form in a welcome mode (`renderEditProfile({ welcome })`:
+photo, Theme, Charms, name, pronouns, bio, a Next at its foot; the settings and
+account rows stay in the DOM, hidden) and `#/welcome/circles`
+(`renderWelcomeCircles`) is Discover's circle cards with a Join that toggles to
+Joined in place (`communityCardHtml`'s `pick`), then Done or Not now. The tab
+bar is put away on both (`body.welcome-live`, also read by `NativeChrome.sync`).
+**Who is new is read off the world** (`needsWelcome`): an account under three
+days old (`users.created_at`, mapped as `joined`) with no friend, circle or
+post, not yet marked `tria:welcomed:<user>` on this device, so every way in
+reaches it with no flag at sign-up. `route()` sends `#/` there once a session,
+and baselines charms empty so a first circle is an unlock.
+
 ## The app icon comes in every accent (2026-10-27)
 
 **Edit profile's App icon color row** (Zoe, under Open songs in, the app only)

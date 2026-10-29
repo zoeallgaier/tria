@@ -9773,6 +9773,8 @@ body[data-ambient="none"] .pf-row-swatch {
      near the bar, and taking somebody's whole navigation away to read one post
      would be a phone answer applied where the phone's problem doesn't exist. */
   body.postbar-live .nav { display: none; }
+  /* The first run's two steps are the whole screen (renderWelcomeCircles). */
+  body.welcome-live .nav { display: none; }
 
   .postbar {
     left: 0;
@@ -11147,3 +11149,46 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 /* The web's picture input, out of sight; the label around it is the tap. */
 .charm-add-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .charm-tile--locked .charm { --charm-ink: var(--muted); opacity: 0.45; }
+
+/* ── The first run (2026-10-28) ─────────────────────────────────────────────
+   #/welcome is Edit profile's form held to the face, the theme, the charms and
+   the words; #/welcome/circles is Discover's circle cards with a Join that
+   toggles. Both end on one full-width commit, the page's 52px pill, and the
+   bar names the step, so the lede is the page's only words of its own. */
+.welcome-lede {
+  max-width: 34ch;
+  margin: 0.4rem auto 0;
+  text-align: center;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.view.welcome .welcome-lede { margin-bottom: 1.25rem; }
+.welcome-circles { margin-bottom: 0; }
+.welcome-circles .daily-card { margin: 0 auto 0.95rem; }
+.welcome-pick-ico { width: 1em; height: 1em; margin-right: 0.3rem; vertical-align: -0.15em; }
+.welcome-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: var(--feed-width);
+  margin: 1.5rem auto 0;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+.welcome-next {
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.welcome-start {
+  color: var(--muted);
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+/* The first run keeps Edit profile's settings and account rows in the DOM,
+   hidden; .pf-account's own display would otherwise win over [hidden]. */
+.pf-settings[hidden],
+.pf-account[hidden] { display: none; }

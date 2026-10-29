@@ -261,6 +261,9 @@ const Store = (() => {
                 private: u.private !== false };
     if (u.avatar) o.avatar = u.avatar;
     if (u.pronouns) o.pronouns = u.pronouns;
+    // When the account was made: the first run (needsWelcome in app.js) is
+    // only offered to an account a few days old.
+    if (u.created_at) o.joined = u.created_at;
     // The song, if it's still true. Absent on a DB that hasn't run
     // add-listening-to.sql — PostgREST omits a column that doesn't exist, so
     // the whole feature simply isn't there rather than erroring.
