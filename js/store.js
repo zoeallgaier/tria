@@ -1291,10 +1291,12 @@ const Store = (() => {
   // session until the link is clicked (see the !data.session branch below); with
   // it off, signUp hands back a live session and we're straight in.
   async function signup({ name, username, email, password }) {
-    name = String(name || '').trim();
     username = String(username || '').trim().toLowerCase();
+    // Signup asks for the handle only; the name is set on the first run's
+    // Create your profile, and until then it is the handle (users.name is
+    // not null).
+    name = String(name || '').trim() || username;
     email = String(email || '').trim();
-    if (!name) return { ok: false, error: 'Add a display name.' };
     if (!/^[a-z0-9_]{2,20}$/.test(username))
       return { ok: false, error: 'Username: 2–20 letters, numbers or _.' };
     if (!/^\S+@\S+\.\S+$/.test(email))
@@ -1575,9 +1577,8 @@ const Store = (() => {
   }
 
   async function claimProfile({ name, username }) {
-    name = String(name || '').trim();
     username = String(username || '').trim().toLowerCase();
-    if (!name) return { ok: false, error: 'Add a display name.' };
+    name = String(name || '').trim() || username;   // the handle stands in, as at signup
     if (!/^[a-z0-9_]{2,20}$/.test(username))
       return { ok: false, error: 'Username: 2–20 letters, numbers or _.' };
 

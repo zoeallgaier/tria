@@ -79,6 +79,11 @@ days old (`users.created_at`, mapped as `joined`) with no friend, circle or
 post, not yet marked `tria:welcomed:<user>` on this device, so every way in
 reaches it with no flag at sign-up. `route()` sends `#/` there once a session,
 and baselines charms empty so a first circle is an unlock.
+**Signup asks for the @handle only** (Zoe, 2026-10-29: the name is step
+one's): `Store.signup` saves the handle as the name (`users.name` is not
+null), and step one shows that as an empty Display name field, an empty one
+keeping the handle. The Apple/Google claim screen is handle only too, a
+provider's name kept as the display name.
 
 ## The app icon comes in every accent (2026-10-27)
 

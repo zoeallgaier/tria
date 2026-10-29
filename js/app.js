@@ -7255,18 +7255,20 @@
     authMode = mode;
     const isSignup = mode === 'signup';
 
-    // Signup leads with your identity as one combo box — display name as the serif
-    // headline, @handle as the note beneath it — echoing the composer's title+note.
+    // Signup asks for the @handle and nothing else of you (Zoe, 2026-10-29):
+    // the display name is the first run's, on Create your profile, so it isn't
+    // asked twice. Until then the name is the handle (Store.signup).
+    // Labelled like Email and Password under it, the @ still inside the box.
     const identityField = isSignup
-      ? `<div class="field field--combo">` +
-          `<input id="f-name" class="combo-title" type="text" autocomplete="name" ` +
-            `maxlength="40" placeholder="Display name" autofocus aria-label="Display name">` +
-          `<div class="combo-divider" aria-hidden="true"></div>` +
-          `<div class="combo-user">` +
-            `<span class="at" aria-hidden="true">@</span>` +
-            `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
-              `autocapitalize="none" spellcheck="false" maxlength="20" ` +
-              `placeholder="username" aria-label="Username">` +
+      ? `<div class="field">` +
+          `<label for="f-user">Username</label>` +
+          `<div class="field--combo">` +
+            `<div class="combo-user">` +
+              `<span class="at" aria-hidden="true">@</span>` +
+              `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
+                `autocapitalize="none" spellcheck="false" maxlength="20" ` +
+                `placeholder="username" autofocus>` +
+            `</div>` +
           `</div>` +
         `</div>` +
         `<p class="field-hint field-hint--combo">Lowercase letters, numbers or _ for your @handle.</p>`
@@ -7328,7 +7330,6 @@
           `<a href="#/about">What is Tria?</a></p>` +
       `</div></section>`;
 
-    const nameInput = document.getElementById('f-name');
     const errEl = document.getElementById('auth-error');
     const submitBtn = document.querySelector('.auth-submit');
     if (isSignup) wireHandle(document.getElementById('auth-form'));
@@ -7348,7 +7349,7 @@
       // the same `.catch`: a dropped connection used to leave the form stuck on
       // "Logging in…" with no way back except a reload.
       const res = await (isSignup
-        ? Store.signup({ name: nameInput.value, username: document.getElementById('f-user').value, email, password })
+        ? Store.signup({ username: document.getElementById('f-user').value, email, password })
         : Store.login(email, password)).catch(() => null);
       if (!res || !res.ok) {
         // Signup with confirm-email on: the account exists, they just need to
@@ -7416,10 +7417,10 @@
   // `suggested`: the handle already in the field is the app's offer (the claim
   // screen's guess off the email), so the name may still write over it.
   function wireHandle(form, { suggested = false } = {}) {
-    const nameEl = form.querySelector('#f-name');
+    const nameEl = form.querySelector('#f-name');   // gone from signup and the claim screen
     const userEl = form.querySelector('#f-user');
     const hintEl = form.querySelector('.field-hint--combo');
-    if (!nameEl || !userEl || !hintEl) return;
+    if (!userEl || !hintEl) return;
     const rest = hintEl.textContent;
     let touched = !!userEl.value && !suggested;
     let seq = 0, timer = 0;
@@ -7437,7 +7438,7 @@
         hintEl.classList.toggle('is-taken', !free);
       }, 450);
     };
-    nameEl.addEventListener('input', () => {
+    nameEl?.addEventListener('input', () => {
       if (touched) return;
       userEl.value = handleFrom(nameEl.value);
       check();
@@ -7458,7 +7459,7 @@
      and until it does there is nothing for the feed to be a feed OF.
 
      It is signup's second half, so it wears signup's second half: the same
-     display-name-over-@handle combo, the same hint under it, the same agreement
+     @handle field (a provider's name kept as the display name), the same hint under it, the same agreement
      checkbox. That checkbox is not decoration — App Store 1.2 and 5.1.1(i) want
      joining to be an explicit agreement, and a provider tap is joining. Somebody
      signing back IN with Apple never sees this screen at all; they agreed the
@@ -7482,19 +7483,15 @@
         `<h1 class="auth-head">Almost in</h1>` +
         `<p class="auth-sub">` +
           (hint.email ? `Signed in as ${esc(hint.email)}. ` : '') +
-          `Pick the name and @handle your friends will see.</p>` +
+          `Pick the @handle your friends will see.</p>` +
         `<form id="claim-form" novalidate>` +
           `<div class="field field--combo">` +
-            `<input id="f-name" class="combo-title" type="text" autocomplete="name" ` +
-              `maxlength="40" placeholder="Display name" aria-label="Display name" ` +
-              `value="${esc(hint.name || '')}"${hint.name ? '' : ' autofocus'}>` +
-            `<div class="combo-divider" aria-hidden="true"></div>` +
             `<div class="combo-user">` +
               `<span class="at" aria-hidden="true">@</span>` +
               `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
                 `autocapitalize="none" spellcheck="false" maxlength="20" ` +
                 `placeholder="username" aria-label="Username" ` +
-                `value="${esc(hint.username || handleFrom(hint.name))}"${hint.name ? ' autofocus' : ''}>` +
+                `value="${esc(hint.username || handleFrom(hint.name))}" autofocus>` +
             `</div>` +
           `</div>` +
           `<p class="field-hint field-hint--combo">Lowercase letters, numbers or _ for your @handle.</p>` +
@@ -7523,7 +7520,10 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Creating…';
       const res = await Store.claimProfile({
-        name: document.getElementById('f-name').value,
+        // The provider's name, when it gave one (Apple only ever says it
+        // once), is the display name; otherwise the handle stands in until
+        // Create your profile.
+        name: hint.name || document.getElementById('f-user').value,
         username: document.getElementById('f-user').value,
       }).catch(() => null);
       if (!res || !res.ok) {
@@ -8802,6 +8802,10 @@
     const u = Store.currentUser();
     if (!u) { go('#/'); return; }
     if (welcome) document.body.classList.add('welcome-live');
+    // Signup no longer asks for a name, so a new account's name is its handle
+    // (Store.signup). The first run shows that as an empty field to fill, and
+    // an empty one keeps the handle.
+    const nameStart = welcome && u.name === u.username ? '' : (u.name || '');
     // Consumed on arrival, the way renderPublish consumes pendingDaily: the flag
     // belonged to the tap that came here, not to the page.
     const canPop = editorPushed;
@@ -8927,7 +8931,7 @@
           // the note beneath it — mirroring the composer's title+note and signup.
           `<div class="field field--combo">` +
             `<input id="pf-name" class="combo-title" type="text" maxlength="40" ` +
-              `value="${esc(u.name)}" placeholder="Display name" autocomplete="name" ` +
+              `value="${esc(nameStart)}" placeholder="Display name" autocomplete="name" ` +
               `aria-label="Display name">` +
             `<div class="combo-divider" aria-hidden="true"></div>` +
             // Pronouns are a line of the box of their own (Zoe, 2026-10-23),
@@ -9153,7 +9157,7 @@
     // these on a tap that can only happen after the whole render has run.
     function pfDirty() {
       return !!pfCropper
-        || nameEl.value !== (u.name || '')
+        || nameEl.value !== nameStart
         || bioEl.value !== (u.bio || '')
         || pronounsEl.value !== (u.pronouns || '')
         || (privacyBtn.getAttribute('aria-checked') === 'true') !== (u.private !== false);
@@ -9305,7 +9309,7 @@
       try {
         const nowPrivate = privacyBtn.getAttribute('aria-checked') === 'true';
         const res = await Store.updateProfile({
-          name: nameEl.value, bio: bioEl.value, pronouns: pronounsEl.value,
+          name: nameEl.value.trim() || (welcome ? u.name : ''), bio: bioEl.value, pronouns: pronounsEl.value,
           isPrivate: nowPrivate,
         });
         if (!res.ok) { errEl.textContent = res.error; return; }
