@@ -94,6 +94,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// nothing costs a compare. -1 until the first one, which is what makes the
     /// very first `0` a real message rather than a no-op.
     private var toldKeyboard: CGFloat = -1
+    /// A reach that arrived mid-drag, sent when the finger lifts. See keyboardMoved.
+    private var heldKeyboard: CGFloat?
+    private var watchingPan = false
 
     /* HOW FAR THE KEYBOARD REACHES INTO THE PAGE — the one piece of geometry the
        web view genuinely cannot see for itself in this shell, and an
@@ -142,10 +145,45 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         // simply span the bottom of the window.
         let frame = web.convert(end, from: web.window)
         let over = max(0, web.bounds.maxY - frame.minY)
-        send(keyboard: max(0, over - web.safeAreaInsets.bottom))
+        let inset = max(0, over - web.safeAreaInsets.bottom)
+        /* NOT WHILE A FINGER IS ON THE PAGE. With a field of ours holding the
+           caret the scroller dismisses interactively, so a drag that crosses
+           the keys carries them with it and this fires on every frame of it.
+           Each one re-padded #view and (growing back) scrolled the page to
+           follow, under the finger that was scrolling it: the page jittered.
+           The figure is held and settled once the finger lifts, by which time
+           the keys have either gone (keyboardGone) or sprung back to where the
+           web was already told they were. */
+        if web.scrollView.isTracking {
+            heldKeyboard = inset
+            watchPan(web.scrollView)
+            return
+        }
+        heldKeyboard = nil
+        send(keyboard: inset)
     }
 
-    @objc private func keyboardGone() { send(keyboard: 0) }
+    @objc private func keyboardGone() {
+        heldKeyboard = nil
+        send(keyboard: 0)
+    }
+
+    private func watchPan(_ scroller: UIScrollView) {
+        guard !watchingPan else { return }
+        watchingPan = true
+        scroller.panGestureRecognizer.addTarget(self, action: #selector(pagePanned(_:)))
+    }
+
+    /// The finger is off. A turn of the run loop first, so the keys' own
+    /// spring back (or away) lands its notification ahead of the held figure.
+    @objc private func pagePanned(_ pan: UIPanGestureRecognizer) {
+        guard pan.state == .ended || pan.state == .cancelled || pan.state == .failed else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let held = self.heldKeyboard else { return }
+            self.heldKeyboard = nil
+            self.send(keyboard: held)
+        }
+    }
 
     private func send(keyboard inset: CGFloat) {
         guard abs(inset - toldKeyboard) > 0.5 else { return }
@@ -2541,6 +2579,7 @@ final class TriaPostBar: UIView, TriaPostBarControl {
 
     private var keyboardUp = false
     private var lastLift: CGFloat = -1
+    private weak var scroller: UIScrollView?
     private var live = false
     /// The last spec, so a push that changes nothing costs no relayout. The text
     /// is deliberately NOT in it: what the reader has typed is this view's, and a
@@ -2586,6 +2625,8 @@ final class TriaPostBar: UIView, TriaPostBarControl {
         autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.addSubview(self)
         self.host = host
+        self.scroller = scroller
+        scroller?.panGestureRecognizer.addTarget(self, action: #selector(pagePanned(_:)))
         // Tap the page or drag it and the keyboard goes, leaving the words. It
         // is the third way out of this bar and the mildest — the face discards,
         // the disc posts, and this one just puts the keys away. See
@@ -2681,6 +2722,10 @@ final class TriaPostBar: UIView, TriaPostBarControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard live else { return }
+        // Not mid-drag: a drag that carries the keys moves the pill every
+        // frame, and each lift restyled the whole page under the finger.
+        // `pagePanned` lays out again once it lifts.
+        if scroller?.isTracking == true { return }
         let lift = max(0, bounds.height - pill.frame.minY)
         guard abs(lift - lastLift) > 0.5 else { return }
         lastLift = lift
@@ -2696,6 +2741,14 @@ final class TriaPostBar: UIView, TriaPostBarControl {
     // MARK: The keyboard
 
     private func armDismissal(_ editing: Bool) { dismisser?.arm(editing) }
+
+    @objc private func pagePanned(_ pan: UIPanGestureRecognizer) {
+        guard pan.state == .ended || pan.state == .cancelled || pan.state == .failed else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.setNeedsLayout()
+            self?.layoutIfNeeded()
+        }
+    }
 
     @objc private func keyboardShown() {
         keyboardUp = true
