@@ -3417,16 +3417,17 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  min-width: 28px;
+  height: 32px;
+  min-width: 32px;
   padding: 0;
   font: inherit;
   background: none;
   border: none;
   border-radius: var(--radius-pill);
   transition: color var(--dur-micro);
-  --heart-size: 18px;
-  --like-nudge: 1px;   /* 1.5px × 18/28, the card's optical nudge in proportion */
+  /* 22px since 2026-10-29 (Zoe: "make the heart icons bigger"); 18 before. */
+  --heart-size: 22px;
+  --like-nudge: 1.2px;   /* 1.5px × 22/28, the card's optical nudge in proportion */
 }
 /* The resting grey at (0,1,0), under .card-like.liked and the hover/active/focus
    rules at (0,2,0), which is the tile's :where() trick for the tile's reason. */
@@ -3447,7 +3448,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    than a control, so none of the hover or press ink the shared rules hand every
    other heart. The trash after it gives up the auto margin the pair now shares. */
 .comment .card-like:has(.card-like-count) { gap: 0.2rem; padding-inline: 0.2rem; }
-.comment .card-like-count { font-size: 0.75rem; }
+.comment .card-like-count { font-size: 0.8rem; }
 .comment .comment-like--still { cursor: default; }
 .comment .comment-like--still:active { color: var(--muted); }
 @media (hover: hover) {
@@ -8969,7 +8970,9 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
    plus however far the keyboard lifted it (--kb-lift), natively the pill's
    own measured top (--native-postbar-lift, which already rides the keys),
    less the safe-area inset the panel's foot has taken. */
-.sheet-scrim--thread .sheet { height: min(82dvh, 780px); }
+/* Its top sits a third of the way down a phone (Zoe, 2026-10-29: dropped
+   about 150px from 82dvh). */
+.sheet-scrim--thread .sheet { height: min(66dvh, 640px); }
 .sheet-scrim--thread .sheet-items {
   flex: 1 1 auto;
   padding: 4px 1.25rem calc(5rem + var(--kb-lift, 0px));
@@ -8981,6 +8984,8 @@ html[data-chrome="native"] .sheet-scrim--thread .sheet-items {
 /* The bar and what hangs off it (the mention list, the photo tray) over the
    scrim, for the sheet's length. */
 body.thread-live .postbar { z-index: 310; }
+/* An edit changes the words, never the picture, so the photo button rests. */
+.postbar-pick:disabled { opacity: 0.35; }
 /* A comment's photo opens over the sheet it was tapped in. */
 body.thread-live .lightbox { z-index: 320; }
 .thread-list { gap: 1.15rem; margin: 0; }
@@ -8989,10 +8994,7 @@ body.thread-live .lightbox { z-index: 320; }
 .thread-list .comment-body { flex: 1; }
 .thread-list .comment-text { font-size: 0.95rem; line-height: 1.42; }
 .thread-list .comment-meta { font-size: 0.76rem; margin-top: 0.2rem; }
-.thread-list .comment .card-like,
-.thread-list .comment-delete { margin-top: 0.3rem; }
-.thread-list .card-like + .comment-delete,
-.thread-list .comment-body + .comment-delete { margin-left: 0; }
+.thread-list .comment .card-like { margin-top: 0.15rem; }
 /* A comment you just sent rises into place under the sparkles. */
 .thread-list .comment--new { animation: thread-rise 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
 @keyframes thread-rise {
@@ -9005,24 +9007,51 @@ body.thread-live .lightbox { z-index: 320; }
   font-size: 0.95rem;
   color: var(--muted);
 }
-/* Sheets don't stack, so your own comment's trash asks in place: a red
-   Delete springs up in its slot, and a second tap takes the row. */
-.comment-delete-word { display: none; }
-.comment-delete.is-armed {
-  width: auto;
-  padding: 0 0.8rem;
-  color: #fff;
-  background: var(--danger);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  animation: delete-arm 0.32s var(--spring) both;
+/* HOLD YOUR OWN COMMENT (wireCommentHold): no trash on it, and the
+   callout and text selection stand down so the hold is ours. It sinks a touch
+   while charging, then lifts onto a soft fill with Edit and Delete under its
+   words, two quiet pills. The fill bleeds past the row by the padding it
+   adds, so nothing around it moves. */
+.comment--own {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  border-radius: var(--radius-soft);
+  transition: transform 0.45s var(--ease-soft), background-color var(--dur-quick) var(--ease-soft);
 }
-.comment-delete.is-armed svg { display: none; }
-.comment-delete.is-armed .comment-delete-word { display: block; }
-.comment-delete.is-armed:active { color: #fff; background: var(--danger); }
-@keyframes delete-arm {
-  from { transform: scale(0.7); opacity: 0; }
+.comment--own.is-charging { transform: scale(0.975); }
+.comment--own.is-held {
+  margin: -0.55rem -0.65rem;
+  padding: 0.55rem 0.65rem;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  transition: transform 0.4s var(--spring), background-color var(--dur-quick) var(--ease-soft);
+}
+.comment-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  animation: comment-acts-in 0.32s var(--spring) both;
+}
+.comment-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 38px;
+  padding: 0 1rem 0 0.85rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  border-radius: var(--radius-pill);
+}
+.comment-act svg { width: 17px; height: 17px; }
+.comment-act--danger { color: var(--danger); }
+@keyframes comment-acts-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .comment--own, .comment--own.is-held { transition: none; }
+  .comment--own.is-charging { transform: none; }
+  .comment-actions { animation: none; }
 }
 /* Who liked your post, from its heart in a feed (openLikesSheet). */
 .likes-sheet-list { gap: 0.95rem; padding: 4px 1.4rem 14px; }
@@ -9031,8 +9060,7 @@ body.thread-live .lightbox { z-index: 320; }
 .likes-sheet-list .comment-text { font-size: 1.02rem; }
 .likes-sheet-list .comment-name { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
-  .thread-list .comment--new,
-  .comment-delete.is-armed { animation: none; }
+  .thread-list .comment--new { animation: none; }
 }
 
 /* SHARE PROFILE'S CODE (2026-10-24), the head of its sheet over Share link

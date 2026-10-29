@@ -76,8 +76,16 @@ for the sheet's length (`mountPostBar`'s `thread`), native in the app: the one
 overlay `pushPostBar` keeps (`body.thread-live`), taken down in `openSheet`'s
 synchronous `onClose`. The list's foot is padded by `--native-postbar-lift`
 (app) or `--kb-lift` (web), and `setKbInset` never scrolls the page under it.
-Deleting your own comment asks in place (a red Delete in the trash's slot),
-since sheets don't stack. **The post page stays** for Read more, a tap on the
+**Your own comment has no trash: hold it** (450ms, or a right click) and it
+lifts onto a soft fill with Edit and Delete pills under its words, in place in
+the sheet AND on the post page (`wireCommentHold`, Zoe 2026-10-29). Edit puts
+the words in the comment bar under an "Editing your comment" chip
+(`postBarEdit`) and the send saves them. Edit is through
+`supabase/comment-edit.sql` (**NOT run** as of 2026-10-29; `edit_comment`
+answers PGRST202 before it, its own 28000 after), and until then the hold
+offers Delete alone (`Store.commentEditReady`). Comment hearts are 22px (were
+18). The sheet is `min(66dvh, 640px)` tall and keeps the 6px inset every sheet
+has. **The post page stays** for Read more, a tap on the
 card, Updates rows and links; a desktop (wider than 680px, not native) keeps
 the glyph a link.
 

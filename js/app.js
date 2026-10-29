@@ -5256,7 +5256,9 @@
     const u = Store.user(c.author);
     const name = esc(u ? u.name : c.author);
     const own = c.author === Store.session();
-    return `<li class="comment">` +
+    // Your own comment has no trash: holding it offers Edit and Delete
+    // (wireCommentHold, 2026-10-29, Zoe).
+    return `<li class="comment${own ? ' comment--own' : ''}" data-comment="${esc(c.id)}">` +
         `<a class="comment-avatar-link" href="#/u/${esc(encodeURIComponent(c.author))}" aria-label="${name}">` +
           avatarEl(u || { name: c.author }, { cls: 'comment-avatar' }) +
         `</a>` +
@@ -5269,11 +5271,6 @@
           `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
         `</div>` +
         commentLikeHtml(c, post) +
-        // Delete uses the same trash glyph as the post controls (right-aligned).
-        (own
-          ? `<button class="comment-delete" type="button" data-comment="${esc(c.id)}" ` +
-              `aria-label="Delete this comment" title="Delete comment">${svgIcon('trash')}</button>`
-          : '') +
       `</li>`;
   }
 
@@ -5432,16 +5429,7 @@
     // comment's heart is a <span> count that is not a control.
     panel.querySelectorAll('button.comment-like').forEach(btn =>
       wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
-    panel.querySelectorAll('.comment-delete').forEach(btn =>
-      btn.addEventListener('click', () => {
-        openSheet({
-          title: 'Delete this comment?',
-          items: [{ label: 'Delete comment', icon: 'trash', danger: true, run: async () => {
-            await Store.deleteComment(btn.dataset.comment);
-            rebuildPostCard('down');
-          } }],
-        });
-      }));
+    wireCommentHold(panel, post, (dir) => rebuildPostCard(dir));
   }
 
   /* ── A thread over the feed (2026-10-29) ───────────────────────────────────
@@ -5464,9 +5452,8 @@
      takes it in onClose rather than after the slide: a navigation from a name
      in the thread mounts the next page's bar straight away.
 
-     Sheets don't stack, so deleting your own comment asks in place: the trash
-     turns into a red Delete, a second tap takes the row, a tap anywhere else
-     puts the trash back. */
+     Sheets don't stack, so holding your own comment offers Edit and Delete
+     in place (wireCommentHold), the same as on the post page. */
   const sheetsForThreads = () =>
     nativeShell() || window.matchMedia('(max-width: 680px)').matches;
 
@@ -5499,46 +5486,132 @@
       }));
     root.querySelectorAll('button.comment-like').forEach(btn =>
       wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
-    root.querySelectorAll('.comment-delete').forEach(btn =>
-      btn.addEventListener('click', () => {
-        if (!btn.classList.contains('is-armed')) {
-          disarmThread(root);
-          btn.classList.add('is-armed');
-          btn.setAttribute('aria-label', 'Delete comment, tap again');
-          if (!btn.querySelector('.comment-delete-word'))
-            btn.insertAdjacentHTML('beforeend', '<span class="comment-delete-word">Delete</span>');
-          hapticEvent('WARNING');
-          return;
-        }
-        dropThreadComment(root, post, btn);
-      }));
+    wireCommentHold(root, post, (dir) => {
+      if (!root.isConnected) return;
+      paintThread(root, post);
+      if (dir) paintCommentCount(post, dir);
+    });
   }
 
-  function disarmThread(root) {
-    root.querySelectorAll('.comment-delete.is-armed').forEach((b) => {
-      b.classList.remove('is-armed');
-      b.setAttribute('aria-label', 'Delete this comment');
+  /* HOLD YOUR OWN COMMENT TO EDIT OR DELETE IT (2026-10-29, Zoe: "remove
+     trash icon for self comments in favor of holding down a comment"). The
+     row sinks while the hold charges, the chat's 450ms, then lifts onto a soft
+     fill with two quiet pills under its words: Edit (once comment-edit.sql is
+     live, Store.commentEditReady) and Delete. In place rather than a menu,
+     because the thread sheet is already a sheet and sheets don't stack, and
+     the post page does the same so a comment answers one way wherever it is.
+     A tap anywhere else lets go. A right click is the hold on a desktop.
+
+     `changed(dir)` redraws whatever holds the thread: 'down' after a delete,
+     nothing after an edit (the count didn't move). */
+  const COMMENT_HOLD_MS = 450;
+  let heldComment = null;     // { li, away } while a row is held
+
+  function letGoComment() {
+    if (!heldComment) return;
+    const { li, away } = heldComment;
+    heldComment = null;
+    document.removeEventListener('pointerdown', away, true);
+    li.classList.remove('is-held');
+    li.querySelector('.comment-actions')?.remove();
+  }
+
+  function wireCommentHold(root, post, changed) {
+    if (!Store.isAuthed()) return;
+    Store.probeCommentEdit();
+    root.querySelectorAll('.comment--own').forEach((li) => {
+      let timer = 0, x0 = 0, y0 = 0, fired = false;
+      const cancel = () => {
+        clearTimeout(timer);
+        timer = 0;
+        li.classList.remove('is-charging');
+      };
+      li.addEventListener('pointerdown', (e) => {
+        if (e.button || e.target.closest('button')) return;
+        fired = false; x0 = e.clientX; y0 = e.clientY;
+        li.classList.add('is-charging');
+        timer = setTimeout(() => {
+          timer = 0;
+          fired = true;
+          li.classList.remove('is-charging');
+          holdComment(li, post, changed);
+        }, COMMENT_HOLD_MS);
+      });
+      // A drag is a scroll (or the sheet's pull), not a hold.
+      li.addEventListener('pointermove', (e) => {
+        if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 8) cancel();
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => li.addEventListener(t, cancel));
+      // The lift that ends a hold must not also follow the name's link.
+      li.addEventListener('click', (e) => {
+        if (!fired) return;
+        fired = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }, true);
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (!li.classList.contains('is-held')) holdComment(li, post, changed);
+      });
     });
+  }
+
+  function holdComment(li, post, changed) {
+    letGoComment();
+    const id = li.dataset.comment;
+    const c = Store.commentsFor(post.id).find(x => x.id === id);
+    if (!c) return;
+    hapticTap('LIGHT');
+    li.classList.add('is-held');
+    const edit = Store.commentEditReady() && postBarEdit;
+    li.querySelector('.comment-body').insertAdjacentHTML('beforeend',
+      `<div class="comment-actions">` +
+        (edit ? `<button class="pill-quiet comment-act" type="button" data-act="edit">` +
+          `${svgIcon('pencil')}<span>Edit</span></button>` : '') +
+        `<button class="pill-quiet comment-act comment-act--danger" type="button" data-act="delete">` +
+          `${svgIcon('trash')}<span>Delete</span></button>` +
+      `</div>`);
+    const acts = li.querySelector('.comment-actions');
+    // Neither pill takes focus: under a raised keyboard a blur would start it
+    // dismissing and the tap would land wherever the row had moved to.
+    acts.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', (e) => e.preventDefault()));
+    acts.querySelector('[data-act="edit"]')?.addEventListener('click', () => {
+      letGoComment();
+      // Straight into the bar, inside the tap, so iOS raises the keys.
+      if (postBarEdit) postBarEdit(c, () => changed());
+    });
+    acts.querySelector('[data-act="delete"]').addEventListener('click', () => {
+      letGoComment();
+      hapticEvent('WARNING');
+      dropComment(li, id, changed);
+    });
+    const away = (e) => { if (!acts.contains(e.target)) letGoComment(); };
+    heldComment = { li, away };
+    document.addEventListener('pointerdown', away, true);
   }
 
   // The row folds away first and the write follows, so the tap is answered on
   // the frame it lands. A refusal puts the thread back as the cache has it.
-  async function dropThreadComment(root, post, btn) {
-    const li = btn.closest('.comment');
-    btn.disabled = true;
-    if (li && !prefersReduced()) {
+  async function dropComment(li, id, changed) {
+    if (!prefersReduced()) {
       const gap = parseFloat(getComputedStyle(li.parentElement).rowGap) || 0;
       li.style.overflow = 'hidden';
+      li.style.pointerEvents = 'none';
       li.animate(
         [{ height: li.offsetHeight + 'px', opacity: 1, marginBottom: '0px' },
          { height: '0px', opacity: 0, marginBottom: -gap + 'px' }],
         { duration: 260, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)', fill: 'forwards' });
     }
-    const res = await Store.deleteComment(btn.dataset.comment).catch(() => null);
-    if (!root.isConnected) return;
-    if (!res || !res.ok) toast((res && res.error) || 'Couldn’t delete, try again.');
-    else paintCommentCount(post, 'down');
-    setTimeout(() => { if (root.isConnected) paintThread(root, post); }, prefersReduced() ? 0 : 260);
+    const [res] = await Promise.all([
+      Store.deleteComment(id).catch(() => null),
+      new Promise(ok => setTimeout(ok, prefersReduced() ? 0 : 260)),
+    ]);
+    if (!res || !res.ok) {
+      toast((res && res.error) || 'Couldn’t delete, try again.');
+      changed();
+      return;
+    }
+    changed('down');
   }
 
   function openThreadSheet(post) {
@@ -5578,12 +5651,9 @@
         list = scrim.querySelector('.sheet-items');
         root = scrim.querySelector('.thread');
         paintThread(root, post);
-        // An armed Delete goes back to a trash on any tap that isn't it.
-        scrim.addEventListener('pointerdown', (e) => {
-          if (!e.target.closest('.comment-delete.is-armed')) disarmThread(root);
-        }, true);
       },
       onClose: () => {
+        letGoComment();
         threadSheet = null;
         document.body.classList.remove('thread-live');
         resetPostBar();
@@ -9611,10 +9681,14 @@
   const postBarEl = () => document.getElementById('postbar');
   // Torn down with the bar. Null whenever no bar is mounted.
   let postBarKeyboardOff = null;
+  /* Puts one of your comments into the bar to be edited (holdComment's Edit):
+     (comment, done) while a comment bar is mounted, null otherwise. */
+  let postBarEdit = null;
 
   function resetPostBar() {
     postBarKeyboardOff?.();
     postBarKeyboardOff = null;
+    postBarEdit = null;
     // The native bar's hooks go with the bar they were wired for. sync() below
     // is what actually takes it off the screen (and the keyboard with it); this
     // is so a late event from the one that is leaving can't land on the next.
@@ -9836,6 +9910,9 @@
     wireMentions(input);
     // The picture waiting to go with the words: { src, dims } off readCommentPhoto.
     let photo = null;
+    // The comment being edited, while one is: { id, image, done }. The bar is
+    // the same bar; its send saves the words instead of posting new ones.
+    let editing = null;
 
     // One line at rest, growing to fit (like the composer and like the box this
     // replaced), so a long comment wraps into view instead of scrolling off the
@@ -9851,7 +9928,7 @@
     // `.is-empty` on the form is what moves the photo button into the disc's
     // slot while the disc isn't there.
     const syncSend = () => {
-      const has = !!input.value.trim() || !!photo;
+      const has = !!input.value.trim() || !!photo || !!(editing && editing.image);
       send.disabled = !has;
       send.classList.toggle('is-idle', !has);
       send.setAttribute('aria-hidden', String(!has));
@@ -9914,6 +9991,47 @@
       if (f) takePhoto(f);
     });
 
+    /* ── Editing a comment you wrote (holdComment's Edit) ─────────────────────
+       The words go into the field with the caret at their end, a chip over the
+       bar says so (the chat's reply chip, worn the same way), and the photo
+       button stands down: an edit changes the words, never the picture. The
+       chip's X, the face and a discard all end it with the field emptied. */
+    const sendLabel = send.getAttribute('aria-label');
+    const editChip = document.createElement('div');
+    editChip.className = 'postbar-attach postbar-reply postbar-editing';
+    editChip.hidden = true;
+    bar.appendChild(editChip);
+    function endEdit() {
+      if (!editing) return;
+      editing = null;
+      editChip.hidden = true;
+      editChip.innerHTML = '';
+      pick.disabled = false;
+      send.setAttribute('aria-label', sendLabel);
+    }
+    if (!chat) postBarEdit = (c, done) => {
+      editing = { id: c.id, image: c.image, done };
+      setPhoto(null);
+      pick.disabled = true;
+      send.setAttribute('aria-label', 'Save edit');
+      editChip.innerHTML =
+        `<div class="postbar-reply-chip">` +
+          `<span class="postbar-reply-text">Editing your comment</span>` +
+          `<button class="postbar-reply-x" type="button" aria-label="Cancel edit">${svgIcon('close')}</button>` +
+        `</div>`;
+      editChip.hidden = false;
+      const x = editChip.querySelector('.postbar-reply-x');
+      x.addEventListener('mousedown', (e) => e.preventDefault());
+      x.addEventListener('click', discard);
+      input.value = c.text || '';
+      syncSend();
+      autoGrow();
+      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+      try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not selectable */ }
+      NativeChrome.postBarText(input.value, input.value.length, true);
+      NativeChrome.sync();
+    };
+
     /* ── Backing out ──────────────────────────────────────────────────────────
        Two ways down off this bar, and they mean different things.
 
@@ -9935,6 +10053,7 @@
       face.setAttribute('aria-hidden', String(!typing));
     };
     const discard = () => {
+      endEdit();
       input.value = '';
       setPhoto(null);
       syncSend();
@@ -10051,6 +10170,7 @@
     // and the keyboard already down by the time this arrives; what is left is
     // the web's copy of the words.
     NativeChrome.postBarHooks.discard = () => {
+      endEdit();
       input.value = '';
       setPhoto(null);
       syncSend();
@@ -10069,6 +10189,26 @@
       e.preventDefault();
       if (send.disabled) return;                    // empty, or a submit already in flight
       send.disabled = true;                         // debounce: no double-post on a fast double-tap
+      if (editing) {
+        const was = editing;
+        bar.classList.add('is-sending');
+        const res = await Store.editComment(was.id, input.value).catch(() => null);
+        bar.classList.remove('is-sending');
+        if (res && res.ok) {
+          hapticTap('LIGHT');
+          endEdit();
+          input.value = '';
+          syncSend();
+          autoGrow();
+          input.blur();
+          NativeChrome.postBarText('', 0, false);
+          was.done(res);
+          return;
+        }
+        toast((res && res.error) || 'Couldn’t save your edit, try again.');
+        syncSend();
+        return;
+      }
       // A picture has to upload before the row is written, which is long enough
       // to see, so the tray dims and neither it nor the photo button can change
       // what is already on its way.

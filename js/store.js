@@ -2296,6 +2296,39 @@ const Store = (() => {
     return { ok: true };
   }
 
+  // ── Editing your own comment (supabase/comment-edit.sql, 2026-10-29) ────────
+  // Holding your comment offers Edit beside Delete, and only once the function
+  // is live: asked once a session with a comment that cannot exist, which the
+  // live function refuses in its own words (42501) and a database without it
+  // answers PGRST202. Until then the hold offers Delete alone.
+  let commentEdit = null, commentEditAsking = false;
+  function probeCommentEdit() {
+    if (commentEdit !== null || commentEditAsking || !state.session) return;
+    commentEditAsking = true;
+    sb.rpc('edit_comment', { p_comment: '00000000-0000-0000-0000-000000000000', p_body: 'x' })
+      .then(({ error }) => { commentEdit = !error || !isMissing(error); })
+      .catch(() => {})
+      .finally(() => { commentEditAsking = false; });
+  }
+  const commentEditReady = () => commentEdit === true;
+
+  async function editComment(id, text) {
+    const me = state.session;
+    const c = state.comments.find(x => x.id === id);
+    if (!c || c.author !== me) return { ok: false, error: 'That comment isn’t yours to edit.' };
+    text = String(text || '').trim();
+    if (!text && !c.image) return { ok: false, error: 'Say something first.' };
+    if (text === c.text) return { ok: true, comment: c };
+    const { error } = await sb.rpc('edit_comment', { p_comment: id, p_body: text });
+    if (error) {
+      if (isMissing(error)) commentEdit = false;
+      return { ok: false, error: 'Couldn’t save your edit, try again.' };
+    }
+    const edited = { ...c, text };
+    write('comments', cs => cs.map(x => (x.id === id ? edited : x)));
+    return { ok: true, comment: edited };
+  }
+
   // ── Comment likes (the same private signal, to whoever wrote the comment) ────
   // Every rule a post like has, one level down. RLS hands me every like on a
   // comment I wrote and only my own row on anyone else's, so the count is
@@ -4108,6 +4141,7 @@ const Store = (() => {
     // Reposts
     createRepost, undoRepost, originalOf, repostable, repostedByMe, myRepostOf,
     canRepost, quoteAudience, repostRulesReady,
+    probeCommentEdit, commentEditReady, editComment,
     // Comments
     commentsFor, addComment, deleteComment,
     // Likes
