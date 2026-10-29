@@ -237,6 +237,11 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
             field.trailingAnchor.constraint(equalTo: well.trailingAnchor),
         ])
         paintTones()
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) {
+                (sheet: TriaStickerSheet, _: UITraitCollection) in sheet.paintTones()
+            }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -256,9 +261,12 @@ final class TriaStickerSheet: UIViewController, UITextViewDelegate,
         dash.path = UIBezierPath(roundedRect: well.bounds.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 24).cgPath
     }
 
+    // iOS 15 and 16 only; 17 on hears it through registerForTraitChanges in
+    // viewDidLoad. Marked deprecated itself so the super call doesn't warn.
+    @available(iOS, deprecated: 17.0)
     override func traitCollectionDidChange(_ previous: UITraitCollection?) {
         super.traitCollectionDidChange(previous)
-        paintTones()
+        if #unavailable(iOS 17.0) { paintTones() }
     }
     private func paintTones() {
         dash.strokeColor = Self.rule.resolvedColor(with: traitCollection).cgColor
