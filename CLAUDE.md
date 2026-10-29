@@ -77,13 +77,21 @@ overlay `pushPostBar` keeps (`body.thread-live`), taken down in `openSheet`'s
 synchronous `onClose`. The list's foot is padded by `--native-postbar-lift`
 (app) or `--kb-lift` (web), and `setKbInset` never scrolls the page under it.
 **Your own comment has no trash: hold it** (450ms, or a right click) and it
-lifts onto a soft fill with Edit and Delete pills under its words, in place in
-the sheet AND on the post page (`wireCommentHold`, Zoe 2026-10-29). Edit puts
+lifts onto a soft fill with Edit and Delete as equal, centred halves under the
+row, opening on a grid-rows tween, in place in the sheet AND on the post page
+(`wireCommentHold`, delegated once per thread root, Zoe 2026-10-29). The click
+that ends a hold is swallowed only in a 350ms window after the lift: iOS often
+sends none after a long press, and a flag waiting for it ate the next tap
+("I have to press it twice"). **An activity's headcount in a feed raises Who's
+going** (the host's Guest list) the same way (`openGoingSheet`), its answers
+shared with the page through `goingBodyHtml` and `wireRsvp`, which lights the
+tapped answer before the write lands. `openSheet` runs `wire` last and inside a
+try, so a throwing sheet can never leave `sheetOpen` stuck and every menu dead. Edit puts
 the words in the comment bar under an "Editing your comment" chip
 (`postBarEdit`) and the send saves them. Edit is through
-`supabase/comment-edit.sql` (**NOT run** as of 2026-10-29; `edit_comment`
-answers PGRST202 before it, its own 28000 after), and until then the hold
-offers Delete alone (`Store.commentEditReady`). Comment hearts are 22px (were
+`supabase/comment-edit.sql` (**confirmed run** 2026-10-29: anon
+`edit_comment` answers its own 28000 "You need to be signed in."); were it
+ever missing again, the hold offers Delete alone (`Store.commentEditReady`). Comment hearts are 22px (were
 18). The sheet is `min(66dvh, 640px)` tall and keeps the 6px inset every sheet
 has. **The post page stays** for Read more, a tap on the
 card, Updates rows and links; a desktop (wider than 680px, not native) keeps

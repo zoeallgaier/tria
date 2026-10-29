@@ -3377,9 +3377,15 @@
   };
 
   function goingPanelHtml(post, full) {
-    if (!full) return '';
-    if (post.type !== 'activity') return '';
-    if (!canJoin(post)) return '';
+    if (!full || post.type !== 'activity' || !canJoin(post)) return '';
+    return `<div class="going-panel going-panel--full post-pane${paneOpen('going')}" data-pane="going">` +
+        `<div class="comments-inner"><div class="comments-content">${goingBodyHtml(post)}</div></div>` +
+      `</div>`;
+  }
+
+  // Who's going and your answer: the post page's Going pane and the feed's
+  // Going sheet draw the same thing.
+  function goingBodyHtml(post) {
     const host = post.author === Store.session();
     const going = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).map(h => h.user);
 
@@ -3454,15 +3460,7 @@
     const empty = host
       ? `<p class="likers-empty">Nobody to invite yet. Add some friends and they’ll show up here.</p>`
       : `<p class="likers-empty">No one’s going yet.</p>`;
-    return `<div class="going-panel going-panel--full post-pane${paneOpen('going')}" data-pane="going">` +
-        `<div class="comments-inner">` +
-          `<div class="comments-content">` +
-            note +
-            out +
-            (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty) +
-          `</div>` +
-        `</div>` +
-      `</div>`;
+    return note + out + (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty);
   }
 
   // A poll's live countdown, said plainly. Coarse on purpose (minutes, then
@@ -4843,23 +4841,14 @@
   function wireGoing(el, post, opts, own = post) {
     // The headcount only shows (see goingControlHtml). In a feed it is an
     // anchor and needs nothing; on the page it switches to the list.
-    const btn = el.querySelector('button.card-attendees');
-    btn?.addEventListener('click', () => setPostPane('going', el));
+    el.querySelector('button.card-attendees')?.addEventListener('click', () => setPostPane('going', el));
+    // In a feed, a phone raises who's going as a sheet (openGoingSheet).
+    asSheet(el.querySelector('a.card-attendees'), () => openGoingSheet(post));
 
-    // Going / Maybe / Can't go, on the page. Tapping the answer you already gave
-    // takes it back. An answer can change the count, the glyph and the list, so
-    // the card is rebuilt in place — no rise flash, same pattern as a comment.
-    const choices = [...el.querySelectorAll('.rsvp-opt')];
-    choices.forEach(opt => opt.addEventListener('click', async () => {
-      const was = Store.myRsvp(post.id);
-      const next = was === opt.dataset.rsvp ? null : opt.dataset.rsvp;
-      choices.forEach(b => { b.disabled = true; });
-      const res = await Store.setRsvp(post.id, next).catch(() => null);
-      choices.forEach(b => { b.disabled = false; });   // on every path
-      if (!res || !res.ok) { toast('Couldn’t save that, try again.'); return; }
-      // Going is the one answer that commits you to a place and a time, so it's
-      // the one that gets the heavier knock.
-      hapticTap(next === 'going' ? 'MEDIUM' : 'LIGHT');
+    // Going / Maybe / Can't go, on the page. An answer can change the count,
+    // the glyph and the list, so the card is rebuilt in place — no rise flash,
+    // same pattern as a comment.
+    wireRsvp(el, post, (was, next) => {
       const fresh = makeCard(own, opts);
       fresh.style.animation = 'none';
       // The count is only the yeses, so it rolls only when you cross into or out
@@ -4869,6 +4858,31 @@
       el.replaceWith(fresh);
       // Going earns the RSVP's own reward beat (see celebrateGoing).
       if (next === 'going') celebrateGoing(fresh);
+    });
+  }
+
+  /* The three answers, on the post page and in the Going sheet. The tapped
+     pill lights on the tap and the others go dark, so the answer is seen
+     before the write lands; a refusal puts them back. Tapping the answer you
+     already gave takes it back. `after(was, next)` redraws on success. */
+  function wireRsvp(scope, post, after) {
+    const choices = [...scope.querySelectorAll('.rsvp-opt')];
+    const light = (key) => choices.forEach((b) => {
+      b.classList.toggle('is-on', b.dataset.rsvp === key);
+      b.setAttribute('aria-pressed', String(b.dataset.rsvp === key));
+    });
+    choices.forEach(opt => opt.addEventListener('click', async () => {
+      const was = Store.myRsvp(post.id);
+      const next = was === opt.dataset.rsvp ? null : opt.dataset.rsvp;
+      light(next);
+      choices.forEach(b => { b.disabled = true; });
+      const res = await Store.setRsvp(post.id, next).catch(() => null);
+      choices.forEach(b => { b.disabled = false; });   // on every path
+      if (!res || !res.ok) { light(was); toast('Couldn’t save that, try again.'); return; }
+      // Going is the one answer that commits you to a place and a time, so it's
+      // the one that gets the heavier knock.
+      hapticTap(next === 'going' ? 'MEDIUM' : 'LIGHT');
+      after(was, next);
     }));
   }
 
@@ -5068,11 +5082,7 @@
       if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => setPostPane('likers', el));
       // In a feed the anchor stays the way there on a desktop (and keeps its
       // preview and middle click); on a phone it raises the list as a sheet.
-      if (btn.tagName === 'A') btn.addEventListener('click', (e) => {
-        if (!sheetsForThreads()) return;
-        e.preventDefault();
-        openLikesSheet(post);
-      });
+      if (btn.tagName === 'A') asSheet(btn, () => openLikesSheet(post));
       return;
     }
 
@@ -5393,12 +5403,7 @@
   function wireComments(el, post) {
     // A feed card's glyph: a sheet on a phone, the post's page on a desktop.
     // Its own row's anchor only, never a quoted card's (it has no row).
-    const link = el.querySelector('.card-actions a.card-comment');
-    if (link && post) link.addEventListener('click', (e) => {
-      if (!sheetsForThreads()) return;
-      e.preventDefault();
-      openThreadSheet(post);
-    });
+    if (post) asSheet(el.querySelector('.card-actions a.card-comment'), () => openThreadSheet(post));
     const panel = el.querySelector('.comments-panel');
     if (!panel) return;
     // This panel only ever exists on the post's page — a feed card has none, so
@@ -5418,17 +5423,10 @@
     // form in here — so this function wires the thread's own controls and
     // nothing else. Guard on the PANEL, never on a form: there is no form here
     // to find, and a `if (!form) return;` would take the delete rows with it.
-    panel.querySelectorAll('.comment-photo').forEach(btn =>
-      btn.addEventListener('click', () => {
-        const img = btn.querySelector('img');
-        openLightbox(img.currentSrc || img.src, '', false, img);
-      }));
     // A comment's heart flips in place like the post's, and for the post's
     // reason: the count belongs to the comment's author, so nothing of mine
-    // changes but the one button. No card rebuild. `button.` because your own
-    // comment's heart is a <span> count that is not a control.
-    panel.querySelectorAll('button.comment-like').forEach(btn =>
-      wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
+    // changes but the one button. No card rebuild.
+    wireThreadRows(panel, post);
     wireCommentHold(panel, post, (dir) => rebuildPostCard(dir));
   }
 
@@ -5457,6 +5455,15 @@
   const sheetsForThreads = () =>
     nativeShell() || window.matchMedia('(max-width: 680px)').matches;
 
+  // A feed's link that a phone answers with a sheet instead. The anchor stays
+  // an anchor, so a desktop, a middle click and a long-press preview still
+  // reach the post's page.
+  const asSheet = (a, open) => a?.addEventListener('click', (e) => {
+    if (!sheetsForThreads()) return;
+    e.preventDefault();
+    open();
+  });
+
   const shownComments = (post) =>
     Store.commentsFor(post.id).filter(c => !Blocks.has(c.author));
 
@@ -5465,20 +5472,16 @@
   // markup, so the next quiet refresh rebuilds it from the cache, which agrees.
   function paintCommentCount(post, dir) {
     const n = shownComments(post).length;
-    const href = postRoute(post);
-    document.querySelectorAll('#view a.card-comment').forEach((a) => {
-      if (a.getAttribute('href') !== href) return;
+    document.querySelectorAll(`#view a.card-comment[href="${postRoute(post)}"]`).forEach((a) => {
       a.innerHTML = svgIcon('comment') + (n ? `<span class="card-comment-count">${n}</span>` : '');
       a.setAttribute('aria-label', n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments');
       if (dir) odoTick(a.querySelector('.card-comment-count'), dir);
     });
   }
 
-  function paintThread(root, post) {
-    const list = shownComments(post);
-    root.innerHTML = list.length
-      ? `<ul class="comments-list thread-list">${list.map(c => commentItemHtml(c, post)).join('')}</ul>`
-      : `<p class="thread-empty">No comments yet.</p>`;
+  // A thread's per-row controls, wherever it is drawn (the post page's panel,
+  // the sheet). The hearts are per button because each holds its own write.
+  function wireThreadRows(root, post) {
     root.querySelectorAll('.comment-photo').forEach(btn =>
       btn.addEventListener('click', () => {
         const img = btn.querySelector('img');
@@ -5486,132 +5489,168 @@
       }));
     root.querySelectorAll('button.comment-like').forEach(btn =>
       wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
-    wireCommentHold(root, post, (dir) => {
-      if (!root.isConnected) return;
-      paintThread(root, post);
-      if (dir) paintCommentCount(post, dir);
-    });
+  }
+
+  function paintThread(root, post) {
+    letGoComment();
+    const list = shownComments(post);
+    root.innerHTML = list.length
+      ? `<ul class="comments-list thread-list">${list.map(c => commentItemHtml(c, post)).join('')}</ul>`
+      : `<p class="thread-empty">No comments yet.</p>`;
+    wireThreadRows(root, post);
   }
 
   /* HOLD YOUR OWN COMMENT TO EDIT OR DELETE IT (2026-10-29, Zoe: "remove
      trash icon for self comments in favor of holding down a comment"). The
      row sinks while the hold charges, the chat's 450ms, then lifts onto a soft
-     fill with two quiet pills under its words: Edit (once comment-edit.sql is
-     live, Store.commentEditReady) and Delete. In place rather than a menu,
-     because the thread sheet is already a sheet and sheets don't stack, and
-     the post page does the same so a comment answers one way wherever it is.
-     A tap anywhere else lets go. A right click is the hold on a desktop.
+     fill and opens two quiet pills under it, equal halves of the row (Zoe:
+     "a nice grid system"): Edit (once comment-edit.sql is live,
+     Store.commentEditReady) and Delete. In place rather than a menu, because
+     the thread sheet is already a sheet and sheets don't stack, and the post
+     page does the same so a comment answers one way wherever it is. A tap
+     anywhere else lets go; a right click is the hold on a desktop.
+
+     DELEGATED from the thread's root, once per root, so a repainted thread
+     needs nothing rewired. The click that ends a hold is swallowed only in a
+     short window after the lift: iOS often sends no click after a long press,
+     and a flag that waited for one ate the next tap, Edit or Delete (Zoe:
+     "I have to press it twice").
 
      `changed(dir)` redraws whatever holds the thread: 'down' after a delete,
-     nothing after an edit (the count didn't move). */
+     nothing after an edit or a refusal. */
   const COMMENT_HOLD_MS = 450;
-  let heldComment = null;     // { li, away } while a row is held
+  let heldComment = null;     // { li, acts, away } while a row is held
 
   function letGoComment() {
     if (!heldComment) return;
-    const { li, away } = heldComment;
+    const { li, acts, away } = heldComment;
     heldComment = null;
     document.removeEventListener('pointerdown', away, true);
     li.classList.remove('is-held');
-    li.querySelector('.comment-actions')?.remove();
+    acts.classList.remove('open');
+    acts.inert = true;
+    setTimeout(() => acts.remove(), prefersReduced() ? 0 : 300);
   }
 
   function wireCommentHold(root, post, changed) {
-    if (!Store.isAuthed()) return;
+    if (!Store.isAuthed() || root.dataset.hold) return;
+    root.dataset.hold = '1';
     Store.probeCommentEdit();
-    root.querySelectorAll('.comment--own').forEach((li) => {
-      let timer = 0, x0 = 0, y0 = 0, fired = false;
-      const cancel = () => {
-        clearTimeout(timer);
-        timer = 0;
+    let press = null, swallowUntil = 0;
+    const cancel = () => {
+      if (!press) return;
+      clearTimeout(press.timer);
+      press.li.classList.remove('is-charging');
+      press = null;
+    };
+    root.addEventListener('pointerdown', (e) => {
+      cancel();
+      const li = !e.button && e.target.closest('.comment--own');
+      if (!li || e.target.closest('button, .comment-actions')) return;
+      li.classList.add('is-charging');
+      press = { li, x: e.clientX, y: e.clientY, timer: setTimeout(() => {
+        press = null;
         li.classList.remove('is-charging');
-      };
-      li.addEventListener('pointerdown', (e) => {
-        if (e.button || e.target.closest('button')) return;
-        fired = false; x0 = e.clientX; y0 = e.clientY;
-        li.classList.add('is-charging');
-        timer = setTimeout(() => {
-          timer = 0;
-          fired = true;
-          li.classList.remove('is-charging');
-          holdComment(li, post, changed);
-        }, COMMENT_HOLD_MS);
-      });
-      // A drag is a scroll (or the sheet's pull), not a hold.
-      li.addEventListener('pointermove', (e) => {
-        if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 8) cancel();
-      });
-      ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => li.addEventListener(t, cancel));
+        swallowUntil = performance.now() + 1500;   // until the lift, below
+        holdComment(li, post);
+      }, COMMENT_HOLD_MS) };
+    });
+    // A drag is a scroll (or the sheet's pull), not a hold.
+    root.addEventListener('pointermove', (e) => {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) cancel();
+    });
+    const lift = () => {
+      cancel();
+      if (swallowUntil > performance.now()) swallowUntil = performance.now() + 350;
+    };
+    root.addEventListener('pointerup', lift);
+    root.addEventListener('pointercancel', lift);
+    root.addEventListener('click', (e) => {
+      const act = e.target.closest('.comment-act');
+      if (act) { runCommentAct(act, post, changed); return; }
       // The lift that ends a hold must not also follow the name's link.
-      li.addEventListener('click', (e) => {
-        if (!fired) return;
-        fired = false;
+      if (performance.now() < swallowUntil) {
+        swallowUntil = 0;
         e.preventDefault();
         e.stopPropagation();
-      }, true);
-      li.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        if (!li.classList.contains('is-held')) holdComment(li, post, changed);
-      });
+      }
+    }, true);
+    root.addEventListener('contextmenu', (e) => {
+      const li = e.target.closest('.comment--own');
+      if (!li) return;
+      e.preventDefault();
+      holdComment(li, post);
     });
   }
 
-  function holdComment(li, post, changed) {
+  function holdComment(li, post) {
+    if (heldComment && heldComment.li === li) return;
     letGoComment();
-    const id = li.dataset.comment;
-    const c = Store.commentsFor(post.id).find(x => x.id === id);
-    if (!c) return;
+    if (!Store.commentsFor(post.id).some(x => x.id === li.dataset.comment)) return;
     hapticTap('LIGHT');
+    const pill = (act, icon, label) =>
+      `<button class="pill-quiet comment-act comment-act--${act}" type="button" data-act="${act}">` +
+        `${svgIcon(icon)}<span>${label}</span></button>`;
+    li.insertAdjacentHTML('beforeend',
+      `<div class="comment-actions"><div class="comment-actions-in">` +
+        (Store.commentEditReady() && postBarEdit ? pill('edit', 'pencil', 'Edit') : '') +
+        pill('delete', 'trash', 'Delete') +
+      `</div></div>`);
+    const acts = li.lastElementChild;
+    // No pill takes focus: under raised keys a blur starts them dismissing and
+    // the tap lands wherever the row has moved to.
+    acts.addEventListener('mousedown', (e) => e.preventDefault());
     li.classList.add('is-held');
-    const edit = Store.commentEditReady() && postBarEdit;
-    li.querySelector('.comment-body').insertAdjacentHTML('beforeend',
-      `<div class="comment-actions">` +
-        (edit ? `<button class="pill-quiet comment-act" type="button" data-act="edit">` +
-          `${svgIcon('pencil')}<span>Edit</span></button>` : '') +
-        `<button class="pill-quiet comment-act comment-act--danger" type="button" data-act="delete">` +
-          `${svgIcon('trash')}<span>Delete</span></button>` +
-      `</div>`);
-    const acts = li.querySelector('.comment-actions');
-    // Neither pill takes focus: under a raised keyboard a blur would start it
-    // dismissing and the tap would land wherever the row had moved to.
-    acts.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', (e) => e.preventDefault()));
-    acts.querySelector('[data-act="edit"]')?.addEventListener('click', () => {
-      letGoComment();
-      // Straight into the bar, inside the tap, so iOS raises the keys.
-      if (postBarEdit) postBarEdit(c, () => changed());
-    });
-    acts.querySelector('[data-act="delete"]').addEventListener('click', () => {
-      letGoComment();
+    void acts.offsetHeight;                 // so the opening below is a transition
+    acts.classList.add('open');
+    const away = (e) => { if (!acts.contains(e.target)) letGoComment(); };
+    heldComment = { li, acts, away };
+    document.addEventListener('pointerdown', away, true);
+  }
+
+  function runCommentAct(act, post, changed) {
+    const li = act.closest('.comment');
+    const id = li.dataset.comment;
+    letGoComment();
+    if (act.dataset.act === 'delete') {
       hapticEvent('WARNING');
       dropComment(li, id, changed);
+      return;
+    }
+    const c = Store.commentsFor(post.id).find(x => x.id === id);
+    if (!c || !postBarEdit) return;
+    // Straight into the bar, inside the tap, so iOS raises the keys. The row
+    // keeps the fill while its words are in the bar, and glows once saved.
+    li.classList.add('is-editing');
+    postBarEdit(c, {
+      end: () => li.classList.remove('is-editing'),
+      done: () => {
+        changed();
+        document.querySelector(`.comment[data-comment="${id}"]`)?.classList.add('comment--saved');
+      },
     });
-    const away = (e) => { if (!acts.contains(e.target)) letGoComment(); };
-    heldComment = { li, away };
-    document.addEventListener('pointerdown', away, true);
   }
 
   // The row folds away first and the write follows, so the tap is answered on
   // the frame it lands. A refusal puts the thread back as the cache has it.
   async function dropComment(li, id, changed) {
-    if (!prefersReduced()) {
+    const fold = prefersReduced() ? 0 : 260;
+    if (fold) {
       const gap = parseFloat(getComputedStyle(li.parentElement).rowGap) || 0;
       li.style.overflow = 'hidden';
       li.style.pointerEvents = 'none';
       li.animate(
         [{ height: li.offsetHeight + 'px', opacity: 1, marginBottom: '0px' },
          { height: '0px', opacity: 0, marginBottom: -gap + 'px' }],
-        { duration: 260, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)', fill: 'forwards' });
+        { duration: fold, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)', fill: 'forwards' });
     }
     const [res] = await Promise.all([
       Store.deleteComment(id).catch(() => null),
-      new Promise(ok => setTimeout(ok, prefersReduced() ? 0 : 260)),
+      new Promise(ok => setTimeout(ok, fold)),
     ]);
-    if (!res || !res.ok) {
-      toast((res && res.error) || 'Couldn’t delete, try again.');
-      changed();
-      return;
-    }
-    changed('down');
+    if (res && res.ok) { changed('down'); return; }
+    toast((res && res.error) || 'Couldn’t delete, try again.');
+    changed();
   }
 
   function openThreadSheet(post) {
@@ -5620,26 +5659,11 @@
     // its old job. No route that draws a feed has one today.
     if (document.body.classList.contains('postbar-live')) { go(postRoute(post)); return; }
     let list = null, root = null;
-    const atFoot = () => !!list && list.scrollHeight > list.clientHeight
-      && list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
-    const toFoot = () => {
-      if (!list) return;
-      list.scrollTo({ top: list.scrollHeight, behavior: prefersReduced() ? 'auto' : 'smooth' });
-    };
-    const thread = {
-      // A reader at the end of the thread stays there as the keys come up and
-      // the list's foot grows under them; anyone reading further up keeps
-      // their place, since they may be answering the comment they are on.
-      onFocus: () => { if (atFoot()) setTimeout(toFoot, 360); },
-      onPosted: () => {
-        if (!root || !root.isConnected) return;
-        paintThread(root, post);
-        paintCommentCount(post, 'up');
-        const mine = [...root.querySelectorAll('.thread-list > .comment')].pop();
-        if (mine) mine.classList.add('comment--new');
-        requestAnimationFrame(toFoot);
-        celebrateComment(mine, burstTypeOf(post));
-      },
+    const toFoot = () => list?.scrollTo({ top: list.scrollHeight, behavior: prefersReduced() ? 'auto' : 'smooth' });
+    const repaint = (dir) => {
+      if (!root?.isConnected) return;
+      paintThread(root, post);
+      if (dir) paintCommentCount(post, dir);
     };
     threadSheet = post;
     document.body.classList.add('thread-live');
@@ -5651,6 +5675,7 @@
         list = scrim.querySelector('.sheet-items');
         root = scrim.querySelector('.thread');
         paintThread(root, post);
+        wireCommentHold(root, post, repaint);
       },
       onClose: () => {
         letGoComment();
@@ -5659,7 +5684,23 @@
         resetPostBar();
       },
     });
-    mountPostBar(post, null, thread);
+    mountPostBar(post, null, {
+      // A reader at the end of the thread stays there as the keys come up and
+      // the list's foot grows under them; anyone reading further up keeps
+      // their place, since they may be answering the comment they are on.
+      onFocus: () => {
+        if (list && list.scrollHeight > list.clientHeight
+          && list.scrollTop + list.clientHeight >= list.scrollHeight - 8) setTimeout(toFoot, 360);
+      },
+      onPosted: () => {
+        repaint('up');
+        const mine = root && [...root.querySelectorAll('.thread-list > .comment')].pop();
+        if (!mine) return;
+        mine.classList.add('comment--new');
+        requestAnimationFrame(toFoot);
+        celebrateComment(mine, burstTypeOf(post));
+      },
+    });
   }
 
   // The author's own heart, in a feed: who liked it, private as ever (only
@@ -5668,10 +5709,43 @@
     const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
     openSheet({
       title: 'Likes',
-      scrimClass: 'sheet-scrim--likes',
+      scrimClass: 'sheet-scrim--people',
       head: list.length
-        ? `<ul class="likers-list likes-sheet-list">${list.map(l => likerItemHtml(l)).join('')}</ul>`
+        ? `<ul class="likers-list">${list.map(l => likerItemHtml(l)).join('')}</ul>`
         : `<p class="thread-empty">No likes yet, and that’s just fine.</p>`,
+    });
+  }
+
+  /* An activity's headcount, in a feed: the post page's Going pane as a sheet
+     (2026-10-29, Zoe: the same feature "for activities"). Who's going for a
+     guest with their three answers on top, the guest list for the host. An
+     answer repaints the sheet and every feed card's headcount in place. */
+  function openGoingSheet(post) {
+    openSheet({
+      title: post.author === Store.session() ? 'Guest list' : 'Who’s going',
+      scrimClass: 'sheet-scrim--people',
+      head: `<div class="going-sheet"></div>`,
+      wire: (scrim) => paintGoing(scrim.querySelector('.going-sheet'), post),
+    });
+  }
+
+  function paintGoing(root, post) {
+    root.innerHTML = goingBodyHtml(post);
+    wireRsvp(root, post, (was, next) => {
+      if (root.isConnected) paintGoing(root, post);
+      paintHeadcount(post, was, next);
+    });
+  }
+
+  function paintHeadcount(post, was, next) {
+    const n = Store.headcountFor(post.id).filter(h => !Blocks.has(h.user)).length;
+    const crossed = (was === 'going') !== (next === 'going');
+    document.querySelectorAll(`#view a.card-attendees[href="${postRoute(post, 'going')}"]`).forEach((a) => {
+      a.classList.toggle('going', next === 'going' && !isPastActivity(post));
+      const count = a.querySelector('.card-attendees-count');
+      if (count) count.textContent = n;
+      if (crossed) odoTick(count, next === 'going' ? 'up' : 'down');
+      if (next === 'going') celebrateGoing(a.closest('.card') || a);
     });
   }
 
@@ -9681,8 +9755,9 @@
   const postBarEl = () => document.getElementById('postbar');
   // Torn down with the bar. Null whenever no bar is mounted.
   let postBarKeyboardOff = null;
-  /* Puts one of your comments into the bar to be edited (holdComment's Edit):
-     (comment, done) while a comment bar is mounted, null otherwise. */
+  /* Puts one of your comments into the bar to be edited (runCommentAct):
+     (comment, { done, end }) while a comment bar is mounted, null otherwise.
+     `end` runs however the edit finishes, `done` only when it saved. */
   let postBarEdit = null;
 
   function resetPostBar() {
@@ -10003,14 +10078,16 @@
     bar.appendChild(editChip);
     function endEdit() {
       if (!editing) return;
+      editing.end?.();
       editing = null;
       editChip.hidden = true;
       editChip.innerHTML = '';
       pick.disabled = false;
       send.setAttribute('aria-label', sendLabel);
     }
-    if (!chat) postBarEdit = (c, done) => {
-      editing = { id: c.id, image: c.image, done };
+    if (!chat) postBarEdit = (c, { done, end }) => {
+      endEdit();
+      editing = { id: c.id, image: c.image, done, end };
       setPhoto(null);
       pick.disabled = true;
       send.setAttribute('aria-label', 'Save edit');
@@ -11189,9 +11266,13 @@
         if (it && it.now && it.run) { it.run(); close(); return; }
         close(() => { if (it && it.run) it.run(); });
       }));
-    if (wire) wire(scrim, close);
     document.addEventListener('keydown', onKey);
     sheetAway = close;
+    // After the way out is wired: a `wire` that throws must still leave a
+    // sheet that closes, or sheetOpen stays up and no sheet opens again.
+    if (wire) {
+      try { wire(scrim, close); } catch (err) { console.error('[tria] sheet', err); }
+    }
     dragToClose(scrim.querySelector('.sheet'), scrim.querySelector('.sheet-items'), () => close());
   }
 

@@ -9009,56 +9009,86 @@ body.thread-live .lightbox { z-index: 320; }
 }
 /* HOLD YOUR OWN COMMENT (wireCommentHold): no trash on it, and the
    callout and text selection stand down so the hold is ours. It sinks a touch
-   while charging, then lifts onto a soft fill with Edit and Delete under its
-   words, two quiet pills. The fill bleeds past the row by the padding it
-   adds, so nothing around it moves. */
+   while charging, then lifts onto a soft fill, and its pills open UNDER the
+   whole row as equal halves, centred (Zoe: "a nice grid system"); Delete
+   alone takes one half, centred. The open is a grid-rows tween, so the rows
+   below glide rather than jump. The fill bleeds past the row by exactly the
+   padding it adds, so nothing around it moves; it stays while the comment's
+   words are in the bar (.is-editing) and glows once after a save. */
 .comment--own {
+  flex-wrap: wrap;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  border-radius: var(--radius-soft);
-  transition: transform 0.45s var(--ease-soft), background-color var(--dur-quick) var(--ease-soft);
-}
-.comment--own.is-charging { transform: scale(0.975); }
-.comment--own.is-held {
   margin: -0.55rem -0.65rem;
   padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-soft);
+  transition: transform 0.45s var(--ease-soft), background-color 0.25s var(--ease-soft);
+}
+.comment--own.is-charging { transform: scale(0.975); }
+.comment--own.is-held,
+.comment--own.is-editing {
   background: color-mix(in srgb, var(--text) 7%, transparent);
-  transition: transform 0.4s var(--spring), background-color var(--dur-quick) var(--ease-soft);
+  transition: transform 0.4s var(--spring), background-color 0.25s var(--ease-soft);
+}
+.comment--saved { animation: comment-saved 1.1s var(--ease-soft); }
+@keyframes comment-saved {
+  0%, 35% { background: color-mix(in srgb, var(--text) 7%, transparent); }
 }
 .comment-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-  animation: comment-acts-in 0.32s var(--spring) both;
+  flex: 0 0 100%;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.34s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s var(--ease-soft);
 }
+.comment-actions.open { grid-template-rows: 1fr; opacity: 1; }
+.comment-actions-in {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: center;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+}
+.comment-actions-in:has(> :only-child) { grid-template-columns: minmax(0, calc(50% - 0.25rem)); }
 .comment-act {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 38px;
-  padding: 0 1rem 0 0.85rem;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0 1rem;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 700;
   color: var(--text);
   border-radius: var(--radius-pill);
 }
-.comment-act svg { width: 17px; height: 17px; }
-.comment-act--danger { color: var(--danger); }
-@keyframes comment-acts-in {
-  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
-}
+.comment-act svg { width: 17px; height: 17px; flex-shrink: 0; }
+.comment-act--delete { color: var(--danger); }
 @media (prefers-reduced-motion: reduce) {
-  .comment--own, .comment--own.is-held { transition: none; }
+  .comment--own, .comment--own.is-held, .comment--own.is-editing, .comment-actions { transition: none; }
   .comment--own.is-charging { transform: none; }
-  .comment-actions { animation: none; }
+  .comment--saved { animation: none; }
 }
-/* Who liked your post, from its heart in a feed (openLikesSheet). */
-.likes-sheet-list { gap: 0.95rem; padding: 4px 1.4rem 14px; }
-.likes-sheet-list .comment-avatar { width: 40px; height: 40px; font-size: 1.1rem; }
-.likes-sheet-list .comment-body { min-height: 40px; }
-.likes-sheet-list .comment-text { font-size: 1.02rem; }
-.likes-sheet-list .comment-name { font-weight: 600; }
+/* Who liked your post, and who's going to your plan, from a feed: one
+   people sheet (openLikesSheet, openGoingSheet), the page's list at a sheet's
+   size, with your three answers over who's going. */
+.sheet-scrim--people .likers-list { gap: 0.95rem; padding: 4px 1.4rem 14px; }
+.sheet-scrim--people .comment-avatar { width: 40px; height: 40px; font-size: 1.1rem; }
+.sheet-scrim--people .comment-body { min-height: 40px; }
+.sheet-scrim--people .comment-text { font-size: 1.02rem; }
+.sheet-scrim--people .comment-name { font-weight: 600; }
+.going-sheet .rsvp-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 2px 1.4rem 14px;
+}
+.going-sheet .rsvp-opt { min-height: 44px; }
+.going-sheet .panel-note,
+.going-sheet .likers-empty { margin: 0 1.4rem 12px; text-align: center; }
 @media (prefers-reduced-motion: reduce) {
   .thread-list .comment--new { animation: none; }
 }
