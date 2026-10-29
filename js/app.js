@@ -6617,21 +6617,10 @@
     // Whether the list scrolls is not settled at open: the audience sheet's
     // checklist folds open inside it and can make it scroll later. So it is
     // re-measured whenever the list or anything in it changes size.
-    // The edge fades (.fade-top/.fade-bottom in app.css) follow the scroll:
-    // each is on only while there is more of the list past that edge.
-    const edges = () => {
-      if (!list) return;
-      const { scrollTop: top, scrollHeight: h, clientHeight: view } = list;
-      list.classList.toggle('fade-top', top > 1);
-      list.classList.toggle('fade-bottom', top + view < h - 1);
-    };
     const sync = () => {
-      if (!list) return;
-      list.style.touchAction = list.scrollHeight > list.clientHeight + 1 ? 'pan-y' : '';
-      edges();
+      if (list) list.style.touchAction = list.scrollHeight > list.clientHeight + 1 ? 'pan-y' : '';
     };
     sync();
-    list?.addEventListener('scroll', edges, { passive: true });
     if (list && typeof ResizeObserver === 'function') {
       const ro = new ResizeObserver(sync);
       ro.observe(list);

@@ -8961,25 +8961,6 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   right: calc(1.4rem - 8px);
 }
 
-/* A SHEET'S LIST FADES AT ITS EDGES (Zoe, 2026-10-29: "gradients instead
-   of hard edges"). A list that scrolls is masked to transparent over its top
-   and foot, each only while there is more past that edge (fade-top and
-   fade-bottom, set by dragToClose off the list's scroll), so a long list of
-   likes or guests melts into the panel's rounded foot instead of being cut
-   by it. The two lengths are registered so the fades ease in and out. A
-   thread's foot fades above its comment bar (--fade-off). */
-@property --fade-top { syntax: '<length>'; inherits: false; initial-value: 0px; }
-@property --fade-bottom { syntax: '<length>'; inherits: false; initial-value: 0px; }
-.sheet-items {
-  --fade-off: 0px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-top),
-    #000 calc(100% - var(--fade-off) - var(--fade-bottom)), transparent calc(100% - var(--fade-off)));
-  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-top),
-    #000 calc(100% - var(--fade-off) - var(--fade-bottom)), transparent calc(100% - var(--fade-off)));
-  transition: --fade-top 0.22s var(--ease-soft), --fade-bottom 0.22s var(--ease-soft);
-}
-.sheet-items.fade-top { --fade-top: 28px; }
-.sheet-items.fade-bottom { --fade-bottom: 48px; }
 /* A THREAD OVER THE FEED (2026-10-29, openThreadSheet). A feed card's
    comment glyph raises the thread as the secondary sheet, taller and FIXED in
    height so it holds still as a comment lands or the keys come up, with the
@@ -8993,8 +8974,6 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 .sheet-scrim--thread .sheet { height: min(66dvh, 640px); }
 .sheet-scrim--thread .sheet-items {
   --sheet-foot: calc(5rem + var(--kb-lift, 0px));
-  /* The foot's fade ends where the bar's top is, not under the bar. */
-  --fade-off: calc(var(--sheet-foot) - 1rem);
   flex: 1 1 auto;
   padding: 4px 1.25rem var(--sheet-foot);
   overscroll-behavior: contain;
