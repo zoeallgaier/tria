@@ -3282,7 +3282,6 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 /* The one line above a name list, and only where the list would otherwise
    misread (a public activity, whose guest list is the host's circle). Sentence
    case at --kicker, the app's one label voice. */
-.panel-note { font-size: var(--kicker); color: var(--muted); margin: 0 0 0.7rem; }
 
 /* "Can't make it" — the way back out of a plan, at the FOOT of the who's-going
    list rather than on the card. Joining is one tap; leaving costs a deliberate
@@ -9076,6 +9075,9 @@ body.thread-live .lightbox { z-index: 320; }
 /* Who liked your post, and who's going to your plan, from a feed: one
    people sheet (openLikesSheet, openGoingSheet), the page's list at a sheet's
    size, with your three answers over who's going. */
+/* Never taller than the thread sheet (Zoe: "drop the guest list like the
+   others"), so every sheet a feed raises tops out at the same line. */
+.sheet-scrim--people .sheet { max-height: min(66dvh, 640px); }
 .sheet-scrim--people .likers-list { gap: 0.95rem; padding: 4px 1.4rem 14px; }
 .sheet-scrim--people .comment-avatar { width: 40px; height: 40px; font-size: 1.1rem; }
 .sheet-scrim--people .comment-body { min-height: 40px; }
@@ -9087,7 +9089,6 @@ body.thread-live .lightbox { z-index: 320; }
   margin: 2px 1.4rem 14px;
 }
 .going-sheet .rsvp-opt { min-height: 44px; }
-.going-sheet .panel-note,
 .going-sheet .likers-empty { margin: 0 1.4rem 12px; text-align: center; }
 @media (prefers-reduced-motion: reduce) {
   .thread-list .comment--new { animation: none; }

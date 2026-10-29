@@ -3433,15 +3433,7 @@
         .concat(maybes.map(user => likerItemHtml({ user }, 'Maybe')));
     }
 
-    /* Only 'public' earns a word above the list, and only for the host. On a
-       circle or a hand-picked activity the names ARE the answer and saying
-       "everyone in your circle" over a list of your circle is the fact told
-       twice. Public is the one that misreads without it: its audience is
-       technically the whole room, but canJoin is friends-only, so what a host
-       sees here is their circle and nothing says why. */
-    const note = host && (post.audience || 'circle') === 'public'
-      ? `<p class="panel-note">Anyone on Tria can read this one, but only your circle can come.</p>`
-      : '';
+    // No eyebrow over the list (Zoe, 2026-10-29): the names are the answer.
 
     // The three answers, ABOVE the list, and the only place on a card an answer
     // is given: the glyph that brought you here only shows.
@@ -3460,7 +3452,7 @@
     const empty = host
       ? `<p class="likers-empty">Nobody to invite yet. Add some friends and they’ll show up here.</p>`
       : `<p class="likers-empty">No one’s going yet.</p>`;
-    return note + out + (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty);
+    return out + (rows.length ? `<ul class="likers-list">${rows.join('')}</ul>` : empty);
   }
 
   // A poll's live countdown, said plainly. Coarse on purpose (minutes, then
