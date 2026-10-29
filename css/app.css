@@ -9083,8 +9083,18 @@ body.thread-live .lightbox { z-index: 320; }
 /* Never taller than the thread sheet (Zoe: "drop the guest list like the
    others"), so every sheet a feed raises tops out at the same line. */
 .sheet-scrim--people .sheet { max-height: min(66dvh, 640px); }
-/* The last row gets room to clear the panel's curved foot. */
-.sheet-scrim--people .likers-list { gap: 0.95rem; padding: 4px 1.4rem 22px; }
+/* A SHEET'S LIST RUNS TO THE PANEL'S FOOT (Zoe, 2026-10-29: "still seeing
+   bottom crop on likes and rsvps"). The panel's own bottom padding sat UNDER
+   the scrolling list, so a long list was cut on a straight line with bare
+   panel beneath it. On a sheet with no dock that padding moves inside the
+   list instead: rows scroll down to the panel's rounded edge, and at the end
+   the last one still clears the home indicator. The thread sheet measures its
+   own foot around the comment bar. */
+.sheet-scrim:not(.sheet-scrim--thread) .sheet:not(:has(> .sheet-cancel)) { padding-bottom: 0; }
+.sheet-scrim:not(.sheet-scrim--thread) .sheet:not(:has(> .sheet-cancel)) > .sheet-items {
+  padding-bottom: max(8px, calc(env(safe-area-inset-bottom) - 6px));
+}
+.sheet-scrim--people .likers-list { gap: 0.95rem; padding: 4px 1.4rem 14px; }
 .sheet-scrim--people .comment-avatar { width: 40px; height: 40px; font-size: 1.1rem; }
 .sheet-scrim--people .comment-body { min-height: 40px; }
 .sheet-scrim--people .comment-text { font-size: 1.02rem; }
