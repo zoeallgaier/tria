@@ -2793,8 +2793,12 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
      right in one state and wrong in the other. With the padding live the count
      sits 0.35rem off the button's edge in both, and this is the only number left:
      20.4px ink-to-ink, a ~2px step, which reads as even while the headcount still
-     isn't jammed against the thread. Re-measure ink, not margins, if it moves. */
-  margin-right: 0.35rem;
+     isn't jammed against the thread. Re-measure ink, not margins, if it moves.
+
+     0.2rem since 2026-10-29 (Zoe: "looks farther away than the others ...
+     just a touch"): ~18px ink-to-ink, level with the comment's count to the
+     heart, so the row reads evenly spaced. */
+  margin-right: 0.2rem;
 }
 .card-attendees-count { font-size: 0.82rem; font-weight: 700; line-height: 1; }
 /* Before you're in, the check's landing zone (the glyph's empty right half) sits
