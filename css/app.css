@@ -8973,9 +8973,11 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
    plus however far the keyboard lifted it (--kb-lift), natively the pill's
    own measured top (--native-postbar-lift, which already rides the keys),
    less the safe-area inset the panel's foot has taken. */
-/* Its top sits a third of the way down a phone (Zoe, 2026-10-29: dropped
-   about 150px from 82dvh). */
-.sheet-scrim--thread .sheet { height: min(66dvh, 640px); padding-bottom: 0; }
+/* As tall as its thread, like Likes, up to a third of the way down a phone
+   (Zoe, 2026-10-29: "if there's only one comment ... the comment menu can
+   sit lower"; the cap was dropped about 150px from 82dvh). A change of
+   height glides (openThreadSheet's repaint). */
+.sheet-scrim--thread .sheet { max-height: min(66dvh, 640px); padding-bottom: 0; }
 /* The list runs to the panel's foot, like every sheet's (see "A SHEET'S
    LIST RUNS TO THE PANEL'S FOOT"), so the bar's reserve is measured from
    the panel's edge, 6px off the screen's: the bar plus its safe-area pad. */
@@ -9009,7 +9011,7 @@ body.thread-live .lightbox { z-index: 320; }
 }
 .thread-empty {
   margin: 0;
-  padding: 3.2rem 1.5rem;
+  padding: 0.5rem 1.5rem 1.1rem;
   text-align: center;
   font-size: 0.95rem;
   color: var(--muted);
