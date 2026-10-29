@@ -8961,6 +8961,80 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   right: calc(1.4rem - 8px);
 }
 
+/* A THREAD OVER THE FEED (2026-10-29, openThreadSheet). A feed card's
+   comment glyph raises the thread as the secondary sheet, taller and FIXED in
+   height so it holds still as a comment lands or the keys come up, with the
+   comment bar standing at its foot (native in the app). The list scrolls
+   under the bar, so its foot is padded by the bar's reach: on the web the bar
+   plus however far the keyboard lifted it (--kb-lift), natively the pill's
+   own measured top (--native-postbar-lift, which already rides the keys),
+   less the safe-area inset the panel's foot has taken. */
+.sheet-scrim--thread .sheet { height: min(82dvh, 780px); }
+.sheet-scrim--thread .sheet-items {
+  flex: 1 1 auto;
+  padding: 4px 1.25rem calc(5rem + var(--kb-lift, 0px));
+  overscroll-behavior: contain;
+}
+html[data-chrome="native"] .sheet-scrim--thread .sheet-items {
+  padding-bottom: calc(var(--native-postbar-lift, 96px) - env(safe-area-inset-bottom) + 1rem);
+}
+/* The bar and what hangs off it (the mention list, the photo tray) over the
+   scrim, for the sheet's length. */
+body.thread-live .postbar { z-index: 310; }
+/* A comment's photo opens over the sheet it was tapped in. */
+body.thread-live .lightbox { z-index: 320; }
+.thread-list { gap: 1.15rem; margin: 0; }
+.thread-list .comment { gap: 0.7rem; }
+.thread-list .comment-avatar { width: 34px; height: 34px; font-size: 1rem; }
+.thread-list .comment-body { flex: 1; }
+.thread-list .comment-text { font-size: 0.95rem; line-height: 1.42; }
+.thread-list .comment-meta { font-size: 0.76rem; margin-top: 0.2rem; }
+.thread-list .comment .card-like,
+.thread-list .comment-delete { margin-top: 0.3rem; }
+.thread-list .card-like + .comment-delete,
+.thread-list .comment-body + .comment-delete { margin-left: 0; }
+/* A comment you just sent rises into place under the sparkles. */
+.thread-list .comment--new { animation: thread-rise 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+@keyframes thread-rise {
+  from { opacity: 0; transform: translateY(10px); }
+}
+.thread-empty {
+  margin: 0;
+  padding: 3.2rem 1.5rem;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+/* Sheets don't stack, so your own comment's trash asks in place: a red
+   Delete springs up in its slot, and a second tap takes the row. */
+.comment-delete-word { display: none; }
+.comment-delete.is-armed {
+  width: auto;
+  padding: 0 0.8rem;
+  color: #fff;
+  background: var(--danger);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  animation: delete-arm 0.32s var(--spring) both;
+}
+.comment-delete.is-armed svg { display: none; }
+.comment-delete.is-armed .comment-delete-word { display: block; }
+.comment-delete.is-armed:active { color: #fff; background: var(--danger); }
+@keyframes delete-arm {
+  from { transform: scale(0.7); opacity: 0; }
+}
+/* Who liked your post, from its heart in a feed (openLikesSheet). */
+.likes-sheet-list { gap: 0.95rem; padding: 4px 1.4rem 14px; }
+.likes-sheet-list .comment-avatar { width: 40px; height: 40px; font-size: 1.1rem; }
+.likes-sheet-list .comment-body { min-height: 40px; }
+.likes-sheet-list .comment-text { font-size: 1.02rem; }
+.likes-sheet-list .comment-name { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .thread-list .comment--new,
+  .comment-delete.is-armed { animation: none; }
+}
+
 /* SHARE PROFILE'S CODE (2026-10-24), the head of its sheet over Share link
    and Copy link. The code is the only thing drawn, like a PNG cut out of its
    page (Zoe: "can the QR itself be bright, without a second background?"):

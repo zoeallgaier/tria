@@ -1945,7 +1945,10 @@
          And leaving it out cost more than it saved — a reader going from a post
          page to a circle watched the same pill stop being glass. */
       const form = bar && !bar.hidden ? bar.querySelector('.postbar-form') : null;
-      const spec = form && !overlaid() ? postBarSpec(bar, form) : { live: false };
+      // A thread sheet is the one overlay that keeps the bar: it is the
+      // sheet's own composer, standing at its foot (openThreadSheet).
+      const held = !overlaid() || document.body.classList.contains('thread-live');
+      const spec = form && held ? postBarSpec(bar, form) : { live: false };
       const signature = JSON.stringify(spec);
       if (signature === toldPostBar) return;
       toldPostBar = signature;
@@ -3867,7 +3870,7 @@
       else if (deck) wireDeck(el, post, img.alt);
       else wirePhoto(el, img);
       wireLikes(el, post, opts);
-      wireComments(el);
+      wireComments(el, post);
       return el;
     }
 
@@ -3951,7 +3954,7 @@
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
-    wireComments(el);
+    wireComments(el, post);
     return el;
   }
 
@@ -4246,7 +4249,7 @@
     el.dataset.sig = cardSig(el);
     wireGoing(el, orig, opts, post);
     wireLikes(el, post, opts);
-    wireComments(el);
+    wireComments(el, post);
     return el;
   }
 
@@ -5063,6 +5066,13 @@
     // anchor to that page and needs no listener at all.
     if (post.author === Store.session()) {
       if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => setPostPane('likers', el));
+      // In a feed the anchor stays the way there on a desktop (and keeps its
+      // preview and middle click); on a phone it raises the list as a sheet.
+      if (btn.tagName === 'A') btn.addEventListener('click', (e) => {
+        if (!sheetsForThreads()) return;
+        e.preventDefault();
+        openLikesSheet(post);
+      });
       return;
     }
 
@@ -5383,7 +5393,15 @@
     return fresh;
   }
 
-  function wireComments(el) {
+  function wireComments(el, post) {
+    // A feed card's glyph: a sheet on a phone, the post's page on a desktop.
+    // Its own row's anchor only, never a quoted card's (it has no row).
+    const link = el.querySelector('.card-actions a.card-comment');
+    if (link && post) link.addEventListener('click', (e) => {
+      if (!sheetsForThreads()) return;
+      e.preventDefault();
+      openThreadSheet(post);
+    });
     const panel = el.querySelector('.comments-panel');
     if (!panel) return;
     // This panel only ever exists on the post's page — a feed card has none, so
@@ -5424,6 +5442,167 @@
           } }],
         });
       }));
+  }
+
+  /* ── A thread over the feed (2026-10-29) ───────────────────────────────────
+     Zoe: "make the reaction icon bar a field like this on top of feeds instead
+     of whole separate pages" (an Instagram/Threads comments sheet was the
+     reference). On a phone a feed card's comment glyph raises the thread as a
+     SHEET over the feed, and the author's heart raises who liked it, so a
+     reply or a look costs no trip there and back. The post's page stays: Read
+     more, a tap on the card, an Updates row and every link still land there,
+     and a desktop keeps the glyph a link (the sidebar layout has no floor for
+     a sheet to stand on).
+
+     IT IS openSheet, not a second panel: the same floor, corners, grab, serif
+     title, scrim and pull to close, only taller and fixed in height, so the
+     sheet does not jump as a comment lands or the keys come up. And its
+     composer is THE COMMENT BAR, mounted for the length of the sheet
+     (mountPostBar's `thread`): native in the app, mentions, a photo, the same
+     send, standing at the sheet's foot where the nav was. That is why the bar
+     is the one overlay pushPostBar keeps (body.thread-live), and why closing
+     takes it in onClose rather than after the slide: a navigation from a name
+     in the thread mounts the next page's bar straight away.
+
+     Sheets don't stack, so deleting your own comment asks in place: the trash
+     turns into a red Delete, a second tap takes the row, a tap anywhere else
+     puts the trash back. */
+  const sheetsForThreads = () =>
+    nativeShell() || window.matchMedia('(max-width: 680px)').matches;
+
+  const shownComments = (post) =>
+    Store.commentsFor(post.id).filter(c => !Blocks.has(c.author));
+
+  // Every feed card drawing this post's glyph, recounted in place, the roll
+  // going the way the count went. The card's signature still holds the old
+  // markup, so the next quiet refresh rebuilds it from the cache, which agrees.
+  function paintCommentCount(post, dir) {
+    const n = shownComments(post).length;
+    const href = postRoute(post);
+    document.querySelectorAll('#view a.card-comment').forEach((a) => {
+      if (a.getAttribute('href') !== href) return;
+      a.innerHTML = svgIcon('comment') + (n ? `<span class="card-comment-count">${n}</span>` : '');
+      a.setAttribute('aria-label', n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments');
+      if (dir) odoTick(a.querySelector('.card-comment-count'), dir);
+    });
+  }
+
+  function paintThread(root, post) {
+    const list = shownComments(post);
+    root.innerHTML = list.length
+      ? `<ul class="comments-list thread-list">${list.map(c => commentItemHtml(c, post)).join('')}</ul>`
+      : `<p class="thread-empty">No comments yet.</p>`;
+    root.querySelectorAll('.comment-photo').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const img = btn.querySelector('img');
+        openLightbox(img.currentSrc || img.src, '', false, img);
+      }));
+    root.querySelectorAll('button.comment-like').forEach(btn =>
+      wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
+    root.querySelectorAll('.comment-delete').forEach(btn =>
+      btn.addEventListener('click', () => {
+        if (!btn.classList.contains('is-armed')) {
+          disarmThread(root);
+          btn.classList.add('is-armed');
+          btn.setAttribute('aria-label', 'Delete comment, tap again');
+          if (!btn.querySelector('.comment-delete-word'))
+            btn.insertAdjacentHTML('beforeend', '<span class="comment-delete-word">Delete</span>');
+          hapticEvent('WARNING');
+          return;
+        }
+        dropThreadComment(root, post, btn);
+      }));
+  }
+
+  function disarmThread(root) {
+    root.querySelectorAll('.comment-delete.is-armed').forEach((b) => {
+      b.classList.remove('is-armed');
+      b.setAttribute('aria-label', 'Delete this comment');
+    });
+  }
+
+  // The row folds away first and the write follows, so the tap is answered on
+  // the frame it lands. A refusal puts the thread back as the cache has it.
+  async function dropThreadComment(root, post, btn) {
+    const li = btn.closest('.comment');
+    btn.disabled = true;
+    if (li && !prefersReduced()) {
+      const gap = parseFloat(getComputedStyle(li.parentElement).rowGap) || 0;
+      li.style.overflow = 'hidden';
+      li.animate(
+        [{ height: li.offsetHeight + 'px', opacity: 1, marginBottom: '0px' },
+         { height: '0px', opacity: 0, marginBottom: -gap + 'px' }],
+        { duration: 260, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)', fill: 'forwards' });
+    }
+    const res = await Store.deleteComment(btn.dataset.comment).catch(() => null);
+    if (!root.isConnected) return;
+    if (!res || !res.ok) toast((res && res.error) || 'Couldn’t delete, try again.');
+    else paintCommentCount(post, 'down');
+    setTimeout(() => { if (root.isConnected) paintThread(root, post); }, prefersReduced() ? 0 : 260);
+  }
+
+  function openThreadSheet(post) {
+    if (sheetOpen) return;
+    // A page already standing on its own bar keeps it, and the glyph keeps
+    // its old job. No route that draws a feed has one today.
+    if (document.body.classList.contains('postbar-live')) { go(postRoute(post)); return; }
+    let list = null, root = null;
+    const atFoot = () => !!list && list.scrollHeight > list.clientHeight
+      && list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
+    const toFoot = () => {
+      if (!list) return;
+      list.scrollTo({ top: list.scrollHeight, behavior: prefersReduced() ? 'auto' : 'smooth' });
+    };
+    const thread = {
+      // A reader at the end of the thread stays there as the keys come up and
+      // the list's foot grows under them; anyone reading further up keeps
+      // their place, since they may be answering the comment they are on.
+      onFocus: () => { if (atFoot()) setTimeout(toFoot, 360); },
+      onPosted: () => {
+        if (!root || !root.isConnected) return;
+        paintThread(root, post);
+        paintCommentCount(post, 'up');
+        const mine = [...root.querySelectorAll('.thread-list > .comment')].pop();
+        if (mine) mine.classList.add('comment--new');
+        requestAnimationFrame(toFoot);
+        celebrateComment(mine, burstTypeOf(post));
+      },
+    };
+    threadSheet = post;
+    document.body.classList.add('thread-live');
+    openSheet({
+      title: 'Comments',
+      scrimClass: 'sheet-scrim--thread',
+      head: `<div class="thread"></div>`,
+      wire: (scrim) => {
+        list = scrim.querySelector('.sheet-items');
+        root = scrim.querySelector('.thread');
+        paintThread(root, post);
+        // An armed Delete goes back to a trash on any tap that isn't it.
+        scrim.addEventListener('pointerdown', (e) => {
+          if (!e.target.closest('.comment-delete.is-armed')) disarmThread(root);
+        }, true);
+      },
+      onClose: () => {
+        threadSheet = null;
+        document.body.classList.remove('thread-live');
+        resetPostBar();
+      },
+    });
+    mountPostBar(post, null, thread);
+  }
+
+  // The author's own heart, in a feed: who liked it, private as ever (only
+  // the author is ever handed this). The page's list, at a sheet's size.
+  function openLikesSheet(post) {
+    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
+    openSheet({
+      title: 'Likes',
+      scrimClass: 'sheet-scrim--likes',
+      head: list.length
+        ? `<ul class="likers-list likes-sheet-list">${list.map(l => likerItemHtml(l)).join('')}</ul>`
+        : `<p class="thread-empty">No likes yet, and that’s just fine.</p>`,
+    });
   }
 
   /* ── Editing a post ────────────────────────────────────────────────────────
@@ -9461,7 +9640,11 @@
      TriaPostBarPill and the same photo tray, with a chat's words and a chat's
      send. It is { submit(text, photo) → Promise<{ok}>, onSent(res), onFocus() },
      and the post is null. Nothing in Swift knows the difference. */
-  function mountPostBar(post, chat = null) {
+  /* `thread` makes it a THREAD SHEET'S bar (openThreadSheet): the comment bar
+     exactly, standing at the foot of a sheet over a feed instead of a post's
+     page. It is { onFocus(), onPosted(res) }, and stands in for the two things
+     the page did itself: walking to the comments and rebuilding the card. */
+  function mountPostBar(post, chat = null, thread = null) {
     const bar = postBarEl();
     if (!bar) return;
     // Signed out (the public site) the thread reads and nobody writes, so there
@@ -9513,7 +9696,7 @@
     // The four destinations and the + go away for the length of this page, the
     // way body.postbar-live takes them off the screen on the web.
     NativeChrome.sync();
-    wirePostBar(bar, post, chat);
+    wirePostBar(bar, post, chat, thread);
   }
 
   /* ── The find bar — the comment bar in its other job ───────────────────────
@@ -9643,7 +9826,7 @@
     postBarKeyboardOff = trackKeyboard(bar, input);
   }
 
-  function wirePostBar(bar, post, chat = null) {
+  function wirePostBar(bar, post, chat = null, thread = null) {
     const form  = bar.querySelector('.postbar-form');
     const input = bar.querySelector('textarea');
     const send  = bar.querySelector('.postbar-send');
@@ -9810,6 +9993,7 @@
     const walkToComments = () => {
       // A chat's floor is its newest message, which is the page's own call.
       if (chat) { if (chat.onFocus) chat.onFocus(); return; }
+      if (thread) { thread.onFocus(); return; }
       const card = document.querySelector('#post-page .card');
       if (card && postPane !== 'comments') setPostPane('comments', card);
     };
@@ -9914,6 +10098,7 @@
         // typing into an empty field.
         NativeChrome.postBarText('', 0, !!chat);
         if (chat) { if (chat.onSent) chat.onSent(res); return; }
+        if (thread) { thread.onPosted(res); return; }
         const fresh = rebuildPostCard('up');
         const mine = fresh && [...fresh.querySelectorAll('.comments-list > .comment')].pop();
         celebrateComment(mine, burstTypeOf(post));
@@ -10019,6 +10204,9 @@
      shift has to move the goalposts rather than be snapped back by them — park
      exists to refuse the scroll WEBKIT invents, not the one we ask for. */
   let kbPark = null;
+  /* The thread sheet that is up, while one is (openThreadSheet). Read here so
+     the keyboard never scrolls the page hidden under it. */
+  let threadSheet = null;
 
   /* AND THE RESERVE COMES OFF THE KEYBOARD'S FIGURE, not on top of it. The page
      is not bare under its last line: `body.postbar-live main` already holds
@@ -10053,6 +10241,12 @@
     const reserve = next > 0 ? Math.max(0, next - KB_TRIM) : 0;
     kbInset = next;
     document.documentElement.style.setProperty('--kb-inset', reserve + 'px');
+    // The keyboard's whole reach, for a thread sheet's list (openThreadSheet),
+    // which stands on the screen's floor rather than on the page's foot.
+    document.documentElement.style.setProperty('--kb-lift', next + 'px');
+    // Under a thread sheet the page is behind the scrim, and a shift would
+    // leave it a keyboard's height down the feed once the sheet went.
+    if (threadSheet) return;
     // Going down: the page shrinks back and the browser clamps a reader who was
     // at the foot to the new one for us, which is exactly right.
     if (!grew || !kbFollow) return;
@@ -10771,8 +10965,11 @@
   // closes, but on a panel that has already taken every answer as it was tapped,
   // "Cancel" is a word for something that cannot happen. `onDock(close)` takes
   // the dock's tap instead, for the one sheet whose dock commits (the circle
-  // invite's Send invites).
-  function openSheet({ title, items, head, wire, scrimClass, dock, onDock, rowsFirst }) {
+  // invite's Send invites). `onClose` runs inside close() itself, before the
+  // panel's slide out, for a sheet that holds something outside it (a thread's
+  // comment bar): a navigation mounts the next page's bar 220ms sooner than a
+  // `then` would run.
+  function openSheet({ title, items, head, wire, scrimClass, dock, onDock, rowsFirst, onClose }) {
     if (sheetOpen) return;
     sheetOpen = true;
     items = items || [];
@@ -10818,6 +11015,7 @@
       sheetOpen = false;
       sheetAway = null;
       document.removeEventListener('keydown', onKey);
+      if (onClose) onClose();
       scrim.classList.remove('open');
       document.body.style.overflow = '';
       if (opener && opener.focus) opener.focus();   // restore focus to the ••• trigger
