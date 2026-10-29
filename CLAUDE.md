@@ -65,6 +65,22 @@ hidden at desktop width the same way. On `#/updates` the sidebar lights that
 row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
+## Comments and likes are sheets over a feed (2026-10-29)
+
+**On a phone, a feed card's comment glyph raises the thread as a sheet** (Zoe,
+a Threads/Instagram comments sheet as the reference: "without people having to
+go back and forth between pages"), and **the author's heart raises Likes**
+(`openThreadSheet`, `openLikesSheet`). It is `openSheet`, taller and fixed in
+height (`.sheet-scrim--thread`), and its composer is THE COMMENT BAR mounted
+for the sheet's length (`mountPostBar`'s `thread`), native in the app: the one
+overlay `pushPostBar` keeps (`body.thread-live`), taken down in `openSheet`'s
+synchronous `onClose`. The list's foot is padded by `--native-postbar-lift`
+(app) or `--kb-lift` (web), and `setKbInset` never scrolls the page under it.
+Deleting your own comment asks in place (a red Delete in the trash's slot),
+since sheets don't stack. **The post page stays** for Read more, a tap on the
+card, Updates rows and links; a desktop (wider than 680px, not native) keeps
+the glyph a link.
+
 ## A new account has a first run (2026-10-28)
 
 **Sign up, make it yours, find your circles, then home** (Zoe). `#/welcome`
