@@ -21528,7 +21528,7 @@
       `<section class="view about${gated ? ' about--front' : ''}">` +
         (gated ? authHeader() : '') +
         (gated ? `<p class="about-back"><a href="#/">&larr; Back to sign in</a></p>` : '') +
-        mastheadEl('Social media made local', 'About Tria') +
+        mastheadEl('', 'About Tria') +
         `<div class="about-body">` +
           `<p class="about-lede">Tria is a social media app built for <em>real ` +
             `relationships</em>. Whether you're keeping up with lifelong friends, ` +
