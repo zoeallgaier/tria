@@ -8975,15 +8975,18 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
    less the safe-area inset the panel's foot has taken. */
 /* Its top sits a third of the way down a phone (Zoe, 2026-10-29: dropped
    about 150px from 82dvh). */
-.sheet-scrim--thread .sheet { height: min(66dvh, 640px); }
+.sheet-scrim--thread .sheet { height: min(66dvh, 640px); padding-bottom: 0; }
+/* The list runs to the panel's foot, like every sheet's (see "A SHEET'S
+   LIST RUNS TO THE PANEL'S FOOT"), so the bar's reserve is measured from
+   the panel's edge, 6px off the screen's: the bar plus its safe-area pad. */
 .sheet-scrim--thread .sheet-items {
-  --sheet-foot: calc(5rem + var(--kb-lift, 0px));
+  --sheet-foot: calc(4.75rem + env(safe-area-inset-bottom) + var(--kb-lift, 0px));
   flex: 1 1 auto;
   padding: 4px 1.25rem var(--sheet-foot);
   overscroll-behavior: contain;
 }
 html[data-chrome="native"] .sheet-scrim--thread .sheet-items {
-  --sheet-foot: calc(var(--native-postbar-lift, 96px) - env(safe-area-inset-bottom) + 1rem);
+  --sheet-foot: calc(var(--native-postbar-lift, 96px) - 6px + 0.75rem);
 }
 /* The bar and what hangs off it (the mention list, the photo tray) over the
    scrim, for the sheet's length. */
@@ -9088,8 +9091,8 @@ body.thread-live .lightbox { z-index: 320; }
    the scrolling list, so a long list was cut on a straight line with bare
    panel beneath it. On a sheet with no dock that padding moves inside the
    list instead: rows scroll down to the panel's rounded edge, and at the end
-   the last one still clears the home indicator. The thread sheet measures its
-   own foot around the comment bar. */
+   the last one still clears the home indicator. The thread sheet does the
+   same and measures its foot around the comment bar. */
 .sheet-scrim:not(.sheet-scrim--thread) .sheet:not(:has(> .sheet-cancel)) { padding-bottom: 0; }
 .sheet-scrim:not(.sheet-scrim--thread) .sheet:not(:has(> .sheet-cancel)) > .sheet-items {
   padding-bottom: max(8px, calc(env(safe-area-inset-bottom) - 6px));
