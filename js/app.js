@@ -7258,28 +7258,32 @@
     // Signup asks for the @handle and nothing else of you (Zoe, 2026-10-29):
     // the display name is the first run's, on Create your profile, so it isn't
     // asked twice. Until then the name is the handle (Store.signup).
-    // Labelled like Email and Password under it, the @ still inside the box.
+    // Username and email are one box (Zoe, 2026-10-29), the @handle over the
+    // address with the combo's hairline between them, so joining reads as two
+    // fields: who you are, and the password.
     const identityField = isSignup
-      ? `<div class="field">` +
-          `<label for="f-user">Username</label>` +
-          `<div class="field--combo">` +
-            `<div class="combo-user">` +
-              `<span class="at" aria-hidden="true">@</span>` +
-              `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
-                `autocapitalize="none" spellcheck="false" maxlength="20" ` +
-                `placeholder="username" autofocus>` +
-            `</div>` +
+      ? `<div class="field field--combo">` +
+          `<div class="combo-user">` +
+            `<span class="at" aria-hidden="true">@</span>` +
+            `<input id="f-user" class="combo-userinput" type="text" autocomplete="username" ` +
+              `autocapitalize="none" spellcheck="false" maxlength="20" ` +
+              `placeholder="username" autofocus aria-label="Username">` +
+          `</div>` +
+          `<div class="combo-divider" aria-hidden="true"></div>` +
+          `<div class="combo-user">` +
+            `<input id="f-email" class="combo-userinput" type="email" autocomplete="email" ` +
+              `autocapitalize="none" spellcheck="false" ` +
+              `placeholder="Email" aria-label="Email">` +
           `</div>` +
         `</div>` +
         `<p class="field-hint field-hint--combo">Lowercase letters, numbers or _ for your @handle.</p>`
       : '';
-    const emailField =
+    const emailField = isSignup ? '' :
       `<div class="field">` +
         `<label for="f-email">Email</label>` +
-        `<input id="f-email" type="email" ` +
-          `autocomplete="${isSignup ? 'email' : 'username'}" ` +
+        `<input id="f-email" type="email" autocomplete="username" ` +
           `autocapitalize="none" spellcheck="false" ` +
-          `placeholder="you@example.com"${isSignup ? '' : ' autofocus'}>` +
+          `placeholder="you@example.com" autofocus>` +
       `</div>`;
 
     view.innerHTML =
