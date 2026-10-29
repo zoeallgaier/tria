@@ -8797,7 +8797,7 @@
   }
 
   // `welcome` is the first run's first step (#/welcome): the same form, held
-  // to the face, the theme, the charms and the words, with Next at its foot.
+  // to the face, the theme and the words, with Next at its foot.
   function renderEditProfile({ welcome = false } = {}) {
     const u = Store.currentUser();
     if (!u) { go('#/'); return; }
@@ -8837,7 +8837,7 @@
     // toolbarBackEl with no href, which is what that branch was built for: the
     // editor's exit pops rather than pushes, and the <button> that buys is also
     // the element whose glyph gets swapped in place.
-    if (welcome) mountToolbar({ title: 'Make it yours' });
+    if (welcome) mountToolbar({ title: 'Create your profile' });
     else mountToolbar({
       leading: toolbarBackEl('', 'Profile', 'pf-cancel'),
       title: 'Edit profile',
@@ -8868,8 +8868,7 @@
         // BIG_TITLE_SEL: there is still nothing for the bar's copy to hide
         // behind, and it goes on showing from the moment the page lands.
         (welcome
-          ? `<h1 class="visually-hidden">Make it yours</h1>` +
-            `<p class="welcome-lede">A face, a name and a color your friends will know you by.</p>`
+          ? `<h1 class="visually-hidden">Create your profile</h1>`
           : `<h1 class="visually-hidden">Edit profile</h1>`) +
         `<form id="pf-form" class="pf-form" novalidate>` +
           // The photo sits in its own colour: the profile gradient, the same
@@ -8898,7 +8897,8 @@
               `<button type="button" class="pill-quiet pf-row" id="pf-accent">` +
                 `<span class="pf-row-swatch" aria-hidden="true"></span>` +
                 `<span class="pf-row-label">Theme</span></button>` +
-              (Store.charmsReady()
+              // Not on the first run: every charm is still locked then.
+              (Store.charmsReady() && !welcome
                 ? `<button type="button" class="pill-quiet pf-row" id="pf-charms">` +
                     svgIcon('charm', 'pf-row-ico') +
                     `<span class="pf-row-label">Charms</span>` +
@@ -13935,7 +13935,7 @@
 
   /* THE FIRST RUN (Zoe, 2026-10-28): a new account is made yours, then finds
      its circles, then lands on My Circle. Two steps, #/welcome (Edit profile's
-     form, held to the face, the theme, the charms and the words) and
+     form, held to the face, the theme and the words) and
      #/welcome/circles (every circle you can join, a tap each), with the tab bar
      put away so the steps are the whole screen.
 
@@ -13972,7 +13972,7 @@
     if (!Store.currentUser()) { go('#/'); return; }
     document.body.classList.add('welcome-live');
     mountToolbar({
-      leading: toolbarBackEl('#/welcome', 'Make it yours'),
+      leading: toolbarBackEl('#/welcome', 'Create your profile'),
       title: 'Find your circles',
     });
     // Public circles first by life, then any you were invited to; one you
@@ -13985,7 +13985,7 @@
         `<h1 class="visually-hidden">Find your circles</h1>` +
         `<p class="welcome-lede">` +
           (list.length
-            ? 'Join a few for what you’re into. Their posts are yours to read and answer.'
+            ? 'Join a circle for what you’re into.'
             : 'There are no circles to join yet. Start the first one, or come back soon.') +
         `</p>` +
         `<section class="communities welcome-circles" aria-label="Circles">` +

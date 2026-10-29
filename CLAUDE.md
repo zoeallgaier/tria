@@ -69,7 +69,7 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 
 **Sign up, make it yours, find your circles, then home** (Zoe). `#/welcome`
 is Edit profile's form in a welcome mode (`renderEditProfile({ welcome })`:
-photo, Theme, Charms, name, pronouns, bio, a Next at its foot; the settings and
+titled Create your profile: photo, Theme, name, pronouns, bio, a Next at its foot, no Charms while every one is locked, no lede; the settings and
 account rows stay in the DOM, hidden) and `#/welcome/circles`
 (`renderWelcomeCircles`) is Discover's circle cards with a Join that toggles to
 Joined in place (`communityCardHtml`'s `pick`), then Done or Not now. The tab
