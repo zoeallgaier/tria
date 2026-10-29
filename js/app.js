@@ -5652,18 +5652,10 @@
     if (document.body.classList.contains('postbar-live')) { go(postRoute(post)); return; }
     let list = null, root = null;
     const toFoot = () => list?.scrollTo({ top: list.scrollHeight, behavior: prefersReduced() ? 'auto' : 'smooth' });
-    // The sheet is as tall as its thread, so a comment landing or leaving
-    // glides it to its new height rather than snapping.
     const repaint = (dir) => {
       if (!root?.isConnected) return;
-      const panel = root.closest('.sheet');
-      const was = panel.offsetHeight;
       paintThread(root, post);
       if (dir) paintCommentCount(post, dir);
-      const now = panel.offsetHeight;
-      if (now !== was && !prefersReduced())
-        panel.animate([{ height: was + 'px' }, { height: now + 'px' }],
-          { duration: 320, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)' });
     };
     threadSheet = post;
     document.body.classList.add('thread-live');
