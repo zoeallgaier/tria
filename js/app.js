@@ -6723,7 +6723,7 @@
   function composeRows() {
     const occ = todaysDaily();
     return [
-      { key: 'note',     label: 'Post' },
+      { key: 'note',     label: 'Note' },
       { key: 'activity', label: 'Activity' },
       // Music is a row again and off the composer's bar (Zoe, 2026-10-23).
       ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
@@ -6740,7 +6740,7 @@
      tiles, and Zoe pointed at Instagram's sheet for the last word. Titled
      Share on 2026-10-22 (Zoe: "change create menu title to share"), the
      word the composer's own button says, and New on 2026-10-24 (Zoe: a
-     circle is "created not shared"), so every row reads as New post, New
+     circle is "created not shared"), so every row reads as New note, New
      activity, New circle. Each row is a shortcut into the one composer
      (pendingAttach). */
   function openComposeDial() {
