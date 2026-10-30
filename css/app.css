@@ -6416,17 +6416,25 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   .card-page-pic img { opacity: 1; transform: none; transition: none; }
 }
 
-/* In a thread a tile is smaller, under the words it came from. */
-.comment-body .card-page,
-.comment-body .card-yt { margin-top: 0.5rem; }
-.comment-body .card-song { --card-art: 64px; margin-top: 0.5rem; padding: 0.5rem; }
+/* A Frame's card has no inset of its own (the photo runs wide), so a tile under
+   the photo takes the one its words and actions take. */
+.card--photo [data-tile] { margin-inline: var(--inset); }
+
+/* In a thread a tile is smaller, under the words it came from, and what follows
+   it is the comment's own small print, not the next thing in a post. */
+.comment-body [data-tile] { margin-top: 0.5rem; }
+.comment-body [data-tile] + * { margin-top: 0.35rem; }
+.comment-body .card-song { --card-art: 64px; padding: 0.5rem; }
 .comment-body .card-song-play { display: none; }
 .msg-col .card-page,
 .msg-col .card-yt { width: min(100%, 300px); margin-top: 0.3rem; }
 .msg-col .card-circle,
 .msg-col .card-quoted { width: min(100%, 300px); }
 
-/* The tile a post will wear, under the box you are writing in. */
+/* The tile a post will wear, under the box you are writing in, a field's gap
+   below it like everything else in the form. */
+.compose-links,
+.compose-circle { margin-top: 1.1rem; }
 .compose-links:not([hidden]) { animation: compose-circle-in var(--dur-move) var(--ease) both; }
 .compose-links > :first-child { margin-top: 0; }
 
@@ -10129,6 +10137,7 @@ body[data-ambient="none"] .pf-row-swatch {
   .card--photo .card-solometa,
   .card--photo .card-passed,
   .card--photo .card-foot { padding-inline: var(--gutter); }
+  .card--photo [data-tile] { margin-inline: var(--gutter); }
 
   /* Tapped photo goes full-bleed edge-to-edge, uncropped (portraits letterbox,
      landscapes span the full width). Drop the desktop padding + inset caps. */
