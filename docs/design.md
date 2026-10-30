@@ -602,10 +602,10 @@ this. Two things that fell out of Updates' dock coming out in 1.2 still hold:
 elsewhere in this file are guarding, and the bottom nav hugs the home indicator
 (small float, iOS Liquid Glass style) rather than being lifted into the screen.
 
-**The composer is ONE form and the type is inferred, never picked.** Four toggles
-ride the foot of the note box — `link` → Find, `image` → Frame, `poll` → Poll,
-`cal` → Activity — each opening its own surface (the link row, the picker, the
-choices, Where and When) and folding the other three, with `derivePostType`
+**The composer is ONE form and the type is inferred, never picked.** Three toggles
+ride the foot of the note box — `image` → Frame, `poll` → Poll, `cal` → Activity —
+each opening its own surface (the picker, the choices, Where and When) and folding
+the others, with `derivePostType`
 reading whichever is live. Nothing else is a type control: no chips, no groups,
 no switcher. Five things about it:
 

@@ -2357,7 +2357,7 @@
   // A small colored label marking an entry's type (Note / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
-  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll',
+  const TYPE_LABEL = { note: 'Note', find: 'Note', photo: 'Frame', activity: 'Activity', poll: 'Poll',
     song: 'Music' };
   // The same five, pluralised — for prose that has to name a type in the plural
   // ("No frames out here yet" when a filter empties Discover's grid).
@@ -2366,7 +2366,7 @@
   // other sense. It is deliberately absent from TYPE_LABEL, TYPE_GLYPH, ICON_ALL
   // and FILTERS: those are the quintet, and a repost has no hue, no heart and no
   // dot on the pull ring.
-  const TYPE_PLURAL = { note: 'notes', find: 'finds', photo: 'frames', activity: 'activities', poll: 'polls',
+  const TYPE_PLURAL = { note: 'notes', photo: 'frames', activity: 'activities', poll: 'polls',
     song: 'music', repost: 'reposts' };
   // Zoe's poll mark — a hand-drawn pink burst/asterisk (icons/poll.svg). This is
   // the TYPE identity glyph (masthead + filter); the composer's attach toggle uses
@@ -2393,7 +2393,6 @@
      being the composer's other GROUP and became the calendar toggle in that bar. */
   const TYPE_GLYPH = {
     note:     'pencil',
-    find:     'link',
     photo:    'image',
     poll:     'poll',
     activity: 'cal',
@@ -2430,23 +2429,12 @@
       `aria-label="More" title="More">${svgIcon('dots')}</button>`;
   }
 
-  // Where a Find points, for the meta line: its domain, or for a circle's own
-  // link the circle's handle (circleOfFind), which is where it really goes.
-  function findWhere(post) {
-    if (post.type !== 'find' || !post.url) return '';
-    const c = circleOfFind(post);
-    return esc(c ? communityHandle(c) : domainOf(post.url));
-  }
-
-  // Byline (identity) — avatar + profile name, with the date (and a find's
-  // domain) beneath, and the type-tag at the right. Leads every entry. No
-  // @usernames; profile names only.
+  // Byline (identity) — avatar + profile name, with the date beneath, and the
+  // type-tag at the right. Leads every entry. No @usernames; profile names only.
   function bylineEl(post) {
     const u = Store.user(post.author);
     const name = esc(u ? u.name : post.author);
-    const domain = findWhere(post);
-    const meta = esc(niceDate(post.date)) +
-      (domain ? ` <span class="dot">·</span> ${domain}` : '');
+    const meta = esc(niceDate(post.date));
     return `<header class="byline">` +
         `<a class="byline-link" href="#/u/${esc(encodeURIComponent(post.author))}">` +
           avatarEl(u || { name: post.author }) +
@@ -2476,12 +2464,9 @@
 
   // A slim single-author meta line that stands in for the byline on a profile,
   // where the header already establishes whose column this is. Just the date
-  // (and a find's domain) — no repeated avatar + name down the page.
+  // — no repeated avatar + name down the page.
   function soloMetaEl(post) {
-    const domain = findWhere(post);
-    const meta = esc(niceDate(post.date)) +
-      (domain ? ` <span class="dot">·</span> ${domain}` : '');
-    return `<p class="card-solometa"><span>${meta}</span></p>`;
+    return `<p class="card-solometa"><span>${esc(niceDate(post.date))}</span></p>`;
   }
 
   // ── Long notes → "Read more" ───────────────────────────────────────────────
@@ -2510,10 +2495,7 @@
   // literal text ("meet @ noon" is safe).
   const MENTION_RE = /(^|[^\w@])@([a-z0-9_]{2,20})\b/g;
 
-  // opts.link:false renders the bold name without its profile link — for text
-  // that already sits inside an anchor (a title-less find's linked caption),
-  // where a nested <a> would be invalid.
-  function richText(text, author, opts = {}) {
+  function mentionText(text, author) {
     // Tracks where the previous rendered mention ended, so a run of tagged users
     // reads as a list. Only two resolved mentions separated by a single space are
     // joined with a comma — never text after a name, so no stray commas appear.
@@ -2524,10 +2506,20 @@
       const name = esc(u.name);
       if (lead === ' ' && offset === prevEnd) lead = '<strong class="mention">,</strong> ';
       prevEnd = offset + m.length;
-      return lead + (opts.link === false
-        ? `<strong class="mention">${name}</strong>`
-        : `<a class="mention" href="#/u/${esc(encodeURIComponent(handle))}">${name}</a>`);
+      return lead + `<a class="mention" href="#/u/${esc(encodeURIComponent(handle))}">${name}</a>`;
     });
+  }
+
+  // Words, with their @mentions and their links live (linkAnchorHtml). A link
+  // is cut out first, so "instagram.com/@sam" never turns into a mention.
+  function richText(text, author) {
+    let out = '';
+    let at = 0;
+    for (const l of linksIn(text)) {
+      out += mentionText(text.slice(at, l.index), author) + linkAnchorHtml(l.href);
+      at = l.index + l.raw.length;
+    }
+    return out + mentionText(text.slice(at), author);
   }
 
   // ── Rich notes (blog-style headings + emphasis) ─────────────────────────────
@@ -2654,22 +2646,13 @@
   // compose → storage: clean HTML, every text run escaped, mentions kept as tokens.
   const serializeNote = (editor) => richItems(editor, esc, true).map(it => itemHtml(it)).join('');
 
-  // storage → feed: same walk, but text flows through richText (so @mentions link)
-  // and blocks carry render classes. Safe to inject: fixed tags, all text escaped.
-  // opts flows into richText ({ link: false } un-links @mentions, for when the
-  // whole body is about to be nested inside another anchor); opts.trailingIcon
-  // splices markup just inside the last block's closing tag (a titleless find's
-  // external-link glyph, placed at the true end of the visible text).
+  // storage → feed: same walk, but text flows through richText (so @mentions and
+  // links go live) and blocks carry render classes. Safe to inject: fixed tags,
+  // all text escaped.
   const RICH_CLASS = { h1: 'card-h1', h2: 'card-h2', p: 'card-note' };
-  const renderRichNote = (html, author, opts = {}) => {
-    const blocks = richItems(parseNoteHtml(html), (t) => richText(t, author, opts), false)
-      .map(it => itemHtml(it, RICH_CLASS));
-    if (opts.trailingIcon && blocks.length) {
-      const last = blocks.length - 1;
-      blocks[last] = blocks[last].replace(/<\/(h1|h2|p)>$/, `${opts.trailingIcon}</$1>`);
-    }
-    return blocks.join('');
-  };
+  const renderRichNote = (html, author) =>
+    richItems(parseNoteHtml(html), (t) => richText(t, author), false)
+      .map(it => itemHtml(it, RICH_CLASS)).join('');
 
   // storage/legacy → editor: clean editable HTML (no classes, no links), in the
   // EDITOR's reading, a block per line: a paragraph's lines become a <p> each and
@@ -2720,18 +2703,19 @@
      max-height tween all retire with it; an anchor needs no wiring and no state
      to survive a rebuild. */
   function cardNoteHtml(post, full) {
-    if (!post.note) return '';
-    const rich = isRichNote(post.note);
+    const note = noteWithoutTail(post.note, postLinks(post));
+    if (!note) return '';
+    const rich = isRichNote(note);
     const body = rich
-      ? renderRichNote(post.note, post.author)
-      : noteParas(post.note).map(p => notePara(p, post.author)).join('');
+      ? renderRichNote(note, post.author)
+      : noteParas(note).map(p => notePara(p, post.author)).join('');
     // Gate Read-more on the visible text length, not the raw markup (headings and
     // emphasis tags would otherwise trip the teaser on a short, formatted note).
     // A caption written as many short lines (a recipe, a list) blows past the
     // teaser's ~6-line clamp well under the character threshold, so also gate on
     // how many lines it renders as (a heading, or a paragraph's every line, so a
     // poem's stanza counts as the lines it is) — whichever trips first.
-    const plainLen = rich ? post.note.replace(/<[^>]+>/g, '').length : post.note.length;
+    const plainLen = rich ? note.replace(/<[^>]+>/g, '').length : note.length;
     const blockCount = (body.match(/<(?:h1|h2|p)[ >]|<br>/g) || []).length;
     if (full) return body;                                   // the page never clamps
     if (plainLen <= READMORE_MIN && blockCount < READMORE_MIN_BLOCKS) return body;
@@ -2793,16 +2777,14 @@
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
         // TAGS ARE THE FOOT (Zoe, 2026-10-23): a row of chips, one + Tag tap
         // per tag, that wraps and grows the box as it fills, with no rule over
-        // it. The type tools (link → Find, photo → Frame, poll → Poll, calendar
-        // → Activity) hold the row's right corner and the chips flow on its
+        // it. The type tools (photo → Frame, poll → Poll, calendar → Activity)
+        // hold the row's right corner and the chips flow on its
         // left; the tools stay composer-only, since the editor can't change a
         // post's type. The audience is a field of its own at the FOOT of the
         // form, after whatever a photo or a plan opens (audienceFieldHtml,
         // appended by fieldsFor and editFieldsFor).
         (opts.tags ? tagRowHtml(idp, opts.tags, (tools
             ? `<div class="rich-attach-tools">` +
-                `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
-                  `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
                 `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
                   `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
                 `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
@@ -2888,8 +2870,33 @@
   // Wire a rich Note editor: the H1/H2/B/I toolbar, plain-text-only paste, the
   // NOTE_MAX cap + its count, the empty-state placeholder, and toolbar active
   // state. Mentions are wired separately (wireMentions handles contenteditable).
+  /* A link pasted into the words shows its tile under the box, the one the post
+     will wear, inert here: a video can't start and a Join can't walk you off a
+     half-written post. The tile comes off with the link. */
+  function wireLinkPreview(editor) {
+    const field = editor.closest('.field--rich');
+    if (!field) return;
+    field.insertAdjacentHTML('afterend', `<div class="compose-links" hidden inert></div>`);
+    const host = field.nextElementSibling;
+    let shown = '';
+    let wait = 0;
+    const sync = () => {
+      const urls = postLinks({ note: serializeNote(editor) });
+      if (urls.join(' ') === shown) return;
+      shown = urls.join(' ');
+      host.hidden = !urls.length;
+      host.innerHTML = urls.map(linkTileHtml).join('');
+      wireLinkTiles(host);
+    };
+    // A typed link is only whole when the typing stops; a paste is, at once.
+    editor.addEventListener('input', () => { clearTimeout(wait); wait = setTimeout(sync, 700); });
+    editor.addEventListener('paste', () => { clearTimeout(wait); wait = setTimeout(sync, 60); });
+    sync();
+  }
+
   function wireRichEditor(editor, countEl) {
     if (!editor) return;
+    wireLinkPreview(editor);
     const toolbar = editor.parentElement.querySelector('.rich-toolbar');
     const len = () => editor.textContent.length;
 
@@ -3726,15 +3733,14 @@
     // Where it was said, when that was a circle: a quote can carry a circle's
     // post out to people who have never been in it.
     const room = orig.communityId && Store.community(orig.communityId);
-    const domain = findWhere(orig) || (room ? esc(communityHandle(room)) : '');
     const meta = esc(niceDate(orig.date)) +
-      (domain ? ` <span class="dot">·</span> ${domain}` : '');
+      (room ? ` <span class="dot">·</span> ${esc(communityHandle(room))}` : '');
     // A quoted Frame runs full bleed to the tile's own corner, which is why the
     // tile clips rather than padding the image: a photo inset inside a 14px box
     // would need a concentric inner radius, and at this size that curve is mud.
-    // A quoted YouTube Find shows its video's still the same way, and plays on
-    // its own card, one tap through.
-    const yt = !orig.image && orig.type === 'find' && orig.url && youTubeOf(orig.url);
+    // A quoted post's YouTube link shows its video's still the same way, and
+    // plays on its own card, one tap through.
+    const yt = !orig.image && youTubeOf(postLinks(orig)[0] || '');
     const media = orig.image
       ? `<span class="quoted-media">` +
           `<img src="${esc(sizedSrc(orig.poster || orig.image, 330))}" alt="" loading="lazy" decoding="async"` +
@@ -3747,7 +3753,7 @@
     // nothing: the options live on the original's card and this is an excerpt.
     const head = orig.title || (orig.poll && orig.poll.q) || '';
     const title = head ? `<p class="quoted-title">${esc(head)}</p>` : '';
-    const say = notePlain(orig.note || '');
+    const say = noteSaid(orig);
     const body = say ? `<p class="quoted-note">${esc(say)}</p>` : '';
     return `<div class="card-quoted">` +
         media +
@@ -3851,11 +3857,13 @@
               mediaHtml +
             `</div>` +
           `</figure>`) +
+          linkTilesHtml(post) +
           actions +
         `</div>` +
         likersPanelHtml(post, full) +
         commentsPanelHtml(post, full);
       el.dataset.sig = cardSig(el);
+      wireLinkTiles(el);
       if (isVideo) wireFrameVideo(el, post);
       else if (deck) wireDeck(el, post, img.alt);
       else wirePhoto(el, img);
@@ -3864,33 +3872,10 @@
       return el;
     }
 
-    // Text entry (post / find): identity first, then headline, caption, tags.
-    // The type shows as the left rule + the domain; no badge (kept editorial).
+    // Text entry: identity first, then headline, caption, tags.
     // Headline as an <h2> (page title is the h1) for a clean heading outline.
-    const external = /^https?:\/\//.test(post.url || '');
-    const room = circleOfFind(post);
-    const titleHtml = post.title
-      ? (post.url && !room
-          ? `<h2 class="card-title"><a href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
-              `${esc(post.title)}${external ? `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>` : ''}</a></h2>`
-          : `<h2 class="card-title">${esc(post.title)}</h2>`)
-      : '';
-
-    // A find with no title: the caption itself carries the link (underlined the
-    // same way a titled find is), so the destination never gets lost. Rendered
-    // whole — the Read-more clamp would nest a button inside the anchor. Covers
-    // a rich caption (headings/emphasis) same as a plain one — renderRichNote's
-    // { link: false } keeps a @mention from nesting its own <a> in here too.
-    const linkedNote = post.type === 'find' && post.url && !room && !post.title && post.note;
-    const extIcon = `<span class="card-title-ext" aria-hidden="true">${svgIcon('extlink')}</span>`;
-    const noteHtml = linkedNote
-      ? `<a class="card-note-link" href="${esc(post.url)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>` +
-          (isRichNote(post.note)
-            ? renderRichNote(post.note, post.author, { link: false, trailingIcon: external ? extIcon : '' })
-            : noteParas(post.note).map(lines => notePara(lines, post.author, { link: false })).join('')
-                .replace(/<\/p>$/, external ? `${extIcon}</p>` : '</p>')) +
-        `</a>`
-      : cardNoteHtml(post, full);
+    const titleHtml = post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '';
+    const noteHtml = cardNoteHtml(post, full);
 
     // Activities carry a where-line and a when-line under the caption — a quiet
     // pin + place, then calendar + day (and time). Same voice, stacked.
@@ -3917,30 +3902,28 @@
             : 'Shared privately'}</span></p>`
       : '';
 
-    // A YouTube Find's tags sit over its video (Zoe, 2026-10-26), with the
-    // words they label, not under the tile.
-    const ytHtml = youTubeTileHtml(post);
+    // A post's tags sit over its link tiles (Zoe, 2026-10-26, of a YouTube
+    // video), with the words they label, not under the tile.
+    const tiles = linkTilesHtml(post);
     el.innerHTML =
       `<div class="card-main">` +
         head +
         titleHtml +
         noteHtml +
-        (ytHtml ? tagChips(post) + ytHtml : '') +
-        (room ? circleTileHtml(room) : '') +
+        (tiles ? tagChips(post) + tiles : '') +
         songTileHtml(post) +
         pollWidgetHtml(post) +
         locationHtml +
         whenHtml +
         audienceHtml +
-        (ytHtml ? '' : tagChips(post)) +
+        (tiles ? '' : tagChips(post)) +
         actions +
       `</div>` +
       goingPanelHtml(post, full) +
       likersPanelHtml(post, full) +
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
-    wireYouTube(el, post);
-    if (room) wireCommunityJoins(el);
+    wireLinkTiles(el);
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
@@ -3953,12 +3936,11 @@
      first for the reason a Frame's caption does: text settles before media.
      The whole row is the link, out to the reader's own service (songLink),
      which is the same tap a song on the rail makes. */
-  function songTileHtml(post) {
-    const s = post.type === 'song' && post.song;
-    if (!s) return '';
+  const songTileHtml = (post) => post.type === 'song' && post.song ? songRowHtml(post.song) : '';
+  function songRowHtml(s) {
     const sub = songSub(s);
     return `<a class="card-song" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
-        `aria-label="${esc(['Listen to ' + s.title, songSub(s, ', ')].filter(Boolean).join(', '))}">` +
+        `data-out="system" aria-label="${esc(['Listen to ' + s.title, songSub(s, ', ')].filter(Boolean).join(', '))}">` +
         `<span class="song-art card-song-art${s.art ? ' pin-cover' : ''}"${s.art
           ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
         `<span class="song-lines" aria-hidden="true">` +
@@ -3969,24 +3951,17 @@
       `</a>`;
   }
 
-  /* A FIND THAT IS A CIRCLE IS THE CIRCLE'S CARD (2.0, 2026-10-25, Zoe: a
-     circle's Invite sheet leads with a post to your feed, "posted as a card").
-     The way a YouTube link is its video, read off the URL as the card is drawn
-     and nothing stored, so any Find ever posted with a circle's link wears it,
-     and a pasted one in the composer turns into it too. It is Discover's card
-     for the circle (communityCardHtml), set into the post where a quote's tile
-     sits, Join pill and all: a friend reads why you're in it, then steps in
-     from the feed. A circle that has closed leaves the plain Find. */
-  function circleOfFind(post) {
-    return post.type === 'find' && post.url ? (circleInMessage(post.url) || {}).c || null : null;
-  }
+  /* A LINK TO A CIRCLE IS THE CIRCLE'S CARD (2.0, 2026-10-25, Zoe: a circle's
+     Invite sheet leads with a post to your feed, "posted as a card"). It is
+     Discover's card for the circle (communityCardHtml), set into the post where
+     a quote's tile sits, Join pill and all: a friend reads why you're in it,
+     then steps in from the feed. A circle that has closed draws a plain link. */
+  const circleOfLink = (url) => (circleInMessage(url) || {}).c || null;
   const circleTileHtml = (c) => `<div class="card-circle">${communityCardHtml(c)}</div>`;
 
-  /* A FIND THAT IS A YOUTUBE VIDEO PLAYS IN ITS CARD (2.0, 2026-10-25, Zoe:
-     "embed them so that thumbnails and everything show"). Everything is read
-     off the link as the card is drawn and nothing is stored on the post, so
-     every Find ever posted with one wears it too. Nothing was migrated, and
-     nothing needed to be.
+  /* A YOUTUBE LINK PLAYS IN ITS CARD (2.0, 2026-10-25, Zoe: "embed them so
+     that thumbnails and everything show"). Everything is read off the link as
+     the card is drawn and nothing is stored on the post.
 
      It is drawn as the quote's and the song's tile, an object set into the
      post: the video's still, a glass play disc on it, then its title and
@@ -3996,12 +3971,13 @@
 
      The title and channel are YouTube's oEmbed, the endpoint the music picker
      reads too, kept on the device (YT_KEY) so a tile seen once is whole on its
-     first frame after that. They land in a microtask, after cardSig has been
-     taken (passedCard takes it again as makeCard returns), so a card whose
-     words arrived late never reads to the feed's diff as a changed card. A
-     changed card is rebuilt, and a rebuild would stop the video under the
-     reader; keepYouTube carries a live tile across one that really happens. */
-  const YT_HOST = /^(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com$/i;
+     first frame after that. They land after cardSig has been taken (passedCard
+     takes it again as makeCard returns), so a card whose words arrived late
+     never reads to the feed's diff as a changed card. A changed card is
+     rebuilt, and a rebuild would stop the video under the reader; keepTiles
+     carries a live tile across one that really happens. */
+  // Not music.youtube.com: that link is a song (MUSIC_HOST), and draws as one.
+  const YT_HOST = /^(?:www\.|m\.)?youtube(?:-nocookie)?\.com$/i;
   function youTubeOf(url) {
     let u;
     try { u = new URL(url); } catch { return null; }
@@ -4045,9 +4021,7 @@
       : `https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&playsinline=1&rel=0${start}`;
   }
 
-  function youTubeTileHtml(post) {
-    const v = post.type === 'find' && post.url && youTubeOf(post.url);
-    if (!v) return '';
+  function youTubeTileHtml(v) {
     return `<figure class="card-yt${v.short ? ' card-yt--short' : ''}" data-yt="${v.id}:${v.start}">` +
         `<div class="card-yt-frame">` +
           `<img src="${esc(ytStills(v)[0])}" alt="" loading="lazy" decoding="async">` +
@@ -4095,23 +4069,22 @@
     if (liveYouTube === fig) liveYouTube = null;
   }
 
-  function wireYouTube(el, post) {
-    const fig = el.querySelector('.card-yt');
-    if (!fig) return;
-    const v = youTubeOf(post.url);
+  function wireYouTube(fig) {
+    const url = fig.dataset.tile;
+    const v = youTubeOf(url);
     const im = fig.querySelector('img');
     const stills = ytStills(v);
     let at = 0;
     // One handler for load and error: a real still is revealed once decoded
     // (the photo's settle, see revealCardImage), a placeholder or a failure
     // steps down. Out of stills, the video is gone (deleted, or a link to
-    // nothing), and the card goes back to being the plain Find it was.
+    // nothing), and the tile goes back to being a plain link.
     const step = () => {
       if (im.naturalWidth > 120) {
         const show = () => fig.classList.add('is-loaded');
         im.decode ? im.decode().then(show, show) : show();
       } else if (++at < stills.length) im.src = stills[at];
-      else fig.remove();
+      else fig.replaceWith(tileNode(pageTileHtml(url), url));
     };
     im.addEventListener('load', step);
     im.addEventListener('error', step);
@@ -4138,7 +4111,7 @@
         // Not ours to play, so the tile is a way to YouTube instead (the app
         // when it's installed: see data-out in the outbound handler).
         go?.replaceWith(Object.assign(document.createElement('a'), {
-          className: 'card-yt-go', href: post.url, target: '_blank', rel: 'noopener noreferrer',
+          className: 'card-yt-go', href: url, target: '_blank', rel: 'noopener noreferrer',
         }));
         const out = fig.querySelector('a.card-yt-go');
         out.dataset.out = 'system';
@@ -4155,12 +4128,315 @@
     });
   }
 
+  /* ── LINKS ARE PART OF THE WORDS (2026-10-30, Zoe: "I want every link embedded
+     as much as possible ... Finds or links are now just a part of notes") ──────
+     There is no link field and no Find any more: you paste a link into what
+     you're writing, and it stays there, a plain URL in the stored note. So all
+     of this is read off the words as a card is drawn, nothing is stored, and
+     every link anybody ever pasted wears it. An older Find's `url` lives outside
+     its words and is read first (postLinks).
+
+     Every link gets a tile under the post, up to LINKS_MAX of them, the best
+     one that link can have (linkTileHtml): a circle's card, a Tria post or
+     person, a song's row, a YouTube player, the picture itself, and otherwise
+     the page's own title and picture. The worst a link can do is a row naming
+     where it goes. A link that ends the words has said its piece as a tile, so
+     it comes out of them (noteWithoutTail); one in the middle of a sentence
+     stays, short and tappable (linkAnchorHtml).
+
+     A tile is drawn as a stand-in and filled in a microtask (wireLinkTiles),
+     after cardSig has been taken, so what a tile has learned never reads to the
+     feed's diff as a changed card, and a tile already known fills before paint. */
+  const LINKS_MAX = 4;
+  const LINK_RE = /(?:https?:\/\/|\bwww\.)[^\s<>"]+/gi;
+  // A sentence's own punctuation isn't the link's. A closing bracket is, when
+  // the link opened one, which is every Wikipedia_(film).
+  const linkEnd = (raw) => {
+    let s = raw.replace(/[.,;:!?'’”*_~]+$/, '');
+    while (/[)\]]$/.test(s) && !/[([]/.test(s)) s = s.slice(0, -1).replace(/[.,;:!?'’”*_~]+$/, '');
+    return s;
+  };
+  function linksIn(text) {
+    const out = [];
+    for (const m of String(text || '').matchAll(LINK_RE)) {
+      const raw = linkEnd(m[0]);
+      const href = /^www\./i.test(raw) ? 'https://' + raw : raw;
+      let host = '';
+      try { host = new URL(href).hostname; } catch { /* not a link after all */ }
+      if (host.includes('.')) out.push({ raw, href, index: m.index });
+    }
+    return out;
+  }
+
+  const postLinksMemo = new Map();
+  function postLinks(post) {
+    const key = (post.url || '') + '\n' + (post.note || '');
+    let urls = postLinksMemo.get(key);
+    if (!urls) {
+      urls = [...new Set([...(/^https?:\/\//i.test(post.url || '') ? [post.url] : []),
+        ...linksIn(notePlain(post.note)).map(l => l.href)])].slice(0, LINKS_MAX);
+      if (postLinksMemo.size >= NOTE_PLAIN_MAX) postLinksMemo.clear();
+      postLinksMemo.set(key, urls);
+    }
+    return urls;
+  }
+
+  /* The words without the links that end them, when those links have a tile.
+     The last word goes while it is one, in plain text or down in a rich note's
+     last text node; what that leaves empty, richItems reads as nothing. */
+  function noteWithoutTail(note, shown) {
+    if (!note || !shown.length) return note;
+    const isShown = (word) => {
+      const l = linksIn(word)[0];
+      return !!l && !l.index && shown.includes(l.href);
+    };
+    const cut = (text) => {
+      let s = text.trimEnd();
+      for (let w = /\S+$/.exec(s); w && isShown(w[0]); w = /\S+$/.exec(s)) s = s.slice(0, w.index).trimEnd();
+      return s;
+    };
+    if (!isRichNote(note)) return cut(String(note));
+    const body = parseNoteHtml(note);
+    const lastText = () => {
+      const walk = body.ownerDocument.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      let last = null;
+      while (walk.nextNode()) if (walk.currentNode.nodeValue.trim()) last = walk.currentNode;
+      return last;
+    };
+    for (let n = lastText(); n; n = lastText()) {
+      const left = cut(n.nodeValue);
+      if (left === n.nodeValue.trimEnd()) break;
+      n.nodeValue = left;
+    }
+    return body.textContent.trim() ? body.innerHTML : '';
+  }
+  // What a post says, for wherever it is named in a line of its own.
+  const noteSaid = (post) => notePlain(noteWithoutTail(post.note, postLinks(post)));
+
+  // Tria's own links stay in Tria: `/c/`, `/p/` and `/u/` are routes.
+  function triaRoute(url) {
+    let u;
+    try { u = new URL(url); } catch { return ''; }
+    if (!/^(?:www\.)?triaonline\.com$/i.test(u.hostname) && u.host !== location.host) return '';
+    return /^\/(?:c|p|u)\/[^/]+\/?$/.test(u.pathname) ? '#' + u.pathname + u.search : '';
+  }
+
+  const linkTarget = (url) => {
+    const route = triaRoute(url);
+    return route ? `href="${esc(route)}"` : `href="${esc(url)}" target="_blank" rel="noopener noreferrer"`;
+  };
+  // A link as words: no scheme, no www, and short enough to sit in a sentence.
+  function linkAnchorHtml(url) {
+    const said = url.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/\/$/, '');
+    return `<a class="note-link" ${linkTarget(url)}>${esc(said.length > 36 ? said.slice(0, 35) + '…' : said)}</a>`;
+  }
+
+  const IMAGE_LINK = /^https:.*\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)/i;
+  const tileTemplate = document.createElement('template');
+  const tileNode = (html, url) => {
+    tileTemplate.innerHTML = linkTileStamp(html, url);
+    const node = tileTemplate.content.firstElementChild;
+    tileWired.add(node);
+    return node;
+  };
+  // Every tile names its link, which is how it is wired and how it is kept.
+  const linkTileStamp = (html, url) => html.replace(/^<[\w-]+/, (m) => `${m} data-tile="${esc(url)}"`);
+
+  const pageLinesHtml = (url, m) =>
+    `<span class="card-page-lines">` +
+      `<span class="card-page-title">${esc(m.title || domainOf(url))}</span>` +
+      (m.about ? `<span class="card-page-about">${esc(m.about)}</span>` : '') +
+      (m.title ? `<span class="card-page-by">${esc(domainOf(url))}</span>` : '') +
+    `</span>`;
+  // The page's own picture when it has one, full width. A link with none, or
+  // one the page never named, is a row with a mark where the picture would be.
+  function pageTileHtml(url, m = {}) {
+    return `<a class="card-page${m.image ? '' : ' card-page--row'}" ${linkTarget(url)}>` +
+        (m.image
+          ? `<span class="card-page-pic"><img src="${esc(m.image)}" alt="" loading="lazy" decoding="async"></span>`
+          : `<span class="card-page-ico" aria-hidden="true">${svgIcon('link')}</span>`) +
+        pageLinesHtml(url, m) +
+      `</a>`;
+  }
+  // A picture's own address is the picture.
+  const imageTileHtml = (url) =>
+    `<a class="card-page card-page--image" ${linkTarget(url)} aria-label="Open the picture">` +
+      `<span class="card-page-pic"><img src="${esc(url)}" alt="" loading="lazy" decoding="async"></span></a>`;
+
+  // A song's row before it has been read: the same size, so nothing moves.
+  function songWaitHtml(url) {
+    const service = /spotify/i.test(url) ? 'Spotify' : /youtube/i.test(url) ? 'YouTube Music' : 'Apple Music';
+    return `<a class="card-song" href="${esc(url)}" target="_blank" rel="noopener noreferrer" ` +
+        `data-out="system" data-read="song">` +
+        `<span class="song-art card-song-art" aria-hidden="true"></span>` +
+        `<span class="song-lines"><span class="song-artist">${service}</span></span>` +
+        `<span class="card-song-play" aria-hidden="true">${svgIcon('play')}</span>` +
+      `</a>`;
+  }
+
+  function triaTileHtml(url, route) {
+    const [, kind, key] = /^#\/(\w)\/([^?/]+)/.exec(route) || [];
+    const id = decodeURIComponent(key || '');
+    if (kind === 'c') { const c = circleOfLink(url); return c ? circleTileHtml(c) : ''; }
+    if (kind === 'p') {
+      const post = Store.posts().find(p => String(p.id) === id);
+      return post ? quotedCardEl(post) : '';
+    }
+    const u = Store.user(id);
+    return u
+      ? `<a class="card-page card-page--row" href="${esc(route)}">` +
+          avatarEl(u, { cls: 'card-page-face' }) +
+          `<span class="card-page-lines"><span class="card-page-title">${esc(u.name)}</span>` +
+          `<span class="card-page-by">@${esc(u.username)}</span></span></a>`
+      : '';
+  }
+
+  function linkTileHtml(url) {
+    const route = triaRoute(url);
+    const v = youTubeOf(url);
+    return linkTileStamp((route && triaTileHtml(url, route))
+      || (route ? pageTileHtml(url)
+        : MUSIC_HOST.test(url) ? songWaitHtml(url)
+        : v ? youTubeTileHtml(v)
+        : IMAGE_LINK.test(url) ? imageTileHtml(url)
+        : pageTileHtml(url).replace(' class="card-page', ' data-read="page" class="card-page')), url);
+  }
+  const linkTilesHtml = (post) => postLinks(post).map(linkTileHtml).join('');
+
+  /* WHAT A PAGE SAYS ABOUT ITSELF, its preview tags, as every app that draws a
+     link reads them. Only the native shell can: a web view may not read another
+     site's page, so TriaSettings.pageHead reads it (no server, no secret), and
+     on the website, or on a build older than that method, a link stays the row
+     naming where it goes. Kept per device (LINKS_KEY), the way a video's title
+     is. DOMParser runs nothing and loads nothing, and every word goes through
+     esc, so a hostile page has no more reach than a hostile note. */
+  const LINKS_KEY = 'tria:links';
+  let linksKept = null;
+  const linkAsked = new Map();   // url → the read in flight, so a feed asks once
+  function pageMeta(html, base) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const tag = (...names) => {
+      for (const n of names) {
+        const v = doc.querySelector(`meta[property="${n}"],meta[name="${n}"]`)?.getAttribute('content')?.trim();
+        if (v) return v;
+      }
+      return '';
+    };
+    const title = (tag('og:title', 'twitter:title') || doc.title || '').trim().slice(0, 200);
+    const about = tag('og:description', 'twitter:description', 'description').slice(0, 300);
+    const named = tag('og:image:secure_url', 'og:image', 'twitter:image', 'twitter:image:src');
+    let image = '';
+    try {
+      if (named) {
+        const u = new URL(named, base);
+        u.protocol = 'https:';
+        image = u.href;
+      }
+    } catch { /* no picture worth drawing */ }
+    return { title, about: about === title ? '' : about, image };
+  }
+  function linkMeta(url) {
+    if (!linksKept) {
+      try { linksKept = JSON.parse(localStorage.getItem(LINKS_KEY) || '{}') || {}; } catch { linksKept = {}; }
+    }
+    if (linksKept[url]) return Promise.resolve(linksKept[url]);
+    if (linkAsked.has(url)) return linkAsked.get(url);
+    if (!nativeShell()) return Promise.resolve(null);
+    const ask = window.Capacitor.nativePromise('TriaSettings', 'pageHead', { url })
+      .then((page) => {
+        const m = /^image\//.test(page.type || '')
+          ? { title: '', about: '', image: page.url, only: true }
+          : pageMeta(page.html || '', page.url || url);
+        if (page.url && page.url !== url) m.moved = page.url;
+        if (!m.title && !m.image && !m.moved) return null;
+        linksKept[url] = m;
+        const urls = Object.keys(linksKept);
+        if (urls.length > 300) delete linksKept[urls[0]];
+        try { localStorage.setItem(LINKS_KEY, JSON.stringify(linksKept)); } catch { /* full or private */ }
+        return m;
+      })
+      .catch(() => null);
+    linkAsked.set(url, ask);
+    return ask;
+  }
+
+  // The picture lands, or doesn't. One too small to hold the tile's width (a
+  // logo, an avatar) moves to the row's corner instead of blowing up to soft.
+  function wirePagePicture(tile, url) {
+    const im = tile.querySelector('.card-page-pic img');
+    if (!im) return;
+    const show = () => {
+      if (!tile.classList.contains('card-page--image') && im.naturalWidth < 360) tile.classList.add('card-page--row');
+      tile.classList.add('is-loaded');
+    };
+    const fail = () => {
+      if (tile.classList.contains('card-page--image')) { tile.replaceWith(tileNode(pageTileHtml(url), url)); return; }
+      const pic = tile.querySelector('.card-page-pic');
+      pic?.insertAdjacentHTML('afterend', `<span class="card-page-ico" aria-hidden="true">${svgIcon('link')}</span>`);
+      pic?.remove();
+      tile.classList.add('card-page--row');
+    };
+    if (im.complete && im.naturalWidth) { show(); return; }
+    im.addEventListener('load', () => (im.decode ? im.decode().then(show, show) : show()), { once: true });
+    im.addEventListener('error', fail, { once: true });
+  }
+
+  /* A link that redirects (bit.ly, spotify.link, a shortened youtu.be) moves to
+     where it landed: if that is somewhere with a better tile, it takes that
+     one, once. */
+  async function readPage(tile, url, hop = true) {
+    const m = await linkMeta(url);
+    if (!m) return;
+    const to = m.moved || url;
+    if (hop && m.moved && !triaRoute(to) && (MUSIC_HOST.test(to) || youTubeOf(to) || IMAGE_LINK.test(to))) {
+      const moved = tileNode(linkTileHtml(to), url);
+      tileWired.delete(moved);
+      tile.replaceWith(moved);
+      wireTile(moved);
+      return;
+    }
+    const html = m.only ? imageTileHtml(to) : m.title || m.image ? pageTileHtml(to, m) : '';
+    if (!html) return;
+    const next = tileNode(html, url);
+    tile.replaceWith(next);
+    wirePagePicture(next, url);
+  }
+
+  function readSong(tile, url) {
+    const paint = (s) => tile.replaceWith(tileNode(songRowHtml(s), url));
+    const known = songMemory().get(url);
+    if (known) { paint(known); return; }
+    if (!linkAsked.has(url + '#song')) linkAsked.set(url + '#song', resolveSongUrl(url).catch(() => null));
+    linkAsked.get(url + '#song').then((s) => {
+      if (!s || !s.title) { readPage(tile, url, false); return; }
+      rememberSong(s, url);
+      paint(s);
+    });
+  }
+
+  const tileWired = new WeakSet();
+  function wireTile(t) {
+    if (tileWired.has(t)) return;
+    tileWired.add(t);
+    const url = t.dataset.tile;
+    if (t.matches('.card-yt')) wireYouTube(t);
+    else if (t.dataset.read === 'song') readSong(t, url);
+    else if (t.dataset.read === 'page') readPage(t, url);
+    else if (t.matches('.card-circle')) wireCommunityJoins(t);
+    else wirePagePicture(t, url);
+  }
+  const wireLinkTiles = (root) => {
+    const tiles = [...root.querySelectorAll('[data-tile]')];
+    if (tiles.length) queueMicrotask(() => tiles.forEach(wireTile));
+  };
+
   // A rebuilt card (a like or a comment landing) keeps a tile that is the same
-  // video, so the one playing goes on playing and a still isn't fetched twice.
-  function keepYouTube(old, fresh) {
-    const was = old.querySelector('.card-yt');
-    const now = fresh.querySelector('.card-yt');
-    if (was && now && was.dataset.yt === now.dataset.yt) now.replaceWith(was);
+  // link, so the video playing goes on playing and nothing is fetched twice.
+  function keepTiles(old, fresh) {
+    const was = [...old.querySelectorAll('[data-tile]')];
+    fresh.querySelectorAll('[data-tile]').forEach((now, i) => {
+      if (was[i] && was[i].dataset.tile === now.dataset.tile) now.replaceWith(was[i]);
+    });
   }
 
   // A BARE repost: the original's card with a line on top. makeCard calls itself,
@@ -4230,6 +4506,7 @@
         // below is already a target for the whole of it.
         (post.title ? `<h2 class="card-title">${esc(post.title)}</h2>` : '') +
         cardNoteHtml(post, full) +
+        linkTilesHtml(post) +
         quotedCardEl(orig) +
         cardActionsHtml(post, { ...opts, goingPost: orig }) +
       `</div>` +
@@ -4237,6 +4514,7 @@
       likersPanelHtml(post, full) +
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
+    wireLinkTiles(el);
     wireGoing(el, orig, opts, post);
     wireLikes(el, post, opts);
     wireComments(el, post);
@@ -5258,6 +5536,8 @@
     const u = Store.user(c.author);
     const name = esc(u ? u.name : c.author);
     const own = c.author === Store.session();
+    // A comment wears its first link's tile, the one link a thread has room for.
+    const link = linksIn(c.text)[0];
     // Your own comment has no trash: holding it offers Edit and Delete
     // (wireCommentHold, 2026-10-29, Zoe).
     return `<li class="comment${own ? ' comment--own' : ''}" data-comment="${esc(c.id)}">` +
@@ -5267,8 +5547,9 @@
         `<div class="comment-body">` +
           `<p class="comment-text">` +
             `<a class="comment-name" href="#/u/${esc(encodeURIComponent(c.author))}">${name}</a> ` +
-            richText(c.text, c.author) +
+            richText(noteWithoutTail(c.text, link ? [link.href] : []), c.author) +
           `</p>` +
+          (link ? linkTileHtml(link.href) : '') +
           commentPhotoHtml(c, name) +
           `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
         `</div>` +
@@ -5384,7 +5665,7 @@
     const row = Store.posts().find(p => String(p.id) === String(el.dataset.id));
     if (!row) return null;
     const fresh = makeCard(row, { full: true, solo: false });
-    keepYouTube(el, fresh);
+    keepTiles(el, fresh);
     fresh.style.animation = 'none';                 // no rise flash on an in-place swap
     // Roll the comment count in its new direction (up on add, down on delete).
     if (dir) odoTick(fresh.querySelector('.card-comment-count'), dir);
@@ -5479,6 +5760,7 @@
         const img = btn.querySelector('img');
         openLightbox(img.currentSrc || img.src, '', false, img);
       }));
+    wireLinkTiles(root);
     root.querySelectorAll('button.comment-like').forEach(btn =>
       wireHeart(btn, () => Store.toggleCommentLike(btn.dataset.comment)));
   }
@@ -5786,9 +6068,8 @@
     const tags = { value: shownTags(post).join(', ') };
 
     if (post.type === 'find') {
-      // A Find shares the Note editor (headline + rich body), same as the composer,
-      // then carries the link field. Keeps create and edit identical, so a formatted
-      // Find edits as rich text instead of raw markup in a flat 180-char box.
+      // A Find from before links joined the words: the Note editor, then the
+      // link field that its one link still lives in.
       return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, tags }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
@@ -6283,7 +6564,6 @@
   const FILTERS = [
     { key: 'all',      label: 'All' },
     { key: 'note',     label: 'Notes' },
-    { key: 'find',     label: 'Finds' },
     { key: 'photo',    label: 'Frames' },
     { key: 'poll',     label: 'Polls' },
     { key: 'activity', label: 'Activities' },
@@ -6291,6 +6571,8 @@
   ];
   let activeFilter = 'all';
   let activeTag = null;
+  // A Find from before links joined the words is a note in every list.
+  const filterType = (p) => p.type === 'find' ? 'note' : p.type;
 
   // The toolbar's filter control: the sliders glyph, WEARING the active type's
   // hue whenever a filter is on, so a closed menu still tells you the feed is
@@ -6964,7 +7246,7 @@
             if (oldImg && newFig && oldImg.src === newFig.querySelector('img')?.src) {
               newFig.replaceWith(oldImg.closest('.photo'));
             }
-            keepYouTube(old, fresh);
+            keepTiles(old, fresh);
             fresh.style.animation = 'none';
             wire(fresh);
             old.replaceWith(fresh);
@@ -7313,7 +7595,7 @@
       // Frames filter because the row says 'repost' would hide a Frame that is
       // visibly sitting in the feed. Same for its tags: the chips on that card are
       // the original's, so tapping one has to match it back.
-      const typeOk = activeFilter === 'all' || s.type === activeFilter;
+      const typeOk = activeFilter === 'all' || filterType(s) === activeFilter;
       const tagOk = !activeTag || (s.tags || []).includes(activeTag);
       return typeOk && tagOk;
     });
@@ -8122,15 +8404,17 @@
   // under, and a browse surface should show the talking. `poll.q` is a legacy
   // shape: the composer has stored a poll's question in title/note for a while
   // now, so it's a last resort rather than the first look.
+  const linkSub = (p) => postLinks(p).length ? domainOf(postLinks(p)[0]) : '';
   const saidOf = (p) =>
-    notePlain(p.note) || p.title || (p.poll && p.poll.q) || (p.song && p.song.title) || '';
+    noteSaid(p) || p.title || (p.poll && p.poll.q) || (p.song && p.song.title) || linkSub(p);
 
   // Everything that isn't a photo speaks instead: what it said, set in the
   // serif, with a quiet second line where the type has one worth adding. A
   // note set large is a better tile than a bad selfie, which is most of why
   // the text face exists at all rather than falling back to a portrait.
   const TILE_SUB = {
-    find:     (p) => domainOf(p.url || ''),
+    note:     linkSub,
+    find:     linkSub,
     activity: (p) => p.location || '',
     // A song post with words of its own says them and names the track under
     // them; one with none is its title, and the artist goes under that.
@@ -8140,8 +8424,8 @@
         : songSub(p.song),
   };
   // A say tile leads with the WORDS — no type glyph above them competing for the
-  // top of a small box. The sub line below adds what's worth adding (a Find's
-  // domain, an activity's place), in words.
+  // top of a small box. The sub line below adds what's worth adding (where a
+  // link goes, an activity's place), in words.
   function sayFaceEl(p) {
     const sub = TILE_SUB[p.type] ? TILE_SUB[p.type](p) : '';
     return `<div class="ptile-face ptile-face--say">` +
@@ -8358,7 +8642,7 @@
     // argument. A profile with nothing but notes gets no control at all — one
     // type and one layout isn't a choice — but a single photo earns one on its
     // own, because Frames isn't a narrowing, it's the wall.
-    const types = new Set(list.map(p => p.type));
+    const types = new Set(list.map(filterType));
     const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))];
     // Reposts get a row of their own, APPENDED rather than slotted into the
     // ladder. All → the five types reads as one run from widest to narrowest, and
@@ -8673,7 +8957,7 @@
     const paintPosts = (stage) => {
       dropCards();                      // a column still paying out is about to go
       feedEl.textContent = '';
-      const shown = profileFilter === 'all' ? list : list.filter(p => p.type === profileFilter);
+      const shown = profileFilter === 'all' ? list : list.filter(p => filterType(p) === profileFilter);
       if (locked && !shown.length) {
         // Private profile, seen by an outsider, with nothing public to show.
         feedEl.innerHTML = lockedNudge(false);
@@ -11530,7 +11814,7 @@
       kind: daily ? 'daily' : (still ? 'photo' : 'note'),
       author: { name: a.name, username: a.username, avatar: a.avatar || null },
       title: post.title || '',
-      blocks: cardBlocks(post.note),
+      blocks: cardBlocks(noteWithoutTail(post.note, postLinks(post))),
       prompt: daily ? daily.prompt : null,
       photo: still || null,
       address: 'triaonline.com',
@@ -13811,8 +14095,7 @@
     // not the full-size upload `still` points at (see thumbUrl in store.js).
     const face = still ? `background-image:url('${encodeURI(thumbUrl(still, 88))}')` : '';
     const sub = p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
-      : p.type === 'find' && p.url ? domainOf(p.url)
-      : '';
+      : linkSub(p);
     // NO STAND-IN SQUARE FOR A POST WITH NO PICTURE. A type glyph on a pastel
     // tile was a mark saying "this is a Note" beside a note that is already
     // legible as one, and three cards each carrying one turned the stack into a
@@ -14667,7 +14950,7 @@
       dock: 'Done',
       scrimClass: 'sheet-scrim--aud sheet-scrim--invite',
       // First, the whole room at once: a post to your circle carrying the
-      // circle as its card (circleOfFind), in the composer so you can say why.
+      // circle as its card, in the composer so you can say why.
       rowsFirst: true,
       items: [{ label: 'Post to your circle', icon: 'compose', run: () => {
         pendingCircleShare = c.id;
@@ -16041,7 +16324,7 @@
     // A picked type narrows it to that type; an empty query is all of them.
     const postsMatching = (q, type) => Store.posts().filter(p =>
       !p.repostOf && !p.communityId && p.type !== 'song' && !Blocks.has(p.author)
-      && (type === 'all' || p.type === type)
+      && (type === 'all' || filterType(p) === type)
       && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
     let discoverable = new Set();
 
@@ -16395,7 +16678,7 @@
   // row is recognisable without leaving the list.
   function notifPostLabel(post) {
     if (!post) return 'a post';
-    const t = post.title || notePlain(post.note) || '';
+    const t = post.title || noteSaid(post) || '';
     const snip = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t;
     if (snip) return `“${snip}”`;
     const yours = post.author === Store.session();
@@ -17044,7 +17327,11 @@
     const href = `#/u/${esc(encodeURIComponent(m.author))}`;
     const room = m.text ? circleInMessage(m.text) : null;
     const tune = m.text && !room ? songInMessage(m.text) : null;
-    const said = room ? room.rest : tune ? tune.rest : m.text;
+    // Anything else a message links to wears its tile too, under the words. A
+    // music link is left to songInMessage, which paints it once it has read it.
+    const link = m.text && !room && !tune ? linksIn(m.text).find(l => !MUSIC_HOST.test(l.href)) : null;
+    const said = room ? room.rest : tune ? tune.rest
+      : link ? noteWithoutTail(m.text, [link.href]) : m.text;
     return `<li class="msg${mine ? ' msg--mine' : ''}${run ? ' msg--run' : ''}" data-id="${esc(m.id)}">` +
       (mine ? '' : `<span class="msg-face">${run ? '' :
         `<a class="msg-face-link" href="${href}" aria-label="${name}">` +
@@ -17066,6 +17353,7 @@
               richText(said, m.author) + `</div>`
           : '') +
         (room ? msgCircleHtml(room.c) : '') +
+        (link ? linkTileHtml(link.href) : '') +
         (hearts.length
           ? `<span class="msg-hearts" role="img" aria-label="Hearted by ${esc(listNames(hearts.map(h => displayNameOf(h.user))))}">` +
               svgIcon('heart') + `</span>`
@@ -17126,12 +17414,14 @@
         const was = prev.querySelector('.msg-photo');
         const now = fresh.querySelector('.msg-photo');
         if (was && now && was.dataset.photo === now.dataset.photo) now.replaceWith(was);
+        keepTiles(prev, fresh);
       }
       if (node === at) at = at.nextElementSibling;
       else list.insertBefore(node, at);
     }
     // Every row placed went in before `at`, so what is left from it on is stale.
     while (at) { const next = at.nextElementSibling; at.remove(); at = next; }
+    wireLinkTiles(list);
   }
 
   /* A heart's pop and sparkle have to finish before the thread is rebuilt under
@@ -18073,20 +18363,19 @@
   }
 
   /* ── Publish (composer) ───────────────────────────────────────────────────
-     ONE form and one field set. Nothing here asks what you are making: the four
-     attach toggles at the note's foot open a link row, a photo picker, a poll's
-     choices or a place and a time, and the type follows from whichever is open.
+     ONE form and one field set. Nothing here asks what you are making: the
+     attach toggles at the note's foot open a photo picker, a poll's choices or
+     a place and a time, and the type follows from whichever is open. A link is
+     just pasted into the words, and shows its tile under them as it would post.
      Photos get a real upload, shown and posted at their native aspect ratio (no
      crop). On publish we route home so the new entry animates in at the top of
      the feed. */
   const PUB_TYPES = [
     { key: 'note',     label: 'Note'     },
-    { key: 'find',     label: 'Find'     },
     { key: 'photo',    label: 'Frame'    },
     { key: 'activity', label: 'Activity' },
   ];
-  // The type is INFERRED, never picked: attach a link and it's a Find, a photo and
-  // it's a Frame, a poll and it's a Poll, a place and a time and it's an Activity,
+  // The type is INFERRED, never picked: attach a photo and it's a Frame, a poll and it's a Poll, a place and a time and it's an Activity,
   // nothing at all and it's a Note. `pubType` is that inference, and it's what the
   // data layer and the masthead mark read.
   //
@@ -18099,6 +18388,7 @@
   // optional headline, its own copy of the audience lock. A plan is a note with a
   // place and a time attached, so that is what it is made of now.
   let pubType = 'note';
+  let pubCarried = '';       // a circle's link carried in from its Invite sheet (wireCarriedCircle)
   let cropper = null;        // set once a still is captured/picked; .export() → data-URI
   let stills = [];           // every picked photo, [{ api, src, im }] in deal order; cropper is stills[0].api
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
@@ -18130,11 +18420,6 @@
   ];
   const randomNotePlaceholder = () =>
     NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)];
-
-  // A URL inside a Note renders as plain text (notes don't linkify, on purpose)
-  // — links belong to Finds, where the destination gets a real home. The
-  // composer watches for one and offers the switch (see wireFindNudge).
-  const NOTE_URL_RE = /(https?:\/\/\S+|\bwww\.\S+)/i;
 
   // The photo/video capture surface. On Frame the field reveals a plain upload
   // dropzone (a visible, labelled field like every other one — more discoverable
@@ -18202,7 +18487,7 @@
 
     // A QUOTE is the ordinary note field — headline and all, like any other post —
     // followed by the thing it is about. What it does NOT get is the attach bar,
-    // the link row, the poll, the frame or tags: those make a post of your own,
+    // the poll, the frame or tags: those make a post of your own,
     // and this one is about somebody else's.
     //
     // It DOES get the audience, last as on every post, and all of it (Zoe,
@@ -18233,19 +18518,12 @@
     if (type === 'song') return songFieldHtml({ open: true });
 
     // The one field set, shared by all five types. The Note rich editor is the base
-    // (headline + a contenteditable body + the H1/H2/B/I toolbar, 15k). The link row,
-    // the poll's choices, the frame surface and the plan's place-and-time all ship
+    // (headline + a contenteditable body + the H1/H2/B/I toolbar, 15k). The poll's choices, the frame surface and the plan's place-and-time all ship
     // hidden below it; an attach toggle reveals the one it names and folds the rest,
     // so the words you have already written carry across every one of those changes
     // (see applyBaseSurface in renderPublish).
     return richNoteField('c', '', '', randomNotePlaceholder(), { event, tags: {} }) +
-      `<p class="field-hint find-nudge" id="c-find-nudge" hidden>Dropping a link? ` +
-        `<button type="button" id="c-make-find">Make it a Find</button></p>` +
-      `<div class="field" id="c-link-row" hidden>` +
-        `<label for="c-url">Link</label>` +
-        `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
-          `spellcheck="false" placeholder="https://…">` +
-      `</div>` +
+      `<div class="compose-circle" id="c-circle" hidden></div>` +
       pollFieldHtml() +
       frameFieldHtml() +
       (event ? eventFieldHtml() : '') +
@@ -18436,7 +18714,7 @@
   // The composer's lock asks for them; the editor's does not, because a posted
   // post moving into a circle, or out of one, is a different act from choosing
   // who reads something you are about to say. `except` names one circle to
-  // leave off: the one a post is about (circleOfFind), which needs no telling.
+  // leave off: the one a post is about (attachedCircle), which needs no telling.
   function wireAudienceLock(root, onChange, { rooms = false, except = null } = {}) {
     const btn = root.querySelector('.aud-lock');
     if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange, { rooms, except }));
@@ -18735,7 +19013,6 @@
     titleEl?.classList.add('masthead-title--swap');   // hosts the outgoing ghost word
     let family = null;              // 'base' (the one post form) | 'quote' | 'song'
     let lastIndType = null;         // last type the mark showed, so it only pops on a real change
-    let wantLink = false;           // link row open → this post is a Find
     let wantPhoto = false;          // frame surface open → this post is a Frame
     let wantPoll = false;           // poll surface open → this post is a Poll
     let wantEvent = false;          // place + time open → this post is an Activity
@@ -18743,8 +19020,8 @@
 
     // The type is INFERRED from what's attached: a place and a time first (an
     // activity is the one thing here that lands in the real world, so it outranks
-    // anything decorating it), then a photo, then a poll, then a link, else a plain
-    // Note. The four attachments are mutually exclusive — opening one folds the
+    // anything decorating it), then a photo, then a poll, else a plain Note. The
+    // attachments are mutually exclusive — opening one folds the
     // others — so at most one is ever live and this order is a tiebreak that should
     // never be reached rather than a policy.
     function derivePostType() {
@@ -18752,8 +19029,6 @@
       if (wantPhoto || cropper || videoCapture) return 'photo';
       if (wantPoll) return 'poll';
       if (wantSong) return 'song';
-      const url = fieldsEl.querySelector('#c-url');
-      if (wantLink || (url && url.value.trim())) return 'find';
       return 'note';
     }
 
@@ -18780,7 +19055,6 @@
       }
       // No wash repaint here any more: the page's colour is the reader's, set once
       // in renderPublish, and attaching a photo doesn't change whose app this is.
-      fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
       fieldsEl.querySelector('#c-add-event')?.setAttribute('aria-pressed', String(pubType === 'activity'));
@@ -18818,8 +19092,6 @@
     // is why a mis-tap costs nothing.
     function applyBaseSurface() {
       if (family !== 'base') return;
-      const linkRow = fieldsEl.querySelector('#c-link-row');
-      if (linkRow) linkRow.hidden = !wantLink;
       const frameField = fieldsEl.querySelector('.frame-field');
       if (frameField) frameField.hidden = !wantPhoto;
       const pollRow = fieldsEl.querySelector('#c-poll-row');
@@ -18861,7 +19133,6 @@
       stills = [];
       videoCapture = null;
       onCaptureChange = null;
-      wantLink = false;
       wantPhoto = false;
       wantPoll = false;
       wantEvent = false;
@@ -18912,11 +19183,10 @@
       wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
       wireTagRow(fieldsEl);
       if (family !== 'quote') {
-        wireCircleLink();
+        wireCarriedCircle();
         wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the field set
         wireWhenHints(fieldsEl);           // …and so do the date and time inputs
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
-        wireFindNudge();
         wireAttachBar();
         // The lock rides the attach bar's bottom-left. A song is read only on
         // My Circle, so the sheet leaves your circles off while one is attached.
@@ -18924,7 +19194,7 @@
           rooms: () => pubType !== 'song',
           // A circle's card goes to people who aren't in it yet, so the
           // circle itself is never offered as its audience.
-          except: () => pubType === 'find' && attachedCircle(),
+          except: () => attachedCircle(),
         });
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       } else if (qa && qa.open) {
@@ -18935,8 +19205,8 @@
       applyBaseSurface();
     }
 
-    // The nameplate rides the inferred type alongside the mark: attach a link and
-    // "New note" hands off to "New find", a photo to "New frame", and so on. The
+    // The nameplate rides the inferred type alongside the mark: attach a photo and
+    // "New note" hands off to "New frame", and so on. The
     // live <h1> takes the new word straight away (so the row's width is right from
     // frame one) and a cloned ghost of the old word sinks out over the top of it.
     // Any stale ghost is swept first, so fast toggling can't strand a word.
@@ -18956,43 +19226,31 @@
       ghost.addEventListener('animationend', () => ghost.remove(), { once: true });
     }
 
-    // The four attach toggles at the note field's foot. Link opens the link row (a
-    // Find); Photo opens the frame field and pops the OS picker (a Frame); Poll opens
-    // the choices (a Poll); the calendar opens Where and When (an Activity). All four
+    // The attach toggles at the note field's foot. Photo opens the frame field and pops the OS picker (a Frame); Poll opens
+    // the choices (a Poll); the calendar opens Where and When (an Activity). All
     // are live toggles: tap again to fold the surface and revert the type.
     function wireAttachBar() {
-      const linkBtn  = fieldsEl.querySelector('#c-add-link');
       const photoBtn = fieldsEl.querySelector('#c-add-photo');
       const pollBtn  = fieldsEl.querySelector('#c-add-poll');
       const eventBtn = fieldsEl.querySelector('#c-add-event');
       const songBtn  = fieldsEl.querySelector('#c-add-song');
-      // The five attachments are one-at-a-time: turning one on folds the others so
+      // The attachments are one-at-a-time: turning one on folds the others so
       // the inferred type is never ambiguous. Photo owns a live picker/capture, so
-      // clearing it routes through clearFrame (stops any stream); the other three
+      // clearing it routes through clearFrame (stops any stream); the others
       // just fold their rows, leaving what's typed in them, so a mis-tap costs
       // nothing but the tap back.
       const foldPhoto = () => { if (wantPhoto) { wantPhoto = false; clearFrame(); } };
-      const foldLink  = () => { wantLink = false; };
       const foldPoll  = () => { wantPoll = false; };
       const foldEvent = () => { wantEvent = false; };
-      // A folded song surface keeps its pick, like the link row keeps its URL: a
-      // mis-tap costs the tap back. Only submitComposer reads it, and only for
+      // A folded song surface keeps its pick: a mis-tap costs the tap back. Only submitComposer reads it, and only for
       // a post that is still Music.
       const foldSong  = () => { wantSong = false; };
-      linkBtn?.addEventListener('click', () => {
-        wantLink = !wantLink;
-        document.getElementById('c-error').textContent = '';
-        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); foldSong(); }
-        else { const u = fieldsEl.querySelector('#c-url'); if (u) { u.value = ''; u.dispatchEvent(new Event('input')); } }
-        applyBaseSurface();
-        syncType();
-      });
       photoBtn?.addEventListener('click', () => {
         const opening = !wantPhoto;
         wantPhoto = opening;
         document.getElementById('c-error').textContent = '';
         if (opening) {
-          foldLink(); foldPoll(); foldEvent(); foldSong();
+          foldPoll(); foldEvent(); foldSong();
           applyBaseSurface();                          // reveal the frame field first
           fieldsEl.querySelector('#c-file')?.click();  // then pop the picker
         } else {
@@ -19003,7 +19261,7 @@
       pollBtn?.addEventListener('click', () => {
         wantPoll = !wantPoll;
         document.getElementById('c-error').textContent = '';
-        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); foldSong(); }
+        if (wantPoll) { foldPhoto(); foldEvent(); foldSong(); }
         applyBaseSurface();
         syncType();
       });
@@ -19013,14 +19271,14 @@
       eventBtn?.addEventListener('click', () => {
         wantEvent = !wantEvent;
         document.getElementById('c-error').textContent = '';
-        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); foldSong(); }
+        if (wantEvent) { foldPhoto(); foldPoll(); foldSong(); }
         applyBaseSurface();
         syncType();
       });
       songBtn?.addEventListener('click', () => {
         wantSong = !wantSong;
         document.getElementById('c-error').textContent = '';
-        if (wantSong) { foldPhoto(); foldLink(); foldPoll(); foldEvent(); }
+        if (wantSong) { foldPhoto(); foldPoll(); foldEvent(); }
         applyBaseSurface();
         syncType();
         if (wantSong && !composeSong) fieldsEl.querySelector('#c-song-q')?.focus();
@@ -19123,90 +19381,37 @@
       renumber();
     }
 
-    // A circle's link in the link row IS the circle: the field steps aside for
-    // the card the post will wear (circleTileHtml), with an x that takes it off
-    // again. Arriving from a circle's Invite sheet lands here already holding
-    // it; a pasted one turns into it the same way.
+    // The circle a post is about, carried here from its Invite sheet or pasted
+    // into the words. The carried one rides over the note as its card, with an x
+    // that takes it off, and goes in at the end of the words as Share is pressed
+    // (submitComposer), a link in a note like any other.
     const attachedCircle = () => {
-      const url = fieldsEl.querySelector('#c-url');
-      return url ? (circleOfFind({ type: 'find', url: url.value.trim() }) || {}).id || null : null;
+      const c = [pubCarried, ...linksIn(fieldsEl.querySelector('#c-note')?.textContent)
+        .map(l => l.href)].map(circleOfLink).find(Boolean);
+      return c ? c.id : null;
     };
-    function wireCircleLink() {
-      const row = fieldsEl.querySelector('#c-link-row');
-      const url = fieldsEl.querySelector('#c-url');
-      if (!row || !url) return;
-      row.insertAdjacentHTML('beforeend', `<div class="compose-circle" id="c-circle" hidden></div>`);
-      const tile = row.querySelector('#c-circle');
-      let shown = null;
-      const sync = () => {
-        const c = circleOfFind({ type: 'find', url: url.value.trim() });
-        row.classList.toggle('field--circle', !!c);
-        tile.hidden = !c;
-        if (c === shown) return;
-        shown = c;
-        // Aimed at this very circle before its card went on: that answer no
-        // longer stands, so the lock goes back to its default.
-        if (c && pubAudience.mode === 'community' && pubAudience.community === c.id) {
-          pubAudience = { mode: defaultAudience(), users: [] };
-          pubAudienceTouched = false;
-          syncAudienceLock(fieldsEl);
-        }
-        tile.innerHTML = c
-          ? circleTileHtml(c) +
-            `<button type="button" class="compose-circle-x" aria-label="Remove ${esc(communityHandle(c))}">` +
-              svgIcon('close') + `</button>`
-          : '';
-        tile.querySelector('.compose-circle-x')?.addEventListener('click', () => {
-          url.value = '';
-          wantLink = false;
-          sync();
-          applyBaseSurface();
-          syncType();
-          hapticTap('LIGHT');
-          fieldsEl.querySelector('#c-note')?.focus();
-        });
-      };
-      url.addEventListener('input', sync);
-      if (sharing) {
-        wantLink = true;
-        // The canonical address, never this page's own origin, so the card
-        // reads in every shell (circleInMessage knows triaonline.com).
-        url.value = 'https://triaonline.com/c/' + encodeURIComponent(sharing.slug);
-        fieldsEl.querySelector('#c-note')?.setAttribute('data-placeholder', 'Say why it’s worth joining.');
+    function wireCarriedCircle() {
+      const tile = fieldsEl.querySelector('#c-circle');
+      pubCarried = sharing ? 'https://triaonline.com/c/' + encodeURIComponent(sharing.slug) : '';
+      if (!sharing || !tile) return;
+      // Aimed at this very circle before its card went on: that answer no
+      // longer stands, so the lock goes back to its default.
+      if (pubAudience.mode === 'community' && pubAudience.community === sharing.id) {
+        pubAudience = { mode: defaultAudience(), users: [] };
+        pubAudienceTouched = false;
+        syncAudienceLock(fieldsEl);
       }
-      sync();
-    }
-
-    // The Note body's link sense: a URL typed straight into the body offers to lift
-    // it into the link field and make the post a Find, instead of leaving the link
-    // buried in prose. One quiet promotion, nothing retyped.
-    function wireFindNudge() {
-      const editor  = fieldsEl.querySelector('#c-note');
-      const nudge   = fieldsEl.querySelector('#c-find-nudge');
-      if (!editor || !nudge) return;
-      const sync = () => {
-        const url = fieldsEl.querySelector('#c-url');
-        nudge.hidden = pubType !== 'note' || !NOTE_URL_RE.test(editor.textContent) || !!(url && url.value.trim());
-      };
-      editor.addEventListener('input', sync);
-      sync();
-      nudge.querySelector('#c-make-find').addEventListener('click', () => {
-        // innerText keeps the block breaks textContent would swallow, so the
-        // leftover words don't run together once the URL is lifted out.
-        const text = editor.innerText || editor.textContent;
-        const m = NOTE_URL_RE.exec(text);
-        // Trim trailing sentence punctuation off the captured URL ("…x.com."),
-        // and give a bare www. link the scheme the Find field validates for.
-        const raw = m ? m[0].replace(/[),.;!?]+$/, '') : '';
-        const link = raw.startsWith('www.') ? 'https://' + raw : raw;
-        if (m) editor.textContent = text.replace(m[0], ' ').replace(/[ \t]{2,}/g, ' ').trim();
-        wantLink = true;
-        applyBaseSurface();               // reveals the link row
-        const url = fieldsEl.querySelector('#c-url');
-        if (url) { url.value = link; url.dispatchEvent(new Event('input')); url.focus(); }
-        syncType();
-        nudge.hidden = true;
+      tile.hidden = false;
+      tile.innerHTML = circleTileHtml(sharing) +
+        `<button type="button" class="compose-circle-x" aria-label="Remove ${esc(communityHandle(sharing))}">` +
+          svgIcon('close') + `</button>`;
+      tile.querySelector('.compose-circle-x').addEventListener('click', () => {
+        pubCarried = '';
+        tile.hidden = true;
+        hapticTap('LIGHT');
+        fieldsEl.querySelector('#c-note')?.focus();
       });
+      fieldsEl.querySelector('#c-note')?.setAttribute('data-placeholder', 'Say why it’s worth joining.');
     }
 
     document.getElementById('composer').addEventListener('submit', (e) => {
@@ -19230,7 +19435,7 @@
     else if (attach && family !== 'quote') fieldsEl.querySelector(ATTACH_BTN[attach])?.click();
   }
   const ATTACH_BTN = {
-    find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
+    photo: '#c-add-photo', poll: '#c-add-poll',
     activity: '#c-add-event',
   };
 
@@ -20241,13 +20446,9 @@
       return;
     }
 
-    if (pubType === 'find') {
-      data.url = val('c-url');
-      data.title = val('c-title');
-      if (!/^https?:\/\/.+/i.test(data.url)) {
-        errEl.textContent = 'Add a link starting with http:// or https://.'; return;
-      }
-    } else if (pubType === 'activity') {
+    if (pubCarried && pubType !== 'song') data.note += `<p>${esc(pubCarried)}</p>`;
+
+    if (pubType === 'activity') {
       data.title = val('c-title');
       data.location = val('c-location');
       data.eventDate = val('c-date');

@@ -1480,6 +1480,19 @@ address and therefore a different person, and there is no way around that.
   pin at the post it just deleted, so a spent slot with nothing in it is the
   fallback rather than the normal path.
 
+## Links (2.0, 2026-10-30)
+
+A link has no column of its own. It is a plain URL in `posts.note`, read as the
+card is drawn, which is why old notes wear tiles with no migration and an older
+build simply shows the URL as text. `posts.url` is only ever read now, for Find
+rows written before this; `'find'` stays in the type check for them. The tile for
+each link is chosen in `linkTileHtml`; a page's title and picture are read on the
+reader's phone by `TriaSettings.pageHead` and kept in `tria:links`, because a web
+view may not read another site and the app has no server to ask. The website
+draws the domain row. If that ever needs to change, the place is `linkMeta`: an
+Edge Function answering the same `{ title, about, image }` would drop in there,
+at the cost of running a fetcher anyone can point at any URL. See CLAUDE.md.
+
 ## Music posts (1.8)
 
 **A song can be a post now**, type `song`, with the track in `posts.song`

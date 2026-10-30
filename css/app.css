@@ -1738,6 +1738,7 @@ main {
    anything arriving later still reveals softly. */
 .page.enter .photo-frame img,
 .page.enter .card-yt-frame img,
+.page.enter .card-page-pic img,
 .page.enter .ptile-face--media img {
   transition: none;
 }
@@ -3006,22 +3007,19 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   color: var(--text);
   margin-bottom: 0.55rem;
 }
-.card-title a { color: inherit; transition: color var(--dur-micro); }
-@media (hover: hover) { .card-title a:hover { color: var(--muted); } }
-.card-title-ext { color: var(--muted); margin-left: 0.3rem; }
-.card-title-ext svg { width: 0.62em; height: 0.62em; vertical-align: 0.02em; }
 
-/* Finds read as links: the title — or, on an untitled find, the caption itself
-   (see .card-note-link) — is underlined so the destination is never a guess. */
-.card--find .card-title a,
-.card-note-link {
+/* A link in the words reads as one, and wraps anywhere rather than push a card
+   wider than the phone. */
+.note-link {
+  color: inherit;
+  overflow-wrap: anywhere;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.16em;
   text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+  transition: color var(--dur-micro);
 }
-.card-note-link { display: block; color: inherit; transition: color var(--dur-micro); }
-@media (hover: hover) { .card-note-link:hover { color: var(--muted); } }
+@media (hover: hover) { .note-link:hover { color: var(--muted); } }
 
 /* Activity when/where-lines — a quiet calendar + day, then pin + place, tucked
    between title and details. Stacked lines pull together into one block. */
@@ -4948,18 +4946,6 @@ body.gate main { padding: 0; }
 .field input:focus,
 .field textarea:focus { outline: none; border-color: var(--accent); }
 .field-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
-/* The Note composer's link nudge (see wireFindNudge): a hint line whose action
-   reads like the auth screens' inline text buttons. */
-.find-nudge button {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 
 /* Combined field: a headline input and its note stacked in one bordered box,
    split by a hairline divider, so the pair reads as a single cleaner block. The
@@ -5195,7 +5181,6 @@ body.gate main { padding: 0; }
    from post types. :hover keeps its neutral fill: that is
    the pointer telling you where the target is, not the form telling you what
    it's making. */
-#c-add-link[aria-pressed="true"],
 #c-add-photo[aria-pressed="true"],
 #c-add-poll[aria-pressed="true"],
 #c-add-song[aria-pressed="true"],
@@ -6336,11 +6321,118 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 }
 .card-circle .daily-card:has(.daily-open:active) { transform: scale(0.985); }
 
+/* ── A link's tile (2026-10-30) ─────────────────────────────────────────────
+   The YouTube tile's material, for every other page: a --surface fill, a --rule
+   hairline, the soft corner, 0.9rem above, the page's picture running to its
+   edges, held at 0 until decoded and then the photo's settle. The same quoted
+   serif headline, two lines of what the page says about itself, then the domain,
+   so a tile always says where it goes. A row is the same tile with nothing wide
+   enough to lead with: a mark, or a small picture, beside the lines. */
+.card-page {
+  display: block;
+  margin: 0.9rem 0 0;
+  overflow: hidden;
+  clip-path: inset(0 round var(--radius-soft));
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-soft);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-micro);
+}
+.card-page:active { transform: scale(0.985); }
+.card-page + * { margin-top: 0.9rem; }
+.card-page-pic {
+  display: block;
+  aspect-ratio: 1.91 / 1;
+  background: var(--rule);
+}
+.card-page-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity var(--dur-move) var(--ease), transform var(--dur-move) var(--ease);
+}
+.card-page.is-loaded .card-page-pic img { opacity: 1; transform: none; }
+.card-page-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+.card-page-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.24rem;
+  line-height: 1.16;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.card-page-about {
+  font-size: 0.86rem;
+  line-height: 1.35;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.card-page-by { font-size: 0.8rem; letter-spacing: 0.02em; color: var(--muted); overflow-wrap: anywhere; }
+.card-page--row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; }
+.card-page--row .card-page-lines { flex: 1 1 auto; padding: 0; }
+.card-page--row .card-page-pic {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  aspect-ratio: auto;
+  overflow: hidden;
+  border-radius: var(--radius-img);
+}
+.card-page-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--heart) 22%, transparent);
+  color: var(--heart);
+}
+.card-page-ico svg { width: 18px; height: 18px; }
+.card-page-face { flex: 0 0 auto; width: 44px; height: 44px; }
+.card-page--image .card-page-pic { aspect-ratio: 4 / 3; }
+@media (prefers-reduced-motion: reduce) {
+  .card-page-pic img { opacity: 1; transform: none; transition: none; }
+}
+
+/* In a thread a tile is smaller, under the words it came from. */
+.comment-body .card-page,
+.comment-body .card-yt { margin-top: 0.5rem; }
+.comment-body .card-song { --card-art: 64px; margin-top: 0.5rem; padding: 0.5rem; }
+.comment-body .card-song-play { display: none; }
+.msg-col .card-page,
+.msg-col .card-yt { width: min(100%, 300px); margin-top: 0.3rem; }
+.msg-col .card-circle,
+.msg-col .card-quoted { width: min(100%, 300px); }
+
+/* The tile a post will wear, under the box you are writing in. */
+.compose-links:not([hidden]) { animation: compose-circle-in var(--dur-move) var(--ease) both; }
+.compose-links > :first-child { margin-top: 0; }
+
 /* In the composer it is the attachment, not a door: the card is inert (its
    link and Join would walk you off a half-written post) and an x on its top
-   right corner takes it off (Zoe), clear of the circle's round photo, the link field stepping aside while it is on. */
-.field--circle > label,
-.field--circle > #c-url { display: none; }
+   right corner takes it off (Zoe), clear of the circle's round photo. */
 .compose-circle { position: relative; }
 .compose-circle .card-circle { margin: 0; }
 .compose-circle .daily-card { pointer-events: none; }

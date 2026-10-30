@@ -65,6 +65,38 @@ hidden at desktop width the same way. On `#/updates` the sidebar lights that
 row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
+## Links are part of the words (2026-10-30)
+
+**There is no Find any more** (Zoe: "Finds or links are now just a part of
+notes", "I want every link embedded as much as possible"). You paste a link
+into what you're writing, on any post; the composer's link button, link row and
+Make it a Find nudge are gone, and **nothing new writes `type: 'find'`**. Old
+Find rows stay: their `url` is read first (`postLinks`), they count as Notes in
+every filter (`filterType`) and their editor keeps its Link field. **A link is a
+plain URL in the stored note**, so it is all read off the words as a card is
+drawn (`linksIn`, `postLinks`), no migration, and every link anyone ever pasted
+wears it. **Every link gets a tile under the post, up to four** (`LINKS_MAX`,
+`linkTileHtml`), the tags over them: a circle's card, a Tria post (the quote's
+tile) or person, a song's row, a YouTube player, the picture itself, else the
+page's own title, words and picture (`.card-page`), else a row naming the domain.
+**Apple Music, Spotify and YouTube Music links draw as the Music post's row**
+(`songRowHtml`, opened in the reader's own service by `songLink`,
+`data-out="system"` so it reaches the app), but the post stays a note, in feeds.
+music.youtube.com is a song, not a video. A link that ENDS the words comes out of
+them (`noteWithoutTail`); one mid-sentence stays, short and tappable
+(`linkAnchorHtml` through `richText`, so comments and messages have live links
+too). A comment wears its first link's tile, a message the same. The composer
+shows the tile under the box as you paste (`wireLinkPreview`, inert). A circle
+carried from its Invite sheet is `pubCarried`, added to the note as Share is
+pressed. Tiles are stand-ins filled in a microtask after `cardSig`
+(`wireLinkTiles`, `data-tile`) and `keepTiles` carries them over a rebuild.
+**Only the app can read a page** (`TriaSettings.pageHead`,
+`TriaPageReader` in TriaSettingsPlugin.swift: no server, no secret, no cookies,
+stops at `</head>` or 1MB, 10s, never the phone's own network, kept per device in
+`tria:links`), **so the website and an older binary draw the domain row.** Reading
+happens on each reader's phone, so a linked site sees that phone's IP, as it does
+for the tile's picture.
+
 ## Comments and likes are sheets over a feed (2026-10-29)
 
 **On a phone, a feed card's comment glyph raises the thread as a sheet** (Zoe,
@@ -202,9 +234,9 @@ everything of its kind. A pick keeps the search open, washes the reader's band
 into the disc, and the placeholder says "Search frames". The chevron or Escape
 clears the words and the filter together.
 
-## A YouTube Find plays in its card (2026-10-25)
+## A YouTube link plays in its card (2026-10-25)
 
-**A Find whose link is a YouTube video wears a tile** (Zoe: "embed them so
+**A link to a YouTube video wears a tile** (Zoe: "embed them so
 that thumbnails and everything show"): the song's and the quote's material,
 the video's still on top (16:9; a `/shorts/` link 4:5), the Frame clip's glass
 play disc, then the video's title and channel (`youTubeTileHtml`,
@@ -212,7 +244,7 @@ play disc, then the video's title and channel (`youTubeTileHtml`,
 stored**, so every Find ever posted has it. Title and channel are YouTube's
 oEmbed, kept per device (`tria:yt`); a 401/403 there makes the tile a link out
 (`data-out="system"`), and a video with no still is dropped back to the plain
-Find. The player loads only on a tap, one at a time, and `keepYouTube` carries
+Find. The player loads only on a tap, one at a time, and `keepTiles` carries
 a live one across a card rebuild. **In the app the player is
 `embed/youtube.html` on triaonline.com** (`ytPlayerSrc`): YouTube answers
 "Error 153" to an embed with no Referer, and WebKit never sends
@@ -223,14 +255,11 @@ must stay live on the site; the web embeds youtube-nocookie directly.
 
 **A circle's Invite sheet leads with Post to your circle** (Zoe, not "feed": "posted as a
 card"), above the friend picker (`openSheet`'s `rowsFirst`). It opens the
-composer holding the circle (`pendingCircleShare`) as a Find whose link is
-`https://triaonline.com/c/<slug>`, and **any Find whose link is a circle draws
-as Discover's card for it** (`circleOfFind`, `circleTileHtml`, `.card-circle`),
-Join pill and all, read off the URL like the YouTube tile, so nothing is
-stored and a pasted circle link turns into the card too. In the composer the
-link field steps aside for the inert card, with an x on its top right corner
-that takes it off (`wireCircleLink`, `.compose-circle`); the byline names
-`c/<slug>` where a Find says its domain (`findWhere`). **The circle a post
+composer holding the circle (`pendingCircleShare`), and **any link to a circle
+draws as Discover's card for it** (`circleOfLink`, `circleTileHtml`,
+`.card-circle`), Join pill and all, read off the URL like the YouTube tile. In the
+composer it is the inert card with an x on its top right corner that takes it off
+(`wireCarriedCircle`, `.compose-circle`). **The circle a post
 carries is never offered as its audience** (Zoe: no sharing a circle with
 itself): the audience sheet leaves it off (`except` on `wireAudienceLock`,
 `attachedCircle`), and a post already aimed at it falls back to the default

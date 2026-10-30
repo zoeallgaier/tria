@@ -33,8 +33,25 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openExternal", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "appIcon", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setAppIcon", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setAppIcon", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pageHead", returnType: CAPPluginReturnPromise)
     ]
+
+    /// The top of a web page, read so a link in a post can draw its title and
+    /// picture (`linkMeta` in app.js parses it). It has to be native: a page in
+    /// a web view can't read another site, CORS sees to that, and the app needs
+    /// no server of its own this way. See `TriaPageReader` for the limits.
+    @objc func pageHead(_ call: CAPPluginCall) {
+        guard let raw = call.getString("url"), let url = URL(string: raw),
+              TriaPageReader.allowed(url) else {
+            call.reject("That isn't a public web page.")
+            return
+        }
+        Task {
+            do { call.resolve(try await TriaPageReader.shared.head(of: url)) }
+            catch { call.reject("That page didn't answer.") }
+        }
+    }
 
     /// A universal link (triaonline.com/u/…, /p/…, /c/…) that opened the app,
     /// as an `openLink` event for app.js to route. SceneDelegate hands the link
@@ -82,7 +99,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// THIS IS NOT @capacitor/browser, and the difference is the whole reason it
     /// exists. That plugin presents SFSafariViewController, which is right for
-    /// READING a page — a Find's article, an activity's map pin — and which
+    /// READING a page — a linked article, an activity's map pin — and which
     /// deliberately does not follow a universal link into the app that claims
     /// the domain. A song's link claims one: `music.apple.com` belongs to Apple
     /// Music and `open.spotify.com` to Spotify, and handed to UIApplication each
@@ -181,5 +198,82 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let error = error { call.reject(error.localizedDescription) } else { call.resolve() }
             }
         }
+    }
+}
+
+/// Reads as little of a page as a link's tile needs, and every reader's phone
+/// runs it, so a hostile link has to cost nothing: no cookies go out, the read
+/// stops at `</head>` or a megabyte and gives up inside ten seconds, a page that
+/// isn't HTML is never downloaded, and neither a link nor a redirect may reach
+/// the phone's own network (that would raise iOS's local network prompt, and
+/// point somebody's post at their router). The user agent names the preview bots
+/// because that is who sites serve their preview tags to, the same words Apple's
+/// LinkPresentation sends.
+private final class TriaPageReader: NSObject, URLSessionTaskDelegate {
+    static let shared = TriaPageReader()
+    private static let limit = 1_000_000
+
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.timeoutIntervalForRequest = 6
+        config.timeoutIntervalForResource = 10
+        config.httpAdditionalHeaders = [
+            "User-Agent": "Mozilla/5.0 (compatible; Tria/2.0; +https://triaonline.com) facebookexternalhit/1.1 Facebot Twitterbot/1.0",
+            "Accept": "text/html,application/xhtml+xml"
+        ]
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }()
+
+    static func allowed(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host?.lowercased(), host.contains("."), !host.contains(":"),
+              !host.hasSuffix(".local"), !host.hasSuffix(".localhost") else { return false }
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return true }     // a name, not an address
+        switch (parts[0], parts[1]) {
+        case (0, _), (10, _), (127, _), (169, 254), (192, 168): return false
+        case (172, 16...31): return false
+        default: return true
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(request.url.map(Self.allowed) == true ? request : nil)
+    }
+
+    func head(of url: URL) async throws -> [String: Any] {
+        let (bytes, response) = try await session.bytes(from: url)
+        defer { bytes.task.cancel() }
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        let answer = (http.url ?? url).absoluteString
+        let type = (http.mimeType ?? "").lowercased()
+        guard type.contains("html") else { return ["url": answer, "type": type, "html": ""] }
+
+        var data = Data()
+        let end = Data("</head>".utf8)
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count >= Self.limit { break }
+            if data.count % 8192 == 0, data.range(of: end, in: max(0, data.count - 8200)..<data.count) != nil { break }
+        }
+        return ["url": answer, "type": type, "html": Self.text(data, named: http.textEncodingName)]
+    }
+
+    private static func text(_ data: Data, named charset: String?) -> String {
+        if let charset {
+            let cf = CFStringConvertIANACharSetNameToEncoding(charset as CFString)
+            if cf != kCFStringEncodingInvalidId,
+               let text = String(data: data, encoding: String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cf))) {
+                return text
+            }
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 }
