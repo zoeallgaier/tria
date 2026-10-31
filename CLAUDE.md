@@ -71,8 +71,11 @@ half strength where it enters the glass.
 
 **The hum starts with the pull's first point** (Zoe: "too subtle, can start
 earlier"): app.js says `prime` as a finger lands at the top of a page that can
-refresh, native brings the engine up and follows the scroll view from then on, and
-it stands down after 3s if nobody pulled. See `TriaPullSwell`.
+refresh, native follows the scroll view from then on, and it stands down after 3s
+if nobody pulled. **`TriaPullSwell` is built on Apple's HapticPalette sample**: no
+dial in the pattern (one at 0 silenced the hum, 2026-10-31), the event at the peak
+and `sendParameters` only turning it down, and one engine left up under auto
+shutdown. SwiftUI's `sensoryFeedback` is one tap at a time, so it can't swell.
 
 ## 2.0's refresh is the screen's edge (2026-10-22, trial)
 

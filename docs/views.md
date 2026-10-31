@@ -73,8 +73,16 @@ switch. **Whether Core Haptics does is unconfirmed**: test with the switch off. 
 stepped detents came first (0.25 rising to 0.7). **The hum doesn't wait for
 `pull`**, which is a scroll event, a frame and a bridge hop behind the finger, with
 the engine still to start: app.js says `prime` on a touch at the top of a page that
-can refresh (no colours read, one message a touch), native wakes the engine, follows
-the scroll view itself, and stands down after 3s if nobody pulled.
+can refresh (no colours read, one message a touch), native follows the scroll view
+itself, and stands down after 3s if nobody pulled. **It is built the way Apple's
+HapticPalette sample is** (2026-10-31, after a starting dial of 0 in the pattern
+silenced it): a plain continuous event at the peak (0.8), no dial in the pattern,
+`sendParameters` turning it down live, the start and its first dial scheduled for
+one instant 10ms ahead so the first frame is faint, and an engine started once with
+the glow and left to `isAutoShutdownEnabled` (about two minutes idle), because
+starting and stopping it is expensive. Were a dial message lost the hum would be flat
+and strong, not silent. SwiftUI's `sensoryFeedback` can't do this: every kind is one
+tap, and `impact` takes one intensity per trigger.
 The screen's corner comes from a table keyed on `nativeBounds` height
 (`_displayCornerRadius` is private API); the 16 Pro onward and the Air at 62
 are unverified.

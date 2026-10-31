@@ -4082,11 +4082,13 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    vibration follows the pull, faint at first and building with the finger
    (`TriaPullSwell`), then stops dead for one rigid click at the threshold, then
    a soft landing as the glow leaves (only after a pull: a resume nobody asked
-   for stays silent). It starts with the pull's first point, so the engine is up
-   before there is one: app.js says `prime` as the finger lands (`prime` here),
-   and native follows the scroll view from then on, ahead of the web's `pull`,
-   which is a scroll event, a frame and a bridge hop behind the finger. Six
-   detents, each firmer than the last, came first. The
+   for stays silent). It starts with the pull's first point: the engine comes up
+   with this view and stays up, app.js says `prime` as the finger lands (`prime`
+   here), and native follows the scroll view from then on, ahead of the web's
+   `pull`, which is a scroll event, a frame and a bridge hop behind the finger.
+   Six detents, each firmer than the last, came first. SwiftUI's sensoryFeedback
+   was looked at for this and can't do it: every kind is one tap, and `impact`
+   takes one intensity per trigger, so a ramp of them is those detents again. The
    swell is the one haptic in the app that isn't UIImpactFeedbackGenerator,
    because a generator can only tap and a smooth rise needs Core Haptics; the
    click and the landing still are. Whether Core Haptics obeys Settings, Sounds &
@@ -4110,37 +4112,45 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
    THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js,
    but only as the fallback for a pull that arrives without colours. */
-/// The pull's one long vibration, its strength a dial the finger turns. The
-/// engine runs only for the length of a pull, and a phone with no Taptic Engine,
-/// or one that lost it to a call or the background, simply gets the click alone.
+/// The pull's one long vibration, its strength a dial the finger turns, built the
+/// way Apple's HapticPalette sample builds one: a plain continuous event, retuned
+/// live with `sendParameters`, and an engine that is started and left up (Apple:
+/// starting and stopping it is expensive) until auto shutdown takes it down after
+/// about two minutes idle. A phone with no Taptic Engine, or one that lost it to a
+/// call or the background, simply gets the click alone.
 private final class TriaPullSwell {
+    /// The hum at its strongest, just before the click. The event carries this
+    /// and the dial only ever turns it down, so were a dial message ever lost the
+    /// hum would be flat, never silent.
+    private static let peak: Float = 0.8
     private var engine: CHHapticEngine?
     private var player: CHHapticAdvancedPatternPlayer?
-    private var awake = false
     private var starting = false
     private var playing = false
     private var level: Float = -1
 
-    /// Started ahead of the finger: an engine takes a moment to come up.
+    /// Ahead of the finger: an engine takes a moment to come up. Safe on every
+    /// touch, and a second start would hand back a second player.
     func wake() {
-        awake = true
-        // A second engine start would hand back a second player, and the first
-        // would hum on with nothing holding it.
-        guard player == nil, !starting else { return }
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
+        guard player == nil, !starting, CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
         if engine == nil, let made = try? CHHapticEngine() {
             made.playsHapticsOnly = true
+            made.isAutoShutdownEnabled = true
             made.resetHandler = { [weak self] in DispatchQueue.main.async { self?.lost() } }
-            made.stoppedHandler = { [weak self] _ in DispatchQueue.main.async { self?.lost() } }
+            made.stoppedHandler = { [weak self] reason in
+                print("TriaPullSwell: engine stopped, reason \(reason.rawValue)")
+                DispatchQueue.main.async { self?.lost() }
+            }
             engine = made
         }
+        guard let engine else { return }
         starting = true
-        engine?.start { [weak self] error in
+        engine.start { [weak self] error in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.starting = false
-                guard error == nil else { return }
-                if self.awake { self.player = self.makePlayer() } else { self.engine?.stop(completionHandler: nil) }
+                if let error { print("TriaPullSwell: engine start failed: \(error)"); return }
+                self.player = self.makePlayer()
             }
         }
     }
@@ -4148,53 +4158,61 @@ private final class TriaPullSwell {
     private func lost() {
         player = nil
         playing = false
+        level = -1
     }
 
-    /// Thirty seconds is the longest a continuous event runs, and far longer
-    /// than any pull. Low sharpness is what makes it a swell and not a buzz.
+    /// Far longer than any pull. Low sharpness is what makes it a swell and not
+    /// a buzz. No dial in the pattern: one at 0 there silenced the hum outright
+    /// (2026-10-31), and the first frame's strength is `follow`'s to set.
     private func makePlayer() -> CHHapticAdvancedPatternPlayer? {
         let event = CHHapticEvent(eventType: .hapticContinuous, parameters: [
-            CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: Self.peak),
             CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.1)
         ], relativeTime: 0, duration: 30)
-        // The dial is set in the pattern: at the event's own 1 the first frame
-        // of every pull would be a full strength thump.
-        let faint = CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: 0, relativeTime: 0)
-        guard let pattern = try? CHHapticPattern(events: [event], parameters: [faint]) else { return nil }
-        return try? engine?.makeAdvancedPlayer(with: pattern)
+        do {
+            return try engine?.makeAdvancedPlayer(with: CHHapticPattern(events: [event], parameters: []))
+        } catch {
+            print("TriaPullSwell: no player: \(error)")
+            return nil
+        }
     }
 
     /// From the first point: up to the hum's floor over the first tenth of the
     /// pull, so it arrives rather than knocks, then building to the click, and a
     /// little brighter as it goes. Below about 0.25 a hum this low can't be felt
-    /// through a phone, which is why 0.12 on a square read as starting late.
+    /// through a phone. Intensity control multiplies, 0 to 1; sharpness control adds.
     func follow(_ p: CGFloat) {
-        guard let player, p > 0 else { hush(); return }
+        guard let player, let engine, p > 0 else { hush(); return }
         let x = Float(p)
-        let next = 0.3 * min(1, x / 0.1) + 0.5 * x * x.squareRoot()
+        let next = min(Self.peak, 0.3 * min(1, x / 0.1) + 0.5 * x * x.squareRoot())
         if abs(next - level) < 0.01 { return }
         level = next
-        if !playing {
-            do { try player.start(atTime: CHHapticTimeImmediate); playing = true }
-            catch { self.player = nil; return }
-        }
-        try? player.sendParameters([
-            CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: next, relativeTime: 0),
+        let dial = [
+            CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: next / Self.peak, relativeTime: 0),
             CHHapticDynamicParameter(parameterID: .hapticSharpnessControl, value: 0.3 * x, relativeTime: 0)
-        ], atTime: CHHapticTimeImmediate)
+        ]
+        do {
+            if playing {
+                try player.sendParameters(dial, atTime: CHHapticTimeImmediate)
+            } else {
+                // The start and its first dial share one instant just ahead, so
+                // the first frame is faint and never the event's full strength.
+                let at = engine.currentTime + 0.01
+                try player.start(atTime: at)
+                try player.sendParameters(dial, atTime: at)
+                playing = true
+            }
+        } catch {
+            print("TriaPullSwell: couldn't play: \(error)")
+            lost()
+            wake()
+        }
     }
 
     func hush() {
         if playing { try? player?.stop(atTime: CHHapticTimeImmediate) }
         playing = false
         level = -1
-    }
-
-    func sleep() {
-        hush()
-        awake = false
-        player = nil
-        engine?.stop(completionHandler: nil)
     }
 }
 
@@ -4275,6 +4293,7 @@ final class TriaEdgeGlow: UIView {
         ramp.startPoint = CGPoint(x: 0.5, y: 0.5)
         ramp.endPoint = CGPoint(x: 0.5, y: 0)
         wear([Self.start, Self.end])
+        swell.wake()
         lit.addSublayer(ramp)
         feather.type = .conic
         feather.startPoint = CGPoint(x: 0.5, y: 0.5)
@@ -4507,7 +4526,7 @@ final class TriaEdgeGlow: UIView {
 
     /// A finger landed at the top of a page that can refresh. Nothing shows yet,
     /// but the hum starts with the pull's first point from here. Most touches
-    /// never pull, so it stands down on its own.
+    /// never pull, so the watch stands down on its own.
     func prime() {
         guard state == "idle" else { return }
         swell.wake()
@@ -4519,7 +4538,7 @@ final class TriaEdgeGlow: UIView {
         let down = DispatchWorkItem { [weak self] in
             guard let self, self.state == "idle" else { return }
             self.watch = nil
-            self.swell.sleep()
+            self.swell.hush()
         }
         unprime = down
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: down)
@@ -4579,7 +4598,7 @@ final class TriaEdgeGlow: UIView {
 
     private func spin(quiet: Bool) {
         watch = nil
-        swell.sleep()
+        swell.hush()
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
@@ -4608,8 +4627,11 @@ final class TriaEdgeGlow: UIView {
     // MARK: idle
 
     private func finish(from was: String, land: Bool) {
+        // An idle with nothing showing is a background refresh ending, and a
+        // primed finger is not its business.
+        guard was != "idle" else { return }
         watch = nil
-        swell.sleep()
+        swell.hush()
         guard !isHidden else { return }
         if was == "spin", land {
             landing.impactOccurred(intensity: 0.5)
