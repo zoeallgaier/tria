@@ -2374,7 +2374,7 @@
   // A small colored label marking an entry's type (Note / Find / Photo), sat at
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
-  const TYPE_LABEL = { note: 'Note', find: 'Note', photo: 'Frame', activity: 'Activity', poll: 'Poll',
+  const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll',
     song: 'Music' };
   // The same five, pluralised — for prose that has to name a type in the plural
   // ("No frames out here yet" when a filter empties Discover's grid).
@@ -2383,7 +2383,7 @@
   // other sense. It is deliberately absent from TYPE_LABEL, TYPE_GLYPH, ICON_ALL
   // and FILTERS: those are the quintet, and a repost has no hue, no heart and no
   // dot on the pull ring.
-  const TYPE_PLURAL = { note: 'notes', photo: 'frames', activity: 'activities', poll: 'polls',
+  const TYPE_PLURAL = { note: 'notes', find: 'finds', photo: 'frames', activity: 'activities', poll: 'polls',
     song: 'music', repost: 'reposts' };
   // Zoe's poll mark — a hand-drawn pink burst/asterisk (icons/poll.svg). This is
   // the TYPE identity glyph (masthead + filter); the composer's attach toggle uses
@@ -2410,6 +2410,7 @@
      being the composer's other GROUP and became the calendar toggle in that bar. */
   const TYPE_GLYPH = {
     note:     'pencil',
+    find:     'link',
     photo:    'image',
     poll:     'poll',
     activity: 'cal',
@@ -2802,6 +2803,8 @@
         // appended by fieldsFor and editFieldsFor).
         (opts.tags ? tagRowHtml(idp, opts.tags, (tools
             ? `<div class="rich-attach-tools">` +
+                `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
+                  `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
                 `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
                   `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
                 `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
@@ -2887,18 +2890,21 @@
   // Wire a rich Note editor: the H1/H2/B/I toolbar, plain-text-only paste, the
   // NOTE_MAX cap + its count, the empty-state placeholder, and toolbar active
   // state. Mentions are wired separately (wireMentions handles contenteditable).
-  /* A link pasted into the words shows its tile under the box, the one the post
-     will wear, inert here: a video can't start and a Join can't walk you off a
-     half-written post. The tile comes off with the link. */
+  /* A link pasted into the words, or a Find's own in its Link field, shows its
+     tile under the box, the one the post will wear, inert here: a video can't
+     start and a Join can't walk you off a half-written post. The tile comes off
+     with the link. */
   function wireLinkPreview(editor) {
     const field = editor.closest('.field--rich');
     if (!field) return;
-    field.insertAdjacentHTML('afterend', `<div class="compose-links" hidden inert></div>`);
-    const host = field.nextElementSibling;
+    const link = field.parentElement.querySelector('input[type="url"]');
+    const under = link?.closest('.field') || field;
+    under.insertAdjacentHTML('afterend', `<div class="compose-links" hidden inert></div>`);
+    const host = under.nextElementSibling;
     let shown = '';
     let wait = 0;
     const sync = () => {
-      const urls = postLinks({ note: serializeNote(editor) });
+      const urls = postLinks({ note: serializeNote(editor), url: under.hidden ? '' : link?.value.trim() });
       if (urls.join(' ') === shown) return;
       shown = urls.join(' ');
       host.hidden = !urls.length;
@@ -2908,6 +2914,7 @@
     // A typed link is only whole when the typing stops; a paste is, at once.
     editor.addEventListener('input', () => { clearTimeout(wait); wait = setTimeout(sync, 700); });
     editor.addEventListener('paste', () => { clearTimeout(wait); wait = setTimeout(sync, 60); });
+    link?.addEventListener('input', () => { clearTimeout(wait); wait = setTimeout(sync, 300); });
     sync();
   }
 
@@ -4146,11 +4153,11 @@
   }
 
   /* ── LINKS ARE PART OF THE WORDS (2026-10-30, Zoe: "I want every link embedded
-     as much as possible ... Finds or links are now just a part of notes") ──────
-     There is no link field and no Find any more: you paste a link into what
-     you're writing, and it stays there, a plain URL in the stored note. So all
+     as much as possible") ──────────────────────────────────────────────────────
+     You paste a link into what you're writing, and it stays there, a plain URL
+     in the stored note. A Find keeps its own link in `url`. So all
      of this is read off the words as a card is drawn, nothing is stored, and
-     every link anybody ever pasted wears it. An older Find's `url` lives outside
+     every link anybody ever pasted wears it. A Find's `url` lives outside
      its words and is read first (postLinks).
 
      Every link gets a tile under the post, up to LINKS_MAX of them, the best
@@ -6085,8 +6092,7 @@
     const tags = { value: shownTags(post).join(', ') };
 
     if (post.type === 'find') {
-      // A Find from before links joined the words: the Note editor, then the
-      // link field that its one link still lives in.
+      // A Find: the Note editor, then the link field its one link lives in.
       return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, tags }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
@@ -6581,6 +6587,7 @@
   const FILTERS = [
     { key: 'all',      label: 'All' },
     { key: 'note',     label: 'Notes' },
+    { key: 'find',     label: 'Finds' },
     { key: 'photo',    label: 'Frames' },
     { key: 'poll',     label: 'Polls' },
     { key: 'activity', label: 'Activities' },
@@ -6588,8 +6595,6 @@
   ];
   let activeFilter = 'all';
   let activeTag = null;
-  // A Find from before links joined the words is a note in every list.
-  const filterType = (p) => p.type === 'find' ? 'note' : p.type;
 
   // The toolbar's filter control: the sliders glyph, WEARING the active type's
   // hue whenever a filter is on, so a closed menu still tells you the feed is
@@ -7612,7 +7617,7 @@
       // Frames filter because the row says 'repost' would hide a Frame that is
       // visibly sitting in the feed. Same for its tags: the chips on that card are
       // the original's, so tapping one has to match it back.
-      const typeOk = activeFilter === 'all' || filterType(s) === activeFilter;
+      const typeOk = activeFilter === 'all' || s.type === activeFilter;
       const tagOk = !activeTag || (s.tags || []).includes(activeTag);
       return typeOk && tagOk;
     });
@@ -8659,7 +8664,7 @@
     // argument. A profile with nothing but notes gets no control at all — one
     // type and one layout isn't a choice — but a single photo earns one on its
     // own, because Frames isn't a narrowing, it's the wall.
-    const types = new Set(list.map(filterType));
+    const types = new Set(list.map(p => p.type));
     const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))];
     // Reposts get a row of their own, APPENDED rather than slotted into the
     // ladder. All → the five types reads as one run from widest to narrowest, and
@@ -8974,7 +8979,7 @@
     const paintPosts = (stage) => {
       dropCards();                      // a column still paying out is about to go
       feedEl.textContent = '';
-      const shown = profileFilter === 'all' ? list : list.filter(p => filterType(p) === profileFilter);
+      const shown = profileFilter === 'all' ? list : list.filter(p => p.type === profileFilter);
       if (locked && !shown.length) {
         // Private profile, seen by an outsider, with nothing public to show.
         feedEl.innerHTML = lockedNudge(false);
@@ -16342,7 +16347,7 @@
     // A picked type narrows it to that type; an empty query is all of them.
     const postsMatching = (q, type) => Store.posts().filter(p =>
       !p.repostOf && !p.communityId && p.type !== 'song' && !Blocks.has(p.author)
-      && (type === 'all' || filterType(p) === type)
+      && (type === 'all' || p.type === type)
       && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
     let discoverable = new Set();
 
@@ -18383,18 +18388,20 @@
 
   /* ── Publish (composer) ───────────────────────────────────────────────────
      ONE form and one field set. Nothing here asks what you are making: the
-     attach toggles at the note's foot open a photo picker, a poll's choices or
-     a place and a time, and the type follows from whichever is open. A link is
-     just pasted into the words, and shows its tile under them as it would post.
+     attach toggles at the note's foot open a link row, a photo picker, a poll's
+     choices or a place and a time, and the type follows from whichever is open. A
+     link pasted into the words stays in them, and shows its tile under them as it
+     would post, on any type: only the link row makes a Find.
      Photos get a real upload, shown and posted at their native aspect ratio (no
      crop). On publish we route home so the new entry animates in at the top of
      the feed. */
   const PUB_TYPES = [
     { key: 'note',     label: 'Note'     },
+    { key: 'find',     label: 'Find'     },
     { key: 'photo',    label: 'Frame'    },
     { key: 'activity', label: 'Activity' },
   ];
-  // The type is INFERRED, never picked: attach a photo and it's a Frame, a poll and it's a Poll, a place and a time and it's an Activity,
+  // The type is INFERRED, never picked: attach a link and it's a Find, a photo and it's a Frame, a poll and it's a Poll, a place and a time and it's an Activity,
   // nothing at all and it's a Note. `pubType` is that inference, and it's what the
   // data layer and the masthead mark read.
   //
@@ -18542,6 +18549,11 @@
     // so the words you have already written carry across every one of those changes
     // (see applyBaseSurface in renderPublish).
     return richNoteField('c', '', '', randomNotePlaceholder(), { event, tags: {} }) +
+      `<div class="field" id="c-link-row" hidden>` +
+        `<label for="c-url">Link</label>` +
+        `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
+          `spellcheck="false" placeholder="https://…">` +
+      `</div>` +
       `<div class="compose-circle" id="c-circle" hidden></div>` +
       pollFieldHtml() +
       frameFieldHtml() +
@@ -19032,6 +19044,7 @@
     titleEl?.classList.add('masthead-title--swap');   // hosts the outgoing ghost word
     let family = null;              // 'base' (the one post form) | 'quote' | 'song'
     let lastIndType = null;         // last type the mark showed, so it only pops on a real change
+    let wantLink = false;           // link row open → this post is a Find
     let wantPhoto = false;          // frame surface open → this post is a Frame
     let wantPoll = false;           // poll surface open → this post is a Poll
     let wantEvent = false;          // place + time open → this post is an Activity
@@ -19039,7 +19052,7 @@
 
     // The type is INFERRED from what's attached: a place and a time first (an
     // activity is the one thing here that lands in the real world, so it outranks
-    // anything decorating it), then a photo, then a poll, else a plain Note. The
+    // anything decorating it), then a photo, then a poll, then a link, else a plain Note. The
     // attachments are mutually exclusive — opening one folds the
     // others — so at most one is ever live and this order is a tiebreak that should
     // never be reached rather than a policy.
@@ -19048,6 +19061,7 @@
       if (wantPhoto || cropper || videoCapture) return 'photo';
       if (wantPoll) return 'poll';
       if (wantSong) return 'song';
+      if (wantLink) return 'find';
       return 'note';
     }
 
@@ -19074,6 +19088,7 @@
       }
       // No wash repaint here any more: the page's colour is the reader's, set once
       // in renderPublish, and attaching a photo doesn't change whose app this is.
+      fieldsEl.querySelector('#c-add-link')?.setAttribute('aria-pressed', String(pubType === 'find'));
       fieldsEl.querySelector('#c-add-photo')?.setAttribute('aria-pressed', String(pubType === 'photo'));
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
       fieldsEl.querySelector('#c-add-event')?.setAttribute('aria-pressed', String(pubType === 'activity'));
@@ -19111,6 +19126,11 @@
     // is why a mis-tap costs nothing.
     function applyBaseSurface() {
       if (family !== 'base') return;
+      const linkRow = fieldsEl.querySelector('#c-link-row');
+      if (linkRow && linkRow.hidden === wantLink) {
+        linkRow.hidden = !wantLink;
+        fieldsEl.querySelector('#c-url')?.dispatchEvent(new Event('input'));   // its tile goes and comes with it
+      }
       const frameField = fieldsEl.querySelector('.frame-field');
       if (frameField) frameField.hidden = !wantPhoto;
       const pollRow = fieldsEl.querySelector('#c-poll-row');
@@ -19152,6 +19172,7 @@
       stills = [];
       videoCapture = null;
       onCaptureChange = null;
+      wantLink = false;
       wantPhoto = false;
       wantPoll = false;
       wantEvent = false;
@@ -19245,10 +19266,11 @@
       ghost.addEventListener('animationend', () => ghost.remove(), { once: true });
     }
 
-    // The attach toggles at the note field's foot. Photo opens the frame field and pops the OS picker (a Frame); Poll opens
+    // The attach toggles at the note field's foot. Link opens the link row (a Find); Photo opens the frame field and pops the OS picker (a Frame); Poll opens
     // the choices (a Poll); the calendar opens Where and When (an Activity). All
     // are live toggles: tap again to fold the surface and revert the type.
     function wireAttachBar() {
+      const linkBtn  = fieldsEl.querySelector('#c-add-link');
       const photoBtn = fieldsEl.querySelector('#c-add-photo');
       const pollBtn  = fieldsEl.querySelector('#c-add-poll');
       const eventBtn = fieldsEl.querySelector('#c-add-event');
@@ -19259,17 +19281,26 @@
       // just fold their rows, leaving what's typed in them, so a mis-tap costs
       // nothing but the tap back.
       const foldPhoto = () => { if (wantPhoto) { wantPhoto = false; clearFrame(); } };
+      const foldLink  = () => { wantLink = false; };
       const foldPoll  = () => { wantPoll = false; };
       const foldEvent = () => { wantEvent = false; };
       // A folded song surface keeps its pick: a mis-tap costs the tap back. Only submitComposer reads it, and only for
       // a post that is still Music.
       const foldSong  = () => { wantSong = false; };
+      linkBtn?.addEventListener('click', () => {
+        wantLink = !wantLink;
+        document.getElementById('c-error').textContent = '';
+        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); foldSong(); }
+        applyBaseSurface();
+        syncType();
+        if (wantLink) fieldsEl.querySelector('#c-url')?.focus();
+      });
       photoBtn?.addEventListener('click', () => {
         const opening = !wantPhoto;
         wantPhoto = opening;
         document.getElementById('c-error').textContent = '';
         if (opening) {
-          foldPoll(); foldEvent(); foldSong();
+          foldLink(); foldPoll(); foldEvent(); foldSong();
           applyBaseSurface();                          // reveal the frame field first
           fieldsEl.querySelector('#c-file')?.click();  // then pop the picker
         } else {
@@ -19280,7 +19311,7 @@
       pollBtn?.addEventListener('click', () => {
         wantPoll = !wantPoll;
         document.getElementById('c-error').textContent = '';
-        if (wantPoll) { foldPhoto(); foldEvent(); foldSong(); }
+        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); foldSong(); }
         applyBaseSurface();
         syncType();
       });
@@ -19290,14 +19321,14 @@
       eventBtn?.addEventListener('click', () => {
         wantEvent = !wantEvent;
         document.getElementById('c-error').textContent = '';
-        if (wantEvent) { foldPhoto(); foldPoll(); foldSong(); }
+        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); foldSong(); }
         applyBaseSurface();
         syncType();
       });
       songBtn?.addEventListener('click', () => {
         wantSong = !wantSong;
         document.getElementById('c-error').textContent = '';
-        if (wantSong) { foldPhoto(); foldPoll(); foldEvent(); }
+        if (wantSong) { foldPhoto(); foldLink(); foldPoll(); foldEvent(); }
         applyBaseSurface();
         syncType();
         if (wantSong && !composeSong) fieldsEl.querySelector('#c-song-q')?.focus();
@@ -19400,12 +19431,13 @@
       renumber();
     }
 
-    // The circle a post is about, carried here from its Invite sheet or pasted
-    // into the words. The carried one rides over the note as its card, with an x
+    // The circle a post is about, carried here from its Invite sheet, or a link
+    // to one in the Link field or pasted into the words. The carried one rides over the note as its card, with an x
     // that takes it off, and goes in at the end of the words as Share is pressed
     // (submitComposer), a link in a note like any other.
     const attachedCircle = () => {
-      const c = [pubCarried, ...linksIn(fieldsEl.querySelector('#c-note')?.textContent)
+      const c = [pubCarried, wantLink ? fieldsEl.querySelector('#c-url')?.value.trim() : '',
+        ...linksIn(fieldsEl.querySelector('#c-note')?.textContent)
         .map(l => l.href)].map(circleOfLink).find(Boolean);
       return c ? c.id : null;
     };
@@ -19454,7 +19486,7 @@
     else if (attach && family !== 'quote') fieldsEl.querySelector(ATTACH_BTN[attach])?.click();
   }
   const ATTACH_BTN = {
-    photo: '#c-add-photo', poll: '#c-add-poll',
+    find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
     activity: '#c-add-event',
   };
 
@@ -20467,7 +20499,13 @@
 
     if (pubCarried && pubType !== 'song') data.note += `<p>${esc(pubCarried)}</p>`;
 
-    if (pubType === 'activity') {
+    if (pubType === 'find') {
+      data.url = val('c-url');
+      data.title = val('c-title');
+      if (!/^https?:\/\/.+/i.test(data.url)) {
+        errEl.textContent = 'Add a link starting with http:// or https://.'; return;
+      }
+    } else if (pubType === 'activity') {
       data.title = val('c-title');
       data.location = val('c-location');
       data.eventDate = val('c-date');

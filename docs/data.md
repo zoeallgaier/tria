@@ -1484,8 +1484,8 @@ address and therefore a different person, and there is no way around that.
 
 A link has no column of its own. It is a plain URL in `posts.note`, read as the
 card is drawn, which is why old notes wear tiles with no migration and an older
-build simply shows the URL as text. `posts.url` is only ever read now, for Find
-rows written before this; `'find'` stays in the type check for them. The tile for
+build simply shows the URL as text. A Find is the exception: the composer's Link
+field writes `type: 'find'` with its link in `posts.url`, read first. The tile for
 each link is chosen in `linkTileHtml`; a page's title and picture are read on the
 reader's phone by `TriaSettings.pageHead` and kept in `tria:links`, because a web
 view may not read another site and the app has no server to ask. The website

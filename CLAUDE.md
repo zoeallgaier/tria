@@ -106,12 +106,15 @@ native shell never draws the CSS nav, so none of this reaches the iOS build.
 
 ## Links are part of the words (2026-10-30)
 
-**There is no Find any more** (Zoe: "Finds or links are now just a part of
-notes", "I want every link embedded as much as possible"). You paste a link
-into what you're writing, on any post; the composer's link button, link row and
-Make it a Find nudge are gone, and **nothing new writes `type: 'find'`**. Old
-Find rows stay: their `url` is read first (`postLinks`), they count as Notes in
-every filter (`filterType`) and their editor keeps its Link field. **A link is a
+**A link embeds wherever it is, and Find is still a post type** (Zoe: "I want
+every link embedded as much as possible"; Finds were taken out for it the same day,
+then back: "lets still use that but with embeds", 2026-10-31). The composer's link
+button opens the Link field, which makes a Find (`type: 'find'`, the link in
+`posts.url`, the type inferred like any other, its own Finds filter), and its tile
+previews under the field. You can also paste a link into what you're writing, on any
+post, and that post stays what it is. The Make it a Find nudge stayed gone: a pasted
+link already embeds, so it has nothing left to offer. A Find's `url` is read first
+(`postLinks`). **A link is a
 plain URL in the stored note**, so it is all read off the words as a card is
 drawn (`linksIn`, `postLinks`), no migration, and every link anyone ever pasted
 wears it. **Every link gets a tile under the post, up to four** (`LINKS_MAX`,
