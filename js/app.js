@@ -10930,7 +10930,8 @@
     if (gone) {
       view.innerHTML =
         `<section class="view view--post">` +
-          `<p class="feed-empty">This post isn’t here any more.</p>` +
+          (catchingUp ? `<span id="page-wait"></span>`
+            : `<p class="feed-empty">This post isn’t here any more.</p>`) +
         `</section>`;
       return;
     }
@@ -17904,7 +17905,8 @@
     if (!c) {
       view.innerHTML =
         `<section class="view view--chat">` +
-          `<p class="feed-empty">This chat isn’t here any more.</p>` +
+          (catchingUp ? `<span id="page-wait"></span>`
+            : `<p class="feed-empty">This chat isn’t here any more.</p>`) +
         `</section>`;
       return;
     }
@@ -21294,7 +21296,7 @@
     // friends tie) — they're one component.
     '.toolbar-btn', '.nav-link',
     // THE BUTTON, both weights: every pill in a page presses the same way.
-    '.publish-fill', '.pill-quiet',
+    '.publish-fill', '.pill-quiet', '.new-posts',
   ].join(', ');
   let pressing = null;   // { el, scale, down } while a finger is down
   function pressRelease() {
@@ -22723,6 +22725,7 @@
     // window.scrollY is still where the reader left it, and renderPage is about
     // to reset it.
     rememberScroll();
+    dropNewPosts();
     const arriving = navStamp();
     navHere = arriving;
 
@@ -23170,29 +23173,41 @@
   // (its in-place repaint is communityRepaint). Its form pages are not.
   const isCommunityPage = (path) =>
     path.startsWith('#/c/') && path !== '#/c/new' && !path.endsWith('/edit');
+  const herePath = () => (location.hash || '#/').split('?')[0];
+  const isFeedPage = (path) => path === '#/' || path === '#/discover' || path === '#/updates'
+    || path === '#/chats' || isCommunityPage(path);
+  // A profile repaints by re-routing onto itself, so it only does when somebody
+  // asked (a pull, a re-tap): nobody rebuilds a page under a reader unbidden.
+  const isProfilePage = (path) => path === '#/profile' || path.startsWith('#/u/');
   async function refreshWorld(path, { force = false, hold = true } = {}) {
-    if (path !== '#/' && path !== '#/discover' && path !== '#/updates' && path !== '#/chats'
-        && !isCommunityPage(path)) return;
     if (!force && Date.now() - lastRefresh < 4000) return;   // tap-spam / boot guard
     lastRefresh = Date.now();
     const seq = ++refreshSeq;
     const changed = await Store.refresh();
     if (seq !== refreshSeq) return;                // stale response — a newer pull won
     // Before either bail below. A pull that brings a like on a post you are not
-    // looking at paints NOTHING — showWorld only ever repaints the three routes
+    // looking at paints NOTHING — showWorld only ever repaints the routes
     // this function serves — and the tab is the one place that news can appear
     // from anywhere. So the dot is answered by the pull, not by the paint.
     syncNavDot();
-    if (!changed && owedPaint !== path) return;    // nothing new, and nothing owed
+    // Wherever the reader is NOW. A tap during the pull rendered from the old
+    // world, so the page they went to is the one that needs the new one.
+    const here = herePath();
+    if (!changed && owedPaint !== here) return;    // nothing new, and nothing owed
     warmImages();   // new friends/posts may have brought new avatars + photos
-    await showWorld(path, { force, hold, seq });
+    // The channel misses whatever was said while the app was away, so an open
+    // thread hears it from the pull.
+    if (changed) chatLive?.();
+    if (!isFeedPage(here) && !(force && isProfilePage(here))) return;
+    if (!force && offerNewPosts(here)) return;
+    await showWorld(here, { force, hold, seq });
     noticeCharmsSoon();
   }
 
   // The paint half, split out because it can land later than the pull that earned
   // it: a paint skipped while a field had focus is held in `owedPaint` and run by
   // whichever refresh comes next, rather than discarded (see the note there).
-  async function showWorld(path, { force = false, hold = true, seq = refreshSeq } = {}) {
+  async function showWorld(path, { force = false, hold = true, seq = refreshSeq, ring = true } = {}) {
     // Two of the three bails settle themselves. A newer pull owns the screen and
     // will paint or owe on its own; navigating away ends with the destination
     // rendering from the same fresh cache. Only a focused field ends with nothing.
@@ -23207,6 +23222,7 @@
       else if (path === '#/discover') { if (!discoverRepaint?.(force)) renderDiscover(); }
       else if (path === '#/chats') renderChats();
       else if (isCommunityPage(path)) { if (!communityRepaint?.()) route(); }
+      else if (isProfilePage(path)) route();
       else renderUpdates();
     };
 
@@ -23220,7 +23236,7 @@
     // silent path, and only when there is actually something to show: a resume
     // that finds nothing new (and owes nothing) never gets this far, which is
     // most of them.
-    const ringOn = !!refreshRing?.on();
+    const ringOn = ring && !!refreshRing?.on();
 
     // Photos on the rows this paint is about to splice in. Home only: Discover
     // rebuilds its grid whole and guards itself with a signature, and an Updates
@@ -23279,20 +23295,126 @@
   // would only fight the scroll (see refreshWorld's own note on both). Nothing
   // polls on a timer; the world is otherwise refreshed at boot and on foreground.
   //
-  // refreshWorld ignores every path but Circle, Discover and Updates, so a
-  // re-tap on Profile is still only a scroll — that page has no reconciling
-  // repaint to run, and re-rendering it under the reader would be a different
-  // thing wearing the same gesture.
-  function reclick(route) {
-    const path = (location.hash || '#/').split('?')[0];
+  // Every tab refreshes, Profile too, and the edge says so for the whole of the
+  // pull rather than only when it found something (Zoe, 2026-10-30): a re-tap
+  // that came back empty used to look like a tap that did nothing.
+  async function reclick(route) {
+    const path = herePath();
     if (route === '#/' && path === '#/' && (activeFilter !== 'all' || activeTag)) {
       activeFilter = 'all';
       activeTag = null;
       renderHome();
     }
+    dropNewPosts();
     scrollTop(true);
-    refreshWorld(path, { force: true, hold: false });
+    const ringOn = !!refreshRing?.on();
+    try {
+      await Promise.all([refreshWorld(path, { force: true, hold: false }), nap(650)]);
+    } finally {
+      if (ringOn) refreshRing.off();
+    }
   }
+
+  /* ── New posts ──────────────────────────────────────────────────────────────
+     A feed that finds new posts while you're down it says so in a little butter
+     capsule, with up to three faces and an arrow, and nothing moves until you
+     ask (Zoe, 2026-10-30: "a cute buttery new posts button"). It was a splice
+     above the reader held in place by scrollBy, and a scrollBy in the middle of
+     a flick stops the flick dead.
+
+     The paint it holds back is `owedPaint`, the debt the refresh already keeps,
+     so a pull or a tab re-tap settles it too. At the top of a page there is
+     nothing to offer: the posts simply come in under the glow.
+
+     Who wrote it, never how many: this is the no COUNT rule's exact shape. */
+  const NEW_POSTS_TOP = 120;     // px from the top, within which they just arrive
+  const PEEK_MS = 60000;
+  let newPostsPill = null;
+  let newPostsAt = '';
+
+  const cardsOf = (path) => {
+    if (path === '#/') return Store.feed();
+    const c = Store.community(decodeURIComponent(path.slice(4)));
+    return c ? Store.communityPosts(c.id) : [];
+  };
+  // What's in the cache above the card at the top of the screen, by somebody
+  // else: a post of your own never needs announcing to you.
+  function postsAbove(path) {
+    const first = document.querySelector('#feed > .card');
+    if (!first) return [];
+    const me = Store.session();
+    const list = cardsOf(path).filter(p => {
+      const s = subjectOf(p);
+      return s && !Blocks.has(p.author) && !Blocks.has(s.author);
+    });
+    const top = list.findIndex(p => String(p.id) === first.dataset.id);
+    return top > 0 ? list.slice(0, top).filter(p => p.author !== me) : [];
+  }
+
+  // True when the pill takes this paint on, so the caller leaves the feed alone.
+  function offerNewPosts(path) {
+    if (path !== '#/' && !isCommunityPage(path)) return false;
+    if (window.scrollY < NEW_POSTS_TOP || typing() || sheetOpen) return false;
+    const news = postsAbove(path);
+    if (!news.length) return false;
+    owedPaint = path;
+    raiseNewPosts(path, news);
+    return true;
+  }
+
+  function raiseNewPosts(path, news) {
+    const faces = [...new Set(news.map(p => p.author))].slice(0, 3)
+      .map(u => Store.user(u)).filter(Boolean)
+      .map(u => avatarEl(u, { px: 24 })).join('');
+    const inner = (faces ? `<span class="new-posts-faces">${faces}</span>` : '') +
+      `<span>New posts</span>` + svgIcon('arrowup', 'new-posts-arrow');
+    newPostsAt = path;
+    if (newPostsPill) {
+      newPostsPill.innerHTML = inner;     // a second post while it's up: same pill
+      return;
+    }
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'new-posts';
+    pill.innerHTML = inner;
+    pill.addEventListener('click', async () => {
+      dropNewPosts();
+      // Painted where the reader is, place held, THEN the glide: the new cards
+      // are waiting at the top when it gets there.
+      await showWorld(path, { force: true, ring: false });
+      scrollTop(true);
+    });
+    document.body.appendChild(pill);
+    newPostsPill = pill;
+    window.addEventListener('scroll', watchNewPosts, { passive: true });
+  }
+
+  // Back at the top by your own thumb: the posts come in and the pill has no job.
+  function watchNewPosts() {
+    if (window.scrollY >= NEW_POSTS_TOP) return;
+    const path = newPostsAt;
+    dropNewPosts();
+    showWorld(path, { force: true, ring: false, hold: false });
+  }
+
+  function dropNewPosts() {
+    const pill = newPostsPill;
+    if (!pill) return;
+    newPostsPill = null;
+    window.removeEventListener('scroll', watchNewPosts);
+    pill.classList.add('new-posts--out');
+    pill.disabled = true;
+    window.setTimeout(() => pill.remove(), 260);
+  }
+
+  // Nothing else tells an open feed that a friend just posted: the channel is
+  // chats only. Asks a row's worth; pulls the world only on a yes.
+  window.setInterval(async () => {
+    const path = herePath();
+    if (document.visibilityState !== 'visible' || !Store.isAuthed() || typing()) return;
+    if (path !== '#/' && !isCommunityPage(path)) return;
+    if (await Store.newerPosts()) refreshWorld(herePath());
+  }, PEEK_MS);
 
   document.getElementById('nav').addEventListener('click', (e) => {
     const link = e.target.closest('.nav-link');
@@ -23365,13 +23487,6 @@
      rest and spreading as the pull arms, then running a wave while the re-pull
      goes out. Reduced motion keeps the feature, drops the theatrics (CSS side).
 
-     This is now the ONLY refresh gesture. Re-tapping the tab you were already on
-     used to refresh too, which was a second, invisible way to do the same thing —
-     nothing on screen said a tab was also a button, so the discoverable gesture
-     was carrying the feature and the hidden one just made the app feel like it
-     reloaded at random. The tab re-tap still scrolls you to the top and clears a
-     filter; it simply no longer re-pulls the world.
-
      IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): a glow of the reader's
      own band in off the glass, down to the foot of the status bar, by `TriaEdgeGlow` in TriaChromePlugin.swift,
      which reads the pull off its own scroll view and owns the haptics (a ratchet
@@ -23411,11 +23526,9 @@
       }
       return ptr;
     };
-    const herePath = () => (location.hash || '#/').split('?')[0];
     const eligible = () =>
       Store.isAuthed() && !busy
-      && (herePath() === '#/' || herePath() === '#/discover' || herePath() === '#/updates' || herePath() === '#/chats'
-        || isCommunityPage(herePath()))
+      && (isFeedPage(herePath()) || isProfilePage(herePath()))
       && document.body.style.overflow !== 'hidden';   // not under a lightbox/modal
     const draw = () => {
       raf = 0;
@@ -23579,11 +23692,13 @@
     check();
   })();
 
-  // Returning to a foregrounded app re-pulls the world too (same quiet rules:
-  // only on Circle/Updates, re-render only if something changed).
+  // Returning to a foregrounded app re-pulls the world too, on every page: an
+  // open chat has nothing else to catch it up on what was said while it was away
+  // (the channel doesn't hear the background). What it repaints is refreshWorld's
+  // call.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
-    refreshWorld((location.hash || '#/').split('?')[0]);
+    refreshWorld(herePath());
   });
 
   // The boot splash (static HTML in index.html, so it paints before any JS or
@@ -23635,49 +23750,95 @@
      notification fires it the moment the listener exists, which is how a tap on a
      closed app still lands on the right page rather than the home feed.
 
-     A re-pull comes FIRST, and the web gets this for free where the app doesn't:
-     `notificationclick` calls `client.navigate()`, which reloads the document and
-     re-runs Store.init() with it, while this handler is a hash change inside the
-     same already-running page. A notification is BY DEFINITION about something
-     that arrived after this device's cache was last filled — a comment on a post
-     the world never had, a brand new friend's post — and a tap that was still
-     backgrounded a while can easily be sitting on a cache from before it existed.
-     Land on that with no re-pull and renderPost finds nothing, which reads as
-     "This post isn't here any more" for a post that very much is — the tap
-     opening to what looks like nothing. Store.refresh() is a no-op pre-auth (it
-     bails on `!state.session`), so this costs a cold launch nothing: Store.init()
-     is already mid-flight doing the real load. */
+     THE PAGE COMES FIRST, the world behind it. This used to await a whole
+     re-pull and then navigate, on the argument below, so every tap sat on the
+     last page for the second and a half the world takes, and a slow network
+     stretched that to however long it felt like (Zoe, 2026-10-30: "takes a while
+     and shows whatever the last page was on"). The argument still stands: a
+     notification is BY DEFINITION about something this cache may not have yet,
+     and landing on that with no re-pull reads "This post isn't here any more"
+     for a post that very much is. See arriveAt for how both hold. */
   if (nativeShell()) {
     try {
       window.Capacitor.nativeCallback('PushNotifications', 'addListener',
-        { eventName: 'pushNotificationActionPerformed' }, async (ev) => {
+        { eventName: 'pushNotificationActionPerformed' }, (ev) => {
           if (ev?.actionId === 'dismiss') return;
           const url = String(ev?.notification?.data?.url || '');
           const hash = url.slice(url.indexOf('#'));
-          const target = /^#\//.test(hash) ? hash : '#/updates';
-          await Store.refresh();
-          location.hash = target;
+          arriveAt(/^#\//.test(hash) ? hash : '#/updates');
         });
     } catch { /* no listener; a tap just opens the app where it was */ }
   }
+
+  /* Go there now, then catch the page up. A post's thread comes on its own round
+     trip (Store.primePost) and a chat's with the chats (reloadChats), so the
+     thing you tapped for is usually there before the edge has finished lighting;
+     the world follows behind them. While it's on its way a page that misses says
+     nothing rather than "isn't here" (`catchingUp`, `#page-wait`), and a reader
+     who has moved on is left alone. `?p=` is the old profile link the router
+     would redirect anyway, resolved here so there is one destination to wait on.
+
+     `catchingUp` starts at 1 for the boot: a cold launch's first page can be
+     painted from a kept world that predates the post, and whenFresh settles it. */
+  let catchingUp = 1;
+  let booted = false;
+  async function arriveAt(hash) {
+    const p = new URLSearchParams(hash.split('?')[1] || '').get('p');
+    const target = p ? `#/p/${encodeURIComponent(p)}` : hash;
+    const path = target.split('?')[0];
+    const cold = !booted;
+    let armed = true;      // this arrival still counts in catchingUp
+    catchingUp++;
+    go(target);
+    const id = path.startsWith('#/p/') ? decodeURIComponent(path.slice(4)) : null;
+    const chat = path.startsWith('#/chat/');
+    const stayed = () => herePath() === path;
+    const waiting = () => !!document.getElementById('page-wait');
+    // A sheet or a half-written comment is the reader's by now. Only a page
+    // that drew nothing is repainted regardless of either.
+    const repaint = () => {
+      if (!stayed()) return;
+      if (chat && !waiting()) { chatLive?.(); return; }
+      if (!waiting() && (sheetOpen || typing() || commentDrafted())) return;
+      if (isFeedPage(path)) showWorld(path);
+      else route();
+    };
+    const ringOn = !cold && !!refreshRing?.on();
+    try {
+      if (cold) { await bootLoad; await Store.whenFresh(); }
+      if (id) { if (await Store.primePost(id)) repaint(); }
+      else if (chat) { await Store.reloadChats(); repaint(); }
+      const had = id && Store.threadPrint(id);
+      const changed = cold ? false : await Store.refresh();
+      catchingUp--;
+      armed = false;
+      syncNavDot();
+      if (id ? (had !== Store.threadPrint(id) || waiting()) : (changed || waiting())) repaint();
+    } catch { /* offline: the page stands as the cache has it */ }
+    finally {
+      if (armed) { catchingUp--; if (waiting()) route(); }
+      if (ringOn) refreshRing.off();
+    }
+  }
+  // The comment bar's words live in a web element in every shell.
+  const commentDrafted = () => !!document.querySelector('.postbar-form textarea, .postbar-form .postbar-input')?.value;
 
   /* A universal link that opened the app: a scanned profile code, a tapped
      triaonline.com/p/… in Messages. It was opening Tria wherever it was and
      going no further (Zoe, 2026-10-24) until SceneDelegate learned to pass it
      on; see the note there. The clean path becomes the hash 404.html would
-     have made of it on the web, and the same re-pull as a notification tap
-     comes first, because a link is often about something this cache predates.
-     Retained by the plugin like the push event, so a cold launch lands too. */
+     have made of it on the web, and it arrives the way a notification tap does,
+     because a link is often about something this cache predates. Retained by
+     the plugin like the push event, so a cold launch lands too. */
   if (nativeShell()) {
     try {
       window.Capacitor.nativeCallback('TriaSettings', 'addListener',
-        { eventName: 'openLink' }, async (ev) => {
+        { eventName: 'openLink' }, (ev) => {
           let u;
           try { u = new URL(String(ev?.url || '')); } catch { return; }
           const m = u.pathname.match(/^\/(p|u|c|daily|i)\/(.+?)\/?$/);
           if (!m) return;
-          await Store.refresh();
-          go('#/' + m[1] + '/' + m[2] + u.search);
+          arriveAt('#/' + m[1] + '/' + m[2] + u.search);
         });
     } catch { /* no listener; a link just opens the app where it was */ }
   }
@@ -23700,7 +23861,9 @@
   // store reads it; the App Store build keeps its gate and reads nothing.
   // `keep`: the App Store build paints a returning reader's last world at once
   // and loads the real one behind it (see "The last world" in store.js).
-  Store.init({ guest: !nativeShell(), keep: nativeShell() }).then(() => {
+  const bootLoad = Store.init({ guest: !nativeShell(), keep: nativeShell() });
+  bootLoad.then(() => {
+    booted = true;
     route();
     warmImages();   // decode avatars + recent photos up front so navigation is flash-free
     // When the real world lands behind a kept one, show what changed the way a
@@ -23708,10 +23871,11 @@
     // anything else re-routes onto itself (same page, same scroll), and a world
     // that no longer has you in it goes back to the gate.
     Store.whenFresh().then((changed) => {
-      if (!changed) return;
+      catchingUp--;
+      if (!changed && !document.getElementById('page-wait')) return;
       syncNavDot();
       warmImages();
-      const path = (location.hash || '#/').split('?')[0];
+      const path = herePath();
       if (!Store.isAuthed()) route();
       else if (['#/', '#/discover', '#/updates', '#/chats'].includes(path)) showWorld(path, { hold: false });
       else if (!typing()) route();
@@ -23726,6 +23890,8 @@
     Store.pushResume();
   }).catch((err) => {
     logError('boot failed', err);   // caught, so no global handler would see it
+    booted = true;
+    catchingUp = 0;
     route();
   }).finally(dismissSplash);
 })();

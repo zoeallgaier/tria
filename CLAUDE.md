@@ -35,6 +35,24 @@ narrower than an accent. The logo SVGs, gen-icons.js, the
 splash's `@property` values and the refresh glow (`TriaEdgeGlow`, as its
 fallback) hold the two hexes by hand. See the top of [docs/design.md](docs/design.md).
 
+## Refresh, audited (2026-10-30)
+
+**A notification opens its page at once and catches up behind it** (`arriveAt`,
+universal links too; it used to await the whole world first, Zoe: "takes a while
+and shows whatever the last page was on"). A post's thread comes on one round trip
+(`Store.primePost`), a chat's with the chats, then the world. A page that misses
+meanwhile draws nothing (`catchingUp`, `#page-wait`), never "isn't here", until the
+world has actually said so. **`Store.refresh` shares one pull in flight.**
+**A feed down the page gets the New posts capsule** (`offerNewPosts`, `.new-posts`,
+butter, up to three faces, never a number): nothing moves until it's tapped, the
+paint it holds is `owedPaint`, and at the top of a page posts simply arrive. Besides
+a foreground, an open feed asks `Store.newerPosts` once a minute (one row; the world
+is pulled only on a yes), so "nothing polls" is no longer true of feeds.
+**Re-tapping any tab refreshes it**, Profile too, the edge lit for the whole pull
+(`reclick`); profiles can be pulled, repainting by re-routing, only when asked. **A
+foreground re-pulls on every page**, so an open chat catches up. **The glow's top
+runs down into the status bar** (`crown` in `TriaEdgeGlow`). See [docs/views.md](docs/views.md).
+
 ## 2.0's refresh is the screen's edge (2026-10-22, trial)
 
 In the app, pull to refresh glows the reader's own band in off the

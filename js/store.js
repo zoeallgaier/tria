@@ -147,6 +147,7 @@ const Store = (() => {
     worldGen++;
     pendingWrites = [];
     state = empty();
+    peekSince = '';
     repostRules = null;
   }
 
@@ -345,6 +346,10 @@ const Store = (() => {
     if (p.community_id) o.communityId = p.community_id;
     return o;
   }
+  const mapComment = (row, nameById) => ({
+    id: row.id, postId: row.post_id, author: nameById.get(row.author),
+    text: row.body, image: row.image || null, date: dateOf(row.created_at), _ts: row.created_at,
+  });
   const nameMap = () => new Map(state.users.map(u => [u.id, u.username]));
 
   // ── Boot ───────────────────────────────────────────────────────────────────
@@ -667,10 +672,7 @@ const Store = (() => {
     // in that never happens; signed out it is every post by someone anon's users
     // policy doesn't reach (or all of them, on a database without that policy).
     state.posts = core(p, 'posts', row => mapPost(row, nameById), state.posts).filter(x => x.author);
-    state.comments = core(c, 'comments', row => ({
-      id: row.id, postId: row.post_id, author: nameById.get(row.author),
-      text: row.body, image: row.image || null, date: dateOf(row.created_at), _ts: row.created_at,
-    }), state.comments).filter(x => x.author);
+    state.comments = core(c, 'comments', row => mapComment(row, nameById), state.comments).filter(x => x.author);
     state.likes = core(l, 'likes', row => ({
       postId: row.post_id, user: nameById.get(row.user_id),
       _ts: row.created_at,
@@ -780,8 +782,17 @@ const Store = (() => {
     const { session, ...world } = state;
     return JSON.stringify(world);
   };
-  async function refresh() {
-    if (!state.session) return false;
+  // One pull at a time. A tapped notification foregrounds the app, and the
+  // foreground and the tap each ask for the world in the same breath: two dozen
+  // reads, twice, for one answer. Whoever asks second shares the first's.
+  let refreshing = null;
+  function refresh() {
+    if (!state.session) return Promise.resolve(false);
+    if (refreshing) return refreshing;
+    refreshing = pullWorld().finally(() => { refreshing = null; });
+    return refreshing;
+  }
+  async function pullWorld() {
     const gen = worldGen;
     const before = worldPrint();
     try { await loadWorld(); } catch { return false; }   // offline — keep the cache
@@ -791,6 +802,58 @@ const Store = (() => {
     const changed = worldPrint() !== before;
     if (changed) keepWorld();
     return changed;
+  }
+
+  /* One post and its thread, on one round trip, for a page a notification has
+     already opened. The world takes a second and a half; this is what the tap
+     came for. Through write(), so a load in the air keeps it (see the journal).
+     A bare repost whose original isn't cached yet, or a comment by somebody the
+     cache hasn't met, waits for the world like everything else. */
+  async function primePost(id) {
+    if (!state.session) return false;
+    const gen = worldGen;
+    const before = threadPrint(id);
+    let post, thread;
+    try {
+      [post, thread] = await Promise.all([
+        sb.from('posts').select('*').eq('id', id).maybeSingle(),
+        sb.from('comments').select('*').eq('post_id', id)
+          .order('created_at', { ascending: true }).order('id', { ascending: true }),
+      ]);
+    } catch { return false; }
+    if (gen !== worldGen || post.error || thread.error) return false;
+    const names = nameMap();
+    const row = post.data && mapPost(post.data, names);
+    if (row && row.author) write('posts', ps => upsert(ps, row, x => x.id === row.id));
+    const rows = (thread.data || []).map(c => mapComment(c, names)).filter(x => x.author);
+    write('comments', cs => [...cs.filter(c => String(c.postId) !== String(id)), ...rows]);
+    return threadPrint(id) !== before;
+  }
+  const threadPrint = (id) => JSON.stringify([
+    state.posts.find(p => String(p.id) === String(id)) || null,
+    state.comments.filter(c => String(c.postId) === String(id)),
+  ]);
+
+  /* Has anybody else posted since the newest post this cache holds? One row of
+     one column, so it can be asked every minute a feed is open, and the whole
+     world is only pulled when the answer is yes. RLS answers who may be read;
+     whether it belongs in THIS feed is the feed's to say once the world is in.
+     `peekSince` keeps a row the feed will never hold (a stranger's post in a
+     public circle) from answering yes every time it's asked. */
+  let peekSince = '';
+  async function newerPosts() {
+    if (!state.session || loadsInFlight) return false;
+    const since = state.posts.reduce((top, p) => (p._ts > top ? p._ts : top), peekSince);
+    if (!since) return false;
+    const gen = worldGen;
+    try {
+      const { data, error } = await sb.from('posts').select('created_at')
+        .gt('created_at', since).neq('author', idOf(state.session))
+        .order('created_at', { ascending: false }).limit(1);
+      if (gen !== worldGen || error || !data?.length) return false;
+      peekSince = data[0].created_at;
+      return true;
+    } catch { return false; }   // offline — the next minute asks again
   }
 
   /* ── Derived indexes ────────────────────────────────────────────────────────
@@ -4123,7 +4186,7 @@ const Store = (() => {
   }
 
   return {
-    init, refresh, whenFresh,
+    init, refresh, whenFresh, primePost, threadPrint, newerPosts, reloadChats,
     users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, posts, postsBy, audienceCount, audienceOf,
     // Auth
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,

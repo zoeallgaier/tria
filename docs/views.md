@@ -1,5 +1,15 @@
 # Refresh, feeds and photos
 
+**Audited 2026-10-30; where this file disagrees below, this wins.** Pull is not
+the only refresh: a re-tap of ANY tab pulls under the edge for the whole pull, a
+foreground pulls on every page, and an open feed asks `Store.newerPosts` once a
+minute. The glow's tips stop at the status bar's foot, with no `depth` measured in
+the page, and its **crown**, a sheet of the same band in the mask, runs down
+through the status bar with the pull, past the threshold to 1.6x, easing back on
+release. Below a feed's top 120px new posts wait behind the butter capsule rather
+than splicing in with a `scrollBy`, which stopped a flick dead. See "Refresh,
+audited" in CLAUDE.md.
+
 **In the app, the refresh is the screen's edge (2.0, trial).** A glow
 spilling in off the display's own rounded corners (a 24pt stroke laid just
 past the glass so it is never seen, and only its 16pt halo shows; it was a

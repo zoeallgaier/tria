@@ -4074,6 +4074,15 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    Detents and not a continuous hum: a hum under the thumb reads as the phone
    buzzing, a ratchet reads as the pull having resistance.
 
+   THE TOP RUNS DOWN INTO THE STATUS BAR (Zoe, 2026-10-30: "the very tippy top
+   of the refresh glow pull can actually pull down with more color further to
+   color the status bar"). A sheet of the same band, solid at the glass and gone
+   by a little under the status bar's foot, comes down with the pull (`crown`).
+   It is one more piece of the mask, so it wears whatever the strokes wear and
+   turns with them, the feather takes it off towards the corners, and the
+   strokes' shadow softens its foot. It keeps following a finger past the
+   threshold, up to `crownOver`, and eases back to the status bar on release.
+
    THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js,
    but only as the fallback for a pull that arrives without colours. */
 final class TriaEdgeGlow: UIView {
@@ -4095,6 +4104,11 @@ final class TriaEdgeGlow: UIView {
     /// and how many stops the mask spends on it.
     private static let fade: CGFloat = 0.38
     private static let feather = 10
+    /// How far the crown runs past the status bar's foot at the threshold, and
+    /// how much further it can follow the finger past that (as a share of its
+    /// reach).
+    private static let crownPast: CGFloat = 14
+    private static let crownOver: CGFloat = 0.6
     private static let start = UIColor(red: 0, green: 0xc9 / 255.0, blue: 0xce / 255.0, alpha: 1)
     private static let end = UIColor(red: 0, green: 0xcc / 255.0, blue: 0x9e / 255.0, alpha: 1)
 
@@ -4107,6 +4121,10 @@ final class TriaEdgeGlow: UIView {
     private let strokes = CALayer()
     private let right = CAShapeLayer()
     private let left = CAShapeLayer()
+    private let crown = CAGradientLayer()
+    /// Past-the-threshold pull, 0 to `crownOver`, added to the crown's reach.
+    private var over: CGFloat = 0
+    private var overFrom: CGFloat = 0
     /// The right stroke's geometry, for turning a distance along it into an
     /// angle round the centre: the top run, the corner, the side run.
     private var shape = (rect: CGRect.zero, r: CGFloat(0), foot: CGFloat(0))
@@ -4157,6 +4175,11 @@ final class TriaEdgeGlow: UIView {
             s.strokeEnd = 0
             strokes.addSublayer(s)
         }
+        crown.colors = [UIColor.black.cgColor,
+                        UIColor(white: 0, alpha: 0.82).cgColor,
+                        UIColor.clear.cgColor]
+        crown.locations = [0, 0.55, 1]
+        strokes.addSublayer(crown)
         // The bloom is the MASK's shadow: a mask's shadow counts as coverage, so
         // the ramp shows through a soft halo round the line with no blur pass.
         // It follows each segment's opacity, so the halo feathers with the line.
@@ -4301,6 +4324,10 @@ final class TriaEdgeGlow: UIView {
         CATransaction.setDisableActions(true)
         right.strokeEnd = t
         left.strokeEnd = t
+        // Eased in, so a short pull is the edge's glow and the colour only runs
+        // down as the pull gets serious.
+        let q = t * t * (3 - 2 * t) + over
+        crown.frame = CGRect(x: 0, y: 0, width: bounds.width, height: (shape.foot + Self.crownPast) * q)
         feather.locations = all.map { NSNumber(value: Double($0.0)) }
         feather.colors = all.map { UIColor(white: 0, alpha: $0.1).cgColor }
         CATransaction.commit()
@@ -4310,6 +4337,7 @@ final class TriaEdgeGlow: UIView {
     private func animate(to t: CGFloat, over seconds: CFTimeInterval) {
         tween?.invalidate()
         tweenFrom = reach
+        overFrom = over
         tweenTo = t
         tweenStart = CACurrentMediaTime()
         tweenLength = seconds
@@ -4321,6 +4349,7 @@ final class TriaEdgeGlow: UIView {
     @objc private func tick(_ link: CADisplayLink) {
         let u = min(1, (CACurrentMediaTime() - tweenStart) / tweenLength)
         let eased = 1 - pow(1 - u, 3)   // ease out
+        over = overFrom * CGFloat(1 - eased)
         draw(tweenFrom + (tweenTo - tweenFrom) * CGFloat(eased))
         if u >= 1 { link.invalidate(); tween = nil }
     }
@@ -4369,6 +4398,7 @@ final class TriaEdgeGlow: UIView {
     private func track(pull d: CGFloat) {
         guard state == "pull" else { return }
         let p = min(d / Self.threshold, 1)
+        over = min(Self.crownOver, max(0, d / Self.threshold - 1) * Self.crownOver)
         draw(p)
         alpha = p > 0 ? 0.45 + 0.55 * p : 0
 
@@ -4455,6 +4485,7 @@ final class TriaEdgeGlow: UIView {
             self.isHidden = true
             self.ramp.removeAllAnimations()
             self.strokes.removeAllAnimations()
+            self.over = 0
             self.draw(0)
         }
     }

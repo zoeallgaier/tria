@@ -82,6 +82,8 @@
 :root {
   /* Neutrals — cool off-white, deep cool off-black. The whole UI lives here. */
   --bg:        #edeef0;   /* cool paper */
+  --butter:     #ffeaa6;  /* the New posts capsule, and nothing else */
+  --butter-ink: #5a4608;
   --surface:   #f6f7f8;   /* barely-lifted panels (sidebar, chips) */
   --surface-2: #e6e8ea;
   --text:      #14171a;   /* deep, slightly cool off-black */
