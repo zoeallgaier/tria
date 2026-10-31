@@ -210,6 +210,25 @@
      page's ink reads on it in both schemes and with every accent. --pill-alpha
      above is now only for the chat bubble, which still paints a solid fill. */
   --pill-wash: 0.3;
+
+  /* THE LIGHT: how loud a colour is when it falls on the page rather than
+     fills something, one set of numbers for everything that glows (Zoe,
+     2026-10-31: the refresh glow "about the same as the profile gradient").
+     A profile's wash, a person card's wash and the refresh glow all read these,
+     the last through `glowLight` in app.js, so turning one turns all three.
+     Each stop is mixed toward --wash-tint, the paper's own extreme, keeping
+     --wash-keep of it; --wash-sat buys the chroma back; --wash-amt is the alpha
+     at the light's hottest point. A reader's colour is one hue and takes these;
+     Tria's ramp is louder per pixel and takes the -tria set. The reasoning is
+     in app.css, above the wash. 56% and 60% until the bloom moved to the corner
+     left it room to come up. */
+  --wash-tint: #fff;
+  --wash-keep: 60%;
+  --wash-sat: 2.4;
+  --wash-amt: 62%;
+  --wash-keep-tria: 64%;
+  --wash-sat-tria: 1.5;
+  --wash-amt-tria: 66%;
   --pill-edge: 1px solid color-mix(in srgb, var(--text) 26%, transparent);
 
   /* THE HEART, one colour now. A reader who picked a colour gets it on every
@@ -518,6 +537,13 @@
        --mono-band for why a neutral is the exception. */
     --mono-band: linear-gradient(115deg, #f5f6f8, #e6e8ec, #d5d8dd);
     --mono-ink:  var(--on-type);
+
+    /* The light mixes toward ink paper's extreme. See THE LIGHT above. */
+    --wash-tint: #000;
+    --wash-keep: 52%;
+    --wash-sat: 2.2;
+    --wash-keep-tria: 56%;
+
     --user-ink:  var(--user-ink-dk);
 
     /* Dark takes --user-heart-dk, the accent at its own pastel weight, and

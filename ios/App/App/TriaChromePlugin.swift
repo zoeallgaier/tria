@@ -535,14 +535,15 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /// The refresh glow (2.0). `state` is `pull`, `spin` or `idle`; `quiet`
-    /// dims a spin nobody's finger started, `land` closes a pulled refresh with
-    /// a soft tap. The FIRST call is also the probe: app.js keeps the CSS ring
+    /// The refresh glow (2.0). `state` is `prime`, `pull`, `spin` or `idle`;
+    /// `peak` is the light's hottest alpha, `quiet` dims a spin nobody's finger
+    /// started, `land` closes a pulled refresh with a soft tap. The FIRST call is also the probe: app.js keeps the CSS ring
     /// until one resolves, so a binary without this method still refreshes.
     @objc func setGlow(_ call: CAPPluginCall) {
         let state = call.getString("state") ?? "idle"
         let quiet = call.getBool("quiet") ?? false
         let land = call.getBool("land") ?? false
+        let peak = call.getDouble("peak").map { CGFloat($0) }
         // Read through the bar's one colour parser. Below 26 that class doesn't
         // exist, and the glow simply keeps Tria's own ramp.
         var colors: [UIColor] = []
@@ -556,9 +557,14 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             if self.glow == nil { self.glow = TriaEdgeGlow(scroll: web.scrollView) }
+            if state == "prime" {
+                self.glow?.prime()
+                call.resolve()
+                return
+            }
             // The tips stop at the status bar's foot (Zoe: the status bar, not the header).
             let foot: CGFloat? = window.safeAreaInsets.top > 0 ? window.safeAreaInsets.top : nil
-            self.glow?.set(state: state, colors: colors, depth: foot, quiet: quiet, land: land, in: window)
+            self.glow?.set(state: state, colors: colors, peak: peak, depth: foot, quiet: quiet, land: land, in: window)
             call.resolve()
         }
     }
@@ -4036,9 +4042,15 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    the glow and not the line: the stroke now sits off the glass (see `line`).
 
    IT WEARS THE READER'S COLOUR, the same band every commit wears
-   (`--pill-band`, resolved by `NativeChrome.glowColors` and sent with each
+   (`--pill-band`, resolved by `NativeChrome.glowLight` and sent with each
    pull): an accent is its three near stops, Tria's own ramp is cyan to green,
    and None is the neutral, ink-side on paper and paper-side on ink.
+
+   IT IS AS BRIGHT AS THE PROFILE WASH (Zoe, 2026-10-31), by the same numbers
+   (THE LIGHT in tokens.css). The stops arrive already mixed and saturated, and
+   `peak` is the wash's hottest alpha, which the crown starts from. The strokes
+   take no scale: their halo is about half strength where it enters the glass,
+   and that is already the wash's weight on a band this thin.
 
    THE PULL DRAWS IT. Two strokes leave the top centre together and run round
    the corners and down either side, each as far as the pull has got, and they
@@ -4070,7 +4082,11 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    vibration follows the pull, faint at first and building with the finger
    (`TriaPullSwell`), then stops dead for one rigid click at the threshold, then
    a soft landing as the glow leaves (only after a pull: a resume nobody asked
-   for stays silent). Six detents, each firmer than the last, came first. The
+   for stays silent). It starts with the pull's first point, so the engine is up
+   before there is one: app.js says `prime` as the finger lands (`prime` here),
+   and native follows the scroll view from then on, ahead of the web's `pull`,
+   which is a scroll event, a frame and a bridge hop behind the finger. Six
+   detents, each firmer than the last, came first. The
    swell is the one haptic in the app that isn't UIImpactFeedbackGenerator,
    because a generator can only tap and a smooth rise needs Core Haptics; the
    click and the landing still are. Whether Core Haptics obeys Settings, Sounds &
@@ -4101,12 +4117,16 @@ private final class TriaPullSwell {
     private var engine: CHHapticEngine?
     private var player: CHHapticAdvancedPatternPlayer?
     private var awake = false
+    private var starting = false
     private var playing = false
     private var level: Float = -1
 
     /// Started ahead of the finger: an engine takes a moment to come up.
     func wake() {
         awake = true
+        // A second engine start would hand back a second player, and the first
+        // would hum on with nothing holding it.
+        guard player == nil, !starting else { return }
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
         if engine == nil, let made = try? CHHapticEngine() {
             made.playsHapticsOnly = true
@@ -4114,9 +4134,12 @@ private final class TriaPullSwell {
             made.stoppedHandler = { [weak self] _ in DispatchQueue.main.async { self?.lost() } }
             engine = made
         }
+        starting = true
         engine?.start { [weak self] error in
             DispatchQueue.main.async {
-                guard let self, error == nil else { return }
+                guard let self else { return }
+                self.starting = false
+                guard error == nil else { return }
                 if self.awake { self.player = self.makePlayer() } else { self.engine?.stop(completionHandler: nil) }
             }
         }
@@ -4136,17 +4159,19 @@ private final class TriaPullSwell {
         ], relativeTime: 0, duration: 30)
         // The dial is set in the pattern: at the event's own 1 the first frame
         // of every pull would be a full strength thump.
-        let faint = CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: 0.12, relativeTime: 0)
+        let faint = CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: 0, relativeTime: 0)
         guard let pattern = try? CHHapticPattern(events: [event], parameters: [faint]) else { return nil }
         return try? engine?.makeAdvancedPlayer(with: pattern)
     }
 
-    /// Nothing for the first few points, then faint and building towards the
-    /// click, slowly at first (the square), and a little brighter as it goes.
+    /// From the first point: up to the hum's floor over the first tenth of the
+    /// pull, so it arrives rather than knocks, then building to the click, and a
+    /// little brighter as it goes. Below about 0.25 a hum this low can't be felt
+    /// through a phone, which is why 0.12 on a square read as starting late.
     func follow(_ p: CGFloat) {
-        guard let player, p > 0.04 else { hush(); return }
+        guard let player, p > 0 else { hush(); return }
         let x = Float(p)
-        let next = 0.12 + 0.58 * x * x
+        let next = 0.3 * min(1, x / 0.1) + 0.5 * x * x.squareRoot()
         if abs(next - level) < 0.01 { return }
         level = next
         if !playing {
@@ -4219,6 +4244,8 @@ final class TriaEdgeGlow: UIView {
     /// Where the strokes end, in this view's points (the status bar's foot).
     private var depth: CGFloat?
     private let swell = TriaPullSwell()
+    /// Puts the engine back down when a primed finger never pulled.
+    private var unprime: DispatchWorkItem?
     private let landing = UIImpactFeedbackGenerator(style: .soft)
     private let click = UIImpactFeedbackGenerator(style: .rigid)
     private var state = "idle"
@@ -4263,8 +4290,7 @@ final class TriaEdgeGlow: UIView {
             s.strokeEnd = 0
             strokes.addSublayer(s)
         }
-        // A smoothstep, so the foot has no edge of its own to read as a line.
-        crown.colors = [1, 0.84, 0.5, 0.16, 0].map { UIColor(white: 0, alpha: $0).cgColor }
+        light(peak: 1)
         crown.locations = [0, 0.25, 0.5, 0.75, 1]
         // The bloom is the MASK's shadow: a mask's shadow counts as coverage, so
         // the ramp shows through a soft halo round the line with no blur pass.
@@ -4287,6 +4313,15 @@ final class TriaEdgeGlow: UIView {
     /// is passing under the light. Four when the foot was halfway down.
     private var band: [CGColor] = []
     private var bands = 4
+
+    /// The crown from the wash's hottest alpha down to nothing, on a smoothstep
+    /// so the foot has no edge of its own to read as a line.
+    private func light(peak: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        crown.colors = [1, 0.84, 0.5, 0.16, 0].map { UIColor(white: 0, alpha: $0 * peak).cgColor }
+        CATransaction.commit()
+    }
 
     private func wear(_ stops: [UIColor]) {
         var b = stops.isEmpty ? [Self.start, Self.end] : stops
@@ -4443,8 +4478,9 @@ final class TriaEdgeGlow: UIView {
         if u >= 1 { link.invalidate(); tween = nil }
     }
 
-    func set(state next: String, colors: [UIColor], depth: CGFloat?, quiet: Bool, land: Bool, in window: UIWindow) {
+    func set(state next: String, colors: [UIColor], peak: CGFloat?, depth: CGFloat?, quiet: Bool, land: Bool, in window: UIWindow) {
         if !colors.isEmpty { wear(colors) }
+        if let peak { light(peak: peak) }
         if next != "idle" { self.depth = depth }
         if superview !== window {
             removeFromSuperview()
@@ -4465,6 +4501,30 @@ final class TriaEdgeGlow: UIView {
 
     // MARK: pull
 
+    private static func pull(of view: UIScrollView) -> CGFloat {
+        max(0, -(view.contentOffset.y + view.adjustedContentInset.top))
+    }
+
+    /// A finger landed at the top of a page that can refresh. Nothing shows yet,
+    /// but the hum starts with the pull's first point from here. Most touches
+    /// never pull, so it stands down on its own.
+    func prime() {
+        guard state == "idle" else { return }
+        swell.wake()
+        watch = scroll?.observe(\.contentOffset, options: [.new]) { [weak self] view, _ in
+            guard let self, self.state == "idle" else { return }
+            self.swell.follow(min(Self.pull(of: view) / Self.threshold, 1))
+        }
+        unprime?.cancel()
+        let down = DispatchWorkItem { [weak self] in
+            guard let self, self.state == "idle" else { return }
+            self.watch = nil
+            self.swell.sleep()
+        }
+        unprime = down
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: down)
+    }
+
     private func beginPull() {
         tween?.invalidate()
         tween = nil
@@ -4479,8 +4539,7 @@ final class TriaEdgeGlow: UIView {
         landing.prepare()
         click.prepare()
         watch = scroll?.observe(\.contentOffset, options: [.initial, .new]) { [weak self] view, _ in
-            let d = -(view.contentOffset.y + view.adjustedContentInset.top)
-            self?.track(pull: max(0, d))
+            self?.track(pull: Self.pull(of: view))
         }
     }
 

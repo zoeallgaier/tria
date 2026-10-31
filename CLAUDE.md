@@ -54,11 +54,31 @@ foreground re-pulls on every page**, so an open chat catches up. **The glow's to
 runs down into the status bar and never past its foot, however hard the pull**
 (`crown` in `TriaEdgeGlow`, Zoe, 2026-10-31). See [docs/views.md](docs/views.md).
 
+## The light is one set of numbers (2026-10-31)
+
+**Everything that falls on the page as colour is equally bright** (Zoe: the
+refresh glow "about the same as the profile gradient", the gradients a touch up
+now they're in the corner, "formalize and make cohesive"). **THE LIGHT** in
+tokens.css holds them: `--wash-tint`, `--wash-keep`, `--wash-sat`, `--wash-amt`
+(62%, was 56) and a `-tria` set for the house ramp (66%, was 60). A profile's
+wash, a person card's wash and the refresh glow all read those, so turn the dial
+there and never in a rule. The glow is native, so `glowLight` in app.js does the
+wash's mix and its `saturate()` matrix to the reader's stops and sends them with
+`peak` (the amt) on each pull. Measured in WebKit, paper plus that light lands on
+the wash's own pixel within a point or two, all accents, both schemes. The crown
+starts at `peak`; the strokes take no scale, because their halo is already about
+half strength where it enters the glass.
+
+**The hum starts with the pull's first point** (Zoe: "too subtle, can start
+earlier"): app.js says `prime` as a finger lands at the top of a page that can
+refresh, native brings the engine up and follows the scroll view from then on, and
+it stands down after 3s if nobody pulled. See `TriaPullSwell`.
+
 ## 2.0's refresh is the screen's edge (2026-10-22, trial)
 
 In the app, pull to refresh glows the reader's own band in off the
 display's rounded edge (the stroke sits past the glass; only its halo shows) instead of the dot ring (`TriaEdgeGlow`, `setGlow`,
-`NativeChrome.glowColors`), with feathered tips that reach the foot of the status bar at
+`NativeChrome.glowLight`), with feathered tips that reach the foot of the status bar at
 the threshold, and a haptic swell into a click there (Core Haptics, `TriaPullSwell`, Zoe: Instagram's vanish mode). The web keeps the ring. See the
 top of [docs/views.md](docs/views.md).
 

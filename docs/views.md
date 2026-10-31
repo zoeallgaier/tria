@@ -36,7 +36,7 @@ Motion keeps the drawing (it is the finger's own movement) and drops the turn
 and the breathing.
 
 **It wears the reader's colour**: every stop of `--pill-band`, resolved by
-`NativeChrome.glowColors()` and sent with `pull` and `spin`, mirrored so peach
+`NativeChrome.glowLight()` and sent with `pull` and `spin`, mirrored so peach
 (or an accent's first stop) is at the top and the last stop at the foot. An
 accent is its three near stops, Tria's own is peach to rose, None is the
 neutral (ink-side on paper, paper-side on ink). Below iOS 26 the bar's colour
@@ -57,14 +57,24 @@ sides share one number, `THRESHOLD`/`TriaEdgeGlow.threshold` (72). The first
 is what draws, unchanged. No `ptr-hold` under the glow, since nothing is in the
 page to make room for.
 
+**It is as bright as the profile wash** (Zoe, 2026-10-31): `glowLight` puts the
+stops through the wash's own mix and saturation (THE LIGHT in tokens.css) and sends
+its `peak`, which the crown starts from. The strokes take no scale: their halo is
+about half strength entering the glass, the wash's weight on a band this thin.
+
 **Its haptics are a swell into a click** (Zoe, 2026-10-31, Instagram's vanish
 mode): one continuous vibration (`TriaPullSwell`, Core Haptics) that builds with the
-finger and falls with it, 0.12 rising to 0.7 on a square, soft and getting brighter,
-then cuts for a rigid click at the threshold (with a swell of the halo), and one
+finger and falls with it, up to a 0.3 floor over the first tenth of the pull, then
+rising to 0.8 on a power of 1.5, soft and getting brighter (0.12 to 0.7 on a square
+came first and read as "too subtle", starting late), then cuts for a rigid click at the threshold (with a swell of the halo), and one
 soft tap as a PULLED refresh's glow leaves. The resume path is silent. The click
 and the tap are still `UIImpactFeedbackGenerator`, which obeys the System Haptics
 switch. **Whether Core Haptics does is unconfirmed**: test with the switch off. Six
-stepped detents came first (0.25 rising to 0.7).
+stepped detents came first (0.25 rising to 0.7). **The hum doesn't wait for
+`pull`**, which is a scroll event, a frame and a bridge hop behind the finger, with
+the engine still to start: app.js says `prime` on a touch at the top of a page that
+can refresh (no colours read, one message a touch), native wakes the engine, follows
+the scroll view itself, and stands down after 3s if nobody pulled.
 The screen's corner comes from a table keyed on `nativeBounds` height
 (`_displayCornerRadius` is private API); the 16 Pro onward and the Air at 62
 are unverified.

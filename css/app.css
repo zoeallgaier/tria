@@ -281,9 +281,9 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
    pages that introduce a PERSON, which is the only thing the gradient ever said
    well. */
 body[data-ambient="profile"] {
-  --wash-tint: #fff;                  /* what the accent is mixed toward first */
-  --wash-keep: 60%;                   /* how much of the accent survives that mix */
-  --wash-sat: 2.4;                    /* chroma bought back, luminance-cheap */
+  /* The numbers are THE LIGHT in tokens.css: --wash-tint, what the accent is
+     mixed toward first, --wash-keep, how much survives that, --wash-sat, the
+     chroma bought back, luminance-cheap, --wash-amt, the hottest alpha. */
   --wash-ink: color-mix(in srgb, var(--muted) 30%, var(--text));
   --wash-ink-soft: color-mix(in srgb, var(--muted) 70%, var(--text));
   /* The colour's spectrum, each stop tinted on its own for the reason the
@@ -299,13 +299,6 @@ body[data-ambient="profile"] {
       color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
       color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
       color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
-  }
-}
-@media (prefers-color-scheme: dark) {
-  body[data-ambient="profile"] {
-    --wash-tint: #000;
-    --wash-keep: 52%;
-    --wash-sat: 2.2;
   }
 }
 body[data-ambient="profile"] .ambient {
@@ -364,10 +357,6 @@ body[data-ambient="profile"] .ambient {
     --wash-c var(--dur-move) var(--ease), opacity 0.4s ease;
   transform: translateZ(0);
 }
-/* One value now the composer's 68% is gone. It stays a token rather than a
-   literal because it is the wash's loudness knob, and the note above the ellipse
-   is written against it. */
-body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
 
 /* THE SAME WASH, IN TRIA'S OWN COLOURS, for a person who hasn't picked one.
 
@@ -413,11 +402,13 @@ body[data-ambient="profile"] .ambient { --wash-amt: 56%; }
 /* QUIETER SINCE 2.0'S BRAND (Zoe, 2026-10-22: "a bitttt intense"), then
    brought back up the same day (Zoe: "too dull"), so it sits between the
    pastel-era settings and that first cut: a little less paper in each stop,
-   some chroma bought back, and a fuller bloom (--wash-amt below). */
+   some chroma bought back, and a fuller bloom (--wash-amt-tria). */
+body[data-ambient="tria"], .person-card--tria {
+  --wash-keep: var(--wash-keep-tria);
+  --wash-sat: var(--wash-sat-tria);
+  --wash-amt: var(--wash-amt-tria);
+}
 body[data-ambient="tria"] {
-  --wash-tint: #fff;
-  --wash-keep: 64%;
-  --wash-sat: 1.5;
   --wash-band: linear-gradient(115deg,
     color-mix(in srgb, var(--brand-start) var(--wash-keep), var(--wash-tint)),
     color-mix(in srgb, var(--brand-end)  var(--wash-keep), var(--wash-tint)));
@@ -429,13 +420,6 @@ body[data-ambient="tria"] {
       color-mix(in srgb, var(--brand-end)  var(--wash-keep), var(--wash-tint)));
   }
 }
-@media (prefers-color-scheme: dark) {
-  body[data-ambient="tria"] {
-    --wash-tint: #000;
-    --wash-keep: 56%;
-    --wash-sat: 1.5;
-  }
-}
 body[data-ambient="tria"] .ambient {
   position: absolute;
   inset: calc(-1 * var(--wash-rise)) 0 auto 0;
@@ -443,7 +427,7 @@ body[data-ambient="tria"] .ambient {
   --wash-rise: 32vh;
   --wash-drop: 4vh;
   --wash-at: 100% calc(var(--wash-rise) + var(--wash-drop));
-  /* LOUDER THAN A PROFILE'S 56%, which is the opposite of where this started.
+  /* LOUDER THAN A READER'S COLOUR (--wash-amt-tria), which is the opposite of where this started.
      It was set at 30% on the arithmetic that four hues at equal alpha put four
      times as much colour on screen as one — true, and beside the point, because
      the four are spread ACROSS the page rather than stacked, so at any single
@@ -451,8 +435,8 @@ body[data-ambient="tria"] .ambient {
      nothing. The tint mix does the luminance protection here (--wash-keep is up
      too, so less of the paper is mixed in), and this dial is free to be the
      loudness it looks like. Down from 68% to 50% with 2.0's brand, which is
-     louder per pixel than any pastel was, and back to 60% when that read dull. */
-  --wash-amt: 60%;
+     louder per pixel than any pastel was, back to 60% when that read dull, and to
+     66% with the bloom in the corner, the same step as a reader's colour. */
   /* The mask carries the bloom's SHAPE and the band carries its colour, which
      is the one structural difference from the accent version: there the shape
      and the colour are the same gradient, because one colour can live in a
@@ -495,7 +479,7 @@ body[data-ambient="tria"] .ambient {
    the model reads about a quarter-step low against the numbers in this file.
    So treat 5.89 as an eight-accent figure until someone samples a real ruby
    profile at 390 in both schemes. If it does come up short, the lever is
-   --wash-amt on the profile (56%), not this ink: deepening --wash-ink-soft any
+   --wash-amt (62%), not this ink: deepening --wash-ink-soft any
    further is what flattens the header, which is the whole point of the split
    above.
 
@@ -10727,24 +10711,11 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    saturation buy-back, same 82% falloff, so the face and its charms sit on
    clear paper as they do on the page. .person-card--tria is the house ramp
    for someone who never picked; None wears nothing. */
-.person-card {
-  isolation: isolate;
-  --wash-tint: #fff;
-  --wash-keep: 60%;
-  --wash-sat: 2.4;
-  --wash-amt: 56%;
-}
+.person-card { isolation: isolate; }
 .person-card--tria {
   --wash-a: var(--brand-start);
   --wash-b: color-mix(in srgb, var(--brand-start), var(--brand-end));
   --wash-c: var(--brand-end);
-  --wash-keep: 64%;
-  --wash-sat: 1.5;
-  --wash-amt: 60%;
-}
-@media (prefers-color-scheme: dark) {
-  .person-card { --wash-tint: #000; --wash-keep: 52%; --wash-sat: 2.2; }
-  .person-card--tria { --wash-keep: 56%; --wash-sat: 1.5; }
 }
 .person-card::before {
   content: '';

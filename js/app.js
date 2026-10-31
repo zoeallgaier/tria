@@ -2226,19 +2226,36 @@
     // binary that predates it, and the caller falls back to the file input.
     const pickPhoto = () => call('pickPhoto');
 
-    /* The refresh glow's colours: the reader's band, every stop, resolved the
-       way the + reads it. Not through bandFill, because an outline is a line of
-       colour and not glass: an accent's three near stops, Tria's cyan to green
-       and None's neutral all draw as they are. Read per pull, so a colour pick
-       or a change of scheme is simply there on the next one. */
-    function glowColors() {
-      return splitStops(probe('background-image: var(--pill-band)').image || '')
-        .map(toRgb).filter(Boolean);
+    /* The refresh glow's light: the reader's band, every stop, resolved the way
+       the + reads it, then taken through THE LIGHT (tokens.css), which is what
+       makes it the profile wash's equal (Zoe, 2026-10-31). Each stop is mixed
+       toward the paper and saturated as the wash's stops are, by the same
+       numbers, and `peak` is the wash's hottest alpha. The glow is drawn natively
+       so it can't wear a color-mix or a filter: saturate() here is the filter's
+       own matrix, and the wash's pixel was measured against it. Read per pull,
+       so a colour pick or a change of scheme is simply there on the next one. */
+    function glowLight() {
+      const stops = splitStops(probe('background-image: var(--pill-band)').image || '')
+        .map(toRgb).map(cssToRgb).filter(Boolean);
+      const root = getComputedStyle(document.documentElement);
+      const dial = (name) => parseFloat(root.getPropertyValue(name + (isBrand(stops) ? '-tria' : '')));
+      const keep = dial('--wash-keep') / 100, s = dial('--wash-sat');
+      const tint = cssToRgb(toRgb(root.getPropertyValue('--wash-tint').trim()));
+      const channel = (v) => Math.round(Math.min(255, Math.max(0, v)));
+      const colors = stops.map(c => {
+        const r = c.r * keep + tint.r * (1 - keep);
+        const g = c.g * keep + tint.g * (1 - keep);
+        const b = c.b * keep + tint.b * (1 - keep);
+        return `rgb(${channel((0.213 + 0.787 * s) * r + (0.715 - 0.715 * s) * g + (0.072 - 0.072 * s) * b)}, ` +
+          `${channel((0.213 - 0.213 * s) * r + (0.715 + 0.285 * s) * g + (0.072 - 0.072 * s) * b)}, ` +
+          `${channel((0.213 - 0.213 * s) * r + (0.715 - 0.715 * s) * g + (0.072 + 0.928 * s) * b)})`;
+      });
+      return { colors, peak: dial('--wash-amt') / 100 };
     }
 
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
-             glowColors, live: isLive };
+             glowLight, live: isLive };
   })();
 
   /* ── Right-sized images ──────────────────────────────────────────────────────
@@ -23491,9 +23508,10 @@
 
      IN THE APP THE RING IS THE SCREEN'S EDGE (2.0): a glow of the reader's
      own band in off the glass, down to the foot of the status bar, by `TriaEdgeGlow` in TriaChromePlugin.swift,
-     which reads the pull off its own scroll view and owns the haptics (a ratchet
-     of soft detents, a click at the threshold, a soft landing). This side still decides WHEN:
-     it says pull on the first frame of overscroll, then spin or idle on release.
+     which reads the pull off its own scroll view and owns the haptics (a swell,
+     a click at the threshold, a soft landing). This side still decides WHEN: it
+     says prime as a finger lands at the top of a page that can refresh, pull on
+     the first frame of overscroll, then spin or idle on release.
      The ring stays the fallback until the first setGlow resolves, so a binary
      without the method refreshes exactly as before. */
   (() => {
@@ -23502,9 +23520,9 @@
     let glow = false, glowing = false;
     const setGlow = (state, opts) => {
       if (!glow) return;
-      // Colours ride the two messages that show it; idle needs none.
-      const colors = state === 'idle' ? undefined : NativeChrome.glowColors();
-      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, colors, ...opts }).catch(() => {});
+      // The light rides the two messages that show it; the others need none.
+      const light = state === 'pull' || state === 'spin' ? NativeChrome.glowLight() : {};
+      window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state, ...light, ...opts }).catch(() => {});
     };
     if (nativeShell()) {
       window.Capacitor.nativePromise('TriaChrome', 'setGlow', { state: 'idle' })
@@ -23536,9 +23554,8 @@
       raf = 0;
       if (!pulling) return;
       const d = Math.max(0, -window.scrollY);
-      // Native draws and buzzes from its own reading of the pull; all it needs
-      // is to hear that one began. Only on a real overscroll, never on every
-      // touch at the top, because each message is a main thread round trip.
+      // Native draws from its own reading of the pull; all it needs is to hear
+      // that one began, on a real overscroll, so a tap never measures the band.
       if (glow) {
         if (d > 0 && !glowing) { glowing = true; setGlow('pull'); }
         return;
@@ -23563,6 +23580,10 @@
       if (window.scrollY > 1 || !eligible()) return;
       pulling = true;
       armed = false;
+      // The hum can't wait for the pull's first frame to reach native: by then
+      // the finger has moved and the engine is still coming up. One message a
+      // touch, and only at the top of a page that can refresh.
+      setGlow('prime');
       window.addEventListener('scroll', onScroll, { passive: true });
     }, { passive: true });
     const finish = async () => {

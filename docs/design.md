@@ -275,7 +275,8 @@ step.
 **TWO pages wash, and both name a PERSON: a profile and Edit profile.** One
 gradient, one question — whose is the thing in front of me — asked by the page
 that shows someone's colour and the page that sets it. `paintWash(user,
-'profile')` is the only call and `--wash-amt` has one value (56%).
+'profile')` is the only call and `--wash-amt` has one value (62%, THE LIGHT in tokens.css, which the person
+card's wash and the refresh glow read too).
 
 **The COMPOSER was the third and took two removals to stop being one, which is
 the note to read before adding a wash anywhere.** It first carried the inferred
