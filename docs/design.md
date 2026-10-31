@@ -747,7 +747,11 @@ a painted bar, at exactly the 62pt inset's height.
 (`--radius-img`) · 12px composer inputs (`--radius-field`) · 14px glass
 menus/cards (`--radius-card`) · 24px feed photos, carousels, YouTube tiles and
 flat cards (`--radius-soft`, since 2026-10-25) · 18px nav rail (`--radius-nav`) · 20px glass
-modals (`--radius-modal`) · 999px pills (`--radius-pill`). **Nested corners are
+modals (`--radius-modal`) · 999px pills (`--radius-pill`). **A squircle here is
+`--radius-soft` on a box taller than twice it** (the chat tiles, the toast, whose
+52px line is padded to stay one): a shorter box collapses into a capsule. It is a
+circular corner, not a true superellipse: `corner-shape` answers false in iOS 26.5
+WebKit and draws nothing different (probed 2026-10-31). **Nested corners are
 concentric:** a child that reaches its parent's corner takes the parent's radius
 *minus* the padding between them, so the two curves stay parallel instead of the
 inner one bending tighter. That's `--radius-row` (a menu row inside a 14px panel)

@@ -9838,18 +9838,23 @@ body[data-ambient="none"] .pf-row-swatch {
 
 /* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar,
    and tops the whole stack (above the filter layer at 400) so a confirmation
-   is never drawn behind a sheet. */
+   is never drawn behind a sheet. It wears the flat cards' corner, and its
+   padding is the corner's other half: one line stands 52px tall, past twice
+   --radius-soft, so it stays a squircle and doesn't collapse into a capsule.
+   max-content because left: 50% offers a shrink-to-fit box only half the screen,
+   which stacked a sentence into a tower long before the max-width. */
 .toast {
   position: fixed;
   left: 50%;
   bottom: calc(98px + env(safe-area-inset-bottom));
   transform: translate(-50%, 0.8rem);
   z-index: 500;
+  width: max-content;
   max-width: min(88vw, 340px);
-  padding: 0.7rem 1.1rem;
+  padding: 0.95rem 1.3rem;
   background: var(--text);
   color: var(--bg);
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-soft);
   font-size: 0.9rem;
   text-align: center;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.24);
