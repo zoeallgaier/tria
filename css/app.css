@@ -11035,11 +11035,10 @@ a.daily-answer { text-decoration: none; }
   letter-spacing: 0.02em;
 }
 
-/* New posts: a butter capsule under the bar, and only ever raised when there are
+/* New posts: THE BUTTON's quiet weight, floating, so it takes the blur a floating
+   surface wears over the words passing under it. Only ever raised when there are
    some (`raiseNewPosts`). It springs down out of the bar, rides up with the header
-   on a read down, and its faces overlap like a circle card's. Not the one button
-   material on purpose (Zoe: cute, buttery): it isn't a commit or a choice in a
-   page, it is a little note stuck to the glass. */
+   on a read down, and its faces overlap like a circle card's. */
 .new-posts {
   --new-posts-top: calc(env(safe-area-inset-top) + var(--topbar-h) + 0.5rem);
   position: fixed;
@@ -11052,16 +11051,15 @@ a.daily-answer { text-decoration: none; }
   gap: 0.4rem;
   min-height: 44px;
   padding: 0.35rem 0.9rem 0.35rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--butter-ink) 14%, transparent);
   border-radius: 999px;
-  background: var(--butter);
-  color: var(--butter-ink);
+  background: var(--glass-bg-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
   font: inherit;
   font-size: 0.875rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--butter-ink) 45%, transparent);
   transition: top var(--dur-move) var(--ease), opacity var(--dur-quick) var(--ease-soft);
   animation: new-posts-in 0.56s var(--spring) both;
 }
@@ -11071,7 +11069,7 @@ a.daily-answer { text-decoration: none; }
   width: 28px;
   height: 28px;
   font-size: 0.75rem;
-  box-shadow: 0 0 0 2px var(--butter);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 .new-posts-faces .avatar + .avatar { margin-left: -9px; }
 .new-posts-arrow { width: 15px; height: 15px; }

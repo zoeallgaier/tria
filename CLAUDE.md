@@ -44,12 +44,12 @@ and shows whatever the last page was on"). A post's thread comes on one round tr
 meanwhile draws nothing (`catchingUp`, `#page-wait`), never "isn't here", until the
 world has actually said so. **`Store.refresh` shares one pull in flight.**
 **A feed down the page gets the New posts capsule** (`offerNewPosts`, `.new-posts`,
-butter, up to three faces, never a number): nothing moves until it's tapped, the
+`.pill-quiet` in floating glass, up to three faces, never a number): nothing moves until it's tapped, the
 paint it holds is `owedPaint`, and at the top of a page posts simply arrive. Besides
 a foreground, an open feed asks `Store.newerPosts` once a minute (one row; the world
 is pulled only on a yes), so "nothing polls" is no longer true of feeds.
 **Re-tapping any tab refreshes it**, Profile too, the edge lit for the whole pull
-(`reclick`); profiles can be pulled, repainting by re-routing, only when asked. **A
+and a LIGHT haptic on the tap (`reclick`, Zoe's call); profiles can be pulled, repainting by re-routing, only when asked. **A
 foreground re-pulls on every page**, so an open chat catches up. **The glow's top
 runs down into the status bar and never past its foot, however hard the pull**
 (`crown` in `TriaEdgeGlow`, Zoe, 2026-10-31). See [docs/views.md](docs/views.md).

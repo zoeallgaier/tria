@@ -53,7 +53,7 @@ forget, no promise per tap. Three rules: **only an act that changed the SHARED
 WORLD** gets one — a like, a vote, an RSVP, a comment, a repost, a published
 post — never an act that only changed what you are LOOKING at, the **one
 exception** being a danger row in `openSheet`, which is a warning *about* what's
-coming; LIGHT is for something
+coming (and, Zoe 2026-10-31, a tab re-tap, whose tap IS the refresh); LIGHT is for something
 that stays on screen and MEDIUM for something that lands in the real world, the
 same split as `canSocial` vs `canJoin`; and they are **not** gated on
 prefers-reduced-motion, unlike the sparkles — a haptic isn't motion, iOS has its

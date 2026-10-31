@@ -8,7 +8,7 @@ the page, and its **crown**, a sheet of the same band in the mask, runs down
 through the status bar with the pull: 72% of it at the threshold, and **the status
 bar's foot is its hard limit**, reached only by a hard pull (Zoe, 2026-10-31, the
 happy medium after a crown that followed the finger to 1.6x). It is outside the
-strokes' shadow so no halo can carry it past that. Below a feed's top 120px new posts wait behind the butter capsule rather
+strokes' shadow so no halo can carry it past that. Below a feed's top 120px new posts wait behind the glass New posts capsule rather
 than splicing in with a `scrollBy`, which stopped a flick dead. See "Refresh,
 audited" in CLAUDE.md.
 

@@ -21296,7 +21296,7 @@
     // friends tie) — they're one component.
     '.toolbar-btn', '.nav-link',
     // THE BUTTON, both weights: every pill in a page presses the same way.
-    '.publish-fill', '.pill-quiet', '.new-posts',
+    '.publish-fill', '.pill-quiet',
   ].join(', ');
   let pressing = null;   // { el, scale, down } while a finger is down
   function pressRelease() {
@@ -23299,6 +23299,7 @@
   // pull rather than only when it found something (Zoe, 2026-10-30): a re-tap
   // that came back empty used to look like a tap that did nothing.
   async function reclick(route) {
+    hapticTap('LIGHT');
     const path = herePath();
     if (route === '#/' && path === '#/' && (activeFilter !== 'all' || activeTag)) {
       activeFilter = 'all';
@@ -23316,9 +23317,10 @@
   }
 
   /* ── New posts ──────────────────────────────────────────────────────────────
-     A feed that finds new posts while you're down it says so in a little butter
-     capsule, with up to three faces and an arrow, and nothing moves until you
-     ask (Zoe, 2026-10-30: "a cute buttery new posts button"). It was a splice
+     A feed that finds new posts while you're down it says so in a little glass
+     capsule, THE BUTTON's quiet weight, with up to three faces and an arrow, and
+     nothing moves until you ask (Zoe, 2026-10-30: "cute buttery", which is the
+     motion and never a colour). It was a splice
      above the reader held in place by scrollBy, and a scrollBy in the middle of
      a flick stops the flick dead.
 
@@ -23375,7 +23377,7 @@
     }
     const pill = document.createElement('button');
     pill.type = 'button';
-    pill.className = 'new-posts';
+    pill.className = 'new-posts pill-quiet';
     pill.innerHTML = inner;
     pill.addEventListener('click', async () => {
       dropNewPosts();
