@@ -57,11 +57,14 @@ sides share one number, `THRESHOLD`/`TriaEdgeGlow.threshold` (72). The first
 is what draws, unchanged. No `ptr-hold` under the glow, since nothing is in the
 page to make room for.
 
-**Its haptics are a ratchet**: six soft detents as the strokes travel, each
-firmer than the last (0.25 rising to 0.7), a rigid click at the threshold
-(with a swell of the halo), and one soft tap as a PULLED refresh's glow leaves. The
-resume path is silent. `UIImpactFeedbackGenerator`, not Core Haptics, because
-it obeys the System Haptics switch for us; prepared on the pull's first frame.
+**Its haptics are a swell into a click** (Zoe, 2026-10-31, Instagram's vanish
+mode): one continuous vibration (`TriaPullSwell`, Core Haptics) that builds with the
+finger and falls with it, 0.12 rising to 0.7 on a square, soft and getting brighter,
+then cuts for a rigid click at the threshold (with a swell of the halo), and one
+soft tap as a PULLED refresh's glow leaves. The resume path is silent. The click
+and the tap are still `UIImpactFeedbackGenerator`, which obeys the System Haptics
+switch. **Whether Core Haptics does is unconfirmed**: test with the switch off. Six
+stepped detents came first (0.25 rising to 0.7).
 The screen's corner comes from a table keyed on `nativeBounds` height
 (`_displayCornerRadius` is private API); the 16 Pro onward and the Air at 62
 are unverified.

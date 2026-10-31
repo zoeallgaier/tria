@@ -59,7 +59,7 @@ runs down into the status bar and never past its foot, however hard the pull**
 In the app, pull to refresh glows the reader's own band in off the
 display's rounded edge (the stroke sits past the glass; only its halo shows) instead of the dot ring (`TriaEdgeGlow`, `setGlow`,
 `NativeChrome.glowColors`), with feathered tips that reach the foot of the status bar at
-the threshold, and a haptic ratchet of detents into a click there. The web keeps the ring. See the
+the threshold, and a haptic swell into a click there (Core Haptics, `TriaPullSwell`, Zoe: Instagram's vanish mode). The web keeps the ring. See the
 top of [docs/views.md](docs/views.md).
 
 ## 2.0: the version, and the web's nav (2026-10-22)

@@ -3,6 +3,7 @@ import UIKit
 import WebKit
 import Capacitor
 import CoreText
+import CoreHaptics
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -4064,15 +4065,17 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
    (every one is a main thread round trip, see the haptics note in
    ios-shell.md). app.js says three things per pull: pull, spin, idle.
 
-   THE HAPTICS ARE A RATCHET. Six soft detents as the strokes travel, each a
-   touch firmer than the last, then one rigid click at the threshold, then a
-   soft landing as the glow leaves (only after a pull: a resume nobody asked
-   for stays silent). UIImpactFeedbackGenerator rather than Core Haptics on
-   purpose: it obeys Settings, Sounds & Haptics, System Haptics before we ever
-   hear about it, which is the app's standing rule, and `prepare()` on the first
-   frame of the pull wakes the Taptic Engine so the first detent isn't late.
-   Detents and not a continuous hum: a hum under the thumb reads as the phone
-   buzzing, a ratchet reads as the pull having resistance.
+   THE HAPTICS ARE A SWELL INTO A CLICK (Zoe, 2026-10-31, Instagram's vanish mode:
+   "soft and smooth and slowly gets stronger towards a click"). One continuous
+   vibration follows the pull, faint at first and building with the finger
+   (`TriaPullSwell`), then stops dead for one rigid click at the threshold, then
+   a soft landing as the glow leaves (only after a pull: a resume nobody asked
+   for stays silent). Six detents, each firmer than the last, came first. The
+   swell is the one haptic in the app that isn't UIImpactFeedbackGenerator,
+   because a generator can only tap and a smooth rise needs Core Haptics; the
+   click and the landing still are. Whether Core Haptics obeys Settings, Sounds &
+   Haptics, System Haptics is unconfirmed: nothing public says, and it wants
+   testing on a phone with the switch off.
 
    THE TOP RUNS DOWN INTO THE STATUS BAR (Zoe, 2026-10-30: "the very tippy top
    of the refresh glow pull can actually pull down with more color further to
@@ -4091,13 +4094,91 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
    THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js,
    but only as the fallback for a pull that arrives without colours. */
+/// The pull's one long vibration, its strength a dial the finger turns. The
+/// engine runs only for the length of a pull, and a phone with no Taptic Engine,
+/// or one that lost it to a call or the background, simply gets the click alone.
+private final class TriaPullSwell {
+    private var engine: CHHapticEngine?
+    private var player: CHHapticAdvancedPatternPlayer?
+    private var awake = false
+    private var playing = false
+    private var level: Float = -1
+
+    /// Started ahead of the finger: an engine takes a moment to come up.
+    func wake() {
+        awake = true
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
+        if engine == nil, let made = try? CHHapticEngine() {
+            made.playsHapticsOnly = true
+            made.resetHandler = { [weak self] in DispatchQueue.main.async { self?.lost() } }
+            made.stoppedHandler = { [weak self] _ in DispatchQueue.main.async { self?.lost() } }
+            engine = made
+        }
+        engine?.start { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self, error == nil else { return }
+                if self.awake { self.player = self.makePlayer() } else { self.engine?.stop(completionHandler: nil) }
+            }
+        }
+    }
+
+    private func lost() {
+        player = nil
+        playing = false
+    }
+
+    /// Thirty seconds is the longest a continuous event runs, and far longer
+    /// than any pull. Low sharpness is what makes it a swell and not a buzz.
+    private func makePlayer() -> CHHapticAdvancedPatternPlayer? {
+        let event = CHHapticEvent(eventType: .hapticContinuous, parameters: [
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.1)
+        ], relativeTime: 0, duration: 30)
+        // The dial is set in the pattern: at the event's own 1 the first frame
+        // of every pull would be a full strength thump.
+        let faint = CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: 0.12, relativeTime: 0)
+        guard let pattern = try? CHHapticPattern(events: [event], parameters: [faint]) else { return nil }
+        return try? engine?.makeAdvancedPlayer(with: pattern)
+    }
+
+    /// Nothing for the first few points, then faint and building towards the
+    /// click, slowly at first (the square), and a little brighter as it goes.
+    func follow(_ p: CGFloat) {
+        guard let player, p > 0.04 else { hush(); return }
+        let x = Float(p)
+        let next = 0.12 + 0.58 * x * x
+        if abs(next - level) < 0.01 { return }
+        level = next
+        if !playing {
+            do { try player.start(atTime: CHHapticTimeImmediate); playing = true }
+            catch { self.player = nil; return }
+        }
+        try? player.sendParameters([
+            CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: next, relativeTime: 0),
+            CHHapticDynamicParameter(parameterID: .hapticSharpnessControl, value: 0.3 * x, relativeTime: 0)
+        ], atTime: CHHapticTimeImmediate)
+    }
+
+    func hush() {
+        if playing { try? player?.stop(atTime: CHHapticTimeImmediate) }
+        playing = false
+        level = -1
+    }
+
+    func sleep() {
+        hush()
+        awake = false
+        player = nil
+        engine?.stop(completionHandler: nil)
+    }
+}
+
 final class TriaEdgeGlow: UIView {
 
     /// Points of pull that arm a refresh. MUST match THRESHOLD in app.js's pull
     /// module: that side decides whether letting go refreshes, this side draws
     /// and clicks at the moment it will.
     private static let threshold: CGFloat = 72
-    private static let detents = 6
     /// The stroke lies JUST PAST the display's edge, so it is never seen: only
     /// its halo spills in off the glass (Zoe: "I want to see the glow, not the
     /// line"). A 1.5pt hairline on the edge with a 4pt halo came first and read
@@ -4137,10 +4218,10 @@ final class TriaEdgeGlow: UIView {
     private var shape = (rect: CGRect.zero, r: CGFloat(0), foot: CGFloat(0))
     /// Where the strokes end, in this view's points (the status bar's foot).
     private var depth: CGFloat?
-    private let detent = UIImpactFeedbackGenerator(style: .soft)
+    private let swell = TriaPullSwell()
+    private let landing = UIImpactFeedbackGenerator(style: .soft)
     private let click = UIImpactFeedbackGenerator(style: .rigid)
     private var state = "idle"
-    private var reached = 0
     private var armed = false
     /// Where the tips are, 0 to 1 along each stroke.
     private var reach: CGFloat = 0
@@ -4393,9 +4474,9 @@ final class TriaEdgeGlow: UIView {
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
-        reached = 0
         armed = false
-        detent.prepare()
+        swell.wake()
+        landing.prepare()
         click.prepare()
         watch = scroll?.observe(\.contentOffset, options: [.initial, .new]) { [weak self] view, _ in
             let d = -(view.contentOffset.y + view.adjustedContentInset.top)
@@ -4410,27 +4491,19 @@ final class TriaEdgeGlow: UIView {
         draw(p)
         alpha = p > 0 ? 0.45 + 0.55 * p : 0
 
-        // Detents on the way out only, firmer as the pull tightens. Backing off
-        // re-arms the ones you backed off, so pulling again ticks again.
-        let step = Int(floor(p * CGFloat(Self.detents)))
-        if step > reached, step < Self.detents {
-            reached = step
-            detent.impactOccurred(intensity: 0.25 + 0.45 * p)
-            detent.prepare()
-        } else if step < reached {
-            reached = step
-        }
-
         // The threshold. A little give before it un-arms, so a thumb resting
         // on the line doesn't click twice.
         if p >= 1, !armed {
             armed = true
+            swell.hush()
             click.impactOccurred(intensity: 0.9)
             click.prepare()
             bloom()
         } else if p < 0.9, armed {
             armed = false
         }
+        // Rises and falls with the finger, and silent once it has clicked.
+        if !armed { swell.follow(p) }
     }
 
     /// The halo swells once at the threshold.
@@ -4447,6 +4520,7 @@ final class TriaEdgeGlow: UIView {
 
     private func spin(quiet: Bool) {
         watch = nil
+        swell.sleep()
         setNeedsLayout()
         layoutIfNeeded()
         isHidden = false
@@ -4476,9 +4550,10 @@ final class TriaEdgeGlow: UIView {
 
     private func finish(from was: String, land: Bool) {
         watch = nil
+        swell.sleep()
         guard !isHidden else { return }
         if was == "spin", land {
-            detent.impactOccurred(intensity: 0.5)
+            landing.impactOccurred(intensity: 0.5)
         }
         let mine = generation
         // A pull let go short retracts the way it came; a refresh fades whole.
