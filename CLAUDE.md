@@ -51,7 +51,8 @@ is pulled only on a yes), so "nothing polls" is no longer true of feeds.
 **Re-tapping any tab refreshes it**, Profile too, the edge lit for the whole pull
 (`reclick`); profiles can be pulled, repainting by re-routing, only when asked. **A
 foreground re-pulls on every page**, so an open chat catches up. **The glow's top
-runs down into the status bar** (`crown` in `TriaEdgeGlow`). See [docs/views.md](docs/views.md).
+runs down into the status bar and never past its foot, however hard the pull**
+(`crown` in `TriaEdgeGlow`, Zoe, 2026-10-31). See [docs/views.md](docs/views.md).
 
 ## 2.0's refresh is the screen's edge (2026-10-22, trial)
 

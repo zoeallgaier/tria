@@ -5,8 +5,10 @@ the only refresh: a re-tap of ANY tab pulls under the edge for the whole pull, a
 foreground pulls on every page, and an open feed asks `Store.newerPosts` once a
 minute. The glow's tips stop at the status bar's foot, with no `depth` measured in
 the page, and its **crown**, a sheet of the same band in the mask, runs down
-through the status bar with the pull, past the threshold to 1.6x, easing back on
-release. Below a feed's top 120px new posts wait behind the butter capsule rather
+through the status bar with the pull: 72% of it at the threshold, and **the status
+bar's foot is its hard limit**, reached only by a hard pull (Zoe, 2026-10-31, the
+happy medium after a crown that followed the finger to 1.6x). It is outside the
+strokes' shadow so no halo can carry it past that. Below a feed's top 120px new posts wait behind the butter capsule rather
 than splicing in with a `scrollBy`, which stopped a flick dead. See "Refresh,
 audited" in CLAUDE.md.
 

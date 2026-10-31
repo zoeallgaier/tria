@@ -4076,12 +4076,18 @@ final class TriaPhotoPicker: NSObject, PHPickerViewControllerDelegate {
 
    THE TOP RUNS DOWN INTO THE STATUS BAR (Zoe, 2026-10-30: "the very tippy top
    of the refresh glow pull can actually pull down with more color further to
-   color the status bar"). A sheet of the same band, solid at the glass and gone
-   by a little under the status bar's foot, comes down with the pull (`crown`).
-   It is one more piece of the mask, so it wears whatever the strokes wear and
-   turns with them, the feather takes it off towards the corners, and the
-   strokes' shadow softens its foot. It keeps following a finger past the
-   threshold, up to `crownOver`, and eases back to the status bar on release.
+   color the status bar"). A sheet of the same band, solid at the glass and fading
+   to nothing, comes down with the pull (`crown`). It is one more piece of the
+   mask, so it wears whatever the strokes wear and turns with them, and the
+   feather takes it off towards the corners.
+
+   THE STATUS BAR'S FOOT IS ITS HARD LIMIT (Zoe, 2026-10-31: "the absolute max of
+   the feathered edge should be the bottom edge of the status bar", the happy
+   medium between no crown and one that followed a hard pull to 1.6x). It stops
+   `crownRest` of the way there at the threshold, and only a hard pull takes its
+   last wisp to the foot itself, easing back on release. It sits OUTSIDE the
+   strokes' shadow, because a shadow would spill past any height set here, and
+   past further still as the halo swells and breathes.
 
    THE TWO HEXES ARE HELD BY HAND here, like the logo SVGs and storycard.js,
    but only as the fallback for a pull that arrives without colours. */
@@ -4104,11 +4110,10 @@ final class TriaEdgeGlow: UIView {
     /// and how many stops the mask spends on it.
     private static let fade: CGFloat = 0.38
     private static let feather = 10
-    /// How far the crown runs past the status bar's foot at the threshold, and
-    /// how much further it can follow the finger past that (as a share of its
-    /// reach).
-    private static let crownPast: CGFloat = 14
-    private static let crownOver: CGFloat = 0.6
+    /// How much of the status bar the crown fills at the threshold. A pull past
+    /// that spends the rest, so the two add up to the foot and can't pass it.
+    private static let crownRest: CGFloat = 0.72
+    private static let crownOver: CGFloat = 1 - crownRest
     private static let start = UIColor(red: 0, green: 0xc9 / 255.0, blue: 0xce / 255.0, alpha: 1)
     private static let end = UIColor(red: 0, green: 0xcc / 255.0, blue: 0x9e / 255.0, alpha: 1)
 
@@ -4118,6 +4123,8 @@ final class TriaEdgeGlow: UIView {
     /// Holds the ramp still while it turns inside, and carries the feather.
     private let lit = CALayer()
     private let feather = CAGradientLayer()
+    /// The whole mask: the strokes with their shadow, and the crown without one.
+    private let cover = CALayer()
     private let strokes = CALayer()
     private let right = CAShapeLayer()
     private let left = CAShapeLayer()
@@ -4175,11 +4182,9 @@ final class TriaEdgeGlow: UIView {
             s.strokeEnd = 0
             strokes.addSublayer(s)
         }
-        crown.colors = [UIColor.black.cgColor,
-                        UIColor(white: 0, alpha: 0.82).cgColor,
-                        UIColor.clear.cgColor]
-        crown.locations = [0, 0.55, 1]
-        strokes.addSublayer(crown)
+        // A smoothstep, so the foot has no edge of its own to read as a line.
+        crown.colors = [1, 0.84, 0.5, 0.16, 0].map { UIColor(white: 0, alpha: $0).cgColor }
+        crown.locations = [0, 0.25, 0.5, 0.75, 1]
         // The bloom is the MASK's shadow: a mask's shadow counts as coverage, so
         // the ramp shows through a soft halo round the line with no blur pass.
         // It follows each segment's opacity, so the halo feathers with the line.
@@ -4187,7 +4192,9 @@ final class TriaEdgeGlow: UIView {
         strokes.shadowOpacity = 1
         strokes.shadowOffset = .zero
         strokes.shadowRadius = Self.halo
-        layer.mask = strokes
+        cover.addSublayer(strokes)
+        cover.addSublayer(crown)
+        layer.mask = cover
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -4226,6 +4233,7 @@ final class TriaEdgeGlow: UIView {
         lit.frame = square
         ramp.frame = lit.bounds
         feather.frame = lit.bounds
+        cover.frame = bounds
         strokes.frame = bounds
         let radius = Self.cornerRadius(for: window)
         // Never above the corner's end or below halfway.
@@ -4326,8 +4334,8 @@ final class TriaEdgeGlow: UIView {
         left.strokeEnd = t
         // Eased in, so a short pull is the edge's glow and the colour only runs
         // down as the pull gets serious.
-        let q = t * t * (3 - 2 * t) + over
-        crown.frame = CGRect(x: 0, y: 0, width: bounds.width, height: (shape.foot + Self.crownPast) * q)
+        let q = t * t * (3 - 2 * t) * Self.crownRest + over
+        crown.frame = CGRect(x: 0, y: 0, width: bounds.width, height: min(shape.foot, depth ?? 0) * q)
         feather.locations = all.map { NSNumber(value: Double($0.0)) }
         feather.colors = all.map { UIColor(white: 0, alpha: $0.1).cgColor }
         CATransaction.commit()
