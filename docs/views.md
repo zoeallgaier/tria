@@ -64,8 +64,8 @@ about half strength entering the glass, the wash's weight on a band this thin.
 
 **Its haptics are a swell into a click** (Zoe, 2026-10-31, Instagram's vanish
 mode): one continuous vibration (`TriaPullSwell`, Core Haptics) that builds with the
-finger and falls with it, up to a 0.3 floor over the first tenth of the pull, then
-rising to 0.8 on a power of 1.5, soft and getting brighter (0.12 to 0.7 on a square
+finger and falls with it, up to a 0.26 floor over the first tenth of the pull, then
+rising to 0.68 on a power of 1.5 (0.3 to 0.8 was "a touch too powerful", Zoe), soft and getting brighter (0.12 to 0.7 on a square
 came first and read as "too subtle", starting late), then cuts for a rigid click at the threshold (with a swell of the halo), and one
 soft tap as a PULLED refresh's glow leaves. The resume path is silent. The click
 and the tap are still `UIImpactFeedbackGenerator`, which obeys the System Haptics
@@ -76,7 +76,7 @@ the engine still to start: app.js says `prime` on a touch at the top of a page t
 can refresh (no colours read, one message a touch), native follows the scroll view
 itself, and stands down after 3s if nobody pulled. **It is built the way Apple's
 HapticPalette sample is** (2026-10-31, after a starting dial of 0 in the pattern
-silenced it): a plain continuous event at the peak (0.8), no dial in the pattern,
+silenced it): a plain continuous event at the peak (0.68), no dial in the pattern,
 `sendParameters` turning it down live, the start and its first dial scheduled for
 one instant 10ms ahead so the first frame is faint, and an engine started once with
 the glow and left to `isAutoShutdownEnabled` (about two minutes idle), because

@@ -4122,7 +4122,7 @@ private final class TriaPullSwell {
     /// The hum at its strongest, just before the click. The event carries this
     /// and the dial only ever turns it down, so were a dial message ever lost the
     /// hum would be flat, never silent.
-    private static let peak: Float = 0.8
+    private static let peak: Float = 0.68
     private var engine: CHHapticEngine?
     private var player: CHHapticAdvancedPatternPlayer?
     private var starting = false
@@ -4184,7 +4184,7 @@ private final class TriaPullSwell {
     func follow(_ p: CGFloat) {
         guard let player, let engine, p > 0 else { hush(); return }
         let x = Float(p)
-        let next = min(Self.peak, 0.3 * min(1, x / 0.1) + 0.5 * x * x.squareRoot())
+        let next = min(Self.peak, 0.26 * min(1, x / 0.1) + 0.42 * x * x.squareRoot())
         if abs(next - level) < 0.01 { return }
         level = next
         let dial = [
