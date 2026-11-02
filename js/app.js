@@ -23796,6 +23796,10 @@
       const poke = () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); };
       document.addEventListener('visibilitychange', poke);
     }).catch(() => { /* push + shell-refresh simply stay off */ });
+    // A notification tapped with Tria open: the worker hands over where it goes.
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data?.tria === 'arrive') arriveFromPush(e.data.url);
+    });
   }
 
   /* ── A tapped notification, in the app ──────────────────────────────────────
@@ -23827,11 +23831,14 @@
       window.Capacitor.nativeCallback('PushNotifications', 'addListener',
         { eventName: 'pushNotificationActionPerformed' }, (ev) => {
           if (ev?.actionId === 'dismiss') return;
-          const url = String(ev?.notification?.data?.url || '');
-          const hash = url.slice(url.indexOf('#'));
-          arriveAt(/^#\//.test(hash) ? hash : '#/updates');
+          arriveFromPush(ev?.notification?.data?.url);
         });
     } catch { /* no listener; a tap just opens the app where it was */ }
+  }
+  function arriveFromPush(url) {
+    const s = String(url || '');
+    const hash = s.slice(s.indexOf('#'));
+    arriveAt(/^#\//.test(hash) ? hash : '#/updates');
   }
 
   /* Go there now, then catch the page up. A post's thread comes on its own round

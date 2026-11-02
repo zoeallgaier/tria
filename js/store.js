@@ -4166,10 +4166,11 @@ const Store = (() => {
     if (nativeShell()) {
       const token = localStorage.getItem(APNS_KEY);
       localStorage.removeItem(APNS_KEY);
-      try {
-        await capPush('unregister');
-        if (token) await sb.from('push_subscriptions').delete().eq('endpoint', 'apns:' + token);
-      } catch { /* the sender prunes an unreachable token on its next send */ }
+      // The row first: it is the off switch, and a bridge that never answers
+      // must not stand between the reader and it.
+      try { if (token) await withWait(sb.from('push_subscriptions').delete().eq('endpoint', 'apns:' + token), SAVE_WAIT); }
+      catch { /* the sender prunes an unreachable token on its next send */ }
+      try { await capPushIn('unregister', PERM_READ_WAIT); } catch { /* the row is what counts */ }
       return { ok: true };
     }
     localStorage.removeItem(APNS_KEY);

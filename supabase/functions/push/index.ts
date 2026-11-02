@@ -40,6 +40,13 @@ webpush.setVapidDetails(
 
 const OPEN_URL = './#/updates';   // the fallback landing, when nothing better is known
 
+// Which source a GET ?health answers for. A deploy can't otherwise be told from
+// the one before it, so move this whenever the file changes.
+const REV = '2026-11-01';
+
+// The app's MENTION_RE: a handle after a non-word, so an email address is nobody.
+const MENTION = /(?:^|[^\w@])@([a-z0-9_]{2,20})\b/g;
+
 // WHERE A TAP LANDS. Every notification used to open Updates, because `sendTo`
 // defaulted `url` and no caller ever passed one — so "Tap to see their profile"
 // didn't, and a comment notification made you find the post yourself. These
@@ -153,9 +160,11 @@ function snip(t: string, n = 90) { t = (t || '').trim(); return t.length > n ? t
 // ── APNs ─────────────────────────────────────────────────────────────────────
 // Apple wants a provider JWT signed ES256 with the .p8 auth key, and it wants
 // that token reused: minting one per push earns a 429 (TooManyProviderTokenUpdates),
-// and one older than an hour is rejected outright. So it's cached at module
-// scope for 45 minutes — an Edge Function instance outlives many sends, which is
-// exactly the lifetime this cache wants.
+// and one older than an hour is rejected outright. An Edge Function instance does
+// NOT reliably outlive that: every cold start lost a cache at module scope and
+// minted afresh, as often as the function went idle. So `iat` is the current
+// half hour rather than the current second, which every instance agrees on, and a
+// token is reused for its half hour. Apple allows one new token per 20 minutes.
 const APNS_BUNDLE_ID = Deno.env.get('APNS_BUNDLE_ID') || 'com.triaonline.tria';
 const APNS_ENV = Deno.env.get('APNS_ENV') || '';
 // A debug build registers with APNs SANDBOX and TestFlight/App Store with
@@ -173,37 +182,46 @@ const b64url = (b: Uint8Array | string) =>
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 let apnsKey: CryptoKey | null = null;
-let apnsJwt = { token: '', at: 0 };
+const APNS_WINDOW = 30 * 60;   // seconds
+let apnsJwt = { token: '', iat: 0 };
 
 async function apnsAuth(): Promise<string | null> {
   const kid = Deno.env.get('APNS_KEY_ID');
   const iss = Deno.env.get('APNS_TEAM_ID');
   const pem = Deno.env.get('APNS_PRIVATE_KEY');
   if (!kid || !iss || !pem) return null;
-  if (apnsJwt.token && Date.now() - apnsJwt.at < 45 * 60 * 1000) return apnsJwt.token;
+  const now = Math.floor(Date.now() / 1000);
+  const iat = now - (now % APNS_WINDOW);
+  if (apnsJwt.token && apnsJwt.iat === iat) return apnsJwt.token;
 
   if (!apnsKey) {
     // The .p8 is PKCS#8 PEM. Strip the armour and the newlines a dashboard
-    // secret field is liable to mangle, then import as a P-256 signing key.
+    // secret field is liable to mangle, the literal backslash-n kind included,
+    // then import as a P-256 signing key.
     const der = Uint8Array.from(
-      atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')),
+      atob(pem.replace(/\\n/g, '\n').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')),
       (c) => c.charCodeAt(0));
     apnsKey = await crypto.subtle.importKey(
       'pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
   }
   const head = b64url(JSON.stringify({ alg: 'ES256', kid }));
-  const body = b64url(JSON.stringify({ iss, iat: Math.floor(Date.now() / 1000) }));
+  const body = b64url(JSON.stringify({ iss, iat }));
   // WebCrypto's ECDSA output is already the raw r‖s pair JWS wants — no DER unwrap.
   const sig = new Uint8Array(await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' }, apnsKey,
     new TextEncoder().encode(`${head}.${body}`)));
-  apnsJwt = { token: `${head}.${body}.${b64url(sig)}`, at: Date.now() };
+  apnsJwt = { token: `${head}.${body}.${b64url(sig)}`, iat };
   return apnsJwt.token;
 }
 
 // Deliver to one device token. Resolves true if the row should be pruned.
 async function sendApns(token: string, payload: Row): Promise<boolean> {
-  const jwt = await apnsAuth();
+  // A key that won't import used to throw from here, up through the Promise.all
+  // in `deliver` and out of `handle`, so everybody after the first iOS recipient
+  // of a group message went untold. One device's trouble is that device's.
+  let jwt: string | null;
+  try { jwt = await apnsAuth(); }
+  catch (e) { console.error('apns key unusable', String(e)); return false; }
   if (!jwt) { console.error('apns skipped: APNS_KEY_ID / APNS_TEAM_ID / APNS_PRIVATE_KEY not set'); return false; }
 
   // No `badge`, on purpose. Updates has no count on the nav and no dot on the
@@ -236,7 +254,12 @@ async function sendApns(token: string, payload: Row): Promise<boolean> {
   // that really are the same event. Apple caps this at 64 bytes.
   if (payload.collapse) headers['apns-collapse-id'] = String(payload.collapse).slice(0, 64);
 
+  // A 403 is about our key and not this token: Apple can scope a key to one
+  // environment, so the other host still gets its turn, and a token that host
+  // then calls bad has only been judged by one of two, so its row stays.
+  let refused = false;
   for (const host of APNS_HOSTS) {
+    const last = host === APNS_HOSTS[APNS_HOSTS.length - 1];
     try {
       const res = await fetch(`https://${host}/3/device/${token}`, { method: 'POST', headers, body });
       if (res.ok) return false;
@@ -246,9 +269,9 @@ async function sendApns(token: string, payload: Row): Promise<boolean> {
       if (res.status === 410 || reason === 'Unregistered') return true;
       // Wrong environment: this token belongs to the other host, so try it. If
       // that was already the last host, the token really is bad and the row goes.
-      if (reason === 'BadDeviceToken' && host !== APNS_HOSTS[APNS_HOSTS.length - 1]) continue;
-      if (reason === 'BadDeviceToken') return true;
-      console.error('apns send failed', res.status, reason);
+      if (reason === 'BadDeviceToken') { if (!last) continue; return !refused; }
+      console.error('apns send failed', host, res.status, reason);
+      if (res.status === 403 && !last) { refused = true; continue; }
       return false;
     } catch (e) {
       console.error('apns request failed', String(e));
@@ -262,8 +285,9 @@ async function sendApns(token: string, payload: Row): Promise<boolean> {
 // transport that device's address names. Prunes addresses the push service
 // reports as gone.
 async function sendTo(userId: string, payload: Row) {
-  const { data: subs } = await supabase.from('push_subscriptions')
+  const { data: subs, error } = await supabase.from('push_subscriptions')
     .select('endpoint,p256dh,auth').eq('user_id', userId);
+  if (error) console.error('push subscriptions read failed', error.message);
   await deliver(subs || [], payload);
 }
 
@@ -284,7 +308,7 @@ async function deliver(subs: Row[], payload: Row) {
     }
     try {
       await webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { urgency: 'high' });
     } catch (e: any) {
       // 404/410 = the browser dropped this subscription; prune it. Anything else
       // (VAPID/crypto/import trouble) is logged so the first live test is legible.
@@ -321,7 +345,7 @@ async function handle(table: string, rec: Row) {
     // On a circle's post, a mention only reaches somebody in the circle: the
     // push quotes the comment, and the thread is the circle's.
     let circle: string | null | undefined;
-    for (const uname of new Set([...(rec.body || '').matchAll(/@(\w+)/g)].map(m => m[1]))) {
+    for (const uname of new Set([...(rec.body || '').matchAll(MENTION)].map(m => m[1]))) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author || notified.has(u.id)) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
@@ -413,7 +437,7 @@ async function handle(table: string, rec: Row) {
     // the rest). A quote's sentence is scanned too, so quoting someone and
     // mentioning a third person sends both, which is correct.
     if (!rec.note) return;
-    for (const uname of new Set([...(rec.note as string).matchAll(/@(\w+)/g)].map(m => m[1]))) {
+    for (const uname of new Set([...(rec.note as string).matchAll(MENTION)].map(m => m[1]))) {
       const u = await userByName(uname);
       if (!u || u.id === rec.author) continue;
       if (!(await areFriends(u.id, rec.author))) continue;
@@ -885,10 +909,47 @@ async function calendarFeed(token: string): Promise<Response> {
   });
 }
 
+// ── Health ───────────────────────────────────────────────────────────────────
+// GET ?health. Everything else about delivery is invisible from outside, so this
+// says which revision is live, whether each secret is set, and what Apple makes
+// of our key. It sends each host a token of all zeroes: `BadDeviceToken` means
+// Apple accepted the key and refused only the token, which is the good answer,
+// and anything else names what's wrong. Booleans and Apple's words, never a secret.
+let healthKept = { at: 0, text: '' };
+async function health(): Promise<Response> {
+  const json = (text: string) => new Response(text, { headers: { 'content-type': 'application/json' } });
+  if (Date.now() - healthKept.at < 5 * 60 * 1000) return json(healthKept.text);
+  const apns: Row = {};
+  let jwt: string | null = null;
+  try { jwt = await apnsAuth(); } catch { apns.key = 'unreadable'; }
+  if (jwt) {
+    for (const host of APNS_HOSTS) {
+      try {
+        const res = await fetch(`https://${host}/3/device/${'0'.repeat(64)}`, {
+          method: 'POST',
+          headers: { 'authorization': `bearer ${jwt}`, 'apns-topic': APNS_BUNDLE_ID,
+            'apns-push-type': 'alert', 'content-type': 'application/json' },
+          body: JSON.stringify({ aps: { alert: 'health' } }),
+        });
+        apns[host] = (await res.json().catch(() => ({}))).reason || res.status;
+      } catch (e) { apns[host] = String(e); }
+    }
+  } else if (!apns.key) apns.key = 'not set';
+  const text = JSON.stringify({
+    rev: REV,
+    vapid: !!(Deno.env.get('VAPID_PUBLIC_KEY') && Deno.env.get('VAPID_PRIVATE_KEY')),
+    apns,
+  });
+  healthKept = { at: Date.now(), text };
+  return json(text);
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method === 'GET') {
-      const token = new URL(req.url).searchParams.get('calendar');
+      const params = new URL(req.url).searchParams;
+      if (params.has('health')) return await health();
+      const token = params.get('calendar');
       return token ? await calendarFeed(token) : new Response('ok');
     }
     const payload = await req.json();

@@ -53,8 +53,10 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Tapping the notification focuses an open Tria window (routing it to the target)
-// or opens a fresh one.
+// Tapping the notification focuses an open Tria window and hands it the target,
+// or opens a fresh one. Handed over rather than navigated, because the window
+// knows how to arrive at something its cache may not hold yet (arriveAt in
+// app.js), and a bare navigate landed on "This post isn't here any more".
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || './#/updates';
@@ -63,7 +65,7 @@ self.addEventListener('notificationclick', (event) => {
     for (const c of wins) {
       if ('focus' in c) {
         await c.focus();
-        if ('navigate' in c) { try { await c.navigate(target); } catch (_) { /* cross-doc guard */ } }
+        c.postMessage({ tria: 'arrive', url: target });
         return;
       }
     }

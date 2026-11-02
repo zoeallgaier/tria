@@ -150,6 +150,15 @@ the sender tries production first and retries sandbox on `BadDeviceToken`. Leave
 it unset unless you're chasing something; it means a phone running a debug build
 and a phone running TestFlight both get notified from one deployment.
 
+## 5c. Ask the live function
+`GET https://autjondbgcjctezbxliv.supabase.co/functions/v1/swift-processor?health`
+answers the deployed `rev` (compare `REV` in index.ts), whether VAPID is set, and
+what Apple says to our key on each host, kept for five minutes. **`BadDeviceToken`
+on `api.push.apple.com` is the good answer**: the key passed and only the all-zero
+test token was refused. `not set` means step 5b is still open; `InvalidProviderToken`
+means the key, its Key ID or the Team ID is wrong. A plain `ok` means the deployed
+code predates this check.
+
 ## 6. Test
 Sign in on two accounts, turn on notifications via the Updates card or profile
 toggle, then have the other account comment / RSVP / send a request. A

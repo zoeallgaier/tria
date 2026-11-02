@@ -50,6 +50,8 @@ class TriaViewController: CAPBridgeViewController {
         // A sticker charm's sheet (TriaStickerPlugin.swift). Missing, the
         // picker's New sticker tile falls back to the web's file picker.
         bridge?.registerPluginInstance(TriaStickerPlugin())
+        // A tap that launched the app, if it beat the bridge here. See TriaLaunchTap.
+        if let router = bridge?.notificationRouter { TriaLaunchTap.shared.replay(into: router) }
     }
 
     /// `--bg` from `css/tokens.css`, in the one form CSS can't reach: light

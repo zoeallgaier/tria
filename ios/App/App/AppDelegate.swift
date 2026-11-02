@@ -1,11 +1,15 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Apple's rule is that this delegate is set before launch finishes, and
+        // Capacitor's is set when the bridge is built, which under UIScene is
+        // after it. See TriaLaunchTap.
+        UNUserNotificationCenter.current().delegate = TriaLaunchTap.shared
         return true
     }
 
@@ -47,6 +51,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+/// Holds the notification that launched the app until the bridge can take it.
+///
+/// A tap on a closed app is answered once, to whoever is the notification
+/// center's delegate at that moment. Capacitor's `NotificationRouter` only takes
+/// that seat as the bridge is built, inside the scene's view controller, so this
+/// sits in it from launch. If the tap comes first it is kept here, and
+/// `TriaViewController.capacitorDidLoad` replays it into the router, whose plugin
+/// retains the event until app.js listens. If the bridge comes first the router
+/// has the seat and this never hears about it, so a tap lands exactly once.
+final class TriaLaunchTap: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = TriaLaunchTap()
+    private var held: UNNotificationResponse?
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        held = response
+        completionHandler()
+    }
+
+    func replay(into router: NotificationRouter) {
+        guard let response = held else { return }
+        held = nil
+        router.userNotificationCenter(.current(), didReceive: response) {}
+    }
 }
 
 /* ── UIScene ─────────────────────────────────────────────────────────────────
