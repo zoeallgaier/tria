@@ -6714,7 +6714,7 @@
      The note mark opens the DIAL, which is back: Post, Activity, and today's
      Daily. Each row is a shortcut into the one composer (pendingAttach), so
      the composer is still the only form there is. */
-  // My Circle's and Discover's, the same + opening the same New sheet.
+  // My Circle's, Discover's and Chats', the same + opening the same New sheet.
   function composeBtnEl(id = 'home-compose-btn') {
     return `<button class="toolbar-btn toolbar-compose" type="button" id="${id}" ` +
         `aria-haspopup="dialog" aria-label="Make something">` +
@@ -17182,6 +17182,7 @@
       return;
     }
     mountToolbar({
+      leading: composeBtnEl('chats-compose-btn'),
       title: 'Chats',
       actions: filterBtnEl('chats-filter-btn', chatFilter, 'Filter chats') +
         (Store.chatsReady()
@@ -17199,6 +17200,8 @@
     fresh.addEventListener('toggle', (e) => {
       if (e.target.matches && e.target.matches('.chat-archived')) archivedOpen = e.target.open;
     }, true);
+    document.getElementById('chats-compose-btn')
+      ?.addEventListener('click', () => openComposeDial());
     document.getElementById('chats-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: chatFilter,
