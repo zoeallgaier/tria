@@ -53,7 +53,10 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setPostBar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPostBarText", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pickPhoto", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setGlow", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setGlow", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pagerShot", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pagerPainted", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pagerForget", returnType: CAPPluginReturnPromise)
     ]
 
     /// Built on the first `setTabs` and kept for the life of the app. Nil until
@@ -90,6 +93,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// No availability dance: it is a gradient and two strokes, nothing 26 only,
     /// so it answers on every OS the app installs on.
     private var glow: TriaEdgeGlow?
+
+    /// The swipe between tabs, built with the bar. See `TriaPager`.
+    private var pager: TriaPagerControl?
 
     /// The last keyboard reach handed to the web, so a notification that changes
     /// nothing costs a compare. -1 until the first one, which is what makes the
@@ -242,7 +248,19 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 // what it folds on. See TriaChromeBar.
                 bar.install(in: hostController, scroller: self.bridge?.webView?.scrollView)
                 self.bar = bar
+                if let web = self.bridge?.webView {
+                    let pager = TriaPager(web: web, host: host)
+                    pager.onGo = { [weak self] route, seq in
+                        self?.notifyListeners("pagerGo", data: ["route": route, "seq": seq])
+                    }
+                    pager.onSelect = { [weak self] route in self?.bar?.select(route: route) }
+                    pager.onFade = { [weak self] fade in
+                        (self?.toolbar as? TriaToolbar)?.setPageFade(fade)
+                    }
+                    self.pager = pager
+                }
             }
+            (self.pager as? TriaPager)?.wear(tabs: tabs)
             bar.apply(tabs: tabs, fab: fab)
             // Laid out before measuring: the constraints were only just added on
             // a first call, and a measurement taken before they resolve is the
@@ -568,6 +586,32 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve()
         }
     }
+
+    /// A tab has sat still long enough to be worth a picture. See `TriaPager`.
+    @objc func pagerShot(_ call: CAPPluginCall) {
+        let route = call.getString("route") ?? ""
+        DispatchQueue.main.async { [weak self] in
+            self?.pager?.shoot(route: route)
+            call.resolve()
+        }
+    }
+
+    /// The page a swipe asked for has drawn, so its picture can lift.
+    @objc func pagerPainted(_ call: CAPPluginCall) {
+        let seq = call.getInt("seq") ?? 0
+        DispatchQueue.main.async { [weak self] in
+            self?.pager?.painted(seq: seq)
+            call.resolve()
+        }
+    }
+
+    /// Signed out: the pictures are of someone's feed.
+    @objc func pagerForget(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            self?.pager?.forget()
+            call.resolve()
+        }
+    }
 }
 
 /// What the plugin is allowed to say to the bar.
@@ -581,6 +625,14 @@ protocol TriaChromeControl: AnyObject {
     func setDots(_ map: [String: String])
     func setVisibility(chrome: Bool, fab: Bool)
     func reservedBottom() -> CGFloat
+}
+
+/// What the plugin is allowed to say to the pager. No availability, for the same
+/// reason as the protocol above.
+protocol TriaPagerControl: AnyObject {
+    func shoot(route: String)
+    func painted(seq: Int)
+    func forget()
 }
 
 // MARK: - The bar
@@ -820,6 +872,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         /// 26 is the size the icon-and-title idiom is drawn at, and the web's
         /// 28px nav glyph had no title under it to make room for.
         static let icon: CGFloat = 26
+        static let tabReach: CGFloat = 10
         /// Past the top of the bar, what the last card of a feed keeps clear.
         static let clearance: CGFloat = 8
     }
@@ -871,7 +924,12 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         shell.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.addChild(controller)
         host.view.addSubview(shell)
-        controller.view.frame = shell.bounds
+        // Five tabs fill the capsule evenly, and on 26 the system sets that
+        // spacing (`itemSpacing` and `itemWidth` do nothing, measured). The one
+        // way to more room between them is a wider capsule (Zoe, 2026-11-01), and
+        // the capsule is cut from the controller's width, so that runs past the
+        // screen by this much a side.
+        controller.view.frame = shell.bounds.insetBy(dx: -Metric.tabReach, dy: 0)
         controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         shell.addSubview(controller.view)
         controller.didMove(toParent: host)
@@ -1086,6 +1144,364 @@ final class TriaTabShell: UIView {
         super.layoutSubviews()
         onLayout?()
     }
+}
+
+// MARK: - Swiping between the tabs
+
+/* SWIPE BETWEEN THE TABS, THE WAY INSTAGRAM DOES (Zoe, 2026-11-01: "smooth and on
+   brand and pretty"). The page follows the finger one to one, the next tab comes
+   in beside it, and letting go settles on a spring with no bounce. Native, because
+   a layer the render server carries keeps the display's rate whatever the page is
+   doing, where a CSS transform on a feed would be main-thread work under the thumb.
+
+   NOTHING MOVES BUT PICTURES, AND THE WEB VIEW NEVER MOVES AT ALL. Two tries are
+   behind that. Capacitor makes the web view the controller's own `view`, so every
+   bar in this file is a SUBVIEW of it: move it and the tab bar goes too. And its
+   scroll view can't be moved either: WKWebView lays its frame back to its bounds
+   on every pass, which undoes a transform (measured, 2026-11-01: `frame` at -9 with
+   `transform` at -44), so the page sat still under the finger and jumped on the
+   lift. So a finger picks up a picture of the page (`cover`), the tab beside it
+   comes in as another, and they slide over a web view that stays put.
+
+   THE PICTURES ARE THE SCROLL VIEW'S `snapshotView`, not WKWebView's `takeSnapshot`,
+   which captures the web view's layer whole, every bar baked in. It is synchronous
+   and the page alone. `snap` keeps one per tab, taken when a tab sits still and as
+   it is picked up. Tria has one page in the document at a time, and rendering a
+   neighbour for real would wake every side effect a route has (Updates clears its
+   dot by being looked at), so a tab not visited this launch is paper and its glyph.
+
+   THE ROUTE GOES ACROSS ON THE LIFT, under the pictures, so the page has drawn by
+   the time they land. The arriving picture is the cover until app.js says so
+   (`painted`, with `giveUp` for a route that never answers), and it dissolves off
+   the opaque page, which can't flash the paper (navigation.md). A finger landing
+   mid-flight finishes the flight and carries on from the cover, which is what lets
+   a thumb flick through three tabs.
+
+   THE WEB DECIDES WHAT A TOUCH MAY DO. At touch-down this asks
+   `window.triaSwipeAt`, which refuses a sheet, a caret, a rail, a carousel. A
+   gesture recognizer has to answer synchronously and the web can't, so a pan that
+   gets its 10pt before the reply simply doesn't begin: a missed swipe, never a
+   rail hijacked. The scroll view's pan waits on this one, which is what keeps a
+   sideways drag from wandering the page, and this one waits on the edge swipes,
+   so back and the sidebar keep their edges.
+
+   Nothing is drawn between the pages: a glow of the reader's band stood there for
+   an afternoon (Zoe: "remove the color glow keep it simple"). There is no haptic
+   either: a swipe only changes what you are looking at (WHO GETS A BUZZ, app.js).
+
+   The title and the discs fade by hand as the page leaves, the material with
+   them, never travelling (the note above `syncMaterial`). */
+@available(iOS 26.0, *)
+final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
+
+    private enum Metric {
+        /// The spring, in seconds to look settled. Critically damped: a page
+        /// that overshoots shows a slice of the one after it.
+        static let spring: TimeInterval = 0.38
+        /// When the flight counts as over. A spring's tail runs on for a third
+        /// of a second under a point of travel, and the bar was waiting it out
+        /// (measured: back at 0.75s on a page that looked landed at 0.4).
+        static let landed: TimeInterval = 0.42
+        static let reveal: TimeInterval = 0.14
+        static let giveUp: TimeInterval = 0.8
+        /// How far across counts as meaning it, and how hard a flick does.
+        static let arm: CGFloat = 0.3
+        static let flick: CGFloat = 360
+        /// More sideways than this over up and down, or it's the scroll's.
+        static let sideways: CGFloat = 1.25
+        /// UIScrollView's own rubber band.
+        static let rubber: CGFloat = 0.55
+        /// Of the screen's width, where the bar has finished fading.
+        static let barGone: CGFloat = 0.3
+        static let glyph: CGFloat = 40
+    }
+
+    private struct Shot {
+        let view: UIView
+        let style: UIUserInterfaceStyle
+    }
+
+    /// The route to go to, and the number `painted` will answer with.
+    var onGo: ((String, Int) -> Void)?
+    var onSelect: ((String) -> Void)?
+    /// The top bar's strength, 1 at rest and 0 with the page gone.
+    var onFade: ((CGFloat) -> Void)?
+
+    private weak var web: WKWebView?
+    private weak var host: UIView?
+    private let pan = UIPanGestureRecognizer()
+
+    private var routes: [String] = []
+    private var glyphs: [String: UIImage] = [:]
+    private var shots: [String: Shot] = [:]
+
+    /// The route this touch may swipe from, once the web has said.
+    private var heard: String?
+    private var keeps = false
+    /// The tab on the glass, or on the way to it.
+    private var here = ""
+    /// The tabs either side of `here`, by -1 and 1.
+    private var leaves: [Int: TriaPagerPage] = [:]
+    /// The picture of `here`: under the finger, or waiting for the real page.
+    private var cover: TriaPagerPage?
+    /// Paper behind the pictures, for the gap a rubber band opens.
+    private let curtain = UIView()
+    private var offset: CGFloat = 0
+    private var flight: UIViewPropertyAnimator?
+    private var giveUp: DispatchWorkItem?
+    private var seq = 0
+    private var paintedSeq = 0
+
+    init(web: WKWebView, host: UIView) {
+        self.web = web
+        self.host = host
+        super.init()
+        curtain.backgroundColor = TriaViewController.paper
+        curtain.isUserInteractionEnabled = false
+        pan.addTarget(self, action: #selector(panned(_:)))
+        pan.delegate = self
+        pan.maximumNumberOfTouches = 1
+        web.addGestureRecognizer(pan)
+        web.scrollView.panGestureRecognizer.require(toFail: pan)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(memoryWarned),
+            name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+    }
+
+    func wear(tabs: [[String: Any]]) {
+        routes = tabs.compactMap { $0["route"] as? String }
+        for tab in tabs {
+            guard let route = tab["route"] as? String else { continue }
+            glyphs[route] = TriaSVG.image(markup: tab["icon"] as? String ?? "",
+                                          size: Metric.glyph, ink: .black, template: true)
+        }
+    }
+
+    private var width: CGFloat { host?.bounds.width ?? 0 }
+    private var dragging: Bool { pan.state == .began || pan.state == .changed }
+    /// A route has gone across and hasn't said it drew.
+    private var waiting: Bool { paintedSeq != seq }
+
+    /// The route on the web view right now, read the way `rightEdge` reads it.
+    private var routeNow: String {
+        let fragment = web?.url?.fragment ?? ""
+        let path = fragment.split(separator: "?", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        return "#" + (path.isEmpty ? "/" : path)
+    }
+
+    // MARK: Pictures
+
+    func shoot(route: String) {
+        guard flight == nil, cover == nil, !dragging, routeNow == route, let scroller = web?.scrollView,
+              !scroller.isDragging, !scroller.isDecelerating else { return }
+        snap(route)
+    }
+
+    /// Not after screen updates: the page is on the glass already, and waiting
+    /// for a commit is the slow half of this call.
+    @discardableResult
+    private func snap(_ route: String, keep: Bool = true) -> UIView? {
+        guard let web, web.window != nil, let style = host?.traitCollection.userInterfaceStyle,
+              let view = web.scrollView.snapshotView(afterScreenUpdates: false) else { return nil }
+        if keep { shots[route] = Shot(view: view, style: style) }
+        return view
+    }
+
+    func forget() { shots.removeAll() }
+
+    @objc private func memoryWarned() { shots.removeAll() }
+
+    // MARK: The touch
+
+    func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gesture.numberOfTouches == 0 else { return true }
+        heard = nil
+        finishFlight()
+        // A picture is up, so the document is mid-route and this is `here`'s.
+        if cover != nil { heard = here; keeps = false; return true }
+        guard routes.contains(routeNow), let web, let host else { return false }
+        let at = touch.location(in: host)
+        web.evaluateJavaScript("window.triaSwipeAt?.(\(at.x), \(at.y))") { [weak self] answer, _ in
+            guard let said = answer as? [String: Any] else { return }
+            self?.keeps = said["shot"] as? Bool ?? false
+            self?.heard = said["route"] as? String
+        }
+        return true
+    }
+
+    func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+        guard heard != nil, let host else { return false }
+        let moved = pan.translation(in: host)
+        return abs(moved.x) > abs(moved.y) * Metric.sideways
+    }
+
+    func gestureRecognizer(_ gesture: UIGestureRecognizer,
+                           shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+        other is UIScreenEdgePanGestureRecognizer
+    }
+
+    @objc private func panned(_ gesture: UIPanGestureRecognizer) {
+        guard let host else { return }
+        switch gesture.state {
+        case .began: pickUp()
+        case .changed: place(follow(gesture.translation(in: host).x))
+        case .ended: letGo(velocity: gesture.velocity(in: host).x)
+        case .cancelled, .failed: fly(0, velocity: 0)
+        default: break
+        }
+    }
+
+    private func pickUp() {
+        guard let host, let web, let route = heard, routes.contains(route) else { return }
+        here = route
+        let index = routes.firstIndex(of: route) ?? 0
+        let style = host.traitCollection.userInterfaceStyle
+        curtain.frame = host.bounds
+        host.insertSubview(curtain, aboveSubview: web.scrollView)
+        // A page that opens at its top only ever has a picture of its top, so one
+        // picked up halfway down is carried but not kept.
+        if let cover {
+            host.insertSubview(cover, aboveSubview: curtain)
+        } else {
+            let page = TriaPagerPage(frame: host.bounds, shot: snap(route, keep: keeps), glyph: glyphs[route])
+            host.insertSubview(page, aboveSubview: curtain)
+            cover = page
+        }
+        var top: UIView = cover ?? curtain
+        for side in [-1, 1] where routes.indices.contains(index + side) {
+            let next = routes[index + side]
+            let shot = shots[next].flatMap { $0.style == style ? $0.view : nil }
+            let page = TriaPagerPage(frame: host.bounds, shot: shot, glyph: glyphs[next])
+            host.insertSubview(page, aboveSubview: top)
+            top = page
+            leaves[side] = page
+        }
+        place(0)
+    }
+
+    /// One to one, until there is no tab that way.
+    private func follow(_ dx: CGFloat) -> CGFloat {
+        guard leaves[dx < 0 ? 1 : -1] == nil, width > 0 else { return dx }
+        let pull = abs(dx)
+        return (dx < 0 ? -1 : 1) * (1 - 1 / (pull * Metric.rubber / width + 1)) * width
+    }
+
+    private func place(_ dx: CGFloat) {
+        offset = dx
+        cover?.transform = CGAffineTransform(translationX: dx, y: 0)
+        for (side, page) in leaves {
+            page.transform = CGAffineTransform(translationX: CGFloat(side) * width + dx, y: 0)
+        }
+        onFade?(waiting ? 0 : 1 - min(1, abs(dx) / (width * Metric.barGone)))
+    }
+
+    private func letGo(velocity: CGFloat) {
+        let side = offset < 0 ? 1 : -1
+        let thrown = abs(velocity) > Metric.flick
+        let sameWay = (velocity < 0) == (offset < 0)
+        let wins = leaves[side] != nil && (thrown ? sameWay : abs(offset) > width * Metric.arm)
+        fly(wins ? side : 0, velocity: velocity)
+    }
+
+    // MARK: The flight
+
+    private func fly(_ side: Int, velocity: CGFloat) {
+        let end = -CGFloat(side) * width
+        let gap = end - offset
+        // The spring's unit is the distance left, so the finger's speed carries
+        // into it. Capped, or a flick from nearly home rings.
+        let carried = abs(gap) > 1 ? min(14, max(-14, velocity / gap)) : 0
+        let spring = UISpringTimingParameters(duration: Metric.spring, bounce: 0,
+                                              initialVelocity: CGVector(dx: carried, dy: 0))
+        let animator = UIViewPropertyAnimator(duration: Metric.spring, timingParameters: spring)
+        animator.isUserInteractionEnabled = true
+        animator.addAnimations { [weak self] in self?.place(end) }
+        animator.addCompletion { [weak self] _ in self?.landed(side) }
+        flight = animator
+        animator.startAnimation()
+        if side != 0, let index = routes.firstIndex(of: here) { go(routes[index + side]) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Metric.landed) { [weak self, weak animator] in
+            guard let self, let animator, self.flight === animator else { return }
+            self.finishFlight()
+        }
+    }
+
+    private func finishFlight() {
+        flight?.stopAnimation(false)
+        flight?.finishAnimation(at: .end)
+    }
+
+    private func go(_ route: String) {
+        here = route
+        onSelect?(route)
+        seq += 1
+        onGo?(route, seq)
+        giveUp?.cancel()
+        let late = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.paintedSeq = self.seq
+            self.lift()
+        }
+        giveUp = late
+        DispatchQueue.main.asyncAfter(deadline: .now() + Metric.giveUp, execute: late)
+    }
+
+    private func landed(_ side: Int) {
+        flight = nil
+        let arriving = leaves[side]
+        for (key, page) in leaves where key != side { page.removeFromSuperview() }
+        leaves.removeAll()
+        curtain.removeFromSuperview()
+        if let arriving {
+            cover?.removeFromSuperview()
+            cover = arriving
+        }
+        offset = 0
+        cover?.transform = .identity
+        lift()
+    }
+
+    func painted(seq: Int) {
+        paintedSeq = max(paintedSeq, seq)
+        lift()
+    }
+
+    /// The real page is under the cover. Over an opaque page, one fade, and
+    /// nothing else moves. One picked up again mid-route waits for its next landing.
+    private func lift() {
+        guard flight == nil, !dragging, !waiting, let leaving = cover else { return }
+        giveUp?.cancel()
+        giveUp = nil
+        cover = nil
+        UIView.animate(withDuration: Metric.reveal, delay: 0, options: [.allowUserInteraction, .curveEaseOut]) {
+            leaving.alpha = 0
+            self.onFade?(1)
+        } completion: { _ in
+            leaving.removeFromSuperview()
+        }
+    }
+}
+
+/// A tab that isn't on the glass: its picture, or paper and its glyph.
+@available(iOS 26.0, *)
+private final class TriaPagerPage: UIView {
+    init(frame: CGRect, shot: UIView?, glyph: UIImage?) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = TriaViewController.paper
+        if let shot {
+            shot.frame = bounds
+            addSubview(shot)
+        } else {
+            let mark = UIImageView(image: glyph)
+            mark.tintColor = .tertiaryLabel
+            mark.center = CGPoint(x: bounds.midX, y: bounds.midY)
+            addSubview(mark)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 }
 
 // MARK: - The toolbar
@@ -1312,6 +1728,9 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// in for.
     private let markView = UIImageView()
     private var drawnMark = ""
+    /// The mark's box: the wordmark, or a sidebar pick's name in its place.
+    private let markBox = UIView()
+    private let markWord = UILabel()
     /// Nothing under the bar yet, so nothing for the material to separate it
     /// from, and whether the reader is going down the page. Native's own
     /// reading of the scroll, not a flag from the web. See `TriaScrollWatch`.
@@ -1323,6 +1742,8 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// in app.js): it is a fact about the route, so it arrives on a navigation
     /// rather than on a scroll.
     private var holdHeader = false
+    /// How much of the bar a swipe between tabs has left, 1 at rest. See `TriaPager`.
+    private var pageFade: CGFloat = 1
     /// The header — the material behind the bar and the small title on it — is
     /// one object in two views, and this is the single answer both wear.
     private var headerUp: Bool { !scroll.atTop && (holdHeader || !scroll.reading) }
@@ -1337,6 +1758,16 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// `materialFrame`). A nested glass element honours alpha.
     private func syncAway(animated: Bool) {
         for control in controls.values { control.setAway(!controlsUp, animated: animated) }
+    }
+
+    /// With the finger or a spring around it, so nothing here animates by itself.
+    /// Every disc on its own, for the reason above, and the material with the
+    /// title, because they are one header.
+    func setPageFade(_ fade: CGFloat) {
+        pageFade = fade
+        for control in controls.values { control.setFade(fade) }
+        syncMaterial(animated: false)
+        syncTitle(animated: false)
     }
 
     /// A menu the system is presenting right now and whose rows have not arrived
@@ -1369,10 +1800,14 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         contentView.addSubview(titleLabel)
         markView.contentMode = .scaleAspectFit
         markView.isUserInteractionEnabled = false
-        markView.isAccessibilityElement = true
-        markView.accessibilityTraits = .header
-        markView.isHidden = true
-        contentView.addSubview(markView)
+        markWord.isUserInteractionEnabled = false
+        markBox.isAccessibilityElement = true
+        markBox.accessibilityTraits = .header
+        markBox.isUserInteractionEnabled = false
+        markBox.isHidden = true
+        markBox.addSubview(markView)
+        markBox.addSubview(markWord)
+        contentView.addSubview(markBox)
         host.addSubview(material)
         host.addSubview(self)
         self.scroller = scroller
@@ -1426,6 +1861,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
             } else {
                 control = TriaToolbarButton(id: id)
                 control.button.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
+                control.setFade(pageFade)
                 contentView.addSubview(control)
                 // Below the glass, so the material has something to sample. See
                 // TriaToolbarButton.ramp for why it cannot live inside it.
@@ -1536,7 +1972,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     private func syncMaterial(animated: Bool) {
         material.frame = materialFrame()
-        let wanted: CGFloat = (live && headerUp) ? 1 : 0
+        let wanted: CGFloat = (live && headerUp) ? pageFade : 0
         guard material.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,
@@ -1572,20 +2008,39 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     private func applyMark(_ spec: [String: Any]?) {
         guard let spec, let svg = spec["svg"] as? String, !svg.isEmpty else {
-            markView.isHidden = true
+            markBox.isHidden = true
             return
         }
         let w = TriaToolbar.number(spec["w"]), h = TriaToolbar.number(spec["h"])
-        markView.frame = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
-                                width: w, height: h)
+        let box = spec["box"] as? [String: Any] ?? [:]
+        let origin = CGPoint(x: TriaToolbar.number(box["x"]), y: TriaToolbar.number(box["y"]))
+        let inBox = { (rect: [String: Any]) in
+            CGRect(x: TriaToolbar.number(rect["x"]) - origin.x, y: TriaToolbar.number(rect["y"]) - origin.y,
+                   width: TriaToolbar.number(rect["w"]), height: TriaToolbar.number(rect["h"]))
+        }
+        markBox.frame = CGRect(origin: origin, size: CGSize(width: TriaToolbar.number(box["w"]),
+                                                            height: TriaToolbar.number(box["h"])))
+        markView.frame = inBox(spec)
+        let ink = TriaChromeBar.color(fromHex: spec["ink"] as? String ?? "") ?? .label
+        if let word = spec["word"] as? [String: Any] {
+            markWord.text = word["text"] as? String
+            markWord.font = TriaToolbar.titleFont(TriaToolbar.number(word["size"]))
+            markWord.textColor = ink
+            markWord.frame = inBox(word)
+            markWord.isHidden = false
+            markView.isHidden = true
+        } else {
+            markWord.isHidden = true
+            markView.isHidden = false
+        }
         let key = "\(w)x\(h)"
         if key != drawnMark {
             drawnMark = key
             markView.image = TriaSVG.image(markup: svg, width: w, height: h)
         }
-        markView.tintColor = TriaChromeBar.color(fromHex: spec["ink"] as? String ?? "") ?? .label
-        markView.accessibilityLabel = spec["label"] as? String
-        markView.isHidden = false
+        markView.tintColor = ink
+        markBox.accessibilityLabel = spec["label"] as? String
+        markBox.isHidden = false
     }
 
     private func syncTitle(animated: Bool) {
@@ -1593,20 +2048,20 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         // there at the top of the page, where there is no header yet: the
         // Instagram home feed's logo, which leaves on the way down and is back
         // the moment you reach up.
-        let markWanted: CGFloat = (scroll.atTop || headerUp) ? 1 : 0
-        if markView.alpha != markWanted {
+        let markWanted: CGFloat = (scroll.atTop || headerUp) ? pageFade : 0
+        if markBox.alpha != markWanted {
             if animated && !UIAccessibility.isReduceMotionEnabled {
                 UIView.animate(withDuration: 0.24, delay: 0,
                                options: [.allowUserInteraction, .beginFromCurrentState,
-                                         .curveEaseOut]) { self.markView.alpha = markWanted }
+                                         .curveEaseOut]) { self.markBox.alpha = markWanted }
             } else {
-                markView.alpha = markWanted
+                markBox.alpha = markWanted
             }
         }
         // The title is the page's name from the first frame now (1.8, one
         // header on every page), so it keeps the wordmark's rule: up at the top
         // of the page and whenever the header is.
-        let wanted: CGFloat = (wantsTitle && (scroll.atTop || headerUp)) ? 1 : 0
+        let wanted: CGFloat = (wantsTitle && (scroll.atTop || headerUp)) ? pageFade : 0
         guard titleLabel.alpha != wanted else { return }
         if animated && !UIAccessibility.isReduceMotionEnabled {
             UIView.animate(withDuration: 0.24, delay: 0,
@@ -1916,9 +2371,17 @@ final class TriaToolbarButton: UIVisualEffectView {
     /// Two reasons a disc is not showing, kept apart so neither undoes the
     /// other: `idle` is the page's (the editor's unearned Save, which also
     /// shrinks), `away` is the scroll's (the header has left on a read down,
-    /// see `TriaToolbar.syncAway`), which only fades.
+    /// see `TriaToolbar.syncAway`), which only fades. `fade` is a swipe between
+    /// tabs on its way through, a strength rather than a reason.
     private var idle = false
     private var away = false
+    private var fade: CGFloat = 1
+
+    func setFade(_ value: CGFloat) {
+        guard value != fade else { return }
+        fade = value
+        settle(animated: false)
+    }
 
     func setAway(_ wanted: Bool, animated: Bool) {
         guard wanted != away else { return }
@@ -1928,9 +2391,10 @@ final class TriaToolbarButton: UIVisualEffectView {
 
     private func settle(animated: Bool) {
         let gone = idle || away
+        let strength: CGFloat = gone ? 0 : fade
         isUserInteractionEnabled = !gone
         let apply = {
-            self.alpha = gone ? 0 : 1
+            self.alpha = strength
             self.transform = self.idle ? CGAffineTransform(scaleX: 0.82, y: 0.82) : .identity
             // The ramp is a sibling and none of the above reaches it. Inside the
             // same block, or the colour hangs in the air behind a Save that has
@@ -1939,11 +2403,11 @@ final class TriaToolbarButton: UIVisualEffectView {
             self.ramp.transform = self.transform
         }
         if UIAccessibility.isReduceMotionEnabled {
-            alpha = gone ? 0 : 1
+            alpha = strength
             transform = .identity
             ramp.alpha = alpha
             ramp.transform = .identity
-        } else if animated && alpha != (gone ? 0 : 1) {
+        } else if animated && alpha != strength {
             UIView.animate(withDuration: 0.24, delay: 0,
                            options: [.allowUserInteraction, .beginFromCurrentState],
                            animations: apply)

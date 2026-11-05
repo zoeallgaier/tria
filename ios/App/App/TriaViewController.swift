@@ -60,7 +60,7 @@ class TriaViewController: CAPBridgeViewController {
     /// `traitCollectionDidChange` and can't drift out of step with the
     /// stylesheet's `prefers-color-scheme`. If the token ever changes, change it
     /// here too — these two literals are the copy.
-    private static let paper = UIColor { traits in
+    static let paper = UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.055, green: 0.063, blue: 0.071, alpha: 1)  // #0e1012
             : UIColor(red: 0.929, green: 0.933, blue: 0.941, alpha: 1)  // #edeef0
@@ -98,6 +98,14 @@ class TriaViewController: CAPBridgeViewController {
         // handler competing with the scroll.
         webView?.allowsBackForwardNavigationGestures = true
 
+        // Swipe in from the right edge for My Circle's sidebar (2026-11-01).
+        // Native, because the web view's own forward swipe holds that edge
+        // whenever there is forward history. See the delegate at the foot.
+        let rightEdge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(rightEdgeSwiped))
+        rightEdge.edges = .right
+        rightEdge.delegate = self
+        webView?.addGestureRecognizer(rightEdge)
+
         // What you see UNDER the page when the bounce above turns the rubber
         // band back on. The document's own fill stops at the end of the
         // document, so the overscroll gap is painted by the scroll view, and
@@ -118,5 +126,26 @@ class TriaViewController: CAPBridgeViewController {
         view.backgroundColor = Self.paper
         webView?.backgroundColor = Self.paper
         webView?.scrollView.backgroundColor = Self.paper
+    }
+
+    @objc private func rightEdgeSwiped(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        webView?.evaluateJavaScript("window.triaOpenSide?.()", completionHandler: nil)
+    }
+}
+
+extension TriaViewController: UIGestureRecognizerDelegate {
+    /// My Circle only, read off the route: `#/`, or no hash on a first load.
+    /// Everywhere else the edge stays the web view's forward swipe.
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        let route = webView?.url?.fragment ?? ""
+        return route.isEmpty || route == "/"
+    }
+
+    /// The web view's own edge swipes wait for this one to fail, so on My Circle
+    /// the sidebar has that edge and the left edge's back swipe is untouched.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        other.view === webView
     }
 }

@@ -297,6 +297,8 @@
              '<path class="check-arm" pathLength="1" d="m15.5 12.5 2.2 2.2 4.2-4.2"/>',
     // Bare check — the poll's "your pick" mark.
     check:   '<path d="M5 12.5 10 17.5 19 7"/>',
+    // My Circle's sidebar: a hamburger in uneven lines, softer than a stack of three.
+    sidebar: '<path d="M4.5 7h15"/><path d="M4.5 12h9.5"/><path d="M4.5 17h12.5"/>',
     // Draws nothing on purpose. A sheet lays its rows out as icon-then-label, so
     // a RADIO list — where only the chosen row wears a check — needs the other
     // rows to hold the column open or their labels step left of it. Cheaper and
@@ -346,6 +348,8 @@
     // Magnifier for the Friends search field, and the X it morphs into when open.
     search:  '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
     close:   '<path d="M6 6 18 18"/><path d="M18 6 6 18"/>',
+    // A message's swipe: the arrow that answers.
+    reply:   '<path d="M9.5 6 4.5 11l5 5"/><path d="M4.5 11H14a5.5 5.5 0 0 1 5.5 5.5V18"/>',
     // Plain left chevron — the toolbar's one leading control, replacing every
     // ad hoc "← Back" text link with a single icon-only affordance.
     chevron: '<path d="M15 5.5 8 12l7 6.5"/>',
@@ -404,6 +408,10 @@
     // A song (Zoe, 2026-10-22: "use a music note for posting a song instead of
     // the sound icon"). Two beamed notes; the speaker above is a video's sound.
     music:   '<path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/>',
+    // A Moment (2026-11-04): a bubble pair (Zoe's pick of nine). Off centre
+    // with a second one beside it, so it reads as bubbles and never a lens,
+    // which would say "stories".
+    moment:  '<circle cx="9.5" cy="14" r="6"/><path d="M6.6 12.5a3.2 3.2 0 0 1 1.7-1.8"/><circle cx="18" cy="6.5" r="2.6"/>',
     // Edit profile's Charms row: the like burst's sparkle, and a small one.
     charm:   '<path d="M10 3c.4 4.6 2.4 6.6 7 7-4.6.4-6.6 2.4-7 7-.4-4.6-2.4-6.6-7-7 4.6-.4 6.6-2.4 7-7z"/><path d="M18 14.5c.2 2 1 2.8 3 3-2 .2-2.8 1-3 3-.2-2-1-2.8-3-3 2-.2 2.8-1 3-3z"/>',
     mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
@@ -539,21 +547,17 @@
   const NAV = [
     { route: '#/',         key: 'myCircle', label: 'My Circle' },
     { route: '#/discover', key: 'circle',   label: 'Discover' },
-    // Chats took Updates' place in 1.7. Since 1.8 Updates is the bell on My
-    // Circle's bar (updatesBtnEl), still at #/updates, with My Circle lit.
     { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
-    // …and on desktop it is in the sidebar too (Zoe, 2026-10-22), where the
-    // rail has the room and My Circle's bar is one bar among many. `rail` is
-    // the sidebar only: hidden on the phone's capsule (which keeps the bell)
-    // and never sent to the native tab bar (tabSpec).
-    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true, rail: true },
+    // A tab of its own since 2026-11-01 (Zoe: "in the navbar instead of the
+    // corner"). It was the bell on My Circle's bar from 1.8.
+    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
   ];
 
   function renderNav(active) {
     const nav = document.getElementById('nav');
     const link = (n) =>
-      `<a class="nav-link${n.rail ? ' nav-link--rail' : ''}" href="${n.route}" aria-label="${n.label}">` +
+      `<a class="nav-link" href="${n.route}" aria-label="${n.label}">` +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
         // Shipped empty and lit by class, never built and torn down: the pill is
@@ -589,13 +593,9 @@
         `</div>`;
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
     }
-    // On #/updates the sidebar lights its own Updates row, and My Circle, the
-    // tab whose bell you reached it from on a phone, is lit there only
-    // (.nav-link--under, worn like aria-current in the phone block of app.css).
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
-      a.classList.toggle('nav-link--under', active === '#/updates' && a.getAttribute('href') === '#/');
     });
     // On the compose page the + would compete with the composer's own publish
     // button, so it drops away (fade + sink behind the nav) and the four-icon
@@ -617,7 +617,7 @@
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
     // having to know this line ran.
-    NativeChrome.setActive(active === '#/updates' ? '#/' : active);
+    NativeChrome.setActive(active);
   }
 
   // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
@@ -879,8 +879,48 @@
     // more marks, and twenty more copies is not a thing to own. Markup is still
     // presentation, so this stays inside the rule about what may cross: native
     // can draw a triad of circles without knowing it means Discover.
-    const tabSpec = () => NAV.filter(n => !n.publish && !n.rail)
+    const tabSpec = () => NAV.filter(n => !n.publish)
       .map(n => ({ route: n.route, label: n.label, icon: svgIcon(n.key) }));
+
+    /* SWIPING BETWEEN THE TABS (TriaPager in TriaChromePlugin.swift), which is
+       native because a layer keeps the display's rate. Native holds no idea what a page is,
+       so what a touch may do is asked here, as it lands: on a tab, with the bar
+       up, no sheet and no caret, and not on anything that owns a sideways drag
+       of its own. That last one is read off the page rather than listed: a
+       touch-action other than auto, or a box that really scrolls sideways, is
+       a rail, a carousel, a song strip, whatever gets added next.
+
+       `shot` says the page may be pictured where it stands. Only My Circle and
+       Discover keep their place (TAB_SCROLL); the other three open at their top,
+       so a picture from halfway down would show a page you won't land on. */
+    const swipeRoute = () => {
+      const path = (location.hash || '#/').split('?')[0];
+      return told.chrome && !overlaid() && !typing() && NAV.some(n => n.route === path) ? path : '';
+    };
+    const swipeShot = (route) => TAB_SCROLL.has(route) || window.scrollY <= 4;
+
+    function swipeAt(x, y) {
+      const route = swipeRoute();
+      if (!route) return null;
+      for (let el = document.elementFromPoint(x, y); el && el !== document.body; el = el.parentElement) {
+        if (el.matches('iframe, video, input, textarea, [contenteditable="true"]')) return null;
+        const style = getComputedStyle(el);
+        if (style.touchAction !== 'auto' && style.touchAction !== 'manipulation') return null;
+        if (/auto|scroll/.test(style.overflowX) && el.scrollWidth > el.clientWidth + 1) return null;
+      }
+      return { route, shot: swipeShot(route) };
+    }
+
+    // A tab that has sat still for a moment is worth a picture, photos landed
+    // and all. Native turns one down while the page is moving.
+    let shotTimer = 0;
+    function shotSoon() {
+      clearTimeout(shotTimer);
+      shotTimer = window.setTimeout(() => {
+        const route = swipeRoute();
+        if (route && swipeShot(route)) call('pagerShot', { route }).catch(() => {});
+      }, 900);
+    }
 
     // Native measures its own bars and hands the number back; CSS reads the
     // property and never a hardcoded height, so the bar can change size in Swift
@@ -1148,8 +1188,8 @@
         // computed visibility, which the gate in app.css sets on every control
         // in the bar and would therefore report every one of them as idle.
         hidden: el.classList.contains('toolbar-commit--idle'),
-        // The bell's dot (updatesBtnEl), as a resolved colour, and empty for
-        // none: the same one-payload shape setDots gives the tab bar's.
+        // A control's dot, as a resolved colour, and empty for none. Nothing on
+        // the bar wears one since Updates became a tab (2026-11-01).
         dot: dotInk(el),
       };
       if (cta) Object.assign(spec, words(el));
@@ -1262,8 +1302,9 @@
     let markSvg = '';
     let markAsked = false;
     function markSpec() {
-      const el = document.querySelector('#toolbar-mark:not([hidden]) .wordmark');
-      if (!el) return null;
+      const box = document.querySelector('#toolbar-mark:not([hidden])');
+      if (!box) return null;
+      const el = box.querySelector('.wordmark');
       if (!markSvg) {
         if (!markAsked) {
           markAsked = true;
@@ -1274,10 +1315,22 @@
         return null;
       }
       const r = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      const rect = (q) => {
+        const n = box.querySelector(q);
+        const s = n && n.getBoundingClientRect();
+        return s && s.width ? { x: s.left, y: s.top, w: s.width, h: s.height } : null;
+      };
+      const word = box.querySelector('.toolbar-mark-word');
       return {
         svg: markSvg, x: r.left, y: r.top, w: r.width, h: r.height,
-        ink: toRgb(getComputedStyle(el).backgroundColor) || '',
-        label: el.getAttribute('aria-label') || 'Tria',
+        ink: toRgb(getComputedStyle(el).backgroundColor) || toRgb(getComputedStyle(box).color) || '',
+        label: box.getAttribute('aria-label') || 'Tria',
+        // The box, then the two things that can stand in it.
+        box: { x: b.left, y: b.top, w: b.width, h: b.height },
+        word: word.textContent
+          ? { text: word.textContent, size: parseFloat(getComputedStyle(word).fontSize), ...rect('.toolbar-mark-word') }
+          : null,
       };
     }
 
@@ -2000,6 +2053,21 @@
             });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'chromeMetrics' }, (ev) => stampBottom(ev && ev.bottom));
+          // A swipe that won. The page goes up under native's picture, which can
+          // lift once it has really drawn: two frames after the route, and a beat
+          // more, because a page builds its first screen first (buildInSlices) and
+          // the picture lifting on that dipped everything below it for a frame.
+          // Hashchange is a task of its own, hence the timeouts.
+          window.triaSwipeAt = swipeAt;
+          window.addEventListener('scroll', shotSoon, { passive: true });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'pagerGo' }, (ev) => {
+              if (!ev || !ev.route) return;
+              go(ev.route);
+              setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+                setTimeout(() => call('pagerPainted', { seq: ev.seq }).catch(() => {}), 140);
+              })), 0);
+            });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'toolbarTap' }, (ev) => {
               const el = ev && mounted[ev.id];
@@ -2118,6 +2186,7 @@
       }
       pushPostBar();
       scheduleToolbar();
+      shotSoon();
     }
 
     /* A DOT ON A DESTINATION, which is the only thing the native bar ever says
@@ -2253,9 +2322,12 @@
       return { colors, peak: dial('--wash-amt') / 100 };
     }
 
+    // Signed out, the tabs' pictures are of someone else's world.
+    const forgetPages = () => { if (live) call('pagerForget').catch(() => {}); };
+
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
-             glowLight, live: isLive };
+             glowLight, forgetPages, live: isLive };
   })();
 
   /* ── Right-sized images ──────────────────────────────────────────────────────
@@ -2319,7 +2391,7 @@
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
   // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
   // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56]];
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['np-avatar', 104], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -2809,8 +2881,13 @@
                   `aria-label="Add a photo or clip" aria-pressed="false">${svgIcon('image', 'rt-attach-ico')}</button>` +
                 `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                   `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
-                // No Music button since 2026-10-23 (Zoe): a song is its
-                // own page (fieldsFor's 'song'), reached from the New sheet.
+                // The Music button is back (Zoe, 2026-11-04), since the New
+                // sheet's Music row became Moment: a note with a song is a
+                // Music post, a Moment with one is a song for a day.
+                (opts.song
+                  ? `<button type="button" class="rt-attach" id="${idp}-add-song" ` +
+                      `aria-label="Add a song" aria-pressed="false">${svgIcon('music', 'rt-attach-ico')}</button>`
+                  : '') +
                 (event
                   ? `<button type="button" class="rt-attach" id="${idp}-add-event" ` +
                       `aria-label="Add a place and time" aria-pressed="false">` +
@@ -4359,11 +4436,16 @@
     } catch { /* no picture worth drawing */ }
     return { title, about: about === title ? '' : about, image };
   }
-  function linkMeta(url) {
+  // What this device already read of a page, without asking again.
+  function keptLink(url) {
     if (!linksKept) {
       try { linksKept = JSON.parse(localStorage.getItem(LINKS_KEY) || '{}') || {}; } catch { linksKept = {}; }
     }
-    if (linksKept[url]) return Promise.resolve(linksKept[url]);
+    return linksKept[url] || null;
+  }
+  function linkMeta(url) {
+    const kept = keptLink(url);
+    if (kept) return Promise.resolve(kept);
     if (linkAsked.has(url)) return linkAsked.get(url);
     if (!nativeShell()) return Promise.resolve(null);
     const ask = window.Capacitor.nativePromise('TriaSettings', 'pageHead', { url })
@@ -5290,9 +5372,6 @@
     if (!nativeShell()) return;
     const a = e.target.closest?.('a[target="_blank"]');
     if (!a) return;
-    // A link that reads its own taps (an On repeat cover: wireSongGestures)
-    // only leaves when it says so, by `data-go` on the click it sends itself.
-    if (a.dataset.taps && !a.dataset.go) return;
     const href = a.getAttribute('href') || '';
     if (!/^https?:\/\//i.test(href)) return;   // in-app routes navigate normally
     e.preventDefault();
@@ -5700,7 +5779,18 @@
   function wireComments(el, post) {
     // A feed card's glyph: a sheet on a phone, the post's page on a desktop.
     // Its own row's anchor only, never a quoted card's (it has no row).
-    if (post) asSheet(el.querySelector('.card-actions a.card-comment'), () => openThreadSheet(post));
+    const glyph = post && el.querySelector('.card-actions a.card-comment');
+    asSheet(glyph, () => openThreadSheet(post));
+    // The headline and the words are the glyph too (Zoe, 2026-11-04: "tap
+    // title or content"), so a sheet on a phone and the page on a desktop.
+    // A link, a mention or a button in them keeps its own tap, the quoted
+    // tile stays the original's, and a finished selection isn't a tap.
+    if (glyph) el.querySelector('.card-main')?.addEventListener('click', (e) => {
+      if (!e.target.closest('.card-title, .card-note, .card-h1, .card-h2, .readmore-clip')) return;
+      if (e.target.closest('a, button, .card-quoted')) return;
+      if (String(window.getSelection?.() || '')) return;
+      glyph.click();
+    });
     const panel = el.querySelector('.comments-panel');
     if (!panel) return;
     // This panel only ever exists on the post's page — a feed card has none, so
@@ -5732,10 +5822,10 @@
      of whole separate pages" (an Instagram/Threads comments sheet was the
      reference). On a phone a feed card's comment glyph raises the thread as a
      SHEET over the feed, and the author's heart raises who liked it, so a
-     reply or a look costs no trip there and back. The post's page stays: Read
-     more, a tap on the card, an Updates row and every link still land there,
-     and a desktop keeps the glyph a link (the sidebar layout has no floor for
-     a sheet to stand on).
+     reply or a look costs no trip there and back. The headline and the words
+     raise it too (wireComments). The post's page stays: Read more, an Updates
+     row and every link still land there, and a desktop keeps the glyph a link
+     (the sidebar layout has no floor for a sheet to stand on).
 
      IT IS openSheet, not a second panel: the same floor, corners, grab, serif
      title, scrim and pull to close, only taller and fixed in height, so the
@@ -5951,6 +6041,9 @@
     changed();
   }
 
+  // The thread sheet's empty space: the panel and the list's own boxes.
+  const SHEET_EMPTY = ['sheet', 'sheet-grab', 'sheet-title', 'sheet-items', 'thread', 'thread-list', 'thread-empty'];
+
   function openThreadSheet(post) {
     if (sheetOpen) return;
     // A page already standing on its own bar keeps it, and the glyph keeps
@@ -5963,19 +6056,28 @@
       paintThread(root, post);
       if (dir) paintCommentCount(post, dir);
     };
+    let wasHeld = false;
+    const noteHeld = () => { wasHeld = !!heldComment; };
     threadSheet = post;
     document.body.classList.add('thread-live');
     openSheet({
       title: 'Comments',
       scrimClass: 'sheet-scrim--thread',
       head: `<div class="thread"></div>`,
-      wire: (scrim) => {
+      wire: (scrim, close) => {
         list = scrim.querySelector('.sheet-items');
         root = scrim.querySelector('.thread');
         paintThread(root, post);
         wireCommentHold(root, post, repaint);
+        // A tap on the panel's empty space closes it (Zoe, 2026-11-04). A tap
+        // that only lets go of a held comment doesn't.
+        window.addEventListener('pointerdown', noteHeld, true);
+        scrim.querySelector('.sheet').addEventListener('click', (e) => {
+          if (!wasHeld && SHEET_EMPTY.some((c) => e.target.classList.contains(c))) close();
+        });
       },
       onClose: () => {
+        window.removeEventListener('pointerdown', noteHeld, true);
         letGoComment();
         threadSheet = null;
         document.body.classList.remove('thread-live');
@@ -6596,6 +6698,113 @@
   let activeFilter = 'all';
   let activeTag = null;
 
+  // A sidebar pick narrows the feed, and the wordmark's place names it. Not a
+  // control: the Instagram style dial that lived here came out (Zoe, 2026-11-01).
+  function feedMatches(p) {
+    return !activeFilter.startsWith('u:') || p.author === activeFilter.slice(2);
+  }
+  // The mark in step with the filter. MutationObserver carries it to native.
+  function syncFeedMark() {
+    const el = document.getElementById('toolbar-mark');
+    const on = feedSideRows().find(f => f.key === activeFilter);
+    if (!on) activeFilter = 'all';
+    if (!el) return;
+    const narrowed = activeFilter !== 'all';
+    el.classList.toggle('is-narrowed', narrowed);
+    el.querySelector('.toolbar-mark-word').textContent = narrowed ? on.label : '';
+    el.setAttribute('aria-label', narrowed ? `Showing ${on.label}` : 'Tria');
+    view.querySelector('.view--home')?.classList.toggle('is-narrowed', narrowed);
+  }
+  function pickFeed(key) {
+    if (key === activeFilter) return;
+    activeFilter = key;
+    dropNewPosts();
+    renderFeed();
+    scrollTop(true);
+  }
+
+  /* MY CIRCLE'S SIDEBAR (Zoe, 2026-11-01: "like reddit almost"). The hamburger
+     on the bar's right slides a tall panel in off the screen's edge: Friends, every
+     circle you're in by name, then your people, friends and follows as one list
+     ("friends can include following"). A pick is an activeFilter key,
+     `c:<id>` or `u:<username>`, so the mark names it, the tab's re-tap
+     clears it and the New posts capsule still counts.
+
+     A CIRCLE IS THE ONE PICK WIDER THAN THE FEED. Store.feed keeps a circle's
+     posts to you and your friends, and here you asked for the room, so it reads
+     all of them, strangers' too (feedPool). A row is here whether or not it has
+     a post: this is a list of where you belong, not of what's new. */
+  const feedPool = () => activeFilter.startsWith('c:')
+    ? Store.communityPosts(activeFilter.slice(2))
+    : Store.feed();
+  const byLabel = (a, b) => a.label.localeCompare(b.label);
+  function feedSideRows() {
+    const people = new Set([...Store.friends(), ...Store.following()]);
+    return [
+      ...Store.myCommunities()
+        .filter(c => !(c.owner && Blocks.has(c.owner)))
+        .map(c => ({ key: `c:${c.id}`, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
+        .sort(byLabel),
+      ...[...people]
+        .filter(name => !Blocks.has(name))
+        .map(name => Store.user(name)).filter(Boolean)
+        .map(u => ({ key: `u:${u.username}`, label: u.name || u.username, art: () => avatarEl(u, { px: 36 }) }))
+        .sort(byLabel),
+    ];
+  }
+  function feedSideRowHtml({ key, label, art }) {
+    const on = key === activeFilter;
+    return `<button class="feed-side-row${on ? ' is-on' : ''}" type="button" data-filter="${esc(key)}"` +
+        `${on ? ' aria-current="true"' : ''}>` +
+        art() +
+        `<span class="feed-side-name">${esc(label)}</span>` +
+        (on ? svgIcon('check', 'feed-side-check') : '') +
+      `</button>`;
+  }
+  // The right edge's swipe, from TriaViewController.
+  window.triaOpenSide = () => {
+    if (document.getElementById('home-side-btn') && !momentsAway) openFeedSide();
+  };
+  function openFeedSide() {
+    const rows = feedSideRows();
+    // A list folds under its own name. Circles start open and People closed
+    // (Zoe), unless the person you're reading is in there.
+    const section = (title, list, open) => !list.length ? '' :
+      `<section class="feed-side-group${open ? ' is-open' : ''}">` +
+        `<button class="feed-side-head" type="button" aria-expanded="${open}">` +
+          title + svgIcon('chevDown', 'feed-side-chev') +
+        `</button>` +
+        `<div class="feed-side-fold"${open ? '' : ' inert'}><div>${list.map(feedSideRowHtml).join('')}</div></div>` +
+      `</section>`;
+    const friends = { key: 'all', label: 'Friends', art: () => `<span class="feed-side-all">${ICON_ALL}</span>` };
+    openSheet({
+      title: 'My Circle',
+      side: true,
+      scrimClass: 'sheet-scrim--side',
+      head: feedSideRowHtml(friends) +
+        section('Circles', rows.filter(r => r.key.startsWith('c:')), true) +
+        section('People', rows.filter(r => r.key.startsWith('u:')), activeFilter.startsWith('u:')) +
+        (rows.length ? '' : `<button class="pill-quiet feed-side-find" type="button">Find people and circles</button>`),
+      wire: (scrim, close) => {
+        scrim.querySelector('.sheet-items').addEventListener('click', (e) => {
+          if (e.target.closest('.feed-side-find')) return close(() => go('#/discover'));
+          const head = e.target.closest('.feed-side-head');
+          if (head) {
+            const open = head.parentElement.classList.toggle('is-open');
+            head.setAttribute('aria-expanded', open);
+            head.nextElementSibling.inert = !open;
+            return;
+          }
+          const row = e.target.closest('.feed-side-row');
+          if (!row) return;
+          scrim.querySelector('.feed-side-row.is-on')?.classList.remove('is-on');
+          row.classList.add('is-on');
+          close(() => pickFeed(row.dataset.filter));
+        });
+      },
+    });
+  }
+
   // The toolbar's filter control: the sliders glyph, WEARING the active type's
   // hue whenever a filter is on, so a closed menu still tells you the feed is
   // narrowed. Tapping it opens the filter dial.
@@ -6700,35 +6909,26 @@
   }
 
   /* ── My Circle's bar (1.8) ───────────────────────────────────────────────────
-     MAKING SOMETHING LIVES UP HERE NOW, beside Updates, and the filter that used
-     to hold this bar is gone from it. The round + left the tab bar when the tab
-     bar became a real UITabBar (four destinations and nothing else is what one
+     MAKING SOMETHING LIVES UP HERE NOW. The round + left the tab bar when the tab
+     bar became a real UITabBar (destinations and nothing else is what one
      is), and it came up to the home feed's bar the way it did in Instagram's
-     2026 layout: the note mark leading, the bell trailing.
-
-     The filter went because it only ever made sense on a PROFILE, where "just
-     their Frames" is a way of reading one person. On your circle it was a way
-     to miss things, and the bar had room for one glyph that narrows and one
-     that makes. Profiles and Discover keep their dials.
+     2026 layout: the note mark leading, the sidebar's mark trailing.
 
      The note mark opens the DIAL, which is back: Post, Activity, and today's
      Daily. Each row is a shortcut into the one composer (pendingAttach), so
      the composer is still the only form there is. */
-  // My Circle's, Discover's and Chats', the same + opening the same New sheet.
+  // My Circle's, Discover's, Chats' and Updates', the same + opening the same New sheet.
   function composeBtnEl(id = 'home-compose-btn') {
     return `<button class="toolbar-btn toolbar-compose" type="button" id="${id}" ` +
         `aria-haspopup="dialog" aria-label="Make something">` +
         svgIcon('plus') +
       `</button>`;
   }
-  // The bell, with the dot that used to sit on the Chats tab for it. Shipped
-  // lit or not, then kept in step by syncNavDot like the tab's own dot.
-  function updatesBtnEl() {
-    return `<a class="toolbar-btn" id="home-updates-btn" href="#/updates" aria-label="Updates">` +
-        svgIcon('bell') +
-        `<i class="toolbar-dot${updatesAreNew() ? ' is-on' : ''}" aria-hidden="true"></i>` +
-      `</a>`;
-  }
+  const sideBtnEl = () =>
+    `<button class="toolbar-btn" type="button" id="home-side-btn" ` +
+      `aria-haspopup="dialog" aria-label="Your circles and people">` +
+      svgIcon('sidebar') +
+    `</button>`;
 
   // The dial's rows: Post, Activity, and the Daily (Zoe, 2026-10-22). It
   // listed every type (Note, Find, Frame, Poll, Activity) and Music, and that
@@ -6746,9 +6946,12 @@
     const occ = todaysDaily();
     return [
       { key: 'note',     label: 'Note' },
-      { key: 'activity', label: 'Activity' },
-      // Music is a row again and off the composer's bar (Zoe, 2026-10-23).
-      ...(Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
+      // No Activity row since 2026-11-04 (Zoe): a plan is the composer's
+      // calendar button, as a link, a photo and a poll are.
+      // Moment took Music's row (Zoe, 2026-11-04); a song is shared from its
+      // own square on the rail. Music keeps the row until moments can post.
+      ...(Store.momentsReady() ? [{ key: 'moment', label: 'Moment', icon: 'moment' }]
+        : Store.songsReady() ? [{ key: 'song', label: 'Music' }] : []),
       ...(occ && !myAnswer(occ) ? [{ key: 'daily', label: 'Daily', icon: 'daily' }] : []),
       // Always here, beside Discover's Start a circle card, so both doors are
       // learned (Zoe, 2026-10-24; it was there only once the card was waved off).
@@ -6771,6 +6974,7 @@
       // Straight to the composer with the prompt over it, the card's Add yours.
       if (row.key === 'daily') return answerDaily(occ);
       if (row.key === 'circle') return go('#/c/new');
+      if (row.key === 'moment') { shareMoment(); return; }
       pendingAttach = row.key === 'note' ? null : row.key;
       go('#/publish');
     };
@@ -6790,7 +6994,7 @@
     // No nameplate since 1.8: the wordmark centred on the bar is the page's
     // name (mountToolbar's `mark`), and no small title either, because the
     // mark never leaves.
-    mountToolbar({ leading: composeBtnEl(), actions: updatesBtnEl(), mark: true });
+    mountToolbar({ leading: composeBtnEl(), actions: sideBtnEl(), mark: true });
     view.innerHTML =
       `<section class="view view--home">` +
         `<div class="np-host" id="np-host"></div>` +
@@ -6800,6 +7004,8 @@
 
     document.getElementById('home-compose-btn')
       ?.addEventListener('click', () => openComposeDial());
+    document.getElementById('home-side-btn')
+      ?.addEventListener('click', () => openFeedSide());
 
     renderFeed();
   }
@@ -6916,7 +7122,9 @@
      scrolls hands that back (`pan-y`), so the list keeps scrolling and the pull
      lives on the handle and title above it. A drag only starts past 6px, so a
      tap is still a tap, and the click a drag ends on is swallowed. */
-  function dragToClose(panel, list, close) {
+  // `side` is the sidebar's: it goes the way it came, off to the right, and a
+  // drag that starts more up than across is its list scrolling.
+  function dragToClose(panel, list, close, side = false) {
     if (!panel) return;
     // Whether the list scrolls is not settled at open: the audience sheet's
     // checklist folds open inside it and can make it scroll later. So it is
@@ -6930,24 +7138,25 @@
       ro.observe(list);
       [...list.children].forEach((c) => ro.observe(c));
     }
-    let startY = 0, dy = 0, dragging = false, down = false, swallow = false;
+    let startX = 0, startY = 0, dy = 0, dragging = false, down = false, swallow = false;
     panel.addEventListener('pointerdown', (e) => {
       if (e.button) return;
       // In a scrolling list a pull belongs to the list unless it is at its top,
       // and the audience sheet's checklist is a list that scrolls on its own.
-      if (list && list.style.touchAction === 'pan-y' && list.contains(e.target) && list.scrollTop > 0) return;
+      if (!side && list && list.style.touchAction === 'pan-y' && list.contains(e.target) && list.scrollTop > 0) return;
       if (e.target.closest && e.target.closest('.aud-list')) return;
-      down = true; dragging = false; startY = e.clientY; dy = 0;
+      down = true; dragging = false; startX = e.clientX; startY = e.clientY; dy = 0;
     });
     panel.addEventListener('pointermove', (e) => {
       if (!down) return;
-      dy = Math.max(0, e.clientY - startY);
+      dy = Math.max(0, side ? e.clientX - startX : e.clientY - startY);
+      if (side && !dragging && Math.abs(e.clientY - startY) > dy) { down = dy < 6; return; }
       if (!dragging && dy > 6) {
         dragging = true;
         panel.style.transition = 'none';
         try { panel.setPointerCapture(e.pointerId); } catch { /* already gone */ }
       }
-      if (dragging) panel.style.transform = `translateY(${dy}px)`;
+      if (dragging) panel.style.transform = side ? `translateX(${dy}px)` : `translateY(${dy}px)`;
     });
     const end = () => {
       if (!down) return;
@@ -6957,7 +7166,7 @@
       setTimeout(() => { swallow = false; }, 0);
       panel.style.transition = '';
       // Far enough, or past a third of its own height: gone. Otherwise back.
-      if (dy > Math.min(110, panel.offsetHeight / 3)) {
+      if (dy > Math.min(110, (side ? panel.offsetWidth : panel.offsetHeight) / 3)) {
         close();
       } else {
         panel.style.transform = '';
@@ -7289,7 +7498,7 @@
     }, lazy);
   }
 
-  // On repeat over My Circle's feed. Rebuilt only when its markup moved, so a
+  // The rail over My Circle's feed. Rebuilt only when its markup moved, so a
   // quiet re-pull doesn't replay the squares.
   function paintOnRepeat() {
     const host = view.querySelector('#np-host');
@@ -7299,34 +7508,48 @@
       host.dataset.sig = html;
       host.innerHTML = html;
       host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
-      host.querySelector('[data-np="mine"]')?.addEventListener('click', openMySong);
-      host.querySelectorAll('.np-item--post').forEach(item => {
-        const post = Store.posts().find(p => String(p.id) === item.dataset.post);
-        if (!post) return;
-        wireSongGestures(item, post);
+      host.querySelectorAll('[data-np="add"]').forEach(b => b.addEventListener('click', shareMoment));
+      host.querySelectorAll('.np-item--stack').forEach(item => {
+        item.querySelector('.np-open').addEventListener('click', (e) => openMoments(item.dataset.who, e.currentTarget));
+        glowFor(item);
       });
-      host.querySelector('.np-hint-x')?.addEventListener('click', dismissSongHint);
+      host.querySelector('.np-hint-x')?.addEventListener('click', dismissMomentHint);
     }
-    // A like is worn as a class, not markup, so a like never rebuilds the rail
-    // under the heart gliding into its corner (popSongHeart).
-    host.querySelectorAll('.np-item--post').forEach(item => {
-      if (item.classList.contains('is-landing')) return;
-      const post = Store.posts().find(p => String(p.id) === item.dataset.post);
-      item.classList.toggle('is-liked', !!(post && Store.reactionOf(post.id)));
-    });
-    // A song just shared is in no feed, so it lands here as your square, and
-    // the square gets a new face's stars in your --heart (Zoe: "like updating
-    // pfps"). Stars only: publishing has already twinkled. Consumed here so
+    // A post just shared is in no feed, so it lands here, on your own face,
+    // with a new face's stars in your --heart (Zoe: "like updating pfps").
+    // Stars only: publishing has already twinkled. Consumed here so
     // renderFeed doesn't look for a card that will never be drawn.
-    if (justPostedId != null && justPostedId === String(myWeekSong()?.id)) {
+    const landed = justPostedId != null &&
+      host.querySelector(`.np-mine[data-posts~="${CSS.escape(justPostedId)}"] .np-art`);
+    if (landed) {
       justPostedId = null;
-      const art = host.querySelector('.np-mine .np-art');
-      if (art && !prefersReduced()) setTimeout(() => burstFace(art, true), 200);
+      landed.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (!prefersReduced()) setTimeout(() => burstFace(landed, true), 200);
     }
   }
 
+  // The glow under an unseen stack is the poster's colour: their palette pick,
+  // their photo's, Tria's ramp, or ink for None (personTone).
+  function glowFor(item) {
+    personTone(Store.user(item.dataset.who)).then((tone) => {
+      if (!item.isConnected) return;
+      item.style.setProperty('--np-glow', tone === 'tria'
+        ? 'color-mix(in srgb, var(--brand-start), var(--brand-end))'
+        : tone === 'none' ? 'color-mix(in srgb, var(--text) 45%, transparent)' : tone);
+      item.classList.add('has-tone');
+    });
+  }
+
+  // The rail's + and the New sheet's Moment row: the composer in its moment
+  // mode, or the song search on a server without add-moments.sql.
+  function shareMoment() {
+    if (!Store.momentsReady()) { goListening('#/'); return; }
+    pendingMoment = true;
+    go('#/publish');
+  }
+
   // Your own square: play it, swap it for another, or take it down early.
-  function openMySong() {
+  function openMySong(before = () => {}) {
     const mine = myWeekSong();
     if (!mine) return;
     openSheet({
@@ -7344,8 +7567,9 @@
           a.click();
           a.remove();
         } },
-        { label: 'Change song', icon: 'pencil', run: () => goListening('#/') },
+        { label: 'Change song', icon: 'pencil', run: () => { before(); goListening('#/'); } },
         { label: 'Take it down', icon: 'trash', danger: true, run: async () => {
+          before();
           const res = await Store.deletePost(mine.id).catch(() => null);
           if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t take it down, try again.'); return; }
           hapticTap('LIGHT');
@@ -7355,230 +7579,407 @@
     });
   }
 
-  /* A SONG TAKES A REPLY, and the reply is a message (Zoe, 2026-10-25: "if
-     likes are already there..."). Not a comment: a Music post has no page and
-     no feed to hold a thread, it is gone in a week, and what people say about
-     somebody's song is said to them. So the bubble beside the heart opens your
-     DM with the friend, the song waiting on the bar as a reply waits, and the
-     caret already in the field. What goes is your words and the song's own
-     link, which the thread draws as the song (songInMessage). No table and no
-     new kind of update: the DM's push and dot carry it. The chat's chevron pops
-     back to My Circle rather than to Chats (chatPopsTo), since that is where
-     the reader came from. */
-  /* A FRIEND'S COVER TAKES THREE GESTURES (Zoe, 2026-10-26: "double tap to
-     like a song and hold down to reply"). The speech bubble and the corner heart
-     are gone: the cover is bare.
-       · tap → the song, once the double tap window has passed
-       · double tap → like it: a big white heart springs up on the cover with
-         the like's own sparkles bursting off it, in white (Zoe: "white heart is
-         fine just use the sparkle on it"), then glides softly into the
-         cover's corner and stays there small, white, as the like (Zoe). There
-         is no coloured corner heart and nothing to tap there, so a double tap
-         only ever ADDS, as one on a message does.
-       · hold → reply (if you can message them), the sleeve sinking under the
-         finger as the hold charges, then a buzz and straight to the chat.
-     A right click is the hold on a desktop, and Enter on the focused cover
-     plays it at once.
+  // Your own Moment, held (Zoe, 2026-11-04): change it or take it down. A
+  // poll has no editor (its choices are fixed once posted).
+  // From the viewer, `before` closes it first, so nothing stale stays up.
+  function openMyMoment(post, before = () => {}) {
+    if (!Store.posts().some(p => p.id === post.id)) return;
+    openSheet({
+      title: 'Your moment',
+      items: [
+        ...(post.type !== 'poll'
+          ? [{ label: 'Edit moment', icon: 'pencil', run: () => { before(); startPostEdit(post); } }] : []),
+        { label: 'Delete moment', icon: 'trash', danger: true, run: () => { before(); confirmDeletePost(post); } },
+      ],
+    });
+  }
 
-     THE HOLD OPENS THE CHAT WITH THE FINGER STILL DOWN, so a clear,
-     unselectable shield lies over the window until it lifts, with
-     `html.is-song-hold` standing every selection and callout down: otherwise
-     iOS's own long press lands on whatever of the thread is under the finger (a
-     word selected, a loupe, a message's hold menu). The lift is heard on the
-     cover (a touch keeps reporting to the node it started on, detached or not),
-     the window and the shield, with a timer for a lift nobody hears.
+  /* ── The Moments viewer ─────────────────────────────────────────────────────
+     A person's stack, read a frame at a time (Zoe, 2026-11-04: "where people
+     can tap through and like or comment, but this needs to be on brand").
+     Tria's, not a black story player: the page's paper, a wash blooming off
+     the top-right corner (a photo's own colour, else the poster's), a hairline
+     segment per frame, their face and name in the byline's type, and the
+     content set the way the feed sets it (a headline in the serif, a note
+     in its light weight, a song's sleeve rounded like every cover).
 
-     AND THE CARET WAITS FOR THE LIFT (Zoe: "the keyboard quickly appears then
-     disappears when holding"). The chat's bar focused its field while the
-     finger was still down, and the lift then landed in the web view as a tap,
-     which took first responder back from the native field and dropped the
-     keys. So the shield swallows the lift (no click, no focus change), and
-     setChatSong waits on `songHoldLift` before it raises the keyboard.
+     NOTHING ADVANCES BY ITSELF. Tria doesn't push a reader along, and a long
+     note is meant to be read, so a frame stays until you tap. Tap the right
+     of the screen for the next, the left for the one before, past the ends
+     into the next or last person. A double tap likes it (the gesture songs
+     already taught), a swipe sideways changes person, a pull down closes.
+     Holding your OWN frame opens its edit and delete sheet (Zoe), holding
+     anyone else's hides the chrome so the picture stands alone. A carousel
+     is a frame per photo. The foot is Comment, the thread's own sheet raised
+     over the viewer, and the heart: yours opens who liked it, as in a feed.
 
-     The cover's anchor reads its own clicks (`data-taps`), so the outbound
-     handler leaves it alone until the single tap is settled and the cover
-     clicks itself with `data-go`. */
-  function wireSongGestures(item, post) {
-    const HOLD_MS = 380;
-    const DOUBLE_MS = 300;
-    const SLOP = 10;       // px a finger may wander and still be a hold or a tap
-    const STILL_MS = 140;  // held this still this long, it is a hold, not a swipe
-    const open = item.querySelector('.np-open');
-    if (!open) return;
-    const canReply = !!item.dataset.reply;
-    const root = document.documentElement;
-    const LIFTS = ['pointerup', 'pointercancel', 'touchend', 'touchcancel'];
+     It is an overlay, not a route: it locks the page as a sheet does, which
+     stands the native chrome down (`overlaid`), and route() closes it on any
+     navigation, so a name, a mention or the editor walks out of it cleanly. */
+  let momentsAway = null;   // the open viewer's close(), for a navigation to take
+  const dismissMoments = () => { if (momentsAway) momentsAway(); };
+  const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
+
+  function momentFrames(stack) {
+    return stack.posts.flatMap(p => p.images && p.images.length > 1 && !isVideoUrl(p.image || '')
+      ? p.images.map((src, i) => ({ post: p, src, i }))
+      : [{ post: p, src: null, i: 0 }]);
+  }
+  const momentWhen = (p) => (p.moment ? momentAge(p) : 'On repeat this week');
+
+  function momentFrameHtml(f) {
+    const p = f.post;
+    const note = f.i === 0 ? cardNoteHtml(p, true) : '';
+    const words = (f.i === 0 && p.title ? `<h2 class="mv-title">${esc(p.title)}</h2>` : '') +
+      (note ? `<div class="mv-note">${note}</div>` : '') +
+      (f.i === 0 ? linkTilesHtml(p) + pollWidgetHtml(p) : '');
+    if (p.song) {
+      const s = p.song;
+      return `<div class="mv-frame mv-frame--words"><div class="mv-words">` +
+          `<span class="mv-sleeve${s.art ? ' pin-cover' : ''}"` +
+            `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true">${s.art ? '' : svgIcon('music')}</span>` +
+          `<p class="mv-song-title">${esc(s.title)}</p>` +
+          (songSub(s) ? `<p class="mv-song-sub">${esc(songSub(s))}</p>` : '') +
+          `<a class="mv-listen pill-quiet" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
+            `data-out="system">${svgIcon('music')}<span>Listen</span></a>` +
+          words +
+        `</div></div>`;
+    }
+    const still = f.src || p.image;
+    if (still) {
+      const video = !f.src && isVideoUrl(p.image);
+      const media = video
+        ? `<video class="mv-pic" src="${esc(p.image)}"${p.poster ? ` poster="${esc(sizedSrc(p.poster, 600))}"` : ''} ` +
+            `playsinline autoplay muted loop></video>` +
+          `<button type="button" class="mv-sound pill-quiet" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute')}</button>`
+        : `<img class="mv-pic" src="${esc(sizedSrc(still, 600))}" alt="${esc(notePlain(p.note) || p.title || 'Photo')}" draggable="false">`;
+      return `<div class="mv-frame mv-frame--pic">` +
+          `<figure class="mv-media">${media}</figure>` +
+          (words ? `<div class="mv-caption">${words}</div>` : '') +
+        `</div>`;
+    }
+    // Words alone. A short note with no headline is set big, in the serif.
+    const big = !p.title && note && notePlain(p.note).length <= 140 && !pollWidgetHtml(p);
+    return `<div class="mv-frame mv-frame--words"><div class="mv-words${big ? ' mv-words--big' : ''}">${words}</div></div>`;
+  }
+
+  function openMoments(who, opener) {
+    if (momentsAway || sheetOpen) return;
+    const stacks = momentStacks();
+    let si = stacks.findIndex(s => s.u.username === who);
+    if (si < 0) return;
+    const me = Store.session();
+    let frames = [];
+    let fi = 0;
+    // A stack opens on the first frame you haven't seen, as stories do.
+    const enter = (i, at) => {
+      si = i;
+      frames = momentFrames(stacks[si]);
+      const seen = seenMoments();
+      const first = stacks[si].mine ? -1 : frames.findIndex(f => !seen.has(String(f.post.id)));
+      fi = at === 'end' ? frames.length - 1 : first < 0 ? 0 : first;
+    };
+    enter(si);
+
+    const root = document.createElement('div');
+    root.className = 'mv';
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
+    root.innerHTML =
+      `<div class="mv-top">` +
+        `<div class="mv-bars" aria-hidden="true"></div>` +
+        `<div class="mv-head"></div>` +
+      `</div>` +
+      `<div class="mv-stage"></div>` +
+      `<div class="mv-foot">` +
+        `<button type="button" class="mv-comment pill-quiet">${svgIcon('comment')}<span></span></button>` +
+        `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
+      `</div>`;
+    const bars = root.querySelector('.mv-bars');
+    const head = root.querySelector('.mv-head');
+    const stage = root.querySelector('.mv-stage');
+    const likeBtn = root.querySelector('.mv-like');
+    const commentBtn = root.querySelector('.mv-comment');
+    document.body.appendChild(root);
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => root.classList.add('open'));
+
+    const cur = () => frames[fi];
+    const own = () => cur().post.author === me;
+
+    const paintLike = () => {
+      const p = cur().post;
+      if (own()) {
+        likeBtn.classList.remove('liked');
+        likeBtn.setAttribute('aria-label', 'Who liked it');
+        likeBtn.removeAttribute('aria-pressed');
+        return;
+      }
+      const on = !!Store.reactionOf(p.id);
+      likeBtn.classList.toggle('liked', on);
+      likeBtn.setAttribute('aria-pressed', String(on));
+      likeBtn.setAttribute('aria-label', on ? 'Unlike' : 'Like');
+    };
+
+    // The wash: a photo's or a song's sleeve's own colour on a picture frame
+    // (Zoe: "make the background gradient match images rather than someones
+    // profile", then "album covers the way they match photos"), the
+    // poster's colour, as their profile wears it, on anything else. Only
+    // repainted when its source changes, so a frame of the same person's words
+    // doesn't flicker.
+    let tint = 0;
+    let washedBy = '';
+    const wash = (f, u) => {
+      const p = f.post;
+      const pic = p.song ? p.song.art || '' : f.src || (p.image ? (isVideoUrl(p.image) ? p.poster || '' : p.image) : '');
+      const by = pic ? 'pic:' + pic : 'who:' + u.username;
+      if (by === washedBy) return;
+      washedBy = by;
+      const mine = ++tint;
+      // A sleeve that won't sample (a host that refuses CORS) falls back to the
+      // poster's colour rather than to no wash at all.
+      const tone = pic
+        ? sampleColor(sizedSrc(pic, 40)).then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : personTone(u)), () => personTone(u))
+        : personTone(u);
+      tone.then((tone) => {
+        if (mine !== tint) return;
+        root.classList.remove('mv--wash', 'mv--tria');
+        for (const k of 'abc') root.style.removeProperty('--wash-' + k);
+        if (tone === 'none') return;
+        const rgb = tone !== 'tria' && cssToRgb(tone);
+        if (rgb) stopsAround(rgb, WASH_ARC).forEach((c, i) => root.style.setProperty('--wash-' + 'abc'[i], c));
+        root.classList.add(rgb ? 'mv--wash' : 'mv--tria');
+      });
+    };
+
+    const paint = (how) => {
+      const s = stacks[si];
+      const f = cur();
+      const p = f.post;
+      bars.innerHTML = frames.map((_, i) => `<span class="mv-bar${i <= fi ? ' is-on' : ''}"></span>`).join('');
+      const name = s.mine ? 'You' : (s.u.name || s.u.username);
+      const more = s.mine || canMessage(s.u.username);
+      head.innerHTML =
+        `<a class="mv-who" href="#/u/${encodeURIComponent(s.u.username)}">` +
+          avatarEl(s.u, { cls: 'mv-avatar' }) +
+          `<span class="mv-who-text"><span class="mv-name">${esc(name)}</span>` +
+          `<span class="mv-when">${esc(momentWhen(p))}</span></span>` +
+        `</a>` +
+        (more ? `<button type="button" class="mv-btn mv-more" aria-label="More">${svgIcon('dots')}</button>` : '') +
+        `<button type="button" class="mv-btn mv-close" aria-label="Close">${svgIcon('close')}</button>`;
+      root.setAttribute('aria-label', `${name}’s moments, ${fi + 1} of ${frames.length}`);
+      head.querySelector('.mv-close').addEventListener('click', () => close());
+      head.querySelector('.mv-more')?.addEventListener('click', (e) => openFrameMenu(e.currentTarget));
+      stage.innerHTML = momentFrameHtml(f);
+      const frame = stage.firstElementChild;
+      wireLinkTiles(frame);
+      wirePoll(frame, p, {});
+      const vid = frame.querySelector('video');
+      const sound = frame.querySelector('.mv-sound');
+      if (vid && sound) sound.addEventListener('click', () => {
+        vid.muted = !vid.muted;
+        sound.setAttribute('aria-pressed', String(!vid.muted));
+        sound.setAttribute('aria-label', vid.muted ? 'Play with sound' : 'Mute');
+        sound.innerHTML = svgIcon(vid.muted ? 'mute' : 'sound');
+      });
+      commentBtn.querySelector('span').textContent = own() ? 'Comments' : 'Add a comment';
+      paintLike();
+      wash(f, s.u);
+      if (!s.mine) markMomentSeen(p);
+      if (prefersReduced() || !how) return;
+      const from = how === 'person' ? `translateX(${dirX * 36}px)` : 'none';
+      frame.animate([{ opacity: 0, transform: from }, { opacity: 1, transform: 'none' }],
+        { duration: how === 'person' ? 280 : 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    };
+
+    let dirX = 1;
+    const step = (d) => {
+      dirX = d;
+      if (fi + d >= 0 && fi + d < frames.length) { fi += d; paint('frame'); return; }
+      if (si + d < 0 || si + d >= stacks.length) { if (d > 0) close(); return; }
+      enter(si + d, d < 0 ? 'end' : null);
+      paint('person');
+    };
+    const person = (d) => {
+      if (si + d < 0 || si + d >= stacks.length) { if (d > 0) close(); return; }
+      dirX = d;
+      enter(si + d);
+      paint('person');
+    };
+
+    const like = (x, y) => {
+      const p = cur().post;
+      if (own()) return;
+      dismissMomentHint();
+      const pop = document.createElement('span');
+      pop.className = 'mv-pop';
+      pop.setAttribute('aria-hidden', 'true');
+      pop.style.left = x + 'px';
+      pop.style.top = y + 'px';
+      pop.innerHTML = svgIcon('heart');
+      root.appendChild(pop);
+      setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 90);
+      setTimeout(() => pop.remove(), 1000);
+      hapticTap('LIGHT');
+      if (Store.reactionOf(p.id)) return;   // a double tap only ever adds
+      setLike(p, 'heart');
+    };
+    let liking = false;
+    const setLike = async (p, next) => {
+      if (liking) return;
+      liking = true;
+      likeBtn.classList.toggle('liked', !!next);
+      if (next) burstSparkles(likeBtn);
+      const res = await Store.setReaction(p.id, next).catch(() => null);
+      liking = false;
+      if (!res || !res.ok) toast('Couldn’t save that like, try again.');
+      if (cur().post === p) paintLike();
+    };
+    likeBtn.addEventListener('click', () => {
+      const p = cur().post;
+      if (own()) { openLikesSheet(p); return; }
+      hapticTap('LIGHT');
+      setLike(p, Store.reactionOf(p.id) ? null : 'heart');
+    });
+    commentBtn.addEventListener('click', () => openThreadSheet(cur().post));
+
+    // Your own: its sheet. Someone else's: a message to them about it.
+    const openFrameMenu = (btn) => {
+      const p = cur().post;
+      if (p.author !== me) {
+        openSheet({ items: [{ label: `Message ${displayNameOf(p.author)}`, icon: 'send', run: () => replyToSong(p, btn) }] });
+        return;
+      }
+      if (!p.moment) { openMySong(close); return; }
+      openMyMoment(p, close);
+    };
+
+    /* The stage's own gestures. A link, a button, a poll or a tile keeps its
+       tap; anything else is the viewer's. */
+    const KEEP = 'a, button, input, textarea, .poll, [data-tile]';
     let press = null;
-    let shield = null;
     let lastTap = 0;
     let tapTimer = 0;
-
-    const play = () => {
-      if (!open.isConnected) return;
-      open.dataset.go = '1';
-      open.click();
-      delete open.dataset.go;
-    };
-    // Moves first and asks after, the way every heart does (wireHeart); a
-    // refusal has nothing on the cover to put back.
-    const like = () => {
-      dismissSongHint();
-      popSongHeart(item);
-      hapticTap('LIGHT');
-      if (Store.reactionOf(post.id)) return;
-      Store.setReaction(post.id, 'heart').then(
-        (res) => { if (!res || !res.ok) item.classList.remove('is-liked'); },
-        () => item.classList.remove('is-liked'));
-    };
-    let lifted = null;   // resolves songHoldLift once the finger is up
-    const lift = () => {
-      for (const t of [open, window]) for (const ev of LIFTS) t.removeEventListener(ev, lift, true);
-      if (press) clearTimeout(press.timer);
-      item.classList.remove('is-pressing');
-      try { window.getSelection()?.removeAllRanges(); } catch { /* nothing selected */ }
-      // Down a beat later, past the click a lift may still send.
-      const was = shield;
-      shield = null;
-      setTimeout(() => {
-        was?.remove();
-        root.classList.remove('is-song-hold');
-        if (lifted) { lifted(); lifted = null; }
-      }, 90);
-    };
-    const hold = (mine) => {
-      if (press !== mine || !open.isConnected) return;
-      mine.fired = true;
-      clearTimeout(tapTimer);   // a tap then a hold is a hold, the song stays put
-      dismissSongHint();
-      songHoldLift = new Promise((res) => { lifted = () => { songHoldLift = null; res(); }; });
-      item.classList.remove('is-pressing');
-      root.classList.add('is-song-hold');
-      if (mine.touch) {
-        shield = document.createElement('div');
-        shield.className = 'hold-shield';
-        shield.setAttribute('aria-hidden', 'true');
-        for (const ev of LIFTS) shield.addEventListener(ev, lift, true);
-        // The lift's own tap is spent here, so WebKit never turns it into a
-        // click or a focus change that would take the keys back.
-        shield.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
-        shield.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); }, true);
-        document.body.appendChild(shield);
-        for (const t of [open, window]) for (const ev of LIFTS) t.addEventListener(ev, lift, true);
-        mine.timer = setTimeout(lift, 2500);   // a lift nobody heard still lets go
-      } else {
-        setTimeout(lift, 0);
-      }
-      replyToSong(post, item);   // buzzes as it goes
-    };
-
-    open.addEventListener('pointerdown', (e) => {
-      if (e.button > 0) return;
-      if (press) clearTimeout(press.timer);
-      const mine = { x: e.clientX, y: e.clientY, t0: e.timeStamp, fired: false, touch: e.pointerType !== 'mouse', timer: 0 };
-      if (canReply) {
-        item.classList.add('is-pressing');
-        mine.timer = setTimeout(() => hold(mine), HOLD_MS);
-      }
-      press = mine;
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || e.target.closest(KEEP)) return;
+      press = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false, held: false, axis: '' };
+      const mine = press;
+      press.timer = setTimeout(() => {
+        if (press !== mine || mine.moved) return;
+        mine.held = true;
+        if (own()) { hapticTap('LIGHT'); openFrameMenu(head.querySelector('.mv-more') || stage); }
+        else root.classList.add('is-held');
+      }, 420);
     });
-    // A drag is a scroll of the rail or the page, not a hold. Once the hold
-    // has answered, only the lift is listened for.
-    const letGo = (e) => {
-      if (!press || press.fired) return;
-      if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < SLOP) return;
-      clearTimeout(press.timer);
-      item.classList.remove('is-pressing');
-      if (e.type !== 'pointerup') press = null;   // a scroll's click is no tap
-    };
-    open.addEventListener('pointermove', letGo, { passive: true });
-    open.addEventListener('pointerup', letGo);
-    open.addEventListener('pointercancel', letGo);
-    /* A HOLD NEVER SCROLLS. A finger that has sat still past STILL_MS is
-       holding, so its first wander is spent here: WebKit then commits the whole
-       touch to no scroll, the page and rail stay put under the charge (no
-       pointercancel to kill it a few px in), and the move past SLOP still lets
-       the hold go through pointermove. A swipe moves well inside STILL_MS and
-       scrolls as ever. Once the hold has fired nothing under the finger moves
-       while the chat opens. Listened for on the cover itself: a touch keeps
-       reporting to the node it began on, even detached. */
-    open.addEventListener('touchmove', (e) => {
-      if (!press || !press.touch || !canReply) return;
-      if (press.fired || e.timeStamp - press.t0 > STILL_MS) {
-        if (e.cancelable) e.preventDefault();
+    stage.addEventListener('pointermove', (e) => {
+      if (!press || press.held) return;
+      press.dx = e.clientX - press.x;
+      press.dy = e.clientY - press.y;
+      if (!press.moved && Math.hypot(press.dx, press.dy) < 10) return;
+      if (!press.moved) {
+        press.moved = true;
+        clearTimeout(press.timer);
+        press.axis = Math.abs(press.dy) > Math.abs(press.dx) ? 'y' : 'x';
       }
-    }, { passive: false });
-
-    open.addEventListener('click', (e) => {
-      if (open.dataset.go) return;   // the settled tap, on its way out
-      e.preventDefault();
-      if (e.detail === 0) { play(); return; }   // Enter on a focused cover
+      const frame = stage.firstElementChild;
+      if (!frame || prefersReduced()) return;
+      frame.style.transition = 'none';
+      frame.style.transform = press.axis === 'y'
+        ? `translateY(${Math.max(0, press.dy)}px) scale(${1 - Math.min(0.08, Math.max(0, press.dy) / 2400)})`
+        : `translateX(${press.dx * 0.5}px)`;
+    }, { passive: true });
+    const lift = (e) => {
       const was = press;
       press = null;
-      if (was && was.fired) return;   // the hold already answered
+      if (!was) return;
+      clearTimeout(was.timer);
+      root.classList.remove('is-held');
+      const frame = stage.firstElementChild;
+      const settle = () => {
+        if (!frame) return;
+        frame.style.transition = 'transform 0.3s var(--spring)';
+        frame.style.transform = '';
+      };
+      if (was.held || e.type === 'pointercancel') { settle(); return; }
+      if (was.moved) {
+        if (was.axis === 'y' && was.dy > 110) { close(); return; }
+        settle();
+        if (was.axis === 'x' && Math.abs(was.dx) > 70) person(was.dx < 0 ? 1 : -1);
+        return;
+      }
+      const x = e.clientX, y = e.clientY;
+      const go = () => step(x < root.clientWidth / 3 ? -1 : 1);
+      if (own()) { go(); return; }   // nothing to like, so no wait
       const now = Date.now();
-      if (now - lastTap < DOUBLE_MS) {
+      if (now - lastTap < MOMENT_TAP_MS) {
         lastTap = 0;
         clearTimeout(tapTimer);
-        like();
+        like(x, y);
         return;
       }
       lastTap = now;
       clearTimeout(tapTimer);
-      // A finger back down when the window closes is a second press, which is
-      // its own tap, double tap or hold: the first never plays under it.
-      tapTimer = setTimeout(() => { if (!press) play(); }, DOUBLE_MS);
-    });
-    open.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      if (!canReply || (press && press.touch)) return;   // a finger's hold has its timer
-      if (press) clearTimeout(press.timer);
-      press = null;
-      dismissSongHint();
-      replyToSong(post, item);
-    });
+      tapTimer = setTimeout(go, MOMENT_TAP_MS);
+    };
+    stage.addEventListener('pointerup', lift);
+    stage.addEventListener('pointercancel', lift);
+    stage.addEventListener('contextmenu', (e) => { if (!e.target.closest(KEEP)) e.preventDefault(); });
+
+    const onKey = (e) => {
+      if (sheetOpen) return;
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowRight') step(1);
+      else if (e.key === 'ArrowLeft') step(-1);
+      else if (e.key === 'Tab') {
+        const f = [...root.querySelectorAll('a[href], button')];
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+
+    function close() {
+      if (momentsAway !== close) return;
+      momentsAway = null;
+      clearTimeout(tapTimer);
+      document.removeEventListener('keydown', onKey);
+      root.querySelector('video')?.pause();
+      root.classList.remove('open');
+      if (!sheetOpen) document.body.style.overflow = '';
+      if (opener && opener.isConnected && opener.focus) opener.focus();
+      setTimeout(() => root.remove(), prefersReduced() ? 0 : 240);
+      paintOnRepeat();   // what was seen stops glowing
+    }
+    momentsAway = close;
+    dirX = 1;
+    paint('person');
+    requestAnimationFrame(() => head.querySelector('.mv-close')?.focus());
   }
 
-  /* The gestures are told ONCE (Zoe, 2026-10-26: "a quiet soft cta to explain
-     this new way to like and reply"): a week card under the rail, its title in
-     the page's own weight rather than a plan's bold, there until its x or the
-     first double tap or hold. Per device and reader, like the week cards'
-     waves. v4: shown once more so it can be seen again (v3 and the hold-only tip before it were waved off). */
-  const songHintKey = () => `tria:song-hint-seen:v4:${Store.session()}`;
-  function songHintSeen() {
-    try { return !!localStorage.getItem(songHintKey()); } catch { return true; }
+  /* Told ONCE, under the rail (Zoe, 2026-10-26: "a quiet soft cta"): a week
+     card, its title in the page's own weight, there until its x or the first
+     double tap. Per device and reader. v6: the stacks and the viewer
+     (2026-11-04); v4 and v5 taught the rail's own gestures, which are gone. */
+  const momentHintKey = () => `tria:song-hint-seen:v6:${Store.session()}`;
+  function momentHintSeen() {
+    try { return !!localStorage.getItem(momentHintKey()); } catch { return true; }
   }
-  function dismissSongHint() {
-    if (songHintSeen()) return;
-    try { localStorage.setItem(songHintKey(), '1'); } catch { /* private window */ }
+  function dismissMomentHint() {
+    if (momentHintSeen()) return;
+    try { localStorage.setItem(momentHintKey(), '1'); } catch { /* private window */ }
     const hint = view.querySelector('.np-hint');
     if (!hint) return;
     hint.classList.add('is-leaving');
     setTimeout(() => hint.remove(), prefersReduced() ? 0 : 220);
   }
 
-  // The double tap's heart: big and white on the cover, springing in with the
-  // like's sparkles bursting off it as it peaks, then gliding down into the
-  // corner, shrinking to the small resting heart (.np-liked) it hands over to.
-  // `is-landing` keeps the resting one hidden until the glide arrives on it.
-  // Laid over the item, not inside the link it would relabel.
-  const SONG_LAND_MS = 1200;   // past np-heart-glide's end: its 0.54s delay plus 0.62s
-  function popSongHeart(item) {
-    item.querySelector('.np-heart-pop')?.remove();
-    clearTimeout(item._land);
-    const pop = document.createElement('span');
-    pop.className = 'np-heart-pop';
-    pop.setAttribute('aria-hidden', 'true');
-    pop.innerHTML = svgIcon('heart');
-    item.classList.add('is-landing', 'is-liked');
-    item.appendChild(pop);
-    setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 110);
-    item._land = setTimeout(() => {
-      pop.remove();
-      item.classList.remove('is-landing');
-    }, prefersReduced() ? 600 : SONG_LAND_MS);
-  }
-
-  let songHoldLift = null;   // a hold's finger still down: the caret waits on it (wireSongGestures)
+  /* A REPLY IS A MESSAGE, from the viewer's ••• (it was a hold on the rail
+     until the stacks): your DM with the poster, the song or Moment waiting
+     on the bar as a reply waits (setChatSong), sent as its own link. The
+     chat's chevron pops back to My Circle rather than to Chats (chatPopsTo),
+     since that is where the reader came from. */
   let songReply = null;   // { chatId, post } for the chat this tap opens
   let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
   async function replyToSong(post, btn) {
@@ -7597,7 +7998,7 @@
       if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
       id = res.id;
     }
-    rememberSong(post.song);
+    if (post.song) rememberSong(post.song);
     songReply = { chatId: id, post };
     chatPopsTo = id;
     go(`#/chat/${encodeURIComponent(id)}`);
@@ -7608,7 +8009,8 @@
     if (!feedEl) return;
     paintOnRepeat();
     paintWeekCards();
-    const list = Store.feed().filter(p => {
+    syncFeedMark();
+    const list = feedPool().filter(p => {
       if (Blocks.has(p.author)) return false;   // blocked authors never surface
       const s = subjectOf(p);
       if (!s || Blocks.has(s.author)) return false;
@@ -7617,9 +8019,8 @@
       // Frames filter because the row says 'repost' would hide a Frame that is
       // visibly sitting in the feed. Same for its tags: the chips on that card are
       // the original's, so tapping one has to match it back.
-      const typeOk = activeFilter === 'all' || s.type === activeFilter;
       const tagOk = !activeTag || (s.tags || []).includes(activeTag);
-      return typeOk && tagOk;
+      return feedMatches(p) && tagOk;
     });
 
     // The Activities tab answers "what's coming up", so it sorts by EVENT date,
@@ -9698,7 +10099,7 @@
       const pickIcon = (key, follow) => {
         const was = iconFollows();
         setIconFollows(follow);
-        (follow ? themeIconKey(Store.currentUser()) : Promise.resolve(key)).then(k =>
+        (follow ? themeIconKey(Store.currentUser()).then(k => k || '') : Promise.resolve(key)).then(k =>
           (k === iconNow ? Promise.resolve() : setAppIcon(k)).then(() => {
             iconNow = k;
             iconValEl.textContent = iconLabel(k);
@@ -9948,7 +10349,9 @@
         // A new face is celebrated on the profile that wears it.
         if (shot && !welcome) celebrateArrival = 'u/' + Store.session();
         leave();
-        if (pendingAvatar) pendingAvatar.then(r => { if (!r.ok) { revertedAvatar(); toast(r.error); } });
+        if (pendingAvatar) pendingAvatar.then(r => {
+          if (!r.ok) { revertedAvatar(); toast(r.error); } else syncThemeIcon();
+        });
       } finally {
         pfSave.disabled = false;
       }
@@ -11139,7 +11542,7 @@
     // The sheet commits as you tap, so every tap has to re-ask the bar. syncAnswers
     // is declared below and this only ever runs from a click, so the reference is
     // live by then.
-    wireAudienceLock(form, () => syncAnswers());
+    wireAudienceLock(form, () => syncAnswers(), { wide: !post.moment });
 
     // Leaving POPS where it can, for the reason the profile editor's does: go()
     // always pushes, so a save that navigated forward would leave the editor
@@ -11485,7 +11888,7 @@
   // panel's slide out, for a sheet that holds something outside it (a thread's
   // comment bar): a navigation mounts the next page's bar 220ms sooner than a
   // `then` would run.
-  function openSheet({ title, items, head, wire, scrimClass, dock, onDock, rowsFirst, onClose }) {
+  function openSheet({ title, items, head, wire, scrimClass, dock, onDock, rowsFirst, onClose, side }) {
     if (sheetOpen) return;
     sheetOpen = true;
     items = items || [];
@@ -11533,7 +11936,8 @@
       document.removeEventListener('keydown', onKey);
       if (onClose) onClose();
       scrim.classList.remove('open');
-      document.body.style.overflow = '';
+      // A sheet over the Moments viewer leaves the viewer's lock in place.
+      document.body.style.overflow = momentsAway ? 'hidden' : '';
       if (opener && opener.focus) opener.focus();   // restore focus to the ••• trigger
       const done = () => { scrim.remove(); if (then) then(); };
       if (prefersReduced()) done(); else setTimeout(done, 220);
@@ -11572,7 +11976,7 @@
     if (wire) {
       try { wire(scrim, close); } catch (err) { console.error('[tria] sheet', err); }
     }
-    dragToClose(scrim.querySelector('.sheet'), scrim.querySelector('.sheet-items'), () => close());
+    dragToClose(scrim.querySelector('.sheet'), scrim.querySelector('.sheet-items'), () => close(), side);
   }
 
   /* ── Profile colour ─────────────────────────────────────────────────────────
@@ -11676,9 +12080,11 @@
   /* THE APP ICON wears Tria's own, one of the nine, or MY THEME (Zoe,
      2026-10-27), which follows the profile's: an accent is itself, Tria is
      Tria's own, None the black and white icon, and a photo takes the accent
-     nearest its colour in hue. Following is per DEVICE, like the icon itself, and a theme change
-     re-icons after it saves (applyAccent), so iOS's "You have changed the
-     icon" alert lands on a pick the reader just made. The nine icons are
+     nearest its colour in hue. Following is per DEVICE, like the icon itself,
+     and it is the DEFAULT until a pick says otherwise (Zoe, 2026-11-01), so
+     syncThemeIcon runs once the real world lands, after a theme change and
+     after a new photo. iOS's "You have changed the icon" alert comes with any
+     switch, the launch's too, and no public API holds it back. The nine icons are
      gen-alt-icons.js's; the light four are deeper there, and ICON_DEEPER
      is its DEEPER by hand so the picker's discs match. */
   const ICON_FOLLOW_KEY = 'tria:icon-theme';
@@ -11700,12 +12106,11 @@
   };
   const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
   const iconFollows = () => {
-    try { return localStorage.getItem(ICON_FOLLOW_KEY) === '1'; } catch { return false; }
+    try { return localStorage.getItem(ICON_FOLLOW_KEY) !== '0'; } catch { return false; }
   };
   const setIconFollows = (on) => {
     try {
-      if (on) localStorage.setItem(ICON_FOLLOW_KEY, '1');
-      else localStorage.removeItem(ICON_FOLLOW_KEY);
+      localStorage.setItem(ICON_FOLLOW_KEY, on ? '1' : '0');
     } catch { /* private mode; it follows for the session */ }
   };
   const setAppIcon = (key) => window.Capacitor.nativePromise('TriaSettings', 'setAppIcon',
@@ -11724,7 +12129,24 @@
     if (!me) return Promise.resolve('');
     if (accentOf(me.accent) || me.accent === 'none') return Promise.resolve(me.accent);
     if (me.accent || !me.avatar) return Promise.resolve('');
-    return sampleColor(sizedSrc(me.avatar, 40)).then(rgb => (rgb ? nearestAccent(rgb) : ''));
+    return sampleColor(sizedSrc(me.avatar, 40)).then(rgb => (rgb ? nearestAccent(rgb) : null));
+  }
+  // A photo that wouldn't sample (null) leaves the icon as it is. Nothing
+  // stored and an alternate icon on means a pick from before this was the
+  // default, so that stays too.
+  function syncThemeIcon() {
+    if (!nativeShell() || !Store.isAuthed()) return;
+    window.Capacitor.nativePromise('TriaSettings', 'appIcon', {}).then((res) => {
+      if (!res || !res.supported) return;
+      const now = (res.name || '').replace(/^TriaAppIcon-/, '');
+      let stored = null;
+      try { stored = localStorage.getItem(ICON_FOLLOW_KEY); } catch { return; }
+      if (stored === null) setIconFollows(!now);
+      if (!iconFollows()) return;
+      return themeIconKey(Store.currentUser()).then((k) => {
+        if (k !== null && k !== now) return setAppIcon(k);
+      });
+    }).catch(() => {});
   }
 
   /* THE PICK ITSELF, what a swatch MEANS. It is the only thing in the
@@ -11749,9 +12171,7 @@
       if (!r.ok) toast(r.error);
       paintWash(Store.currentUser(), 'profile');   // confirmed, or store reverted it
       paintBrandBand();
-      if (r.ok && nativeShell() && iconFollows()) {
-        themeIconKey(Store.currentUser()).then(setAppIcon).catch(() => {});
-      }
+      if (r.ok) syncThemeIcon();
     });
   }
 
@@ -12072,8 +12492,9 @@
       // rather than the row appearing and disappearing, so the same place in the
       // same menu is where a pin goes on and comes off.
       const at = myPins().findIndex(e => e.k === 'post' && e.id === post.id);
-      // A circle's post can't be pinned: a profile is not in it.
-      if (at >= 0 || !post.communityId) items.push(at >= 0
+      // A circle's post can't be pinned: a profile is not in it. A Moment
+      // can't either: it is gone in a day.
+      if (at >= 0 || (!post.communityId && !post.moment)) items.push(at >= 0
         ? { label: 'Unpin from profile', icon: 'pinned', run: () =>
             commitPins(myPins().filter((_, j) => j !== at), { toastOk: 'Unpinned.' }) }
         : { label: 'Pin to profile', icon: 'pinned', run: () => pinPostFromMenu(post) });
@@ -12201,8 +12622,8 @@
   // so it refreshes whichever view is showing rather than assuming the profile.
   function confirmDeletePost(post) {
     openSheet({
-      title: 'Delete this post? This can’t be undone.',
-      items: [{ label: 'Delete post', icon: 'trash', danger: true, run: async () => {
+      title: `Delete this ${post.moment ? 'moment' : 'post'}? This can’t be undone.`,
+      items: [{ label: post.moment ? 'Delete moment' : 'Delete post', icon: 'trash', danger: true, run: async () => {
         const res = await Store.deletePost(post.id);
         if (res && res.ok === false) { toast(res.error || 'Couldn’t delete, try again.'); return; }
         refreshPostViews(post.id);
@@ -13033,6 +13454,11 @@
   // itself: the type is still INFERRED from what is attached, and this only
   // presses the button that attaches it.
   let pendingAttach = null;
+  // The New sheet's Moment row: the one composer, its post lasting a day on
+  // the rail (Zoe, 2026-11-04). One-shot like the rest; `composingMoment`
+  // outlives the render because submitComposer reads it.
+  let pendingMoment = false;
+  let composingMoment = false;
   // The track a Music post will carry, picked on the composer's song surface.
   // Module scope because submitComposer reads it, the way it reads `cropper`.
   let composeSong = null;
@@ -13629,11 +14055,10 @@
      repeat section at the top should be a weekly thing, posts for music
      aren't needed"). A Music post is in no feed (Store.isSongPost's note in
      store.js); it is up here for seven days and then it is gone, the way a
-     week of listening is. A square opens the song itself, and a friend's
-     carries a heart in its corner, the post's own like ("add a like button to
-     the corner ... so people can still react to songs"), which reaches the
-     author's Updates like any other. The + is always first, because it is the
-     way in and the rail must be able to have a first user. Without
+     week of listening is. Since Moments (2026-11-04) a song is the first
+     frame of its person's stack, liked and commented on in the viewer like
+     any Moment (openMoments). Your own place is always first, because it is
+     the way in and the rail must be able to have a first user. Without
      add-song-posts.sql the rail is the old listening status (statusRailEl). */
   const ON_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
   /* ONE SONG A WEEK (Zoe, 2026-10-22: "only allow one song a week, like the
@@ -13648,7 +14073,7 @@
     if (!me) return null;
     const since = new Date(Date.now() - ON_REPEAT_MS).toISOString();
     return Store.posts().find(p => p.author === me && p.type === 'song' && p.song
-      && !p.communityId && (p._ts || '') >= since) || null;
+      && !p.moment && !p.communityId && (p._ts || '') >= since) || null;
   }
   function songPostsOnRepeat() {
     const seen = new Set();
@@ -13656,7 +14081,7 @@
     const since = new Date(Date.now() - ON_REPEAT_MS).toISOString();
     const mine = new Set([Store.session(), ...Store.friends()]);
     for (const p of Store.posts()) {   // newest first
-      if (p.type !== 'song' || !p.song || !p.author || seen.has(p.author)) continue;
+      if (p.type !== 'song' || !p.song || p.moment || !p.author || seen.has(p.author)) continue;
       if ((p._ts || '') < since) break;   // newest first, so the rest are older
       if (!mine.has(p.author) || p.communityId) continue;
       if (Blocks.has(p.author)) continue;
@@ -13668,59 +14093,130 @@
     return out;
   }
 
+  /* MOMENTS LIVE ON THIS RAIL (Zoe, 2026-11-04: "they can live where the
+     music currently lives, as an extension of it"). A Moment is an ordinary
+     post that lasts a day (add-moments.sql) and is in no feed, so this is the
+     one place it is read: every live one by you and your friends. */
+  function momentsOnRail() {
+    if (!Store.momentsReady()) return [];
+    const now = Date.now();
+    const mine = new Set([Store.session(), ...Store.friends()]);
+    const out = [];
+    for (const p of Store.posts()) {   // newest first
+      if (!p.moment || !p.author || !Store.momentLive(p, now)) continue;
+      if (!mine.has(p.author) || Blocks.has(p.author)) continue;
+      const u = Store.user(p.author);
+      if (u) out.push({ u, post: p });
+    }
+    return out;
+  }
+
+  /* ONE PLACE ON THE RAIL PER PERSON, their posts STACKED like stories (Zoe,
+     2026-11-04: "each persons moment posts stacking like instagram stories
+     do"). A stack is the song they have on repeat this week, then their
+     Moments in the order they were said, read through in the viewer
+     (openMoments). Each is their round face, however many they have up (Zoe:
+     "make it just someones pfp no matter how many posts"; a lone post drew as
+     itself for an hour). What you haven't opened yet glows
+     softly under it in the POSTER's own colour, not yours (Zoe), read off this
+     device (`tria:moments-seen:<me>`), and those come first: you, then the
+     unseen, then the rest, each by their newest. */
+  const seenKey = () => `tria:moments-seen:${Store.session()}`;
+  let seenIds = null;   // { who, ids } for whoever's signed in
+  function seenMoments() {
+    const who = Store.session();
+    if (seenIds && seenIds.who === who) return seenIds.ids;
+    let ids = [];
+    try { ids = JSON.parse(localStorage.getItem(seenKey()) || '[]'); } catch { /* private window */ }
+    seenIds = { who, ids: new Set(Array.isArray(ids) ? ids.map(String) : []) };
+    return seenIds.ids;
+  }
+  function markMomentSeen(post) {
+    const ids = seenMoments();
+    if (ids.has(String(post.id))) return;
+    ids.add(String(post.id));
+    // Kept to what is still up, so the list never outgrows a week of songs.
+    const live = new Set(momentStacks().flatMap(s => s.posts.map(p => String(p.id))));
+    for (const id of [...ids]) if (!live.has(id)) ids.delete(id);
+    try { localStorage.setItem(seenKey(), JSON.stringify([...ids])); } catch { /* private window */ }
+  }
+  function momentStacks() {
+    const me = Store.session();
+    const seen = seenMoments();
+    const by = new Map();
+    const put = ({ u, post }) => {
+      let s = by.get(u.username);
+      if (!s) by.set(u.username, (s = { u, posts: [] }));
+      s.posts.push(post);
+    };
+    songPostsOnRepeat().forEach(put);
+    momentsOnRail().reverse().forEach(put);   // oldest first, the order they were said
+    const stacks = [...by.values()];
+    for (const s of stacks) {
+      s.mine = s.u.username === me;
+      s.newest = s.posts.reduce((t, p) => ((p._ts || '') > t ? p._ts || '' : t), '');
+      s.unseen = !s.mine && s.posts.some(p => !seen.has(String(p.id)));
+    }
+    return stacks.sort((a, b) => (b.mine - a.mine) || (b.unseen - a.unseen)
+      || (a.newest < b.newest ? 1 : a.newest > b.newest ? -1 : 0));
+  }
+
+  // What a Moment says in a line: its headline, else its words, else its link.
+  function momentWords(post) {
+    if (post.title) return post.title;
+    if (post.song) return post.song.title;
+    const note = post.note
+      ? new DOMParser().parseFromString(post.note.replace(/<br\s*\/?>|<\/p>/gi, ' '), 'text/html')
+        .body.textContent.replace(/\s+/g, ' ').trim()
+      : '';
+    if (note) return note;
+    const link = post.url || '';
+    return link.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0];
+  }
+  const momentAge = (post) => {
+    const mins = Math.max(0, Math.round((Date.now() - Date.parse(post._ts || 0)) / 60000));
+    return mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+  };
   function nowPlayingEl() {
     if (!Store.songsReady()) return statusRailEl();
     const me = Store.session();
-    const all = songPostsOnRepeat();
-    if (!me && !all.length) return '';
-    // Nobody to play it to: a song goes to your circle, so an account with no
-    // friends and nothing on repeat gets no rail, not an empty + over an
-    // empty feed (2.0's first-run pass).
-    if (!all.length && !Store.friends().length) return '';
-    // Mine leads, as the + it stands in for did; everybody else follows.
-    const mine = all.find(x => x.u.username === me);
-    const items = all.filter(x => x !== mine);
-    const add = !me ? '' : mine
-      ? `<button type="button" class="np-item np-mine" data-np="mine" ` +
-          `aria-label="${esc(npFace({ ...mine.u, listening: mine.post.song }, me).label)}, your song this week">` +
-          npFace({ ...mine.u, listening: mine.post.song }, me).html +
-        `</button>`
-      : `<button type="button" class="np-item np-mine np-mine--empty" data-np="edit" ` +
-          `aria-label="Share a song">` +
-        `<span class="np-art np-art--add" aria-hidden="true">+</span>` +
-        `<span class="np-song">Share a song</span>` +
-        `<span class="np-who">You</span>` +
-      `</button>`;
-    // The square is a link out and the heart a button, side by side in one
-    // box (a button can't sit inside a link), the heart laid over the art.
-    // A friend's cover reads its own taps: double tap likes, a hold replies
-    // (wireSongGestures). There is no glyph for the reply.
-    let anyFriend = false, anyReply = false;
-    const square = ({ u, post }) => {
-      const f = npFace({ ...u, listening: post.song }, me);
-      const friend = u.username !== me && Store.isAuthed();
-      const reply = friend && canMessage(u.username);
-      if (friend) anyFriend = true;
-      if (reply) anyReply = true;
-      return `<div class="np-item np-item--post" data-post="${esc(String(post.id))}"${reply ? ' data-reply="1"' : ''}>` +
-          `<a class="np-open" href="${esc(songLink(post.song))}" target="_blank" draggable="false" ` +
-            `rel="noopener noreferrer" data-out="system"${friend ? ' data-taps="1"' : ''} aria-label="${esc(f.label)}"` +
-            `${friend ? ` aria-description="Double tap to like${reply ? ', hold to reply' : ''}"` : ''}>${f.html}</a>` +
-          (friend ? `<span class="np-liked" aria-hidden="true">${svgIcon('heart')}</span>` : '') +
+    const stacks = momentStacks();
+    if (!me && !stacks.length) return '';
+    // Nobody to share it with: an account with no friends and nothing up
+    // gets no rail, not an empty + over an empty feed (2.0's first-run pass).
+    if (!stacks.length && !Store.friends().length) return '';
+    const share = Store.momentsReady() ? 'Share a moment' : 'Share a song';
+    const item = (s) => {
+      // The face and the name, nothing under it (Zoe).
+      const who = s.mine ? 'You' : (s.u.name || s.u.username);
+      return `<div class="np-item np-item--stack${s.mine ? ' np-mine' : ''}${s.unseen ? ' is-unseen' : ''}" ` +
+          `data-who="${esc(s.u.username)}" data-posts="${esc(s.posts.map(p => String(p.id)).join(' '))}">` +
+          `<button type="button" class="np-open" aria-label="${esc(`${who}’s moments${s.unseen ? ', new' : ''}`)}">` +
+            `<span class="np-glow" aria-hidden="true"></span>` +
+            avatarEl(s.u, { cls: 'np-art np-avatar' }) +
+            `<span class="np-song">${esc(who)}</span>` +
+          `</button>` +
+          (s.mine ? `<button type="button" class="np-add pill-quiet" data-np="add" aria-label="${share}">${svgIcon('plus')}</button>` : '') +
         `</div>`;
     };
-    const strip = items.map(square).join('');
-    const hint = anyFriend && !songHintSeen()
+    const mine = stacks.find(s => s.mine);
+    const own = !me || mine ? '' :
+      `<button type="button" class="np-item np-mine np-mine--empty" data-np="add" aria-label="${share}">` +
+        `<span class="np-art np-art--add np-avatar" aria-hidden="true">+</span>` +
+        `<span class="np-song">${share}</span>` +
+      `</button>`;
+    const friends = stacks.some(s => !s.mine);
+    const hint = friends && Store.momentsReady() && Store.isAuthed() && !momentHintSeen()
       ? `<div class="week-card np-hint">` +
           `<div class="week-card-link">` +
-            `<span class="week-card-kicker">${svgIcon('music')}On repeat</span>` +
-            `<span class="week-card-title">Double tap a friend’s song to like it${anyReply ? ', hold it to reply' : ''}.</span>` +
+            `<span class="week-card-kicker">${svgIcon('moment')}Moments</span>` +
+            `<span class="week-card-title">Moments last a day. Tap someone to see theirs, and double tap one to like it.</span>` +
           `</div>` +
           `<button class="week-card-x np-hint-x" type="button" aria-label="Got it">${svgIcon('close')}</button>` +
         `</div>`
       : '';
-    return `<section class="nowplaying" aria-label="What people have on repeat this week">` +
-        `<div class="np-strip">${add}${strip}</div>${hint}` +
+    return `<section class="nowplaying" aria-label="Moments and songs from your people">` +
+        `<div class="np-strip">${own}${stacks.map(item).join('')}</div>${hint}` +
       `</section>`;
   }
 
@@ -13974,7 +14470,7 @@
      reason the exclusion elsewhere exists — a daily excludes activities because
      answering a prompt with a plan makes no sense, not because an activity is
      unfit to be looked at. */
-  const PIN_MAX = 3;
+  const PIN_MAX = 4;
   const myPins = () => (Store.currentUser() || {}).pins || [];
 
   /* The pins a given reader may actually see on a given profile, resolved and in
@@ -14056,91 +14552,109 @@
     return next;
   };
 
-  /* ── One card ───────────────────────────────────────────────────────────────
-     A song and a post draw the same object: a square on the leading edge, a
-     type word above a serif line, a quiet line under it, and the whole card is
-     the tap. They share a fixed height, which is a design decision AND the
-     thing that makes the drag exact — every card displaces every other card by
-     the same distance, so a reorder never has to guess.
+  /* ── The grid ────────────────────────────────────────────────────────────────
+     TWO COLUMNS AND ONE ROW HEIGHT (Zoe, 2026-11-04: "implement a grid system").
+     A row is as tall as a column is wide, so every small card is a square, and
+     an odd count puts the first pin across both columns at that same height:
+     one pin is a wide card, two are a pair, three are a wide card over a pair,
+     four are two pairs.
+     The wide card keeps the grid too: its picture is exactly one column's
+     square, so it sits on the line of the card under it, and its words take
+     the other column. The numbers live once, on .pin-grid in app.css.
 
-     EVERY SQUARE IS AN OBJECT, never a picture printed into the glass: no
-     hairline, a real drop shadow, and a sheen — one soft diagonal highlight,
-     the light a sleeve catches (`.pin-cover`, the same class on a song's art
-     and a photo's). Only the bloom behind the card differs, because of what
-     the picture IS. A song's art is hotlinked from its service's own CDN,
-     so CSS may blur it but canvas may not read it (touching the pixels taints
-     it) — a blurred, blown-up copy of the same artwork lies over the card's
-     fill and is masked out before it reaches the words, no CORS, no second
-     request, no colour column. A post's photo is our own upload, so blurring a
-     full-size copy behind an 88px card is real work for a colour we already
-     have: it glows from its own stored `tint` instead, one flat colour
-     computed at publish time. */
-  function pinCardEl(item, ctx) {
+     Every card is one of two things. A PICTURE (a photo, a frame's poster, a
+     song's sleeve, the picture a link's page names) fills its square, and what
+     the post says sits on a soft shade at its foot. WORDS are set straight on
+     the card's paper, a headline over the first lines when there is one, and a
+     foot line saying where it points (a domain, a date, an artist). The •••
+     sits in the top right corner of your own, with the headline clear of it. */
+  const pinKey = (e) => e.k === 'song' ? 'song' : 'p' + e.id;
+
+  // The picture a post's first link brings when the post has none of its own: a
+  // video's still, a picture's own address, or what the page named, once read.
+  function pinLinkPicture(p) {
+    const url = postLinks(p)[0];
+    if (!url || triaRoute(url) || MUSIC_HOST.test(url)) return { url: '' };
+    const v = youTubeOf(url);
+    if (v) return { url, image: `https://i.ytimg.com/vi/${v.id}/${v.short ? 'oardefault' : 'hqdefault'}.jpg`, yt: !v.short };
+    if (IMAGE_LINK.test(url)) return { url, image: url };
+    const m = keptLink(url);
+    return { url, meta: m, image: (m && m.image) || '', unread: !m };
+  }
+
+  function pinCardEl(item, ctx, wide) {
     const e = item.pin;
     const at = item.at;
-    const own = ctx.isSelf;
-    const more = own
+    const more = ctx.isSelf
       ? `<button type="button" class="pin-more" data-pin="${at}" aria-haspopup="menu" ` +
           `aria-label="Options for this pin" title="Options">${svgIcon('dots')}</button>`
       : '';
+    const metaEl = (words) => words ? `<span class="pin-meta"><span>${esc(words)}</span></span>` : '';
+    // Your own card's ••• sits in its top right corner (Zoe, 2026-11-04), and
+    // its headline keeps clear of it (pin--own).
+    const card = ({ cls, type, pic, say, gist, meta, open, glow = '' }) =>
+      `<article class="pin ${pic ? 'pin--pic' : 'pin--words'}${wide ? ' pin--wide' : ''}${more ? ' pin--own' : ''}${cls || ''}" ` +
+          `data-i="${at}" data-key="${esc(pinKey(e))}" data-type="${esc(type)}">` +
+        glow + (pic || '') +
+        `<span class="pin-body">` +
+          `<span class="pin-face">` +
+            (say ? `<span class="pin-say">${esc(say)}</span>` : '') +
+            (gist ? `<span class="pin-gist">${esc(gist)}</span>` : '') +
+          `</span>` +
+          `<span class="pin-foot">${meta}</span>` +
+        `</span>` +
+        open + more +
+      `</article>`;
+    const picEl = (src, { tint = '', cls = '' } = {}) =>
+      `<span class="pin-pic${cls}"${tint ? ` style="background-color:${esc(tint)}"` : ''} aria-hidden="true">` +
+        `<img src="${esc(src)}" alt="" decoding="async"></span>`;
 
     if (e.k === 'song') {
       const s = item.song;
-      const art = s.art ? `background-image:url('${encodeURI(s.art)}')` : '';
-      return `<article class="pin pin--song" data-i="${at}" data-type="song">` +
-          (s.art ? `<span class="pin-glow" style="${art}" aria-hidden="true"></span>` : '') +
-          // A song ALWAYS keeps its square, art or none: a record without its
-          // sleeve is still a record, and the empty square is where the sleeve
-          // would be rather than a mark standing in for one. (A post with no
-          // picture has no square at all — see below. The difference is that a
-          // sleeve is missing, where a note's picture was never a thing.)
-          `<span class="pin-art pin-cover" ${art ? `style="${art}"` : ''} aria-hidden="true"></span>` +
-          `<span class="pin-lines">` +
-            `<span class="pin-title">${esc(s.title)}</span>` +
-            (songSub(s) ? `<span class="pin-sub">${esc(songSub(s))}</span>` : '') +
-          `</span>` +
-          // target="_blank" + data-out="system" is what the outbound handler up
-          // top reads to hand the link to iOS itself, which is the only way a
-          // universal link reaches the music app that owns it (see songLink).
-          `<a class="pin-open" href="${esc(songLink(s))}" target="_blank" ` +
-            `rel="noopener noreferrer" data-out="system" ` +
-            `aria-label="${esc(s.title + (songSub(s, ', ') ? ', ' + songSub(s, ', ') : ''))}"></a>` +
-          more +
-        `</article>`;
+      // target="_blank" + data-out="system" is what the outbound handler up
+      // top reads to hand the link to iOS itself, which is the only way a
+      // universal link reaches the music app that owns it (see songLink).
+      return card({
+        cls: ' pin--song', type: 'song',
+        pic: s.art ? picEl(s.art) : '',
+        glow: s.art && wide ? `<span class="pin-glow" style="background-image:url('${encodeURI(s.art)}')" aria-hidden="true"></span>` : '',
+        say: s.title,
+        meta: metaEl(songSub(s)),
+        open: `<a class="pin-open" href="${esc(songLink(s))}" target="_blank" ` +
+          `rel="noopener noreferrer" data-out="system" ` +
+          `aria-label="${esc(s.title + (songSub(s, ', ') ? ', ' + songSub(s, ', ') : ''))}"></a>`,
+      });
     }
 
     const p = item.post;
-    // A video Frame with no stored poster has no still to show, so it falls back
-    // to its tint square like a note does — the same rule the feed's own frames
-    // follow rather than a second one for small pictures.
+    // A video Frame with no stored poster has no still, so it is words, the
+    // same rule the feed's own frames follow.
     const still = p.image && !isVideoUrl(p.image) ? p.image : (p.poster || '');
-    // 88 to match --pin-art in app.css — the square this card actually draws,
-    // not the full-size upload `still` points at (see thumbUrl in store.js).
-    const face = still ? `background-image:url('${encodeURI(thumbUrl(still, 88))}')` : '';
-    const sub = p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
-      : linkSub(p);
-    // NO STAND-IN SQUARE FOR A POST WITH NO PICTURE. A type glyph on a pastel
-    // tile was a mark saying "this is a Note" beside a note that is already
-    // legible as one, and three cards each carrying one turned the stack into a
-    // row of icons. A post with a picture shows the picture, at the same size
-    // an album cover sits at; a post without one is its own words, across the
-    // whole card.
-    return `<article class="pin pin--post${still ? '' : ' pin--wordy'}" ` +
-        `data-i="${at}" data-type="${esc(p.type)}">` +
-        (p.tint && still ? `<span class="pin-glow pin-glow--flat" style="background:${esc(p.tint)}" aria-hidden="true"></span>` : '') +
-        (still ? `<span class="pin-art pin-cover" style="${face}" aria-hidden="true"></span>` : '') +
-        `<span class="pin-lines">` +
-          `<span class="pin-title">${esc(saidOf(p) || TYPE_LABEL[p.type] || 'Post')}</span>` +
-          (sub ? `<span class="pin-sub">${esc(sub)}</span>` : '') +
-        `</span>` +
-        `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(saidOf(p) || 'Open this post')}"></a>` +
-        more +
-      `</article>`;
+    const link = still ? { url: postLinks(p)[0] || '' } : pinLinkPicture(p);
+    const page = link.meta || {};
+    const domain = link.url ? domainOf(link.url) : '';
+    // The post's own words lead. A headline over a note is the headline over
+    // the note's first lines; a link nobody wrote anything over says what its
+    // page is called, then what the page says about itself.
+    const said = noteSaid(p) || (p.poll && p.poll.q) || '';
+    // The widest square this draws, a column at the grid's cap (thumbUrl
+    // takes the device's pixel ratio on top).
+    const pic = still ? picEl(thumbUrl(still, 220), { tint: p.tint })
+      : link.image ? picEl(link.image, { cls: ' pin-pic--link' + (link.yt ? ' pin-pic--yt' : '') }) : '';
+    // A picture with nothing said over it is only the picture; words always
+    // have something to set, the type's name at the very least.
+    const head = p.title && said ? p.title
+      : (said || p.title || page.title || (pic ? '' : domain || TYPE_LABEL[p.type] || 'Post'));
+    const gist = p.title && said ? said : (!said && !p.title && page.title ? page.about || '' : '');
+    const meta = metaEl(p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime) : domain);
+    return card({
+      cls: link.unread ? ' pin--unread' : '', type: p.type, pic, say: head, gist, meta,
+      open: `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(head || 'Open this post')}"></a>`,
+    });
   }
 
   /* The section: the cards and nothing else. NO CAPTION AND NO EMPTY SLOT, and
-     both absences are the same decision. A card is already a card — it does not
-     need a word above it announcing that a card is what it is — and an empty
+     both absences are the same decision. A card is already a card, and an empty
      slot is furniture standing where content isn't, on the one page that is
      supposed to be about a person rather than about the app. Two pins mean two
      cards, none means nothing at all, including on your own profile.
@@ -14152,8 +14666,17 @@
     const items = pinsFor(u, ctx);
     if (!items.length) return '';
     return `<section class="pins" aria-label="Pinned">` +
-        `<div class="pin-stack">${items.map(it => pinCardEl(it, ctx)).join('')}</div>` +
+        `<div class="pin-grid">${items.map((it, n) => pinCardEl(it, ctx, n === 0 && items.length % 2 === 1)).join('')}</div>` +
       `</section>`;
+  }
+
+  // A move from the menu glides like a drop does.
+  function movePinTo(next, repaint) {
+    const host = view.querySelector('#pins');
+    const before = new Map([...(host?.querySelectorAll('.pin[data-key]') || [])]
+      .map(c => [c.dataset.key, c.getBoundingClientRect()]));
+    commitPins(next, { repaint });
+    if (host) settlePins(host, before);
   }
 
   // The card's own ••• — the one surface a SONG pin has, since a song has no
@@ -14175,10 +14698,10 @@
       items.push({ label: 'Change song', icon: 'music', run: () => goListening('#/profile') });
     if (k > 0)
       items.push({ label: 'Move up', icon: 'arrowup',
-        run: () => commitPins(movedPins(pins, at, slots[k - 1]), { repaint }) });
+        run: () => movePinTo(movedPins(pins, at, slots[k - 1]), repaint) });
     if (k >= 0 && k < slots.length - 1)
       items.push({ label: 'Move down', icon: 'arrowdown',
-        run: () => commitPins(movedPins(pins, at, slots[k + 1]), { repaint }) });
+        run: () => movePinTo(movedPins(pins, at, slots[k + 1]), repaint) });
     items.push({ label: 'Unpin', icon: 'pinned',
       run: () => commitPins(pins.filter((_, j) => j !== at), { repaint }) });
     openSheet({ items });
@@ -14255,7 +14778,7 @@
       return;
     }
     openSheet({
-      title: 'Your profile holds three pins. Swap one out?',
+      title: 'Your profile holds four pins. Swap one out?',
       items: pins.map((e, i) => ({
         label: pinLabel(e),
         run: () => {
@@ -14267,7 +14790,7 @@
     });
   }
 
-  /* ── Dragging one card to a new slot ────────────────────────────────────────
+  /* ── Dragging one card to a new place ────────────────────────────────────────
      Pointer events and a long press, not HTML5 drag-and-drop, which does not
      exist on touch. The press has to be LONG (a lift at 280ms with no movement)
      for one reason: these cards live in a page you scroll, and a finger that
@@ -14281,12 +14804,39 @@
      has moved yet: the browser has not yet decided this gesture is a scroll, so
      a preventDefault still takes it.
 
-     The cards are all one height (see .pin in app.css), so a displacement is
-     exactly one card plus one gap and the geometry needs no measuring beyond
-     the rects taken at the lift. */
-  function wirePinDrag(stack, pins, repaint) {
-    const cards = [...stack.querySelectorAll('.pin[data-i]')];
+     IN A GRID A CARD TRADES PLACES with the card it is dropped on, which is
+     marked while the finger is over it. Opening a gap the way the old stack did
+     would mean a square sliding into the wide slot and changing shape under the
+     finger. The repaint after the drop then glides every card from where it was
+     to where it landed (settlePins), the held one from under the finger. */
+  const swappedPins = (list, a, b) => {
+    const next = list.slice();
+    [next[a], next[b]] = [next[b], next[a]];
+    return next;
+  };
+
+  // FLIP: each card drawn where it was a moment ago, then let go to where it is.
+  function settlePins(host, before) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cards = [...host.querySelectorAll('.pin[data-key]')];
+    cards.forEach(c => {
+      const was = before.get(c.dataset.key);
+      if (!was) return;
+      const now = c.getBoundingClientRect();
+      if (!now.width || !now.height) return;
+      c.classList.add('is-settling');
+      c.style.transform = `translate(${was.left - now.left}px, ${was.top - now.top}px) ` +
+        `scale(${was.width / now.width}, ${was.height / now.height})`;
+    });
+    void host.offsetWidth;
+    cards.forEach(c => { c.style.transform = ''; });
+    setTimeout(() => cards.forEach(c => c.classList.remove('is-settling')), 420);
+  }
+
+  function wirePinDrag(grid, pins, repaint) {
+    const cards = [...grid.querySelectorAll('.pin[data-i]')];
     if (cards.length < 2) return;
+    const host = grid.closest('.pins-host') || grid.parentElement;
     const LIFT_MS = 280, SLOP = 8;
     let press = null;      // finger down, not yet a lift
     let drag = null;       // lifted and moving
@@ -14294,25 +14844,14 @@
     const blockScroll = (e) => { if (drag) e.preventDefault(); };
     const cancelPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
 
-    const layoutGap = () => {
-      const step = drag.rects[drag.from].height + drag.gap;
-      cards.forEach((c, j) => {
-        if (j === drag.from) return;
-        const up = drag.to > drag.from && j > drag.from && j <= drag.to;
-        const down = drag.to < drag.from && j < drag.from && j >= drag.to;
-        c.style.transform = up ? `translateY(${-step}px)` : down ? `translateY(${step}px)` : '';
-      });
-    };
-
     const lift = () => {
       const el = press.el;
-      const rects = cards.map(c => c.getBoundingClientRect());
-      const i = cards.indexOf(el);
-      drag = { el, from: i, to: i, y: press.y, rects,
-               gap: rects.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0 };
+      drag = { el, from: cards.indexOf(el), over: -1, x: press.x, y: press.y,
+               rects: cards.map(c => c.getBoundingClientRect()) };
       press = null;
-      stack.classList.add('is-reordering');
+      grid.classList.add('is-reordering');
       el.classList.add('is-lifted');
+      el.style.transform = 'scale(1.03)';
       document.addEventListener('touchmove', blockScroll, { passive: false });
     };
 
@@ -14322,28 +14861,21 @@
         return;
       }
       if (!drag) return;
-      const dy = e.clientY - drag.y;
-      drag.el.style.transform = `translateY(${dy}px)`;
-      const r = drag.rects[drag.from];
-      const mid = r.top + dy + r.height / 2;
-      let to = drag.from;
-      drag.rects.forEach((rr, j) => {
-        if (j === drag.from) return;
-        const c = rr.top + rr.height / 2;
-        if (j < drag.from && mid < c) to = Math.min(to, j);
-        if (j > drag.from && mid > c) to = Math.max(to, j);
-      });
-      if (to !== drag.to) { drag.to = to; layoutGap(); }
+      drag.el.style.transform = `translate(${e.clientX - drag.x}px, ${e.clientY - drag.y}px) scale(1.03)`;
+      const over = drag.rects.findIndex((r, j) => j !== drag.from &&
+        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+      if (over !== drag.over) {
+        cards[drag.over]?.classList.remove('is-target');
+        cards[over]?.classList.add('is-target');
+        drag.over = over;
+      }
     };
 
     const onUp = () => {
       if (press) { cancelPress(); return; }
       if (!drag) return;
-      const { from, to } = drag;
+      const { el, from, over } = drag;
       document.removeEventListener('touchmove', blockScroll);
-      drag.el.classList.remove('is-lifted');
-      stack.classList.remove('is-reordering');
-      cards.forEach(c => { c.style.transform = ''; });
       drag = null;
       // A lift that barely moved still ends in a click on the stretched link
       // under the finger, and that click means "open this", which is not what
@@ -14351,10 +14883,16 @@
       const kill = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
       document.addEventListener('click', kill, { capture: true, once: true });
       setTimeout(() => document.removeEventListener('click', kill, true), 350);
+      const before = new Map(cards.map(c => [c.dataset.key, c.getBoundingClientRect()]));
+      el.classList.remove('is-lifted');
+      cards[over]?.classList.remove('is-target');
+      grid.classList.remove('is-reordering');
+      // Dropped on nothing: home again, from under the finger.
+      if (over < 0) { el.style.transform = ''; settlePins(host, new Map([[el.dataset.key, before.get(el.dataset.key)]])); return; }
       // Drawn positions became slots on the way out (see pinsFor): the geometry
       // above counts cards, and the array being written counts everything.
-      if (to !== from)
-        commitPins(movedPins(pins, +cards[from].dataset.i, +cards[to].dataset.i), { repaint });
+      commitPins(swappedPins(pins, +cards[from].dataset.i, +cards[over].dataset.i), { repaint });
+      settlePins(host, before);
     };
 
     cards.forEach(el => {
@@ -14367,7 +14905,7 @@
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
     document.addEventListener('pointercancel', onUp);
-    // The listeners outlive the stack (they are on the document), so the caller
+    // The listeners outlive the grid (they are on the document), so the caller
     // hands them back when the section is repainted or the page changes.
     return () => {
       cancelPress();
@@ -14378,16 +14916,66 @@
     };
   }
 
-  // Everything the section needs hooked up, re-run whenever it repaints.
+  /* Everything the section needs hooked up, re-run whenever it repaints. A link
+     whose page this device hasn't read yet is read now, and the grid repaints
+     once if that page names a picture (it is kept, so the next paint has it).
+     A picture that won't load, or is too small to fill a square (a logo, an
+     icon), leaves its card as words. */
+  /* A card's words end on a whole line: the last block in its face is clamped
+     to the lines left under whatever sits above it. Measured, because the room
+     is the row's height, which follows the screen, and the headline's lines
+     follow its words. Again once the serif has loaded, since it wraps
+     differently from the face standing in for it. */
+  function fitPinWords(host) {
+    host.querySelectorAll('.pin--words .pin-face, .pin--wide .pin-face').forEach(face => {
+      const last = face.lastElementChild;
+      if (!last) return;
+      last.style.webkitLineClamp = '';
+      const lh = parseFloat(getComputedStyle(last).lineHeight);
+      const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
+      if (lh > 0) last.style.webkitLineClamp = String(Math.max(1, Math.floor((room + 1) / lh)));
+    });
+  }
+
   function wirePins(host, u, ctx, repaint) {
+    fitPinWords(host);
+    document.fonts?.ready.then(() => { if (host.isConnected) fitPinWords(host); });
+    host.querySelectorAll('.pin-pic img').forEach(img => {
+      const toWords = () => {
+        const card = img.closest('.pin');
+        img.parentElement.remove();
+        card.classList.replace('pin--pic', 'pin--words');
+        fitPinWords(card);
+      };
+      const check = () => {
+        if (!img.naturalWidth) toWords();
+        else if (img.parentElement.classList.contains('pin-pic--link') && img.naturalWidth < 300) toWords();
+        else img.parentElement.classList.add('is-loaded');
+      };
+      if (img.complete) check();
+      else { img.addEventListener('load', check, { once: true }); img.addEventListener('error', toWords, { once: true }); }
+    });
+    const unread = [...host.querySelectorAll('.pin--unread')];
+    if (unread.length) {
+      const posts = Store.posts();
+      Promise.all(unread.map(c => {
+        const row = posts.find(p => 'p' + p.id === c.dataset.key);
+        const url = row && postLinks(subjectOf(row) || row)[0];
+        return url ? linkMeta(url) : null;
+      })).then(ms => {
+        if (!ms.some(m => m && m.image) || !host.isConnected) return;
+        if (host.querySelector('.pin-grid.is-reordering')) return;
+        repaint();
+      });
+    }
     if (!ctx.isSelf) return null;
     host.querySelectorAll('.pin-more').forEach(btn =>
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         openPinMenu(+btn.dataset.pin, repaint);
       }));
-    const stack = host.querySelector('.pin-stack');
-    return stack ? wirePinDrag(stack, myPins(), repaint) : null;
+    const grid = host.querySelector('.pin-grid');
+    return grid ? wirePinDrag(grid, myPins(), repaint) : null;
   }
 
   /* ── Picking one of your own posts to pin (#/pin/post) ───────────────────────
@@ -14546,7 +15134,9 @@
      The kicker is its handle, the serif headline is its name, the hint is its
      about, and the foot is who is in it and the way in, the daily's faces and
      count and the daily's own pill. The one thing a daily hasn't got is a face
-     of its own, so the circle's photo sits in the card's top corner.
+     of its own, so the circle's photo stands on the card's left with the words
+     on its right (Zoe, 2026-11-01; it sat small in the top corner), and the
+     pill keeps the card's whole width under them.
 
      A member's card drops the pill, the way an answered daily does, and says so
      in the kicker instead; the whole card is a link either way. A count of
@@ -14560,7 +15150,9 @@
     const mine = Store.inCommunity(c.id);
     const faces = me ? communityFaces(c, 4) : [];
     return `<section class="daily-card community-card" data-community="${esc(c.id)}">` +
-        communityPicHtml(c, 'community-card-pic', 52) +
+        `<div class="community-card-top">` +
+        communityPicHtml(c, 'community-card-pic', 90) +
+        `<div class="community-card-info">` +
         // An invite-only circle's handle wears the padlock a private profile's
         // name does, and says where you stand with it.
         `<p class="daily-kicker">${esc(communityHandle(c))}` +
@@ -14574,7 +15166,8 @@
           : `<a class="daily-open" href="${communityRoute(c)}">` +
               `<span class="daily-prompt">${esc(c.name)}</span>` +
             `</a>`) +
-        (c.about ? `<p class="daily-hint">${esc(c.about)}</p>` : '') +
+        `</div></div>` +
+        (c.about ? `<p class="daily-hint community-card-about">${esc(c.about)}</p>` : '') +
         `<div class="daily-foot">` +
           (n
             ? `<div class="daily-answered">` +
@@ -16346,7 +16939,7 @@
     // read in their circle and in On repeat). Newest first, as posts() is.
     // A picked type narrows it to that type; an empty query is all of them.
     const postsMatching = (q, type) => Store.posts().filter(p =>
-      !p.repostOf && !p.communityId && p.type !== 'song' && !Blocks.has(p.author)
+      !p.repostOf && !p.communityId && p.type !== 'song' && !p.moment && !Blocks.has(p.author)
       && (type === 'all' || p.type === type)
       && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
     let discoverable = new Set();
@@ -16418,17 +17011,12 @@
     // paper for None. Its own resolve, not withAccent, whose one shared seq
     // would let only the last card on the rail answer.
     const washPersonCard = (card) => {
-      const u = Store.user(card.dataset.user);
-      if (!u || u.accent === 'none') return;
-      const wear = (css) => {
-        const rgb = css && cssToRgb(css);
+      personTone(Store.user(card.dataset.user)).then((tone) => {
+        if (tone === 'none' || !card.isConnected) return;
+        const rgb = tone !== 'tria' && cssToRgb(tone);
         if (rgb) stopsAround(rgb, WASH_ARC).forEach((c, i) => card.style.setProperty('--wash-' + 'abc'[i], c));
         card.classList.add(rgb ? 'person-card--wash' : 'person-card--tria');
-      };
-      const picked = u.accent !== 'default' && accentCss(u.accent);
-      if (picked) return wear(picked);
-      if (u.accent === 'default' || !u.avatar) return wear(null);
-      sampleColor(sizedSrc(u.avatar, 40)).then(rgb => { if (card.isConnected) wear(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`); });
+      });
     };
     const peopleRailHtml = (people) => {
       if (!people.length) return '';
@@ -16637,25 +17225,17 @@
   // (refreshWorld) and on the visit that spends it (renderUpdates).
   // In 1.7 the dot sat on Chats and answered for both things under it. Since 1.8
   // they are two marks, because Updates is no longer under Chats: the tab's dot
-  // is chats only (Store.chatsAreNew), and Updates carries its own on the bell
-  // on My Circle's bar, the one place you open it from. Each is still one state
-  // and never a number, and each clears by looking at the thing it is on.
+  // is chats only (Store.chatsAreNew), and Updates carries its own, on its own
+  // tab since 2026-11-01. Each is still one state and never a number, and each
+  // clears by looking at the thing it is on.
   function syncNavDot() {
     const chats = Store.chatsAreNew();
     document.querySelectorAll('#nav a[href="#/chats"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', chats));
-    // The sidebar's Updates row (desktop only) carries the bell's dot.
     const fresh = updatesAreNew();
     document.querySelectorAll('#nav a[href="#/updates"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', fresh));
-    NativeChrome.setDots({ '#/chats': chats });
-    const bell = document.querySelector('#home-updates-btn .toolbar-dot');
-    if (bell && bell.classList.contains('is-on') !== fresh) {
-      bell.classList.toggle('is-on');
-      // The bell is a toolbar control, so native wears its face and reads the
-      // dot off it (controlSpec). A class flip is not a render, so say so.
-      NativeChrome.sync();
-    }
+    NativeChrome.setDots({ '#/chats': chats, '#/updates': fresh });
   }
 
   // The open chat page's repaint, set by renderChats / renderChat and dropped by
@@ -17131,8 +17711,7 @@
     const reqs = Store.chatRequests();
     // THE PINNED ROW. Message requests, whenever there are any, named by who
     // and never by how many. Updates led this list from 1.7 until 1.8, when it
-    // moved to the bell on My Circle's bar: it was never a chat, and the
-    // ledger of likes and adds belongs beside the feed they happen on.
+    // left: it was never a chat. It is its own tab now.
     const pinned = reqs.length
       ? `<ul class="chat-list chat-list--pinned">` +
           (reqs.length
@@ -17498,6 +18077,8 @@
        · hold one → its menu (heart, reply, copy, unsend or report)
        · tap a photo → open it, once the double tap window has passed
        · Enter or Space on a focused bubble → its menu
+       · swipe one sideways → reply, as iMessage does: it follows the finger,
+         stiffens past the threshold, and springs home as the reply lands
      Delegated from the page, so a rebuilt thread needs no rewiring. The hold
      replaced a single tap for the menu, which is what lets a tap answer at once
      rather than waiting to see whether a second one is coming. */
@@ -17507,14 +18088,45 @@
     let press = null;
     let last = { id: '', at: 0 };
     let photoTimer = 0;
+    const SWIPE_AT = 60;      // past this the lift replies
+    const SWIPE_STIFF = 0.2;  // how much of the finger it follows past that
+    let swipedAt = 0;         // the click a swipe's lift can leave behind
     const targetOf = (e) => e.target.closest && e.target.closest('.msg-bubble, .msg-photo');
+
+    const canSwipe = () => { const c = Store.chat(chatId); return !!c && c.status === 'member'; };
+    const swipeTo = (s, dx) => {
+      const far = Math.abs(dx);
+      const shown = (far <= SWIPE_AT ? far : SWIPE_AT + (far - SWIPE_AT) * SWIPE_STIFF) * Math.sign(dx);
+      s.li.style.transform = `translate3d(${shown}px, 0, 0)`;
+      s.mark.classList.toggle('is-left', dx > 0);
+      s.mark.style.opacity = Math.min(1, far / SWIPE_AT);
+      const armed = far >= SWIPE_AT;
+      s.mark.classList.toggle('is-armed', armed);
+      if (armed !== s.armed) {
+        s.armed = armed;
+        if (armed) hapticTap('LIGHT');
+      }
+    };
+    const swipeEnd = (p, reply) => {
+      const s = p.swipe;
+      p.swipe = null;
+      swipedAt = Date.now();
+      s.li.classList.remove('is-swiping');
+      s.li.style.transform = '';
+      s.mark.style.opacity = '0';
+      setTimeout(() => s.mark.remove(), 320);
+      if (!reply || !s.armed) return;
+      const m = Store.messagesFor(chatId).find(x => x.id === s.li.dataset.id);
+      if (m) setChatReply(m);
+    };
 
     root.addEventListener('pointerdown', (e) => {
       const hit = targetOf(e);
       if (!hit) return;
       const li = hit.closest('.msg');
       if (press) clearTimeout(press.timer);
-      const mine = { x: e.clientX, y: e.clientY, fired: false, timer: 0 };
+      if (press && press.swipe) swipeEnd(press, false);
+      const mine = { x: e.clientX, y: e.clientY, fired: false, timer: 0, li, touch: e.pointerType === 'touch', swipe: null };
       mine.timer = setTimeout(() => {
         mine.fired = true;
         hapticTap('LIGHT');
@@ -17524,7 +18136,27 @@
     });
     // A drag is a scroll, not a hold; lifting before the time is a tap.
     const letGo = (e) => {
-      if (!press || press.fired) return;
+      if (!press) return;
+      if (press.swipe) {
+        if (e.type === 'pointermove') swipeTo(press.swipe, e.clientX - press.x);
+        else swipeEnd(press, e.type === 'pointerup');
+        return;
+      }
+      if (press.fired) return;
+      // Sideways first is a swipe; touch-action leaves up and down to the page.
+      const dx = e.clientX - press.x;
+      if (e.type === 'pointermove' && press.touch && Math.abs(dx) >= 10 &&
+          Math.abs(dx) > Math.abs(e.clientY - press.y) * 1.5 && canSwipe() && press.li.isConnected) {
+        clearTimeout(press.timer);
+        const mark = document.createElement('span');
+        mark.className = 'msg-swipe-mark';
+        mark.innerHTML = svgIcon('reply');
+        press.li.appendChild(mark);
+        press.li.classList.add('is-swiping');
+        press.swipe = { li: press.li, mark, armed: false };
+        swipeTo(press.swipe, dx);
+        return;
+      }
       if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
       clearTimeout(press.timer);
     };
@@ -17535,6 +18167,7 @@
     root.addEventListener('click', (e) => {
       if (e.target.closest('a')) return;            // a mention, or the head's profile link
       if (press && press.fired) { press = null; return; }   // the hold already answered
+      if (Date.now() - swipedAt < 350) return;              // so did the swipe
       const heartMark = e.target.closest('.msg-hearts');
       if (heartMark) {
         const li = heartMark.closest('.msg');
@@ -17630,14 +18263,19 @@
       tray.className = 'postbar-attach postbar-reply postbar-song';
       bar.appendChild(tray);
     }
-    const s = post.song;
+    // A Moment waits the same way, its picture for the sleeve.
+    const s = post.song || null;
+    const pic = s ? s.art : post.image ? (isVideoUrl(post.image) ? post.poster : post.image) : '';
+    const art = pic && !s ? sizedSrc(pic, 48) : pic;
     const who = displayNameOf(post.author);
+    const what = s ? 'song' : 'moment';
+    const said = s ? s.title : momentWords(post);
     tray.innerHTML =
       `<div class="postbar-reply-chip postbar-song-chip">` +
-        `<span class="postbar-song-art${s.art ? ' pin-cover' : ''}"${s.art
-          ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
-        `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> song: ${esc(s.title)}</span>` +
-        `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the song">${svgIcon('close')}</button>` +
+        `<span class="postbar-song-art${art ? ' pin-cover' : ''}"${art
+          ? ` style="background-image:url('${encodeURI(art)}')"` : ''} aria-hidden="true"></span>` +
+        `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> ${what}${said ? ': ' + esc(said) : ''}</span>` +
+        `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the ${what}">${svgIcon('close')}</button>` +
       `</div>`;
     const x = tray.querySelector('.postbar-reply-x');
     x.addEventListener('mousedown', (e) => e.preventDefault());
@@ -17646,15 +18284,8 @@
       if (!field.dataset.place) field.dataset.place = field.getAttribute('placeholder') || '';
       field.setAttribute('placeholder', `Reply to ${who}…`);
       NativeChrome.sync();
-      // Reached by a hold, the keys wait for the finger to lift (see
-      // wireSongGestures): raised under it, the lift took them back down.
-      const raise = () => {
-        if (!field.isConnected || !chatSong || chatSong.post !== post) return;
-        field.focus();
-        NativeChrome.postBarText(field.value, field.value.length, true);
-      };
-      if (songHoldLift) songHoldLift.then(() => requestAnimationFrame(raise));
-      else raise();
+      field.focus();
+      NativeChrome.postBarText(field.value, field.value.length, true);
     }
   }
 
@@ -18009,7 +18640,8 @@
         // A song being answered goes as its link under the words, which the
         // thread draws as the record (songInMessage).
         submit: (text, photo) => Store.sendMessage(c.id,
-          chatSong ? `${String(text || '').trim()}\n${songOwnLink(chatSong.post.song)}`.trim() : text,
+          chatSong ? `${String(text || '').trim()}\n${chatSong.post.song
+            ? songOwnLink(chatSong.post.song) : postLink(chatSong.post)}`.trim() : text,
           photo, chatReply && chatReply.id),
         onSent: () => { setChatReply(null); setChatSong(null); repaint(true); },
         /* NOT SMOOTH, and that is the keyboard's doing. The reserve the keys
@@ -18226,9 +18858,7 @@
       // reading, not a setting, so it does not survive leaving the page.
       notifShown = NOTIF_PAGE;
       mountToolbar({
-        // Reached from the bell on My Circle's bar since 1.8 (a pinned row in
-        // the chat list before that), so that is where back goes.
-        leading: toolbarBackEl('#/', 'My Circle'),
+        leading: composeBtnEl('updates-compose-btn'),
         title: 'Updates',
         actions: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
       });
@@ -18263,6 +18893,8 @@
       // the button's hue in place, leave the nameplate and the scroll alone.
       // The dial itself declines to buzz for a pick that changes nothing, so the
       // early return here is only about not rebuilding the ledger for it.
+      document.getElementById('updates-compose-btn')
+        ?.addEventListener('click', () => openComposeDial());
       document.getElementById('updates-filter-btn')
         ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
           current: notifFilter,
@@ -18551,7 +19183,9 @@
     // hidden below it; an attach toggle reveals the one it names and folds the rest,
     // so the words you have already written carry across every one of those changes
     // (see applyBaseSurface in renderPublish).
-    return richNoteField('c', '', '', randomNotePlaceholder(), { event, tags: {} }) +
+    // Not on a daily answer: a song is read on On repeat, never on its page.
+    const song = opts.song !== false && Store.songsReady();
+    return richNoteField('c', '', '', randomNotePlaceholder(), { event, song, tags: {} }) +
       `<div class="field" id="c-link-row" hidden>` +
         `<label for="c-url">Link</label>` +
         `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -18560,6 +19194,7 @@
       `<div class="compose-circle" id="c-circle" hidden></div>` +
       pollFieldHtml() +
       frameFieldHtml() +
+      (song ? songFieldHtml({ moment: opts.moment }) : '') +
       (event ? eventFieldHtml() : '') +
       audienceFieldHtml('c');
   }
@@ -18594,7 +19229,7 @@
   // (fieldsFor's 'song'). The pick sits above the field once there is one, and
   // the field stays, so changing your mind is a second search rather than a
   // clear and a search.
-  function songFieldHtml({ open = false } = {}) {
+  function songFieldHtml({ open = false, moment = false } = {}) {
     // No "Song" label on Music's own page (Zoe, 2026-10-23): the page is the
     // song search, and the field's own placeholder and aria-label say so.
     return `<div class="field song-field" id="c-song-row"${open ? '' : ' hidden'}>` +
@@ -18605,7 +19240,7 @@
           `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
           `aria-label="Search a song or album, or paste a link">` +
         `<div class="song-results" id="c-song-results" aria-live="polite"></div>` +
-        (myWeekSong()
+        (myWeekSong() && !moment
           ? `<p class="field-hint">Music stays up for a week. This one replaces ` +
               `“${esc(myWeekSong().song.title)}”.</p>`
           : '') +
@@ -18749,9 +19384,9 @@
   // post moving into a circle, or out of one, is a different act from choosing
   // who reads something you are about to say. `except` names one circle to
   // leave off: the one a post is about (attachedCircle), which needs no telling.
-  function wireAudienceLock(root, onChange, { rooms = false, except = null } = {}) {
+  function wireAudienceLock(root, onChange, { rooms = false, except = null, wide = true } = {}) {
     const btn = root.querySelector('.aud-lock');
-    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange, { rooms, except }));
+    if (btn) btn.addEventListener('click', () => openAudienceSheet(root, onChange, { rooms, except, wide }));
   }
   function syncAudienceLock(scope) {
     const btn = (scope || document).querySelector('.aud-lock');
@@ -18786,7 +19421,8 @@
      gave. The coercion is unchanged and still stated exactly once: "Choose
      people" with nobody chosen is My circle, because an empty allowlist is a
      post that nobody can read. */
-  function openAudienceSheet(root, onChange, { rooms = false, except = null } = {}) {
+  // `wide` false leaves Anyone off: a Moment is read on My Circle's rail.
+  function openAudienceSheet(root, onChange, { rooms = false, except = null, wide = true } = {}) {
     const friends = Store.friends().map(n => Store.user(n)).filter(Boolean)
       .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username));
     const chosen = new Set(pubAudience.users);
@@ -18842,7 +19478,7 @@
       scrimClass: 'sheet-scrim--aud',
       head:
         `<div class="aud-modes" role="group" aria-label="Who can see this">` +
-          modeBtn('public', 'Anyone', 'Everyone on Tria, friend or not') +
+          (wide ? modeBtn('public', 'Anyone', 'Everyone on Tria, friend or not') : '') +
           modeBtn('circle', 'My circle', 'Only your mutual friends') +
           modeBtn('list', 'Choose people', 'Only who you pick') +
         `</div>` +
@@ -18907,6 +19543,7 @@
     // "Quote" rather than "New quote": the noun is the act, and the thing being
     // made already exists — you are adding to it, not starting one.
     if (quotingPost) return 'Quote';
+    if (composingMoment) return 'New moment';
     return `New ${(TYPE_LABEL[pubType] || 'post').toLowerCase()}`;
   }
   // The mark beside the composer's nameplate, and it is now the SAME glyph as
@@ -18922,6 +19559,9 @@
     // quote makes no such choice: there is nothing to attach and the mark would
     // sit there naming a type the post isn't.
     if (quotingPost) return '';
+    // A Moment wears its own mark whatever is attached: the day is the choice.
+    if (composingMoment) return `<span class="type-indicator type-icon type-icon--moment" id="c-type-ind" ` +
+      `role="img" aria-label="Moment">${svgIcon('moment')}</span>`;
     return `<span class="type-indicator type-icon type-icon--${pubType}" id="c-type-ind" ` +
       `role="img" aria-label="${TYPE_LABEL[pubType]}">${svgIcon(TYPE_GLYPH[pubType])}</span>`;
   }
@@ -18955,8 +19595,12 @@
     // ask for it through pendingAttach. Never over a quote or a daily answer.
     const song = pendingAttach === 'song' && Store.songsReady() && !quote && !daily;
     if (song) pendingAttach = null;
-    // A circle to post about, never over the three above.
-    const sharing = !quote && !daily && !song && pendingCircleShare
+    // A Moment is the one form with a day on it, never over the three above.
+    const moment = pendingMoment && Store.momentsReady() && !quote && !daily && !song;
+    pendingMoment = false;
+    composingMoment = moment;
+    // A circle to post about, never over the four above.
+    const sharing = !quote && !daily && !song && !moment && pendingCircleShare
       ? Store.community(pendingCircleShare) : null;
     pendingCircleShare = null;
     // The composer never persists a draft across navigations, so every entry opens
@@ -19079,7 +19723,7 @@
       if (family === 'quote') { syncTitle(); return; }
       pubType = derivePostType();
       const ind = document.getElementById('c-type-ind');
-      if (ind && pubType !== lastIndType) {
+      if (ind && pubType !== lastIndType && !composingMoment) {
         lastIndType = pubType;
         syncTitle();                         // nameplate and mark flip together
         ind.className = `type-indicator type-icon type-icon--${pubType}`;
@@ -19220,7 +19864,13 @@
         return;
       }
       family = quote ? 'quote' : 'base';
-      fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily });
+      // A Moment is anything but a plan, so it has no calendar either, and it
+      // goes to your friends unless you pick people (add-moments.sql).
+      if (moment) {
+        pubAudience = { mode: 'circle', users: [] };
+        pubAudienceTouched = true;
+      }
+      fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily && !moment, song: !daily, moment });
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
       wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
@@ -19234,7 +19884,8 @@
         // The lock rides the attach bar's bottom-left. A song is read only on
         // My Circle, so the sheet leaves your circles off while one is attached.
         wireAudienceLock(fieldsEl, null, {
-          rooms: () => pubType !== 'song',
+          rooms: () => pubType !== 'song' && !moment,
+          wide: !moment,
           // A circle's card goes to people who aren't in it yet, so the
           // circle itself is never offered as its audience.
           except: () => attachedCircle(),
@@ -20476,7 +21127,8 @@
 
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
     // The song this one replaces, read before the new one exists (myWeekSong).
-    const replacing = pubType === 'song' ? myWeekSong() : null;
+    // A song in a Moment is for the day and replaces nothing.
+    const replacing = pubType === 'song' && !composingMoment ? myWeekSong() : null;
     // A daily answer carries its join tag invisibly — it's the app's bookkeeping,
     // not one of the poster's words, so it never sat in the field they can see.
     // The tag goes on only if what you made is what the prompt asked for
@@ -20498,6 +21150,16 @@
     if (pubType === 'song' && data.audience === 'community') {
       errEl.textContent = 'Songs go to On repeat on My Circle, so pick your circle or your friends for this one.';
       return;
+    }
+
+    // A Moment goes to your friends or to people you picked, never wider
+    // (posts_moment_shape), and is never a plan or a song.
+    if (composingMoment) {
+      if (pubType === 'activity') {
+        errEl.textContent = 'A moment can’t be a plan. Post it as an activity instead.'; return;
+      }
+      data.moment = true;
+      if (data.audience !== 'list') { data.audience = 'circle'; data.communityId = null; }
     }
 
     if (pubCarried && pubType !== 'song') data.note += `<p>${esc(pubCarried)}</p>`;
@@ -20638,13 +21300,14 @@
     // and would tell them what the post kept from them. Best effort and
     // silent: the post is what you asked for, and it is already out.
     // A circle's song stays in the circle for the same reason.
-    if (data.type === 'song' && data.song && res.post.audience !== 'list' && !res.post.communityId)
+    if (data.type === 'song' && data.song && !data.moment && res.post.audience !== 'list' && !res.post.communityId)
       Store.setListeningTo(data.song).catch(() => {});
     // One song a week: the new one is out, so the old one comes down. Quiet
     // and best effort; a refusal leaves two up until the next try.
     if (replacing && replacing.id !== res.post.id) Store.deletePost(replacing.id).catch(() => {});
     justPostedId = String(res.post.id);   // feed will sparkle this card in on arrival
     pubType = 'note';           // next compose opens as a plain Note until something's attached
+    composingMoment = false;
     // An answer goes home to its question: the point of answering is seeing what
     // everyone else said, and the home feed is not where that is. Only if the tag
     // actually survived — someone who deleted it out of the field posted a normal
@@ -21514,7 +22177,7 @@
 
   const glowNorm = (r, g, b, boost) => {
     const hsl = rgbToHsl(r, g, b);
-    return hslToRgb(hsl.h, Math.max(0.5, Math.min(0.85, hsl.s * (boost || 1))), 0.55);
+    return hslToRgb(hsl.h, Math.max(0.6, Math.min(0.95, hsl.s * (boost || 1))), 0.55);
   };
 
   // A palette slug -> the colour it paints. Unknown slug (an older client meeting
@@ -21554,10 +22217,12 @@
             const w = sat * sat + 0.05;      // saturated pixels lead the average
             R += r * w; G += g * w; B += b * w; W += w;
           }
-          // 1.5x: a saturation-weighted AVERAGE is still an average, and comes
+          // 1.75x: a saturation-weighted AVERAGE is still an average, and comes
           // out limper than any pixel that fed it. A chosen hex needs no such
           // rescue, which is the only difference between the two sources.
-          out = glowNorm(R / W, G / W, B / W, 1.5);
+          // (1.5x into 0.5-0.85 until 2026-11-04, Zoe: more saturation, so
+          // the photo option reads as the photo's colour, not a pastel of it.)
+          out = glowNorm(R / W, G / W, B / W, 1.75);
         } catch { out = null; }
         sampleCache.set(src, out);
         resolve(out);
@@ -21663,7 +22328,7 @@
   // half up one side and three down the other.
   function bandFrom(rgb) {
     const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-    const sat = Math.max(0.42, Math.min(0.72, hsl.s));
+    const sat = Math.max(0.55, Math.min(0.9, hsl.s)); // was 0.42-0.72 (2026-11-04)
     const stop = (dh, dl) => {
       const c = atLStar((hsl.h + dh / 360 + 1) % 1, sat, BAND_LSTAR + dl);
       return `rgb(${c.r}, ${c.g}, ${c.b})`;
@@ -21696,6 +22361,19 @@
      11 degrees each way all but vanished. Three registered colours, so a wash
      still tweens from one person to the next. */
   const WASH_ARC = 18;
+  // A PERSON'S OWN COLOUR, read the way their profile's wash reads it: a
+  // palette pick, else their photo's sampled colour, else 'tria' (the house
+  // ramp, for someone who never picked or whose photo won't sample), or
+  // 'none'. A person card's wash, the Moments rail's glow and the viewer's
+  // wash all wear it, so a person is one colour wherever they turn up.
+  function personTone(u) {
+    if (!u || u.accent === 'none') return Promise.resolve('none');
+    const picked = u.accent !== 'default' && accentCss(u.accent);
+    if (picked) return Promise.resolve(picked);
+    if (u.accent === 'default' || !u.avatar) return Promise.resolve('tria');
+    return sampleColor(sizedSrc(u.avatar, 40))
+      .then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : 'tria'), () => 'tria');
+  }
   // The band a palette KEY paints. One home, because the picker's discs and
   // paintBrandBand both draw it and must be the same band.
   const accentBand = (key) => {
@@ -22803,6 +23481,7 @@
     // in. Its own close() is what runs, so the scroll lock, the focus return and
     // the exit animation are the sheet's, unchanged.
     dismissSheet();
+    dismissMoments();
 
     // Your colour on the primary buttons. Above the gate check on purpose: it is
     // what CLEARS the band on the way out, so signing out doesn't leave the next
@@ -22825,6 +23504,7 @@
     if (!Store.isAuthed() && (nativeShell() || Store.isRecovering()
                               || Store.pendingProfile() || GUEST_GATE.has(gatePath))) {
       document.body.classList.add('gate');
+      NativeChrome.forgetPages();
       // The signed-out front door is the ACCOUNT FORM, in every shell. It used to
       // be an install-first welcome ("add Tria to your home screen, then sign in
       // there") built to stop people signing in twice, since a Safari session
@@ -23393,7 +24073,7 @@
   let newPostsAt = '';
 
   const cardsOf = (path) => {
-    if (path === '#/') return Store.feed();
+    if (path === '#/') return feedPool().filter(p => feedMatches(p));
     const c = Store.community(decodeURIComponent(path.slice(4)));
     return c ? Store.communityPosts(c.id) : [];
   };
@@ -23952,7 +24632,7 @@
       else if (!typing()) route();
     });
     // Charms take their baseline off the real world, never a kept one.
-    Store.whenFresh().then(() => { charmsLive = true; noticeCharmsSoon(); },
+    Store.whenFresh().then(() => { charmsLive = true; noticeCharmsSoon(); syncThemeIcon(); },
                            () => { charmsLive = true; });
     // Native push housekeeping, after init because it needs the signed-in user:
     // read the OS permission into the cache the push UI renders from, and if push

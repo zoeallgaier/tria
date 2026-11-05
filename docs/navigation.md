@@ -37,6 +37,17 @@ it makes a page a containing block for any `position: fixed` child. No page has
 one now that the Updates switcher is inline, and that is worth not undoing by
 accident from either end.
 
+**A swipe between tabs is the one page change that moves (2026-11-01), and it
+is not an exception to the above, because the router still draws nothing.** The
+finger moves two PICTURES over a web view that stays put, and the route, instant
+as ever, lands under them (`TriaPager` in TriaChromePlugin.swift). Don't try to
+move the live page: Capacitor makes the web view the controller's `view`, so every
+native bar is its subview, and WKWebView lays its scroll view's frame back to its
+bounds on every pass, undoing a transform (measured: `frame` at -9 with `transform`
+at -44, the page still under the finger until it jumped on the lift). And don't
+take the pictures with `takeSnapshot`: it captures the web view's layer whole,
+bars and all. `scrollView.snapshotView` is the page alone, and synchronous.
+
 **The two things the fade was quietly paying for still have to be paid.** Both
 survive, and without them "instant" just relocates the wait — the page frame
 lands at once and then assembles itself in front of the reader, which is the

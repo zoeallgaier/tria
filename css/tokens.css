@@ -414,6 +414,9 @@
   --glass-blur:       15px;
   --glass-blur-panel: 30px;
   --glass-filter-panel: blur(var(--glass-blur-panel));
+  /* The veil's tier: a page held still behind a panel, softened rather than
+     frosted, so its shapes and colour still read through the dim. */
+  --glass-blur-veil:  6px;
 
   --glass-bg:       color-mix(in srgb, var(--bg) 58%, transparent);
   --glass-bg-panel: color-mix(in srgb, var(--bg) 70%, transparent);
@@ -624,7 +627,7 @@
    specificity, and both are written in terms of the scheme's own primitives so
    one copy answers light and dark. */
 @media (prefers-reduced-transparency: reduce) {
-  :root { --pill-alpha: 1; }
+  :root { --pill-alpha: 1; --glass-blur-veil: 0px; }
 }
 @media (prefers-contrast: more) {
   :root {

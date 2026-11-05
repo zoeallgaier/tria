@@ -21,6 +21,144 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## Moments (2026-11-04)
+
+**A Moment is an ordinary post that lasts a day** (Zoe: "24hr posts ... they can
+live where the music currently lives, as an extension of it"; she named it
+Moments over "In passing"). It is a FLAG, `posts.moment`, not a type: the type is
+still inferred (note, photo, find, poll, and a song once
+`supabase/moment-songs.sql` runs, **NOT run** as of 2026-11-04), never an activity
+or a repost (`posts_moment_shape`). **The New sheet's Music row is Moment now**
+(`ICONS.moment`, a bubble pair, off centre so it never reads as a lens; options in
+https://claude.ai/artifact/HQYYdesESYAuKUS6NATGsA), and **Activity left the New sheet**
+(Zoe, 2026-11-04): it is Note, Moment, Daily, Circle, a plan being the
+composer's calendar button. **The Music button is back in the attach bar**
+(Zoe, same day, `opts.song` on `richNoteField`, not on a daily answer): on a
+note it makes a Music post as ever, on a Moment a song for a day, which On
+repeat's week leaves out (`myWeekSong`, `songPostsOnRepeat`) and the rail draws
+as a Moment with its sleeve. Moment opens THE composer in a moment mode, like the
+daily's (`pendingMoment`/`composingMoment`): New moment, its own mark, no
+caption over it (Zoe took the eyebrow off), no calendar, and an audience of My circle or Choose people
+(`wide: false` drops Anyone, no circles). **It lives on the rail over My Circle and in no feed** (`offFeed` in store.js,
+also off profiles, circles, pins, reposts and Discover search). **The rail is
+one round face per person, their posts STACKED like stories** (Zoe, same day:
+"each persons moment posts stacking like instagram stories do", then "just
+someones pfp no matter how many posts", "circle everything", "just display name
+is fine"): `momentStacks`, a stack being their song for the week then their live
+Moments oldest first; the face (`.np-avatar`, 104px, between the old album art's 132 and
+a person card's 80) and the name, nothing under it. **Unseen glows**, a soft halo centred on
+the face in the POSTER's colour, not the reader's, drawn as a radial gradient
+(a blur filter was cropped to a box by WebKit inside the scrolling rail) and
+turned down once (Zoe: "too bright") (`glowFor`, `personTone`: a
+palette pick, the photo's sampled colour, Tria's ramp, ink for None; the person
+card's wash reads it too), seen ids kept per device (`tria:moments-seen:<me>`).
+Order: you, the unseen, the rest, by newest. Your face wears a + for another
+Moment; with nothing up, your place is a round + saying **Share a moment**
+(`shareMoment`, the moment composer, Share a song only without
+add-moments.sql). **A tap opens the viewer** (`openMoments`, an overlay that
+locks the page like a sheet, so the native chrome stands down, and route()
+closes it): Tria's paper with a wash off the top-right corner (a photo or a song
+takes its picture's own colour, Zoe; anything else, or a sleeve that won't sample, the poster's), bare ••• and x
+glyphs (no pills: the paper is always behind them), a
+hairline segment per frame (a carousel is a frame per photo), face, name, age,
+the content set as the feed sets it (a short note big in the serif, a song's
+sleeve, title and Listen). **Nothing advances by itself**: tap right for next,
+left for back, on into the next person; a swipe sideways changes person, a pull
+down closes, a double tap likes (the heart where the finger was), a hold hides
+the chrome, and on your OWN opens Edit moment and Delete moment (`openMyMoment`,
+or Listen/Change song/Take it down for your song). The foot is Add a comment
+(the thread sheet over the viewer) and the heart (yours opens Likes). The •••
+on a friend's frame is Message them (`replyToSong`, the frame on the DM's bar).
+The rail's own double tap and hold are gone (`wireSongGestures` deleted).
+The hint is v6 ("Moments last a day. Tap someone to see theirs, and double tap
+one to like it."). **A day is enforced twice**: the client
+drops it from `Store.posts()` (`momentLive`, `MOMENT_MS`) and a RESTRICTIVE
+select policy hides it from everyone but its author (`supabase/add-moments.sql`,
+**confirmed run** 2026-11-04: anon `GET /rest/v1/posts?select=moment&limit=1`
+answered 42703 that morning and `[{"moment":false}]` that afternoon). Until it runs, `Store.momentsReady` is false and
+the New sheet keeps Music. An older binary draws a live Moment as an ordinary
+post until it expires.
+
+## Pins are a grid (2026-11-04)
+
+**A profile's pins are two columns with one row height** (Zoe: "implement a grid
+system and clean things up"; they were a stack of 88px rows, and a note or a find
+set its words under the ••• with uneven padding). A row is as tall as a column is
+wide (`--pin-row`, capped at 220px), the gap is 10px, the pad inside every card is
+14px, the page's gutter, all four on `.pin-grid`. An odd count puts the first pin
+across both columns at the same height, its picture one `--pin-row` square on the
+grid's line. A card is a PICTURE (photo, poster, sleeve, or the picture a link's
+page names, `pinLinkPicture`, read on the phone like a tile) with its words in
+white on a shade, or WORDS: a headline over the note's first lines, ending on a
+whole line (`fitPinWords` measures the clamp), and a foot with the domain, date or
+artist. **The ••• sits in your own card's top right**, no type glyph (Zoe). A
+drag trades places with the card under the finger and the repaint glides every
+card there (`settlePins`, a FLIP); the menu's rows stay Move up and Move down.
+iOS 15 is the floor, so no container queries: the row reads `100vw`.
+
+## Swipe between the tabs (2026-11-01)
+
+**Drag sideways on any tab and the next one comes in beside it, like Instagram**
+(Zoe: "smooth and on brand and pretty", `TriaPager` in TriaChromePlugin.swift, app
+only). One to one with the finger, past 30% of the width or on a flick it goes, and
+a critically damped spring settles it. **Only pictures move**: the web view never
+does (its frame is reset on every layout, and the bars are its subviews), so a
+finger picks up `scrollView.snapshotView` of the page and the neighbour is the last
+picture of that tab, or paper and its glyph if unvisited this launch. **The route
+goes across on the lift, under the pictures**, and the arriving one dissolves off
+once `pagerPainted` says the page drew. **Nothing is drawn between the pages** (a
+glow of the reader's band was tried and removed the same day, Zoe: "remove the color
+glow keep it simple"); past My Circle and Profile the page rubber-bands onto paper.
+The title, discs and material fade with the page, never travelling (`setPageFade`).
+**`window.triaSwipeAt` decides at touch-down**: a tab, the bar up, no sheet, no
+caret, and nothing under the finger that owns a sideways drag, read off the page
+(a `touch-action` other than auto, or a box that really scrolls sideways), so a new
+rail needs no list. Only My Circle and Discover are pictured scrolled down
+(`TAB_SCROLL`, the others open at their top). The edge swipes keep their edges: back
+and the sidebar win, the pan waits on them. No haptic: it changes only what you are
+looking at. See [docs/navigation.md](docs/navigation.md).
+
+## Swipe a message to reply (2026-11-01)
+
+**Drag a bubble or photo sideways, either way, and past 60px it arms** (Zoe:
+"like imessages", who asked for left; iMessage's own is rightward): it follows the
+finger, stiffens, a LIGHT haptic and the arrow light up, and the lift springs it
+home and calls `setChatReply` (`wireMessages`, `.msg-swipe-mark`, members only).
+`touch-action: pan-y` is what lets it share a thread with the scroll.
+
+## Updates is a tab (2026-11-01)
+
+**Five tabs now: My Circle, Discover, Chats, Updates, Profile** (Zoe: "in the
+navbar instead of the corner"). The bell left My Circle's bar, and Updates is a
+tab root with no back chevron, lit as itself in all three shells, its dot on its
+tab (`setDots`). Older notes below that say "bell" are the history of that.
+`dotInk`, `.toolbar-dot` and `paintDot` have no caller left. **On 26 the system
+spaces the tabs** (`itemSpacing` and `itemWidth` measured as doing nothing) and
+they fill the capsule evenly, so the room between them comes from a wider capsule:
+the controller's view runs `Metric.tabReach` (10pt) past each side of the screen.
+
+## My Circle's sidebar (2026-11-01)
+
+**The uneven hamburger on the bar's right slides a tall panel in off the screen's
+edge** (Zoe: "like reddit almost", `openFeedSide`, `ICONS.sidebar`,
+`.sheet-scrim--side`; a blur was tried and removed the same day, then came back
+subtle on 2026-11-04: `--glass-blur-veil` (6px, 0 under Reduce Transparency)
+under a lighter 22% dim, the radius fixed so only the scrim's opacity fades): Friends (the whole feed), every
+circle you're in by name, then People, friends and follows as one list (Zoe:
+"friends can include following"), each alphabetical. Circles and People are
+small Oxygen labels that fold (Instrument was tried and taken back the same day); People starts closed unless your pick is in it. It is `openSheet` with `side`, so its focus trap, the chrome
+standing down and the swipe away (`dragToClose`'s `side`) are the sheet's. A pick
+is an `activeFilter` key, `c:<id>` or `u:<username>` (`feedMatches`), so the
+wordmark's place names it, not a control,, a tab re-tap clears it and the New posts capsule still works.
+**A circle is the one pick wider than the feed**: `Store.feed` keeps a circle's
+posts to you and your friends, the sidebar reads the whole room (`feedPool`),
+strangers' posts too. A row stays listed with no posts in it.
+**It starts at the foot of the status bar** (the clock used to straddle its
+edge). **A swipe in from the right edge opens it on My Circle**: native
+(`rightEdge` in TriaViewController.swift, calling `window.triaOpenSide`), because
+`allowsBackForwardNavigationGestures` gives WebKit that edge whenever there is
+forward history. WebKit's own swipes wait for it to fail; off `#/` it never begins.
+
 ## 2.0's brand: cyan to green (2026-10-22)
 
 **Tria's colour is one ramp, `--brand-start` #00c9ce to `--brand-end`
@@ -100,11 +238,7 @@ wordmark ruled off by a hairline (`.nav-head`), the same neutral capsule for
 where you are, and **New** at the foot, ruled off (`.nav-foot`). **One
 New per shell:** the sidebar's New opens the New sheet
 (`openComposeDial`, the old "+ Post" linked straight to the composer), and My
-Circle's compose mark is hidden at desktop width outside the native shell. **Updates is a sidebar row on
-desktop** (Zoe), after Chats, with the bell's dot (NAV's `rail` entry: hidden
-on the phone capsule, never sent to the native tab bar), and the bar's bell is
-hidden at desktop width the same way. On `#/updates` the sidebar lights that
-row; a phone lights My Circle (`.nav-link--under`) and native still gets `#/`. The
+Circle's compose mark is hidden at desktop width outside the native shell. The
 native shell never draws the CSS nav, so none of this reaches the iOS build.
 
 ## Links are part of the words (2026-10-30)
@@ -170,9 +304,11 @@ the words in the comment bar under an "Editing your comment" chip
 `edit_comment` answers its own 28000 "You need to be signed in."); were it
 ever missing again, the hold offers Delete alone (`Store.commentEditReady`). Comment hearts are 22px (were
 18). The sheet is `min(66dvh, 640px)` tall and keeps the 6px inset every sheet
-has. **The post page stays** for Read more, a tap on the
-card, Updates rows and links; a desktop (wider than 680px, not native) keeps
-the glyph a link.
+has. **A tap on a card's headline or words raises the sheet too** (Zoe,
+2026-11-04: "tap title or content", `wireComments` clicks the glyph; a link,
+mention or the quoted tile keeps its own tap). **A tap on the panel's empty space closes it** (Zoe, 2026-11-04, `SHEET_EMPTY`), not one that only lets go of a held comment; with the keys up the first tap only lowers them. **The post page stays** for Read
+more, Updates rows and links; a desktop (wider than 680px, not native) keeps
+the glyph a link, so the words lead there.
 
 ## A new account has a first run (2026-10-28)
 
@@ -205,15 +341,16 @@ re-iconing after a theme change saves (`applyAccent`). None is the black and
 white icon, `--mono-band`'s ends, white on the dark icon (an appearance
 specialization in its icon.json). Amber (gold), lime, jade and cyan are DEEPER on the icon than in the
 palette, so they read on white (`DEEPER` in the script, `ICON_DEEPER` in
-app.js, kept equal by hand). iOS can
+app.js, kept equal by hand). **My theme is the default until you pick another
+(Zoe, 2026-11-01, `syncThemeIcon`, `'0'` in `tria:icon-theme` means a pick; an alternate icon already on with nothing stored counts as one).** iOS can
 only switch to icons built into the binary, so each is an Icon Composer file,
 `ios/App/TriaAppIcon-<key>.icon`, made by **`node gen-alt-icons.js`** from
 TriaAppIcon.icon with its two fills swapped (the wordmark a 15 degree ramp
 around the accent, the rings the accent). **Redraw the icon, rerun it.** The
 project lists them in `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`;
 `TriaSettings.appIcon`/`setAppIcon` do the switch. iOS shows its own "You have
-changed the icon" alert on every switch, and no public API holds it back, so it
-is a pick, never automatic with the profile colour.
+changed the icon" alert on every switch, and no public API holds it back, so following by
+default means that alert once when the icon first changes, and again after a theme changes elsewhere.
 
 ## 2.0's charms (2026-10-24)
 
@@ -530,7 +667,7 @@ row's own tie (`tieHtml`). A card answered this visit keeps its place
 own card** (the same `.daily-card` classes, Zoe: "style circles like the daily
 cards"): handle as kicker, name as the serif headline, about as the hint,
 members' faces and count in the foot, the daily's pill as Join (which joins and
-walks you in), and the circle's photo in the top corner. No eyebrows: no
+walks you in), and the circle's photo at 90px on the card's left with its handle and name on its right and the about full width below (2026-11-01; it was 52px in the top corner). No eyebrows: no
 "Circles" caption, no kicker on the Start card. **Every card's pill is full
 width and 52px tall** (`.daily-card .daily-answer`, Share Tria too, which is
 painted CSS now and no longer a native page button), worn as hairline glass
@@ -617,19 +754,18 @@ folds while you read down), with the same `setTabs`/`selectTab`/`setDots`/
 `setChrome` contract as 1.4. The reserve only grows (a folded bar must not move
 the foot of a page mid-scroll).
 
-**The + left the tab bar for My Circle's top bar** (and your own profile's, 2026-10-23; Discover's; Chats', 2026-11-01), Instagram-style: the
-compose mark (a sheet and pencil, `ICONS.compose`) leading, the Updates bell
+**The + left the tab bar for My Circle's top bar** (and your own profile's, 2026-10-23; Discover's; Chats', 2026-11-01; Updates', 2026-11-04), Instagram-style: the
+compose mark (a sheet and pencil, `ICONS.compose`) leading, the sidebar's mark
 trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled New since 2026-10-24, Share before it: a circle is created, not shared): Note (the pencil), Activity (Frame left it 2026-10-23, Zoe; a photo is the composer's attach bar),
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on
 mount (`pendingAttach`); a post's type is still inferred. **My
-Circle lost its filter**; profiles, Discover and Updates keep theirs. On the
+Circle lost its filter** (an Instagram style dial on the wordmark was tried and removed, 2026-11-01); profiles, Discover and Updates keep theirs. On the
 web the phone nav simply drops its round +.
 
 **Updates left the chat list.** The Chats tab's dot is chats only; Updates has
-its own dot on the bell (`.toolbar-dot`, crossed to native as a control's `dot`).
-`#/updates` lights My Circle and its back chevron goes there.
+its own, on its own tab since 2026-11-01.
 
 **Discover has no title; its search field IS the header.** One web field,
 always open, no X (`mountToolbar({ field })`, `#toolbar-field`,
@@ -859,7 +995,7 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
 - **No COUNT, anywhere** — not in `aps`, not on the nav, not on a native tab.
   What the rule refuses is a NUMBER: something that climbs while you are away
   and asks to be driven back to zero. A DOT is allowed, in two places since 1.8:
-  the Chats tab (chats) and the Updates bell on My Circle's bar, and each is one: it cannot climb, there is nothing to be behind on, and it clears
+  the Chats tab (chats) and the Updates tab, and each is one: it cannot climb, there is nothing to be behind on, and it clears
   by looking. Zoe's call, 2026-09-09. See `updatesAreNew` in app.js and
   `setDots` in `TriaChromePlugin.swift`; the dot wears `--dot`, the reader's
   own colour.

@@ -403,7 +403,7 @@ body[data-ambient="profile"] .ambient {
    brought back up the same day (Zoe: "too dull"), so it sits between the
    pastel-era settings and that first cut: a little less paper in each stop,
    some chroma bought back, and a fuller bloom (--wash-amt-tria). */
-body[data-ambient="tria"], .person-card--tria {
+body[data-ambient="tria"], .person-card--tria, .mv--tria {
   --wash-keep: var(--wash-keep-tria);
   --wash-sat: var(--wash-sat-tria);
   --wash-amt: var(--wash-amt-tria);
@@ -1077,12 +1077,22 @@ body.toolbar-live .view { padding-top: 1rem; }
   left: 50%;
   top: var(--toolbar-mid);
   transform: translate(-50%, -50%);
-  height: 20px;
+  /* A sidebar pick's name stands where the mark was. Not a control. */
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  color: var(--text);
   pointer-events: none;
   transition: opacity var(--dur-quick) var(--ease);
 }
-.toolbar-mark .wordmark { height: 100%; background: var(--text); }
+.toolbar-mark .wordmark { height: 20px; flex-shrink: 0; background: var(--text); }
+.toolbar-mark-word { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; font-family: 'Oxygen', sans-serif; font-weight: 700; font-size: 1.05rem; line-height: 1.3; white-space: nowrap; }
+.toolbar-mark-word:empty { display: none; }
+.toolbar-mark.is-narrowed .wordmark { display: none; }
 .topbar--reading .toolbar-mark { opacity: 0; }
+/* A narrowed feed is that feed alone: On repeat and the week's plans step out. */
+.view--home.is-narrowed > :is(.np-host, .week-cards) { display: none; }
 
 /* ── The controls go with the header (2026-10-22) ─────────────────────────────
    Zoe: the top buttons can disappear on scroll. Through 1.7 they stayed up on
@@ -1637,10 +1647,6 @@ body.toolbar-live .view { padding-top: 1rem; }
 /* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's New
    is on every page, so the same act on My Circle's bar would be a second door. */
 @media (min-width: 681px) { html:not([data-chrome="native"]) .toolbar-compose { display: none; } }
-/* THE SAME FOR THE BELL: at desktop width Updates is a row in the sidebar
-   (NAV's `rail` entry), with the bell's dot, so the bar's bell would be a
-   second door. On a phone the row is hidden and the bell is the way in. */
-@media (min-width: 681px) { html:not([data-chrome="native"]) #home-updates-btn { display: none; } }
 
 /* ── Main / views ────────────────────────────────────────────────────────── */
 main {
@@ -3106,6 +3112,11 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
    worth naming: expanding in place was the one control in Tria that could make
    a single card taller than the screen it sits in, and the reader who wants the
    whole note wants the comments under it too. So the teaser stays a teaser. */
+/* A feed card's headline and words open its thread, as its comment glyph does
+   (wireComments), so they point like it. The post's own page has no glyph link. */
+.card:has(.card-actions a.card-comment) > .card-main :is(.card-title, .card-note, .card-h1, .card-h2) {
+  cursor: pointer;
+}
 .readmore-clip {
   overflow: hidden;
   max-height: 8.6rem;                 /* ~six lines of teaser */
@@ -4691,7 +4702,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 .lightbox.open { opacity: 1; visibility: visible; }
 .lightbox img,
-.lightbox video { max-width: 92vw; max-height: 90vh; border-radius: var(--radius-img); }
+.lightbox video { max-width: 92vw; max-height: 90vh; border-radius: var(--radius-soft); }
 .lightbox video { background: #000; }
 
 /* A carousel's pager: where you are, and two real buttons. It sits on the veil,
@@ -5858,159 +5869,376 @@ button.poll-option:disabled { cursor: default; }
   text-overflow: ellipsis;
 }
 
-/* A song somebody posted (2.0): the square is a link out to the song. A
-   friend's cover is bare (Zoe, 2026-10-26: "no colored corner icon"); a double
-   tap likes it and a hold replies (wireSongGestures). */
-.np-item--post { position: relative; cursor: default; }
+/* ONE PLACE PER PERSON (2026-11-04): their song and Moments stacked, read in
+   the viewer (openMoments), each their round face however many they have up
+   (Zoe). 104px, between the album art's 132 and a person card's 80 (Zoe: "a
+   bit bigger. between the album cover size and these"). The rail's own taps only open: the like
+   and the comment are the viewer's. */
+.np-item:is(.np-item--stack, .np-mine--empty) { width: 108px; align-items: center; text-align: center; }
+.np-item--stack .np-open { align-items: center; text-align: center; }
+.np-item:is(.np-item--stack, .np-mine--empty) :is(.np-song, .np-who) { max-width: 100%; }
+.np-item--stack { position: relative; isolation: isolate; cursor: pointer; }
 .np-open {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
   color: inherit;
-  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-/* A FRIEND'S COVER IS ITS OWN GESTURES (2026-10-26, Zoe: "double tap to like
-   a song and hold down to reply"), wireSongGestures in app.js. The speech
-   bubble that sat beside the heart is gone. The rail must not raise iOS's link
-   preview, select a word or zoom under a finger; a tap doesn't wait on zoom. */
+.np-open .np-art { position: relative; z-index: 1; transition: transform 0.32s var(--spring); }
+.np-open:active .np-art { transform: scale(0.96); }
 .np-strip {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
-.np-open[data-taps] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-/* THE HOLD CHARGES: the sleeve sinks under the finger across the hold's own
-   380ms (a beat late, so a flick along the rail never dips it), and springs
-   back the moment the finger lets go or the hold lands. */
-.np-item .np-art {
-  transition: transform 0.32s var(--spring);
-  will-change: transform;
+.np-art.np-avatar {
+  width: 104px;
+  height: 104px;
+  margin-inline: 2px;
+  border-radius: 50%;
+  font-size: 2.8rem;
 }
-.np-item.is-pressing .np-art {
-  transform: scale(0.92);
-  transition: transform 0.32s cubic-bezier(0.3, 0, 0.2, 1) 0.06s;   /* lands with the 380ms hold */
-}
-@media (prefers-reduced-motion: reduce) {
-  .np-item .np-art, .np-item.is-pressing .np-art { transform: none; transition: none; }
-}
-/* While a hold is down, nothing on the page selects or raises a callout, so
-   the thread it opens never inherits the gesture. Fields are left alone: the
-   chat's bar takes the caret as it opens. The shield is the clear layer the
-   finger lands on meanwhile. */
-html.is-song-hold,
-html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-}
-.hold-shield {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  background: transparent;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-}
-/* THE DOUBLE TAP'S HEART: big, white and shadowed, springing up from the
-   cover's centre with the like's own sparkles (burstSparkles) bursting off it
-   in white, then shrinking in place and only then gliding softly down into
-   the bottom right corner onto the resting heart, which takes over exactly where it lands (Zoe,
-   2026-10-26: "softly smoothly move into the corner, make it small"). The glide's
-   end is the resting heart's box: centre 66px to 116px (an 8px inset on a 16px
-   heart), 58px to 16px. Transform and opacity only. */
-.np-heart-pop {
+.np-art.avatar { border: 0; background: var(--text); color: var(--bg); }
+.np-art.avatar--photo { background: none; }
+/* UNSEEN GLOWS, softly, underneath (Zoe: "a soft glow underneath the pfps
+   matching the users preference, person who posted not user viewing"): the
+   poster's colour (glowFor, personTone), blurred behind the face and centred
+   on it (Zoe), a soft halo rather than a drawn ring. Seen, it fades away. */
+.np-glow {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: -20px;
+  left: 50%;
+  width: 144px;
+  height: 144px;
+  margin-left: -72px;
+  z-index: 0;
+  border-radius: 50%;
+  /* A gradient, not a blur: WebKit crops a filter at its layer's edge inside
+     the scrolling rail, which drew the glow as a hard box (Zoe). */
+  background: radial-gradient(closest-side,
+    color-mix(in srgb, var(--np-glow, transparent) 60%, transparent) 70%,
+    color-mix(in srgb, var(--np-glow, transparent) 20%, transparent) 84%,
+    transparent);
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-soft);
+  pointer-events: none;
+}
+.np-item.is-unseen.has-tone .np-glow { opacity: 0.55; }
+/* The strip gives the glow room to spill, without moving the rail. */
+.np-strip { padding-block: 24px 14px; margin-block: -24px -14px; }
+/* Your own face takes a + for another Moment, on its corner. */
+.np-add {
+  position: absolute;
+  top: 74px;
+  left: 76px;
   z-index: 2;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  width: 132px;
-  height: 132px;
-  color: #fff;
-  pointer-events: none;
-  --burst: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.np-heart-pop svg {
-  width: 58px;
-  height: 58px;
-  fill: currentColor;
-  stroke: none;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
-  /* Two tracks on the separate `scale` and `translate` properties, so each
-     eases on its own clock. Scale leads and position follows, overlapping (Zoe:
-     "scale into position keyframes should overlap ... and ease"): the glide
-     sets off a third of the way into the shrink, so the heart curves into the
-     corner as it gets smaller, and nothing ever stops dead between them. Both
-     ease in and out. */
-  will-change: scale, translate;
-  animation:
-    np-heart-scale 1.08s both,
-    np-heart-glide 0.62s cubic-bezier(0.4, 0, 0.2, 1) 0.54s both;
-}
-.np-heart-pop .like-sparkles { transform: scale(2.6); }
-.np-heart-pop .spark { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.3)); }
-@keyframes np-heart-scale {
-  0%   { scale: 0.3; opacity: 0; animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
-  15%  { scale: 1.1; opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
-  27%  { scale: 0.97; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
-  37%  { scale: 1; }
-  /* The recede: in from rest and out to rest, so it leaves the settle and meets
-     the corner without a bump. */
-  43%  { scale: 1; animation-timing-function: cubic-bezier(0.42, 0, 0.2, 1); }
-  76%  { scale: 0.276; }
-  100% { scale: 0.276; opacity: 1; }
-}
-@keyframes np-heart-glide {
-  from { translate: 0 0; }
-  to   { translate: 50px 50px; }
-}
-/* The like at rest: small, white, shadowed, bare in the corner, nothing to tap. */
-.np-liked {
-  position: absolute;
-  top: calc(132px - 8px - 16px);
-  left: calc(132px - 8px - 16px);
-  z-index: 1;
-  display: grid;
-  width: 16px;
-  height: 16px;
-  color: #fff;
-  opacity: 0;
-  pointer-events: none;
-}
-.np-liked svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  stroke: none;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-}
-.np-item.is-liked .np-liked { opacity: 1; }
-.np-item.is-landing .np-liked { opacity: 0; }
-/* The resting heart rides the sleeve's hold press with it. */
-.np-item .np-liked { transition: transform 0.32s var(--spring); }
-.np-item.is-pressing .np-liked { transform: translate(-4px, -4px) scale(0.92); transition: transform 0.32s cubic-bezier(0.3, 0, 0.2, 1) 0.06s; }
-@media (prefers-reduced-motion: reduce) {
-  .np-heart-pop svg { animation: np-heart-fade 0.6s ease both; will-change: auto; }
-  @keyframes np-heart-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
-  .np-item.is-pressing .np-liked { transform: none; }
-}
-/* Opening a chat that isn't there yet takes a round trip: the sleeve breathes. */
-.np-item.is-busy .np-art { animation: np-reply-wait 0.9s var(--ease-soft) infinite alternate; }
-@keyframes np-reply-wait { to { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .np-item.is-busy .np-art { animation: none; opacity: 0.6; } }
+.np-add svg { width: 14px; height: 14px; stroke-width: 2.4; }
 
-/* The one-time tip under the rail (dismissSongHint): a week card, quiet. Its
+/* The one-time tip under the rail (dismissMomentHint): a week card, quiet. Its
    title is a sentence in the page's weight, not a plan's bold, so it may wrap.
    Cards here keep Discover's one gap (0.95rem): rail to tip, tip to a plan. */
 .week-card.np-hint { margin-top: 0.95rem; transition: opacity var(--dur-quick) var(--ease); }
 .np-host:has(.np-hint):has(+ .week-cards:not([hidden])) .nowplaying { margin-bottom: 0.95rem; }
 .np-hint .week-card-title { font-size: 0.95rem; font-weight: 400; line-height: 1.35; white-space: normal; }
 .np-hint.is-leaving { opacity: 0; }
+
+/* ── The Moments viewer (openMoments) ────────────────────────────────────────
+   Tria's paper, not a black player, with the poster's wash blooming off the
+   top-right corner as on their profile (the person card's mix, at full
+   screen), a hairline segment per frame, and the content set as the feed
+   sets it. Under the sheets (300), over everything else. */
+.mv {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  background: var(--bg);
+  color: var(--text);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 0.22s var(--ease-soft), transform 0.34s var(--spring);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mv.open { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .mv, .mv.open { transform: none; transition: opacity 0.15s linear; } }
+.mv--tria {
+  --wash-a: var(--brand-start);
+  --wash-b: color-mix(in srgb, var(--brand-start), var(--brand-end));
+  --wash-c: var(--brand-end);
+}
+.mv::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg,
+    color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
+    color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
+  -webkit-mask-image: radial-gradient(ellipse 95% 50% at 100% 0,
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  mask-image: radial-gradient(ellipse 95% 50% at 100% 0,
+    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
+  filter: saturate(var(--wash-sat));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+@supports (background: linear-gradient(in oklab, #000, #fff)) {
+  .mv::before {
+    background: linear-gradient(115deg in oklab,
+      color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
+      color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
+  }
+}
+:is(.mv--wash, .mv--tria)::before { opacity: 1; }
+
+.mv-top, .mv-foot { padding-inline: 14px; transition: opacity 0.2s var(--ease-soft); }
+.mv.is-held :is(.mv-top, .mv-foot) { opacity: 0; }
+.mv-top { padding-top: 8px; }
+/* Hairlines, as fine as a story's (Zoe: "smaller like the lines on the story"). */
+.mv-bars { display: flex; gap: 3px; padding-inline: 2px; }
+.mv-bar {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  transition: background-color 0.2s var(--ease-soft);
+}
+.mv-bar.is-on { background: color-mix(in srgb, var(--text) 85%, transparent); }
+.mv-head { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-height: 44px; }
+.mv-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.mv-avatar { width: 36px; height: 36px; font-size: 1.1rem; }
+.mv-who-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.mv-name { font-weight: 700; font-size: 0.95rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-when { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.02em; }
+/* Bare glyphs (Zoe): the viewer's paper is always behind them. */
+.mv-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  cursor: pointer;
+}
+.mv-btn svg { width: 22px; height: 22px; }
+.mv-btn:active { opacity: 0.5; }
+
+.mv-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 14px;
+  touch-action: none;
+  cursor: pointer;
+}
+.mv-frame { flex: 1; min-width: 0; min-height: 0; will-change: transform; }
+/* A picture fills what's left, its caption under it. */
+.mv-frame--pic {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 14px;
+}
+.mv-media {
+  margin: 0;
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mv-pic {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-soft);
+  object-fit: contain;
+  -webkit-user-drag: none;
+}
+.mv-sound {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.mv-sound svg { width: 20px; height: 20px; }
+.mv-caption { max-height: 32dvh; overflow-y: auto; touch-action: pan-y; }
+/* Words alone sit in the middle, and a long note scrolls. */
+.mv-frame--words { display: flex; flex-direction: column; justify-content: center; }
+.mv-words {
+  max-height: 100%;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+.mv-title {
+  margin: 0 0 0.6rem;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 2.2rem;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.mv-note { font-weight: 300; font-size: 1.15rem; line-height: 1.45; }
+/* The note's paragraphs take the viewer's size, not the feed's. */
+.mv-note :is(.card-note, p) { font-size: inherit; line-height: inherit; font-weight: inherit; }
+.mv-words--big .mv-note {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 2rem;
+  line-height: 1.15;
+  text-wrap: pretty;
+}
+.mv-words :is(.card-link, .card-yt, .card-page, .card-circle, .card-song, .poll) { margin-top: 1rem; }
+/* A song: the sleeve big and rounded like every cover, then its name. */
+.mv-sleeve {
+  display: block;
+  width: min(72vw, 300px, 42dvh);
+  aspect-ratio: 1;
+  margin: 0 auto 1.2rem;
+  border-radius: var(--radius-art);
+  background: var(--glass-bg-panel) center / cover;
+  border: var(--glass-edge);
+}
+.mv-sleeve.pin-cover { border: 0; }
+.mv-sleeve:not(.pin-cover) { display: grid; place-items: center; color: var(--muted); }
+.mv-sleeve svg { width: 30%; height: 30%; stroke-width: 1.2; }
+.mv-song-title {
+  margin: 0;
+  text-align: center;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.mv-song-sub { margin: 0.3rem 0 0; text-align: center; color: var(--muted); }
+.mv-listen {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.1rem auto 0.6rem;
+  padding: 0 1.4rem;
+  min-height: 44px;
+  border-radius: 22px;
+  text-decoration: none;
+}
+.mv-listen svg { width: 18px; height: 18px; }
+
+.mv-foot { display: flex; align-items: center; gap: 10px; padding-top: 6px; padding-bottom: 10px; }
+.mv-comment {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+.mv-comment span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-comment svg { width: 22px; height: 22px; flex: none; }
+.mv-like {
+  --burst: var(--heart);
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  cursor: pointer;
+}
+.mv-like svg { width: 24px; height: 24px; transition: transform 0.3s var(--spring); }
+.mv-like.liked svg { fill: var(--heart); stroke: var(--heart); }
+.mv-like:active svg { transform: scale(0.88); }
+/* The double tap's heart, where the finger was, in the reader's --heart. */
+.mv-pop {
+  --burst: var(--heart);
+  position: fixed;
+  z-index: 3;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  display: grid;
+  place-items: center;
+  color: var(--heart);
+  pointer-events: none;
+}
+.mv-pop svg {
+  width: 96px;
+  height: 96px;
+  fill: currentColor;
+  stroke: none;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.18));
+  animation: mv-pop 0.95s both;
+}
+.mv-pop .like-sparkles { transform: scale(2.8); }
+@keyframes mv-pop {
+  0%   { scale: 0.3; opacity: 0; animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
+  18%  { scale: 1.08; opacity: 1; }
+  32%  { scale: 0.97; }
+  44%  { scale: 1; opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  100% { scale: 0.9; opacity: 0; translate: 0 -24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv-pop svg { animation: mv-pop-fade 0.6s ease both; }
+  @keyframes mv-pop-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+}
 
 /* ── The picker (#/listening) ─────────────────────────────────────────────────
    A page, not a sheet — see renderListening in app.js for why (the keyboard
@@ -7257,178 +7485,224 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 
 /* ── Pinned cards ─────────────────────────────────────────────────────────────
    Up to three things somebody holds above their own wall, between the identity
-   and the posts. The PANEL IS THE DAILY CARD'S, declared again rather than
-   shared, and the difference is worth naming: .daily-card is one headline on
-   Discover and can afford a serif question at 1.95rem, while this is a STACK of
-   up to three on a page that already opened with a photograph and a name. Same
-   corner; a smaller voice and a fixed height.
+   and the posts. A GRID since 2026-11-04 (Zoe: "implement a grid system and
+   clean things up"; they were a stack of 88px rows, and a note or a find, with
+   no square, set its words under the ••• with the card's padding uneven).
 
-   SO THEY WENT FLAT WITH IT. The daily card, the week-of activity card and a
-   quote's nested tile all dropped the glass in 1.7 for a --surface fill and a
-   --rule hairline, and a stack of three cards on a profile is the same object
-   in the same grammar: a boxed thing sitting in a page's normal flow with a
-   wall of photographs scrolling behind it. Glass here was the last place the
-   old vocabulary survived, and one page showing both read as two apps. Zoe's
-   call, 2026-09-18. The bill argues the same way — a blur costs area × radius ×
-   MOVING FRAMES, and three of these scroll.
+   THE GRID IS FOUR NUMBERS, all on .pin-grid: two columns, a 10px gap, a row as
+   tall as a column is wide (capped at 220px, where a desktop column outgrows a
+   square), and a 14px pad inside every card, the page's own --gutter, so words
+   in a card sit on the same inset the page's do. An odd count puts the first
+   pin across both columns at the row's height. The wide card keeps the lines:
+   its picture is one --pin-row square, flush with the card under it.
 
-   WHAT DID NOT GO WITH IT is anything that was doing a job. A song still
-   blooms its own artwork over the fill (.pin-glow, below), the square on the
-   leading edge keeps the drop shadow that draws it as an object lying ON the
-   card rather than printed into it (.pin-cover), and a lifted card still
-   throws a real shadow while it is up (.pin.is-lifted) — that one is the
-   gesture's whole feedback, the card leaving the page. The rest, at rest, is
-   flat.
+   Two kinds of card. A PICTURE fills its square and the words sit on a shade
+   at its foot, in white. WORDS are on the flat cards' material (--surface and
+   a --rule hairline, as .daily-card and .week-card), serif over the first
+   lines, ending on a whole line, and a foot line under them. The ••• sits in
+   your own card's top right corner, and the headline keeps clear of it.
 
-   THE FIXED HEIGHT IS LOAD-BEARING TWICE. It makes three cards read as a set
-   rather than as three unrelated blocks, and it is what lets the drag be exact:
-   every card displaces every other by one card plus one gap, so a reorder never
-   has to measure anything but the rects it took on the lift (wirePinDrag). */
+   One row height for every card is also what keeps the drag honest: a held
+   card trades places with the one under the finger (wirePinDrag), and the
+   repaint glides each card from where it was (settlePins). */
 .pins-host:empty { display: none; }
 
 .pins {
   max-width: var(--feed-width);
   margin: 1.7rem auto 0;
 }
-/* THE CARD'S EDGE IS THE PAGE'S AXIS, which is the daily card's arrangement and
-   not the account block's. It had --inset of its own padding on top of the
-   view's, which set the stack a further 26px in on each side and made three
-   cards that are the page's headline the narrowest thing on it — narrower than
-   the identity above and than every post below. The type inside a card is inset
-   by the card's own padding, which is what a card is for; the box is not. */
-.pin-stack { display: flex; flex-direction: column; gap: 0.6rem; }
+.pin-grid {
+  --pin-gap: 10px;
+  --pin-pad: 14px;
+  --pin-row: min(calc((100vw - 2 * var(--gutter, 0.875rem) - var(--pin-gap)) / 2), 220px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: var(--pin-row);
+  gap: var(--pin-gap);
+}
 
 .pin {
+  --pin-radius: var(--radius-soft);
   position: relative;
-  /* isolate + overflow are what keep the glow inside: it is a negative-z child
-     bleeding well past the card's own box, and without both it would wash over
-     the posts underneath. */
+  /* isolate + overflow keep the picture and a song's bloom inside the card. */
   isolation: isolate;
   overflow: hidden;
   display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  width: 100%;
-  /* ONE HEIGHT FOR EVERY CARD, and it is derived rather than typed: the square
-     plus the padding either side plus the hairline either side. A card with no
-     square (a post that is only words) meets the same number through the
-     min-height, so the three are exactly equal instead of nearly. The drag
-     depends on that — a displacement is one card plus one gap, and 2px of drift
-     per card is 2px the dropped card lands out by. */
-  --pin-art: 88px;
-  --pin-pad: 0.7rem;
-  min-height: calc(var(--pin-art) + var(--pin-pad) * 2 + 2px);
-  padding: var(--pin-pad) 0.8rem;
-  border-radius: var(--radius-soft);
-  /* The flat cards' material (.week-card, .daily-card, .card-quoted): a
-     --surface fill and a --rule hairline, no blur, no rim, no lift. No
-     prefers-color-scheme block — both tokens answer the scheme in tokens.css,
-     which is the whole point of their being tokens. The box-shadow slot is
-     left empty rather than deleted from the transition below: .is-lifted still
-     fills it, and a shadow that eases in from nothing is the card rising. */
+  min-width: 0;
+  border-radius: var(--pin-radius);
   background: var(--surface);
   border: 1px solid var(--rule);
   text-align: left;
   color: inherit;
-  font: inherit;
   /* A card is held before it is dragged, and a long press on iOS otherwise
      raises the link preview or a selection loupe over the thing being lifted. */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
   transition: box-shadow var(--dur-micro) var(--ease),
+              opacity var(--dur-micro) var(--ease),
               transform var(--dur-quick) var(--ease);
 }
+.pin--wide { grid-column: 1 / -1; }
+/* A sleeve rounds like every cover (--art-round), and its card with it. */
+.pin--song { --pin-radius: calc(var(--pin-row) * var(--art-round)); }
 
-/* A pin's square, behind a photograph that hasn't decoded yet and on the
-   picker's rows as the whole mark, wears a wash of page ink (the --pin-hue
-   fallback). Each type lent it its own pastel until 2.0's brand. */
+.pin-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--pin-pad);
+}
+.pin-face {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+/* The words run as far as the card has room and end on a whole line: the last
+   of them is clamped to the lines that fit (fitPinWords measures it), so a card
+   never shows a sliver of a line cut through. */
+.pin-face > * {
+  flex: 0 0 auto;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pin-say {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.3rem;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+/* With a headline over it, the headline takes three lines at most and the
+   note's first lines fill the rest. */
+.pin-say:not(:only-child) { -webkit-line-clamp: 3; }
+.pin-gist {
+  font-size: 0.88rem;
+  line-height: 1.42;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.pin--wide.pin--words .pin-say { font-size: 1.55rem; line-height: 1.1; }
+.pin--wide.pin--words .pin-gist { font-size: 0.92rem; }
+
+.pin-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+.pin-foot:empty { display: none; }
+.pin-meta {
+  display: flex;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.pin-meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Your own card's headline keeps clear of the ••• in the corner; the lines
+   under it run full width. */
+.pin--own.pin--words .pin-say,
+.pin--own.pin--wide .pin-say { padding-inline-end: 26px; }
+
+/* ── A picture ──────────────────────────────────────────────────────────────
+   Fills the square, a hair past the hairline so no paper rims it, on a wash of
+   ink (or the photo's stored tint) until it decodes. */
+.pin-pic {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  background-color: color-mix(in srgb, var(--text) 8%, var(--surface));
+}
+.pin-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease-soft);
+}
+.pin-pic.is-loaded img { opacity: 1; }
+/* hqdefault is 4:3 with the video letterboxed in it; this is the 16:9 inside. */
+.pin-pic--yt img { transform: scale(1.34); }
+
+.pin--pic:not(.pin--wide) { border-color: transparent; }
+.pin--pic:not(.pin--wide) .pin-body {
+  justify-content: flex-end;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.56) 36%, rgba(0, 0, 0, 0.2) 64%, transparent 84%);
+}
+.pin--pic:not(.pin--wide) .pin-face { flex: 0 0 auto; }
+.pin--pic:not(.pin--wide) .pin-gist { display: none; }
+.pin--pic:not(.pin--wide) .pin-say {
+  -webkit-line-clamp: 2;
+  font-size: 1.12rem;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
+}
+.pin--pic:not(.pin--wide) .pin-meta { color: rgba(255, 255, 255, 0.86); }
+/* Over a picture the dots stand on a small dark blurred disc, the carousel
+   count's pill, so they read on any photo. */
+.pin--pic:not(.pin--wide) .pin-more { color: #fff; }
+.pin--pic:not(.pin--wide) .pin-more::before {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.34);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.pin--pic:not(.pin--wide) .pin-more svg { position: relative; width: 18px; height: 18px; }
+/* A picture with nothing to say over it is only the picture. */
+.pin--pic .pin-body:not(:has(.pin-say, .pin-meta)) { display: none; }
+
+/* The wide card's picture is one square on its leading side, on the grid's
+   line, and its words take the rest on the card's own paper. */
+.pin--wide.pin--pic .pin-pic {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: 0 0 var(--pin-row);
+  margin: -1px 0 -1px -1px;
+}
 
 /* ── The album's own colour ───────────────────────────────────────────────────
-   A blown-up, blurred copy of the artwork, lying over the card's fill and
-   dissolving before it reaches the words. It is the cheapest honest way to let
-   a record colour its own card: the artwork is HOTLINKED from Apple's or
-   Spotify's CDN, so CSS may blur it but canvas may not read it (touching the
-   pixels taints the canvas), and nothing here needs a colour column, a second
-   request or a sampler. The mask is not decoration — it is what keeps a serif
-   title on the plain fill while the cover end of the card glows.
-
-   THE FLATTENING LEFT IT ALONE, and the negative z-index is why it could: a
-   card paints its own background FIRST and its negative-z children straight
-   after, so the bloom that used to sit over translucent glass now sits over an
-   opaque --surface at the same strength, in front of the fill and behind the
-   words. A record colours its own card either way; that was never the glass
-   doing it.
-
-   A photo post gets the same bloom from its stored `tint` instead (--flat): one
-   colour we already computed at publish time, rather than blurring a full-size
-   upload behind an 88px card for a colour we know. */
+   A wide song card blooms its own sleeve behind its words: a blown-up, blurred
+   copy of the artwork, dissolving before it reaches the far edge. The art is
+   hotlinked, so CSS may blur it where canvas may not read it. The clip-path is
+   not belt and braces: WebKit does not clip a composited child (this one has a
+   filter) against an ancestor's border-radius. */
 .pin-glow {
-  /* Bigger than the card by BLEED on every side, so the blur's own soft edge
-     falls outside the card rather than showing as a halo inside it, and then
-     clipped back to exactly the card's rounded rect. The clip is not belt and
-     braces: WebKit does not clip a composited child (this one has a filter)
-     against an ancestor's border-radius, so `overflow: hidden` on .pin leaves
-     the bloom filling the square corners — measured, in the simulator and in
-     Playwright's WebKit. A clip-path on .pin itself would fix it too and would
-     take the card's lift shadow with it, since clip-path clips everything an
-     element paints. So the clip goes here, where the same number is used twice
-     and the two are visibly the same number. */
   --bleed: 40px;
   position: absolute;
   inset: calc(var(--bleed) * -1);
-  clip-path: inset(var(--bleed) round var(--radius-card));
+  clip-path: inset(var(--bleed) round var(--pin-radius));
   z-index: -1;
   background-size: cover;
   background-position: center;
   filter: blur(26px) saturate(1.5);
-  opacity: 0.5;
+  opacity: 0.45;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.5) 38%, transparent 70%);
-  mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.5) 38%, transparent 70%);
+  -webkit-mask-image: linear-gradient(to right, #000 35%, rgba(0, 0, 0, 0.45) 65%, transparent 92%);
+  mask-image: linear-gradient(to right, #000 35%, rgba(0, 0, 0, 0.45) 65%, transparent 92%);
 }
-.pin-glow--flat { inset: 0; clip-path: none; filter: none; opacity: 0.3; }
 
-/* The square on the leading edge: an album cover, or a photograph. 88px. A
-   post with no picture has NO square — see .pin--wordy below and pinCardEl in
-   app.js. A song's square is an album cover, so it rounds like every cover
-   (--radius-art), and its card rounds with it to stay concentric. The stack
-   reads fine with one card rounder than the others: the record is a different
-   object from a post, and the curve is the first thing that says so. */
-.pin-art {
-  position: relative;
-  flex: 0 0 auto;
-  width: var(--pin-art);
-  height: var(--pin-art);
-  border-radius: calc(var(--radius-soft) - var(--pin-pad));   /* concentric with the soft card */
-  border: var(--glass-edge);
-  background-color: color-mix(in srgb, var(--pin-hue, var(--text)) 20%, transparent);
-  background-size: cover;
-  background-position: center;
-}
-.pin--song .pin-art { border-radius: var(--radius-art); }
-.pin--song { border-radius: calc(var(--pin-art) * var(--art-round) + var(--pin-pad)); }
-
-/* THE COVER GETS THE EXTRA, on a song's art and a photo's alike. A hairline
-   would draw it as a picture printed into the card; a real drop shadow and a
-   lit top edge draw it as an object lying ON it instead.
-
-   THE DROP CAME DOWN when the pin card went flat (Zoe, 2026-09-18). Not because
-   the flattening changed what it is for, but because a blurred panel was eating
-   half of it: on a clean --surface the same shadow that read as depth on glass
-   read as a smudge under the square. Softer numbers, same job. It stays ONE
-   treatment and the picker rows took the new value with the cards — forking it
-   so that a cover looks like a different object on two screens is exactly what
-   this class exists to prevent.
-
-   IT IS THE APP'S COVER TREATMENT, not the pin card's: the same class rides
-   both pickers' squares (.song-art, .pin-row-art) and a music post's sleeve
-   as of 1.5, so a record looks like the same object wherever you meet it. It is
-   added only where there is actually a picture — the empty sleeve on a song
-   with no art, the + on the rail's own slot and a wordless post's pastel tile
-   keep the hairline, because there is no object there to lie on anything. The
-   `position` is here rather than on each host for the same reason the rest is:
-   the ::after below needs it, and one class carries the whole treatment. */
+/* THE COVER TREATMENT, kept for the squares that still wear it: both pickers'
+   (.song-art, .pin-row-art), a music post's sleeve and the rail. A real drop
+   shadow and a lit top edge draw a picture as an object lying ON its card
+   rather than printed into it. One treatment, so a record looks like the same
+   object wherever you meet it. Added only where there is a picture. */
 .pin-cover {
   position: relative;
   border: 0;
@@ -7453,56 +7727,21 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   pointer-events: none;
 }
 
-.pin-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-/* NO TYPE WORD ABOVE THE TITLE. It said Song / Note / Frame over a card that is
-   visibly a song, a note or a photograph, and three of them stacked read as a
-   form with three labelled fields. The one sub-line that survived says something
-   the card doesn't already show — an artist, a domain, a date — and it sits
-   UNDER the words, where it annotates rather than announces. */
-/* What it says, in the serif, clamped to two lines. Smaller than the daily's
-   headline on purpose: three of these stack, and at the daily's size two of
-   them would be the page. */
-.pin-title {
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-weight: 400;
-  font-size: clamp(1.15rem, 3.4vw, 1.35rem);
-  line-height: 1.14;
-  letter-spacing: -0.01em;
-  color: var(--text);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.pin-sub {
-  font-size: 0.84rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The whole card is the tap — the daily card's stretched link, drawn as a real
-   <a> rather than an ::after because these cards carry a control (•••) that has
-   to sit above it. */
+/* The whole card is the tap, a real <a> rather than an ::after because the
+   card carries a control (•••) that has to sit above it. */
 .pin-open {
   position: absolute;
   inset: 0;
   z-index: 1;
   border-radius: inherit;
 }
-/* Your own card's overflow. Full 44pt target in the corner, glyph-sized ink —
-   the same quiet tool the post card's ••• is, and above the stretched link. */
+/* Your own card's overflow, in its top right corner (Zoe, 2026-11-04): a 44pt
+   target around a glyph-sized mark, the dots on the pad's edge and centred on
+   the headline's first line. */
 .pin-more {
   position: absolute;
-  top: 2px;
-  inset-inline-end: 2px;
+  top: 3px;
+  inset-inline-end: calc(var(--pin-pad) - 12px);
   z-index: 2;
   width: 44px;
   height: 44px;
@@ -7516,49 +7755,28 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 }
 .pin-more svg { width: 20px; height: 20px; }
 
-/* A post with no picture is its own words, across the whole card. It keeps the
-   stack's height so the three still read as a set, and it takes a third line of
-   the clamp, because the words are all there is here and a card with room for
-   them should use it. There is no empty-slot tile any more: an empty slot is
-   furniture standing where content isn't, and the way to fill one is a row in
-   the profile's own ••• (see pinsSectionHtml). */
-.pin--wordy .pin-title { -webkit-line-clamp: 3; }
-.pin--wordy .pin-lines { gap: 0.25rem; }
-
 /* ── Being dragged ────────────────────────────────────────────────────────────
    The lifted card takes its transform from JS on every pointer move, so it
-   cannot also be transitioning one — the others can, and that is what makes the
-   gap open smoothly under it. Nothing on the page may be tapped through while a
-   card is up: a drag that ends on a link would otherwise open it. */
+   cannot also be transitioning one. The card it would trade with steps back.
+   Nothing may be tapped through while a card is up: a drag that ends on a link
+   would otherwise open it.
+
+   The held card's shadow is two layers because a lift reads differently on
+   paper and on ink: the drop does the job on paper, and the lit top edge
+   (.pin-cover's inset) is what says "up" on a near-black page. */
 .pin.is-lifted {
   transition: none;
   z-index: 3;
-  /* The one shadow the card still wears, and it is the gesture: flat at rest,
-     off the page while it is held.
-
-     TWO LAYERS, BECAUSE A LIFT READS DIFFERENTLY ON PAPER AND ON INK. The drop
-     does the whole job on light paper and almost none of it on dark — a black
-     shadow on a near-black page is a shadow nobody can see, and taking the
-     glass out took --glass-rim with it, which turns out to have been the only
-     thing saying "up" in dark mode. So the lit TOP EDGE comes back, and not as
-     the four-sided glass rim: it is .pin-cover's inset, at .pin-cover's value,
-     which is already the app's way of drawing an object lying ON something.
-     One declaration, no prefers-color-scheme block — it is invisible on paper
-     where the drop is doing the talking and legible on ink where it isn't,
-     which is the same trick --label plays on a native control.
-
-     The drop came down with the cover's, and for the same reason: the blur was
-     absorbing it before, and at full strength on a flat card a held pin looked
-     dropped through the page rather than lifted off it. It only has to be
-     clearly more than the nothing every other card is wearing. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 14px 32px -8px rgba(0, 0, 0, 0.30);
 }
-.pin-stack.is-reordering .pin-open { pointer-events: none; }
+.pin.is-target { opacity: 0.55; transform: scale(0.96); }
+.pin.is-settling { transition: transform var(--dur-move) var(--ease); transform-origin: 0 0; }
+.pin-grid.is-reordering .pin-open { pointer-events: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pin { transition: none; }
+  .pin, .pin.is-settling { transition: none; }
 }
 
 /* ── Picking something to pin (#/pin/post) ────────────────────────────────────
@@ -8451,8 +8669,34 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-  touch-action: manipulation;
+  touch-action: pan-y;   /* sideways is the swipe to reply (wireMessages) */
 }
+/* SWIPE TO REPLY, as iMessage: the row follows the finger with no transition,
+   and lets go on the signature ease. The arrow rides in the gap it opens. */
+.msg {
+  position: relative;
+  transition: transform 0.32s var(--ease);
+}
+.msg.is-swiping { transition: none; will-change: transform; }
+.msg-swipe-mark {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 16px);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  border-radius: 50%;
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: color 0.16s var(--ease), background-color 0.16s var(--ease), transform 0.22s var(--ease);
+  transform: scale(0.8);
+}
+.msg-swipe-mark.is-left { left: auto; right: calc(100% + 16px); }
+.msg-swipe-mark.is-armed { color: var(--text); background: var(--surface); transform: scale(1); }
+.msg-swipe-mark svg { width: 18px; height: 18px; }
 /* The heart mark carries the like's own sparkle (burstSparkles), in the dot's
    colour, and pops in on a double tap. */
 .msg-hearts { position: relative; --burst: var(--dot); }
@@ -8627,7 +8871,7 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 .composer .event-field > .field:first-of-type { margin-top: 1.1rem; }
 /* The field corner, --radius-field (the soft corner since 2026-10-23), on the
    composer's boxes, the editor's (same fields) and the About page's feedback
-   form. Post photos keep --radius-img. */
+   form. Photo previews wear --radius-soft, the feed photo's corner. */
 .composer .field input,
 .composer .field textarea,
 .composer .field--combo,
@@ -9066,7 +9310,9 @@ html.is-song-hold *:not(input):not(textarea):not([contenteditable]) {
 .sheet-scrim--thread .sheet-items {
   --sheet-foot: calc(4.75rem + env(safe-area-inset-bottom) + var(--kb-lift, 0px));
   flex: 1 1 auto;
-  padding: 4px 1.25rem var(--sheet-foot);
+  /* The top clears a held comment's fill (.comment--own bleeds 0.55rem up),
+     which the list's scroll edge otherwise cut off on the first comment. */
+  padding: calc(0.55rem + 4px) 1.25rem var(--sheet-foot);
   overscroll-behavior: contain;
 }
 html[data-chrome="native"] .sheet-scrim--thread .sheet-items {
@@ -9116,6 +9362,9 @@ body.thread-live .lightbox { z-index: 320; }
   border-radius: var(--radius-soft);
   transition: transform 0.45s var(--ease-soft), background-color 0.25s var(--ease-soft);
 }
+/* The row wraps for the pills alone: at its natural width a long comment would
+   wrap too, under its own avatar (the post page; the sheet's list sets flex). */
+.comment--own > .comment-body { flex: 1 1 0; }
 .comment--own.is-charging { transform: scale(0.975); }
 .comment--own.is-held,
 .comment--own.is-editing {
@@ -9170,6 +9419,125 @@ body.thread-live .lightbox { z-index: 320; }
 /* Never taller than the thread sheet (Zoe: "drop the guest list like the
    others"), so every sheet a feed raises tops out at the same line. */
 .sheet-scrim--people .sheet { max-height: min(66dvh, 640px); }
+
+/* MY CIRCLE'S SIDEBAR (2026-11-01, openFeedSide). The sheet's own surface and
+   6px inset, stood on end against the right edge: from the foot of the status
+   bar down, the display's corner at its outer foot and the panel's 32px
+   everywhere else. Comes and goes sideways, by the same spring. */
+.sheet-scrim--side {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: calc(env(safe-area-inset-top) + 6px) 6px 6px;
+  /* The feed goes soft behind it (Zoe, 2026-11-04: "subtly"), a lighter dim
+     than every other sheet's because the blur does half the parting. The
+     radius is fixed and only the scrim's opacity fades, so the frozen page is
+     sampled at one depth and never re-blurred on the way in. */
+  background: color-mix(in srgb, #000 22%, transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur-veil));
+  backdrop-filter: blur(var(--glass-blur-veil));
+}
+.sheet-scrim--side .sheet {
+  --side-corner: max(32px, calc(env(safe-area-inset-bottom) + 16px));
+  width: min(84vw, 340px);
+  max-width: none;
+  max-height: none;
+  padding: 18px 0 0;
+  border-radius: 32px 32px var(--side-corner) 32px;
+  transform: translateX(calc(100% + 24px));
+}
+.sheet-scrim--side .sheet-grab { display: none; }
+.sheet-scrim--side .sheet-title {
+  padding: 0 1.25rem 0.5rem;
+  text-align: left;
+}
+.sheet-scrim--side .sheet-items {
+  flex: 1;
+  overscroll-behavior: contain;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+/* A list's name folds it, and stays in view while its rows pass under. */
+.feed-side-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 0.3rem;
+  padding: 0 1.25rem;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: 'Oxygen', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+}
+.feed-side-chev {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  transition: transform var(--dur-move) var(--ease);
+}
+.feed-side-group.is-open .feed-side-chev { transform: rotate(180deg); }
+.feed-side-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-move) var(--ease);
+}
+.feed-side-group.is-open .feed-side-fold { grid-template-rows: 1fr; }
+.feed-side-fold > div { min-height: 0; overflow: hidden; }
+.feed-side-row {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: calc(100% - 16px);
+  min-height: 52px;
+  margin-inline: 8px;
+  padding: 0.4rem 0.75rem 0.4rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-soft);
+  background: none;
+  color: var(--text);
+  font-size: 1rem;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.feed-side-row:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+/* Where you are wears the reader's band, a commit's wash. */
+.feed-side-row.is-on { font-weight: 700; }
+.feed-side-row.is-on::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--pill-band);
+  opacity: var(--pill-wash);
+}
+.feed-side-row .avatar,
+.feed-side-pic,
+.feed-side-all {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  font-size: 1.1rem;
+}
+.feed-side-all { display: grid; place-items: center; }
+.feed-side-all svg { width: 26px; height: 26px; }
+.feed-side-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-side-check { flex-shrink: 0; width: 18px; height: 18px; }
+.feed-side-find { width: calc(100% - 32px); min-height: 52px; margin: 1rem 16px 0; border-radius: var(--radius-pill); }
 /* A SHEET'S LIST RUNS TO THE PANEL'S FOOT (Zoe, 2026-10-29: "still seeing
    bottom crop on likes and rsvps"). The panel's own bottom padding sat UNDER
    the scrolling list, so a long list was cut on a straight line with bare
@@ -9285,7 +9653,7 @@ body.thread-live .lightbox { z-index: 320; }
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;
-  border-radius: 14px;
+  border-radius: var(--radius-soft);
   overflow: hidden;
   background: var(--surface-2);
 }
@@ -9513,7 +9881,7 @@ body.thread-live .lightbox { z-index: 320; }
   width: 100%;
   aspect-ratio: 1 / 1;
   overflow: hidden;
-  border-radius: var(--radius-img);
+  border-radius: var(--radius-soft);   /* the feed photo's corner, so the preview is the post */
   background: var(--surface-2);
   cursor: grab;
   touch-action: none;      /* let us own the drag on touch */
@@ -9938,8 +10306,7 @@ body[data-ambient="none"] .pf-row-swatch {
      rather than left out of renderNav, because the breakpoint moves under a
      resize and the nav is built once. Share is My Circle's compose mark here. */
   .nav-head,
-  .nav-foot,
-  .nav-pill .nav-link--rail { display: none; }
+  .nav-foot { display: none; }
   .nav-pill {
     pointer-events: auto;
     position: relative;               /* containing block for anything absolute inside */
@@ -9986,11 +10353,6 @@ body[data-ambient="none"] .pf-row-swatch {
   /* The capsule says where you are, so the label keeps its weight: a bold
      label changing width under a moving capsule would make the row twitch. */
   .nav-pill .nav-link[aria-current="page"] { font-weight: 400; }
-  /* Updates is My Circle's on a phone (its bell), so that tab stays lit there. */
-  .nav-pill .nav-link--under {
-    color: var(--text);
-    background: color-mix(in srgb, var(--text) 8%, transparent);
-  }
   /* The dot on the glyph's top trailing corner: the glyph is 24px, centred,
      so its corner is 12px either side of the tab's middle. */
   .nav-pill .nav-dot {
@@ -10654,7 +11016,6 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 /* Less side padding on Discover's cards (Zoe, 2026-10-22: "less side padding
    on discover cards"): the words and the full-width pill run nearer the edge. */
 .view--discover .daily-card { padding-inline: 0.8rem; }
-.view--discover .community-card-pic { right: 0.8rem; }
 
 /* PEOPLE, UNDER THE CIRCLES (Zoe, 2026-10-23; first under Start a circle). A sideways rail of 4:5 cards in
    the daily card's flat material, 200px across (Zoe: "just bios. scale cards
@@ -10781,17 +11142,14 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 }
 .community-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .community-pic--mark svg { width: 46%; height: 46%; }
-/* On the card it sits in the top corner, and the kicker and the name keep clear
-   of it. The stretched link still covers it, so it taps through to the circle. */
-.community-card-pic {
-  position: absolute;
-  top: 0.95rem;
-  right: 1.05rem;
-  width: 52px;
-  height: 52px;
-}
-.community-card:not(.community-card--start) .daily-kicker,
-.community-card:not(.community-card--start) .daily-open { padding-right: 4rem; }
+/* On the card it stands on the left at 90px (was 52, in the top corner), the
+   words on its right. The stretched link still covers it, so it taps through
+   to the circle. */
+.community-card-top { display: flex; align-items: center; gap: 0.85rem; }
+/* The about runs the card's width under the photo (Zoe, 2026-11-01). */
+.community-card-about { margin-top: 0.7rem; }
+.community-card-pic { width: 90px; height: 90px; }
+.community-card-info { flex: 1; min-width: 0; }
 
 /* The card that starts one: the same card with its fill taken out and a dashed
    edge, the way an empty slot is drawn. An invitation, not a room. */

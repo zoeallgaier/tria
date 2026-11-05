@@ -43,12 +43,12 @@ create table public.users (
   accent     text,                          -- profile colour: palette slug, 'default', 'none', or null = sample the photo (see profile-accent.sql)
   pronouns   text,                          -- freeform, e.g. 'she/her'; null = nothing shown (see add-pronouns.sql)
   listening_to jsonb,                       -- self-reported song {title, artist?, art?, apple?, spotify?, youtube?, kind?, at}; a link per service, chosen at the reading end; kind 'album'|'playlist' for a pasted one; expires after 7d on READ (see add-listening-to.sql)
-  pinned     jsonb,                         -- up to 3 cards held above your wall, in order: {k:'post',id} | {k:'song'} (a window on listening_to, not a copy) (see add-pins.sql)
+  pinned     jsonb,                         -- up to 4 cards held above your wall, in order: {k:'post',id} | {k:'song'} (a window on listening_to, not a copy) (see add-pins.sql)
   created_at timestamptz not null default now(),
-  -- Three slots, and only an array. See add-pins.sql for why the order lives in
+  -- Four slots, and only an array. See add-pins.sql and pins-four.sql for why the order lives in
   -- the array rather than in a position column on a table of its own.
   constraint users_pinned_shape check (
-    pinned is null or (jsonb_typeof(pinned) = 'array' and jsonb_array_length(pinned) <= 3)
+    pinned is null or (jsonb_typeof(pinned) = 'array' and jsonb_array_length(pinned) <= 4)
   )
 );
 
@@ -75,6 +75,7 @@ create table public.posts (
   event_date date,                          -- the day an activity happens (sorts + retires past plans)
   event_time text,                          -- optional 'HH:MM' straight from <input type="time">
   song       jsonb,                         -- { title, artist?, art?, apple?, spotify?, youtube?, kind? } for music posts; see add-song-posts.sql
+  moment     boolean not null default false, -- lasts a day, on the rail and in no feed; see add-moments.sql
   -- Who can see this post, authoritatively — the account's `private` flag does
   -- NOT gate reads (it only picks the composer's default). 'circle' means
   -- mutual-friends-only for every account, public ones included.
@@ -94,6 +95,12 @@ create table public.posts (
        and event_date is null and event_time is null)
     or
     (type <> 'repost' and repost_of is null)
+  ),
+  -- A Moment is a note, photo, link, poll or song for friends or picked people
+  -- (add-moments.sql, moment-songs.sql).
+  constraint posts_moment_shape check (
+    not moment
+    or (type in ('note','find','photo','poll','song') and audience in ('circle','list'))
   ),
   -- A song post carries a song, and nothing else does (add-song-posts.sql).
   constraint posts_song_shape check (
@@ -426,6 +433,12 @@ create policy "posts read visible" on public.posts
 -- cuts that off. Passing the values as parameters also removes the scope trap —
 -- `o` has a repost_of and an audience of its own, so a bare column name inside
 -- the subquery would bind to the ORIGINAL.
+-- A Moment is gone a day after it was said, for everyone but its author
+-- (add-moments.sql). Restrictive, so it is ANDed onto the policy above.
+create policy "posts moments fade" on public.posts
+  as restrictive for select using (
+    not moment or author = auth.uid() or created_at > now() - interval '24 hours'
+  );
 create policy "posts insert own" on public.posts
   for insert to authenticated with check (
     author = auth.uid()

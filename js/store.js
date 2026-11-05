@@ -62,6 +62,7 @@ const Store = (() => {
   //   commentLikesReady: whether add-comment-likes.sql has run (the table answered)
   //   likes: [{postId, user(username), _ts}]
   //   songsReady: whether add-song-posts.sql has run (posts.song answered)
+  //   momentsReady: whether add-moments.sql has run (posts.moment answered)
   //   friends: symmetric adjacency map keyed by username
   //   friendCounts: how many mutual ties each username actually has (see friendCount)
   //   edgeTs: when each directed edge was made, keyed "adder\nadded" (see below)
@@ -78,7 +79,7 @@ const Store = (() => {
   //   communityInvites: [{communityId, user(username), by(username)}] — mine, and
   //     those of circles I am in (circle-privacy.sql)
   //   communityPrivacyReady: whether circle-privacy.sql has run (invite only)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, momentsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
                          communities: [], communityMembers: [], communitiesReady: false,
                          communityToolsReady: false, communityInvites: [], communityPrivacyReady: false });
@@ -229,7 +230,7 @@ const Store = (() => {
      and the card goes with it, unpin it and the song stays in the rail. One
      entry at most, because a second window on the same thing shows the same
      thing. */
-  const PIN_MAX = 3;
+  const PIN_MAX = 4;
   let hasPinsColumn = false;
   // Whether add-charms.sql has run, by the same `in` test as hasPinsColumn: a
   // column that doesn't exist is omitted, an empty one is []. Until it is, no
@@ -336,6 +337,9 @@ const Store = (() => {
     // A music post's track (add-song-posts.sql): the same shape as a listening
     // status, minus `at`, because a post does not expire the way a status does.
     if (p.song && typeof p.song === 'object' && p.song.title) o.song = p.song;
+    // A Moment (add-moments.sql): an ordinary post that lasts a day, read on
+    // the rail over My Circle and in no feed (see offFeed).
+    if (p.moment) o.moment = true;
     // A repost points at the post it passes along. Absent on every other row, and
     // absent on ALL rows until reposts.sql has run — the client tolerates that the
     // same way it tolerates every other pending migration.
@@ -595,6 +599,8 @@ const Store = (() => {
       // answer is yes, and then never again: a column that exists does not stop
       // existing, and a sign-out empties the world and asks anew.
       state.songsReady ? { data: [], error: null } : sb.from('posts').select('song').limit(1),
+      // Whether a post can be a Moment yet (add-moments.sql). The same latch.
+      state.momentsReady ? { data: [], error: null } : sb.from('posts').select('moment').limit(1),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
@@ -639,7 +645,7 @@ const Store = (() => {
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, sg, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci] = read;
+    const [u, p, c, l, cl, sg, mo, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -682,6 +688,8 @@ const Store = (() => {
     // songs away mid-session.
     if (!sg.error) state.songsReady = true;
     else if (sg.error.code === '42703') state.songsReady = false;
+    if (!mo.error) state.momentsReady = true;
+    else if (mo.error.code === '42703') state.momentsReady = false;
     // Comment likes arrive in their own migration, so a MISSING table says the
     // hearts are not wired up yet, and the app draws none rather than a heart
     // that silently springs back on every tap. Any other error is a blip and
@@ -1077,6 +1085,9 @@ const Store = (() => {
   // row is still a post, so it can be liked from there. A repost of one is
   // out with it (and a song can't be reposted any more, see repostable).
   const isSongPost = (p) => p.type === 'song' || (p.repostOf && (originalOf(p) || {}).type === 'song');
+  // A MOMENT is in no feed either (Zoe, 2026-11-04): it lives a day on the
+  // rail beside the songs, and can't be reposted (see repostable).
+  const offFeed = (p) => !!p.moment || isSongPost(p);
   //
   // ONE BARE REPOST PER PERSON PER POST. A bare repost has one place now (its
   // original's, repost-audience.sql), but the Repost to a circle row of
@@ -1087,7 +1098,7 @@ const Store = (() => {
     const followed = new Set(following());
     const passed = new Set();
     return posts().filter(p => {
-      if (!(visibleRepost(p) && !isSongPost(p)
+      if (!(visibleRepost(p) && !offFeed(p)
         && (!p.communityId || p.author === state.session || inCommunity(p.communityId)) && (
           circle.has(p.author) ||
           (followed.has(p.author) && p.audience === 'public')))) return false;
@@ -1171,7 +1182,7 @@ const Store = (() => {
     const target = originalOf(post) || post;
     // A song stays in On repeat (see isSongPost). A circle's post waits on
     // repost-audience.sql, which is what lets a repost land in a circle.
-    if ((target.audience || 'circle') === 'list' || target.type === 'song') return false;
+    if ((target.audience || 'circle') === 'list' || target.type === 'song' || target.moment) return false;
     // Someone else's friends-only post goes nowhere new (Zoe, 2026-10-26): the
     // read gate holds a repost or a quote of it to the author's own friends, so
     // a private account's circle is never widened, and a glyph would promise a
@@ -1282,10 +1293,16 @@ const Store = (() => {
   // rule as the indexes above: replace state.posts, never mutate it, and this
   // can't go stale.
   const sorted = new WeakMap();
+  // A Moment lasts a day (MOMENT_MS). RLS stops handing one to anyone but its
+  // author after that (add-moments.sql); this lets go of it everywhere at the
+  // next paint, the author's copy too.
+  const MOMENT_MS = 24 * 60 * 60 * 1000;
+  const momentLive = (p, now = Date.now()) => !p.moment || (now - Date.parse(p._ts || 0)) < MOMENT_MS;
   function posts() {
     let list = sorted.get(state.posts);
     if (!list) {
-      list = [...state.posts].sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
+      const now = Date.now();
+      list = state.posts.filter(p => momentLive(p, now)).sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
       sorted.set(state.posts, list);
     }
     return list;
@@ -1295,7 +1312,7 @@ const Store = (() => {
   // its reposter. RLS hands a circle's posts only to its members, so on someone
   // else's profile that means the circles you share. My Circle still leaves
   // them out (see feed).
-  const postsBy = (username) => posts().filter(p => p.author === username && !isSongPost(p));
+  const postsBy = (username) => posts().filter(p => p.author === username && !offFeed(p));
 
   // How many people a targeted post is shared with. Accurate for posts you
   // authored (RLS gives you all their allowlist rows); 0 for others' posts.
@@ -1954,6 +1971,7 @@ const Store = (() => {
     if (data.eventDate) row.event_date = data.eventDate;
     if (data.eventTime) row.event_time = data.eventTime;
     if (data.song)     row.song = data.song;   // { title, artist?, art?, apple?, spotify?, youtube?, kind? }
+    if (data.moment)   row.moment = true;
     if (data.video) {
       try {
         const vExt = /mp4/i.test(data.video.type) ? 'mp4' : /webm/i.test(data.video.type) ? 'webm' : 'mov';
@@ -1994,6 +2012,18 @@ const Store = (() => {
     }
 
     const { data: inserted, error } = await sb.from('posts').insert(row).select().single();
+    if (error && row.moment) {
+      // A DB without add-moments.sql refuses the column by name.
+      dropUploads([row.image, row.poster, ...(row.images || [])]);
+      console.warn('[tria] moment refused:', error.code, error.message);
+      const missing = error.code === '42703' || error.code === 'PGRST204';
+      // A song Moment before moment-songs.sql: the shape check refuses it.
+      if (error.code === '23514' && row.song)
+        return { ok: false, error: 'Songs in moments aren’t switched on yet. Share it as Music for now.' };
+      return { ok: false, error: missing
+        ? 'Moments aren’t switched on yet.'
+        : 'Couldn’t share that, try again.' };
+    }
     if (error && row.images) {
       // A DB without add-carousels.sql refuses the column by name. Say that rather
       // than "try again", which would only fail the same way, and take the files back.
@@ -2149,7 +2179,7 @@ const Store = (() => {
     write('audience', xs => xs.filter(x => x.postId !== id));
     // And the pin, if this post was one. A pin at a post that no longer exists
     // draws nothing (the readers drop what they can't resolve), but leaving it
-    // in the row silently spends a slot: you'd be at three pins with two cards
+    // in the row silently spends a slot: you'd be at four pins with three cards
     // showing and no way to see which one is the ghost. Only your own posts
     // reach this function, so the pin being pruned is always your own.
     const mine = currentUser();
@@ -2471,6 +2501,9 @@ const Store = (() => {
   // Whether a post can carry a song (add-song-posts.sql). Until then the
   // compose dial offers no Music row and the composer no song button.
   const songsReady = () => !!state.songsReady;
+  // Whether a post can be a Moment (add-moments.sql). Until then the New
+  // sheet keeps its Music row and offers no Moment.
+  const momentsReady = () => !!state.momentsReady;
   const reactionOf = (postId) => mineIn(state.likes, postId) ? 'heart' : null;
 
   // Like a post ('heart') or take the like back (null).
@@ -3201,7 +3234,7 @@ const Store = (() => {
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
   const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
   // Newest first, through posts() so it shares the one sort.
-  const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p) && !isSongPost(p));
+  const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p) && !offFeed(p));
   // The last sign of life in a circle that this reader can see: a post (only
   // members are handed those), a join, or the day it was started. Discover
   // orders its circles by it.
@@ -4210,7 +4243,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
-    reactionOf, setReaction, songsReady,
+    reactionOf, setReaction, songsReady, momentsReady, momentLive, MOMENT_MS,
     commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,

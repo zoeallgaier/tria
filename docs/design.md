@@ -1199,6 +1199,20 @@ placeholder box (JS adds `.is-loaded`), so they settle rather than pop.
 
 ## Pinned cards, and what an album cover is worth
 
+**Since 2026-11-04 the pins are a grid**, and much of what follows (the stack,
+the 88px square on the leading edge, the cover's drop shadow on a pin, the gap
+opening under a held card) is the history of that. Two columns, one row height
+(a column's width, capped at 220px), a 10px gap and a 14px pad, the page's own
+gutter, all on `.pin-grid`. An odd count puts the first pin across both columns,
+its picture exactly one row square so it sits on the line of the card below. A
+picture fills its card with the words in white on a shade; words sit on the flat
+cards' material, a headline over the first lines, clamped to whole lines, and a
+foot naming where it points. The ••• is in your own card's top right corner,
+and no card wears a type glyph (Zoe: "the icons are unnecessary"). A held card trades places with the card under the
+finger, since a square sliding into the wide slot would change shape under it,
+and the repaint glides every card from where it was. The panel still carries no
+colour of its own, and there is still no caption and no empty slot.
+
 Up to three things a person holds above their own wall, between the identity and
 the posts: a post they wrote, or the song they're on — and the song card is a
 window on the listening status rather than a copy of it, so it is the same song
