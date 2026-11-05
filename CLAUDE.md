@@ -64,11 +64,16 @@ hairline segment per frame (a carousel is a frame per photo), face, name, age,
 the content set as the feed sets it (a short note big in the serif, a song's
 sleeve, title and Listen). **Nothing advances by itself**: tap right for next,
 left for back, on into the next person; a swipe sideways changes person, a pull
-down closes, a double tap likes (the heart where the finger was), a hold hides
+down closes, **a pull up replies** (past `REPLY_AT`, 70px, the Reply pill lights
+and a LIGHT haptic arms it, Zoe 2026-11-05), a double tap likes (the heart where the finger was), a hold hides
 the chrome, and on your OWN opens Edit moment and Delete moment (`openMyMoment`,
-or Listen/Change song/Take it down for your song). The foot is Add a comment
-(the thread sheet over the viewer) and the heart (yours opens Likes). The •••
-on a friend's frame is Message them (`replyToSong`, the frame on the DM's bar).
+or Listen/Change song/Take it down for your song). **A reply is a message, not
+a comment** (Zoe, 2026-11-05: "adding a comment should actually be replies"):
+the foot is **Reply to <name>** (`replyToSong`, your DM with the frame on its
+bar) and the heart; your own frame, or someone you can't message, has the heart
+alone (yours opens Likes), and only your own frame has a •••. Words take the
+vertical pan only when they really scroll (`.is-long`, a ResizeObserver), so the
+pulls work on a short note.
 The rail's own double tap and hold are gone (`wireSongGestures` deleted).
 The hint is v6 ("Moments last a day. Tap someone to see theirs, and double tap
 one to like it."). **A day is enforced twice**: the client

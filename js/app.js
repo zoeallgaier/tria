@@ -7607,18 +7607,26 @@
      note is meant to be read, so a frame stays until you tap. Tap the right
      of the screen for the next, the left for the one before, past the ends
      into the next or last person. A double tap likes it (the gesture songs
-     already taught), a swipe sideways changes person, a pull down closes.
+     already taught), a swipe sideways changes person, a pull down closes,
+     and a pull UP replies (Zoe, 2026-11-05, as a story does).
      Holding your OWN frame opens its edit and delete sheet (Zoe), holding
      anyone else's hides the chrome so the picture stands alone. A carousel
-     is a frame per photo. The foot is Comment, the thread's own sheet raised
-     over the viewer, and the heart: yours opens who liked it, as in a feed.
+     is a frame per photo. The foot is Reply and the heart.
 
-     It is an overlay, not a route: it locks the page as a sheet does, which
+     A REPLY IS A MESSAGE, never a comment (Zoe, 2026-11-05: "adding a comment
+     should actually be replies"): Reply to <name> opens your DM with them,
+     the frame waiting on the bar (replyToSong), and so does a pull up past
+     REPLY_AT, which lights the pill as it arms. Someone you can't message,
+     and your own frame, have no Reply: the foot is the heart alone, and
+     yours opens who liked it, as in a feed. Replies land in your chats. */
+
+  /* It is an overlay, not a route: it locks the page as a sheet does, which
      stands the native chrome down (`overlaid`), and route() closes it on any
      navigation, so a name, a mention or the editor walks out of it cleanly. */
   let momentsAway = null;   // the open viewer's close(), for a navigation to take
   const dismissMoments = () => { if (momentsAway) momentsAway(); };
   const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
+  const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
 
   function momentFrames(stack) {
     return stack.posts.flatMap(p => p.images && p.images.length > 1 && !isVideoUrl(p.image || '')
@@ -7692,20 +7700,28 @@
       `</div>` +
       `<div class="mv-stage"></div>` +
       `<div class="mv-foot">` +
-        `<button type="button" class="mv-comment pill-quiet">${svgIcon('comment')}<span></span></button>` +
+        `<button type="button" class="mv-reply pill-quiet">${svgIcon('reply')}<span></span></button>` +
         `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
       `</div>`;
     const bars = root.querySelector('.mv-bars');
     const head = root.querySelector('.mv-head');
     const stage = root.querySelector('.mv-stage');
     const likeBtn = root.querySelector('.mv-like');
-    const commentBtn = root.querySelector('.mv-comment');
+    const replyBtn = root.querySelector('.mv-reply');
     document.body.appendChild(root);
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => root.classList.add('open'));
 
     const cur = () => frames[fi];
     const own = () => cur().post.author === me;
+    const canReply = () => !own() && canMessage(cur().post.author);
+
+    /* Words take the vertical pan only when they really scroll (a long note,
+       a long caption), so on every other frame a pull up or down is the
+       viewer's. Watched, since a tile's picture can land and tip it over. */
+    const fits = typeof ResizeObserver === 'function' ? new ResizeObserver((seen) => {
+      for (const { target: el } of seen) el.classList.toggle('is-long', el.scrollHeight > el.clientHeight + 1);
+    }) : null;
 
     const paintLike = () => {
       const p = cur().post;
@@ -7758,7 +7774,9 @@
       const p = f.post;
       bars.innerHTML = frames.map((_, i) => `<span class="mv-bar${i <= fi ? ' is-on' : ''}"></span>`).join('');
       const name = s.mine ? 'You' : (s.u.name || s.u.username);
-      const more = s.mine || canMessage(s.u.username);
+      // Only your own frame has a •••: a friend's held Message them alone,
+      // which is the foot's Reply now.
+      const more = s.mine;
       head.innerHTML =
         `<a class="mv-who" href="#/u/${encodeURIComponent(s.u.username)}">` +
           avatarEl(s.u, { cls: 'mv-avatar' }) +
@@ -7769,9 +7787,13 @@
         `<button type="button" class="mv-btn mv-close" aria-label="Close">${svgIcon('close')}</button>`;
       root.setAttribute('aria-label', `${name}’s moments, ${fi + 1} of ${frames.length}`);
       head.querySelector('.mv-close').addEventListener('click', () => close());
-      head.querySelector('.mv-more')?.addEventListener('click', (e) => openFrameMenu(e.currentTarget));
+      head.querySelector('.mv-more')?.addEventListener('click', () => openFrameMenu());
       stage.innerHTML = momentFrameHtml(f);
       const frame = stage.firstElementChild;
+      if (fits) {
+        fits.disconnect();
+        frame.querySelectorAll('.mv-words, .mv-caption').forEach(el => fits.observe(el));
+      }
       wireLinkTiles(frame);
       wirePoll(frame, p, {});
       const vid = frame.querySelector('video');
@@ -7782,7 +7804,8 @@
         sound.setAttribute('aria-label', vid.muted ? 'Play with sound' : 'Mute');
         sound.innerHTML = svgIcon(vid.muted ? 'mute' : 'sound');
       });
-      commentBtn.querySelector('span').textContent = own() ? 'Comments' : 'Add a comment';
+      replyBtn.hidden = !canReply();
+      replyBtn.querySelector('span').textContent = `Reply to ${displayNameOf(p.author)}`;
       paintLike();
       wash(f, s.u);
       if (!s.mine) markMomentSeen(p);
@@ -7841,17 +7864,26 @@
       hapticTap('LIGHT');
       setLike(p, Store.reactionOf(p.id) ? null : 'heart');
     });
-    commentBtn.addEventListener('click', () => openThreadSheet(cur().post));
+    // The DM, the frame on its bar. A pull up has already buzzed as it armed.
+    const reply = (pulled) => { if (canReply()) replyToSong(cur().post, replyBtn, pulled); };
+    replyBtn.addEventListener('click', () => reply(false));
 
-    // Your own: its sheet. Someone else's: a message to them about it.
-    const openFrameMenu = (btn) => {
+    // Your own frame's sheet: edit and delete, or your song's.
+    const openFrameMenu = () => {
       const p = cur().post;
-      if (p.author !== me) {
-        openSheet({ items: [{ label: `Message ${displayNameOf(p.author)}`, icon: 'send', run: () => replyToSong(p, btn) }] });
-        return;
-      }
+      if (p.author !== me) return;
       if (!p.moment) { openMySong(close); return; }
       openMyMoment(p, close);
+    };
+
+    // A pull up arms the reply past REPLY_AT: the pill takes the wash and the
+    // finger feels it, as a message's swipe to reply does.
+    const aimReply = (p) => {
+      const armed = p.axis === 'y' && p.dy <= -REPLY_AT && canReply();
+      if (armed === p.armed) return;
+      p.armed = armed;
+      replyBtn.classList.toggle('is-on', armed);
+      if (armed) hapticTap('LIGHT');
     };
 
     /* The stage's own gestures. A link, a button, a poll or a tile keeps its
@@ -7862,12 +7894,12 @@
     let tapTimer = 0;
     stage.addEventListener('pointerdown', (e) => {
       if (e.button > 0 || e.target.closest(KEEP)) return;
-      press = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false, held: false, axis: '' };
+      press = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false, held: false, axis: '', armed: false };
       const mine = press;
       press.timer = setTimeout(() => {
         if (press !== mine || mine.moved) return;
         mine.held = true;
-        if (own()) { hapticTap('LIGHT'); openFrameMenu(head.querySelector('.mv-more') || stage); }
+        if (own()) { hapticTap('LIGHT'); openFrameMenu(); }
         else root.classList.add('is-held');
       }, 420);
     });
@@ -7881,12 +7913,18 @@
         clearTimeout(press.timer);
         press.axis = Math.abs(press.dy) > Math.abs(press.dx) ? 'y' : 'x';
       }
+      aimReply(press);
       const frame = stage.firstElementChild;
       if (!frame || prefersReduced()) return;
       frame.style.transition = 'none';
-      frame.style.transform = press.axis === 'y'
-        ? `translateY(${Math.max(0, press.dy)}px) scale(${1 - Math.min(0.08, Math.max(0, press.dy) / 2400)})`
-        : `translateX(${press.dx * 0.5}px)`;
+      // Up, the frame rises at half the finger's pace and stiffens once armed;
+      // on a frame with no Reply it only gives a little, so nothing is promised.
+      const up = Math.max(0, -press.dy);
+      const rise = !canReply() ? Math.min(18, up * 0.12)
+        : up <= REPLY_AT ? up * 0.5 : REPLY_AT * 0.5 + (up - REPLY_AT) * 0.12;
+      frame.style.transform = press.axis === 'x' ? `translateX(${press.dx * 0.5}px)`
+        : press.dy < 0 ? `translateY(${-rise}px)`
+        : `translateY(${press.dy}px) scale(${1 - Math.min(0.08, press.dy / 2400)})`;
     }, { passive: true });
     const lift = (e) => {
       const was = press;
@@ -7894,6 +7932,7 @@
       if (!was) return;
       clearTimeout(was.timer);
       root.classList.remove('is-held');
+      replyBtn.classList.remove('is-on');
       const frame = stage.firstElementChild;
       const settle = () => {
         if (!frame) return;
@@ -7904,6 +7943,7 @@
       if (was.moved) {
         if (was.axis === 'y' && was.dy > 110) { close(); return; }
         settle();
+        if (was.armed) { reply(true); return; }
         if (was.axis === 'x' && Math.abs(was.dx) > 70) person(was.dx < 0 ? 1 : -1);
         return;
       }
@@ -7944,6 +7984,7 @@
       if (momentsAway !== close) return;
       momentsAway = null;
       clearTimeout(tapTimer);
+      if (fits) fits.disconnect();
       document.removeEventListener('keydown', onKey);
       root.querySelector('video')?.pause();
       root.classList.remove('open');
@@ -7975,16 +8016,17 @@
     setTimeout(() => hint.remove(), prefersReduced() ? 0 : 220);
   }
 
-  /* A REPLY IS A MESSAGE, from the viewer's ••• (it was a hold on the rail
-     until the stacks): your DM with the poster, the song or Moment waiting
-     on the bar as a reply waits (setChatSong), sent as its own link. The
-     chat's chevron pops back to My Circle rather than to Chats (chatPopsTo),
-     since that is where the reader came from. */
+  /* A REPLY IS A MESSAGE, from the viewer's Reply pill or a pull up (it was
+     the ••• until 2026-11-05, and a hold on the rail before the stacks): your
+     DM with the poster, the song or Moment waiting on the bar as a reply
+     waits (setChatSong), sent as its own link. The chat's chevron pops back
+     to My Circle rather than to Chats (chatPopsTo), since that is where the
+     reader came from. `quiet` when a gesture already buzzed as it armed. */
   let songReply = null;   // { chatId, post } for the chat this tap opens
   let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
-  async function replyToSong(post, btn) {
+  async function replyToSong(post, btn, quiet) {
     if (btn.dataset.busy) return;
-    hapticTap('LIGHT');
+    if (!quiet) hapticTap('LIGHT');
     const dm = Store.chats().find(ch => ch.kind === 'direct' && ch.other === post.author
       && ch.status === 'member' && !ch.archived);
     let id = dm && dm.id;

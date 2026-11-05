@@ -6110,15 +6110,18 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
 }
 .mv-sound svg { width: 20px; height: 20px; }
-.mv-caption { max-height: 32dvh; overflow-y: auto; touch-action: pan-y; }
+.mv-caption { max-height: 32dvh; overflow-y: auto; }
 /* Words alone sit in the middle, and a long note scrolls. */
 .mv-frame--words { display: flex; flex-direction: column; justify-content: center; }
 .mv-words {
   max-height: 100%;
   overflow-y: auto;
-  touch-action: pan-y;
   overscroll-behavior: contain;
 }
+/* Only words that really scroll take the vertical pan (`is-long`, measured in
+   openMoments); anywhere else a pull up replies and a pull down closes. */
+.mv-words, .mv-caption { touch-action: none; }
+:is(.mv-words, .mv-caption).is-long { touch-action: pan-y; }
 .mv-title {
   margin: 0 0 0.6rem;
   font-family: 'Instrument Serif', 'Times New Roman', serif;
@@ -6174,8 +6177,10 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-listen svg { width: 18px; height: 18px; }
 
-.mv-foot { display: flex; align-items: center; gap: 10px; padding-top: 6px; padding-bottom: 10px; }
-.mv-comment {
+/* Reply to <name> and the heart. With no Reply (your own frame, or someone
+   you can't message) the heart keeps its corner. */
+.mv-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 6px; padding-bottom: 10px; }
+.mv-reply {
   flex: 1;
   min-width: 0;
   height: 52px;
@@ -6190,8 +6195,11 @@ button.poll-option:disabled { cursor: default; }
   cursor: pointer;
   text-align: left;
 }
-.mv-comment span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mv-comment svg { width: 22px; height: 22px; flex: none; }
+.mv-reply[hidden] { display: none; }
+/* Armed by a pull up: the wash comes on and the words take the page's ink. */
+.mv-reply.is-on { color: var(--text); }
+.mv-reply span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-reply svg { width: 22px; height: 22px; flex: none; }
 .mv-like {
   --burst: var(--heart);
   width: 52px;
