@@ -37,29 +37,40 @@ native material cut around it (2026-11-06, a few hours). All three are deleted:
 `mountToolbar` has no `field`, there is no `#toolbar-field` or
 `body.toolbar-field`. The 1.8 notes below about the field in the bar are history.
 
-## The composer has the camera roll (2026-11-06)
+## The camera roll is how a photo gets in (2026-11-06)
 
-**A row of recent photos sits under the note on the post and Moment
-composers** (Zoe: "make it easier and seamless to post images"; public posts
-over the last 60 days were 47% photo, 43% note). It is APPLE'S PICKER set into
-the page (`TriaPhotosPlugin.swift`, `PHPickerViewController` in `.compact` mode
-with `.continuous` selection, iOS 17 and up, app only), never a strip of our
-own: it runs out of process, so Tria asks for no photo permission and sees only
-what is tapped. A custom strip would need the whole library, and that was the
-trade refused. The cost is that the thumbnails and checks are Apple's.
-**A tap puts a photo in, a second tap takes it out**: picks are ordinary
-stills (`rollId` on each, `api.addRoll`/`dropRoll` from `wireFrameCapture`),
-so the carousel, its tray and its six are unchanged, and a still taken out on
-the web side (the tray's x, Start over, the photo button) is unticked natively
-(`rollDeselect`). The roll's first pick opens the photo surface and its last
-untick closes it. **It lives INSIDE the web view's scroll view** at the document
-rect of `#c-roll` (`.compose-roll`, 104px, 140 on a Moment, `--radius-soft`), so
-it scrolls with the page on its own; a ResizeObserver on the fields re-sends the
-box. **It is there only while the post could take a photo**: not over a link,
-poll, plan, song or clip, not while a field holds the caret, and never over a
-sheet (native draws over every web pixel; a body MutationObserver watches for
-`.sheet-scrim`). iOS 15 and 16 and the web never draw it; the photo button is
-unchanged and still the way in for a clip or the camera. `wireRoll` in
+**In the app the composer's photo button is gone: a row under the note is the
+way in** (Zoe: "make it easier and seamless to post images", then "replace the
+frames icon ... take or choose a photo"; public posts over the last 60 days were
+47% photo, 43% note). The row is two quiet discs, **Take a photo** (the system
+camera, `capture` on `#c-camera`) and **All photos** (the whole library in a
+sheet, clips too, opening with what the post already holds ticked, so Add
+hands back the post's whole set: `TriaPhotos.pick`, `TriaLibrarySheet`,
+`setLibrary`), then the reader's **recent photos in Apple's own picker set into
+the page** (`TriaRoll`, `PHPickerViewController` `.compact` and `.continuous`,
+iOS 17). A tap on a recent photo puts it in, a second takes it out. **No photo
+permission is ever asked**: both pickers run out of process. A strip of our own
+would need the whole library; that was the trade refused, and the cost is that
+the thumbnails and checks are Apple's.
+**The preview's x is how anything comes out** (`rollMode` in
+`wireFrameCapture`: `.media-x` on the photo and on the clip, in the carousel
+count's material). Under the roll there is no dropzone, no Add more, no Choose
+another and no + or x in the tray, which only picks which photo the preview
+shows. Picks are ordinary stills (`rollId` is the asset id, none for a camera
+photo), so the carousel and its six are unchanged; a still taken out is
+unticked in the row (`rollDeselect`), the first thing in opens the photo
+surface and the last out folds it. A photo added from All photos is not ticked
+in the row (a picker can be unticked from outside, never ticked); tapped there,
+it is marked as the one already in. **A clip** comes from All photos as a file
+in tmp, read through `Capacitor.convertFileSrc`, never as base64.
+**The row lives INSIDE the web view's scroll view** at the document rect of
+`#c-roll-strip` (`.compose-roll` 104px, 140 on a Moment, the strip
+`--radius-soft`), so it scrolls with the page; a ResizeObserver on the fields
+re-sends the box. It shows while the post could take a photo (not over a link,
+poll, plan, song or clip) and the picker stands down under a sheet or the
+mention list, since native draws over every web pixel. **iOS 15 and 16 and the
+web keep the photo button** (`rollLikely`, `rollAble`; the button ships hidden
+under the roll and comes back if `rollReady` says no). `wireRoll` in
 renderPublish, `stopRoll` in route().
 
 ## A photo colour is pinned (2026-11-05)

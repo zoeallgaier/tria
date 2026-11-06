@@ -43,11 +43,35 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "rollReady", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "roll", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "rollDeselect", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pick", returnType: CAPPluginReturnPromise),
     ]
 
     /// A `TriaRoll` while the composer is up. `AnyObject` so the property can
     /// live on a class that also runs on iOS 15.
     private var strip: AnyObject?
+    /// The All photos sheet while it is up (PHPicker holds its delegate weakly).
+    private var sheet: TriaLibrarySheet?
+
+    /// `{ limit, selected: [asset ids] }` resolves `{ items: [...] }` (see
+    /// `TriaLibrarySheet`) or `{ cancelled: true }`: backing out is an answer.
+    @objc func pick(_ call: CAPPluginCall) {
+        let limit = call.getInt("limit") ?? 6
+        let selected = (call.getArray("selected") ?? []).compactMap { $0 as? String }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let root = self.bridge?.viewController else {
+                call.resolve(["cancelled": true])
+                return
+            }
+            var top: UIViewController = root
+            while let shown = top.presentedViewController { top = shown }
+            let sheet = TriaLibrarySheet(limit: limit, selected: selected) { [weak self] items in
+                if let items { call.resolve(["items": items]) } else { call.resolve(["cancelled": true]) }
+                DispatchQueue.main.async { self?.sheet = nil }
+            }
+            self.sheet = sheet
+            sheet.present(from: top)
+        }
+    }
 
     @objc func rollReady(_ call: CAPPluginCall) {
         if #available(iOS 17.0, *) { call.resolve(["ok": true]) } else { call.resolve(["ok": false]) }
@@ -186,7 +210,7 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         picked = ids
         gone.forEach { emit("rollUnpick", ["id": $0]) }
         for (id, provider) in fresh {
-            Self.load(provider) { [weak self] result in
+            TriaPhotoLoad.image(provider) { [weak self] result in
                 DispatchQueue.main.async {
                     // Unticked (or taken out on the web) while it loaded.
                     guard let self, self.picked.contains(id) else { return }
@@ -198,7 +222,111 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         }
     }
 
-    private static func load(_ provider: NSItemProvider, done: @escaping ([String: Any]) -> Void) {
+}
+
+/// The full library, for the roll's All photos button: photos and clips, in a
+/// sheet, with what the post already holds ticked as it opens
+/// (`preselectedAssetIdentifiers`), so Add hands back the post's whole new
+/// set. A pick already in the post comes back as `{ id, kept: true }` with no
+/// bytes; a photo as `{ id, data, type }`; a clip as `{ id, path, type }`, a
+/// copy in the app's own tmp folder, read by the web through
+/// `Capacitor.convertFileSrc` (150MB of base64 is not a bridge message).
+final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
+    private let limit: Int
+    private let selected: [String]
+    private let done: ([[String: Any]]?) -> Void
+    private var finished = false
+
+    init(limit: Int, selected: [String], done: @escaping ([[String: Any]]?) -> Void) {
+        self.limit = limit
+        self.selected = selected
+        self.done = done
+    }
+
+    func present(from host: UIViewController) {
+        var config = PHPickerConfiguration(photoLibrary: .shared())
+        config.filter = .any(of: [.images, .videos])
+        config.selectionLimit = max(1, limit)
+        config.selection = .ordered
+        config.preselectedAssetIdentifiers = selected
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        host.present(picker, animated: true)
+    }
+
+    private func finish(_ items: [[String: Any]]?) {
+        guard !finished else { return }
+        finished = true
+        done(items)
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        // Cancel, or nothing left ticked: the post stays as it is (its own x
+        // is how a photo comes out).
+        guard !results.isEmpty else { finish(nil); return }
+        TriaPhotoLoad.clearClips()
+        var items = [[String: Any]?](repeating: nil, count: results.count)
+        let group = DispatchGroup()
+        let lock = NSLock()
+        for (i, result) in results.enumerated() {
+            let id = result.assetIdentifier ?? UUID().uuidString
+            if selected.contains(id) { items[i] = ["id": id, "kept": true]; continue }
+            group.enter()
+            let provider = result.itemProvider
+            let landed: ([String: Any]) -> Void = { data in
+                var data = data
+                data["id"] = id
+                lock.lock(); items[i] = data; lock.unlock()
+                group.leave()
+            }
+            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                TriaPhotoLoad.clip(provider, done: landed)
+            } else {
+                TriaPhotoLoad.image(provider, done: landed)
+            }
+        }
+        group.notify(queue: .main) { [weak self] in
+            self?.finish(items.compactMap { $0 })
+        }
+    }
+}
+
+/// Reading a pick into what crosses the bridge, shared by the roll and the sheet.
+enum TriaPhotoLoad {
+    private static var clipsDir: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("tria-clips", isDirectory: true)
+    }
+
+    /// Each sheet's clips replace the last one's, so tmp never fills with them.
+    static func clearClips() {
+        try? FileManager.default.removeItem(at: clipsDir)
+    }
+
+    static func clip(_ provider: NSItemProvider, done: @escaping ([String: Any]) -> Void) {
+        let unreadable: [String: Any] = ["error": "Couldn’t read that clip. Try another."]
+        let typeId = provider.registeredTypeIdentifiers.first {
+            UTType($0)?.conforms(to: .movie) ?? false
+        } ?? UTType.movie.identifier
+        provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, _ in
+            // The file is gone when this returns, so it is copied out first.
+            guard let url else { done(unreadable); return }
+            let dir = clipsDir
+            let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+            let copy = dir.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                try FileManager.default.copyItem(at: url, to: copy)
+            } catch {
+                done(unreadable)
+                return
+            }
+            let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "video/quicktime"
+            done(["path": copy.absoluteString, "type": mime])
+        }
+    }
+
+    static func image(_ provider: NSItemProvider, done: @escaping ([String: Any]) -> Void) {
         let unreadable: [String: Any] = ["error": "Couldn’t read that photo. Try another."]
         if provider.hasItemConformingToTypeIdentifier(UTType.gif.identifier) {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.gif.identifier) { data, _ in
