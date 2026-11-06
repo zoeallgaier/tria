@@ -7759,6 +7759,17 @@
      whole in the same task as the route, before the page under it paints,
      with no fade, so My Circle never flashes. */
   const momentReturn = new Map();
+  /* The pages opened OUT of the viewer, so their back chevron pops onto it.
+     A bar's back is a link to a fixed place (a profile's to My Circle, a
+     chat's to Chats), which would push a fresh entry and lose the Moment. */
+  const momentLeft = new Set();
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a.toolbar-back[href]');
+    if (!a || !navHere || !momentLeft.has(navHere)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    history.back();
+  }, true);
   const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
   const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
   const DISMISS_AT = 110;      // a pull down past this closes the viewer
@@ -25144,6 +25155,7 @@
     dismissSheet();
     if (momentsAway && momentsAway.at && prevHere && prevHere !== arriving) {
       momentReturn.set(prevHere, momentsAway.at());
+      momentLeft.add(arriving);
       while (momentReturn.size > 20) momentReturn.delete(momentReturn.keys().next().value);
     }
     dismissMoments();
