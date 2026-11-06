@@ -7693,7 +7693,9 @@
       items: [
         ...(post.type !== 'poll'
           ? [{ label: 'Edit moment', icon: 'pencil', run: () => { before(); startPostEdit(post); } }] : []),
-        { label: 'Delete moment', icon: 'trash', danger: true, run: () => { before(); confirmDeletePost(post); } },
+        // The viewer stays up behind the confirm, so a Cancel leaves you on the
+        // moment; only the second Delete takes it (and the viewer) away.
+        { label: 'Delete moment', icon: 'trash', danger: true, run: () => confirmDeletePost(post, before) },
       ],
     });
   }
@@ -13008,10 +13010,13 @@
   // the escape hatch, the danger row the deliberate act — the same one-sheet guard
   // Delete account uses). Fired from the post's ••• menu wherever the card lives,
   // so it refreshes whichever view is showing rather than assuming the profile.
-  function confirmDeletePost(post) {
+  // `confirmed` runs on the deliberate press, before the write (the Moments
+  // viewer closes there, not on the first Delete).
+  function confirmDeletePost(post, confirmed = () => {}) {
     openSheet({
       title: `Delete this ${post.moment ? 'moment' : 'post'}? This can’t be undone.`,
       items: [{ label: post.moment ? 'Delete moment' : 'Delete post', icon: 'trash', danger: true, run: async () => {
+        confirmed();
         const res = await Store.deletePost(post.id);
         if (res && res.ok === false) { toast(res.error || 'Couldn’t delete, try again.'); return; }
         refreshPostViews(post.id);
