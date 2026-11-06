@@ -11754,9 +11754,18 @@ html[data-chrome="native"] .topbar .toolbar-cta { visibility: hidden; }
    tapped would vanish under its own card. The web's copies show instead, under
    the card's scrim and dimmed with the page, exactly as on the web. */
 html[data-chrome="native"] body:has(.bar-menu-scrim) .topbar .toolbar-btn { visibility: visible; }
-/* AND ON A ROUTE WHOSE BAR HOLDS A WEB FIELD (Discover). Native is off duty
-   there and the web draws the whole bar, so Discover's + is the web's own. */
-html[data-chrome="native"] body.toolbar-field .topbar .toolbar-btn { visibility: visible; }
+/* DISCOVER'S FIELD IS NATIVE TOO (2026-11-05, TriaSearchField), so its bar is
+   the same Liquid Glass as My Circle's. The web input and its glyph stay in
+   the bar, invisible, as the model and the box measured (searchSpec). The
+   filter slot doesn't tween here: native reads the box on the frame the class
+   flips and glides the capsule itself, and the disc is a native control. */
+html[data-chrome="native"] .toolbar-field .discover-search-field,
+html[data-chrome="native"] .toolbar-field .discover-search-ico { visibility: hidden; }
+html[data-chrome="native"] .discover-filter-slot,
+html[data-chrome="native"] .topbar .discover-filter-slot .masthead-filter,
+html[data-chrome="native"] .topbar .discover-filter-slot.is-open .masthead-filter { transition: none; }
+html[data-chrome="native"] .topbar .discover-filter-slot .masthead-filter { transform: none; }
+html[data-chrome="native"] .topbar--reading .toolbar-field:not(:focus-within) { transform: none; }
 
 /* AND THE TITLE, for a reason the controls never had.
 
@@ -11811,11 +11820,6 @@ html[data-chrome="native"] .topbar .toolbar-mark { visibility: hidden; }
    thing that answers to the scroll is the material, which is native here and
    `.topbar--bare` off-app. */
 html[data-chrome="native"] .topbar::before { content: none; }
-/* EXCEPT ON A ROUTE WHOSE BAR HOLDS A WEB FIELD (1.8, Discover's search). Native
-   stands its toolbar down there (pushToolbar sends it off duty), because native
-   glass is above every web pixel and would blur the field under it, so the CSS
-   bar draws its own material again. Restated with the gate, per the note above. */
-html[data-chrome="native"] body.toolbar-field .topbar::before { content: ''; }
 
 /* AND THE STATUS BAR SCRIM GOES WITH IT, in the app only.
 

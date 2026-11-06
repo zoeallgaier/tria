@@ -385,11 +385,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 toolbar.onSearchText = { [weak self] text in
                     self?.notifyListeners("searchText", data: ["text": text])
                 }
-                toolbar.onSearchClose = { [weak self] in
-                    self?.notifyListeners("searchClose", data: [:])
-                }
-                toolbar.onSearchBlur = { [weak self] in
-                    self?.notifyListeners("searchBlur", data: [:])
+                toolbar.onSearchFocus = { [weak self] on in
+                    self?.notifyListeners("searchFocus", data: ["focused": on])
                 }
                 toolbar.install(in: host, scroller: self.bridge?.webView?.scrollView)
                 self.toolbar = toolbar
@@ -1757,8 +1754,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// Discover's search, which is the one control in this bar that holds a
     /// caret. See `TriaSearchField`.
     var onSearchText: ((String) -> Void)?
-    var onSearchClose: (() -> Void)?
-    var onSearchBlur: (() -> Void)?
+    var onSearchFocus: ((Bool) -> Void)?
 
     private var controls: [String: TriaToolbarButton] = [:]
     private var search: TriaSearchField?
@@ -1845,6 +1841,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// `materialFrame`). A nested glass element honours alpha.
     private func syncAway(animated: Bool) {
         for control in controls.values { control.setAway(!controlsUp, animated: animated) }
+        search?.setAway(!controlsUp, animated: animated)
     }
 
     /// With the finger or a spring around it, so nothing here animates by itself.
@@ -1853,6 +1850,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     func setPageFade(_ fade: CGFloat) {
         pageFade = fade
         for control in controls.values { control.setFade(fade) }
+        search?.setFade(fade)
         syncMaterial(animated: false)
         syncTitle(animated: false)
     }
@@ -1981,11 +1979,12 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
             if search == nil, field["live"] as? Bool == true {
                 let bar = TriaSearchField()
                 bar.onText = { [weak self] text in self?.onSearchText?(text) }
-                bar.onClose = { [weak self] in self?.onSearchClose?() }
-                bar.onBlur = { [weak self] in self?.onSearchBlur?() }
+                bar.onFocus = { [weak self] on in self?.onSearchFocus?(on) }
+                bar.setFade(pageFade)
                 contentView.addSubview(bar)
                 search = bar
             }
+            search?.setAway(!controlsUp, animated: false)
             search?.apply(spec: field, scroller: scroller)
         }
 
@@ -2505,124 +2504,100 @@ final class TriaToolbarButton: UIVisualEffectView {
 }
 
 
-/// DISCOVER'S SEARCH, WHICH IS A DISC UNTIL IT IS A BAR.
+/// DISCOVER'S SEARCH FIELD, ALWAYS OPEN (2026-11-05).
 ///
-/// The web control is three nodes that behave as one (see `.toolbar-search-shell`
-/// in app.css): a glass shell pinned by its RIGHT edge — exactly where the disc
-/// already was — that animates its WIDTH, so the field grows leftward out of the
-/// button the finger is still resting on, with the input and the glyph riding
-/// inside it.
+/// Discover's bar is one search field between the sidebar's mark and Chats
+/// (`mountToolbar`'s `field` in app.js). From 1.8 until today that field was
+/// web, so native stood the whole toolbar down on Discover and the CSS drew
+/// the bar, its discs and its material: Liquid Glass on My Circle, a CSS
+/// impression of it one swipe over (Zoe: "the glass needs to be consistent
+/// between circle and discover"). Native glass sits above every web pixel, so
+/// the bar can only be native if the field is too. This is that field.
 ///
-/// Under native chrome that shell used to hand its dress back to the web the
-/// moment it opened, which is the one seam this class exists to close. The
-/// reason was honest — the X rides ON the shell, and a glass disc of ours over a
-/// glass shell of theirs is the stack "never glass on glass" has never allowed —
-/// but the answer was the wrong half: it left a reader watching real Liquid
-/// Glass turn into a CSS impression of it, on the one control in the app whose
-/// whole gesture is the material stretching. Drawing BOTH here fixes the stack
-/// instead of dodging it: one glass capsule, and the X inside it is a bare mark
-/// on the surface, the way the web's own clear is on the find bar.
-///
-/// AND THE FIELD IS REAL, for the comment bar's reason exactly: it holds a
-/// caret, so it cannot be a face over a hidden web input. Every keystroke is
-/// written straight back into `#discover-search`, which fires its own `input`,
-/// so the debounce, the tile scoring, the tag rail and the whole rebuild are the
-/// code that already shipped, running unchanged. This file has never heard of a
-/// tag.
-///
-/// It lives in `TriaToolbar`'s glass container beside the buttons, which is what
-/// makes the open and the close a MORPH rather than a swap: the disc's own
-/// control stops being sent on the frame this appears, the two overlap, and the
-/// container merges them the way the system merges any two pieces of glass that
-/// meet.
+/// It is the comment bar's arrangement: a real `UITextField` holds the caret,
+/// and every keystroke is written back into `#discover-search`, which fires its
+/// own `input`, so the search itself is the web's code unchanged. The web input
+/// stays in the bar, invisible, as the model and the thing measured: its box is
+/// this capsule's frame, its padding the text's inset, its placeholder this
+/// one's. The filter that slides in on its right is an ordinary toolbar disc,
+/// a sibling of this capsule as it is of the web input, and the field's end
+/// glides over for it because the measured box shrinks and `apply` animates to
+/// it. No X: there was none on the web either (the leading chevron closes).
 @available(iOS 26.0, *)
 final class TriaSearchField: UIVisualEffectView, UITextFieldDelegate {
 
     /// A keystroke. The web input is still the model.
     var onText: ((String) -> Void)?
-    /// The X, tapped. Closing is the web's — it clears the query, folds the bar
-    /// and repaints — so this only says that it happened.
-    var onClose: (() -> Void)?
-    /// The field gave up the caret without the X being tapped: the page was
-    /// tapped, or dragged, or Return was pressed. The web folds an EMPTY search
-    /// on a blur and keeps a full one open, and that rule stays over there.
-    var onBlur: (() -> Void)?
+    /// The caret arrived (true) or left (false). The web reads "open" off it.
+    var onFocus: ((Bool) -> Void)?
 
     private let field = UITextField()
-    private let close = UIButton(type: .custom)
+    private let glyph = UIImageView()
     private var dismisser: TriaKeyboardDismisser?
 
-    /// Where the disc sits when the bar is shut, so the capsule can grow out of
-    /// it and shrink back into it rather than appearing whole.
-    private var closedFrame = CGRect.zero
-    private var openFrame = CGRect.zero
     private var live = false
     private var drawn = ""
+    /// The web's request to put the caret down (closeSearch, the filter's
+    /// sheet), as a counter so a repeat is still news.
+    private var blurSeq = -1
+    private var away = false
+    private var fade: CGFloat = 1
 
     init() {
         super.init(effect: UIGlassEffect(style: .regular))
         (effect as? UIGlassEffect)?.isInteractive = true
         cornerConfiguration = .capsule()
         isHidden = true
-        alpha = 0
 
         field.borderStyle = .none
         field.backgroundColor = .clear
         field.autocorrectionType = .no
         field.autocapitalizationType = .none
         field.spellCheckingType = .no
-        field.clearButtonMode = .never          // the X at the end of the bar is the clear
+        field.clearButtonMode = .never
         field.returnKeyType = .search
         field.delegate = self
         field.addTarget(self, action: #selector(edited), for: .editingChanged)
         contentView.addSubview(field)
 
-        // A BARE MARK, NOT A DISC. The web's own rule for the pair of clears it
-        // already draws (.postbar-clear, .toolbar-search-btn): the surface under
-        // it is already glass, so a second sample here is the stack this whole
-        // release refuses.
-        close.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        contentView.addSubview(close)
+        glyph.contentMode = .center
+        glyph.isUserInteractionEnabled = false
+        glyph.isAccessibilityElement = false
+        contentView.addSubview(glyph)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    var isEditing: Bool { field.isFirstResponder }
+
     // MARK: State
 
-    /// `spec` is the toolbar payload's `search` object. Every length in it was
-    /// measured off the laid-out shell on the web side — the gate switches that
-    /// shell's width transition OFF under native chrome precisely so the box read
-    /// on the frame the class flips is the FINAL one, and the growth below is
-    /// this view's own rather than a per-frame chase of the stylesheet's.
+    /// `spec` is the toolbar payload's `search` object, every length measured
+    /// off the laid-out web input (the gate turns the filter slot's width
+    /// transition off under native, so the box read is the final one and the
+    /// glide below is this view's own).
     func apply(spec: [String: Any], scroller: UIScrollView?) {
         if dismisser == nil {
             dismisser = TriaKeyboardDismisser(scroller: scroller) { [weak self] in
                 self?.field.resignFirstResponder()
             }
         }
-        let wanted = spec["live"] as? Bool ?? false
-        closedFrame = CGRect(x: TriaToolbar.number(spec["closedX"]),
-                             y: TriaToolbar.number(spec["closedY"]),
-                             width: TriaToolbar.number(spec["closedW"]),
-                             height: TriaToolbar.number(spec["closedH"]))
-        openFrame = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
-                           width: TriaToolbar.number(spec["w"]),
-                           height: TriaToolbar.number(spec["h"]))
-
-        guard wanted else {
+        guard spec["live"] as? Bool ?? false else {
             guard live else { return }
             live = false
             drawn = ""
             field.resignFirstResponder()
-            shrink()
+            isHidden = true
             return
         }
 
-        // Everything but the text, for the comment bar's reason: what the reader
-        // has typed belongs to this side while it has the caret, and echoing it
-        // back would fight the cursor.
-        let signature = spec.filter { $0.key != "text" && $0.key != "live" }
+        let box = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
+                         width: TriaToolbar.number(spec["w"]), height: TriaToolbar.number(spec["h"]))
+
+        // Everything but the text: what the reader types belongs to this side
+        // while it has the caret, and echoing it back would fight the cursor.
+        let signature = spec.filter { !["text", "live", "x", "y", "w", "h", "blur"].contains($0.key) }
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=" + String(describing: $0.value) }
             .joined(separator: "|")
@@ -2636,102 +2611,88 @@ final class TriaSearchField: UIVisualEffectView, UITextFieldDelegate {
             field.tintColor = (spec["caret"] as? String)
                 .flatMap(TriaChromeBar.color(fromHex:)) ?? ink
             field.accessibilityLabel = spec["label"] as? String
-            // The web's placeholder is --muted at 0.6, baked into the colour so
-            // the string composites once.
+            // The web's placeholder is --muted at 0.75, baked into the colour.
             field.attributedPlaceholder = NSAttributedString(
                 string: spec["placeholder"] as? String ?? "",
                 attributes: [.font: TriaPostBarPill.face,
-                             .foregroundColor: muted.withAlphaComponent(0.6)])
-            close.accessibilityLabel = spec["closeLabel"] as? String
-            if let mark = spec["closeGlyph"] as? String, !mark.isEmpty {
-                close.setImage(TriaSVG.image(markup: mark, size: 24, ink: ink, template: false),
-                               for: .normal)
+                             .foregroundColor: muted.withAlphaComponent(0.75)])
+            if let mark = spec["glyph"] as? String, !mark.isEmpty {
+                let side = TriaToolbar.number(spec["glyphSize"], fallback: 20)
+                glyph.image = TriaSVG.image(markup: mark, size: side, ink: muted, template: false)
             }
-            fieldInset = CGRect(x: TriaToolbar.number(spec["fieldLeft"]), y: 0,
-                                width: TriaToolbar.number(spec["fieldRight"]), height: 0)
-            closeSide = TriaToolbar.number(spec["closeSize"], fallback: 44)
-            closeRight = TriaToolbar.number(spec["closeRight"])
+            textLeft = TriaToolbar.number(spec["fieldLeft"], fallback: 43)
+            textRight = TriaToolbar.number(spec["fieldRight"], fallback: 16)
+            glyphCentre = TriaToolbar.number(spec["glyphX"], fallback: 25)
+            setNeedsLayout()
         }
         if let text = spec["text"] as? String, text != field.text, !field.isFirstResponder {
             field.text = text
         }
+        let seq = Int(TriaToolbar.number(spec["blur"]))
+        if seq != blurSeq {
+            // The first push only records where the count stands.
+            if blurSeq >= 0 { field.resignFirstResponder() }
+            blurSeq = seq
+        }
 
         if !live {
             live = true
-            // Focus is opt-OUT, and the caller is the tag rail: tapping a tag
-            // runs its query and should show you the results, not raise a
-            // keyboard over them. Read only on the frame the bar opens, so a
-            // later push cannot re-take a caret the reader put down.
-            grow(focus: spec["focus"] as? Bool ?? true)
+            isHidden = false
+            frame = box
+            layoutIfNeeded()
+        } else if frame != box {
+            let settle = { self.frame = box; self.layoutIfNeeded() }
+            if UIAccessibility.isReduceMotionEnabled || isHidden || alpha == 0 {
+                settle()
+            } else {
+                // The filter slot's own move (--dur-move on --ease).
+                UIView.animate(withDuration: 0.36, delay: 0,
+                               options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+                               animations: settle)
+            }
+        }
+        settle(animated: false)
+    }
+
+    /// The header's rule, as the discs wear it, except while it holds the
+    /// caret: a field fading out from under your thumb mid-word is a bug.
+    func setAway(_ wanted: Bool, animated: Bool) {
+        guard wanted != away else { return }
+        away = wanted
+        settle(animated: animated)
+    }
+
+    func setFade(_ value: CGFloat) {
+        guard value != fade else { return }
+        fade = value
+        settle(animated: false)
+    }
+
+    private func settle(animated: Bool) {
+        let gone = away && !field.isFirstResponder
+        isUserInteractionEnabled = !gone
+        let strength: CGFloat = gone ? 0 : fade
+        let move = { self.alpha = strength }
+        if animated && !UIAccessibility.isReduceMotionEnabled {
+            UIView.animate(withDuration: 0.22, delay: 0,
+                           options: [.allowUserInteraction, .beginFromCurrentState], animations: move)
         } else {
-            frame = openFrame
-            setNeedsLayout()
-        }
-    }
-
-    /// Text the web wrote while this field is up — a tag tapped on the rail,
-    /// which is a shortcut into search and puts its own words in the box.
-    func setText(_ text: String) {
-        guard field.text != text else { return }
-        field.text = text
-    }
-
-    // MARK: The growth
-
-    private func grow(focus: Bool) {
-        isHidden = false
-        frame = closedFrame
-        alpha = 1
-        setNeedsLayout()
-        layoutIfNeeded()
-        let settle = { self.frame = self.openFrame; self.layoutIfNeeded() }
-        if UIAccessibility.isReduceMotionEnabled {
-            settle()
-        } else {
-            // The stylesheet's own ramp for this control (--dur-move, --ease),
-            // which is what the CSS shell travelled on before native drew it.
-            UIView.animate(withDuration: 0.36, delay: 0,
-                           options: [.allowUserInteraction, .beginFromCurrentState,
-                                     .curveEaseOut], animations: settle)
-        }
-        if focus { field.becomeFirstResponder() }
-    }
-
-    private func shrink() {
-        let settle = {
-            self.frame = self.closedFrame
-            self.alpha = 0
-            self.layoutIfNeeded()
-        }
-        guard !UIAccessibility.isReduceMotionEnabled else {
-            settle(); isHidden = true; return
-        }
-        UIView.animate(withDuration: 0.36, delay: 0,
-                       options: [.allowUserInteraction, .beginFromCurrentState,
-                                 .curveEaseOut], animations: settle) { _ in
-            // Only if nothing re-opened it in the meantime.
-            if !self.live { self.isHidden = true }
+            move()
         }
     }
 
     // MARK: Geometry
 
-    /// Where the text starts and how much room the mark leaves it, both measured
-    /// off `.toolbar-search-field`'s own padding on the web side. `x` is the left
-    /// inset and `width` the right one — a rect used as a pair of numbers, so the
-    /// two travel together.
-    private var fieldInset = CGRect(x: 16, y: 0, width: 48, height: 0)
-    private var closeSide: CGFloat = 44
-    private var closeRight: CGFloat = 0
+    private var textLeft: CGFloat = 43
+    private var textRight: CGFloat = 16
+    private var glyphCentre: CGFloat = 25
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let box = contentView.bounds
-        close.bounds = CGRect(x: 0, y: 0, width: closeSide, height: closeSide)
-        close.center = CGPoint(x: box.width - closeRight - closeSide / 2, y: box.midY)
-        let left = fieldInset.minX
-        field.frame = CGRect(x: left, y: 0,
-                             width: max(0, box.width - left - fieldInset.width),
+        glyph.frame = CGRect(x: glyphCentre - 14, y: box.midY - 14, width: 28, height: 28)
+        field.frame = CGRect(x: textLeft, y: 0,
+                             width: max(0, box.width - textLeft - textRight),
                              height: box.height)
     }
 
@@ -2739,28 +2700,25 @@ final class TriaSearchField: UIVisualEffectView, UITextFieldDelegate {
 
     @objc private func edited() { onText?(field.text ?? "") }
 
-    @objc private func closeTapped() {
-        field.resignFirstResponder()
-        onClose?()
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        dismisser?.arm(true)
+        onFocus?(true)
     }
-
-    func textFieldDidBeginEditing(_ textField: UITextField) { dismisser?.arm(true) }
 
     func textFieldDidEndEditing(_ textField: UITextField) {
         dismisser?.arm(false)
-        // Only while the bar is still open. A close tears the field down and
-        // resigns on the way, and that blur is the shutting rather than a
-        // reader stepping off a field they left words in.
-        if live { onBlur?() }
+        settle(animated: true)
+        if live { onFocus?(false) }
     }
 
-    /// Return puts the keyboard away and leaves the query standing. There is
-    /// nothing to submit — the grid has been rebuilding on every letter.
+    /// Return puts the keyboard away and leaves the query standing: the page
+    /// has been searching on every letter.
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         textField.resignFirstResponder()
         return false
     }
 }
+
 
 // MARK: - Menus
 

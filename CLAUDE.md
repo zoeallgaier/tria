@@ -21,6 +21,21 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## Discover's bar is native glass (2026-11-05)
+
+**Discover's search field is a native `UITextField` in Liquid Glass
+(`TriaSearchField`, always open)** so its bar matches My Circle's (Zoe: "the
+glass needs to be consistent between circle and discover"). Until then the
+field was web, so `body.toolbar-field` sent the native toolbar off duty and CSS
+drew Discover's whole bar. Now that route is on duty like any other: the web
+input stays in the bar, invisible under the gate, as the model and the box
+(`searchSpec`); keystrokes come back as `searchText`, the caret as
+`searchFocus` (`NativeChrome.searchHasCaret`, read by `syncOpen`), and the page
+puts the caret down with `NativeChrome.blurSearch()`. The filter that slides in
+is a native disc (`CONTROL_SEL`'s `.discover-filter-slot.is-open`), washed when
+a type is picked; under native the slot doesn't tween and the capsule glides
+to the new box itself. The 1.8 notes below about a web field are history.
+
 ## A photo colour is pinned (2026-11-05)
 
 **The first sample of a face is kept** (Zoe: "my pfp color keeps changing"):
