@@ -1833,6 +1833,8 @@ main {
 /* Discover's bell leads the row like My Circle's (2026-11-05; the + led it
    from 2.0 and trails now), at its own width, and the field takes what is left. */
 body.toolbar-field .toolbar-page { flex: 0 0 auto; margin-right: var(--toolbar-gap); }
+/* And the Chats button trails it at the same gap, so the field sits evenly. */
+body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 /* The page starts under the bar, with the gap the nameplate used to leave. */
 body.toolbar-field .view--discover { padding-top: 0.5rem; }
 /* On desktop the bar spans the window but the cards are one 660px column, so
