@@ -6308,7 +6308,20 @@ button.poll-option:disabled { cursor: default; }
   transition: transform var(--dur-micro);
 }
 .card-song:active { transform: scale(0.985); }
+.card-song:has(.song-play:active) { transform: none; }
 .card-song + * { margin-top: 0.9rem; }
+/* The sleeve and words are the link; the play disc beside them is its own
+   button (a preview, 2026-11-06), so the row is a box holding the two. */
+.card-song-go {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
 /* The sleeve is the post (Zoe, 2026-10-22: "album art can be like 1.5x2x
    bigger on posts in the feed"), so it went from 76px to 128, about 1.7x, the
    most a phone's card can give it and still keep the title beside it. The tile
@@ -6351,6 +6364,56 @@ button.poll-option:disabled { cursor: default; }
   color: var(--heart);
 }
 .card-song-play svg { width: 18px; height: 18px; margin-inline-start: 2px; }
+button.card-song-play {
+  position: relative;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.3s var(--spring);
+}
+button.card-song-play:active { transform: scale(0.9); }
+
+/* A SONG PREVIEW'S DISC (2026-11-06): play, or pause while it plays, and a
+   ring in --heart running round the disc's edge over the 30 seconds. The
+   ring's length is set from JS (paintPlay); it shows only while playing. */
+.song-play .song-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  transform: rotate(-90deg);
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-soft);
+}
+.song-play .song-ring-run {
+  fill: none;
+  stroke: var(--heart);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+}
+.song-play.is-playing .song-ring { opacity: 1; }
+.song-play .song-play-ico { display: grid; place-items: center; }
+.song-play .song-play-ico--pause,
+.song-play.is-playing .song-play-ico--play { display: none; }
+.song-play.is-playing .song-play-ico--pause { display: grid; }
+.song-play .song-play-ico svg { margin-inline-start: 0; }
+/* Waiting on the clip: the mark breathes. */
+.song-play.is-loading .song-play-ico { animation: song-play-wait 1s var(--ease-soft) infinite alternate; }
+@keyframes song-play-wait { to { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+  .song-play.is-loading .song-play-ico { animation: none; opacity: 0.6; }
+}
+/* On the Moments rail, under the heart: the rail's glass disc, the ring
+   round its edge. */
+.mv-rail .mv-play { position: relative; }
+.mv-rail .mv-play .song-ring,
+.mv-rail .mv-play:active .song-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.mv-rail .mv-play .song-play-ico svg { width: 21px; height: 21px; }
 
 /* ── A Find's YouTube video, on its card (2.0, 2026-10-25) ─────────────────
    The song's and the quote's tile (a --surface fill, a --rule hairline, the

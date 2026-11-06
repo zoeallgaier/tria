@@ -454,6 +454,13 @@
     // this — the old path leaned right AND .frame-play-ico nudged it right again,
     // which put the triangle 4px off the middle of its own disc.
     play:    '<path d="M7 5.8v12.4a1 1 0 0 0 1.5.85l10-6.2a1 1 0 0 0 0-1.7l-10-6.2a1 1 0 0 0-1.5.85z" fill="currentColor" stroke="none"/>',
+    // A song preview's play, soft all round (Zoe, 2026-11-06: "rounded play
+    // icon"): the triangle filled and stroked thick with round joins, so every
+    // corner is a curve. Its middle sits right of the box's for play's reason.
+    playSoft: '<path d="M8.6 6.6v10.8l9-5.4z" fill="currentColor" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/>',
+    // Two round-ended bars, solid like play: a song preview that is playing.
+    pause:   '<rect x="6.5" y="5.5" width="4" height="13" rx="2" fill="currentColor" stroke="none"/>' +
+      '<rect x="13.5" y="5.5" width="4" height="13" rx="2" fill="currentColor" stroke="none"/>',
     // A framed picture (sun + hills) — the composer's "add a photo or clip" tool.
     image:   '<rect x="3.5" y="5" width="17" height="14" rx="4.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="M5 17 9 13l3 2.5L15.5 12l3.5 4"/>',
     // A drop of ink — the profile-colour control on your own identity card.
@@ -4111,21 +4118,25 @@
   /* A MUSIC POST'S TRACK (1.8): the listening rail's square and two lines, laid
      flat as a row, under whatever the poster said about it. The words come
      first for the reason a Frame's caption does: text settles before media.
-     The whole row is the link, out to the reader's own service (songLink),
-     which is the same tap a song on the rail makes. */
+     The sleeve and the words are the link, out to the reader's own service
+     (songLink). The play disc at the end is its own button (Zoe, 2026-11-06):
+     it plays the song's 30 second preview with a ring running round it
+     (songPlayHtml, playPreview). */
   const songTileHtml = (post) => post.type === 'song' && post.song ? songRowHtml(post.song) : '';
   function songRowHtml(s) {
     const sub = songSub(s);
-    return `<a class="card-song" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
-        `data-out="system" aria-label="${esc(['Listen to ' + s.title, songSub(s, ', ')].filter(Boolean).join(', '))}">` +
-        `<span class="song-art card-song-art${s.art ? ' pin-cover' : ''}"${s.art
-          ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
-        `<span class="song-lines" aria-hidden="true">` +
-          `<span class="song-title">${esc(s.title)}</span>` +
-          (sub ? `<span class="song-artist">${esc(sub)}</span>` : '') +
-        `</span>` +
-        `<span class="card-song-play" aria-hidden="true">${svgIcon('play')}</span>` +
-      `</a>`;
+    return `<div class="card-song">` +
+        `<a class="card-song-go" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
+          `data-out="system" aria-label="${esc(['Listen to ' + s.title, songSub(s, ', ')].filter(Boolean).join(', '))}">` +
+          `<span class="song-art card-song-art${s.art ? ' pin-cover' : ''}"${s.art
+            ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true"></span>` +
+          `<span class="song-lines" aria-hidden="true">` +
+            `<span class="song-title">${esc(s.title)}</span>` +
+            (sub ? `<span class="song-artist">${esc(sub)}</span>` : '') +
+          `</span>` +
+        `</a>` +
+        (canPreview(s) ? songPlayHtml(s, 'card-song-play') : '') +
+      `</div>`;
   }
 
   /* A LINK TO A CIRCLE IS THE CIRCLE'S CARD (2.0, 2026-10-25, Zoe: a circle's
@@ -8009,6 +8020,12 @@
         wirePoll(frame, p, {});
       }
       if (!pg.s.mine) markMomentSeen(p);
+      // A song's frame plays its preview by itself, as ambient audio the
+      // ringer switch silences; any other frame stops it.
+      const play = pg.el.querySelector('.mv-play');
+      if (!play.hidden && previewAutoplays()) {
+        if (preview.btn !== play) playPreview(play, true);
+      } else stopPreview();
       if (how === 'frame' && !prefersReduced()) {
         frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
       }
@@ -8022,6 +8039,9 @@
       const rep = pg.el.querySelector('.mv-reply');
       rep.hidden = p.author === me || !canMessage(p.author);
       rep.setAttribute('aria-label', `Reply to ${displayNameOf(p.author)}`);
+      const play = pg.el.querySelector('.mv-play');
+      play.hidden = !canPreview(p.song);
+      if (!play.hidden) setPlaySong(play, p.song);
       paintLike(pg);
       pg.stage.innerHTML = momentFrameHtml(f);
       wireLinkTiles(pg.stage);
@@ -8056,6 +8076,9 @@
         `<div class="mv-stage"></div>` +
         `<div class="mv-rail">` +
           `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
+          // A song's preview, under the heart (Zoe, 2026-11-06), on a song's
+          // frame only; it starts by itself where it can (live, below).
+          songPlayHtml({ title: '' }, 'mv-play pill-quiet').replace('<button ', '<button hidden ') +
           `<button type="button" class="mv-reply pill-quiet">${svgIcon('reply')}</button>` +
           `<button type="button" class="mv-more pill-quiet" aria-label="More">${svgIcon('dots')}</button>` +
         `</div>` +
@@ -8074,6 +8097,7 @@
       busy = true;
       const old = page;
       old.el.querySelector('video')?.pause();
+      stopPreview();
       page = nb;
       Promise.all([
         mvGlide(old.el, { transform: `translateX(${-d * span()}px)` }, ms, MV_GLIDE),
@@ -8376,6 +8400,7 @@
       document.removeEventListener('pointerup', lift);
       document.removeEventListener('pointercancel', lift);
       root.querySelectorAll('video').forEach(v => v.pause());
+      stopPreview();
       if (!sheetOpen) document.body.style.overflow = '';
       if (opener && opener.isConnected && opener.focus) opener.focus({ preventScroll: true });
       if (how === 'gone' || prefersReduced()) root.remove();
@@ -14317,6 +14342,192 @@
     }
     return out;
   }
+
+  /* SONG PREVIEWS (Zoe, 2026-11-06: "play previews of songs people post").
+     Apple's catalogue answers every track with a `previewUrl`, a 30 second
+     clip, open to anyone. Nothing is stored on the post: the clip is looked up
+     when it is first played, by the Apple track id the song's link already
+     holds (a search pick or an Apple paste), else by title and artist (a
+     YouTube Music paste; a Spotify paste names no artist, so it has no
+     preview, and nor does an album or a playlist). Kept per device in
+     `tria:previews`, so every song ever posted plays and a second play asks
+     nothing.
+
+     ONE CLIP AT A TIME, through one Audio element. The button that plays it
+     wears a ring that runs round it over the clip (paintPlay). A Moment's
+     song starts by itself (Zoe: "play it automatically if a user's sound is
+     on"), as AMBIENT audio, which the ringer switch silences and which mixes
+     with whatever the phone is already playing; a tap on a play button is
+     PLAYBACK, which plays through the switch, as any music app does. That is
+     the Audio Session API (iOS 16.4); without it a Moment never starts on its
+     own on an iPhone, since an older WebKit's media ignores the switch. */
+  const PREVIEW_KEY = 'tria:previews';
+  let previewMap = null;
+  const previewCache = () => {
+    if (!previewMap) {
+      try { previewMap = JSON.parse(localStorage.getItem(PREVIEW_KEY) || '{}') || {}; } catch { previewMap = {}; }
+    }
+    return previewMap;
+  };
+  const keepPreview = (k, url) => {
+    const m = previewCache();
+    m[k] = url;
+    const ks = Object.keys(m);
+    if (ks.length > 300) delete m[ks[0]];
+    try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(m)); } catch { /* private mode */ }
+  };
+  // The track id and storefront an Apple link names: `?i=<track>` on an album
+  // link, or the last segment of `/song/<name>/<id>`.
+  function appleTrack(apple) {
+    if (!apple) return null;
+    try {
+      const u = new URL(apple);
+      const p = u.pathname.split('/').filter(Boolean);
+      const cc = /^[a-z]{2}$/i.test(p[0] || '') ? p[0].toLowerCase() : '';
+      const i = u.searchParams.get('i') || (p.includes('song') ? p[p.length - 1] : '');
+      return /^\d+$/.test(i || '') ? { id: i, cc } : null;
+    } catch { return null; }
+  }
+  const canPreview = (s) => !!(s && s.title && !s.kind && (appleTrack(s.apple) || s.artist));
+  const previewKey = (s) => s.apple || `${s.title}|${s.artist || ''}`.toLowerCase();
+
+  async function previewUrl(s) {
+    const k = previewKey(s);
+    const m = previewCache();
+    if (typeof m[k] === 'string') return m[k];
+    let url = '';
+    let heard = false;   // an answer came back, so a miss is worth keeping
+    const t = appleTrack(s.apple);
+    if (t) {
+      const j = await getJson(`${ITUNES}/lookup?id=${t.id}&entity=song${t.cc ? '&country=' + t.cc : ''}`);
+      if (j) heard = true;
+      url = ((j && j.results) || []).find(r => r.previewUrl)?.previewUrl || '';
+    }
+    if (!url && s.artist) {
+      const j = await getJson(`${ITUNES}/search?term=${encodeURIComponent(s.title + ' ' + s.artist)}&entity=song&limit=10`);
+      if (j) heard = true;
+      // Only the same song by the same artist: a wrong song is worse than none.
+      const plain = (x) => String(x || '').toLowerCase().replace(/\s*[([].*$/, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      const title = plain(s.title), artist = plain(s.artist);
+      const hit = ((j && j.results) || []).find(r => r.previewUrl && plain(r.trackName) === title &&
+        (plain(r.artistName).includes(artist) || artist.includes(plain(r.artistName))));
+      url = hit ? hit.previewUrl : '';
+    }
+    if (!/^https:\/\//.test(url)) url = '';
+    if (heard) keepPreview(k, url);
+    return url;
+  }
+
+  // The disc: a play mark, a pause mark, and the ring that runs round it.
+  const RING_R = 18.25;
+  const RING_C = 2 * Math.PI * RING_R;
+  function songPlayHtml(s, cls) {
+    return `<button type="button" class="song-play ${cls}"${songPlayData(s)}>` +
+        `<svg class="song-ring" viewBox="0 0 40 40" aria-hidden="true">` +
+          `<circle class="song-ring-run" cx="20" cy="20" r="${RING_R}" ` +
+            `stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${RING_C.toFixed(2)}"/>` +
+        `</svg>` +
+        `<span class="song-play-ico song-play-ico--play" aria-hidden="true">${svgIcon('playSoft')}</span>` +
+        `<span class="song-play-ico song-play-ico--pause" aria-hidden="true">${svgIcon('pause')}</span>` +
+      `</button>`;
+  }
+  const songPlayData = (s) =>
+    ` data-key="${esc(previewKey(s))}" data-title="${esc(s.title)}" data-artist="${esc(s.artist || '')}" ` +
+    `data-apple="${esc(s.apple || '')}" aria-label="${esc('Play a preview of ' + s.title)}" aria-pressed="false"`;
+  // A disc reused for another song (the Moments rail's, frame to frame).
+  function setPlaySong(btn, s) {
+    if (btn.dataset.key === previewKey(s)) return;
+    if (preview.btn === btn) stopPreview();
+    btn.dataset.key = previewKey(s);
+    btn.dataset.title = s.title;
+    btn.dataset.artist = s.artist || '';
+    btn.dataset.apple = s.apple || '';
+    btn.dataset.label = 'Play a preview of ' + s.title;
+    paintPlay(btn, false, 0);
+  }
+  const songOfPlay = (b) => ({ title: b.dataset.title || '', artist: b.dataset.artist || '', apple: b.dataset.apple || '' });
+
+  function paintPlay(btn, on, t) {
+    btn.classList.toggle('is-playing', on);
+    btn.setAttribute('aria-pressed', String(on));
+    const title = btn.dataset.title || '';
+    btn.setAttribute('aria-label', (on ? 'Pause the preview of ' : 'Play a preview of ') + title);
+    const run = btn.querySelector('.song-ring-run');
+    if (run) run.style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(1, t))));
+  }
+
+  const preview = { audio: null, btn: null, turn: 0, raf: 0 };
+  const setAudioSession = (type) => {
+    try { if (navigator.audioSession) navigator.audioSession.type = type; } catch { /* not settable */ }
+  };
+  function stopPreview() {
+    preview.turn++;
+    cancelAnimationFrame(preview.raf);
+    if (preview.audio) preview.audio.pause();
+    if (preview.btn) { preview.btn.classList.remove('is-loading'); paintPlay(preview.btn, false, 0); }
+    preview.btn = null;
+    setAudioSession('auto');
+  }
+  // May a Moment's song start by itself here? Only where the ringer switch
+  // can silence it, or where there is no ringer switch.
+  const appleTouch = () => /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const previewAutoplays = () => 'audioSession' in navigator || !appleTouch();
+
+  async function playPreview(btn, ambient) {
+    stopPreview();
+    const turn = preview.turn;
+    const s = songOfPlay(btn);
+    preview.btn = btn;
+    btn.classList.add('is-loading');
+    paintPlay(btn, true, 0);
+    const url = await previewUrl(s).catch(() => '');
+    if (turn !== preview.turn) return;
+    btn.classList.remove('is-loading');
+    if (!url) {
+      paintPlay(btn, false, 0);
+      preview.btn = null;
+      if (!ambient) { btn.hidden = true; toast('No preview for this one.'); }
+      return;
+    }
+    setAudioSession(ambient ? 'ambient' : 'playback');
+    const a = preview.audio || (preview.audio = new Audio());
+    a.preload = 'auto';
+    if (a.src !== url) a.src = url;
+    try { a.currentTime = 0; } catch { /* not loaded yet */ }
+    a.onended = () => { if (turn === preview.turn) stopPreview(); };
+    try { await a.play(); } catch {
+      // Refused (a browser wanting a tap first): the disc simply waits for one.
+      if (turn === preview.turn) { paintPlay(btn, false, 0); preview.btn = null; }
+      return;
+    }
+    if (turn !== preview.turn) { a.pause(); return; }
+    const tick = () => {
+      if (turn !== preview.turn) return;
+      let b = preview.btn;
+      // A feed card rebuilt under the clip (a like, a refresh) hands it to its
+      // new disc; a Moment's disc leaving takes the clip with it.
+      if (!b.isConnected) {
+        b = !b.classList.contains('mv-play') &&
+          document.querySelector(`.card-song-play[data-key="${CSS.escape(b.dataset.key || '')}"]`);
+        if (!b) { stopPreview(); return; }
+        preview.btn = b;
+      }
+      paintPlay(b, true, a.currentTime / (a.duration || 30));
+      preview.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  // Every play disc in every page, the Moments rail's included.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.song-play');
+    if (!b) return;
+    e.preventDefault();
+    if (preview.btn && preview.btn.dataset.key === b.dataset.key) { stopPreview(); return; }
+    playPreview(b, false);
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopPreview(); });
 
   /* Null for anything but a 200: a private playlist is a 401 or a 404, and to
      the picker those are one answer. A THROW is caught into the same null,
@@ -25366,6 +25577,7 @@
     if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
     if (stopRoll) { stopRoll(); stopRoll = null; }
     if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
+    stopPreview();   // a song preview belongs to the page it was played on
 
     // A SHEET IS NOT A HISTORY ENTRY, so the back gesture walks out from under
     // one: the page behind it re-renders and the panel is left floating over a

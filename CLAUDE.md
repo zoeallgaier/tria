@@ -21,6 +21,24 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## A song plays its preview (2026-11-06)
+
+**A song row's play disc plays Apple's 30 second preview, a ring in `--heart`
+running round it** (Zoe), and the sleeve and words still go to the song
+(`.card-song` is a box now: `.card-song-go`, the link, and `.song-play`, the
+button). **A Moment's song starts by itself** ("if a user's sound is on"),
+from a play disc under the heart on the rail (`.mv-play`). Nothing is stored:
+`previewUrl` looks the clip up at play time by the Apple track id in
+`song.apple`, else by title and artist (exact match only; a Spotify paste
+names no artist, so it has none, nor an album or playlist), kept per device in
+`tria:previews`. One clip at a time (`playPreview`, `stopPreview`, stopped by
+route(), the viewer's close and slide, and backgrounding). **Autoplay is
+AMBIENT** (`navigator.audioSession`, iOS 16.4), which the ringer switch
+silences; a tap is PLAYBACK. Without the API an iPhone never autoplays
+(`previewAutoplays`), since older WebKit media ignores the switch. The play
+mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play icon").
+**Not yet heard on a phone**: that WKWebView honours `ambient` is unverified.
+
 ## Discover's search is the header; chips under it (2026-11-06)
 
 **Discover's bar is the sidebar's mark, the search field and Chats** (Zoe: "I
