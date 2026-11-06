@@ -58,8 +58,8 @@ public posts, meaning Anyone posts and posts in PUBLIC circles (never
 invite-only), friends' included, yours not, no reposts, nothing `offFeed`,
 today's daily answers left to the daily's card, at most TWO a person
 (`SQUARE_EACH`), newest first and never ranked, as My Circle's own cards in the
-reading column (not the old masonry wall). **It ends**: "That's the square for
-this week.", then Share Tria. **Circles and people are set between the posts on
+reading column (not the old masonry wall). **It ends** on Share Tria, no
+closing line (Zoe: "town square" is ours; users only ever see Discover). **Circles and people are set between the posts on
 a fixed rhythm, never at random** (Zoe asked for random; Claude pushed back:
 random reshuffles under the thumb and reads as a slot): FOUR CAROUSELS, TWO
 OF EACH (Zoe: "just have two carousel groups for each"; rails of about 8 came

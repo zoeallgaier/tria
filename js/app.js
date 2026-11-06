@@ -17513,9 +17513,8 @@
       if (footSig === squareFootSig) return;
       squareFootSig = footSig;
       squareFoot.innerHTML =
-        `<p class="square-end">${list.length
-          ? 'That’s the square for this week.'
-          : 'It’s quiet in the square this week. Post to Anyone and it shows up here.'}</p>` +
+        (list.length ? ''
+          : '<p class="square-end">It’s quiet here this week. Post to Anyone and it shows up on Discover.</p>') +
         shareAsk;
       squareFoot.classList.toggle('is-quiet', !list.length);
       wireShare();
