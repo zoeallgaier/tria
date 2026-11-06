@@ -8339,7 +8339,7 @@ button.poll-option:disabled { cursor: default; }
 /* Discover's cards rise in on arrival the same way (renderDiscover's paint).
    `backwards`, not `both`: once a card has landed it keeps no transform, so a
    page of circles doesn't hold a layer per card or trap the glass inside. */
-.discover-body:not(.is-still) :is(.daily-card, .person-rail, .friends-share) {
+.discover-body:not(.is-still) .daily-card {
   animation: rise var(--dur-slow) var(--ease) backwards;
 }
 .chat-row:active { --row-fill: color-mix(in srgb, var(--text) 8%, var(--surface)); }
@@ -10293,7 +10293,7 @@ body[data-ambient="none"] .pf-row-swatch {
      opacity fade — a cross-fade isn't motion, and without it a photo would
      still pop in over its placeholder. */
   .card, .friend, .ptile, .notif, .request-row,
-  .discover-body :is(.daily-card, .person-rail, .friends-share) { animation: none; }
+  .discover-body .daily-card { animation: none; }
   .ptile, .ptile:hover { transform: none; transition: none; }
 }
 
@@ -11088,16 +11088,17 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    on discover cards"): the words and the full-width pill run nearer the edge. */
 .view--discover .daily-card { padding-inline: 0.8rem; }
 
-/* PEOPLE, UNDER THE CIRCLES (Zoe, 2026-10-23; first under Start a circle). A sideways rail of 4:5 cards in
-   the daily card's flat material, 200px across (Zoe: "just bios. scale cards
-   appropriately"), so a phone shows one and most of the next. On a phone it
-   bleeds to the screen's edges so a card scrolls off the glass rather than
-   into the gutter. Face, name, who you both know and the bio open the profile
-   (a stretched link); the tie is its own control, raised over that link. */
-.person-rail { max-width: var(--feed-width); margin: 0 auto 0.95rem; }
-.person-strip {
+/* DISCOVER'S RAILS, people and circles, both set between the square's posts
+   (paintSquare): a sideways strip of cards, each rail one card and a peek of
+   the next on a phone. They sit in the square's column, which already bleeds
+   to the screen's edges there, so a card scrolls off the glass rather than
+   into the gutter and the gutter is only the strip's padding. */
+.person-rail,
+.community-rail { max-width: var(--feed-width); margin: 0 auto; }
+.person-strip,
+.community-strip {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.9rem;
   overflow-x: auto;
   /* Same as .np-strip: the swipe stays in the rail, never the back gesture. */
   overscroll-behavior-x: contain;
@@ -11105,10 +11106,15 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-.person-strip::-webkit-scrollbar { display: none; }
+:is(.person-strip, .community-strip)::-webkit-scrollbar { display: none; }
 @media (max-width: 680px) {
-  .person-strip { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
+  .person-strip, .community-strip { padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
 }
+
+/* PEOPLE (Zoe, 2026-10-23). 4:5 cards in the daily card's flat material,
+   216px across (Zoe: "just bios. scale cards appropriately"). Face, name, who
+   you both know and the bio open the profile (a stretched link); the tie is
+   its own control, raised over that link. */
 .person-card {
   position: relative;
   flex: 0 0 auto;
@@ -11200,25 +11206,10 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .person-card-slot .friend-tie { width: 100%; }
 .person-card-slot .friend-go { display: none; }
 
-/* CIRCLES ARE A RAIL (Zoe, 2026-11-05), the people rail's strip holding the
-   daily's card in its wider shape: one card and a peek of the next on a
-   phone, every circle kept (no More circles). The cards stand one height, so
-   the foot is pushed to the bottom and the name and about are clamped; the
-   face is 80px, the people card's, so the two rails read as one system. */
-.community-strip {
-  display: flex;
-  gap: 0.6rem;
-  margin: 0 auto 0.95rem;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.community-strip::-webkit-scrollbar { display: none; }
-@media (max-width: 680px) {
-  .community-strip { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
-}
+/* A CIRCLE ON A RAIL (Zoe, 2026-11-05) is the daily's card in its wider
+   shape. The cards stand one height, so the foot is pushed to the bottom and
+   the name and about are clamped; the face is 80px, the people card's, so
+   the two rails read as one system. */
 .view--discover .community-strip .daily-card {
   flex: 0 0 auto;
   width: min(330px, calc(100vw - 2 * var(--gutter) - 2.75rem));
@@ -11253,22 +11244,18 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    (.nowplaying's 2rem, Zoe: "match the circle feed below moments"). */
 .discover-body > .daily-card { margin-bottom: 2rem; }
 /* Generous air around a piece set between the posts (Zoe, 2026-11-05: "a
-   bit more generous with padding above and below cards and also in between
-   the sides"): about twice the column's gap over and under it, and the rails'
-   cards a wider gap apart. */
+   bit more generous with padding above and below cards"), a little less over
+   it than under: the post above already ends on its action row's own space,
+   so even margins read as more air on top (Zoe: "the top padding is a bit too
+   much"). */
 .square-feed > .feed-extra {
-  margin-block: 1rem;
+  margin-block: 0.55rem 1rem;
   animation: rise var(--dur-slow) var(--ease) backwards;
 }
-.square-feed :is(.community-strip, .person-strip) { gap: 0.9rem; }
-.square-feed .daily-card,
-.square-feed .person-rail { margin: 0 auto; }
-.square-feed .community-strip { margin-bottom: 0; }
-/* The column bleeds to the screen's edges on a phone; a lone circle card
-   takes the gutter back, and a rail runs edge to edge, padded by it. */
+/* A lone circle card under its post takes the gutter back from the column. */
+.square-feed > .feed-extra > .daily-card { margin: 0 auto; }
 @media (max-width: 680px) {
   .square-feed > .feed-extra > .daily-card { margin-inline: var(--gutter); }
-  .square-feed :is(.community-strip, .person-strip) { margin-inline: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .square-feed > .feed-extra { animation: none; } }
 .square-end {

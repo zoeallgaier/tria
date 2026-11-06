@@ -34,10 +34,13 @@ reading column (not the old masonry wall). **It ends**: "That's the square for
 this week.", then Share Tria. **Circles and people are set between the posts on
 a fixed rhythm, never at random** (Zoe asked for random; Claude pushed back:
 random reshuffles under the thumb and reads as a slot): a circle's card under
-the first post said in it if you're not in it, then rails in HANDFULS of about
-8 (`RAIL_SIZE`, split evenly), circles and people taking turns from the 3rd
-post, 4 posts apart (`RAIL_GAP`), no two pieces within 3 posts
-(`SQUARE_GAP`), the rest at the foot so every circle is always on the page.
+the first post said in it if you're not in it, then TWO RAILS OF EACH (Zoe:
+"just have two carousel groups for each"; rails of about 8 came first),
+circles and people each split in half (`halves`, one rail under four), taking
+turns from the 3rd post, 4 posts apart (`RAIL_GAP`), no two pieces within 3
+posts (`SQUARE_GAP`), the rest at the foot so every circle is always on the
+page. A piece has a little less air over it than under (0.55rem, 1rem): the
+post above already ends on its action row's space.
 **The little algorithm** (Zoe: "a little one is fine if it gets people
 connected") is only in what is set between: circles your friends are in lead,
 then by life, yours last; people by friends in common. A piece between is a

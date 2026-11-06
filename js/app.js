@@ -15549,10 +15549,10 @@
      the daily card's wider shape, set into the square (see paintSquare), so
      every circle stays on Discover (Zoe: they are "inevitably a large part of
      tria like subreddits") without a stack of them on top. The dashed Start a
-     circle card ENDS the rail, where you land once you have looked through
-     every room. */
-  function communityRailHtml(list) {
-    const cards = list.map(c => communityCardHtml(c)).join('') + communityStartHtml();
+     circle card (`start`) ENDS the last rail, where you land once you have
+     looked through every room. */
+  function communityRailHtml(list, { start = true } = {}) {
+    const cards = list.map(c => communityCardHtml(c)).join('') + (start ? communityStartHtml() : '');
     return cards
       ? `<section class="community-rail" aria-label="Circles"><div class="community-strip">${cards}</div></section>`
       : '';
@@ -17131,7 +17131,8 @@
     // How long typing has to settle before the page rebuilds.
     const SEARCH_BEAT = 110;
 
-    /* PEOPLE, UNDER START A CIRCLE (Zoe, 2026-10-23). A sideways rail of 4:5 cards,
+    /* PEOPLE (Zoe, 2026-10-23; set between the square's posts since 2026-11-05,
+       in two rails, see paintSquare). A sideways rail of 4:5 cards,
        one per person you have no tie to yet: the most friends in common first,
        then the newest account. Strangers only, so a friend, a follow or a
        request you sent is left out; someone who added you first stays, with
@@ -17319,55 +17320,42 @@
        - a circle's own card UNDER a post said in it, the first time that
          circle comes up and only one you're not in, which is the square's
          straight line from a post to Join;
-       - every other circle as the rail after the third post, then the
-         people rail after the seventh;
-       - never two of these within SQUARE_GAP posts of each other (a circle
+       - TWO RAILS OF EACH (Zoe: "lets just have two carousel groups for
+         each"), the circles and the people each split in half, taking turns
+         down the column, circles first, from the RAIL_FIRST post on and
+         RAIL_GAP posts apart: a sideways rail is rarely scrolled past its
+         first few cards, so the second half further down is a second look;
+       - never two pieces within SQUARE_GAP posts of each other (a circle
          that comes up too soon waits for its next post), and whatever never
          found a place closes the column, so every circle is always here.
        THE LITTLE ALGORITHM (Zoe: "without a heavy algorithm but like a little
        one is fine if it gets people connected") is only in what is set
-       between: circles your friends are in lead the rail, then the liveliest,
-       and yours go last (the sidebar already lists them); people are most
-       friends in common first (peopleForRail). The posts are never ranked:
-       newest first, as the About page promises.
+       between: circles your friends are in lead, then the liveliest, and
+       yours go last (the sidebar already lists them); people are most friends
+       in common first (peopleForRail). The posts are never ranked: newest
+       first, as the About page promises.
        The foot says the square ends, then Share Tria, the page's last word. */
-    /* RAILS COME IN HANDFULS (Zoe, 2026-11-05: "10 people or circles at a time
-       with more groups to not make it overwhelming"): a rail holds about
-       RAIL_SIZE cards, split evenly (13 circles are 7 and 6, never 8 and 5),
-       and the handfuls take turns down the column, circles first, at least
-       RAIL_GAP posts apart. A sideways rail is rarely scrolled past its first
-       few cards, so a second handful further down is a second look, not more
-       of the same row. Start a circle ends the LAST circles rail. */
     const SQUARE_GAP = 3;
     const RAIL_FIRST = 3;
     const RAIL_GAP = 4;
-    const RAIL_SIZE = 8;
     let squareFootSig = null;
     const friendsIn = (c) => Store.communityMembers(c.id)
       .filter(u => Store.isFriend(u) && !Blocks.has(u)).length;
-    const handfuls = (list) => {
-      if (!list.length) return [];
-      const k = Math.ceil(list.length / RAIL_SIZE), size = Math.ceil(list.length / k);
-      return Array.from({ length: k }, (_, i) => list.slice(i * size, (i + 1) * size));
+    // Two even halves, the first the larger; a short list stays one rail.
+    const halves = (list) => {
+      if (list.length < 4) return list.length ? [list] : [];
+      const mid = Math.ceil(list.length / 2);
+      return [list.slice(0, mid), list.slice(mid)];
     };
     const squareItems = (posts, rail) => {
       const ready = Store.communitiesReady();
       const items = [];
       const carded = new Set();
-      // Placeholders, in turn order; their markup is filled in once every
-      // circle met under a post is known (the rails leave those out).
-      const circleRails = [], peopleRails = handfuls(rail).map((h, i) =>
-        ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }));
-      // How many circle handfuls there will be is only known at the end, so
-      // the queue holds up to the most there could be and the empty ones drop.
-      const roomCount = ready ? communitiesInOrder().length : 0;
-      const maxCircleRails = ready ? Math.max(1, Math.ceil(roomCount / RAIL_SIZE)) : 0;
-      for (let i = 0; i < maxCircleRails; i++) circleRails.push({ extra: true, id: 'x:circles:' + i });
-      const queue = [];
-      for (let i = 0; i < Math.max(circleRails.length, peopleRails.length); i++) {
-        if (circleRails[i]) queue.push(circleRails[i]);
-        if (peopleRails[i]) queue.push(peopleRails[i]);
-      }
+      // The circles rails are placeholders, filled once every circle met
+      // under a post is known (the rails leave those out); an empty one drops.
+      const circleRails = ready ? [{ extra: true, id: 'x:circles:0' }, { extra: true, id: 'x:circles:1' }] : [];
+      const peopleRails = halves(rail).map((h, i) => ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }));
+      const queue = [circleRails[0], peopleRails[0], circleRails[1], peopleRails[1]].filter(Boolean);
       let n = 0, since = SQUARE_GAP, sinceRail = RAIL_GAP;
       for (const p of posts) {
         items.push(p);
@@ -17392,15 +17380,11 @@
           .map(c => ({ c, f: friendsIn(c) }))
           .sort((a, b) => b.f - a.f)            // stable: life breaks the tie
           .map(x => x.c);
-        const groups = handfuls(theirs.concat(all.filter(c => Store.inCommunity(c.id))));
+        const groups = halves(theirs.concat(all.filter(c => Store.inCommunity(c.id))));
         // With no circle left to show, the one rail is Start a circle alone.
         if (!groups.length) groups.push([]);
         groups.forEach((g, i) => {
-          if (!circleRails[i]) return;
-          const last = i === groups.length - 1;
-          circleRails[i].html = last ? communityRailHtml(g)
-            : `<section class="community-rail" aria-label="Circles"><div class="community-strip">` +
-                g.map(c => communityCardHtml(c)).join('') + `</div></section>`;
+          circleRails[i].html = communityRailHtml(g, { start: i === groups.length - 1 });
         });
       }
       return items.filter(x => !x.extra || x.html);
