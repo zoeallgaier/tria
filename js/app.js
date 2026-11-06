@@ -7977,7 +7977,8 @@
       el.className = 'mv-page' + (frames.length > 1 ? ' has-dots' : '');
       el.innerHTML =
         `<div class="mv-head">` +
-          `<a class="mv-who" href="#/u/${encodeURIComponent(s.u.username)}">` +
+          // Your own face is your Profile TAB, with its nav, never #/u/<you>.
+          `<a class="mv-who" href="${s.mine ? '#/profile' : `#/u/${encodeURIComponent(s.u.username)}`}">` +
             avatarEl(s.u, { cls: 'mv-avatar' }) +
             `<span class="mv-who-text"><span class="mv-name">${esc(name)}</span>` +
             `<span class="mv-when"></span></span>` +
