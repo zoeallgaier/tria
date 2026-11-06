@@ -14805,6 +14805,12 @@
   // add-song-posts.sql, where the composer has no song surface to open.
   function goListening(from) {
     songBack = from || '#/discover';
+    // Music is a Moment now (Zoe, 2026-11-06: "no longer weekly"): as many
+    // songs as you like, each up for a day. A song already up for the week
+    // keeps its week; nothing new is made that way.
+    if (Store.songsReady() && Store.momentsReady()) {
+      pendingMoment = true; pendingAttach = 'momentSong'; go('#/publish'); return;
+    }
     if (Store.songsReady()) { pendingAttach = 'song'; go('#/publish'); return; }
     go('#/listening');
   }
@@ -20268,7 +20274,7 @@
           `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
           `aria-label="Search a song or album, or paste a link">` +
         `<div class="song-results" id="c-song-results" aria-live="polite"></div>` +
-        (myWeekSong() && !moment
+        (myWeekSong() && !moment && !Store.momentsReady()
           ? `<p class="field-hint">Music stays up for a week. This one replaces ` +
               `“${esc(myWeekSong().song.title)}”.</p>`
           : '') +
@@ -20934,7 +20940,7 @@
         pubAudience = { mode: 'circle', users: [] };
         pubAudienceTouched = true;
       }
-      fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily && !moment, song: !daily, moment });
+      fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily && !moment, song: !daily && (moment || !Store.momentsReady()), moment });
       // The audience joins Share in the send row, in THE BUTTON's quiet
       // weight beside Share's commit; its label stays for a screen reader.
       const aud = family === 'base' && fieldsEl.querySelector('.aud-field');
@@ -21409,7 +21415,7 @@
   }
   const ATTACH_BTN = {
     find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
-    activity: '#c-add-event',
+    activity: '#c-add-event', momentSong: '#c-add-song',
   };
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
@@ -22774,7 +22780,9 @@
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
     // The song this one replaces, read before the new one exists (myWeekSong).
     // A song in a Moment is for the day and replaces nothing.
-    const replacing = pubType === 'song' && !composingMoment ? myWeekSong() : null;
+    // Since 2026-11-06 no song replaces another (songs are Moments), so this
+    // only ever holds on a server without add-moments.sql.
+    const replacing = pubType === 'song' && !composingMoment && !Store.momentsReady() ? myWeekSong() : null;
     // A daily answer carries its join tag invisibly — it's the app's bookkeeping,
     // not one of the poster's words, so it never sat in the field they can see.
     // The tag goes on only if what you made is what the prompt asked for
