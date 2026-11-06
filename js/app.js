@@ -938,7 +938,10 @@
            here; empty still means the tab picks its own. */
         // Tria's own ramp lights the tab in Tria's green (Zoe, 2026-11-05),
         // --heart resolved for the live scheme; "none" still sends nothing.
-        tabTint: accent || (fill.ramp ? toRgb(probe('color: var(--heart)').color || '') || '' : ''),
+        // Every colour lights it with --heart, as the web's lit tab does: a
+        // photo's band stop is a paler weight than its heart, so the two
+        // shells were wearing two shades of one photo (2026-11-05).
+        tabTint: (accent || fill.ramp) ? (toRgb(probe('color: var(--heart)').color || '') || accent) : '',
         /* THE INK, AND THE + IS THE ONE THING HERE THAT ALWAYS NAMES ONE.
 
            controlSpec points at this note and still keeps the older rule: only a tint sends its own ink, and empty is what
@@ -12213,7 +12216,7 @@
     // nothing to sample the buttons paint the brand ramp, so that is the row
     // that reads as live; 'none' would leave the picker saying "no colour"
     // while the FAB behind it was plainly still the quintet.
-    const current = me.accent || (me.avatar ? 'auto' : 'default');
+    const current = !isPhotoAccent(me.accent) ? me.accent : (me.avatar ? 'auto' : 'default');
 
     /* TWELVE SOURCES IN ONE LIST, and two drawings of it.
 
@@ -12335,8 +12338,8 @@
   function themeIconKey(me) {
     if (!me) return Promise.resolve('');
     if (accentOf(me.accent) || me.accent === 'none') return Promise.resolve(me.accent);
-    if (me.accent || !me.avatar) return Promise.resolve('');
-    return sampleColor(sizedSrc(me.avatar, 40)).then(rgb => (rgb ? nearestAccent(rgb) : null));
+    if (!isPhotoAccent(me.accent) || !me.avatar) return Promise.resolve('');
+    return photoTone(me).then(rgb => (rgb ? nearestAccent(rgb) : null));
   }
   // A photo that wouldn't sample (null) leaves the icon as it is. Nothing
   // stored and an alternate icon on means a pick from before this was the
@@ -16198,7 +16201,7 @@
     const picked = u.accent !== 'default' && accentOf(u.accent);
     if (picked) return Promise.resolve([dark ? picked.hex : (picked.ink || picked.hex)]);
     if (u.accent === 'default' || !u.avatar) return Promise.resolve(TRIA_STARS);
-    return sampleColor(sizedSrc(u.avatar, 40))
+    return photoTone(u)
       .then(rgb => (rgb ? [heartsFrom(rgb)[dark ? 'dk' : 'lt']] : TRIA_STARS), () => TRIA_STARS);
   }
   function friendInks(username) {
@@ -22662,6 +22665,54 @@
     });
   }
 
+  /* A PHOTO COLOUR IS PINNED (Zoe, 2026-11-05: "my pfp color keeps changing,
+     make sure it picks one and stays"). A sample is an average of a decoded,
+     resized picture, and the decode differs by device, by the renderer's copy
+     versus the original, and by this device's own crop just after an upload;
+     on a photo with little colour in it, a few levels of drift swing the hue
+     right round. So the FIRST answer for a face is kept: per device in
+     `tria:tone:<hash>`, and for your own face in your row, as
+     `users.accent = 'p:<hex>:<hash>'`, so every device and every reader wears
+     the one you got. The hash is of the avatar URL, so a new photo (from any
+     build, even one that never heard of this) simply fails to match and is
+     sampled and pinned afresh. An older build reads the pin as an unknown slug,
+     which it already treats as "sample the photo". */
+  const PHOTO_PIN = /^p:([0-9a-f]{6}):([0-9a-z]+)$/i;
+  const isPhotoAccent = (a) => !a || PHOTO_PIN.test(a);
+  const faceHash = (url) => {
+    const s = String(url || '').split(/[?#]/)[0];
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  };
+  const toneHex = (c) => [c.r, c.g, c.b].map(v => v.toString(16).padStart(2, '0')).join('');
+  const tonePinning = new Set();
+  function photoTone(u) {
+    if (!u || !u.avatar) return Promise.resolve(null);
+    const h = faceHash(u.avatar);
+    const m = PHOTO_PIN.exec(u.accent || '');
+    if (m && m[2] === h) return Promise.resolve(cssToRgb('#' + m[1]));
+    const KEY = 'tria:tone:' + h;
+    let kept = null;
+    try { kept = localStorage.getItem(KEY); } catch {}
+    const pin = (rgb) => {
+      const me = Store.isAuthed() ? Store.currentUser() : null;
+      if (!rgb || !me || me.id !== u.id || me.avatar !== u.avatar) return;
+      if (!isPhotoAccent(me.accent) || tonePinning.has(h)) return;
+      tonePinning.add(h);
+      Promise.resolve(Store.updateAccent(`p:${toneHex(rgb)}:${h}`)).catch(() => {});
+    };
+    if (kept && /^[0-9a-f]{6}$/i.test(kept)) {
+      const rgb = cssToRgb('#' + kept);
+      pin(rgb);
+      return Promise.resolve(rgb);
+    }
+    return sampleColor(sizedSrc(u.avatar, 40)).then((rgb) => {
+      if (rgb) { try { localStorage.setItem(KEY, toneHex(rgb)); } catch {} pin(rgb); }
+      return rgb;
+    }, () => null);
+  }
+
   /* ── Your colour on the buttons ──────────────────────────────────────────────
      The band every primary-act button paints (--pill-band, tokens.css) follows
      YOUR accent. Not the accent of whoever's profile is on screen — and that
@@ -22795,7 +22846,7 @@
     const picked = u.accent !== 'default' && accentCss(u.accent);
     if (picked) return Promise.resolve(picked);
     if (u.accent === 'default' || !u.avatar) return Promise.resolve('tria');
-    return sampleColor(sizedSrc(u.avatar, 40))
+    return photoTone(u)
       .then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : 'tria'), () => 'tria');
   }
   // The band a palette KEY paints. One home, because the picker's discs and
@@ -22854,7 +22905,11 @@
   const SPLASH_KEY = 'tria:splash';   // read by the inline script under #splash in index.html
   function paintBrandBand() {
     const me = Store.isAuthed() ? Store.currentUser() : null;
-    const key = me ? `${me.id}:${me.accent || (me.avatar ? 'auto' : 'default')}:${me.avatar || ''}` : 'none';
+    // A pin of this same photo is the same answer as 'auto', so pinning never
+    // repaints (a stale pin, another photo's, still keys apart).
+    const pinned = me && PHOTO_PIN.exec(me.accent || '');
+    const acc = me && (!me.accent || (pinned && pinned[2] === faceHash(me.avatar)) ? 'auto' : me.accent);
+    const key = me ? `${me.id}:${me.avatar ? acc : (isPhotoAccent(me.accent) ? 'default' : me.accent)}:${me.avatar || ''}` : 'none';
     if (key === bandKey) return;
     bandKey = key;
     const seq = ++bandSeq;
@@ -22972,7 +23027,7 @@
     // colour off a photograph and there isn't one, which is not the same as
     // asking for no colour at all.
     if (!me.avatar) return set(null);
-    sampleColor(sizedSrc(me.avatar, 40)).then(rgb => set(rgb || null));
+    photoTone(me).then(rgb => set(rgb || null));
   }
 
   // A person's colour: a palette pick if they made one, otherwise sampled from
@@ -23013,7 +23068,7 @@
     const picked = accentCss(user.accent);
     if (picked) return done(picked);
     if (!user.avatar) return done(null);                      // nothing to sample
-    sampleColor(sizedSrc(user.avatar, 40)).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
+    photoTone(user).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
   }
 
   // Light the wash. Three callers, two modes, ONE resolved colour: a profile page,

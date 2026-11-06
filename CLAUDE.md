@@ -21,6 +21,17 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## A photo colour is pinned (2026-11-05)
+
+**The first sample of a face is kept** (Zoe: "my pfp color keeps changing"):
+`photoTone` is the one way to a photo's colour. Your own is written to your row
+as `users.accent = 'p:<hex>:<hash of the avatar URL>'` (`PHOTO_PIN`,
+`isPhotoAccent`: null or a pin both mean Photo), every face per device in
+`tria:tone:<hash>`. A new photo fails the hash and is pinned afresh; an older
+build reads the pin as an unknown slug, which it samples. The native lit tab
+wears `--heart` for every colour, as the web's does (a photo sent its paler
+band stop).
+
 ## A new friend gets the stars (2026-11-05)
 
 **When a tie turns mutual, `celebrateFace`'s stars burst off their face, half
