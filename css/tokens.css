@@ -275,7 +275,10 @@
      "No colour" stamps --mono-heart, so choosing none gets a grey one and means
      what it says. --user-heart-dk takes over in the dark block below, the same
      one-scheme-apart pair every other accent mark leans on. */
-  --dot: var(--user-heart-lt, var(--accent));
+  /* TRIA'S OWN RAMP WEARS TRIA (Zoe, 2026-11-05: "use the tria brand color
+     properly"): a reader who never picked lands on --brand-ink, the green the
+     heart already wears, not page ink. "None" still stamps --mono-heart. */
+  --dot: var(--user-heart-lt, var(--brand-ink));
 
   /* A TAGGED NAME in running text — the reader's own colour a fourth time, and
      the one place an accent lands on BODY COPY, which is exactly the case the
@@ -301,7 +304,11 @@
      paper. QUIETER rather than louder, because a name inside a sentence is body
      copy and the byline over it is not — and because a shade off the ink is
      what choosing none should buy. */
-  --mention-ink: color-mix(in srgb, var(--user-heart-lt, var(--mono-heart)) 80%, var(--text));
+  /* Tria's own ramp tags in Tria's green (2026-11-05), not --mono-heart: the
+     fallback is the green set so this 80% mix lands on --brand-ink itself
+     (#04735c, 5.0 on paper). "None" still stamps --mono-heart, so the
+     off-black above survives for the reader who asked for no colour. */
+  --mention-ink: color-mix(in srgb, var(--user-heart-lt, #008a6c) 80%, var(--text));
 
   /* Geometry + rhythm */
   --radius:      3px;     /* small radius — focus rings, incidental corners */
@@ -558,14 +565,14 @@
        no contrast caveat: a palette hex on ink paper measures 4.14 (ruby) or
        better, and the fallback brand ink IS the rose here. */
     --going-ink: var(--user-heart-dk, var(--brand-ink));
-    --dot:       var(--user-heart-dk, var(--accent));
+    --dot:       var(--user-heart-dk, var(--brand-ink));
     /* Undeepened here, for the reason the hearts are: on ink paper the hex
        already measures 4.14 (ruby) or better, and mixing a mention toward --text would
        lighten it rather than deepen it. The colourless fallback is --mono-heart
        on this side too, where the same recipe that reads as an off-black on
        paper reads as an OFF-WHITE: #d0d3d7, 8.5 points of L* under the byline
        and 12.69 against the page — one mix, mirrored by the scheme. */
-    --mention-ink: var(--user-heart-dk, var(--mono-heart));
+    --mention-ink: var(--user-heart-dk, var(--brand-ink));
 
     /* Lit surfaces on dark paper: the top-white sheen barely reads on the
        near-white fills, so lean on a deeper base shade and a stronger lift. */
