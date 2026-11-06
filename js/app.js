@@ -7878,9 +7878,10 @@
       const p = f.post;
       bars.innerHTML = frames.map((_, i) => `<span class="mv-bar${i <= fi ? ' is-on' : ''}"></span>`).join('');
       const name = s.mine ? 'You' : (s.u.name || s.u.username);
-      // Only your own frame has a •••: a friend's held Message them alone,
-      // which is the foot's Reply now.
-      const more = s.mine;
+      // Every frame has a •••: yours edits and deletes, anyone else's reports
+      // and blocks (App Store 1.2: user content must be reportable where it
+      // is seen, and its author blockable).
+      const more = true;
       head.innerHTML =
         `<a class="mv-who" href="#/u/${encodeURIComponent(s.u.username)}">` +
           avatarEl(s.u, { cls: 'mv-avatar' }) +
@@ -7975,7 +7976,14 @@
     // Your own frame's sheet: edit and delete, or your song's.
     const openFrameMenu = () => {
       const p = cur().post;
-      if (p.author !== me) return;
+      if (p.author !== me) {
+        const who = p.author;
+        openSheet({ items: [
+          { label: p.moment ? 'Report moment' : 'Report post', icon: 'flag', danger: true, run: () => reportPost(p) },
+          { label: 'Block', icon: 'block', danger: true, run: () => { close(); confirmBlock(who); } },
+        ] });
+        return;
+      }
       if (!p.moment) { openMySong(close); return; }
       openMyMoment(p, close);
     };
@@ -12541,6 +12549,9 @@
               ? 'Tria needs permission to add to your photos. It is in Settings.'
               : 'The card could not be saved.');
           });
+          // A Moment's link stops opening after a day, so the report carries
+          // what was seen: its picture and song travel with the words.
+          ...(post.moment ? { moment: true, posted: post._ts || '', media: post.images?.join(' ') || post.image || '', song: post.song ? `${post.song.title} by ${post.song.artist}` : '' } : {}),
         return;
       }
       draw()
