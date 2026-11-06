@@ -34,6 +34,7 @@
 		TR1A0013000000000000013 /* TriaAuthPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0014000000000000014 /* TriaAuthPlugin.swift */; };
 		TR1A0015000000000000015 /* TriaSharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0016000000000000016 /* TriaSharePlugin.swift */; };
 		TR1A0017000000000000017 /* TriaStickerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0018000000000000018 /* TriaStickerPlugin.swift */; };
+		TR1A0019000000000000019 /* TriaPhotosPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = TR1A0020000000000000020 /* TriaPhotosPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +68,7 @@
 		TR1A0014000000000000014 /* TriaAuthPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaAuthPlugin.swift; sourceTree = "<group>"; };
 		TR1A0016000000000000016 /* TriaSharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaSharePlugin.swift; sourceTree = "<group>"; };
 		TR1A0018000000000000018 /* TriaStickerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaStickerPlugin.swift; sourceTree = "<group>"; };
+		TR1A0020000000000000020 /* TriaPhotosPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriaPhotosPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 				TR1A0014000000000000014 /* TriaAuthPlugin.swift */,
 				TR1A0016000000000000016 /* TriaSharePlugin.swift */,
 				TR1A0018000000000000018 /* TriaStickerPlugin.swift */,
+				TR1A0020000000000000020 /* TriaPhotosPlugin.swift */,
 				TR1A0010000000000000010 /* Oxygen-Bold.ttf */,
 				TR1A0012000000000000012 /* Oxygen-Regular.ttf */,
 				TR1A0003000000000000003 /* App.entitlements */,
@@ -267,6 +270,7 @@
 				TR1A0013000000000000013 /* TriaAuthPlugin.swift in Sources */,
 				TR1A0015000000000000015 /* TriaSharePlugin.swift in Sources */,
 				TR1A0017000000000000017 /* TriaStickerPlugin.swift in Sources */,
+				TR1A0019000000000000019 /* TriaPhotosPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

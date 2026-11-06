@@ -9590,6 +9590,21 @@ body.thread-live .lightbox { z-index: 320; }
    material. Tapping it opens the OS picker; picking a photo swaps in the .crop
    preview below, a video swaps in the .trim surface (the dropzone hides while
    they show). Content, not floating chrome. */
+/* THE CAMERA ROLL (2026-11-06, wireRoll, TriaPhotosPlugin.swift): the box
+   Apple's picker is laid on in the app, one row of recent photos under the
+   note. It only holds the place: native reads its rect and its corner, the
+   page's flat-card one, and the fill is what shows for the moment before the
+   picker draws. A Moment's row is taller, since a Moment is so often just a
+   photo. */
+.compose-roll {
+  height: 104px;
+  margin-top: 1.1rem;
+  border-radius: var(--radius-soft);
+  background: var(--surface-2);
+}
+.compose-roll--moment { height: 140px; }
+.compose-roll[hidden] { display: none; }
+
 .dropzone {
   display: flex;
   align-items: center;

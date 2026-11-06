@@ -19456,6 +19456,18 @@
   let stills = [];           // every picked photo, [{ api, src, im }] in deal order; cropper is stills[0].api
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
   let stopActiveCapture = null;   // teardown for the live camera/mic (getUserMedia or native preview)
+  let stopRoll = null;            // takes the composer's camera roll down (wireRoll), called by route()
+  // The roll's picks and unticks, heard once for the life of the app and
+  // handed to whichever composer is up (wireRoll sets it, stopRoll clears it).
+  let rollHandler = null;
+  let rollListening = false;
+  function listenRoll() {
+    if (rollListening) return;
+    rollListening = true;
+    const C = window.Capacitor;
+    C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollPick' }, (ev) => rollHandler?.pick(ev));
+    C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollUnpick' }, (ev) => rollHandler?.unpick(ev));
+  }
   let onCaptureChange = null;     // set by the Post composer so the type indicator re-reads when a frame lands/clears
   let justPostedId = null;   // id of a just-published post → sparkle it in when the feed next paints
 
@@ -19596,6 +19608,12 @@
       `<div class="compose-circle" id="c-circle" hidden></div>` +
       pollFieldHtml() +
       frameFieldHtml() +
+      // The camera roll's row (wireRoll), app only: native draws Apple's picker
+      // over this box, which only holds its place in the form.
+      (nativeShell()
+        ? `<div class="compose-roll${opts.moment ? ' compose-roll--moment' : ''}" id="c-roll" ` +
+            `role="group" aria-label="Recent photos" hidden></div>`
+        : '') +
       (song ? songFieldHtml({ moment: opts.moment }) : '') +
       (event ? eventFieldHtml() : '') +
       audienceFieldHtml('c');
@@ -20121,6 +20139,7 @@
     let wantPoll = false;           // poll surface open → this post is a Poll
     let wantEvent = false;          // place + time open → this post is an Activity
     let wantSong = false;           // song surface open → this post is Music
+    let roll = null;                // the camera roll's { sync, ticks } (wireRoll), app only
 
     // The type is INFERRED from what's attached: a place and a time first (an
     // activity is the one thing here that lands in the real world, so it outranks
@@ -20174,6 +20193,7 @@
         titleInput.placeholder = pubType === 'activity' ? 'Picnic at the park' : 'Title (optional)';
       }
       syncDefaultAudience();
+      roll?.sync();   // another attachment folds the camera roll away, and back
     }
 
     // Drop any attached photo/clip and fold the frame surface away. Also resets the
@@ -20190,6 +20210,7 @@
       fieldsEl.querySelector('#c-dropzone')?.removeAttribute('hidden');
       const file = fieldsEl.querySelector('#c-file'); if (file) file.value = '';
       fieldsEl.querySelector('.frame-field')?.setAttribute('hidden', '');
+      roll?.ticks();   // whatever the roll had ticked went with the rest
       const b = view.querySelector('.composer-submit'); if (b) b.disabled = false;
     }
 
@@ -20302,7 +20323,7 @@
       wireTagRow(fieldsEl);
       if (family !== 'quote') {
         wireCarriedCircle();
-        wireFrameCapture(fieldsEl);        // the frame surface ships hidden in the field set
+        roll = wireRoll(wireFrameCapture(fieldsEl));   // the frame surface ships hidden in the field set
         wireWhenHints(fieldsEl);           // …and so do the date and time inputs
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
         wireAttachBar();
@@ -20544,6 +20565,116 @@
       fieldsEl.querySelector('#c-note')?.setAttribute('data-placeholder', 'Say why it’s worth joining.');
     }
 
+    /* THE CAMERA ROLL (Zoe, 2026-11-06: "make it easier and seamless to post
+       images"). A row of the reader's recent photos under the note, in Apple's
+       own picker set into the page (TriaPhotosPlugin.swift, iOS 17 and up, app
+       only): a tap puts a photo in the post, a second tap takes it out, and the
+       picks are the same stills the photo button makes, so the carousel, its
+       tray and its six are unchanged. It needs no photo permission, which is
+       why it is Apple's picker and not a strip of our own.
+
+       It is there while the post could still take a photo: not over a link, a
+       poll, a plan, a song or a clip, not while a field holds the caret (the
+       keys are up and the reader is writing), and never over a sheet, since
+       native draws above every web pixel. `#c-roll` holds its place in the form
+       and native lays the picker on it; every layout change re-sends the box. */
+    function wireRoll(frame) {
+      const el = fieldsEl.querySelector('#c-roll');
+      const C = window.Capacitor;
+      if (!el || !frame || !C?.isPluginAvailable?.('TriaPhotos')) return null;
+      if (stopRoll) { stopRoll(); stopRoll = null; }   // one roll at a time
+      const call = (m, o) => C.nativePromise('TriaPhotos', m, o || {});
+      const ticked = new Set();   // asset ids ticked in the row, each a still in the post
+      let ok = false, told = '', typing = false, gone = false;
+
+      const shown = () => ok && !gone && family === 'base'
+        && !wantLink && !wantPoll && !wantEvent && !wantSong && !videoCapture
+        && !typing && !sheetOpen && !document.querySelector('.sheet-scrim');
+      function sync() {
+        if (gone) return;
+        const show = shown();
+        if (el.hidden === show) el.hidden = !show;
+        if (!show) {
+          if (told !== 'off') { told = 'off'; call('roll', { show: false }).catch(() => {}); }
+          return;
+        }
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        // Document coordinates: the picker lives in the web view's scroll view,
+        // so it scrolls with the page on its own.
+        const rect = { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height };
+        const sig = JSON.stringify(rect);
+        if (sig === told) return;
+        told = sig;
+        call('roll', {
+          show: true, rect, limit: MAX_STILLS,
+          radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) || 24,
+        }).catch(() => {});
+      }
+      // A still taken out on this side (the tray's x, Start over, the photo
+      // button folding it all) is unticked in the row.
+      function ticks() {
+        const live = new Set(stills.filter(s => s.rollId).map(s => s.rollId));
+        const off = [...ticked].filter(id => !live.has(id));
+        if (!off.length) return;
+        off.forEach(id => ticked.delete(id));
+        call('rollDeselect', { ids: off }).catch(() => {});
+      }
+      frame.changed = ticks;
+      const refuse = (id, msg) => {
+        call('rollDeselect', { ids: [id] }).catch(() => {});
+        frame.error(msg);
+      };
+
+      rollHandler = {
+        pick(ev) {
+          if (gone || !ev || !ev.id) return;
+          if (ev.error || !ev.data) { refuse(ev.id, ev.error || 'Couldn’t read that photo. Try another.'); return; }
+          if (!wantPhoto) { wantPhoto = true; applyBaseSurface(); }
+          ticked.add(ev.id);
+          if (!frame.addRoll(ev.id, `data:${ev.type || 'image/jpeg'};base64,${ev.data}`)) {
+            ticked.delete(ev.id);
+            refuse(ev.id, 'That’s six photos, which is as many as one post holds.');
+            if (!stills.length && !videoCapture) { wantPhoto = false; clearFrame(); }
+          }
+          syncType();
+        },
+        unpick(ev) {
+          if (gone || !ev || !ticked.has(ev.id)) return;
+          ticked.delete(ev.id);
+          frame.dropRoll(ev.id);
+          // The roll opened the photo surface, so its last photo closes it.
+          if (!stills.length && !videoCapture && wantPhoto) { wantPhoto = false; clearFrame(); }
+          syncType();
+        },
+      };
+      listenRoll();
+
+      const isField = (n) => !!n && fieldsEl.contains(n)
+        && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName));
+      const onFocus = () => {
+        const t = isField(document.activeElement);
+        if (t !== typing) { typing = t; sync(); }
+      };
+      fieldsEl.addEventListener('focusin', onFocus);
+      fieldsEl.addEventListener('focusout', () => setTimeout(onFocus, 0));
+      const ro = new ResizeObserver(() => sync());
+      ro.observe(fieldsEl);
+      const mo = new MutationObserver(() => sync());   // a sheet's scrim coming and going
+      mo.observe(document.body, { childList: true });
+      window.addEventListener('resize', sync);
+      stopRoll = () => {
+        gone = true;
+        ro.disconnect();
+        mo.disconnect();
+        window.removeEventListener('resize', sync);
+        rollHandler = null;
+        call('roll', { drop: true }).catch(() => {});
+      };
+      call('rollReady').then((r) => { ok = !!(r && r.ok); sync(); }).catch(() => {});
+      return { sync, ticks };
+    }
+
     document.getElementById('composer').addEventListener('submit', (e) => {
       e.preventDefault();
       submitComposer();
@@ -20606,6 +20737,26 @@
     const addMore  = root.querySelector('#c-addmore');
     const stillsEl = root.querySelector('#c-stills');
     const errEl    = () => document.getElementById('c-error');
+    // What the camera roll (wireRoll) reaches in here: a still it picked goes
+    // in carrying the roll's asset id, comes out by it, and `changed` hears
+    // every change to the set so the roll can untick what the tray took out.
+    const api = {
+      changed: null,
+      addRoll(id, src) {
+        if (videoCapture || stills.length >= MAX_STILLS) return false;
+        const err = errEl();
+        if (err) err.textContent = '';
+        finishStills([src], stills.length > 0, [id]);
+        return true;
+      },
+      dropRoll(id) {
+        const i = stills.findIndex(s => s.rollId === id);
+        if (i < 0) return;
+        stills.splice(i, 1);
+        showStill(i < sel ? sel - 1 : sel);
+      },
+      error: (msg) => showPickError(msg),
+    };
 
     // Put a pick rejection where it can't be missed. iOS holds the user in the
     // Photos sheet while it exports the pick (we're not even running yet), so by
@@ -20710,11 +20861,11 @@
     // at it, which is what the type inference and a single photo's submit read.
     let sel = 0, stillsHold = 0;
     function finishPhoto(dataUrl) { finishStills([dataUrl], false); }
-    function finishStills(srcs, adding) {
+    function finishStills(srcs, adding, rollIds) {
       if (!adding) stills = [];
-      srcs.forEach(src => {
+      srcs.forEach((src, i) => {
         const im = new Image();
-        stills.push({ api: initPhotoPreview(im, src), src, im });
+        stills.push({ api: initPhotoPreview(im, src), src, im, rollId: rollIds ? rollIds[i] : null });
       });
       showStill(adding ? stills.length - srcs.length : 0);
     }
@@ -20738,6 +20889,7 @@
       imgEl.src = stills[sel].src;
       renderTray();
       onCaptureChange?.();   // a still landed → the Post composer flips its type mark to Frame
+      api.changed?.();
       // Hold Post until every still decodes — export() reads naturalWidth, so
       // posting early would ship a 1x1 canvas. 'error' as well as 'load': a picture
       // that never decodes used to leave Post disabled forever, which reads as the
@@ -20765,6 +20917,7 @@
       imgEl.removeAttribute('src');
       if (dropzone) dropzone.hidden = false;
       onCaptureChange?.();
+      api.changed?.();
       const b = document.querySelector('.composer-submit');
       if (b) b.disabled = false;
     }
@@ -20853,6 +21006,7 @@
       cropEl.hidden = true;
       cropper = null;
       stills = [];
+      api.changed?.();   // a clip is a post of its own: the roll's ticks go
       stillsEl.hidden = true;
       stillsEl.replaceChildren();
       addMore.hidden = true;
@@ -21117,6 +21271,7 @@
       // Any length is fine — the trim surface enforces the ≤10s cut.
       await finishVideo(f);
     }
+    return api;
   }
 
   // Read a just-loaded clip's duration + native size straight off the preview
@@ -24081,6 +24236,7 @@
     // profile editor's cropper: its ResizeObserver and any frame it has queued
     // outlive the nodes the next render replaces.
     if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
+    if (stopRoll) { stopRoll(); stopRoll = null; }
     if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
 
     // A SHEET IS NOT A HISTORY ENTRY, so the back gesture walks out from under

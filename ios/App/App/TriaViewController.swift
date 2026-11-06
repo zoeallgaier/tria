@@ -50,6 +50,9 @@ class TriaViewController: CAPBridgeViewController {
         // A sticker charm's sheet (TriaStickerPlugin.swift). Missing, the
         // picker's New sticker tile falls back to the web's file picker.
         bridge?.registerPluginInstance(TriaStickerPlugin())
+        // The composer's camera roll (TriaPhotosPlugin.swift). Missing, or on
+        // iOS 15 and 16, the row never shows and the photo button is the way in.
+        bridge?.registerPluginInstance(TriaPhotosPlugin())
         // A tap that launched the app, if it beat the bridge here. See TriaLaunchTap.
         if let router = bridge?.notificationRouter { TriaLaunchTap.shared.replay(into: router) }
     }

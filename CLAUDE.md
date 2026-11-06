@@ -37,6 +37,31 @@ native material cut around it (2026-11-06, a few hours). All three are deleted:
 `mountToolbar` has no `field`, there is no `#toolbar-field` or
 `body.toolbar-field`. The 1.8 notes below about the field in the bar are history.
 
+## The composer has the camera roll (2026-11-06)
+
+**A row of recent photos sits under the note on the post and Moment
+composers** (Zoe: "make it easier and seamless to post images"; public posts
+over the last 60 days were 47% photo, 43% note). It is APPLE'S PICKER set into
+the page (`TriaPhotosPlugin.swift`, `PHPickerViewController` in `.compact` mode
+with `.continuous` selection, iOS 17 and up, app only), never a strip of our
+own: it runs out of process, so Tria asks for no photo permission and sees only
+what is tapped. A custom strip would need the whole library, and that was the
+trade refused. The cost is that the thumbnails and checks are Apple's.
+**A tap puts a photo in, a second tap takes it out**: picks are ordinary
+stills (`rollId` on each, `api.addRoll`/`dropRoll` from `wireFrameCapture`),
+so the carousel, its tray and its six are unchanged, and a still taken out on
+the web side (the tray's x, Start over, the photo button) is unticked natively
+(`rollDeselect`). The roll's first pick opens the photo surface and its last
+untick closes it. **It lives INSIDE the web view's scroll view** at the document
+rect of `#c-roll` (`.compose-roll`, 104px, 140 on a Moment, `--radius-soft`), so
+it scrolls with the page on its own; a ResizeObserver on the fields re-sends the
+box. **It is there only while the post could take a photo**: not over a link,
+poll, plan, song or clip, not while a field holds the caret, and never over a
+sheet (native draws over every web pixel; a body MutationObserver watches for
+`.sheet-scrim`). iOS 15 and 16 and the web never draw it; the photo button is
+unchanged and still the way in for a clip or the camera. `wireRoll` in
+renderPublish, `stopRoll` in route().
+
 ## A photo colour is pinned (2026-11-05)
 
 **The first sample of a face is kept** (Zoe: "my pfp color keeps changing"):
