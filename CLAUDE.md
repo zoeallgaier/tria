@@ -247,7 +247,13 @@ the foot is **Reply to <name>** (`replyToSong`, your DM with the frame on its
 bar) and the heart; your own frame, or someone you can't message, has the heart
 alone (yours opens Likes), and only your own frame has a •••. Words take the
 vertical pan only when they really scroll (`.is-long`, a ResizeObserver), so the
-pulls work on a short note.
+pulls work on a short note. **The viewer is one reading column** (2026-11-06,
+`--mv-col` 36rem, `--mv-side`): the bar, stage and foot take the same side
+inset, 14px on any phone and centred on a desktop, where the words and the
+Reply pill used to run the window's full width. The stage stays full width, so
+the tap zones (left third back, the rest forward) and swipes are unchanged.
+Words frames are set in a further 10px (24px from a phone's edge) with 0.75rem
+of air above and below the scroller; a pictured frame fills the column.
 The rail's own double tap and hold are gone (`wireSongGestures` deleted).
 The hint is v6 ("Moments last a day. Tap someone to see theirs, and double tap
 one to like it."). **A day is enforced twice**: the client

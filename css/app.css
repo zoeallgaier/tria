@@ -5831,7 +5831,18 @@ button.poll-option:disabled { cursor: default; }
 }
 :is(.mv--wash, .mv--tria)::before { opacity: 1; }
 
-.mv-top, .mv-foot { padding-inline: 14px; transition: opacity 0.2s var(--ease-soft); }
+/* ONE READING COLUMN (2026-11-06). The viewer is fixed to the whole window, so
+   on a desktop the header, a note and the Reply pill all ran the window's full
+   width, the words 1400px long. The bar, the stage and the foot take the same
+   side inset: 14px where the screen is narrower than the column (every phone),
+   else whatever centres the column. The stage itself stays full width, so a
+   tap anywhere still reads as left third or the rest (`step` in openMoments),
+   and a swipe starts anywhere. */
+.mv {
+  --mv-col: 36rem;
+  --mv-side: max(14px, calc((100% - var(--mv-col)) / 2));
+}
+.mv-top, .mv-foot { padding-inline: var(--mv-side); transition: opacity 0.2s var(--ease-soft); }
 .mv.is-held :is(.mv-top, .mv-foot) { opacity: 0; }
 .mv-top { padding-top: 8px; }
 /* Hairlines, as fine as a story's (Zoe: "smaller like the lines on the story"). */
@@ -5881,7 +5892,7 @@ button.poll-option:disabled { cursor: default; }
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 14px;
+  padding: 14px var(--mv-side);
   touch-action: none;
   cursor: pointer;
 }
@@ -5923,7 +5934,13 @@ button.poll-option:disabled { cursor: default; }
 .mv-sound svg { width: 20px; height: 20px; }
 .mv-caption { max-height: 32dvh; overflow-y: auto; }
 /* Words alone sit in the middle, and a long note scrolls. */
-.mv-frame--words { display: flex; flex-direction: column; justify-content: center; }
+/* Words are set in from the column's edge (a pictured frame fills it), so a
+   note sits clear of the screen and of the avatar's gutter, 24px in on a phone
+   (Zoe: "padded properly"). The scroller keeps a little air above and below
+   its words, or a long note's first and last lines are cut flush against the
+   bar and the foot; it also keeps a serif's overhang from being clipped by the
+   overflow it needs to scroll. */
+.mv-frame--words { display: flex; flex-direction: column; justify-content: center; padding-inline: 10px; }
 .mv-words {
   max-height: 100%;
   overflow-y: auto;
