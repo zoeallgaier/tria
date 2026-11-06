@@ -11252,11 +11252,6 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   margin-block: 0.55rem 1rem;
   animation: rise var(--dur-slow) var(--ease) backwards;
 }
-/* A lone circle card under its post takes the gutter back from the column. */
-.square-feed > .feed-extra > .daily-card { margin: 0 auto; }
-@media (max-width: 680px) {
-  .square-feed > .feed-extra > .daily-card { margin-inline: var(--gutter); }
-}
 @media (prefers-reduced-motion: reduce) { .square-feed > .feed-extra { animation: none; } }
 .square-end {
   max-width: var(--feed-width);

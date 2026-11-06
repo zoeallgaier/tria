@@ -1177,9 +1177,34 @@ const Store = (() => {
   // policy checks the audience, the allowlist and the chain, not the author),
   // the derived ledger already skips `p.author !== me`, and the push function
   // already refuses to buzz you about yourself (`orig.author !== rec.author`).
+  /* WHO MAY LIKE, COMMENT AND VOTE (Zoe, 2026-11-05: "I should be able to like
+     and comment on anything posted publicly on town square"). Your own post,
+     a friend's, any post to Anyone, a post in a circle you're in, and a post
+     in a PUBLIC circle, which anyone can read and which the square shows to
+     everyone (until today a reader had to join to take part). The one rule
+     behind app.js's canSocial and every write here; RLS signs the row as you
+     and nothing more, so this is the product rule. An invite-only circle's
+     posts stay with its members, and a friends-only or hand-picked post with
+     the author's friends. */
+  function canReact(post) {
+    const me = state.session;
+    if (!me || !post) return false;
+    if (post.author === me || isFriend(post.author) || post.audience === 'public') return true;
+    if (!post.communityId) return false;
+    if (inCommunity(post.communityId)) return true;
+    const c = community(post.communityId);
+    return !!c && !c.inviteOnly;
+  }
+
   function repostable(post) {
     if (!post || !state.session) return false;
     const target = originalOf(post) || post;
+    // A PRIVATE account's post is never passed along by anyone else (Zoe,
+    // 2026-11-05: "no reposts for private users to keep things secure and safe
+    // feeling"), public or not, bare or quoted: you can like it and answer it
+    // where it stands, and it goes no further than they sent it. Their own
+    // repost of it still bumps it for their friends.
+    if (target.author !== state.session && isPrivate(target.author)) return false;
     // A song stays in On repeat (see isSongPost). A circle's post waits on
     // repost-audience.sql, which is what lets a repost land in a circle.
     if ((target.audience || 'circle') === 'list' || target.type === 'song' || target.moment) return false;
@@ -2379,10 +2404,10 @@ const Store = (() => {
     if (!text && !photo) return { ok: false, error: 'Say something first.' };
     const post = state.posts.find(p => p.id === postId);
     if (!post) return { ok: false, error: 'That post no longer exists.' };
-    // Comments open on a PUBLIC post to anyone who can see it — Discover only
-    // builds relationships if strangers can say something. Circle/list posts stay
-    // friends-only. (RLS permits the insert either way; this is the product rule.)
-    if (post.author !== me && !isFriend(post.author) && post.audience !== 'public')
+    // Comments open on a PUBLIC post to anyone who can see it (canReact) —
+    // Discover only builds relationships if strangers can say something.
+    // (RLS permits the insert either way; this is the product rule.)
+    if (!canReact(post))
       return { ok: false, error: 'You can only comment on friends’ posts.' };
 
     // The picture goes up FIRST, so the row is never written pointing at a file
@@ -2474,7 +2499,7 @@ const Store = (() => {
     if (!c || c.author === me) return { ok: false };
     const post = state.posts.find(p => p.id === c.postId);
     if (!post) return { ok: false };
-    if (post.author !== me && !isFriend(post.author) && post.audience !== 'public') return { ok: false };
+    if (!canReact(post)) return { ok: false };
     const mine = idOf(me);
     const same = x => x.commentId === commentId && x.user === me;
     const has = commentLikedByMe(commentId);
@@ -2509,7 +2534,7 @@ const Store = (() => {
     if (!me) return { ok: false };
     const post = state.posts.find(p => p.id === postId);
     if (!post || post.author === me) return { ok: false };
-    if (!isFriend(post.author) && post.audience !== 'public') return { ok: false };
+    if (!canReact(post)) return { ok: false };
     const mine = idOf(me);
     const has = likedByMe(postId);
     if (has) {
@@ -2544,7 +2569,7 @@ const Store = (() => {
     if (!me) return { ok: false };
     const post = state.posts.find(p => p.id === postId);
     if (!post || post.author === me) return { ok: false };
-    if (!isFriend(post.author) && post.audience !== 'public') return { ok: false };
+    if (!canReact(post)) return { ok: false };
     const mine = idOf(me);
     const same = x => x.postId === postId && x.user === me;
     const had = mineIn(state.likes, postId);
@@ -2643,7 +2668,7 @@ const Store = (() => {
     // Voting sits with likes and comments, not with RSVPs: a poll made public is
     // asking the wider room, so anyone who can see it can answer it. A circle
     // poll stays friends-only. Unlike an RSVP, the author may vote in their own.
-    if (post.author !== me && !isFriend(post.author) && post.audience !== 'public')
+    if (!canReact(post))
       return { ok: false };
     const n = (post.poll && post.poll.options || []).length;
     if (!(choice >= 0 && choice < n)) return { ok: false };
@@ -4253,7 +4278,7 @@ const Store = (() => {
 
   return {
     init, refresh, whenFresh, primePost, threadPrint, newerPosts, reloadChats,
-    users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, square, posts, postsBy, audienceCount, audienceOf,
+    users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, square, canReact, posts, postsBy, audienceCount, audienceOf,
     // Auth
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,

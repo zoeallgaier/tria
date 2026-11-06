@@ -33,22 +33,34 @@ today's daily answers left to the daily's card, at most TWO a person
 reading column (not the old masonry wall). **It ends**: "That's the square for
 this week.", then Share Tria. **Circles and people are set between the posts on
 a fixed rhythm, never at random** (Zoe asked for random; Claude pushed back:
-random reshuffles under the thumb and reads as a slot): a circle's card under
-the first post said in it if you're not in it, then TWO RAILS OF EACH (Zoe:
-"just have two carousel groups for each"; rails of about 8 came first),
-circles and people each split in half (`halves`, one rail under four), taking
-turns from the 3rd post, 4 posts apart (`RAIL_GAP`), no two pieces within 3
-posts (`SQUARE_GAP`), the rest at the foot so every circle is always on the
-page. A piece has a little less air over it than under (0.55rem, 1rem): the
-post above already ends on its action row's space.
+random reshuffles under the thumb and reads as a slot): FOUR CAROUSELS, TWO
+OF EACH (Zoe: "just have two carousel groups for each"; rails of about 8 came
+first), circles and people each split in half (`halves`, one rail under
+four), circles first, after the 3rd post and every 4th after (`RAIL_FIRST`,
+`RAIL_GAP`), the rest at the foot so every circle is always on the page.
+**No card under a circle's post** (Zoe: "the post itself is enough with the
+reposts style citation"; tried and removed the same day). A rail has a little
+less air over it than under (0.55rem, 1rem): the post above already ends on
+its action row's space.
 **The little algorithm** (Zoe: "a little one is fine if it gets people
-connected") is only in what is set between: circles your friends are in lead,
-then by life, yours last; people by friends in common. A piece between is a
+connected") is only in the rails: circles your friends are in lead,
+then by life, yours last; people by friends in common. A rail is a
 `.feed-extra` that `syncCards` diffs like a card (`nodeFor`), so a repaint
 never re-rises the column. Circles are a sideways rail of the wider daily
 card (`communityRailHtml`, 80px faces, Start a circle ending the last rail);
 a search's circles stay a stack. No hairline over the first post; the daily
 has My Circle's 2rem under it, like the Moments rail.
+**Anyone may like, comment and vote on anything public** (Zoe: "I should be
+able to like and comment on anything posted publicly on town square"):
+`Store.canReact` is THE rule (app.js's `canSocial` and all five store writes
+read it): yours, a friend's, Anyone, a circle you're in, or a PUBLIC circle's
+post. Public circles' posts were members-only until then, and the store's
+writes never knew circles at all, so a member's heart on a stranger's circle
+post silently did nothing. RLS only signs the row as you; this is the product
+rule. **A private account's post is never reposted or quoted by anyone else**
+(Zoe: "no reposts for private users to keep things secure and safe feeling"),
+public or not (`repostable`); its author still can. Client rule only: the
+repost insert policy does not know it.
 
 ## Moments (2026-11-04)
 
@@ -625,8 +637,8 @@ public posts should be visible"), signed in or out, through
 `supabase/circle-public-posts.sql` (**confirmed run** 2026-10-26: anon reads
 `audience=eq.community` rows from public circles), which widens
 `community_reads_post` and leaves `can_view_post` alone. An invite-only
-circle's stay with its members. Likes, comments and RSVPs are still for members
-(and the author's friends), so a reader joins to take part.
+circle's stay with its members. RSVPs are still for members (and the author's
+friends); likes and comments opened to anyone on 2026-11-05 (`Store.canReact`).
 
 **New circle is the composer's page**: the serif nameplate kept on the page,
 the circle's face where the type mark sits (76px, the camera on its rim; with a

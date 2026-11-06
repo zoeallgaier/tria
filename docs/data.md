@@ -728,8 +728,9 @@ address and therefore a different person, and there is no way around that.
   app refuses.
 - **Two interaction gates, not one** (`app.js`). The split isn't cheap-vs-costly,
   it's *stays on the screen* vs *lands in the real world*. `canSocial` (likes,
-  comments, **poll votes**) is open on your own post, a friend's, *or any public
-  post* — Discover only builds relationships if strangers can react, and a poll
+  comments, **poll votes**) is open on your own post, a friend's, *any public
+  post*, and any post in a circle you're in or in a public circle
+  (`Store.canReact`, the one rule the store's writes read too, 2026-11-05) — Discover only builds relationships if strangers can react, and a poll
   made public is asking the wider room. `canJoin` (RSVP/headcount,
   add-to-calendar) is activities-only and stays friends-only on purpose: a public
   activity carries a place and a time, so anyone may see it but only your circle

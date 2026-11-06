@@ -3361,11 +3361,12 @@
   // whether the gesture stays on the screen or lands in the real world.
   //
   // canSocial — likes, comments, AND poll votes. Open on your own post, a
-  // friend's, OR any public post. Discover only builds relationships if a
-  // stranger can react to what they found; a like leaks nothing (RLS shows the
-  // count to the author alone), a comment is the actual conversation, and a
-  // public poll wants the wider read — that's the whole reason to make one
-  // public.
+  // friend's, any post to Anyone, and any post in a circle you're in or in a
+  // PUBLIC circle (Store.canReact, the one rule the store's writes check too).
+  // Discover only builds relationships if a stranger can react to what they
+  // found; a like leaks nothing (RLS shows the count to the author alone), a
+  // comment is the actual conversation, and a public poll wants the wider read
+  // — that's the whole reason to make one public.
   //
   // canJoin — RSVP/headcount and add-to-calendar. Activities only, and still
   // friends-only on purpose: a public activity carries a place and a time, so
@@ -3374,13 +3375,12 @@
   // The store guards every write behind the matching rule too — see
   // Store.addComment / toggleLike / votePoll (open) vs setRsvp (closed).
   //
-  // A CIRCLE'S POST (the room, audience 'community') opens both to its members,
-  // and only to them. The circle is the audience, so it is also who turns up:
-  // a plan posted in a hobby circle is the circle's plan, friends or not.
+  // A CIRCLE'S POST (the room, audience 'community') opens canJoin to its
+  // members, and only to them. The circle is the audience, so it is also who
+  // turns up: a plan posted in a hobby circle is the circle's plan, friends or
+  // not.
   const inItsCommunity = (post) => !!post.communityId && Store.inCommunity(post.communityId);
-  const canSocial = (post) =>
-    post.author === Store.session() || Store.isFriend(post.author) || post.audience === 'public'
-    || inItsCommunity(post);
+  const canSocial = (post) => Store.canReact(post);
   const canJoin = (post) =>
     post.author === Store.session() || Store.isFriend(post.author) || inItsCommunity(post);
 
@@ -17317,25 +17317,22 @@
        circles and people cards in the feed, instead of it just sitting on
        top"), on a fixed rhythm rather than at random, so nothing moves under
        the thumb between pulls and nothing reads as a slot to keep pulling:
-       - a circle's own card UNDER a post said in it, the first time that
-         circle comes up and only one you're not in, which is the square's
-         straight line from a post to Join;
        - TWO RAILS OF EACH (Zoe: "lets just have two carousel groups for
          each"), the circles and the people each split in half, taking turns
-         down the column, circles first, from the RAIL_FIRST post on and
-         RAIL_GAP posts apart: a sideways rail is rarely scrolled past its
-         first few cards, so the second half further down is a second look;
-       - never two pieces within SQUARE_GAP posts of each other (a circle
-         that comes up too soon waits for its next post), and whatever never
-         found a place closes the column, so every circle is always here.
+         down the column, circles first: after the RAIL_FIRST post and then
+         every RAIL_GAP posts. A sideways rail is rarely scrolled past its
+         first few cards, so the second half further down is a second look.
+         Whatever doesn't find a place closes the column, so every circle is
+         always here. A circle's post needs nothing more: its "Posted in
+         c/slug" line is the way in (a card under it was tried and taken out
+         the same day, Zoe: "the post itself is enough").
        THE LITTLE ALGORITHM (Zoe: "without a heavy algorithm but like a little
-       one is fine if it gets people connected") is only in what is set
-       between: circles your friends are in lead, then the liveliest, and
-       yours go last (the sidebar already lists them); people are most friends
-       in common first (peopleForRail). The posts are never ranked: newest
-       first, as the About page promises.
+       one is fine if it gets people connected") is only in the rails: circles
+       your friends are in lead, then the liveliest, and yours go last (the
+       sidebar already lists them); people are most friends in common first
+       (peopleForRail). The posts are never ranked: newest first, as the About
+       page promises.
        The foot says the square ends, then Share Tria, the page's last word. */
-    const SQUARE_GAP = 3;
     const RAIL_FIRST = 3;
     const RAIL_GAP = 4;
     let squareFootSig = null;
@@ -17347,47 +17344,31 @@
       const mid = Math.ceil(list.length / 2);
       return [list.slice(0, mid), list.slice(mid)];
     };
+    // The circles' two rails, Start a circle ending the last (alone, with no
+    // circle to show).
+    const circleRails = () => {
+      if (!Store.communitiesReady()) return [];
+      const all = communitiesInOrder();
+      const theirs = all.filter(c => !Store.inCommunity(c.id))
+        .map(c => ({ c, f: friendsIn(c) }))
+        .sort((a, b) => b.f - a.f)              // stable: life breaks the tie
+        .map(x => x.c);
+      const groups = halves(theirs.concat(all.filter(c => Store.inCommunity(c.id))));
+      if (!groups.length) groups.push([]);
+      return groups.map((g, i) => ({ extra: true, id: 'x:circles:' + i,
+        html: communityRailHtml(g, { start: i === groups.length - 1 }) }));
+    };
     const squareItems = (posts, rail) => {
-      const ready = Store.communitiesReady();
+      const circles = circleRails();
+      const people = halves(rail).map((h, i) => ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }));
+      const rails = [circles[0], people[0], circles[1], people[1]].filter(x => x && x.html);
       const items = [];
-      const carded = new Set();
-      // The circles rails are placeholders, filled once every circle met
-      // under a post is known (the rails leave those out); an empty one drops.
-      const circleRails = ready ? [{ extra: true, id: 'x:circles:0' }, { extra: true, id: 'x:circles:1' }] : [];
-      const peopleRails = halves(rail).map((h, i) => ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }));
-      const queue = [circleRails[0], peopleRails[0], circleRails[1], peopleRails[1]].filter(Boolean);
-      let n = 0, since = SQUARE_GAP, sinceRail = RAIL_GAP;
-      for (const p of posts) {
+      posts.forEach((p, i) => {
         items.push(p);
-        n++; since++; sinceRail++;
-        if (since < SQUARE_GAP) continue;
-        const c = ready && p.communityId && Store.community(p.communityId);
-        if (c && !carded.has(c.id) && !Store.inCommunity(c.id) && !(c.owner && Blocks.has(c.owner))) {
-          carded.add(c.id);
-          items.push({ extra: true, id: 'x:c:' + c.id, html: communityCardHtml(c) });
-        } else if (queue.length && n >= RAIL_FIRST && sinceRail >= RAIL_GAP) {
-          items.push(queue.shift());
-          sinceRail = 0;
-        } else continue;
-        since = 0;
-      }
-      items.push(...queue);
-      // The circles rails: every circle not already met under a post, the ones
-      // your friends are in first, yours last.
-      if (ready) {
-        const all = communitiesInOrder().filter(c => !carded.has(c.id));
-        const theirs = all.filter(c => !Store.inCommunity(c.id))
-          .map(c => ({ c, f: friendsIn(c) }))
-          .sort((a, b) => b.f - a.f)            // stable: life breaks the tie
-          .map(x => x.c);
-        const groups = halves(theirs.concat(all.filter(c => Store.inCommunity(c.id))));
-        // With no circle left to show, the one rail is Start a circle alone.
-        if (!groups.length) groups.push([]);
-        groups.forEach((g, i) => {
-          circleRails[i].html = communityRailHtml(g, { start: i === groups.length - 1 });
-        });
-      }
-      return items.filter(x => !x.extra || x.html);
+        const n = i + 1;
+        if (rails.length && n >= RAIL_FIRST && (n - RAIL_FIRST) % RAIL_GAP === 0) items.push(rails.shift());
+      });
+      return items.concat(rails);
     };
     // A piece set between the posts is wired as the page wires it above.
     const wireSquareNode = (node) => {
