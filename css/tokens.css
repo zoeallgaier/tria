@@ -366,7 +366,7 @@
      It sits over the Edit/Share row, and under whatever comes next: that row,
      else the pins, else the posts. One number, so the buttons have the same
      air on both sides by construction. */
-  --account-gap: 1.1rem;
+  --account-gap: 1.5rem;
 
   /* Type scale — Instrument Serif carries the display sizes (mastheads, headlines,
      names); Oxygen carries the functional layer. Bigger, bolder, editorial. */
