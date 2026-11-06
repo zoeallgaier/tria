@@ -84,6 +84,21 @@ answered 42703 that morning and `[{"moment":false}]` that afternoon). Until it r
 the New sheet keeps Music. An older binary draws a live Moment as an ordinary
 post until it expires.
 
+## The tab you're on is solid, and no tab has a label (2026-11-05)
+
+**Like Instagram** (Zoe; picked in https://claude.ai/artifact/7jHUB4GeuiKsUczsQqkytd).
+Each tab's `<key>On` in ICONS is its outline grown solid: My Circle is now a
+BUBBLE (the Moments mark's larger one alone, its shine cut through when solid;
+the ring and dot is in git), Discover's triad is INTERLACED (the outline's lines
+cut into three solid discs), Chats' two bubbles part on a seam, Profile fills.
+Natively it is the item's `selectedImage` with no title (the label is its
+`accessibilityLabel`); on the web capsule the solid svg sits before the outline
+and shows only on `aria-current` or `--under`, and `.nav-label` is hidden there
+(the desktop sidebar keeps its words). **Holes are plain SVG `<mask>` (cut only:
+white keeps, black takes away) and `<clipPath>`**, which TriaSVG learned for
+this, because the bar's images are templates and a hole painted in paper would
+come out as ink. `svgIcon` suffixes ids per copy.
+
 ## Pins are a grid (2026-11-04)
 
 **A profile's pins are two columns with one row height** (Zoe: "implement a grid
@@ -131,21 +146,35 @@ finger, stiffens, a LIGHT haptic and the arrow light up, and the lift springs it
 home and calls `setChatReply` (`wireMessages`, `.msg-swipe-mark`, members only).
 `touch-action: pan-y` is what lets it share a thread with the scroll.
 
-## Updates is a tab (2026-11-01)
+## The + is the tab bar's centre; Updates is the bell (2026-11-05)
 
-**Five tabs now: My Circle, Discover, Chats, Updates, Profile** (Zoe: "in the
-navbar instead of the corner"). The bell left My Circle's bar, and Updates is a
-tab root with no back chevron, lit as itself in all three shells, its dot on its
-tab (`setDots`). Older notes below that say "bell" are the history of that.
-`dotInk`, `.toolbar-dot` and `paintDot` have no caller left. **On 26 the system
-spaces the tabs** (`itemSpacing` and `itemWidth` measured as doing nothing) and
-they fill the capsule evenly, so the room between them comes from a wider capsule:
-the controller's view runs `Metric.tabReach` (10pt) past each side of the screen.
+**The tab bar is My Circle, Discover, +, Chats, Profile** (Zoe). The + is an
+ACTION, not a place (NAV's `action: true`, route `#/new`, `ICONS.newTab` at a
+2.3 stroke to sit with the solid tab marks): a tap raises the New sheet and lights
+nothing (`shouldSelect` returns false for it, app.js's tap handler calls
+`openComposeDial`), and **a swipe between the tabs goes straight past it**
+(`TriaPager.wear` keeps places only). On the web it is a button in the phone
+capsule (`.nav-link--pill`, `.nav-new`); the desktop rail has New at its foot. No
+top bar wears a + any more (`composeBtnEl` is gone).
+**Updates was a fifth tab from 2026-11-01 and is the bell again**, on the RIGHT of
+My Circle's and Discover's bars (`updatesBtnEl(from)`, `.toolbar-updates`, its dot
+`.toolbar-dot` kept by `syncNavDot` and read natively by `dotInk`). The tab that
+rang it is lit on `#/updates` (`updatesFrom`, `.nav-link--under`, `setActive`) and
+is where its back chevron goes. On desktop Updates is still a sidebar row
+(`rail: true`, never a native tab, never swipeable).
+**Both My Circle and Discover lead with the sidebar's mark** (`sideBtnEl`,
+`.toolbar-side`); while Discover's search is open that mark is the back chevron
+that empties it. **The filter leads on Chats and your own profile** (Zoe: the tabs
+you own), and stays on the right of a friend's profile and Updates. With five
+tabs the controller ran 10pt past each side of the screen (`tabReach`); that went
+with the Updates tab.
 
 ## My Circle's sidebar (2026-11-01)
 
-**The uneven hamburger on the bar's right slides a tall panel in off the screen's
-edge** (Zoe: "like reddit almost", `openFeedSide`, `ICONS.sidebar`,
+**The uneven hamburger on the bar's LEFT slides a tall panel in off the screen's
+left edge**, on My Circle and Discover (the right, My Circle only, until
+2026-11-05, when the bell took the bar back; a pick from Discover goes to My
+Circle reading it, `pickFeed`) (Zoe: "like reddit almost", `openFeedSide`, `ICONS.sidebar`,
 `.sheet-scrim--side`; a blur was tried and removed the same day, then came back
 subtle on 2026-11-04: `--glass-blur-veil` (6px, 0 under Reduce Transparency)
 under a lighter 22% dim, the radius fixed so only the scrim's opacity fades): Friends (the whole feed), every
@@ -159,10 +188,12 @@ wordmark's place names it, not a control,, a tab re-tap clears it and the New po
 posts to you and your friends, the sidebar reads the whole room (`feedPool`),
 strangers' posts too. A row stays listed with no posts in it.
 **It starts at the foot of the status bar** (the clock used to straddle its
-edge). **A swipe in from the right edge opens it on My Circle**: native
-(`rightEdge` in TriaViewController.swift, calling `window.triaOpenSide`), because
-`allowsBackForwardNavigationGestures` gives WebKit that edge whenever there is
-forward history. WebKit's own swipes wait for it to fail; off `#/` it never begins.
+edge). **A swipe in from the left edge opens it on My Circle and Discover, never
+back**, and a drag left closes it: native (`sideEdge` in
+TriaViewController.swift, calling `window.triaOpenSide`), because
+`allowsBackForwardNavigationGestures` gives WebKit that edge for back whenever
+there is back history. WebKit's own swipes wait for it to fail; off `#/` and
+`#/discover` it never begins.
 
 ## 2.0's brand: cyan to green (2026-10-22)
 
@@ -759,9 +790,9 @@ folds while you read down), with the same `setTabs`/`selectTab`/`setDots`/
 `setChrome` contract as 1.4. The reserve only grows (a folded bar must not move
 the foot of a page mid-scroll).
 
-**The + left the tab bar for My Circle's top bar** (and your own profile's, 2026-10-23; Discover's; Chats', 2026-11-01; Updates', 2026-11-04), Instagram-style: the
-compose mark (a sheet and pencil, `ICONS.compose`) leading, the sidebar's mark
-trailing. The compose mark raises the CREATE sheet (`openComposeDial`, titled New since 2026-10-24, Share before it: a circle is created, not shared): Note (the pencil), Activity (Frame left it 2026-10-23, Zoe; a photo is the composer's attach bar),
+**The + left the tab bar for My Circle's top bar** (and your own profile's, 2026-10-23; Discover's; Chats', 2026-11-01; Updates' while it was a tab), Instagram-style: the
+compose mark (a sheet and pencil, `ICONS.compose`), until 2026-11-05, when the +
+went to the tab bar's centre (see "The + is the tab bar's centre"). The compose mark raises the CREATE sheet (`openComposeDial`, titled New since 2026-10-24, Share before it: a circle is created, not shared): Note (the pencil), Activity (Frame left it 2026-10-23, Zoe; a photo is the composer's attach bar),
 and Daily (a sun, straight to its composer, there only while you haven't
 answered) (Zoe, 2026-10-22; it listed every type and Music,
 which was the attach bar again). Activity presses the composer's calendar button on

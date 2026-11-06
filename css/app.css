@@ -885,7 +885,9 @@ body.toolbar-live .view { padding-top: 1rem; }
 .toolbar-page {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  /* The trailing slot's gap: My Circle's leading pair (the sidebar and the
+     bell) sits as far apart as any pair on the right. */
+  gap: var(--toolbar-gap);
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -1539,6 +1541,14 @@ body.toolbar-live .view { padding-top: 1rem; }
   transition: color var(--dur-micro) var(--ease), background-color var(--dur-micro) var(--ease);
 }
 .nav-link .nav-ico { width: 22px; height: 22px; flex-shrink: 0; }
+/* THE TAB YOU'RE ON IS DRAWN SOLID (2026-11-05, ICONS' `<key>On`): the solid
+   copy sits before the outline and only shows where you are, hiding it. The
+   tab a bell was rung from (`--under`) is where you are too. */
+.nav-link .nav-ico--on { display: none; }
+.nav-link[aria-current="page"] .nav-ico--on,
+.nav-link--under .nav-ico--on { display: block; }
+.nav-link[aria-current="page"] .nav-ico--on + .nav-ico,
+.nav-link--under .nav-ico--on + .nav-ico { display: none; }
 /* Where you are: full ink on a soft neutral capsule (the site's 8%), and a
    lighter one under the pointer. Hover only on a real pointer, so a first tap
    on a touch screen is never spent becoming a hover. */
@@ -1644,9 +1654,16 @@ body.toolbar-live .view { padding-top: 1rem; }
   cursor: pointer;
 }
 .nav--compose .nav-foot { visibility: hidden; }
-/* THE COMPOSE MARK IS THE PHONE'S WAY IN. At desktop width the sidebar's New
-   is on every page, so the same act on My Circle's bar would be a second door. */
-@media (min-width: 681px) { html:not([data-chrome="native"]) .toolbar-compose { display: none; } }
+/* THE CENTRE + IS THE PHONE'S WAY IN (2026-11-05, NAV's `action`), a button
+   in the capsule. At desktop width the sidebar's New is on every page, so the
+   rail draws no + of its own. */
+.nav-link--pill { display: none; }
+.nav-new {
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
 
 /* ── Main / views ────────────────────────────────────────────────────────── */
 main {
@@ -1813,8 +1830,8 @@ main {
   .toolbar-field { transition: opacity var(--dur-quick) var(--ease); }
   .topbar--reading .toolbar-field:not(:focus-within) { transform: none; }
 }
-/* Discover's + (2.0) leads the row like My Circle's, at its own width, and the
-   field moves over and takes what is left. */
+/* Discover's bell leads the row like My Circle's (2026-11-05; the + led it
+   from 2.0 and trails now), at its own width, and the field takes what is left. */
 body.toolbar-field .toolbar-page { flex: 0 0 auto; margin-right: var(--toolbar-gap); }
 /* The page starts under the bar, with the gap the nameplate used to leave. */
 body.toolbar-field .view--discover { padding-top: 0.5rem; }
@@ -9429,12 +9446,13 @@ body.thread-live .lightbox { z-index: 320; }
 .sheet-scrim--people .sheet { max-height: min(66dvh, 640px); }
 
 /* MY CIRCLE'S SIDEBAR (2026-11-01, openFeedSide). The sheet's own surface and
-   6px inset, stood on end against the right edge: from the foot of the status
-   bar down, the display's corner at its outer foot and the panel's 32px
-   everywhere else. Comes and goes sideways, by the same spring. */
+   6px inset, stood on end against the LEFT edge (the right until 2026-11-05,
+   when its button moved left and the bell took the bar back): from the foot of
+   the status bar down, the display's corner at its outer foot and the panel's
+   32px everywhere else. Comes and goes sideways, by the same spring. */
 .sheet-scrim--side {
   align-items: stretch;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: calc(env(safe-area-inset-top) + 6px) 6px 6px;
   /* The feed goes soft behind it (Zoe, 2026-11-04: "subtly"), a lighter dim
      than every other sheet's because the blur does half the parting. The
@@ -9450,8 +9468,8 @@ body.thread-live .lightbox { z-index: 320; }
   max-width: none;
   max-height: none;
   padding: 18px 0 0;
-  border-radius: 32px 32px var(--side-corner) 32px;
-  transform: translateX(calc(100% + 24px));
+  border-radius: 32px 32px 32px var(--side-corner);
+  transform: translateX(calc(-100% - 24px));
 }
 .sheet-scrim--side .sheet-grab { display: none; }
 .sheet-scrim--side .sheet-title {
@@ -10314,7 +10332,8 @@ body[data-ambient="none"] .pf-row-swatch {
      rather than left out of renderNav, because the breakpoint moves under a
      resize and the nav is built once. Share is My Circle's compose mark here. */
   .nav-head,
-  .nav-foot { display: none; }
+  .nav-foot,
+  .nav-pill .nav-link--rail { display: none; }
   .nav-pill {
     pointer-events: auto;
     position: relative;               /* containing block for anything absolute inside */
@@ -10335,8 +10354,9 @@ body[data-ambient="none"] .pf-row-swatch {
        it. Pinning the layer here, plus the repaint nudge in route(), fixes it. */
     transform: translateZ(0);
   }
-  /* A tab: icon over label, an equal share of the capsule, 56px tall, well
-     past the 44pt floor. The label is 10px, an iOS tab bar's own size. */
+  /* A tab: the glyph alone (the label is hidden below, kept in the DOM for the
+     desktop sidebar), an equal share of the capsule, 56px tall, well past the
+     44pt floor. */
   .nav-pill .nav-link {
     position: relative;               /* the dot's containing block */
     flex: 1 1 0;
@@ -10350,23 +10370,27 @@ body[data-ambient="none"] .pf-row-swatch {
     font-weight: 400;
     letter-spacing: 0.02em;
   }
-  .nav-pill .nav-link .nav-label {
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .nav-pill .nav-link .nav-ico { width: 24px; height: 24px; }
+  /* No labels on the capsule (2026-11-05, "like insta"): the solid glyph says
+     where you are, and each link's aria-label still names it. */
+  .nav-pill .nav-link .nav-label { display: none; }
+  .nav-pill .nav-link--pill { display: flex; }
+  .nav-pill .nav-link .nav-ico { width: 26px; height: 26px; }
   /* The capsule says where you are, so the label keeps its weight: a bold
      label changing width under a moving capsule would make the row twitch. */
   .nav-pill .nav-link[aria-current="page"] { font-weight: 400; }
-  /* The dot on the glyph's top trailing corner: the glyph is 24px, centred,
-     so its corner is 12px either side of the tab's middle. */
+  /* Updates is the bell on My Circle's and Discover's bars on a phone, so the
+     tab you rang it from stays lit there (2026-11-05, as in 1.8). */
+  .nav-pill .nav-link--under {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+  }
+  /* The dot on the glyph's top trailing shoulder: the glyph is 26px, centred
+     both ways in the 56px tab (no label under it since 2026-11-05), so its top
+     is 15px down and its side 13px from the middle. */
   .nav-pill .nav-dot {
     position: absolute;
-    top: 7px;
-    left: calc(50% + 9px);
+    top: 14px;
+    left: calc(50% + 8px);
     width: 6.5px;
     height: 6.5px;
   }

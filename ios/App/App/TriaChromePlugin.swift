@@ -872,7 +872,6 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         /// 26 is the size the icon-and-title idiom is drawn at, and the web's
         /// 28px nav glyph had no title under it to make room for.
         static let icon: CGFloat = 26
-        static let tabReach: CGFloat = 10
         /// Past the top of the bar, what the last card of a feed keeps clear.
         static let clearance: CGFloat = 8
     }
@@ -886,6 +885,9 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
     private let controller = UITabBarController()
     private let shell = TriaTabShell()
     private var routes: [String] = []
+    /// Tabs that are ACTS, not places: the centre + (2026-11-05). A tap on one
+    /// crosses to app.js and selects nothing.
+    private var actions: Set<String> = []
     private var currentRoute = ""
     private var tabTint: UIColor?
     private var dots: [String: UIColor] = [:]
@@ -924,12 +926,11 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         shell.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.addChild(controller)
         host.view.addSubview(shell)
-        // Five tabs fill the capsule evenly, and on 26 the system sets that
-        // spacing (`itemSpacing` and `itemWidth` do nothing, measured). The one
-        // way to more room between them is a wider capsule (Zoe, 2026-11-01), and
-        // the capsule is cut from the controller's width, so that runs past the
-        // screen by this much a side.
-        controller.view.frame = shell.bounds.insetBy(dx: -Metric.tabReach, dy: 0)
+        // The screen's own width again since Updates went back to the bar
+        // (2026-11-05). With five tabs the controller ran 10pt past each side
+        // (`tabReach`), the one way to widen a capsule whose spacing 26 sets
+        // itself; four have the room.
+        controller.view.frame = shell.bounds
         controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         shell.addSubview(controller.view)
         controller.didMove(toParent: host)
@@ -938,6 +939,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
     func apply(tabs: [[String: Any]]?, fab fabSpec: [String: Any]?) {
         if let tabs {
             routes = tabs.compactMap { $0["route"] as? String }
+            actions = Set(tabs.compactMap { ($0["action"] as? Bool) == true ? $0["route"] as? String : nil })
             controller.setViewControllers(tabs.enumerated().map { index, tab in
                 let page = TriaTabPage()
                 let label = tab["label"] as? String ?? ""
@@ -945,7 +947,16 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
                 // you are not on and `tintColor` for the one you are.
                 let image = TriaSVG.image(markup: tab["icon"] as? String ?? "",
                                           size: Metric.icon, ink: .black, template: true)
-                page.tabBarItem = UITabBarItem(title: label, image: image, tag: index)
+                // THE TAB YOU'RE ON IS SOLID, AND NONE HAS A TITLE (Zoe,
+                // 2026-11-05, "like insta"): the solid drawing is the item's
+                // selectedImage, the system's own swap, and the label only
+                // names the item to VoiceOver.
+                let solid = (tab["iconOn"] as? String).flatMap { $0.isEmpty ? nil :
+                    TriaSVG.image(markup: $0, size: Metric.icon, ink: .black, template: true) }
+                let item = UITabBarItem(title: nil, image: image, selectedImage: solid ?? image)
+                item.tag = index
+                item.accessibilityLabel = label
+                page.tabBarItem = item
                 // The scroll the bar folds on, handed over BEFORE the page is
                 // shown. The controller registers itself as the scroll view's
                 // observer only when a page comes up; handed to a page already
@@ -1037,7 +1048,8 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         guard let index = tabBarController.viewControllers?.firstIndex(of: viewController),
               index < routes.count else { return false }
         onTap?(routes[index])
-        return true
+        // The centre + raises the New sheet; the lens stays where you are.
+        return !actions.contains(routes[index])
     }
 
     func setVisibility(chrome: Bool, fab _: Bool) {
@@ -1269,7 +1281,9 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
     }
 
     func wear(tabs: [[String: Any]]) {
-        routes = tabs.compactMap { $0["route"] as? String }
+        // Places only: a swipe goes straight past the centre + (an `action`),
+        // from Discover to Chats and back.
+        routes = tabs.filter { ($0["action"] as? Bool) != true }.compactMap { $0["route"] as? String }
         for tab in tabs {
             guard let route = tab["route"] as? String else { continue }
             glyphs[route] = TriaSVG.image(markup: tab["icon"] as? String ?? "",
@@ -1282,7 +1296,7 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
     /// A route has gone across and hasn't said it drew.
     private var waiting: Bool { paintedSeq != seq }
 
-    /// The route on the web view right now, read the way `rightEdge` reads it.
+    /// The route on the web view right now, read the way the sidebar's edge swipe reads it.
     private var routeNow: String {
         let fragment = web?.url?.fragment ?? ""
         let path = fragment.split(separator: "?", omittingEmptySubsequences: false).first.map(String.init) ?? ""
@@ -3994,23 +4008,42 @@ enum TriaSVG {
         let scale = size / max(doc.box.width, doc.box.height)
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         let image = renderer.image { context in
-            context.cgContext.scaleBy(x: scale, y: scale)
-            context.cgContext.translateBy(x: -doc.box.minX, y: -doc.box.minY)
+            let cg = context.cgContext
+            cg.scaleBy(x: scale, y: scale)
+            cg.translateBy(x: -doc.box.minX, y: -doc.box.minY)
             for shape in doc.shapes {
-                shape.path.lineWidth = shape.strokeWidth
-                shape.path.lineCapStyle = .round
-                shape.path.lineJoinStyle = .round
-                if let fill = shape.fill {
-                    (template ? UIColor.black : resolve(fill, ink)).setFill()
-                    shape.path.fill()
+                // A masked shape is drawn on a layer of its own, its cuts taken
+                // out of that layer alone, then laid down.
+                let cuts = shape.mask.flatMap { doc.masks[$0] } ?? []
+                if !cuts.isEmpty { cg.beginTransparencyLayer(auxiliaryInfo: nil) }
+                paint(shape, doc, cg) { path, paint, isFill in
+                    (template ? UIColor.black : resolve(paint, ink)).set()
+                    isFill ? path.fill() : path.stroke()
                 }
-                if let stroke = shape.stroke {
-                    (template ? UIColor.black : resolve(stroke, ink)).setStroke()
-                    shape.path.stroke()
+                if !cuts.isEmpty {
+                    for cut in cuts {
+                        paint(cut, doc, cg) { path, _, isFill in
+                            isFill ? path.fill(with: .clear, alpha: 1) : path.stroke(with: .clear, alpha: 1)
+                        }
+                    }
+                    cg.endTransparencyLayer()
                 }
             }
         }
         return image.withRenderingMode(template ? .alwaysTemplate : .alwaysOriginal)
+    }
+
+    /// One shape's fill then stroke, inside its clip path when it names one.
+    private static func paint(_ shape: Shape, _ doc: Document, _ cg: CGContext,
+                              _ draw: (UIBezierPath, String, Bool) -> Void) {
+        cg.saveGState()
+        if let clip = shape.clip.flatMap({ doc.clips[$0] }) { clip.addClip() }
+        shape.path.lineWidth = shape.strokeWidth
+        shape.path.lineCapStyle = .round
+        shape.path.lineJoinStyle = .round
+        if let fill = shape.fill { draw(shape.path, fill, true) }
+        if let stroke = shape.stroke { draw(shape.path, stroke, false) }
+        cg.restoreGState()
     }
 
     /// Whether the drawing names any colour of its own. See the note at the one
@@ -4039,7 +4072,11 @@ enum TriaSVG {
     }
 
     static func carriesColour(_ markup: String) -> Bool {
+        var defs = 0   // inside a <mask> or <clipPath>, whose black and white are not ink
         for tag in scan(markup) {
+            if tag.name == "mask" || tag.name == "clipPath" { defs += 1; continue }
+            if tag.name == "/mask" || tag.name == "/clipPath" { defs = max(0, defs - 1); continue }
+            if defs > 0 { continue }
             for key in ["fill", "stroke"] where tag.attrs[key] != nil {
                 let value = tag.attrs[key] ?? ""
                 if value != "none" && value != "currentColor" { return true }
@@ -4058,10 +4095,31 @@ enum TriaSVG {
         let fill: String?          // nil is `none`
         let stroke: String?
         let strokeWidth: CGFloat
+        var clip: String? = nil    // a <clipPath> id
+        var mask: String? = nil    // a <mask> id
     }
+    /* MASKS AND CLIP PATHS, as far as the solid tab marks need them
+       (2026-11-05, ICONS' `<key>On` in app.js). A <mask> here only CUTS: its
+       white paint (the full-box rect every one starts with) keeps, its black
+       paint takes away, and anything between is not understood. A <clipPath>
+       is the union of its shapes. Both are plain SVG, so the web draws the same
+       markup as it is. */
     private struct Document {
         let box: CGRect
         let shapes: [Shape]
+        var masks: [String: [Shape]] = [:]
+        var clips: [String: UIBezierPath] = [:]
+    }
+
+    /// `url(#id)` to `id`.
+    private static func ref(_ raw: String?) -> String? {
+        guard let raw, raw.hasPrefix("url(#"), raw.hasSuffix(")") else { return nil }
+        return String(raw.dropFirst(5).dropLast())
+    }
+
+    private static func isBlack(_ paint: String?) -> Bool {
+        guard let paint = paint?.lowercased() else { return false }
+        return paint == "#000" || paint == "#000000" || paint == "black"
     }
 
     private static func parse(_ markup: String) -> Document {
@@ -4076,8 +4134,25 @@ enum TriaSVG {
         var rootStroke: String? = nil
         var rootWidth: CGFloat = 1.8
         var shapes: [Shape] = []
+        var masks: [String: [Shape]] = [:]
+        var clips: [String: UIBezierPath] = [:]
+        var inMask: String?
+        var inClip: String?
 
         for tag in tags {
+            switch tag.name {
+            case "mask":
+                inMask = tag.attrs["id"] ?? ""
+                masks[inMask!] = []
+                continue
+            case "clipPath":
+                inClip = tag.attrs["id"] ?? ""
+                clips[inClip!] = UIBezierPath()
+                continue
+            case "/mask": inMask = nil; continue
+            case "/clipPath": inClip = nil; continue
+            default: break
+            }
             if tag.name == "svg" {
                 if let raw = tag.attrs["viewBox"] {
                     let n = raw.split(whereSeparator: { $0 == " " || $0 == "," }).compactMap { Double($0) }
@@ -4091,15 +4166,24 @@ enum TriaSVG {
                 continue
             }
             guard let path = geometry(tag) else { continue }
+            if let id = inClip { clips[id]?.append(path); continue }
             var fill = rootFill
             var stroke = rootStroke
             if let raw = tag.attrs["fill"] { fill = raw == "none" ? nil : raw }
             if let raw = tag.attrs["stroke"] { stroke = raw == "none" ? nil : raw }
             var width = rootWidth
             if let raw = tag.attrs["stroke-width"], let value = Double(raw) { width = CGFloat(value) }
-            shapes.append(Shape(path: path, fill: fill, stroke: stroke, strokeWidth: width))
+            if let id = inMask {
+                // Only the black takes anything away; the white keeps.
+                masks[id]?.append(Shape(path: path, fill: isBlack(fill) ? fill : nil,
+                                        stroke: isBlack(stroke) ? stroke : nil,
+                                        strokeWidth: width, clip: ref(tag.attrs["clip-path"])))
+                continue
+            }
+            shapes.append(Shape(path: path, fill: fill, stroke: stroke, strokeWidth: width,
+                                clip: ref(tag.attrs["clip-path"]), mask: ref(tag.attrs["mask"])))
         }
-        return Document(box: box, shapes: shapes)
+        return Document(box: box, shapes: shapes, masks: masks, clips: clips)
     }
 
     private static func geometry(_ tag: (name: String, attrs: [String: String])) -> UIBezierPath? {
@@ -4146,8 +4230,20 @@ enum TriaSVG {
         while i < chars.count {
             guard chars[i] == "<" else { i += 1; continue }
             i += 1
-            // Closing tags, comments and declarations carry nothing we want.
-            if i < chars.count, chars[i] == "/" || chars[i] == "!" || chars[i] == "?" {
+            // A closing tag crosses as its name behind a slash ("/mask"), the
+            // one thing `parse` needs to know where a <mask> or <clipPath> ends.
+            if i < chars.count, chars[i] == "/" {
+                i += 1
+                var name = "/"
+                while i < chars.count, chars[i].isLetter || chars[i].isNumber {
+                    name.append(chars[i]); i += 1
+                }
+                while i < chars.count, chars[i] != ">" { i += 1 }
+                if name.count > 1 { out.append((name, [:])) }
+                continue
+            }
+            // Comments and declarations carry nothing we want.
+            if i < chars.count, chars[i] == "!" || chars[i] == "?" {
                 while i < chars.count, chars[i] != ">" { i += 1 }
                 continue
             }

@@ -253,18 +253,45 @@
     // dots; these are r 4.4 on a tighter one, so what you see is the weave.
     // Same idea, same tab, drawn so it survives being 28pt across.
     circle:  '<circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/>',
-    // A RING WITH A CENTRE (a house was tried for an afternoon on 2026-10-22
-    // and Zoe asked for this one back) — the people around you, and you in the middle of
-    // them, which is what the home feed is. The bare ring it replaces said
-    // "circle" and had no way to say WHICH circle, so it leaned entirely on
-    // being the plainest mark in the row. The centre is the reader, and that is
-    // the whole distinction between this tab and Discover's said in the drawings
-    // rather than in how busy they are: one triad has somebody at its middle and
-    // the other does not. The centre is FILLED rather than outlined so the mark
-    // has one solid thing in it at 28pt, and `stroke="none"` matters as much as
-    // the fill does: ICON_ATTRS strokes everything at 1.8, and a 1.9-radius
-    // circle stroked at 1.8 is not a dot, it is a smudge with a hole in it.
-    myCircle: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/>',
+    // A BUBBLE (Zoe, 2026-11-05): the Moments mark's larger bubble on its own,
+    // centred and grown to the old ring's size, its shine kept. It was a ring
+    // with a filled centre (you in the middle of your people) from 2026-10-22,
+    // and a house for an afternoon before that; both are in git.
+    myCircle: '<circle cx="12" cy="12" r="7"/><path d="M8.6 10.25a3.73 3.73 0 0 1 2-2.1"/>',
+    /* THE TAB YOU'RE ON IS DRAWN SOLID, and the bar has no labels (Zoe,
+       2026-11-05, "like insta"; picked in
+       https://claude.ai/artifact/7jHUB4GeuiKsUczsQqkytd). Each is its outline
+       grown solid (the fill plus the same 1.8 stroke), so it keeps its size.
+       `<key>On` is found by name (tabSpec, renderNav).
+       Where a solid needs a hole, it is a <mask> that only CUTS (a white box,
+       then black paint taken away) and the odd <clipPath>: plain SVG, so the
+       web draws it as it is, and TriaSVG learned exactly those two for the
+       native bar, whose images are templates (a hole painted in paper would
+       come out as ink). svgIcon gives every id a fresh suffix per copy.
+       The bubble's shine is cut through it; the chat bubbles part on a seam
+       round the front one; the triad is INTERLACED, the outline's own lines
+       cut into the solid: each disc's edge wherever it lies over another. */
+    myCircleOn: '<mask id="tabOn" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">' +
+                '<rect width="24" height="24" fill="#fff" stroke="none"/>' +
+                '<path d="M8.6 10.25a3.73 3.73 0 0 1 2-2.1" fill="none" stroke="#000"/></mask>' +
+                '<circle cx="12" cy="12" r="7" fill="currentColor" mask="url(#tabOn)"/>',
+    circleOn: '<clipPath id="tabC0"><circle cx="15" cy="9.8" r="5.3"/><circle cx="12" cy="15" r="5.3"/></clipPath>' +
+              '<clipPath id="tabC1"><circle cx="9" cy="9.8" r="5.3"/><circle cx="12" cy="15" r="5.3"/></clipPath>' +
+              '<clipPath id="tabC2"><circle cx="9" cy="9.8" r="5.3"/><circle cx="15" cy="9.8" r="5.3"/></clipPath>' +
+              '<mask id="tabOn" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">' +
+              '<rect width="24" height="24" fill="#fff" stroke="none"/>' +
+              '<circle cx="9" cy="9.8" r="5.3" fill="none" stroke="#000" stroke-width="1.2" clip-path="url(#tabC0)"/>' +
+              '<circle cx="15" cy="9.8" r="5.3" fill="none" stroke="#000" stroke-width="1.2" clip-path="url(#tabC1)"/>' +
+              '<circle cx="12" cy="15" r="5.3" fill="none" stroke="#000" stroke-width="1.2" clip-path="url(#tabC2)"/></mask>' +
+              '<circle cx="9" cy="9.8" r="4.4" fill="currentColor" mask="url(#tabOn)"/>' +
+              '<circle cx="15" cy="9.8" r="4.4" fill="currentColor" mask="url(#tabOn)"/>' +
+              '<circle cx="12" cy="15" r="4.4" fill="currentColor" mask="url(#tabOn)"/>',
+    chatsOn:  '<mask id="tabOn" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">' +
+              '<rect width="24" height="24" fill="#fff" stroke="none"/>' +
+              '<path d="M3.5 8A3.5 3.5 0 0 1 7 4.5h6A3.5 3.5 0 0 1 16.5 8v2.5A3.5 3.5 0 0 1 13 14H10l-3 3v-3A3.5 3.5 0 0 1 3.5 10.5z" fill="#000" stroke="#000" stroke-width="4.4"/></mask>' +
+              '<path d="M13.2 8.6H18.4A2.6 2.6 0 0 1 21 11.2v3.2A2.6 2.6 0 0 1 18.6 17v2.5l-3-2.5h-2.4A2.6 2.6 0 0 1 10.6 14.4v-3.2A2.6 2.6 0 0 1 13.2 8.6z" fill="currentColor" mask="url(#tabOn)"/>' +
+              '<path d="M3.5 8A3.5 3.5 0 0 1 7 4.5h6A3.5 3.5 0 0 1 16.5 8v2.5A3.5 3.5 0 0 1 13 14H10l-3 3v-3A3.5 3.5 0 0 1 3.5 10.5z" fill="currentColor"/>',
+    profileOn: '<circle cx="12" cy="8" r="3.5" fill="currentColor"/><path d="M5 20a7 7 0 0 1 14 0z" fill="currentColor"/>',
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
     friends: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
@@ -279,6 +306,9 @@
     // prompt that belongs to a day, and no post type's mark says that.
     daily:   '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/>',
     plus:    '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    // The tab bar's centre + (Zoe, 2026-11-05): heavier than the toolbar's,
+    // so it sits with the solid tab marks beside it. Never lit, so no `On`.
+    newTab:  '<path d="M12 5v14" stroke-width="2.3"/><path d="M5 12h14" stroke-width="2.3"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
@@ -470,8 +500,18 @@
   // svgIcon (the nav/card glyph set) and the About page's INSTALL_ICONS.
   const ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
-  const svgIcon = (key, cls) =>
-    `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${ICONS[key]}</svg>`;
+  // A drawing with a <mask> or <clipPath> (the solid tab marks) gets its ids
+  // suffixed per copy: the nav and the native bar's spec each hold one, and two
+  // masks sharing an id in one document resolve to whichever came first.
+  let iconCopy = 0;
+  const svgIcon = (key, cls) => {
+    let inner = ICONS[key];
+    if (inner.includes(' id="')) {
+      const n = ++iconCopy;
+      inner = inner.replace(/ id="([\w-]+)"/g, ` id="$1-${n}"`).replace(/url\(#([\w-]+)\)/g, `url(#$1-${n})`);
+    }
+    return `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${inner}</svg>`;
+  };
 
   /* ── Likes ─────────────────────────────────────────────────────────────────
      A like is a heart and nothing else (Zoe, 2026-10-22: "remove the other
@@ -547,17 +587,34 @@
   const NAV = [
     { route: '#/',         key: 'myCircle', label: 'My Circle' },
     { route: '#/discover', key: 'circle',   label: 'Discover' },
+    // THE + IS THE CENTRE TAB (Zoe, 2026-11-05). An ACTION, not a place: a tap
+    // raises the New sheet and lights nothing, and a swipe between the tabs
+    // goes straight past it (TriaPager reads `action`). On the web it is the
+    // phone capsule's only (`pill`); the desktop rail has New at its foot.
+    { route: '#/new',      key: 'newTab',   label: 'New', action: true, pill: true },
     { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
-    // A tab of its own since 2026-11-01 (Zoe: "in the navbar instead of the
-    // corner"). It was the bell on My Circle's bar from 1.8.
-    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true },
+    // The bell on the right of My Circle's and Discover's bars (updatesBtnEl),
+    // still at #/updates, with the tab you rang it from lit. It was the bell on
+    // My Circle's bar from 1.8, a tab of its own from 2026-11-01, and the bell
+    // again from 2026-11-05 (Zoe), when the + took the tab bar's centre. On desktop it is in the sidebar too, where
+    // the rail has the room: `rail` is the sidebar only, hidden on the phone's
+    // capsule and never sent to the native tab bar (tabSpec).
+    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true, rail: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
   ];
 
   function renderNav(active) {
     const nav = document.getElementById('nav');
-    const link = (n) =>
-      `<a class="nav-link" href="${n.route}" aria-label="${n.label}">` +
+    // The centre + is a button, not a link: it raises the New sheet in place.
+    const link = (n) => n.action
+      ? `<button class="nav-link nav-link--pill nav-new" type="button" aria-label="${n.label}" aria-haspopup="dialog">` +
+          svgIcon(n.key, 'nav-ico') +
+        `</button>`
+      :
+      `<a class="nav-link${n.rail ? ' nav-link--rail' : ''}" href="${n.route}" aria-label="${n.label}">` +
+        // The solid one first, shown only on the tab you're on, where it hides
+        // the outline after it (`.nav-ico--on + .nav-ico`, no :has on iOS 15).
+        (ICONS[n.key + 'On'] ? svgIcon(n.key + 'On', 'nav-ico nav-ico--on') : '') +
         svgIcon(n.key, 'nav-ico') +
         `<span class="nav-label">${n.label}</span>` +
         // Shipped empty and lit by class, never built and torn down: the pill is
@@ -573,12 +630,12 @@
     // a flat column, headed by the wordmark and footed by New, each ruled off
     // with a hairline. The head and the foot are display:none on a phone.
     //
-    // NEW IS THE SIDEBAR'S FOOT, and it is the same New sheet My Circle's
-    // compose mark opens (openComposeDial), not a link to the composer. It was
+    // NEW IS THE SIDEBAR'S FOOT, and it is the same New sheet the capsule's
+    // centre + opens (openComposeDial), not a link to the composer. It was
     // "+ Post" straight to #/publish while the bar's mark opened the sheet: two
-    // ways in that did different things. At desktop width the bar's mark is
-    // hidden (.toolbar-compose in app.css), because this one is on
-    // every page; on a phone the mark is the way in and this is hidden.
+    // ways in that did different things. At desktop width the capsule's + is
+    // hidden (.nav-link--pill in app.css), because this one is on every page;
+    // on a phone the + is the way in and this is hidden.
     if (!nav.querySelector('.nav-pill')) {
       nav.innerHTML =
         // Decorative on purpose: the wordmark was the signed-in link to About
@@ -592,11 +649,24 @@
           `</button>` +
         `</div>`;
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
+      nav.querySelector('.nav-new')?.addEventListener('click', () => openComposeDial());
     }
+    // On #/updates the sidebar lights its own Updates row, and the tab whose
+    // bell you rang on a phone (updatesFrom) is lit there only
+    // (.nav-link--under, worn like aria-current in the phone block of app.css).
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
+      a.classList.toggle('nav-link--under', active === '#/updates' && a.getAttribute('href') === updatesFrom);
     });
+    // THE + IS WHERE YOU ARE WHILE YOU MAKE SOMETHING (Zoe, 2026-11-05): the
+    // composer in every mode and New circle, the pages the New sheet opens.
+    const making = makingRoute(active);
+    const plus = nav.querySelector('.nav-new');
+    if (plus) {
+      if (making) plus.setAttribute('aria-current', 'page');
+      else plus.removeAttribute('aria-current');
+    }
     // On the compose page the + would compete with the composer's own publish
     // button, so it drops away (fade + sink behind the nav) and the four-icon
     // pill glides to true center — same spirit as the docked seg-tabs switcher.
@@ -617,8 +687,10 @@
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
     // having to know this line ran.
-    NativeChrome.setActive(active);
+    NativeChrome.setActive(active === '#/updates' ? updatesFrom
+      : making ? NAV.find(n => n.action).route : active);
   }
+  const makingRoute = (path) => path === '#/publish' || path === '#/c/new';
 
   // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
   // block), so navigation costs no layout read and no per-frame filter work.
@@ -879,8 +951,11 @@
     // more marks, and twenty more copies is not a thing to own. Markup is still
     // presentation, so this stays inside the rule about what may cross: native
     // can draw a triad of circles without knowing it means Discover.
-    const tabSpec = () => NAV.filter(n => !n.publish)
-      .map(n => ({ route: n.route, label: n.label, icon: svgIcon(n.key) }));
+    // `iconOn` is the solid drawing, the item's selectedImage (see ICONS).
+    // `label` crosses as the item's accessibility label: the bar draws none.
+    const tabSpec = () => NAV.filter(n => !n.publish && !n.rail)
+      .map(n => ({ route: n.route, label: n.label, action: !!n.action, icon: svgIcon(n.key),
+                   iconOn: ICONS[n.key + 'On'] ? svgIcon(n.key + 'On') : '' }));
 
     /* SWIPING BETWEEN THE TABS (TriaPager in TriaChromePlugin.swift), which is
        native because a layer keeps the display's rate. Native holds no idea what a page is,
@@ -895,7 +970,7 @@
        so a picture from halfway down would show a page you won't land on. */
     const swipeRoute = () => {
       const path = (location.hash || '#/').split('?')[0];
-      return told.chrome && !overlaid() && !typing() && NAV.some(n => n.route === path) ? path : '';
+      return told.chrome && !overlaid() && !typing() && NAV.some(n => n.route === path && !n.rail) ? path : '';
     };
     const swipeShot = (route) => TAB_SCROLL.has(route) || window.scrollY <= 4;
 
@@ -1188,8 +1263,8 @@
         // computed visibility, which the gate in app.css sets on every control
         // in the bar and would therefore report every one of them as idle.
         hidden: el.classList.contains('toolbar-commit--idle'),
-        // A control's dot, as a resolved colour, and empty for none. Nothing on
-        // the bar wears one since Updates became a tab (2026-11-01).
+        // The bell's dot (updatesBtnEl), as a resolved colour, and empty for
+        // none: the same one-payload shape setDots gives the tab bar's.
         dot: dotInk(el),
       };
       if (cta) Object.assign(spec, words(el));
@@ -2048,7 +2123,9 @@
               //
               // Native does not move its own highlight either way — that comes
               // back around through sync() once the router has actually landed.
-              if (route === (location.hash || '#/').split('?')[0]) reclick(route);
+              // The centre + is an action: native lit nothing for it.
+              if (NAV.some(n => n.action && n.route === route)) openComposeDial();
+              else if (route === (location.hash || '#/').split('?')[0]) reclick(route);
               else go(route);
             });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
@@ -6716,6 +6793,14 @@
     view.querySelector('.view--home')?.classList.toggle('is-narrowed', narrowed);
   }
   function pickFeed(key) {
+    // From Discover's sidebar: My Circle, reading that pick, from its top.
+    if ((location.hash || '#/').split('?')[0] !== '#/') {
+      activeFilter = key;
+      dropNewPosts();
+      pathScroll.delete('#/');
+      go('#/');
+      return;
+    }
     if (key === activeFilter) return;
     activeFilter = key;
     dropNewPosts();
@@ -6761,9 +6846,11 @@
         (on ? svgIcon('check', 'feed-side-check') : '') +
       `</button>`;
   }
-  // The right edge's swipe, from TriaViewController.
+  // The left edge's swipe, from TriaViewController, on My Circle and Discover.
+  // Not while Discover's mark is a back chevron (a search is open).
   window.triaOpenSide = () => {
-    if (document.getElementById('home-side-btn') && !momentsAway) openFeedSide();
+    const mark = document.querySelector('#toolbar-page .toolbar-side');
+    if (mark && mark.getAttribute('aria-haspopup') === 'dialog' && !sheetOpen && !momentsAway) openFeedSide();
   };
   function openFeedSide() {
     const rows = feedSideRows();
@@ -6908,24 +6995,37 @@
     }));
   }
 
-  /* ── My Circle's bar (1.8) ───────────────────────────────────────────────────
-     MAKING SOMETHING LIVES UP HERE NOW. The round + left the tab bar when the tab
-     bar became a real UITabBar (destinations and nothing else is what one
-     is), and it came up to the home feed's bar the way it did in Instagram's
-     2026 layout: the note mark leading, the sidebar's mark trailing.
+  /* ── My Circle's and Discover's bars ─────────────────────────────────────────
+     THE SIDEBAR'S MARK ON THE LEFT, THE BELL ON THE RIGHT (Zoe, 2026-11-05), on
+     both. The + lived up here from 1.8 to 2026-11-05 (leading, then trailing for
+     an afternoon) and is the tab bar's centre now (NAV's `action`), so making
+     something is one place on every tab.
 
-     The note mark opens the DIAL, which is back: Post, Activity, and today's
-     Daily. Each row is a shortcut into the one composer (pendingAttach), so
-     the composer is still the only form there is. */
-  // My Circle's, Discover's, Chats' and Updates', the same + opening the same New sheet.
-  function composeBtnEl(id = 'home-compose-btn') {
-    return `<button class="toolbar-btn toolbar-compose" type="button" id="${id}" ` +
-        `aria-haspopup="dialog" aria-label="Make something">` +
-        svgIcon('plus') +
-      `</button>`;
+     The + opens the DIAL: Note, Moment, today's Daily, Circle. Each row is a
+     shortcut into the one composer (pendingAttach), so the composer is still
+     the only form there is. */
+  // The bell, with the dot for Updates, on My Circle's and Discover's bars.
+  // Shipped lit or not, then kept in step by syncNavDot like a tab's own dot.
+  // A tap remembers which tab rang it, for the back chevron and the lit tab.
+  let updatesFrom = '#/';
+  const UPDATES_FROM = { '#/': 'My Circle', '#/discover': 'Discover' };
+  function updatesBtnInner() {
+    return svgIcon('bell') +
+      `<i class="toolbar-dot${updatesAreNew() ? ' is-on' : ''}" aria-hidden="true"></i>`;
   }
-  const sideBtnEl = () =>
-    `<button class="toolbar-btn" type="button" id="home-side-btn" ` +
+  function updatesBtnEl(from = '#/') {
+    return `<a class="toolbar-btn toolbar-updates" href="#/updates" data-from="${from}" aria-label="Updates">` +
+        updatesBtnInner() +
+      `</a>`;
+  }
+  // Delegated once: a bell is rebuilt with every bar.
+  document.addEventListener('click', (e) => {
+    const bell = e.target.closest && e.target.closest('a.toolbar-updates');
+    if (bell) updatesFrom = bell.dataset.from || '#/';
+  }, true);
+  // The sidebar's mark. `toolbar-side` is what the left edge's swipe looks for.
+  const sideBtnEl = (id = 'home-side-btn') =>
+    `<button class="toolbar-btn toolbar-side" type="button" id="${id}" ` +
       `aria-haspopup="dialog" aria-label="Your circles and people">` +
       svgIcon('sidebar') +
     `</button>`;
@@ -6994,7 +7094,7 @@
     // No nameplate since 1.8: the wordmark centred on the bar is the page's
     // name (mountToolbar's `mark`), and no small title either, because the
     // mark never leaves.
-    mountToolbar({ leading: composeBtnEl(), actions: sideBtnEl(), mark: true });
+    mountToolbar({ leading: sideBtnEl(), actions: updatesBtnEl('#/'), mark: true });
     view.innerHTML =
       `<section class="view view--home">` +
         `<div class="np-host" id="np-host"></div>` +
@@ -7002,8 +7102,6 @@
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
-    document.getElementById('home-compose-btn')
-      ?.addEventListener('click', () => openComposeDial());
     document.getElementById('home-side-btn')
       ?.addEventListener('click', () => openFeedSide());
 
@@ -7122,8 +7220,9 @@
      scrolls hands that back (`pan-y`), so the list keeps scrolling and the pull
      lives on the handle and title above it. A drag only starts past 6px, so a
      tap is still a tap, and the click a drag ends on is swallowed. */
-  // `side` is the sidebar's: it goes the way it came, off to the right, and a
-  // drag that starts more up than across is its list scrolling.
+  // `side` is the sidebar's: it goes the way it came, off to the left (the
+  // right until 2026-11-05), and a drag that starts more up than across is its
+  // list scrolling.
   function dragToClose(panel, list, close, side = false) {
     if (!panel) return;
     // Whether the list scrolls is not settled at open: the audience sheet's
@@ -7149,14 +7248,14 @@
     });
     panel.addEventListener('pointermove', (e) => {
       if (!down) return;
-      dy = Math.max(0, side ? e.clientX - startX : e.clientY - startY);
+      dy = Math.max(0, side ? startX - e.clientX : e.clientY - startY);
       if (side && !dragging && Math.abs(e.clientY - startY) > dy) { down = dy < 6; return; }
       if (!dragging && dy > 6) {
         dragging = true;
         panel.style.transition = 'none';
         try { panel.setPointerCapture(e.pointerId); } catch { /* already gone */ }
       }
-      if (dragging) panel.style.transform = side ? `translateX(${dy}px)` : `translateY(${dy}px)`;
+      if (dragging) panel.style.transform = side ? `translateX(${-dy}px)` : `translateY(${dy}px)`;
     });
     const end = () => {
       if (!down) return;
@@ -9267,15 +9366,16 @@
           isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`)
       : '';
     mountToolbar({
-      // Your own profile wears My Circle's + where a visitor's back chevron
-      // would be (Zoe, 2026-10-23): the same New sheet.
-      leading: b ? toolbarBackEl(b.href, b.label) : isSelf ? composeBtnEl('profile-compose-btn') : '',
+      // Your own profile wore My Circle's + from 2026-10-23; it is the tab
+      // bar's centre since 2026-11-05, and the filter took its place on the
+      // left (Zoe, as on Chats). A visitor's keeps it on the right, by the tie.
+      leading: b ? toolbarBackEl(b.href, b.label) : isSelf ? filterBtn : '',
       // The @HANDLE, since 1.8, Instagram's arrangement: the bar title is up
       // from the first frame on every page now, and the card under it already
       // says the name in big serif, so the bar says the other half of who this
       // is instead of saying the name twice.
       title: '@' + u.username,
-      actions: friendBadge + moreBadge + filterBtn,
+      actions: friendBadge + moreBadge + (isSelf ? '' : filterBtn),
     });
 
     view.innerHTML =
@@ -9506,8 +9606,6 @@
     // looked it up that way, and the same contract Circle, Discover and Updates
     // are already on — resetToolbar clears that node on every navigation, so the
     // listener dies with it rather than accumulating.
-    document.getElementById('profile-compose-btn')
-      ?.addEventListener('click', () => openComposeDial());
     document.getElementById('profile-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: profileFilter,
@@ -16858,13 +16956,12 @@
         `</span>` +
       `</div>`;
 
-    // The + leads, as on My Circle, and the field takes the rest of the row.
-    // It is the New sheet's way in here too, and the sheet's Circle row
-    // stands beside the Start a circle card, waved off or not (Zoe).
+    // My Circle's bar around a field (Zoe, 2026-11-05): the sidebar's mark
+    // leads, the bell trails, and the field takes the rest of the row.
     mountToolbar({
-      leading: Store.isAuthed() ? composeBtnEl('discover-compose-btn') : '',
+      leading: Store.isAuthed() ? sideBtnEl('discover-side-btn') : '',
       field: searchBar,
-      actions: '',
+      actions: Store.isAuthed() ? updatesBtnEl('#/discover') : '',
     });
 
     view.innerHTML =
@@ -16878,14 +16975,16 @@
     const bodyEl = view.querySelector('#discover-body');
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
-    const leadBtn = document.getElementById('discover-compose-btn');
+    const leadBtn = document.getElementById('discover-side-btn');
     const filterBtn = document.getElementById('discover-filter-btn');
 
-    /* WHILE SEARCH IS OPEN THE + IS A WAY BACK (Zoe). Open is the field holding
-       the caret or a query, or a type picked, or the filter in hand (its sheet
-       up, or the focus handed back to it as the sheet closes): the + turns into
-       the back chevron and the filter slides in, and pressing the chevron
-       empties the field and the filter, drops the keyboard and puts the + back.
+    /* WHILE SEARCH IS OPEN THE LEADING MARK IS A WAY BACK (Zoe; the + was,
+       while it led, until 2026-11-05, and the sidebar's mark is now). Open is
+       the field holding the caret or a query, or a type picked, or the filter
+       in hand (its sheet up, or the focus handed back to it as the sheet
+       closes): the mark turns into the back chevron and the filter slides in,
+       and pressing the chevron empties the field and the filter, drops the
+       keyboard and puts the mark back.
        Both buttons swallow their mousedown so the tap doesn't blur the field
        first, which would close the search under the finger. */
     let searchOpen = null;
@@ -16902,10 +17001,12 @@
         filterBtn.setAttribute('aria-hidden', String(!open));
       }
       if (!leadBtn) return;
-      leadBtn.innerHTML = open ? svgIcon('chevron', 'toolbar-back-ico') : svgIcon('plus');
-      leadBtn.setAttribute('aria-label', open ? 'Close search' : 'Make something');
+      leadBtn.innerHTML = open ? svgIcon('chevron', 'toolbar-back-ico') : svgIcon('sidebar');
+      leadBtn.setAttribute('aria-label', open ? 'Close search' : 'Your circles and people');
       if (open) leadBtn.removeAttribute('aria-haspopup');
       else leadBtn.setAttribute('aria-haspopup', 'dialog');
+      // The face changed under native's copy of it.
+      NativeChrome.sync();
     };
     const setType = (key) => {
       discoverType = key;
@@ -16922,7 +17023,7 @@
     };
     leadBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
     leadBtn?.addEventListener('click', () => {
-      if (!searchOpen) { openComposeDial(); return; }
+      if (!searchOpen) { openFeedSide(); return; }
       closeSearch();
     });
     filterBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
@@ -17267,17 +17368,26 @@
   // (refreshWorld) and on the visit that spends it (renderUpdates).
   // In 1.7 the dot sat on Chats and answered for both things under it. Since 1.8
   // they are two marks, because Updates is no longer under Chats: the tab's dot
-  // is chats only (Store.chatsAreNew), and Updates carries its own, on its own
-  // tab since 2026-11-01. Each is still one state and never a number, and each
-  // clears by looking at the thing it is on.
+  // is chats only (Store.chatsAreNew), and Updates carries its own on the bell
+  // on My Circle's and Discover's bars, where you open it from (its own tab
+  // from 2026-11-01 to 11-05). Each is still one state and never a number, and
+  // each clears by looking at the thing it is on.
   function syncNavDot() {
     const chats = Store.chatsAreNew();
     document.querySelectorAll('#nav a[href="#/chats"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', chats));
     const fresh = updatesAreNew();
+    // The sidebar's Updates row (desktop only) carries the bell's dot.
     document.querySelectorAll('#nav a[href="#/updates"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', fresh));
-    NativeChrome.setDots({ '#/chats': chats, '#/updates': fresh });
+    NativeChrome.setDots({ '#/chats': chats });
+    const bell = document.querySelector('.toolbar-updates .toolbar-dot');
+    if (bell && bell.classList.contains('is-on') !== fresh) {
+      bell.classList.toggle('is-on');
+      // The bell is a toolbar control, so native wears its face and reads the
+      // dot off it (controlSpec). A class flip is not a render, so say so.
+      NativeChrome.sync();
+    }
   }
 
   // The open chat page's repaint, set by renderChats / renderChat and dropped by
@@ -17753,7 +17863,7 @@
     const reqs = Store.chatRequests();
     // THE PINNED ROW. Message requests, whenever there are any, named by who
     // and never by how many. Updates led this list from 1.7 until 1.8, when it
-    // left: it was never a chat. It is its own tab now.
+    // left: it was never a chat. It is the bell on My Circle's and Discover's bars.
     const pinned = reqs.length
       ? `<ul class="chat-list chat-list--pinned">` +
           (reqs.length
@@ -17803,12 +17913,13 @@
       return;
     }
     mountToolbar({
-      leading: composeBtnEl('chats-compose-btn'),
       title: 'Chats',
-      actions: filterBtnEl('chats-filter-btn', chatFilter, 'Filter chats') +
-        (Store.chatsReady()
-          ? `<a class="toolbar-btn" id="chats-new-btn" href="#/chats/new" aria-label="New chat">${svgIcon('newchat')}</a>`
-          : ''),
+      // The filter on the left, as on your own profile: the two tabs you own
+      // read the same (Zoe, 2026-11-05). New chat is the right's.
+      leading: filterBtnEl('chats-filter-btn', chatFilter, 'Filter chats'),
+      actions: Store.chatsReady()
+        ? `<a class="toolbar-btn" id="chats-new-btn" href="#/chats/new" aria-label="New chat">${svgIcon('newchat')}</a>`
+        : '',
     });
     view.innerHTML =
       `<section class="view view--chats">` +
@@ -17821,8 +17932,6 @@
     fresh.addEventListener('toggle', (e) => {
       if (e.target.matches && e.target.matches('.chat-archived')) archivedOpen = e.target.open;
     }, true);
-    document.getElementById('chats-compose-btn')
-      ?.addEventListener('click', () => openComposeDial());
     document.getElementById('chats-filter-btn')
       ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
         current: chatFilter,
@@ -18900,7 +19009,9 @@
       // reading, not a setting, so it does not survive leaving the page.
       notifShown = NOTIF_PAGE;
       mountToolbar({
-        leading: composeBtnEl('updates-compose-btn'),
+        // Reached from the bell on My Circle's or Discover's bar (2026-11-05,
+        // a tab before that), so that is where back goes.
+        leading: toolbarBackEl(updatesFrom, UPDATES_FROM[updatesFrom] || 'My Circle'),
         title: 'Updates',
         actions: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
       });
@@ -18935,8 +19046,6 @@
       // the button's hue in place, leave the nameplate and the scroll alone.
       // The dial itself declines to buzz for a pick that changes nothing, so the
       // early return here is only about not rebuilding the ledger for it.
-      document.getElementById('updates-compose-btn')
-        ?.addEventListener('click', () => openComposeDial());
       document.getElementById('updates-filter-btn')
         ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
           current: notifFilter,
