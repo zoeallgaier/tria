@@ -187,9 +187,9 @@ finger, stiffens, a LIGHT haptic and the arrow light up, and the lift springs it
 home and calls `setChatReply` (`wireMessages`, `.msg-swipe-mark`, members only).
 `touch-action: pan-y` is what lets it share a thread with the scroll.
 
-## The + is the tab bar's centre; Updates is the bell (2026-11-05)
+## The + is the tab bar's centre; Chats is a bar button (2026-11-05)
 
-**The tab bar is My Circle, Discover, +, Chats, Profile** (Zoe). The + is an
+**The tab bar is My Circle, Discover, +, Updates, Profile** (Zoe). The + is an
 ACTION, not a place (NAV's `action: true`, route `#/new`, `ICONS.newTab` at a
 2.3 stroke to sit with the solid tab marks): a tap raises the New sheet and lights
 nothing (`shouldSelect` returns false for it, app.js's tap handler calls
@@ -197,18 +197,23 @@ nothing (`shouldSelect` returns false for it, app.js's tap handler calls
 (`TriaPager.wear` keeps places only). On the web it is a button in the phone
 capsule (`.nav-link--pill`, `.nav-new`); the desktop rail has New at its foot. No
 top bar wears a + any more (`composeBtnEl` is gone).
-**Updates was a fifth tab from 2026-11-01 and is the bell again**, on the RIGHT of
-My Circle's and Discover's bars (`updatesBtnEl(from)`, `.toolbar-updates`, its dot
-`.toolbar-dot` kept by `syncNavDot` and read natively by `dotInk`). The tab that
-rang it is lit on `#/updates` (`updatesFrom`, `.nav-link--under`, `setActive`) and
-is where its back chevron goes. On desktop Updates is still a sidebar row
-(`rail: true`, never a native tab, never swipeable).
+**Updates is the tab and Chats is the button on the RIGHT of My Circle's and
+Discover's bars** (Zoe, the same evening: "updates is MUCH more active than
+messages and I dont want to have a mostly empty feed on the tab bar"; for a few
+hours Chats was the tab and Updates the bell). `chatsBtnEl(from)`,
+`.toolbar-chats`, the chats glyph with its dot `.toolbar-dot` kept by
+`syncNavDot` and read natively by `dotInk`; the Updates tab's dot is
+`setDots({ '#/updates' })`, solid `bellOn` where you are. The tab Chats was
+opened from is lit on `#/chats` and every chat page (`chatsFrom`,
+`.nav-link--under`, `setActive`) and is where the Chats list's back chevron
+goes; the filter and New chat share its right. On desktop Chats is still a
+sidebar row (`rail: true`, never a native tab, never swipeable).
 **Both My Circle and Discover lead with the sidebar's mark** (`sideBtnEl`,
 `.toolbar-side`); while Discover's search is open that mark is the back chevron
-that empties it. **The filter leads on Chats and your own profile** (Zoe: the tabs
-you own), and stays on the right of a friend's profile and Updates. With five
+that empties it. **The filter leads on Updates and your own profile** (Zoe: the
+tabs you own), and stays on the right of a friend's profile and Chats. With five
 tabs the controller ran 10pt past each side of the screen (`tabReach`); that went
-with the Updates tab.
+when Updates first left the tab bar.
 
 ## My Circle's sidebar (2026-11-01)
 

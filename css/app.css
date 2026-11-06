@@ -1142,8 +1142,8 @@ body.toolbar-live .view { padding-top: 1rem; }
     white-space: nowrap;
   }
 }
-/* The bell's dot on My Circle's bar (1.8), which is the Chats tab's old dot for
-   Updates moved to where Updates now is. The same mark as .nav-dot: --dot, no
+/* The dot on a bar button: the bell's for Updates from 1.8, Chats' since
+   2026-11-05, when Updates became the tab and Chats took the bell's place. The same mark as .nav-dot: --dot, no
    number, faded in rather than popped. On the disc's top-right shoulder, which
    the 24px glyph in a 44px disc leaves clear. */
 .toolbar-dot {
@@ -1543,7 +1543,7 @@ body.toolbar-live .view { padding-top: 1rem; }
 .nav-link .nav-ico { width: 22px; height: 22px; flex-shrink: 0; }
 /* THE TAB YOU'RE ON IS DRAWN SOLID (2026-11-05, ICONS' `<key>On`): the solid
    copy sits before the outline and only shows where you are, hiding it. The
-   tab a bell was rung from (`--under`) is where you are too. */
+   tab Chats was opened from (`--under`) is where you are too. */
 .nav-link .nav-ico--on { display: none; }
 .nav-link[aria-current="page"] .nav-ico--on,
 .nav-link--under .nav-ico--on { display: block; }
@@ -10417,8 +10417,8 @@ body[data-ambient="none"] .pf-row-swatch {
   /* The capsule says where you are, so the label keeps its weight: a bold
      label changing width under a moving capsule would make the row twitch. */
   .nav-pill .nav-link[aria-current="page"] { font-weight: 400; }
-  /* Updates is the bell on My Circle's and Discover's bars on a phone, so the
-     tab you rang it from stays lit there (2026-11-05, as in 1.8). */
+  /* Chats is a button on My Circle's and Discover's bars on a phone, so the
+     tab you opened it from stays lit there (2026-11-05, where the bell was). */
   .nav-pill .nav-link--under {
     color: var(--text);
     background: color-mix(in srgb, var(--text) 8%, transparent);

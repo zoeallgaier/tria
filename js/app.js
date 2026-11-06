@@ -291,6 +291,7 @@
               '<path d="M3.5 8A3.5 3.5 0 0 1 7 4.5h6A3.5 3.5 0 0 1 16.5 8v2.5A3.5 3.5 0 0 1 13 14H10l-3 3v-3A3.5 3.5 0 0 1 3.5 10.5z" fill="#000" stroke="#000" stroke-width="4.4"/></mask>' +
               '<path d="M13.2 8.6H18.4A2.6 2.6 0 0 1 21 11.2v3.2A2.6 2.6 0 0 1 18.6 17v2.5l-3-2.5h-2.4A2.6 2.6 0 0 1 10.6 14.4v-3.2A2.6 2.6 0 0 1 13.2 8.6z" fill="currentColor" mask="url(#tabOn)"/>' +
               '<path d="M3.5 8A3.5 3.5 0 0 1 7 4.5h6A3.5 3.5 0 0 1 16.5 8v2.5A3.5 3.5 0 0 1 13 14H10l-3 3v-3A3.5 3.5 0 0 1 3.5 10.5z" fill="currentColor"/>',
+    bellOn:  '<path d="M6 9.2a6 6 0 0 1 12 0c0 4.6 1.7 5.8 1.7 5.8H4.3S6 13.8 6 9.2z" fill="currentColor"/><path d="M10.4 19.3a1.9 1.9 0 0 0 3.2 0"/>',
     profileOn: '<circle cx="12" cy="8" r="3.5" fill="currentColor"/><path d="M5 20a7 7 0 0 1 14 0z" fill="currentColor"/>',
     // Two full figures shoulder to shoulder — a balanced, symmetric pair that
     // reads cleanly at the small nav scale.
@@ -592,14 +593,16 @@
     // goes straight past it (TriaPager reads `action`). On the web it is the
     // phone capsule's only (`pill`); the desktop rail has New at its foot.
     { route: '#/new',      key: 'newTab',   label: 'New', action: true, pill: true },
-    { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true },
-    // The bell on the right of My Circle's and Discover's bars (updatesBtnEl),
-    // still at #/updates, with the tab you rang it from lit. It was the bell on
-    // My Circle's bar from 1.8, a tab of its own from 2026-11-01, and the bell
-    // again from 2026-11-05 (Zoe), when the + took the tab bar's centre. On desktop it is in the sidebar too, where
-    // the rail has the room: `rail` is the sidebar only, hidden on the phone's
-    // capsule and never sent to the native tab bar (tabSpec).
-    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true, rail: true },
+    // UPDATES IS THE TAB, CHATS THE BAR'S BUTTON (Zoe, 2026-11-05: "updates is
+    // MUCH more active than messages"). Updates was the bell on My Circle's bar
+    // from 1.8, a tab from 2026-11-01, the bell again for an evening, and a tab
+    // for good once Chats took the bell's place (chatsBtnEl).
+    { route: '#/updates',  key: 'bell',     label: 'Updates', dot: true },
+    // Chats on the right of My Circle's and Discover's bars (chatsBtnEl), still
+    // at #/chats, with the tab you opened it from lit. On desktop it is in the
+    // sidebar too, where the rail has the room: `rail` is the sidebar only,
+    // hidden on the phone's capsule and never sent to the native tab bar (tabSpec).
+    { route: '#/chats',    key: 'chats',    label: 'Chats', dot: true, rail: true },
     { route: '#/profile',  key: 'profile',  label: 'Profile' },
   ];
 
@@ -651,13 +654,13 @@
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
       nav.querySelector('.nav-new')?.addEventListener('click', () => openComposeDial());
     }
-    // On #/updates the sidebar lights its own Updates row, and the tab whose
-    // bell you rang on a phone (updatesFrom) is lit there only
+    // On #/chats the sidebar lights its own Chats row, and the tab whose
+    // bar you opened it from on a phone (chatsFrom) is lit there only
     // (.nav-link--under, worn like aria-current in the phone block of app.css).
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
-      a.classList.toggle('nav-link--under', active === '#/updates' && a.getAttribute('href') === updatesFrom);
+      a.classList.toggle('nav-link--under', active === '#/chats' && a.getAttribute('href') === chatsFrom);
     });
     // THE + IS WHERE YOU ARE WHILE YOU MAKE SOMETHING (Zoe, 2026-11-05): the
     // composer in every mode and New circle, the pages the New sheet opens.
@@ -687,7 +690,7 @@
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
     // having to know this line ran.
-    NativeChrome.setActive(active === '#/updates' ? updatesFrom
+    NativeChrome.setActive(active === '#/chats' ? chatsFrom
       : making ? NAV.find(n => n.action).route : active);
   }
   const makingRoute = (path) => path === '#/publish' || path === '#/c/new';
@@ -1263,7 +1266,7 @@
         // computed visibility, which the gate in app.css sets on every control
         // in the bar and would therefore report every one of them as idle.
         hidden: el.classList.contains('toolbar-commit--idle'),
-        // The bell's dot (updatesBtnEl), as a resolved colour, and empty for
+        // The chats button's dot (chatsBtnEl), as a resolved colour, and empty for
         // none: the same one-payload shape setDots gives the tab bar's.
         dot: dotInk(el),
       };
@@ -7004,24 +7007,22 @@
      The + opens the DIAL: Note, Moment, today's Daily, Circle. Each row is a
      shortcut into the one composer (pendingAttach), so the composer is still
      the only form there is. */
-  // The bell, with the dot for Updates, on My Circle's and Discover's bars.
-  // Shipped lit or not, then kept in step by syncNavDot like a tab's own dot.
-  // A tap remembers which tab rang it, for the back chevron and the lit tab.
-  let updatesFrom = '#/';
-  const UPDATES_FROM = { '#/': 'My Circle', '#/discover': 'Discover' };
-  function updatesBtnInner() {
-    return svgIcon('bell') +
-      `<i class="toolbar-dot${updatesAreNew() ? ' is-on' : ''}" aria-hidden="true"></i>`;
-  }
-  function updatesBtnEl(from = '#/') {
-    return `<a class="toolbar-btn toolbar-updates" href="#/updates" data-from="${from}" aria-label="Updates">` +
-        updatesBtnInner() +
+  // Chats, with its dot, on My Circle's and Discover's bars (2026-11-05, where
+  // the bell was: Updates is the tab now). Shipped lit or not, then kept in
+  // step by syncNavDot like a tab's own dot. A tap remembers which tab it was
+  // on, for the back chevron and the lit tab.
+  let chatsFrom = '#/';
+  const CHATS_FROM = { '#/': 'My Circle', '#/discover': 'Discover' };
+  function chatsBtnEl(from = '#/') {
+    return `<a class="toolbar-btn toolbar-chats" href="#/chats" data-from="${from}" aria-label="Chats">` +
+        svgIcon('chats') +
+        `<i class="toolbar-dot${Store.chatsAreNew() ? ' is-on' : ''}" aria-hidden="true"></i>` +
       `</a>`;
   }
-  // Delegated once: a bell is rebuilt with every bar.
+  // Delegated once: the button is rebuilt with every bar.
   document.addEventListener('click', (e) => {
-    const bell = e.target.closest && e.target.closest('a.toolbar-updates');
-    if (bell) updatesFrom = bell.dataset.from || '#/';
+    const btn = e.target.closest && e.target.closest('a.toolbar-chats');
+    if (btn) chatsFrom = btn.dataset.from || '#/';
   }, true);
   // The sidebar's mark. `toolbar-side` is what the left edge's swipe looks for.
   const sideBtnEl = (id = 'home-side-btn') =>
@@ -7094,7 +7095,7 @@
     // No nameplate since 1.8: the wordmark centred on the bar is the page's
     // name (mountToolbar's `mark`), and no small title either, because the
     // mark never leaves.
-    mountToolbar({ leading: sideBtnEl(), actions: updatesBtnEl('#/'), mark: true });
+    mountToolbar({ leading: sideBtnEl(), actions: chatsBtnEl('#/'), mark: true });
     view.innerHTML =
       `<section class="view view--home">` +
         `<div class="np-host" id="np-host"></div>` +
@@ -9465,7 +9466,11 @@
     // ••• down the column repaints the stack above it. Only your own, because
     // nothing you can do changes what somebody else has pinned.
     pinsRepaint = isSelf ? paintPins : null;
-    if (arrivedChanged('u/' + u.username) && isSelf) celebrateFace(view.querySelector('.account'), true);
+    // Your own new photo, or a friend you just made (celebrateFriend).
+    if (arrivedChanged('u/' + u.username)) {
+      if (isSelf) celebrateFace(view.querySelector('.account'), true);
+      else celebrateFriend(view.querySelector('.account'), u.username, true);
+    }
 
     /* A SONG PIN WHOSE SONG HAS GONE is the one dangling pin no write is
        watching. A cleared song takes its pin with it (Store.setListeningTo) and
@@ -9667,7 +9672,10 @@
       // sent → cancel the request · following → unfollow. Both drop my edge.
       if (status === 'sent' || status === 'following') await Store.removeFriend(u.username);
       else await Store.addFriend(u.username);
-      hapticTap('LIGHT');
+      // Just became friends: the repaint below takes the stars (and their
+      // twinkle) off this face; anything else is the one light tap.
+      if (madeFriends(u.username, status)) celebrateArrival = 'u/' + u.username;
+      else hapticTap('LIGHT');
       renderUser(username);      // reflect the new state in place
       noticeCharmsSoon();
     });
@@ -9841,10 +9849,17 @@
       const name = btn.dataset.user;
       // sent → cancel the request · following → unfollow. Both drop my edge;
       // add and accept both create it. The profile's own tie, same three ways.
-      const drop = btn.dataset.status === 'sent' || btn.dataset.status === 'following';
+      const was = btn.dataset.status;
+      const drop = was === 'sent' || was === 'following';
       btn.disabled = true;
       const ok = await (drop ? Store.removeFriend(name) : Store.addFriend(name)).then(() => true, () => false);
-      if (ok) { hapticTap('LIGHT'); noticeCharmsSoon(); }
+      if (ok) {
+        if (madeFriends(name, was)) {
+          const row = btn.closest('.friend, .person-card');
+          celebrateFriend(row && row.querySelector('.friend-avatar, .person-card-face'), name);
+        } else hapticTap('LIGHT');
+        noticeCharmsSoon();
+      }
       // Every path hands the control back, a rejected write included: a row left
       // disabled by one dropped connection is a control that does nothing,
       // forever, with nothing on screen to say why.
@@ -16079,7 +16094,9 @@
     { x:  58, y:  62, s: 11, r: -18, d: 430 },
     { x: -86, y: -64, s:  8, r:  12, d: 480 },
   ];
-  function celebrateFace(root, own) {
+  // `inks`, when given, is one colour per star (celebrateFriend's), over
+  // either default.
+  function celebrateFace(root, own, inks) {
     const face = root.querySelector('.account-photo') || root;
     const img = face.querySelector('img');
     const decoded = img && img.decode ? img.decode().catch(() => {}) : Promise.resolve();
@@ -16087,28 +16104,86 @@
       if (!face.isConnected) return;
       hapticTwinkle();
       if (prefersReduced()) return;
-      setTimeout(() => burstFace(face, own), 120);
+      setTimeout(() => burstFace(face, own, inks), 120);
     });
   }
-  function burstFace(face, own) {
-    const r = face.getBoundingClientRect();
-    if (!r.width || !face.isConnected) return;
-    face.classList.add('face-born');
-    setTimeout(() => face.classList.remove('face-born'), 700);
+  // `at` is a centre measured earlier, for a face that may be repainted away
+  // before its stars fly (an accepted request's row in Updates).
+  function burstFace(face, own, inks, at) {
+    if (!at) {
+      const r = face.getBoundingClientRect();
+      if (!r.width || !face.isConnected) return;
+      at = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    if (face.isConnected) {
+      face.classList.add('face-born');
+      setTimeout(() => face.classList.remove('face-born'), 700);
+    }
     const layer = document.createElement('div');
     layer.className = 'circle-sparkles';
-    layer.style.left = (r.left + r.width / 2) + 'px';
-    layer.style.top = (r.top + r.height / 2) + 'px';
+    layer.style.left = at.x + 'px';
+    layer.style.top = at.y + 'px';
     CIRCLE_SPARKS.forEach((p, i) => {
       const s = document.createElement('span');
       s.className = 'spark';
+      const ink = inks ? inks[i] : `var(${own ? '--heart' : i % 2 ? '--brand-end' : '--brand-start'})`;
       s.style.cssText =
         `--x:${p.x}px;--y:${p.y}px;--s:${p.s}px;--r:${p.r}deg;animation-delay:${p.d}ms;` +
-        `--burst:var(${own ? '--heart' : i % 2 ? '--brand-end' : '--brand-start'})`;
+        `--burst:${ink}`;
       layer.appendChild(s);
     });
     document.body.appendChild(layer);
     setTimeout(() => layer.remove(), 1700);
+  }
+
+  /* Two people just became friends (Zoe, 2026-11-05): the same stars off
+     their face, alternating YOUR colour and THEIRS, since a friendship is
+     both of you. Only the tie turning mutual is celebrated, never a request
+     or a follow: those may never be answered. Whoever completes it sees it
+     (an Accept, an Add back), wherever they tapped: a profile, a list row,
+     Discover's person card, a request in Updates.
+
+     Each person's colour is their heart's rule (paintBrandBand): a pick's
+     hex (its `ink` twin on paper), a photo's sample pinned in L* by
+     heartsFrom, the mono heart for None, and Tria's ramp (both ends, the
+     circle burst's pair) for someone who never picked. A photo's sample is
+     usually cached from drawing the face; it gets 300ms, then Tria's ramp.
+
+     `fresh` is a face just painted (the profile re-renders), which waits on
+     its decode like any new face. Otherwise the face is measured NOW, so a
+     row repainted away under it still bursts where it was. */
+  const TRIA_STARS = ['var(--brand-start)', 'var(--brand-end)'];
+  function starInks(u) {
+    let dark = false;
+    try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch {}
+    if (!u) return Promise.resolve(TRIA_STARS);
+    if (u.accent === 'none') return Promise.resolve(['var(--mono-heart)']);
+    const picked = u.accent !== 'default' && accentOf(u.accent);
+    if (picked) return Promise.resolve([dark ? picked.hex : (picked.ink || picked.hex)]);
+    if (u.accent === 'default' || !u.avatar) return Promise.resolve(TRIA_STARS);
+    return sampleColor(sizedSrc(u.avatar, 40))
+      .then(rgb => (rgb ? [heartsFrom(rgb)[dark ? 'dk' : 'lt']] : TRIA_STARS), () => TRIA_STARS);
+  }
+  function friendInks(username) {
+    const both = Promise.all([starInks(Store.currentUser()), starInks(Store.user(username))])
+      .then(([mine, theirs]) => CIRCLE_SPARKS.map((_, i) => {
+        const t = i % 2 ? theirs : mine;
+        return t[(i >> 1) % t.length];
+      }));
+    return Promise.race([both, new Promise(r => setTimeout(() => r(null), 300))]);
+  }
+  const madeFriends = (username, was) => was !== 'friends' && Store.friendStatus(username) === 'friends';
+  function celebrateFriend(face, username, fresh) {
+    if (!face) return;
+    const inks = friendInks(username);
+    if (fresh) { inks.then(list => celebrateFace(face, false, list)); return; }
+    const r = face.getBoundingClientRect();
+    if (!r.width) return;
+    const at = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    inks.then((list) => {
+      hapticTwinkle();
+      if (!prefersReduced()) setTimeout(() => burstFace(face, false, list, at), 120);
+    });
   }
 
   /* ── Charms ──────────────────────────────────────────────────────────────────
@@ -16983,11 +17058,11 @@
       `</div>`;
 
     // My Circle's bar around a field (Zoe, 2026-11-05): the sidebar's mark
-    // leads, the bell trails, and the field takes the rest of the row.
+    // leads, Chats trails, and the field takes the rest of the row.
     mountToolbar({
       leading: Store.isAuthed() ? sideBtnEl('discover-side-btn') : '',
       field: searchBar,
-      actions: Store.isAuthed() ? updatesBtnEl('#/discover') : '',
+      actions: Store.isAuthed() ? chatsBtnEl('#/discover') : '',
     });
 
     view.innerHTML =
@@ -17496,23 +17571,23 @@
   // (refreshWorld) and on the visit that spends it (renderUpdates).
   // In 1.7 the dot sat on Chats and answered for both things under it. Since 1.8
   // they are two marks, because Updates is no longer under Chats: the tab's dot
-  // is chats only (Store.chatsAreNew), and Updates carries its own on the bell
-  // on My Circle's and Discover's bars, where you open it from (its own tab
-  // from 2026-11-01 to 11-05). Each is still one state and never a number, and
-  // each clears by looking at the thing it is on.
+  // is Updates' (since 2026-11-05 Updates is the tab again), and Chats carries
+  // its own on the chats button on My Circle's and Discover's bars. Before that
+  // the bell wore Updates' and the Chats tab its own. Each is still one state
+  // and never a number, and each clears by looking at the thing it is on.
   function syncNavDot() {
     const chats = Store.chatsAreNew();
+    // The sidebar's Chats row (desktop only) carries the bar button's dot.
     document.querySelectorAll('#nav a[href="#/chats"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', chats));
     const fresh = updatesAreNew();
-    // The sidebar's Updates row (desktop only) carries the bell's dot.
     document.querySelectorAll('#nav a[href="#/updates"] .nav-dot')
       .forEach(el => el.classList.toggle('is-on', fresh));
-    NativeChrome.setDots({ '#/chats': chats });
-    const bell = document.querySelector('.toolbar-updates .toolbar-dot');
-    if (bell && bell.classList.contains('is-on') !== fresh) {
-      bell.classList.toggle('is-on');
-      // The bell is a toolbar control, so native wears its face and reads the
+    NativeChrome.setDots({ '#/updates': fresh });
+    const dot = document.querySelector('.toolbar-chats .toolbar-dot');
+    if (dot && dot.classList.contains('is-on') !== chats) {
+      dot.classList.toggle('is-on');
+      // The button is a toolbar control, so native wears its face and reads the
       // dot off it (controlSpec). A class flip is not a render, so say so.
       NativeChrome.sync();
     }
@@ -18041,13 +18116,15 @@
       return;
     }
     mountToolbar({
+      // Reached from the button on My Circle's or Discover's bar (2026-11-05,
+      // a tab before that), so that is where back goes. The filter and New
+      // chat share the right.
+      leading: toolbarBackEl(chatsFrom, CHATS_FROM[chatsFrom] || 'My Circle'),
       title: 'Chats',
-      // The filter on the left, as on your own profile: the two tabs you own
-      // read the same (Zoe, 2026-11-05). New chat is the right's.
-      leading: filterBtnEl('chats-filter-btn', chatFilter, 'Filter chats'),
-      actions: Store.chatsReady()
-        ? `<a class="toolbar-btn" id="chats-new-btn" href="#/chats/new" aria-label="New chat">${svgIcon('newchat')}</a>`
-        : '',
+      actions: filterBtnEl('chats-filter-btn', chatFilter, 'Filter chats') +
+        (Store.chatsReady()
+          ? `<a class="toolbar-btn" id="chats-new-btn" href="#/chats/new" aria-label="New chat">${svgIcon('newchat')}</a>`
+          : ''),
     });
     view.innerHTML =
       `<section class="view view--chats">` +
@@ -19099,8 +19176,15 @@
       scope.querySelectorAll('.request-accept').forEach(btn =>
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          const ok = await Store.addFriend(btn.dataset.accept).then(() => true, () => false);
-          if (ok) hapticTap('LIGHT');
+          const name = btn.dataset.accept;
+          const was = Store.friendStatus(name);
+          const ok = await Store.addFriend(name).then(() => true, () => false);
+          // Measured before renderUpdates takes the row away, so the stars
+          // burst where it was.
+          if (ok && madeFriends(name, was)) {
+            const row = btn.closest('.request-row');
+            celebrateFriend(row && row.querySelector('.comment-avatar'), name);
+          } else if (ok) hapticTap('LIGHT');
           btn.disabled = false;              // or a dropped write leaves the row dead
           renderUpdates();
           if (ok) noticeCharmsSoon();
@@ -19137,11 +19221,10 @@
       // reading, not a setting, so it does not survive leaving the page.
       notifShown = NOTIF_PAGE;
       mountToolbar({
-        // Reached from the bell on My Circle's or Discover's bar (2026-11-05,
-        // a tab before that), so that is where back goes.
-        leading: toolbarBackEl(updatesFrom, UPDATES_FROM[updatesFrom] || 'My Circle'),
+        // A tab again (2026-11-05), so the filter leads, as on your own
+        // profile: the tabs you own read the same.
+        leading: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
         title: 'Updates',
-        actions: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
       });
       view.innerHTML =
         `<section class="view view--updates">` +
@@ -23878,9 +23961,9 @@
     // the one route that borrows another's highlight: it is somewhere you went,
     // but it is somewhere INSIDE your profile, so that tab stays lit rather than
     // the nav going blank while you edit.
-    // Every chat page sits inside Chats, so it keeps that tab lit. Updates moved
-    // out of the chat list and onto My Circle's bar in 1.8; renderNav lights the
-    // sidebar's own Updates row on desktop and My Circle on a phone and natively.
+    // Every chat page sits inside Chats, so it keeps Chats lit: the sidebar's
+    // own row on desktop, and on a phone and natively the tab whose bar you
+    // opened it from (renderNav, chatsFrom).
     renderNav(path === '#/profile/edit' ? '#/profile'
       : path.startsWith('#/chat') ? '#/chats' : path);
 
