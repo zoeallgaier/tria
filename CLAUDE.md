@@ -68,10 +68,13 @@ in tmp, read through `Capacitor.convertFileSrc`, never as base64.
 `--radius-soft`), so it scrolls with the page; a ResizeObserver on the fields
 re-sends the box. It shows while the post could take a photo (not over a link,
 poll, plan, song or clip) and the picker stands down under a sheet or the
-mention list, since native draws over every web pixel. **iOS 15 and 16 and the
-web keep the photo button** (`rollLikely`, `rollAble`; the button ships hidden
-under the roll and comes back if `rollReady` says no). `wireRoll` in
-renderPublish, `stopRoll` in route().
+mention list, since native draws over every web pixel. **The web (Android,
+desktop) and iOS 15 and 16 keep the photo button; the iOS app on 17 and up
+never draws it** (Zoe: "ios should be cleaner"). `rollLikely` reads the OS off
+the web view's user agent so the composer knows as it draws; a first pass
+shipped the button with `hidden`, and `.rt-attach`'s `display: inline-flex`
+beat the attribute, so it stayed on screen. `wireRoll` in renderPublish,
+`stopRoll` in route().
 
 ## A photo colour is pinned (2026-11-05)
 

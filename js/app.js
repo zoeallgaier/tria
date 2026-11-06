@@ -2883,11 +2883,12 @@
             ? `<div class="rich-attach-tools">` +
                 `<button type="button" class="rt-attach" id="${idp}-add-link" ` +
                   `aria-label="Add a link" aria-pressed="false">${svgIcon('link', 'rt-attach-ico')}</button>` +
-                // Where the camera roll is (opts.roll), it is the way in to a
-                // photo, and this button waits hidden in case the roll can't be.
-                `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
-                  `aria-label="Add a photo or clip" aria-pressed="false"${opts.roll ? ' hidden' : ''}>` +
-                  `${svgIcon('image', 'rt-attach-ico')}</button>` +
+                // Where the camera roll is (opts.roll) it replaces this button.
+                (opts.roll
+                  ? ''
+                  : `<button type="button" class="rt-attach" id="${idp}-add-photo" ` +
+                      `aria-label="Add a photo or clip" aria-pressed="false">` +
+                      `${svgIcon('image', 'rt-attach-ico')}</button>`) +
                 `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                   `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
                 // The Music button is back (Zoe, 2026-11-04), since the New
@@ -19464,11 +19465,15 @@
   // handed to whichever composer is up (wireRoll sets it, stopRoll clears it).
   let rollHandler = null;
   let rollListening = false;
-  // Whether this phone can embed the picker (iOS 17), once asked; until then
-  // the composer assumes so, which is nearly every phone, and gives the photo
-  // button back if the answer is no.
-  let rollAble = null;
-  const rollLikely = () => nativeShell() && rollAble !== false
+  // Whether this phone has the camera roll: the app, the plugin, and iOS 17,
+  // the first that can embed the picker. Read off the web view's own user
+  // agent ("OS 17_0 like Mac OS X") so the composer knows as it draws, and
+  // iOS 15 and 16 simply keep the photo button.
+  const iosMajor = () => {
+    const m = /\bOS (\d+)_\d+(?:_\d+)? like Mac OS X/.exec(navigator.userAgent || '');
+    return m ? +m[1] : 0;
+  };
+  const rollLikely = () => nativeShell() && iosMajor() >= 17
     && !!window.Capacitor?.isPluginAvailable?.('TriaPhotos');
   function listenRoll() {
     if (rollListening) return;
@@ -20767,19 +20772,9 @@
         rollHandler = null;
         call('roll', { drop: true }).catch(() => {});
       };
-      // iOS 15 and 16 can't embed the picker: the photo button comes back.
-      call('rollReady').then((r) => {
-        ok = !!(r && r.ok);
-        rollAble = ok;
-        if (!ok) {
-          frame.setRollMode(false);
-          fieldsEl.querySelector('#c-add-photo')?.removeAttribute('hidden');
-        }
-        sync();
-      }).catch(() => {
-        frame.setRollMode(false);
-        fieldsEl.querySelector('#c-add-photo')?.removeAttribute('hidden');
-      });
+      // Native's own word that the picker can be embedded (rollLikely already
+      // read the OS); until it lands the row stays hidden.
+      call('rollReady').then((r) => { ok = !!(r && r.ok); sync(); }).catch(() => {});
       return { sync, ticks };
     }
 
