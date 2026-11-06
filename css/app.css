@@ -8208,7 +8208,7 @@ button.poll-option:disabled { cursor: default; }
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  padding: 1.05rem var(--inset);
+  padding: 0.85rem var(--inset);
   color: var(--text);
   transition: background-color var(--dur-micro);
   animation: rise var(--dur-slow) var(--ease) both;   /* same soft rise as the directory rows */
@@ -8221,6 +8221,94 @@ button.poll-option:disabled { cursor: default; }
 /* Unread: a faint accent wash across the row (the dot still marks it), so fresh
    items read a touch warmer than the ones you've already seen. */
 .notif--new { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+/* The paper the row is drawn on, as one colour, so the face's mark can be cut
+   out of the photo by a ring of exactly it (an unread row's wash included). */
+.notif, .request-row { --notif-paper: var(--bg); }
+.notif--new { --notif-paper: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+@media (hover: hover) { .notif:hover, .request-row:hover { --notif-paper: var(--surface); } }
+
+/* THE FACE (Zoe, 2026-11-05: bigger, with what they did on its corner). 44px,
+   the person card's and the chat list's neighbourhood, and the friend request
+   rows above wear the same so the page has one face size. */
+.notif-avatar { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 50%; flex-shrink: 0; }
+.notif-face { position: relative; flex-shrink: 0; width: 44px; height: 44px; }
+/* The mark: a disc in the reader's heart colour, its glyph in paper, ringed
+   in the row's paper so it reads as cut out of the face. */
+.notif-mark {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--heart);
+  color: var(--bg);
+  box-shadow: 0 0 0 2px var(--notif-paper);
+}
+.notif-mark svg { width: 16px; height: 16px; stroke-width: 2.7; }
+.notif-mark--solid svg { width: 17px; height: 17px; stroke-width: 1.2; }
+.notif-mark--solid svg path { fill: currentColor; }
+
+/* THE PREVIEW: what it was about, on the right. 46px, a touch bigger than the
+   face so the two read as person and thing, with a soft corner at the photos'
+   ratio; a sleeve takes the art's own roundness. */
+.notif-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.notif-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.notif-thumb--art { border-radius: var(--radius-art); }
+.notif-thumb--round { border-radius: 50%; }
+/* A clip's poster wears a little play mark, the Frame's glass disc at row size. */
+.notif-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #fff;
+}
+.notif-play svg { width: 11px; height: 11px; margin-left: 1px; }
+/* A plan with no picture: a calendar page on lifted paper with a hairline and
+   a bloom of the reader's colour off its top right corner, as a profile's
+   wash blooms, its month in the heart colour over the day in the serif. */
+.notif-thumb--day {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--heart) 26%, transparent), transparent 72%),
+    var(--surface);
+  color: var(--text);
+}
+.notif-month {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--heart);
+  line-height: 1;
+}
+.notif-daynum {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.45rem;
+  line-height: 0.95;
+}
 .notif-body {
   display: flex;
   flex-direction: column;

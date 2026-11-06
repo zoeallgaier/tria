@@ -34,6 +34,25 @@ this device from any such value and writes null back; `PHOTO_PIN` and
 wears `--heart` for every colour, as the web's does (a photo sent its paler
 band stop).
 
+## An update shows what it was about (2026-11-05)
+
+**An Updates row is a 44px face with a mark on its corner, then the words,
+then a preview** (Zoe: "a cute beautiful on brand preview on the right side",
+"make the pfp's bigger"). The mark (`notifFaceHtml`, `NOTIF_MARK`) is a disc
+in `--heart` with its glyph in paper, ringed in the row's own paper
+(`--notif-paper`, so an unread row's wash rings it too): a heart for a like,
+a bubble for a comment, solid; @, repost, poll, check, calendar, person and
+the triad in line at a heavier stroke. It was sized up the same day (Zoe:
+"tough to read") until the glyph fills the disc. The preview (`notifThumbHtml`)
+is the post's picture: a photo, a Frame's poster with a small play disc, a
+song's sleeve at `--radius-art`, a Find's link picture once read; a plan with
+no picture is a little calendar page; a circle join shows the circle's face.
+**A text post, a poll or a follow shows no preview** (Zoe: "if its just a text
+post no preview needed but keep it clean"; a drop cap was drafted and cut).
+Friend request rows wear the same 44px face. **Still no count on the tab**:
+Zoe asked for Instagram's count morphing into the dot and agreed to keep the
+rule when it was pointed out.
+
 ## A new friend gets the stars (2026-11-05)
 
 **When a tie turns mutual, `celebrateFace`'s stars burst off their face, half

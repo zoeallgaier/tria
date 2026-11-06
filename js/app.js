@@ -2519,7 +2519,7 @@
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
   // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
   // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['np-avatar', 104], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56]];
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['np-avatar', 104], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56], ['notif-avatar', 44]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -17749,15 +17749,79 @@
     return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
           `data-post="${esc(n.postId || '')}" data-kind="${n.kind}">` +
-          avatarEl(u || { name: n.user }, { cls: 'comment-avatar' }) +
+          notifFaceHtml(u || { name: n.user }, n.kind) +
           `<span class="notif-body">` +
             `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
             (quote ? `<span class="notif-quote">${quote}</span>` : '') +
             (n._ts ? `<span class="notif-date">${esc(niceDate(dayMT(n._ts)))}</span>` : '') +
           `</span>` +
           `<span class="notif-dot" aria-hidden="true"></span>` +
+          notifThumbHtml(n.kind === 'circlejoin' ? null : post, n.kind === 'circlejoin' ? room : null) +
         `</a>` +
       `</li>`;
+  }
+
+  /* A ROW'S FACE AND ITS MARK (Zoe, 2026-11-05: "make the pfps bigger ... a
+     like icon if its a like and a comment icon if its a comment on the corner
+     of the pfp"). The face is 44px, and a small disc on its bottom right says
+     what they did, in the reader's own heart colour, its glyph in paper, cut
+     out of the face by a ring of the row's own paper (--notif-paper, so an
+     unread row's wash rings it too). Every kind has one, so the column of
+     faces reads as one system: a like and a comment are solid marks, the
+     rest the icon set's line at a heavier stroke so it holds at 11px. */
+  const NOTIF_MARK = {
+    like: 'heart', commentlike: 'heart', comment: 'comment', mention: 'at',
+    repost: 'repost', vote: 'poll', going: 'check', maybe: 'cal',
+    follow: 'profileOn', circlejoin: 'circle',
+  };
+  const NOTIF_SOLID = new Set(['heart', 'comment']);
+  function notifFaceHtml(u, kind) {
+    const mark = NOTIF_MARK[kind] || 'heart';
+    return `<span class="notif-face">` +
+        avatarEl(u, { cls: 'notif-avatar' }) +
+        `<span class="notif-mark${NOTIF_SOLID.has(mark) ? ' notif-mark--solid' : ''}" aria-hidden="true">${svgIcon(mark)}</span>` +
+      `</span>`;
+  }
+
+  /* WHAT IT WAS ABOUT, on the row's right (Zoe, 2026-11-05: "a cute beautiful
+     on brand preview on the right side"), the way Instagram's ledger shows the
+     photo. A post with a picture shows it: a photo (a carousel's cover), a
+     Frame's poster with a little play mark, a song's sleeve at the art's own
+     roundness, the picture a Find's link brings once this phone has read it.
+     A plan with no picture is a tiny calendar page, its month in the reader's
+     heart colour over the day in the serif. Words alone show NOTHING (Zoe: "if
+     its just a text post no preview needed but keep it clean"; a drop cap was
+     drafted and taken out before it shipped), nor does a poll or a link this
+     phone hasn't read. A circle join shows the circle's face. A follow is
+     about a person and shows nothing. */
+  function notifThumbHtml(post, room) {
+    if (room) {
+      return room.avatar
+        ? `<span class="notif-thumb notif-thumb--round" aria-hidden="true"><img src="${esc(sizedSrc(room.avatar, 46))}" alt="" decoding="async"></span>`
+        : '';
+    }
+    if (!post) return '';
+    const pic = (src, cls = '') =>
+      `<span class="notif-thumb${cls}" aria-hidden="true"${post.tint ? ` style="background-color:${esc(post.tint)}"` : ''}>` +
+        `<img src="${esc(sizedSrc(src, 46))}" alt="" decoding="async">` +
+        (cls === ' notif-thumb--clip' ? `<span class="notif-play">${svgIcon('play')}</span>` : '') +
+      `</span>`;
+    if (post.song && post.song.art) return pic(post.song.art, ' notif-thumb--art');
+    if (post.image) {
+      if (!isVideoUrl(post.image)) return pic(post.image);
+      if (post.poster) return pic(post.poster, ' notif-thumb--clip');
+    }
+    if (post.type === 'activity' && post.eventDate) {
+      const d = new Date(+post.eventDate.slice(0, 4), +post.eventDate.slice(5, 7) - 1, +post.eventDate.slice(8, 10));
+      if (!isNaN(d)) {
+        return `<span class="notif-thumb notif-thumb--day" aria-hidden="true">` +
+            `<span class="notif-month">${esc(d.toLocaleDateString(undefined, { month: 'short' }))}</span>` +
+            `<span class="notif-daynum">${d.getDate()}</span>` +
+          `</span>`;
+      }
+    }
+    const link = pinLinkPicture(post);
+    return link.image ? pic(link.image, link.yt ? ' notif-thumb--clip' : '') : '';
   }
 
   // The ledger's view filter, in the shape every other page's is in: rows for
@@ -17845,7 +17909,7 @@
     const row = (u, key, line, actions) =>
       `<li class="request-row" data-key="${key}:${esc(u.username)}">` +
         `<a class="request-who" href="#/u/${encodeURIComponent(u.username)}">` +
-          avatarEl(u, { cls: 'comment-avatar' }) +
+          avatarEl(u, { cls: 'notif-avatar' }) +
           `<span class="request-text"><strong>${esc(u.name)}</strong> ${line}</span>` +
         `</a>` +
         `<span class="request-actions">${actions}</span>` +
@@ -19230,7 +19294,7 @@
           // burst where it was.
           if (ok && madeFriends(name, was)) {
             const row = btn.closest('.request-row');
-            celebrateFriend(row && row.querySelector('.comment-avatar'), name);
+            celebrateFriend(row && row.querySelector('.notif-avatar'), name);
           } else if (ok) hapticTap('LIGHT');
           btn.disabled = false;              // or a dropped write leaves the row dead
           renderUpdates();
