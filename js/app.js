@@ -7850,9 +7850,9 @@
     return el.animate(frames, { duration: ms, easing }).finished.then(() => true, () => false);
   }
 
-  function openMoments(who, opener, back) {
+  function openMoments(who, opener, back, only) {
     if (momentsAway || sheetOpen) return;
-    const stacks = momentStacks();
+    const stacks = only || momentStacks();
     const start = stacks.findIndex(s => s.u.username === who);
     if (start < 0) return;
     const me = Store.session();
@@ -11736,16 +11736,24 @@
     const m = /^#\/p\/([^?]+)(?:\?(.*))?$/.exec(href || '');
     if (!m || !Store.session()) return null;
     const id = decodeURIComponent(m[1]);
+    const likers = new URLSearchParams(m[2] || '').get('pane') === 'likers';
     const post = Store.posts().find(p => String(p.id) === id);
-    if (!post || !post.moment || Blocks.has(post.author)) return null;
+    if (!post) {
+      // Your own, past its day (Zoe: "I should be able to see my own expired
+      // moments"): a stack of that one Moment, on its own, nobody either side.
+      const old = Store.ownMoment(id);
+      const me = old && Store.user(old.author);
+      if (!me) return null;
+      return { who: me.username, post: old, likers,
+        only: [{ u: me, posts: [old], mine: true, unseen: false, newest: old._ts || '' }] };
+    }
+    if (!post.moment || Blocks.has(post.author)) return null;
     const stack = momentStacks().find(s => s.posts.some(p => String(p.id) === id));
     if (!stack) return null;
-    const likers = new URLSearchParams(m[2] || '').get('pane') === 'likers' &&
-      post.author === Store.session();
-    return { who: stack.u.username, post, likers };
+    return { who: stack.u.username, post, likers: likers && post.author === Store.session() };
   }
   function openMomentLink(m, rise) {
-    openMoments(m.who, null, { who: m.who, post: String(m.post.id), i: 0, rise });
+    openMoments(m.who, null, { who: m.who, post: String(m.post.id), i: 0, rise }, m.only);
     if (m.likers && momentsAway) openLikesSheet(m.post);
   }
   /* A TAP on such a link (an Updates row, a link in a note or a message) never
@@ -11774,7 +11782,7 @@
     const subj = subjectOf(post);
     const gone = !post || !subj || Blocks.has(post.author) || Blocks.has(subj.author);
 
-    const asMoment = !gone && post.moment &&
+    const asMoment = (gone ? !post && Store.session() : post.moment) &&
       momentLink(`#/p/${encodeURIComponent(id)}${pane === 'likers' ? '?pane=likers' : ''}`);
     if (asMoment) {
       momentLanding = asMoment;
@@ -14634,7 +14642,8 @@
   }
   const momentAge = (post) => {
     const mins = Math.max(0, Math.round((Date.now() - Date.parse(post._ts || 0)) / 60000));
-    return mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+    return mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago`
+      : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : niceDate(dayMT(post._ts));   // your own, past its day
   };
   function nowPlayingEl() {
     if (!Store.songsReady()) return statusRailEl();

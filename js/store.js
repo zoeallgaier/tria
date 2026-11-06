@@ -1369,6 +1369,10 @@ const Store = (() => {
   // its reposter. RLS hands a circle's posts only to its members, so on someone
   // else's profile that means the circles you share. My Circle still leaves
   // them out (see feed).
+  // YOUR OWN Moment past its day: RLS still hands it to you, posts() lets go
+  // of it, and Updates still lists what happened on it, so its row can open it.
+  const ownMoment = (id) => state.posts.find(p =>
+    p.moment && p.author === state.session && String(p.id) === String(id)) || null;
   const postsBy = (username) => posts().filter(p => p.author === username && !offFeed(p));
 
   // How many people a targeted post is shared with. Accurate for posts you
@@ -4303,7 +4307,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
-    reactionOf, setReaction, songsReady, momentsReady, momentLive, MOMENT_MS,
+    reactionOf, setReaction, songsReady, momentsReady, momentLive, MOMENT_MS, ownMoment,
     commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,
