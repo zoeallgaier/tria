@@ -5968,6 +5968,9 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  /* Blurred glass, so the face under it softens and the + reads clean. */
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel));
+  backdrop-filter: blur(var(--glass-blur-panel));
 }
 .np-add svg { width: 14px; height: 14px; stroke-width: 2.4; }
 
