@@ -143,10 +143,12 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
     /// THE CAMERA DISC (Zoe, 2026-11-06: "one icon in the corner on top of
     /// the photo scroller ... just the camera icon"), on the strip's bottom
     /// right. Native, because the picker is drawn over every web pixel in its
-    /// box. A dark scrim and a white glyph, the web's `.media-x` material, so
-    /// it reads on any photo. A tap says `rollMore`; app.js raises Take a
-    /// photo and All photos.
-    private let more = UIButton(type: .system)
+    /// box. A blur under a dark tint and a white line glyph, so it reads on any
+    /// photo, at the composer's own icon size (Zoe: "the same size as the
+    /// other icons in the composer"): a 20pt camera in the attach bar's line,
+    /// on a 36pt disc, with 44pt for the finger (`TriaRollMore`). A tap says
+    /// `rollMore`; app.js raises Take a photo and All photos.
+    private let more = TriaRollMore()
 
     init(limit: Int, emit: @escaping (String, [String: Any]) -> Void) {
         self.emit = emit
@@ -165,14 +167,6 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         clip.backgroundColor = .clear
         clip.alpha = 0
         clip.isHidden = true
-        let glyph = UIImage(systemName: "camera.fill",
-                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
-        more.setImage(glyph, for: .normal)
-        more.tintColor = .white
-        more.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-        more.layer.cornerRadius = 22
-        more.layer.borderWidth = 1
-        more.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
         more.accessibilityLabel = "Take a photo or see all photos"
         more.addTarget(self, action: #selector(tapMore), for: .touchUpInside)
     }
@@ -194,7 +188,7 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         if clip.frame != rect { clip.frame = rect }
         clip.layer.cornerRadius = radius
         // Inset by the corner's own curve, so it sits concentric in it.
-        let side: CGFloat = 44, inset: CGFloat = max(8, radius * 0.38)
+        let side = TriaRollMore.side, inset: CGFloat = max(8, radius * 0.38)
         more.frame = CGRect(x: rect.width - side - inset, y: rect.height - side - inset, width: side, height: side)
         clip.bringSubviewToFront(more)
     }
@@ -246,6 +240,44 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         }
     }
 
+}
+
+/// The roll's camera disc: a 36pt circle of blur with a dark tint and a white
+/// 20pt camera outline, its touch area reaching 44pt.
+final class TriaRollMore: UIButton {
+    static let side: CGFloat = 36
+    private let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+
+    init() {
+        super.init(frame: .zero)
+        blur.isUserInteractionEnabled = false
+        blur.clipsToBounds = true
+        blur.contentView.backgroundColor = UIColor.black.withAlphaComponent(0.22)
+        blur.layer.borderWidth = 0.5
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.25).cgColor
+        insertSubview(blur, at: 0)
+        let glyph = UIImage(systemName: "camera",
+                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+        setImage(glyph, for: .normal)
+        tintColor = .white
+        adjustsImageWhenHighlighted = false
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        blur.frame = bounds
+        blur.layer.cornerRadius = bounds.height / 2
+        if let img = imageView { bringSubviewToFront(img) }
+    }
+
+    override var isHighlighted: Bool {
+        didSet { UIView.animate(withDuration: 0.12) { self.alpha = self.isHighlighted ? 0.6 : 1 } }
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: -4, dy: -4).contains(point)
+    }
 }
 
 /// The full library, for the roll's All photos button: photos and clips, in a

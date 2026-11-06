@@ -5950,10 +5950,15 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-sound svg { width: 20px; height: 20px; }
 /* Words over the picture, as a post sets them (2026-11-06): the caption takes
-   what it needs (up to a third of the screen, then it scrolls) and the picture
-   sits straight under it, at the top of what's left, not floated mid-page. */
-.mv-frame--pic.has-caption { grid-template-rows: auto minmax(0, 1fr); }
-.mv-frame--pic.has-caption .mv-media { align-items: flex-start; }
+   what it needs (up to a third of the screen, then it scrolls), the picture
+   sits straight under it, and the two are centred in the stage AS ONE (Zoe:
+   "the content sits much too high"). The picture's row grows to the photo's
+   own height and no further than the room left (minmax(0, max-content)), so
+   a short pair floats in the middle and a tall photo still fits. */
+.mv-frame--pic.has-caption {
+  grid-template-rows: auto minmax(0, max-content);
+  align-content: center;
+}
 .mv-caption { max-height: 32dvh; overflow-y: auto; padding-right: var(--mv-lane); }
 .mv-caption .mv-title { font-size: 1.9rem; }
 .mv-caption .tags, .mv-words .tags { margin-top: 0.85rem; }
