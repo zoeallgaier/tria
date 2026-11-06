@@ -34,6 +34,25 @@ this device from any such value and writes null back; `PHOTO_PIN` and
 wears `--heart` for every colour, as the web's does (a photo sent its paler
 band stop).
 
+## A link lands ON what it was about (2026-11-05)
+
+**`#/p/<id>?c=<comment>` and `#/chat/<id>?m=<message>` open with that row a
+little over the middle of the screen, washed in `--heart` for 2.2s** (Zoe:
+"tapping a comment, notification, etc should also scroll to where it is";
+`armSeek`/`seekNow`/`washFound`, `.is-found` in app.css). An Updates row for a
+comment, a mention in one or a like on yours carries `?c=` (`commentId` on the
+event in store.js); a like opens Likes (`?pane=likers`), a yes or maybe Who's
+going, a quote the quote (`quoteId`). **A seek belongs to one FRESH history
+entry**: a back onto it restores the reader's scroll, and it survives a
+repaint of its own entry, so a push that lands before the thread
+(arriveAt, primePost) still finds it. The newest message gets no seek (a chat
+opens there). The old `?p=` links carry `c` (`seekQuery`). **A reply's quote in
+a chat goes to the message it quotes** (`glideTo`), and the post page goes to a
+comment you just sent if it landed off screen, as the sheet does. **The push
+function points every post push at `#/p/` now** (`postAt`, `commentAt`) and a
+message push at its message, so it needs a redeploy (REV 2026-11-05); until
+then a comment push opens the post without the seek.
+
 ## An update shows what it was about (2026-11-05)
 
 **An Updates row is a 44px face with a mark on its corner, then the words,

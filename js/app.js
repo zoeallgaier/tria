@@ -11237,7 +11237,16 @@
         if (thread) { thread.onPosted(res); return; }
         const fresh = rebuildPostCard('up');
         const mine = fresh && [...fresh.querySelectorAll('.comments-list > .comment')].pop();
-        celebrateComment(mine, burstTypeOf(post));
+        // Down a long thread the new comment lands off screen, so the page
+        // goes to it, as the sheet does (after the keys are down, which moves
+        // the page under it), and the sparkles go off where you can see them.
+        setTimeout(() => {
+          if (!mine || !mine.isConnected) return;
+          const r = mine.getBoundingClientRect();
+          if (r.top < 80 || r.bottom > window.innerHeight * 0.75)
+            mine.scrollIntoView({ block: 'center', behavior: prefersReduced() ? 'auto' : 'smooth' });
+          celebrateComment(mine, burstTypeOf(post));
+        }, 360);
         return;
       }
       // Every path hands the control back — a rejected write and a refused one
@@ -17738,10 +17747,20 @@
     // A follow is the one row about a person rather than a post, so it still
     // walks to them.
     // A join walks to the circle it was a join of.
+    // And it lands ON what it was about (2026-11-05, seekNow): a comment, a
+    // mention in one, or a like on yours opens the thread on that comment; a
+    // like opens Likes and a yes or a maybe Who's going (both yours to read, the
+    // page falls back to comments for anyone else); a quote opens the quote.
+    const quotePost = n.quoteId && Store.posts().find(p => p.id === n.quoteId);
     const href =
       n.kind === 'follow' ? `#/u/${esc(encodeURIComponent(n.user))}` :
       n.kind === 'circlejoin' ? (room ? communityRoute(room) : '#/discover') :
-      post ? postRoute(post) : '#/profile';
+      quotePost ? postRoute(quotePost) :
+      !post ? '#/profile' :
+      n.commentId ? `${postRoute(post)}?c=${esc(encodeURIComponent(n.commentId))}` :
+      n.kind === 'like' ? postRoute(post, 'likers') :
+      (n.kind === 'going' || n.kind === 'maybe') ? postRoute(post, 'going') :
+      postRoute(post);
     const fresh = n._ts && n._ts > lastSeen;
     // data-key is the row's stable identity for the reconcile in renderUpdates
     // (kind + which post + who + when) — one event, one row, across refreshes.
@@ -18411,7 +18430,9 @@
       `<div class="msg-col">` +
         (!mine && !run && c.kind !== 'direct' ? `<a class="msg-name" href="${href}">${name}</a>` : '') +
         (reply
-          ? `<span class="msg-reply">${esc(displayNameOf(reply.author))}: ${esc(replySaid.length > 70 ? replySaid.slice(0, 70).trimEnd() + '…' : replySaid)}</span>`
+          ? `<span class="msg-reply" role="button" tabindex="0" data-to="${esc(reply.id)}" ` +
+              `aria-label="Go to ${esc(displayNameOf(reply.author))}’s message">` +
+              `${esc(displayNameOf(reply.author))}: ${esc(replySaid.length > 70 ? replySaid.slice(0, 70).trimEnd() + '…' : replySaid)}</span>`
           : m.replyTo ? `<span class="msg-reply">A message that’s gone</span>` : '') +
         (m.image
           ? `<button class="msg-photo" type="button" data-photo="${esc(m.image)}" aria-label="Open photo"` +
@@ -18559,6 +18580,17 @@
     const SWIPE_STIFF = 0.2;  // how much of the finger it follows past that
     let swipedAt = 0;         // the click a swipe's lift can leave behind
     const targetOf = (e) => e.target.closest && e.target.closest('.msg-bubble, .msg-photo');
+
+    // A reply's quote goes to what it quotes, as iMessage's does.
+    const toQuoted = (e) => {
+      const q = e.target.closest && e.target.closest('.msg-reply[data-to]');
+      if (!q || !root.contains(q)) return;
+      if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      glideTo(root.querySelector(`.msg[data-id="${CSS.escape(q.dataset.to)}"]`));
+    };
+    root.addEventListener('click', toQuoted);
+    root.addEventListener('keydown', toQuoted);
 
     const canSwipe = () => { const c = Store.chat(chatId); return !!c && c.status === 'member'; };
     const swipeTo = (s, dx) => {
@@ -19070,7 +19102,7 @@
       if (now.status !== c.status) { renderChat(id); return; }   // a request answered elsewhere
       const follow = stick || nearBottom();
       patchThread(list, threadHtml(now));
-      if (follow) toBottom(false);
+      if (!seekNow() && follow) toBottom(false);
       read();
     };
     chatLive = () => repaint(false);
@@ -19125,8 +19157,9 @@
       if (answering) requestAnimationFrame(() => { if (section.isConnected) setChatSong(answering); });
     }
 
-    // Open on the newest message, after the router has settled the scroll.
-    requestAnimationFrame(() => requestAnimationFrame(() => toBottom(false)));
+    // Open on the newest message, after the router has settled the scroll,
+    // unless a push named an older one (?m=, seekNow).
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!seekNow()) toBottom(false); }));
     read();
   }
 
@@ -23937,6 +23970,97 @@
     requestAnimationFrame(again);
   }
 
+  /* ── Landing ON the thing (2026-11-05) ─────────────────────────────────────
+     A link can name what in the page it was about: `#/p/<id>?c=<comment>` (an
+     Updates row or a push about a comment, a mention in one, or a like on
+     yours) and `#/chat/<id>?m=<message>` (a message push). The page opens with
+     that row in the middle of the screen and a soft wash of the reader's colour
+     over it, so you never hunt down a thread for the reply you were told about
+     (Zoe: "tapping a comment, notification, etc should also scroll to where it
+     is").
+
+     A SEEK BELONGS TO ONE HISTORY ENTRY, and only a fresh one. A back onto it
+     has a scroll on file, and that is where the reader left it, not where the
+     link pointed. It also outlives a repaint of its own entry: a push often
+     lands before the thread does (arriveAt's catch up re-routes onto the same
+     entry once primePost brings it), so a seek that found nothing waits for
+     the next paint of that entry instead of giving up. Any real input lets it
+     go, as restoreScroll's re-aim does. */
+  let seek = null;   // { key, sel } for the entry being arrived on
+  // The `c`/`m` of a query, carried onto a link that rewrites it (old `?p=`).
+  function seekQuery(q) {
+    const c = q.get('c'), m = q.get('m');
+    return c ? `?c=${encodeURIComponent(c)}` : m ? `?m=${encodeURIComponent(m)}` : '';
+  }
+  function armSeek(key, path, hash) {
+    if (seek && seek.key === key) return;            // a repaint of the same arrival
+    seek = null;
+    if (!key || scrollMemory.has(key)) return;       // a back: the reader's scroll wins
+    const q = new URLSearchParams(hash.split('?')[1] || '');
+    const c = path.startsWith('#/p/') && q.get('c');
+    const m = path.startsWith('#/chat/') && q.get('m');
+    if (!c && !m) return;
+    const id = CSS.escape(c || m);
+    seek = { key, sel: c ? `#post-page .comment[data-comment="${id}"]` : `#msg-list .msg[data-id="${id}"]` };
+  }
+  // Put the named row in the middle of the screen, if it's drawn. True when it
+  // landed, so a chat knows not to drop to its foot instead.
+  function seekNow() {
+    if (!seek || seek.key !== navHere) return false;
+    const el = document.querySelector(seek.sel);
+    if (!el) {
+      // Still on its way (a push about something this cache predates) or gone.
+      // Once the world has answered, a miss is a miss.
+      if (!catchingUp) seek = null;
+      return false;
+    }
+    seek = null;
+    // The newest message is where a chat opens anyway, and a wash on the row
+    // you're already looking at says nothing.
+    if (el.matches('.msg') && el === [...el.parentNode.querySelectorAll('.msg')].pop()) return false;
+    const aim = () => {
+      const r = el.getBoundingClientRect();
+      // A little over the middle: the comment or message bar takes the foot.
+      return Math.max(0, window.scrollY + r.top + r.height / 2 - window.innerHeight * 0.42);
+    };
+    window.scrollTo(0, aim());
+    washFound(el);
+    // A picture above finishing its layout can still push the row down a beat
+    // later; follow it until the reader touches anything.
+    const moves = ['wheel', 'touchstart', 'keydown'];
+    let stopped = false;
+    const bail = () => { stopped = true; };
+    moves.forEach(ev => window.addEventListener(ev, bail, { passive: true, once: true }));
+    let frames = 0;
+    const again = () => {
+      if (stopped || !el.isConnected || ++frames > 20) {
+        moves.forEach(ev => window.removeEventListener(ev, bail));
+        return;
+      }
+      const y = aim();
+      if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+      requestAnimationFrame(again);
+    };
+    requestAnimationFrame(again);
+    return true;
+  }
+  // A row in the page you're already on: glide to it and wash it (a chat's
+  // reply quote, tapped).
+  function glideTo(el) {
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: prefersReduced() ? 'auto' : 'smooth' });
+    washFound(el);
+  }
+  // The wash (`.is-found` in app.css, 2.2s), restarted if it's the same row
+  // again. A timer, not animationend: that one fires off a pseudo-element.
+  function washFound(el) {
+    clearTimeout(el._found);
+    el.classList.remove('is-found');
+    void el.offsetWidth;
+    el.classList.add('is-found');
+    el._found = setTimeout(() => el.classList.remove('is-found'), 2300);
+  }
+
   /* ── The back gesture, and why it needs nothing from us now ─────────────────
      The App Store build turns on WKWebView's edge-swipe (`allowsBackForward
      NavigationGestures` in TriaViewController.swift), and that gesture is not a
@@ -24143,6 +24267,7 @@
 
     const hash = location.hash || '#/';
     const path = hash.split('?')[0];
+    armSeek(arriving, path, hash);
     // A new account's first look at home is the first run instead, once a
     // session (needsWelcome). replace, so back from it isn't an empty home.
     if (path === '#/' && needsWelcome()) {
@@ -24159,8 +24284,16 @@
     // the query is now a redirect to the post's own page rather than a spotlight.
     // Old links keep working and land somewhere better than they used to.
     if (path.startsWith('#/u/') || path === '#/profile') {
-      const p = new URLSearchParams(hash.split('?')[1] || '').get('p');
-      if (p) { location.replace(postRoute(p)); return; }
+      const q = new URLSearchParams(hash.split('?')[1] || '');
+      const p = q.get('p');
+      // replace keeps this entry's key, and a redirect is no scroll to keep:
+      // forgotten, the post arrives fresh and can seek (armSeek).
+      if (p) {
+        scrollMemory.delete(arriving);
+        navHere = null;   // so the next route() files nothing under it either
+        location.replace(postRoute(p) + seekQuery(q));
+        return;
+      }
     }
     // A friend view (#/u/…) matches nothing → nothing highlighted. The editor is
     // the one route that borrows another's highlight: it is somewhere you went,
@@ -24322,7 +24455,11 @@
       // the top. There is no third case left: the spotlight that used to place
       // the window itself and hand in an empty settle retired with the inline
       // editor (see the tombstone over staggerDelay).
-    }, () => restoreScroll(arriving, path));
+    }, () => {
+      restoreScroll(arriving, path);
+      // A chat seeks from its own opening, which drops to the foot a beat later.
+      if (path.startsWith('#/p/')) seekNow();
+    });
 
     nudgeNav();           // installed shells: re-composite the nav's frosted layer
     // Deliberately NO background re-pull here: a refresh landing on the heels of
@@ -25124,8 +25261,9 @@
   let catchingUp = 1;
   let booted = false;
   async function arriveAt(hash) {
-    const p = new URLSearchParams(hash.split('?')[1] || '').get('p');
-    const target = p ? `#/p/${encodeURIComponent(p)}` : hash;
+    const q = new URLSearchParams(hash.split('?')[1] || '');
+    const p = q.get('p');
+    const target = p ? `#/p/${encodeURIComponent(p)}${seekQuery(q)}` : hash;
     const path = target.split('?')[0];
     const cold = !booted;
     let armed = true;      // this arrival still counts in catchingUp

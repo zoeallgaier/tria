@@ -9532,6 +9532,35 @@ body.thread-live .lightbox { z-index: 320; }
 @keyframes comment-saved {
   0%, 35% { background: color-mix(in srgb, var(--text) 7%, transparent); }
 }
+/* The row a link was about (seekNow, glideTo): a comment in its thread or a
+   message in its chat, washed in the reader's colour as the page lands on it,
+   then let go. Behind the row, on the soft corner a held comment wears, so the
+   words never move. Your own comment already carries that padding. */
+.comment.is-found,
+.msg.is-found { position: relative; isolation: isolate; }
+.comment.is-found::before,
+.msg.is-found::before {
+  content: '';
+  position: absolute;
+  inset: -0.55rem -0.65rem;
+  z-index: -1;
+  border-radius: var(--radius-soft);
+  background: color-mix(in srgb, var(--heart) 16%, transparent);
+  pointer-events: none;
+  animation: row-found 2.2s var(--ease-soft) both;
+}
+.comment--own.is-found::before { inset: 0; }
+.msg.is-found::before { inset: -0.3rem -0.5rem; }
+@keyframes row-found {
+  0% { opacity: 0; }
+  12%, 55% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.msg-reply[data-to] { cursor: pointer; }
+@media (prefers-reduced-motion: reduce) {
+  .comment.is-found::before, .msg.is-found::before { animation: row-found-still 2.2s steps(1, end) both; }
+}
+@keyframes row-found-still { from { opacity: 1; } to { opacity: 0; } }
 .comment-actions {
   flex: 0 0 100%;
   display: grid;

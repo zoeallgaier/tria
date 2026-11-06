@@ -42,25 +42,24 @@ const OPEN_URL = './#/updates';   // the fallback landing, when nothing better i
 
 // Which source a GET ?health answers for. A deploy can't otherwise be told from
 // the one before it, so move this whenever the file changes.
-const REV = '2026-11-01';
+const REV = '2026-11-05';
 
 // The app's MENTION_RE: a handle after a non-word, so an email address is nobody.
 const MENTION = /(?:^|[^\w@])@([a-z0-9_]{2,20})\b/g;
 
 // WHERE A TAP LANDS. Every notification used to open Updates, because `sendTo`
 // defaulted `url` and no caller ever passed one — so "Tap to see their profile"
-// didn't, and a comment notification made you find the post yourself. These
-// mirror the routes the app already mints for a copied link (see postLink and
-// the `?p=` branch in route()): a post is its AUTHOR'S profile plus the post id,
-// which the router reads to spotlight-scroll that card into view.
+// didn't, and a comment notification made you find the post yourself.
 //
-// `#/profile` is the author's own column, so a notification about your own post
-// — which is nearly all of them: someone commented on YOURS, someone is coming
-// to YOURS — takes the self route. A mention lands on somebody else's post, so
-// it needs their handle.
-const selfPost = (postId: string) => `./#/profile?p=${encodeURIComponent(postId)}`;
-const userPost = (username: string, postId: string) =>
-  `./#/u/${encodeURIComponent(username)}?p=${encodeURIComponent(postId)}`;
+// A post is its own page, `#/p/<id>`, as an Updates row is (2026-11-05; these
+// were the author's profile plus `?p=<id>`, which the app only redirected).
+// `seek` names the row it was about, so the app lands ON it (seekNow in app.js):
+// `c=<comment>` on a post, `pane=going` for a plan's answers. A binary from
+// before 2026-11-05 ignores what it doesn't know and opens the post.
+const postAt = (postId: string, seek = '') =>
+  `./#/p/${encodeURIComponent(postId)}${seek ? `?${seek}` : ''}`;
+const commentAt = (postId: string, commentId: string) =>
+  postAt(postId, `c=${encodeURIComponent(commentId)}`);
 const userPage = (username: string) => `./#/u/${encodeURIComponent(username)}`;
 
 type Row = Record<string, any>;
@@ -332,16 +331,11 @@ async function handle(table: string, rec: Row) {
         title: `${author.name} commented`,
         body: snip(rec.body) || `Commented on ${postLabel(post)}`,
         tag: `post:${post.id}`, collapse: `comment:${rec.id}`,
-        url: selfPost(post.id),   // the recipient IS the author, so: their column
+        url: commentAt(post.id, rec.id),
       });
       notified.add(post.author);
     }
     // Anyone @mentioned in the comment who is a mutual friend of the commenter.
-    // A mentioned reader is usually NOT the post's author, so the link needs the
-    // author's handle — fetched lazily, since most comments mention nobody and
-    // this would otherwise be a round trip on every single insert.
-    let owner: Row | null | undefined;
-    const postOwner = async () => (owner ??= await userById(post.author));
     // On a circle's post, a mention only reaches somebody in the circle: the
     // push quotes the comment, and the thread is the circle's.
     let circle: string | null | undefined;
@@ -351,14 +345,10 @@ async function handle(table: string, rec: Row) {
       if (!(await areFriends(u.id, rec.author))) continue;
       if (circle === undefined) circle = await circleOf(post.id);
       if (circle && !(await inCircle(circle, u.id))) continue;
-      const home = u.id === post.author ? selfPost(post.id) : await (async () => {
-        const o = await postOwner();
-        return o ? userPost(o.username, post.id) : OPEN_URL;
-      })();
       await sendTo(u.id, {
         title: `${author.name} mentioned you`, body: snip(rec.body),
         tag: `post:${post.id}`, collapse: `comment:${rec.id}:${u.id}`,
-        url: home,
+        url: commentAt(post.id, rec.id),
       });
       notified.add(u.id);
     }
@@ -398,7 +388,8 @@ async function handle(table: string, rec: Row) {
           : chat.kind === 'direct' ? author.name : `${author.name} in ${where}`,
         body,
         tag: `chat:${chat.id}`, collapse: `message:${rec.id}`,
-        url: `./#/chat/${encodeURIComponent(chat.id)}`,
+        // Onto the message, if more have come since (seekNow).
+        url: `./#/chat/${encodeURIComponent(chat.id)}?m=${encodeURIComponent(rec.id)}`,
       });
     }
     return;
@@ -428,7 +419,9 @@ async function handle(table: string, rec: Row) {
           // Collapsed PER PERSON, like headcount and for the same reason: two
           // friends passing something along is two pieces of news.
           tag: `repost:${orig.id}`, collapse: `repost:${orig.id}:${rec.author}`,
-          url: selfPost(orig.id),   // the recipient wrote it
+          // A quote opens the quote, its words being the news; a bare repost
+          // has nothing of its own, so it opens the original.
+          url: postAt(rec.note ? rec.id : orig.id),
         });
       }
     }
@@ -452,7 +445,7 @@ async function handle(table: string, rec: Row) {
       await sendTo(u.id, {
         title: `${author.name} mentioned you`, body: snip(plain(rec.note as string)),
         tag: `post:${rec.id}`, collapse: `post:${rec.id}:${u.id}`,
-        url: userPost(author.username, rec.id),
+        url: postAt(rec.id),
       });
     }
     return;
@@ -473,7 +466,7 @@ async function handle(table: string, rec: Row) {
       // Collapsed PER PERSON, not per activity: two friends saying yes is two
       // pieces of news. The same person re-RSVPing is one.
       tag: `going:${post.id}`, collapse: `going:${post.id}:${rec.user_id}`,
-      url: selfPost(post.id),   // the recipient hosts it
+      url: postAt(post.id, 'pane=going'),   // the recipient hosts it
     });
     return;
   }
@@ -755,7 +748,7 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
         body: reminderBody(host, act, stage, going.has(uid)),
         tag: `activity:${act.id}`,
         collapse: collapseKey(act.id as string, stage, uid),
-        url: userPost(host.username, act.id as string),
+        url: postAt(act.id as string),
       },
     });
   }
@@ -768,7 +761,7 @@ async function remindOne(act: Row, stage: Stage, mins: number): Promise<number> 
         body: hostBody(act, yesCount),
         tag: `activity:${act.id}`,
         collapse: collapseKey(act.id as string, stage, act.author as string),
-        url: selfPost(act.id as string),   // the recipient hosts it
+        url: postAt(act.id as string, 'pane=going'),   // the recipient hosts it
       },
     });
   }

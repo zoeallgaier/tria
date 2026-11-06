@@ -2700,9 +2700,9 @@ const Store = (() => {
       author !== me && mentionRe.test(text || '') && areFriends(author, me);
     for (const c of state.comments) {
       if (mine.has(c.postId) && c.author !== me)
-        evts.push({ kind: 'comment', postId: c.postId, user: c.author, text: c.text, image: c.image, _ts: c._ts || '' });
+        evts.push({ kind: 'comment', postId: c.postId, commentId: c.id, user: c.author, text: c.text, image: c.image, _ts: c._ts || '' });
       else if (mentionsMe(c.text, c.author))
-        evts.push({ kind: 'mention', postId: c.postId, user: c.author, text: c.text, _ts: c._ts || '' });
+        evts.push({ kind: 'mention', postId: c.postId, commentId: c.id, user: c.author, text: c.text, _ts: c._ts || '' });
     }
     for (const p of state.posts)
       if (mentionsMe(p.note, p.author))
@@ -2718,7 +2718,7 @@ const Store = (() => {
       for (const l of state.commentLikes) {
         const c = said.get(l.commentId);
         if (c && l.user !== me)
-          evts.push({ kind: 'commentlike', postId: c.postId, user: l.user, text: c.text, _ts: l._ts || '' });
+          evts.push({ kind: 'commentlike', postId: c.postId, commentId: c.id, user: l.user, text: c.text, _ts: l._ts || '' });
       }
     }
     // A yes and a maybe are news for the host; a "can't go" waits on the guest list.
@@ -2738,6 +2738,9 @@ const Store = (() => {
     for (const p of state.posts)
       if (p.repostOf && mine.has(p.repostOf) && p.author !== me)
         evts.push({ kind: 'repost', postId: p.repostOf, user: p.author,
+                    // A quote is its own post with its own words, so the row
+                    // opens the quote; a bare repost has nothing but the original.
+                    quoteId: p.note ? p.id : null,
                     text: p.note || '', _ts: p._ts || '' });
     // Someone adding you is news, and news belongs in the ledger — dated, ageing
     // down the list like everything else here. It used to be drawn as a standing
