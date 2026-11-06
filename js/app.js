@@ -12781,9 +12781,6 @@
               ? 'Tria needs permission to add to your photos. It is in Settings.'
               : 'The card could not be saved.');
           });
-          // A Moment's link stops opening after a day, so the report carries
-          // what was seen: its picture and song travel with the words.
-          ...(post.moment ? { moment: true, posted: post._ts || '', media: post.images?.join(' ') || post.image || '', song: post.song ? `${post.song.title} by ${post.song.artist}` : '' } : {}),
         return;
       }
       draw()
@@ -12836,6 +12833,9 @@
           post_id: post.id, post_type: post.type, post_author: '@' + post.author,
           excerpt: (post.title || post.note || '').replace(/<[^>]*>/g, ' ').trim().slice(0, 280) || '(no text)',
           link: postLink(post),
+          // A Moment's link stops opening after a day, so the report carries
+          // what was seen: its picture and song travel with the words.
+          ...(post.moment ? { moment: true, posted: post._ts || '', media: post.images?.join(' ') || post.image || '', song: post.song ? `${post.song.title} by ${post.song.artist}` : '' } : {}),
         })) })),
     });
   }
@@ -18070,7 +18070,7 @@
     const key = esc(`${n.kind}:${n.postId || n.communityId || ''}:${n.user}:${n._ts || ''}`);
     return `<li data-key="${key}">` +
         `<a class="notif${fresh ? ' notif--new' : ''}" href="${href}" ` +
-          `data-post="${esc(n.postId || '')}" data-kind="${n.kind}">` +
+          `data-post="${esc(n.postId || '')}" data-kind="${n.kind}" data-user="${esc(n.user)}">` +
           notifFaceHtml(u || { name: n.user }, n.kind) +
           `<span class="notif-body">` +
             `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
@@ -19706,6 +19706,18 @@
       // already read stay put, with their avatars, and only the older ones rise
       // in underneath.
       panel.addEventListener('click', (e) => {
+        // The face and the name are the PERSON (Zoe, 2026-11-06: "tapping a pfp
+        // or name in updates should take you to that profile"); the rest of the
+        // row is still the post. The row is one <a>, which can't hold another,
+        // so the row's own link is turned aside here, as the feed's repost
+        // glyph does inside a card.
+        const who = e.target.closest('.notif-face, .notif-text strong');
+        const row = who && who.closest('a.notif[data-user]');
+        if (row && row.dataset.user) {
+          e.preventDefault();
+          go(`#/u/${encodeURIComponent(row.dataset.user)}`);
+          return;
+        }
         if (!e.target.closest('.notif-more')) return;
         notifShown += NOTIF_PAGE;
         hapticTap('LIGHT');
