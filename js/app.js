@@ -7749,6 +7749,11 @@
      navigation, so a name, a mention or the editor walks out of it cleanly. */
   let momentsAway = null;   // the open viewer's close(), for a navigation to take
   const dismissMoments = () => { if (momentsAway) momentsAway(); };
+  /* A navigation out of the viewer (a face to a profile, a reply to a chat, a
+     tag to Discover) files where it was under the entry it left, and a back
+     onto that entry opens it again on the same frame, so nobody has to find
+     the Moment twice (Zoe, 2026-11-06). Keyed by navStamp's token. */
+  const momentReturn = new Map();
   const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
   const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
   const DISMISS_AT = 110;      // a pull down past this closes the viewer
@@ -7829,7 +7834,7 @@
     return el.animate(frames, { duration: ms, easing }).finished.then(() => true, () => false);
   }
 
-  function openMoments(who, opener) {
+  function openMoments(who, opener, back) {
     if (momentsAway || sheetOpen) return;
     const stacks = momentStacks();
     const start = stacks.findIndex(s => s.u.username === who);
@@ -7947,7 +7952,9 @@
       const s = stacks[si];
       const frames = momentFrames(s);
       const seen = seenMoments();
-      const fi = at === 'end' ? frames.length - 1
+      const was = back && back.who === s.u.username
+        ? frames.findIndex(f => String(f.post.id) === back.post && f.i === back.i) : -1;
+      const fi = was >= 0 ? was : at === 'end' ? frames.length - 1
         : s.mine ? 0 : Math.max(0, frames.findIndex(f => !seen.has(String(f.post.id))));
       const name = s.mine ? 'You' : (s.u.name || s.u.username);
       const el = document.createElement('div');
@@ -8298,7 +8305,9 @@
     document.body.appendChild(root);
     document.body.style.overflow = 'hidden';
     momentsAway = close;
+    close.at = () => ({ who: page.s.u.username, post: String(cur().post.id), i: cur().i });
     page = pageFor(start);
+    back = null;   // only the first page lands on the filed frame
     live('open');
     requestAnimationFrame(() => {
       root.classList.add('open');
@@ -25097,6 +25106,7 @@
     // to reset it.
     rememberScroll();
     dropNewPosts();
+    const prevHere = navHere;
     const arriving = navStamp();
     navHere = arriving;
 
@@ -25117,7 +25127,16 @@
     // in. Its own close() is what runs, so the scroll lock, the focus return and
     // the exit animation are the sheet's, unchanged.
     dismissSheet();
+    if (momentsAway && momentsAway.at && prevHere && prevHere !== arriving) {
+      momentReturn.set(prevHere, momentsAway.at());
+      while (momentReturn.size > 20) momentReturn.delete(momentReturn.keys().next().value);
+    }
     dismissMoments();
+    const momentBack = momentReturn.get(arriving);
+    if (momentBack) {
+      momentReturn.delete(arriving);
+      setTimeout(() => { if (navHere === arriving) openMoments(momentBack.who, null, momentBack); }, 0);
+    }
 
     // Your colour on the primary buttons. Above the gate check on purpose: it is
     // what CLEARS the band on the way out, so signing out doesn't leave the next
