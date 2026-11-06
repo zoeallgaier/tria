@@ -654,9 +654,8 @@
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
       nav.querySelector('.nav-new')?.addEventListener('click', () => openComposeDial());
     }
-    // A PAGE NO TAB NAMES LIGHTS NO TAB (Zoe, 2026-11-05): Chats and its
-    // threads, a friend's profile. The sidebar still lights its own Chats row;
-    // natively the folded bar wears where you are instead (`hereFor`).
+    // Only a tab's own page lights it. Every other page has no bar on a phone
+    // (`tabbedRoute`); the sidebar still lights its own Chats row.
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -689,39 +688,20 @@
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
     // having to know this line ran.
-    NativeChrome.setActive(making ? NAV.find(n => n.action).route : active, hereFor(active));
+    NativeChrome.setActive(making ? NAV.find(n => n.action).route : active);
   }
   const makingRoute = (path) => path === '#/publish' || path === '#/c/new';
 
-  /* WHAT THE FOLDED BAR WEARS WHERE NO TAB IS LIT (Zoe, 2026-11-05). Open, the
-     bar lights nothing on these pages; folded, its one bubble is the place:
-     Chats' solid mark, or a friend's own face, the way yours sits in the
-     comment bar. Null is an ordinary tab page. A face crosses as pixels
-     (`NativeChrome.facePixels`), so until it has loaded, and for anyone with
-     no photo, the bubble is the solid profile mark. */
-  const hereFaces = new Map();
-  function hereFor(active) {
-    if (active === '#/chats') return { icon: svgIcon('chatsOn') };
-    if (!active.startsWith('#/u/') || !nativeShell()) return null;
-    const name = decodeURIComponent(active.slice(4));
-    if (name === Store.session()) return null;
-    const user = Store.user(name);
-    const src = user && user.avatar ? (sizedSrc(user.avatar, 96) || user.avatar) : '';
-    if (!src) return { icon: svgIcon('profileOn') };
-    if (hereFaces.has(src)) return { face: hereFaces.get(src) };
-    // decode(), not onload: iOS's WebKit draws a loaded but undecoded picture
-    // into a canvas as nothing (measured, 2026-11-05: a blank disc).
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = src;
-    img.decode().then(() => {
-      const px = NativeChrome.facePixels(img);
-      if (!px) return;
-      hereFaces.set(src, px);
-      if (location.hash.split('?')[0] === active) NativeChrome.setActive(active, { face: px });
-    }, () => {});
-    return { icon: svgIcon('profileOn') };
-  }
+  /* THE BAR IS ON THE TABS AND NOWHERE ELSE (Zoe, 2026-11-06). A tab's own page,
+     and the pages the + opens (the composer's only way out is the bar). Every
+     other page, Chats, a chat, a friend's profile, a circle, a post, a list, is
+     a page you went INTO: no bar, and its top bar's back chevron is the way
+     out, as a pushed page is in any iOS app. One class, `nav-off`, read by the
+     web's phone nav (app.css) and by NativeChrome.sync. It replaced lighting no
+     tab on Chats and a friend's profile, with the folded bar wearing Chats'
+     mark or the friend's face (5648550). */
+  const TAB_ROUTES = new Set(NAV.filter(n => !n.rail && !n.action).map(n => n.route));
+  const tabbedRoute = (path) => TAB_ROUTES.has(path) || makingRoute(path);
 
   // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
   // block), so navigation costs no layout read and no per-frame filter work.
@@ -756,11 +736,10 @@
     let live = false;      // the plugin answered; the native bars are up
     let asked = false;     // …and we only ever ask once
     let activeRoute = '';
-    let activeHere = null;   // what the folded bar wears where no tab is lit (hereFor)
     // What native was last TOLD, so a route change that moves nothing costs no
     // bridge traffic. Every one of these calls is a hop to the main thread and
     // back (see the haptics note above), and route() runs on every navigation.
-    const told = { route: null, here: null, chrome: null, fab: null };
+    const told = { route: null, chrome: null, fab: null };
 
     const call = (method, opts) =>
       window.Capacitor.nativePromise('TriaChrome', method, opts || {});
@@ -2248,7 +2227,7 @@
             });
         } catch { /* the bars are up but inert; better than no bars */ }
         watchToolbar();
-        told.route = told.here = told.chrome = told.fab = null;   // force the first push
+        told.route = told.chrome = told.fab = null;   // force the first push
         sync();
       }).catch(() => {
         // iOS 25 or older, or a plugin that isn't in the binary. Nothing to say
@@ -2267,18 +2246,17 @@
       if (!live) return;
       const nav = document.getElementById('nav');
       const gated = document.body.classList.contains('gate');
-      // Signed out there is no navigation to draw, and on a post's page the
-      // bottom of the screen belongs to the comment bar — the same two facts
-      // body.gate and body.postbar-live already state to the stylesheet.
-      const chrome = !gated && !overlaid()
-        && !document.body.classList.contains('postbar-live')
-        && !document.body.classList.contains('welcome-live');
+      // Signed out there is no navigation to draw, off the tabs there is no bar
+      // (`tabbedRoute`), and on a post's page the bottom of the screen belongs
+      // to the comment bar — the facts body.gate, body.nav-off and
+      // body.postbar-live already state to the stylesheet.
+      const body = document.body.classList;
+      const chrome = !gated && !overlaid() && !body.contains('nav-off')
+        && !body.contains('postbar-live') && !body.contains('welcome-live');
       const fab = !(nav && nav.classList.contains('nav--compose'));
-      const here = activeHere ? (activeHere.face || activeHere.icon) : '';
-      if (activeRoute !== told.route || here !== told.here) {
+      if (activeRoute !== told.route) {
         told.route = activeRoute;
-        told.here = here;
-        call('selectTab', { route: activeRoute, here: activeHere || {} }).catch(() => {});
+        call('selectTab', { route: activeRoute }).catch(() => {});
       }
       if (chrome !== told.chrome || fab !== told.fab) {
         told.chrome = chrome;
@@ -2375,9 +2353,8 @@
     // run on a signed-in route — so it is where the bars are asked for. Under
     // the gate renderNav never runs, which is why nothing native appears before
     // sign-in.
-    function setActive(route, here) {
+    function setActive(route) {
       activeRoute = route || '';
-      activeHere = here || null;
       start();
       sync();
     }
@@ -2422,10 +2399,7 @@
     // Signed out, the tabs' pictures are of someone else's world.
     const forgetPages = () => { if (live) call('pagerForget').catch(() => {}); };
 
-    // A friend's face for the folded bar, sized for its bubble (hereFor).
-    const facePixels = (img) => avatarPixels(img, 84);
-
-    return { setActive, sync, repaint, setDots, captureMenu, presentMenu, facePixels,
+    return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, pickPhoto,
              glowLight, forgetPages, live: isLive };
   })();
@@ -24127,7 +24101,9 @@
 
   function renderGuestPitch(kind) {
     const p = GUEST_PITCH[kind];
-    mountToolbar({ title: p.title });
+    // A pitch for a page you can't open yet: the ones that aren't a tab have no
+    // bar (tabbedRoute), so it leads back to where a visitor reads.
+    mountToolbar({ leading: tabbedRoute(location.hash.split('?')[0]) ? '' : toolbarBackEl('#/discover', 'Discover'), title: p.title });
     view.innerHTML =
       `<section class="view about guest-pitch">` +
         mastheadEl(p.kicker === undefined ? 'Social media made local' : p.kicker, p.title) +
@@ -24283,13 +24259,11 @@
         return;
       }
     }
-    // A friend view (#/u/…) matches nothing → nothing highlighted. The editor is
-    // the one route that borrows another's highlight: it is somewhere you went,
-    // but it is somewhere INSIDE your profile, so that tab stays lit rather than
-    // the nav going blank while you edit.
-    // Every chat page sits inside Chats, so it keeps Chats lit: the sidebar's
-    // own row on desktop, and on a phone and natively the tab whose bar you
-    // opened it from (renderNav, chatsFrom).
+    // Off the tabs there is no bar on a phone (tabbedRoute). Set before
+    // renderNav, whose setActive is what tells native.
+    document.body.classList.toggle('nav-off', !tabbedRoute(path));
+    // The desktop sidebar is always there, so what it lights still matters:
+    // the editor keeps Profile and every chat page keeps the Chats row.
     renderNav(path === '#/profile/edit' ? '#/profile'
       : path.startsWith('#/chat') ? '#/chats' : path);
 
@@ -24332,7 +24306,7 @@
     applyAmbient(path);   // warm (Circle) / cool (Friends) / photo tint (a profile)
 
     // A friend's profile lives at #/u/username. Own profile stays at #/profile so
-    // the nav can mark it current (a friend view highlights nothing).
+    // the nav can mark it current (a friend view has no tab bar).
     // Discover's grid is laid out by JS, so it keeps a resize listener alive.
     // Drop it on the way out; renderDiscover re-arms one on the way back in.
     if (path !== '#/discover') discoverResizeOff?.();
@@ -24370,7 +24344,7 @@
         return;
       }
       // Someone's circle lives at #/friends/<username> — pushed from the friend
-      // count on their profile, so it highlights no tab either. Tested BEFORE
+      // count on their profile, so it has no tab bar either. Tested BEFORE
       // the switch below, where bare #/friends is the retired Friends page and
       // still redirects for the links that are out there.
       if (path.startsWith('#/friends/')) {
@@ -24379,7 +24353,7 @@
       }
       // A circle (the room) lives at #/c/<slug>, the way a subreddit lives at
       // /r/<name>: #/c/new starts one, #/c/<slug>/edit is its owner's editor.
-      // Like a profile it lights no tab: it is somewhere you went.
+      // Like a profile it has no tab bar: it is somewhere you went.
       if (path.startsWith('#/c/')) {
         const [slug, sub] = path.slice(4).split('/').map(decodeURIComponent);
         if (slug === 'new') renderCommunityForm(null);

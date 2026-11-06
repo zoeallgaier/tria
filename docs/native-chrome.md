@@ -278,9 +278,11 @@ Four decisions inside it:
   `chromeTap`), and app.js confirms with `selectTab`, which also corrects a tap
   the router refuses. Holding the highlight until the router answered read as a
   bar ignoring the finger.
-- **A route no tab names leaves the last tab lit.** A `UITabBarController` has
-  no "none" state, and the tab you came from is the honest answer on a pushed
-  page.
+- **A route no tab names has no bar** (2026-11-06, `tabbedRoute`/`body.nav-off`
+  in app.js, `setChrome`'s `visible`). A `UITabBarController` has no "none"
+  state, and lighting nothing took private view names (`calmLens`, 5648550,
+  removed), so a pushed page simply goes without the bar and its back chevron
+  leads out. The last tab stays selected underneath, unseen.
 - **The dot is the system's unnumbered badge** (`badgeValue = ""`, `badgeColor`
   from `--dot`), **clipped to the bell's 6.5pt** (2026-10-25, Zoe: "oversized").
   The empty badge is a count badge with no count, 18pt, and nothing public

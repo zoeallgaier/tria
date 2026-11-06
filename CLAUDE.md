@@ -286,16 +286,18 @@ hours Chats was the tab and Updates the bell). `chatsBtnEl(from)`,
 `syncNavDot` and read natively by `dotInk`; the Updates tab's dot is
 `setDots({ '#/updates' })`, solid `bellOn` where you are. The tab Chats was
 opened from (`chatsFrom`) is where the Chats list's back chevron goes; the
-filter and New chat share its right. **A page no tab names lights NO tab**
-(Zoe, same day): on `#/chats`, every chat page and a friend's profile the open
-bar is all outlines, and natively the FOLDED bar's one bubble wears the place,
-Chats' solid mark or the friend's own face (`hereFor`, `selectTab`'s `here`,
-pixels via `facePixels` after `img.decode()`, since an undecoded picture draws
-blank). No public API unselects a controller's bar, so the lit item lends its
-`selectedImage` (which the bubble draws) and `calmLens` sets the open capsule's
-lens, lit copy and cut-out to alpha 0, leaving its plain row (private view
-names, measured on 26.5; if they change, the tab you came from stays lit). On desktop Chats is still a
-sidebar row (`rail: true`, never a native tab, never swipeable).
+filter and New chat share its right. **The tab bar is on the tabs and nowhere
+else** (Zoe, 2026-11-06: "just having no nav and the back button above"): a
+tab's own page and the pages the + opens (the composer, New circle; the
+composer's way out is the bar) have it, and every other page, Chats, a chat, a
+friend's profile, a circle, a post, a list, a setting, has none and goes back
+by its top bar's chevron, as a pushed page does in any iOS app (`tabbedRoute`,
+`body.nav-off`, read by the phone nav's CSS and `NativeChrome.sync`). It
+replaced, a day later, lighting no tab on Chats and a friend's profile with the
+folded bar wearing Chats' mark or the friend's face (5648550: `hereFor`,
+`facePixels`, `calmLens` hiding private `_UITabBarPlatterView` layers), which
+leaned on private view names. On desktop Chats is still a sidebar row (`rail:
+true`, never a native tab, never swipeable) and the sidebar is always there.
 **Both My Circle and Discover lead with the sidebar's mark** (`sideBtnEl`,
 `.toolbar-side`); while Discover's search is open that mark is the back chevron
 that empties it. **The filter leads on Updates and your own profile** (Zoe: the

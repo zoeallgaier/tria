@@ -10400,6 +10400,12 @@ body[data-ambient="none"] .pf-row-swatch {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
+  /* OFF THE TABS THERE IS NO BAR (tabbedRoute in app.js, 2026-11-06): Chats, a
+     friend's profile, a circle, any page you went into. Its back chevron is the
+     way out, and its foot keeps only the home indicator's room. Before the
+     comment bar's reserve below, which wins on source order where both hold. */
+  body.nav-off .nav { display: none; }
+  body.nav-off main { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .toast { transition: opacity var(--dur-quick) ease; } }
@@ -11554,6 +11560,13 @@ a.daily-answer { text-decoration: none; }
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--rule);
+/* Off the tabs the bar is gone too (setChrome, `nav-off`), so the foot keeps
+   only the home indicator's room, as in the mobile block. Before the comment
+   bar's rule below, which wins on source order where both hold. */
+html[data-chrome="native"] body.nav-off main {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+}
+
   border-radius: var(--radius-field);
   transition: border-color var(--dur-micro);
 }
