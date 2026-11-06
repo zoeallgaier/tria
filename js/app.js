@@ -21645,8 +21645,8 @@
        lifts the thumb. The others make room as it passes (a selection tick
        per place), and on the lift every thumb glides to where it now is (a
        FLIP) and the preview glides to the photo you moved. The first is the
-       cover. Arrow keys move a focused thumb. Thumbs are a canvas drawn once
-       from the still, so six of them never decode six more photos. */
+       cover. Arrow keys move a focused thumb. Thumbs are a small JPEG drawn
+       once from the still, so six of them never decode six more photos. */
     const ORDER_TAUGHT = 'tria:carousel-order-taught';
     const orderTaught = () => { try { return localStorage.getItem(ORDER_TAUGHT) === '1'; } catch { return false; } };
     const teachOrder = () => {
@@ -21660,18 +21660,26 @@
       t.className = 'cc-thumb';
       t.setAttribute('role', 'button');
       t.tabIndex = 0;
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = THUMB_PX;
-      cv.setAttribute('aria-hidden', 'true');
+      // A small JPEG drawn once from the still: an <img> repaints wherever
+      // it is moved (a canvas moved mid-glide can come up blank in WebKit).
+      const im = document.createElement('img');
+      im.alt = '';
+      im.draggable = false;
+      im.setAttribute('aria-hidden', 'true');
       const draw = () => {
         const w = s.im.naturalWidth, h = s.im.naturalHeight;
         if (!w || !h) return;
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = THUMB_PX;
         const k = Math.max(THUMB_PX / w, THUMB_PX / h);
-        try { cv.getContext('2d').drawImage(s.im, (THUMB_PX - w * k) / 2, (THUMB_PX - h * k) / 2, w * k, h * k); } catch {}
+        try {
+          cv.getContext('2d').drawImage(s.im, (THUMB_PX - w * k) / 2, (THUMB_PX - h * k) / 2, w * k, h * k);
+          im.src = cv.toDataURL('image/jpeg', 0.85);
+        } catch { im.src = s.src; }
       };
       if (s.im.complete && s.im.naturalWidth) draw();
       else s.im.addEventListener('load', draw, { once: true });
-      t.append(cv);
+      t.append(im);
       s.thumb = t;
       return t;
     }
@@ -21700,6 +21708,7 @@
       const before = new Map();
       if (wasShown) for (const el of stillsEl.children) before.set(el, el.getBoundingClientRect().left);
       pre?.();
+      stillsEl.style.setProperty('--cc-n', String(Math.max(4, want.length)));
       stillsEl.replaceChildren(...want);
       stills.forEach((s, k) => {
         s.thumb.dataset.i = String(k);
