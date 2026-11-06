@@ -654,13 +654,12 @@
       nav.querySelector('.nav-publish').addEventListener('click', () => openComposeDial());
       nav.querySelector('.nav-new')?.addEventListener('click', () => openComposeDial());
     }
-    // On #/chats the sidebar lights its own Chats row, and the tab whose
-    // bar you opened it from on a phone (chatsFrom) is lit there only
-    // (.nav-link--under, worn like aria-current in the phone block of app.css).
+    // A PAGE NO TAB NAMES LIGHTS NO TAB (Zoe, 2026-11-05): Chats and its
+    // threads, a friend's profile. The sidebar still lights its own Chats row;
+    // natively the folded bar wears where you are instead (`hereFor`).
     nav.querySelectorAll('.nav-link').forEach(a => {
       if (a.getAttribute('href') === active) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
-      a.classList.toggle('nav-link--under', active === '#/chats' && a.getAttribute('href') === chatsFrom);
     });
     // THE + IS WHERE YOU ARE WHILE YOU MAKE SOMETHING (Zoe, 2026-11-05): the
     // composer in every mode and New circle, the pages the New sheet opens.
@@ -690,10 +689,39 @@
     // reads .nav--compose back off the element above rather than being handed
     // `composing`, so every other caller of sync() gets the same answer without
     // having to know this line ran.
-    NativeChrome.setActive(active === '#/chats' ? chatsFrom
-      : making ? NAV.find(n => n.action).route : active);
+    NativeChrome.setActive(making ? NAV.find(n => n.action).route : active, hereFor(active));
   }
   const makingRoute = (path) => path === '#/publish' || path === '#/c/new';
+
+  /* WHAT THE FOLDED BAR WEARS WHERE NO TAB IS LIT (Zoe, 2026-11-05). Open, the
+     bar lights nothing on these pages; folded, its one bubble is the place:
+     Chats' solid mark, or a friend's own face, the way yours sits in the
+     comment bar. Null is an ordinary tab page. A face crosses as pixels
+     (`NativeChrome.facePixels`), so until it has loaded, and for anyone with
+     no photo, the bubble is the solid profile mark. */
+  const hereFaces = new Map();
+  function hereFor(active) {
+    if (active === '#/chats') return { icon: svgIcon('chatsOn') };
+    if (!active.startsWith('#/u/') || !nativeShell()) return null;
+    const name = decodeURIComponent(active.slice(4));
+    if (name === Store.session()) return null;
+    const user = Store.user(name);
+    const src = user && user.avatar ? (sizedSrc(user.avatar, 96) || user.avatar) : '';
+    if (!src) return { icon: svgIcon('profileOn') };
+    if (hereFaces.has(src)) return { face: hereFaces.get(src) };
+    // decode(), not onload: iOS's WebKit draws a loaded but undecoded picture
+    // into a canvas as nothing (measured, 2026-11-05: a blank disc).
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = src;
+    img.decode().then(() => {
+      const px = NativeChrome.facePixels(img);
+      if (!px) return;
+      hereFaces.set(src, px);
+      if (location.hash.split('?')[0] === active) NativeChrome.setActive(active, { face: px });
+    }, () => {});
+    return { icon: svgIcon('profileOn') };
+  }
 
   // The nav's active marker is pure CSS (see .nav-pill .nav-link in the mobile
   // block), so navigation costs no layout read and no per-frame filter work.
@@ -728,10 +756,11 @@
     let live = false;      // the plugin answered; the native bars are up
     let asked = false;     // …and we only ever ask once
     let activeRoute = '';
+    let activeHere = null;   // what the folded bar wears where no tab is lit (hereFor)
     // What native was last TOLD, so a route change that moves nothing costs no
     // bridge traffic. Every one of these calls is a hop to the main thread and
     // back (see the haptics note above), and route() runs on every navigation.
-    const told = { route: null, chrome: null, fab: null };
+    const told = { route: null, here: null, chrome: null, fab: null };
 
     const call = (method, opts) =>
       window.Capacitor.nativePromise('TriaChrome', method, opts || {});
@@ -2229,7 +2258,7 @@
             });
         } catch { /* the bars are up but inert; better than no bars */ }
         watchToolbar();
-        told.route = told.chrome = told.fab = null;   // force the first push
+        told.route = told.here = told.chrome = told.fab = null;   // force the first push
         sync();
       }).catch(() => {
         // iOS 25 or older, or a plugin that isn't in the binary. Nothing to say
@@ -2255,9 +2284,11 @@
         && !document.body.classList.contains('postbar-live')
         && !document.body.classList.contains('welcome-live');
       const fab = !(nav && nav.classList.contains('nav--compose'));
-      if (activeRoute !== told.route) {
+      const here = activeHere ? (activeHere.face || activeHere.icon) : '';
+      if (activeRoute !== told.route || here !== told.here) {
         told.route = activeRoute;
-        call('selectTab', { route: activeRoute }).catch(() => {});
+        told.here = here;
+        call('selectTab', { route: activeRoute, here: activeHere || {} }).catch(() => {});
       }
       if (chrome !== told.chrome || fab !== told.fab) {
         told.chrome = chrome;
@@ -2354,8 +2385,9 @@
     // run on a signed-in route — so it is where the bars are asked for. Under
     // the gate renderNav never runs, which is why nothing native appears before
     // sign-in.
-    function setActive(route) {
+    function setActive(route, here) {
       activeRoute = route || '';
+      activeHere = here || null;
       start();
       sync();
     }
@@ -2405,7 +2437,10 @@
     // Signed out, the tabs' pictures are of someone else's world.
     const forgetPages = () => { if (live) call('pagerForget').catch(() => {}); };
 
-    return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
+    // A friend's face for the folded bar, sized for its bubble (hereFor).
+    const facePixels = (img) => avatarPixels(img, 84);
+
+    return { setActive, sync, repaint, setDots, captureMenu, presentMenu, facePixels,
              postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
              glowLight, forgetPages, live: isLive };
   })();

@@ -219,9 +219,16 @@ hours Chats was the tab and Updates the bell). `chatsBtnEl(from)`,
 `.toolbar-chats`, the chats glyph with its dot `.toolbar-dot` kept by
 `syncNavDot` and read natively by `dotInk`; the Updates tab's dot is
 `setDots({ '#/updates' })`, solid `bellOn` where you are. The tab Chats was
-opened from is lit on `#/chats` and every chat page (`chatsFrom`,
-`.nav-link--under`, `setActive`) and is where the Chats list's back chevron
-goes; the filter and New chat share its right. On desktop Chats is still a
+opened from (`chatsFrom`) is where the Chats list's back chevron goes; the
+filter and New chat share its right. **A page no tab names lights NO tab**
+(Zoe, same day): on `#/chats`, every chat page and a friend's profile the open
+bar is all outlines, and natively the FOLDED bar's one bubble wears the place,
+Chats' solid mark or the friend's own face (`hereFor`, `selectTab`'s `here`,
+pixels via `facePixels` after `img.decode()`, since an undecoded picture draws
+blank). No public API unselects a controller's bar, so the lit item lends its
+`selectedImage` (which the bubble draws) and `calmLens` sets the open capsule's
+lens, lit copy and cut-out to alpha 0, leaving its plain row (private view
+names, measured on 26.5; if they change, the tab you came from stays lit). On desktop Chats is still a
 sidebar row (`rail: true`, never a native tab, never swipeable).
 **Both My Circle and Discover lead with the sidebar's mark** (`sideBtnEl`,
 `.toolbar-side`); while Discover's search is open that mark is the back chevron

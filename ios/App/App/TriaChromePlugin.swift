@@ -253,7 +253,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                     pager.onGo = { [weak self] route, seq in
                         self?.notifyListeners("pagerGo", data: ["route": route, "seq": seq])
                     }
-                    pager.onSelect = { [weak self] route in self?.bar?.select(route: route) }
+                    pager.onSelect = { [weak self] route in self?.bar?.select(route: route, here: [:]) }
                     pager.onFade = { [weak self] fade in
                         (self?.toolbar as? TriaToolbar)?.setPageFade(fade)
                     }
@@ -276,8 +276,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
     /// as a route no tab matches — that is a legitimate state, not an error.
     @objc func selectTab(_ call: CAPPluginCall) {
         let route = call.getString("route") ?? ""
+        let here = call.getObject("here") ?? [:]
         DispatchQueue.main.async { [weak self] in
-            self?.bar?.select(route: route)
+            self?.bar?.select(route: route, here: here)
             call.resolve()
         }
     }
@@ -621,7 +622,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
 /// the note on `bar` above.
 protocol TriaChromeControl: AnyObject {
     func apply(tabs: [[String: Any]]?, fab: [String: Any]?)
-    func select(route: String)
+    func select(route: String, here: [String: Any])
     func setDots(_ map: [String: String])
     func setVisibility(chrome: Bool, fab: Bool)
     func reservedBottom() -> CGFloat
@@ -889,6 +890,13 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
     /// crosses to app.js and selects nothing.
     private var actions: Set<String> = []
     private var currentRoute = ""
+    private var currentHere: [String: Any] = [:]
+    /// Each tab's own solid drawing, kept so a page no tab names can lend the
+    /// lit item its picture and hand it back (`select`).
+    private var solids: [UIImage?] = []
+    /// The lens is stood down: a page no tab names lights none (`calmLens`).
+    private var lensDown = false
+    private var lensWatch: NSKeyValueObservation?
     private var tabTint: UIColor?
     private var dots: [String: UIColor] = [:]
     private var wantsChrome = true
@@ -911,7 +919,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         // ink, and a reader's accent replaces it in `apply`.
         controller.tabBar.tintColor = .label
         shell.tabBar = controller.tabBar
-        shell.onLayout = { [weak self] in self?.report() }
+        shell.onLayout = { [weak self] in self?.report(); self?.calmLens() }
 
         let centre = NotificationCenter.default
         centre.addObserver(self, selector: #selector(keyboardShown),
@@ -922,6 +930,11 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
 
     func install(in host: UIViewController, scroller: UIScrollView?) {
         self.scroller = scroller
+        // The bar folds and opens on this scroll, and may put its lens back as
+        // it does, so a stood-down lens is restated with it. Only while down.
+        lensWatch = scroller?.observe(\.contentOffset) { [weak self] _, _ in
+            if self?.lensDown == true { self?.calmLens() }
+        }
         shell.frame = host.view.bounds
         shell.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.addChild(controller)
@@ -939,6 +952,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
     func apply(tabs: [[String: Any]]?, fab fabSpec: [String: Any]?) {
         if let tabs {
             routes = tabs.compactMap { $0["route"] as? String }
+            solids = []
             actions = Set(tabs.compactMap { ($0["action"] as? Bool) == true ? $0["route"] as? String : nil })
             controller.setViewControllers(tabs.enumerated().map { index, tab in
                 let page = TriaTabPage()
@@ -954,6 +968,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
                 let solid = (tab["iconOn"] as? String).flatMap { $0.isEmpty ? nil :
                     TriaSVG.image(markup: $0, size: Metric.icon, ink: .black, template: true) }
                 let item = UITabBarItem(title: nil, image: image, selectedImage: solid ?? image)
+                solids.append(solid ?? image)
                 item.tag = index
                 item.accessibilityLabel = label
                 page.tabBarItem = item
@@ -967,7 +982,7 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
                 return page
             }, animated: false)
             paintDots()
-            select(route: currentRoute)
+            select(route: currentRoute, here: currentHere)
         }
         if let fabSpec {
             tabTint = Self.color(fromHex: fabSpec["tabTint"] as? String ?? "")
@@ -1025,15 +1040,73 @@ final class TriaChromeBar: NSObject, TriaChromeControl, UITabBarControllerDelega
         walk(controller.tabBar)
     }
 
-    /// Which destination is lit. A route no tab names (a friend's profile, a
-    /// post) leaves the last one lit, which is what a pushed page in any tab
-    /// bar app does — a `UITabBarController` has no "none selected" state, and
-    /// the place you came from is the honest answer to "where am I".
-    func select(route: String) {
+    /// Which destination is lit. A route no tab names (a post) leaves the last
+    /// one lit, which is what a pushed page in any tab bar app does: a
+    /// `UITabBarController` has no "none selected" state.
+    ///
+    /// `here` is the exception (Zoe, 2026-11-05): on Chats and a friend's
+    /// profile the OPEN bar lights nothing and the FOLDED bar's one bubble
+    /// wears the place, Chats' solid mark (`icon`) or the friend's face
+    /// (`face`, pixels). The bubble draws the selected item's `selectedImage`
+    /// and the open row its `image` (measured on 26.5), so the lit item lends
+    /// its solid out for the visit and `calmLens` hides the open bar's lens.
+    func select(route: String, here: [String: Any]) {
         currentRoute = route
-        guard let index = routes.firstIndex(of: route),
-              let pages = controller.viewControllers, index < pages.count else { return }
-        if controller.selectedIndex != index { controller.selectedIndex = index }
+        currentHere = here
+        let pages = controller.viewControllers ?? []
+        if let index = routes.firstIndex(of: route), index < pages.count,
+           controller.selectedIndex != index {
+            controller.selectedIndex = index
+        }
+        let wear = hereImage(here)
+        for (index, page) in pages.enumerated() where index < solids.count {
+            let image = wear != nil && index == controller.selectedIndex ? wear : solids[index]
+            if page.tabBarItem.selectedImage !== image { page.tabBarItem.selectedImage = image }
+        }
+        let down = wear != nil
+        if down != lensDown {
+            lensDown = down
+            calmLens(restore: !down)
+        }
+    }
+
+    private func hereImage(_ here: [String: Any]) -> UIImage? {
+        if let uri = here["face"] as? String, let comma = uri.firstIndex(of: ","),
+           let data = Data(base64Encoded: String(uri[uri.index(after: comma)...])),
+           let face = UIImage(data: data) {
+            // Already a disc (avatarPixels clips it); drawn to the glyphs' size,
+            // in its own colours rather than the bar's ink.
+            let side = Metric.icon + 2
+            return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+                face.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+            }.withRenderingMode(.alwaysOriginal)
+        }
+        if let icon = here["icon"] as? String, !icon.isEmpty {
+            return TriaSVG.image(markup: icon, size: Metric.icon, ink: .black, template: true)
+        }
+        return nil
+    }
+
+    /* THE OPEN BAR LIGHTS NOTHING. No public API unselects a controller's bar
+       (setting `tabBar.selectedItem` throws), so the lit drawing is put out
+       instead: the open capsule (`_UITabBarPlatterView`, the wide one; the
+       narrow one is the folded bubble) holds a plain row of every tab
+       (`…ContentView`), the lit copy over it, the liquid lens, and a cut-out
+       that clears the plain row under the lens. Everything but the plain row
+       goes to alpha 0, which leaves every tab in its outline. Measured on
+       26.5; should those names ever change, nothing matches and the tab you
+       came from stays lit, as it did before. */
+    private func calmLens(restore: Bool = false) {
+        guard lensDown || restore else { return }
+        for platter in controller.tabBar.subviews
+        where NSStringFromClass(type(of: platter)).hasSuffix("_UITabBarPlatterView")
+            && platter.bounds.width > platter.bounds.height * 2 {
+            for layer in platter.subviews {
+                let name = NSStringFromClass(type(of: layer))
+                let plain = name.hasSuffix("ContentView") && !name.hasSuffix("SelectedContentView")
+                layer.alpha = lensDown && !plain ? 0 : 1
+            }
+        }
     }
 
     /* A TAP CROSSES AS A ROUTE, and the system is allowed to move its lens first.
