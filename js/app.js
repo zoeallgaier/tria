@@ -7049,7 +7049,7 @@
   // step by syncNavDot like a tab's own dot. A tap remembers which tab it was
   // on, for the back chevron and the lit tab.
   let chatsFrom = '#/';
-  const CHATS_FROM = { '#/': 'My Circle', '#/discover': 'Discover' };
+  const CHATS_FROM = { '#/': 'My Circle', '#/discover': 'Discover', '#/updates': 'Updates' };
   function chatsBtnEl(from = '#/') {
     return `<a class="toolbar-btn toolbar-chats" href="#/chats" data-from="${from}" aria-label="Chats">` +
         svgIcon('chats') +
@@ -19262,6 +19262,8 @@
         // profile: the tabs you own read the same.
         leading: filterBtnEl('updates-filter-btn', notifFilter, 'Filter updates'),
         title: 'Updates',
+        // Chats on its right too (Zoe, 2026-11-05), as on My Circle and Discover.
+        actions: chatsBtnEl('#/updates'),
       });
       view.innerHTML =
         `<section class="view view--updates">` +
