@@ -167,13 +167,15 @@ one round face per person, their posts STACKED like stories** (Zoe, same day:
 "each persons moment posts stacking like instagram stories do", then "just
 someones pfp no matter how many posts", "circle everything", "just display name
 is fine"): `momentStacks`, a stack being their song for the week then their live
-Moments oldest first; the face (`.np-avatar`, 104px, between the old album art's 132 and
-a person card's 80) and the name, nothing under it. **Unseen glows**, a soft halo centred on
-the face in the POSTER's colour, not the reader's, drawn as a radial gradient
-(a blur filter was cropped to a box by WebKit inside the scrolling rail) and
-turned down once (Zoe: "too bright") (`glowFor`, `personTone`: a
-palette pick, the photo's sampled colour, Tria's ramp, ink for None; the person
-card's wash reads it too), seen ids kept per device (`tria:moments-seen:<me>`).
+Moments oldest first; the face (`.np-avatar`, 92px since 2026-11-06, Zoe: "a touch smaller", from
+104; with its ring it fills 104) and the name, nothing under it. **Unseen wears a solid
+ring** (Zoe, 2026-11-06, replacing a soft glow under the face): 3px of the
+POSTER's band, not the reader's, 3px off the face (`ringFor`, `.np-ring`, a
+masked donut): a pick's band, a photo's `bandFrom`, `--brand-band`, or
+`--mono-band` for None. Squircles and moment previews in place of faces were
+weighed and passed over: a row of squircle photos reads as app icons, a face is
+round everywhere else, and a preview leaves a text Moment second class. Seen
+ids are kept per device (`tria:moments-seen:<me>`).
 Order: you, the unseen, the rest, by newest. Your face wears a + for another
 Moment; with nothing up, your place is a round + saying **Share a moment**
 (`shareMoment`, the moment composer, Share a song only without

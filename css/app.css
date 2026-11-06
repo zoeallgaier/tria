@@ -5890,10 +5890,10 @@ button.poll-option:disabled { cursor: default; }
 
 /* ONE PLACE PER PERSON (2026-11-04): their song and Moments stacked, read in
    the viewer (openMoments), each their round face however many they have up
-   (Zoe). 104px, between the album art's 132 and a person card's 80 (Zoe: "a
-   bit bigger. between the album cover size and these"). The rail's own taps only open: the like
+   (Zoe). 92px (Zoe, 2026-11-06: "a touch smaller", from 104), so with its
+   ring it fills the 104 the bare face did. The rail's own taps only open: the like
    and the comment are the viewer's. */
-.np-item:is(.np-item--stack, .np-mine--empty) { width: 108px; align-items: center; text-align: center; }
+.np-item:is(.np-item--stack, .np-mine--empty) { width: 104px; align-items: center; text-align: center; }
 .np-item--stack .np-open { align-items: center; text-align: center; }
 .np-item:is(.np-item--stack, .np-mine--empty) :is(.np-song, .np-who) { max-width: 100%; }
 .np-item--stack { position: relative; isolation: isolate; cursor: pointer; }
@@ -5922,45 +5922,41 @@ button.poll-option:disabled { cursor: default; }
   user-select: none;
 }
 .np-art.np-avatar {
-  width: 104px;
-  height: 104px;
-  margin-inline: 2px;
+  width: 92px;
+  height: 92px;
+  /* Room for the ring: 3px of paper, then 3px of band. */
+  margin: 6px;
   border-radius: 50%;
-  font-size: 2.8rem;
+  font-size: 2.5rem;
 }
 .np-art.avatar { border: 0; background: var(--text); color: var(--bg); }
 .np-art.avatar--photo { background: none; }
-/* UNSEEN GLOWS, softly, underneath (Zoe: "a soft glow underneath the pfps
-   matching the users preference, person who posted not user viewing"): the
-   poster's colour (glowFor, personTone), blurred behind the face and centred
-   on it (Zoe), a soft halo rather than a drawn ring. Seen, it fades away. */
-.np-glow {
+/* UNSEEN WEARS A RING (Zoe, 2026-11-06: "a solid ring instead of a glow"), in
+   the POSTER's band, the gradient their solid things wear (ringFor), not the
+   reader's. A 3px ring a 3px gap off the face, the band masked to a donut.
+   Seen, it fades away. It replaced a soft radial glow under the face. */
+.np-ring {
   position: absolute;
-  top: -20px;
+  top: 0;
   left: 50%;
-  width: 144px;
-  height: 144px;
-  margin-left: -72px;
+  width: 104px;
+  height: 104px;
+  margin-left: -52px;
   z-index: 0;
   border-radius: 50%;
-  /* A gradient, not a blur: WebKit crops a filter at its layer's edge inside
-     the scrolling rail, which drew the glow as a hard box (Zoe). */
-  background: radial-gradient(closest-side,
-    color-mix(in srgb, var(--np-glow, transparent) 60%, transparent) 70%,
-    color-mix(in srgb, var(--np-glow, transparent) 20%, transparent) 84%,
-    transparent);
+  background: var(--np-ring, transparent);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
+  mask: radial-gradient(closest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   opacity: 0;
   transition: opacity 0.5s var(--ease-soft);
   pointer-events: none;
 }
-.np-item.is-unseen.has-tone .np-glow { opacity: 0.55; }
-/* The strip gives the glow room to spill, without moving the rail. */
-.np-strip { padding-block: 24px 14px; margin-block: -24px -14px; }
+.np-item.is-unseen.has-tone .np-ring { opacity: 1; }
 /* Your own face takes a + for another Moment, on its corner. */
 .np-add {
   position: absolute;
-  top: 74px;
-  left: 76px;
+  top: 68px;
+  left: 68px;
   z-index: 2;
   width: 30px;
   height: 30px;

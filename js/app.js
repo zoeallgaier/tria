@@ -2465,7 +2465,7 @@
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
   // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
   // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['np-avatar', 104], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56], ['notif-avatar', 44]];
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['np-avatar', 92], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56], ['notif-avatar', 44]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -7616,7 +7616,7 @@
       host.querySelectorAll('[data-np="add"]').forEach(b => b.addEventListener('click', shareMoment));
       host.querySelectorAll('.np-item--stack').forEach(item => {
         item.querySelector('.np-open').addEventListener('click', (e) => openMoments(item.dataset.who, e.currentTarget));
-        glowFor(item);
+        ringFor(item);
       });
       host.querySelector('.np-hint-x')?.addEventListener('click', dismissMomentHint);
     }
@@ -7633,16 +7633,23 @@
     }
   }
 
-  // The glow under an unseen stack is the poster's colour: their palette pick,
-  // their photo's, Tria's ramp, or ink for None (personTone).
-  function glowFor(item) {
-    personTone(Store.user(item.dataset.who)).then((tone) => {
+  // The ring round an unseen stack is the POSTER's band, the one their solid
+  // things wear (Zoe, 2026-11-06: "a solid ring instead of a glow"): a pick's
+  // band, a photo's (bandFrom, as paintBrandBand makes it), Tria's ramp, or
+  // --mono-band for None, which flips with the scheme in tokens.css.
+  function ringFor(item) {
+    const u = Store.user(item.dataset.who);
+    const wear = (band) => {
       if (!item.isConnected) return;
-      item.style.setProperty('--np-glow', tone === 'tria'
-        ? 'color-mix(in srgb, var(--brand-start), var(--brand-end))'
-        : tone === 'none' ? 'color-mix(in srgb, var(--text) 45%, transparent)' : tone);
+      item.style.setProperty('--np-ring', band);
       item.classList.add('has-tone');
-    });
+    };
+    if (!u || u.accent === 'none') return wear('var(--mono-band)');
+    const picked = u.accent !== 'default' && accentBand(u.accent);
+    if (picked) return wear(picked);
+    if (u.accent === 'default' || !u.avatar) return wear('var(--brand-band)');
+    photoTone(u).then(rgb => wear(rgb ? bandFrom(rgb) : 'var(--brand-band)'),
+      () => wear('var(--brand-band)'));
   }
 
   // The rail's + and the New sheet's Moment row: the composer in its moment
@@ -14361,7 +14368,7 @@
       return `<div class="np-item np-item--stack${s.mine ? ' np-mine' : ''}${s.unseen ? ' is-unseen' : ''}" ` +
           `data-who="${esc(s.u.username)}" data-posts="${esc(s.posts.map(p => String(p.id)).join(' '))}">` +
           `<button type="button" class="np-open" aria-label="${esc(`${who}’s moments${s.unseen ? ', new' : ''}`)}">` +
-            `<span class="np-glow" aria-hidden="true"></span>` +
+            `<span class="np-ring" aria-hidden="true"></span>` +
             avatarEl(s.u, { cls: 'np-art np-avatar' }) +
             `<span class="np-song">${esc(who)}</span>` +
           `</button>` +
@@ -22945,7 +22952,7 @@
   // A PERSON'S OWN COLOUR, read the way their profile's wash reads it: a
   // palette pick, else their photo's sampled colour, else 'tria' (the house
   // ramp, for someone who never picked or whose photo won't sample), or
-  // 'none'. A person card's wash, the Moments rail's glow and the viewer's
+  // 'none'. A person card's wash and the Moments viewer's
   // wash all wear it, so a person is one colour wherever they turn up.
   function personTone(u) {
     if (!u || u.accent === 'none') return Promise.resolve('none');
