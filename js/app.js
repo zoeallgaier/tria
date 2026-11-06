@@ -9542,7 +9542,7 @@
       if (!shown.length && isSelf && profileFilter === 'all') {
         const bare = !u.avatar && !u.bio;
         feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
-          `<p>Nothing posted yet. Whenever you’re ready.</p>` +
+          `<p>No posts yet. No rush.</p>` +
           `<a class="welcome-go publish-fill" href="#/publish">Write your first post</a>` +
           (bare ? `<a class="welcome-go pill-quiet" href="#/profile/edit">Add a photo and bio</a>` : '') +
         `</div>`;
