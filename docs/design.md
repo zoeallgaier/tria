@@ -189,8 +189,7 @@ area × radius × moving-frames:
   scrolls under it: the toolbar, nav pill, daily card. Re-samples
   every frame of every scroll, so it stays lean. The toolbar's own BUTTONS are
   the exception, and it's the "never glass on glass" rule: they sit on a bar
-  that already blurs, so they keep the fill, rim and edge and drop the sample —
-  and Discover's search field is one of them, not a chrome surface of its own.
+  that already blurs, so they keep the fill, rim and edge and drop the sample.
 - **panel** (`--glass-filter-panel`, 30px + `saturate(1.7)`) — over a page that's
   frozen behind it: modals, sheets, the mention popover, the lightbox. Samples
   once and holds, so it can afford the depth that actually reads as glass.
@@ -493,7 +492,9 @@ Six things about it are load-bearing:
   (which pays a third time in `.account`'s own padding). The bar is the air now.
   Same argument retired the 84px head on the desktop nav card, which was
   clearing a wordmark that is no longer drawn.
-- **Discover's search button BECOMES the field, and that costs a third node.**
+- **(History: Discover's search left the bar in 1.8 and became a page field
+  on 2026-11-06; `.toolbar-search-shell` is gone.)** Discover's search button
+  BECAME the field, and that cost a third node.
   One glass surface (`.toolbar-search-shell`) pinned by its right edge — exactly
   where the disc's right edge already sat — growing its **width** into the bar,
   with the button on top reduced to glyph and tap target (no fill, no rim, no

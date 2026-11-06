@@ -949,14 +949,6 @@ body.toolbar-live .view { padding-top: 1rem; }
   transition: filter var(--dur-quick) var(--ease), opacity var(--dur-quick) var(--ease);
 }
 .topbar--title-visible .toolbar-title { opacity: 1; filter: blur(0); }
-/* Searching takes the title fully out, by the same blur+fade it arrived on.
-   The pre-1.3 in-flow field only faded ITS title to 0.35, so it read through
-   the glass as depth — but that field opened directly over the title it was
-   dimming, and this one opens in the bar beside it. A ghost of a word
-   floating mid-field is just a smudge, and the placeholder already names the
-   control. Two classes rather than one rule with a fallback, so it outranks
-   .topbar--title-visible regardless of source order. */
-.topbar--title-visible.topbar--searching .toolbar-title { opacity: 0; filter: blur(6px); }
 /* AND READING DOWN TAKES IT OUT AGAIN, by the same blur and fade, on every page
    that doesn't hold its header (syncToolbarReading in app.js decides which; the
    class is only ever on when it is suppressed, so this rule never has to know
@@ -998,9 +990,7 @@ body.toolbar-live .view { padding-top: 1rem; }
    scroll position, and the doubled sample is paid only on a phone browser, only
    while the band happens to be up.
 
-   NOT ON .toolbar-search-shell, and that is a rendering fact rather than a
-   taste — the note on that rule has it. Nor on .toolbar-commit, which is opaque
-   (see below).
+   NOT ON .toolbar-commit, which is opaque (see below).
 
    The disc is --toolbar-btn (44px) and that IS the tap target: it meets the HIG
    floor by being drawn at it, with no invisible box around it. Which is the
@@ -1246,161 +1236,6 @@ body.toolbar-live .view { padding-top: 1rem; }
    the only measurement in the pair that isn't load-bearing. */
 @media (max-width: 360px) {
   .toolbar-cta { padding: 0 0.62rem; gap: 0.2rem; font-size: 0.86rem; }
-}
-
-/* Discover's search: ONE glass object that is a 44px disc at rest and the search
-   bar when open — the button BECOMES the field rather than riding on top of one.
-
-   It used to be two materials. A .toolbar-btn disc sat at z-index 2 with its own
-   fill, rim and lift, and a separate full-bar field wiped open underneath it from
-   a clip-path. That reads correctly for the first frame and wrong for every frame
-   after: what you end up looking at is a button sitting ON a bar, with the disc's
-   own rim drawing a hard circle a third of the way along the pill and two glass
-   surfaces stacked where the app's rule says there may only ever be one. The clip
-   was also load-bearing for the wrong reason — a clipped edge carries no border
-   and no inset rim, so a clip that stopped at the disc's own width would have
-   left three-quarters of a ring, which is why the disc had to be there to hide
-   the seam in the first place.
-
-   Now there is one surface, .toolbar-search-shell, pinned by its RIGHT edge —
-   exactly where the disc's right edge already was — animating its WIDTH, so it
-   grows leftward out of the control the finger is still resting on. The button
-   and the input are both passengers inside it.
-
-   THREE nodes and not two, which is the one thing here that isn't obvious. The
-   glass can't live on the <input> itself: a border-box width smaller than the
-   element's own padding floors the content at zero and lets the BORDER box grow
-   instead, so an input needing 3rem of right clearance for the glyph could never
-   measure 44px shut — it measured 66. The shell carries the material and the
-   width, the input carries the text and its padding, and the shell's overflow
-   clips the difference while it's narrow. */
-.toolbar-search { flex-shrink: 0; }
-/* Chrome off, deliberately: the shell beneath is the glass now, and a second
-   fill + rim + lift at the same 44px in the same place is "never glass on glass"
-   in its most literal form. What's left is a 44px hit target and the glyph, which
-   is all this button was ever doing. Geometry is untouched — box-sizing is
-   border-box, so dropping the 1px --glass-edge doesn't move the mark.
-
-   THE BACKDROP-FILTER IS PART OF THE CHROME BEING TURNED OFF, and it is the
-   line here that actually bites. .toolbar-btn carries its own blur now (see its
-   note), and this button is a .toolbar-btn that is transparent and sits INSIDE
-   .toolbar-search-shell, on top of the shell's glass. Inheriting the blur meant
-   a second sample of an already-blurred surface, taken inside that shell's
-   `overflow: hidden` — which renders as a hard square patch sitting over the
-   44px circle, not as a rounded disc. Every other .toolbar-btn is its own glass
-   object on the page and blurs correctly; this one is a glyph and a hit target
-   riding someone else's, so it takes no material of any kind. */
-.toolbar-search-btn {
-  z-index: 2;
-  background: none;
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-/* The two glyphs stack in one grid cell; opening cross-fades + quarter-turns
-   the magnifier into the X (and back), so the morph reads as one control. */
-.msb-ico {
-  grid-area: 1 / 1;
-  display: flex;
-  transition: opacity var(--dur-quick) var(--ease-soft), transform var(--dur-quick) var(--ease);
-}
-/* Restated rather than inherited, because these two live in a span rather than
-   directly in the button — and they have to stay in step with .toolbar-btn svg
-   or the search glyph is the one mark in the bar drawn at a different size. */
-.msb-ico svg { width: 24px; height: 24px; }
-.msb-ico--close { opacity: 0; transform: rotate(-90deg); }
-.topbar--searching .msb-ico--search { opacity: 0; transform: rotate(90deg); }
-.topbar--searching .msb-ico--close { opacity: 1; transform: rotate(0); }
-
-/* The shell: the disc, and the bar, and the only glass in the group. Positioned
-   against .topbar (the nearest positioned ancestor, being fixed) rather than its
-   own .toolbar-search wrapper, because the open width is a share of the BAR —
-   the same shortcut the old in-flow field used against .masthead-row.
-
-   Right edge only. The inset is the filter button plus the actions gap plus the
-   bar's own padding, which is precisely where the search disc's right edge sits,
-   so shut it lands exactly on the button and open it stops exactly short of the
-   filter — which therefore stays put and tappable throughout.
-
-   Glass-MINUS-blur, and the one control in the bar that stayed that way when
-   the discs beside it got their own backdrop-filter. This box is not a disc: it
-   is `overflow: hidden` with an absolutely-placed input inside it and a WIDTH
-   that animates, and a backdrop-filter on it renders its blurred patch as the
-   square border box rather than the pill — a hard bright rectangle sitting
-   where the 44px circle should be. It also blurs the field open and shut, which
-   is the one moving-frames bill this bar had managed to avoid. It takes
-   --glass-lift as well as the rim, because at rest it isn't "a field on the bar",
-   it's the disc, and the disc floats. */
-.toolbar-search-shell {
-  position: absolute;
-  left: auto;
-  right: calc(var(--toolbar-pad) + var(--toolbar-btn) + var(--toolbar-gap));
-  width: var(--toolbar-btn);          /* shut: the disc, to the pixel */
-  height: var(--toolbar-btn);
-  top: var(--toolbar-mid);
-  transform: translateY(-50%);
-  z-index: 1;
-  overflow: hidden;                   /* clips the input's overhang while narrow */
-  background: var(--glass-bg);
-  border: var(--glass-edge);
-  box-shadow: var(--glass-rim), var(--glass-lift);
-  border-radius: var(--radius-pill);  /* 999px, so at 44px wide it IS a circle */
-  /* Width, not clip-path (see above for why the clip had to go). One out-of-flow
-     box laying out for the length of a tap is not the cost this file refuses
-     elsewhere — that bill is area × radius × MOVING FRAMES, and nothing here
-     recurs. No opacity ramp either: shut, the input's content box computes to
-     zero width, so the placeholder has nowhere to render and is unrolled by the
-     growth itself rather than fading in behind it. */
-  transition: width var(--dur-move) var(--ease);
-}
-.topbar--searching .toolbar-search-shell {
-  width: calc(100% - 2 * var(--toolbar-pad) - var(--toolbar-btn) - var(--toolbar-gap));
-}
-/* Desktop's bar spans the whole content column, so opening to the full span came
-   out ~1000px wide — far past the grid it searches, and past the point where the
-   growth still reads as having come out of the button. A fixed open width keeps
-   the gesture legible; the right edge is pinned either way, so it still grows
-   leftward from the control. */
-@media (min-width: 681px) {
-  .topbar--searching .toolbar-search-shell { width: 420px; }
-}
-/* focus-WITHIN, not :focus: the ring belongs to the shell now and the thing that
-   takes focus is the input inside it. */
-.toolbar-search-shell:focus-within {
-  border-color: color-mix(in srgb, var(--text) 22%, transparent);
-}
-
-/* The input is text and nothing else — no fill, no border, no radius. It fills
-   the shell, so its left edge travels with the growth and the placeholder unrolls
-   out of the disc rather than appearing whole at the end. */
-.toolbar-search-field {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  font: inherit;
-  color: var(--text);
-  background: none;
-  border: 0;
-  border-radius: inherit;
-  padding: 0 3rem 0 1rem;             /* right pad clears the glyph riding over it */
-  pointer-events: none;
-}
-.topbar--searching .toolbar-search-field { pointer-events: auto; }
-.toolbar-search-field:focus { outline: none; }
-.toolbar-search-field::placeholder { color: var(--muted); opacity: 0.6; }
-/* Kill the browser's own clear "✕" — the morphing icon already closes + clears,
-   so a second X inside the field is redundant. */
-.toolbar-search-field::-webkit-search-cancel-button,
-.toolbar-search-field::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
-@media (prefers-reduced-motion: reduce) {
-  /* Nothing to substitute a fade for: the shell is present in both states and
-     only its width differs, so with the growth off it is simply the right size
-     on the frame the tap lands. */
-  .toolbar-search-shell { transition: none; }
-  .msb-ico { transition: opacity var(--dur-quick) ease; }
 }
 
 /* Status-bar legibility scrim — only an INSTALLED shell needs it (see the note
@@ -1801,50 +1636,24 @@ main {
 .view--people .masthead-title,
 .view--discover .masthead-title { padding-bottom: 0.6rem; }
 
-/* ── Discover's search, in the header (1.8) ───────────────────────────────────
-   Discover has no nameplate. The bar at the top holds one search field, always
-   open: no open, no close, no X (Zoe's calls). It is mounted in the bar's own
-   field slot (.toolbar-field, mountToolbar's `field`) and fills the row from
-   edge to edge of the content, where the cards below it start and stop.
-
-   IT GOES WITH THE HEADER. Reading down, the material leaves (.topbar--reading)
-   and the field leaves with it; scroll up and both come back. The one exception
-   is a field holding the caret, which stays put while you type, because a
-   field fading out from under your thumb mid-word is a bug however principled
-   the rule that did it. At the very top the material is absent (.topbar--bare)
-   and the field sits on the page with nothing behind it, which is where the
-   title used to be. */
-.toolbar-field[hidden] { display: none; }
-.toolbar-field {
-  flex: 1 1 auto;
-  min-width: 0;
-  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
+/* ── Discover's search, at the top of the page (2026-11-06) ─────────────────
+   Under the same bar every tab wears, as the page's first thing: one field,
+   always open, no X (Zoe's calls). It sat in the bar from 1.8 to 2026-11-06,
+   which made Discover's header the one that never matched. Here it scrolls
+   with the page and the filter's disc beside it is a page control, so it
+   carries the bar's own measurements itself. */
+.view--discover > .discover-search {
+  --toolbar-gap: 0.4rem;
+  --toolbar-btn: 44px;
+  margin: 0.25rem 0 0.95rem;
 }
-.topbar--reading .toolbar-field:not(:focus-within) {
-  opacity: 0;
-  transform: translateY(-6px);
-  pointer-events: none;
-}
-.topbar--edge-instant .toolbar-field { transition: none; }
-@media (prefers-reduced-motion: reduce) {
-  .toolbar-field { transition: opacity var(--dur-quick) var(--ease); }
-  .topbar--reading .toolbar-field:not(:focus-within) { transform: none; }
-}
-/* Discover's bell leads the row like My Circle's (2026-11-05; the + led it
-   from 2.0 and trails now), at its own width, and the field takes what is left. */
-body.toolbar-field .toolbar-page { flex: 0 0 auto; margin-right: var(--toolbar-gap); }
-/* And the Chats button trails it at the same gap, so the field sits evenly. */
-body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
-/* The page starts under the bar, with the gap the nameplate used to leave. */
-body.toolbar-field .view--discover { padding-top: 0.5rem; }
-/* On desktop the bar spans the window but the cards are one 660px column, so
-   the field stops where they do instead of running the window's width. */
 @media (min-width: 681px) {
-  .toolbar-field .discover-search { max-width: var(--feed-width); margin-inline: auto; }
+  .view--discover > .discover-search { max-width: var(--feed-width); margin-inline: auto; }
 }
 .discover-search { position: relative; display: flex; align-items: center; }
 .discover-search-ico {
   position: absolute;
+  z-index: 1;                       /* over the field, which comes after it */
   left: 0.95rem;
   top: 50%;
   transform: translateY(-50%);
@@ -1868,6 +1677,8 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   font: inherit;
   /* 16px, never less: iOS zooms the page into any field set smaller. */
   font-size: 1rem;
+  /* The placeholder is longer than a phone's field is wide. */
+  text-overflow: ellipsis;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -1883,8 +1694,8 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 
 /* ── The search's filter, in on the right (2026-10-25) ────────────────────────
    Zoe: while search is open, filter it by post type, the icon coming in on the
-   right. The disc is the other pages' filter (.masthead-filter, .toolbar-btn,
-   bare at the top like the + across from it) in a SLOT at the field's end. Shut,
+   right. The disc is the other pages' filter (.masthead-filter, .toolbar-btn)
+   in a SLOT at the field's end. Shut,
    the slot is no width and the field runs to the edge. Open (.is-open, syncOpen
    in app.js), the slot widens by a disc and a gap on the signature ease, so the
    field's end glides over as one move, and the disc rides in from the edge on
@@ -1905,9 +1716,9 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   width: calc(var(--toolbar-btn) + var(--toolbar-gap));
   pointer-events: auto;
 }
-/* Two classes and the bar, to outrank .masthead-filter's and .toolbar-btn's
-   own transitions and the bare rule's, and restating what they move. */
-.topbar .discover-filter-slot .masthead-filter {
+/* Three classes, to outrank .masthead-filter's and .toolbar-btn's own
+   transitions, and restating what they move. */
+.discover-search .discover-filter-slot .masthead-filter {
   isolation: isolate;               /* keeps the band's z-index:-1 inside the disc */
   opacity: 0;
   transform: translateX(calc(var(--toolbar-gap) + 14px)) scale(0.55);
@@ -1915,7 +1726,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
     color var(--dur-micro), background-color var(--dur-quick) var(--ease),
     border-color var(--dur-quick) var(--ease);
 }
-.topbar .discover-filter-slot.is-open .masthead-filter {
+.discover-search .discover-filter-slot.is-open .masthead-filter {
   opacity: 1;
   transform: none;
   transition: opacity var(--dur-quick) var(--ease) 0.04s, transform var(--dur-slow) var(--spring),
@@ -1929,9 +1740,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 .discover-filter-slot.is-open .masthead-filter-ico { filter: none; }
 /* A TYPE PICKED WEARS THE READER'S BAND, washed into the disc as a chosen
    .pill-quiet is (their colour, Tria's ramp or the neutral, at --pill-wash),
-   blooming from the middle on the spring. The other filters say "on" in ink
-   alone, which the bare bar at the top of a page can't show: a bare glyph is
-   already in ink. So this one keeps its hairline and glass even bare. */
+   blooming from the middle on the spring. */
 .discover-filter-slot .masthead-filter::before {
   content: '';
   position: absolute;
@@ -1943,7 +1752,7 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
   transform: scale(0.3);
   transition: opacity var(--dur-quick) var(--ease), transform var(--dur-move) var(--ease);
 }
-.topbar .discover-filter-slot .masthead-filter[data-active] {
+.discover-search .discover-filter-slot .masthead-filter[data-active] {
   color: var(--text);
   background: var(--glass-bg);
   border: var(--pill-edge);
@@ -1955,8 +1764,8 @@ body.toolbar-field .view--discover { padding-top: 0.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .discover-filter-slot { transition: none; }
-  .topbar .discover-filter-slot .masthead-filter,
-  .topbar .discover-filter-slot.is-open .masthead-filter { transform: none; transition: opacity var(--dur-quick) ease; }
+  .discover-search .discover-filter-slot .masthead-filter,
+  .discover-search .discover-filter-slot.is-open .masthead-filter { transform: none; transition: opacity var(--dur-quick) ease; }
   .discover-filter-slot .masthead-filter-ico { filter: none; transition: none; }
   .discover-filter-slot .masthead-filter::before { transform: none; }
 }
@@ -3643,9 +3452,9 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 }
 /* 44 of target under 26 of mark, without moving the mark. */
 .postbar-face::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; }
-/* The two marks share one grid cell and cross-fade with a quarter turn, the
-   same morph the toolbar's search disc uses (.msb-ico) — which is what makes
-   this read as one thing becoming another rather than as two things swapping. */
+/* The two marks share one grid cell and cross-fade with a quarter turn,
+   which is what makes this read as one thing becoming another rather than as
+   two things swapping. */
 .postbar-face > * {
   grid-area: 1 / 1;
   transition: opacity var(--dur-quick) var(--ease-soft),
@@ -11748,9 +11557,8 @@ html[data-chrome="native"] body.postbar-live main {
    there is exactly one of each control for VoiceOver to find and it is the
    native one; and the box keeps its space, which is what the bar needs — the
    title's --toolbar-side reserve is a count of the controls that ARE there,
-   Discover's search shell is pinned by an arithmetic that starts from the
-   filter disc's width, and app.js measures these boxes to tell native where to
-   put the glass. Dropping them from flow would take all three away at once.
+   and app.js measures these boxes to tell native where to put the glass.
+   Dropping them from flow would take both away at once.
 
    The controls are still the real ones underneath: a tap on the native glass
    comes back through the bridge and clicks the element this rule is hiding, so
@@ -11763,19 +11571,6 @@ html[data-chrome="native"] .topbar .toolbar-cta { visibility: hidden; }
    tapped would vanish under its own card. The web's copies show instead, under
    the card's scrim and dimmed with the page, exactly as on the web. */
 html[data-chrome="native"] body:has(.bar-menu-scrim) .topbar .toolbar-btn { visibility: visible; }
-/* DISCOVER'S FIELD IS NATIVE TOO (2026-11-05, TriaSearchField), so its bar is
-   the same Liquid Glass as My Circle's. The web input and its glyph stay in
-   the bar, invisible, as the model and the box measured (searchSpec). The
-   filter slot doesn't tween here: native reads the box on the frame the class
-   flips and glides the capsule itself, and the disc is a native control. */
-html[data-chrome="native"] .toolbar-field .discover-search-field,
-html[data-chrome="native"] .toolbar-field .discover-search-ico { visibility: hidden; }
-html[data-chrome="native"] .discover-filter-slot,
-html[data-chrome="native"] .topbar .discover-filter-slot .masthead-filter,
-html[data-chrome="native"] .topbar .discover-filter-slot.is-open .masthead-filter { transition: none; }
-html[data-chrome="native"] .topbar .discover-filter-slot .masthead-filter { transform: none; }
-html[data-chrome="native"] .topbar--reading .toolbar-field:not(:focus-within) { transform: none; }
-
 /* AND THE TITLE, for a reason the controls never had.
 
    This one was meant to stay. It is measured against the page's own <h1>
@@ -11848,53 +11643,6 @@ html[data-chrome="native"] .topbar::before { content: none; }
    paint, one object rather than two, and no `env()` arithmetic restated in a
    second place. */
 html[data-chrome="native"] .statusbar-scrim { display: none; }
-
-/* DISCOVER'S SEARCH GOES ALL THE WAY OVER, disc AND bar, and that is a change
-   of mind from the way stage 3 shipped it.
-
-   It used to be split. At rest the glass is the shell (.toolbar-search-btn is
-   deliberately chromeless — the disc you see IS the shell), so the shell gave
-   up its dress and native drew the disc; but OPEN, the shell has grown into a
-   search bar with the X riding ON it, and a glass disc of ours over a glass
-   shell of theirs is the one stack "never glass on glass" has never allowed. So
-   the whole control went back to the web for that state.
-
-   That fixed the stack by giving up the material, on the single control in this
-   app whose entire gesture IS glass stretching: you tapped real Liquid Glass and
-   watched it turn into a CSS impression of itself. Native draws both halves now
-   (TriaSearchField), with the X a bare mark on the capsule's own surface the way
-   the find bar's clear is on the comment pill — which fixes the stack instead of
-   dodging it.
-
-   So the shell is hidden here in BOTH states, and it is still measured in both:
-   visibility, not display, for the reason at the top of this section. It is the
-   ruler native lays its capsule against.
-
-   AND ITS WIDTH TRANSITION IS OFF, which is the load-bearing half. The web grows
-   the shell over --dur-move; native cannot follow that a frame at a time without
-   a resize per rAF and a stutter to show for it. With the transition off, the
-   box read on the frame the class flips is already the FINAL one, so app.js can
-   send the shut box and the open box together and let UIKit animate between them
-   on its own clock. Same argument as the .msb-ico rule below, and the same fix. */
-html[data-chrome="native"] .toolbar-search-shell {
-  visibility: hidden;
-  transition: none;
-}
-
-/* AND THE MORPH IS OFF ENTIRELY, for the shell's reason. The magnifier and the
-   X cross-fade over 0.24s on the web, and that fade is what makes the disc read
-   as one control turning into another — but this button is hidden in both
-   states now, so the whole quarter second is a mark nobody can see, and app.js
-   measures it on the very next frame to decide which glyph native should draw
-   (liveGlyph picks whichever mark is actually showing). It was reading a fade
-   that had barely started, so leaving search left an X on the native disc until
-   the next thing to touch the bar came along. Off, the class flip lands whole in
-   one style recalc and the frame after it is the truth.
-
-   The open capsule's X does not come through liveGlyph at all — searchSpec
-   names `.msb-ico--close` directly, because at that moment the mark is on a
-   control app.js has already stopped sending. */
-html[data-chrome="native"] .msb-ico { transition: none; }
 
 /* ── The comment bar (1.4) ───────────────────────────────────────────────────
    A post page's bottom chrome is drawn by UIKit as well now (TriaPostBar in the

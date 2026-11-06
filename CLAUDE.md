@@ -21,20 +21,21 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
-## Discover's bar is native glass (2026-11-05)
+## Discover's bar is every tab's bar (2026-11-06)
 
-**Discover's search field is a native `UITextField` in Liquid Glass
-(`TriaSearchField`, always open)** so its bar matches My Circle's (Zoe: "the
-glass needs to be consistent between circle and discover"). Until then the
-field was web, so `body.toolbar-field` sent the native toolbar off duty and CSS
-drew Discover's whole bar. Now that route is on duty like any other: the web
-input stays in the bar, invisible under the gate, as the model and the box
-(`searchSpec`); keystrokes come back as `searchText`, the caret as
-`searchFocus` (`NativeChrome.searchHasCaret`, read by `syncOpen`), and the page
-puts the caret down with `NativeChrome.blurSearch()`. The filter that slides in
-is a native disc (`CONTROL_SEL`'s `.discover-filter-slot.is-open`), washed when
-a type is picked; under native the slot doesn't tween and the capsule glides
-to the new box itself. The 1.8 notes below about a web field are history.
+**Discover's search is the first thing in the PAGE, not in the bar** (Zoe:
+"SIMPLIFY and make the headers CONSISTENT"). The bar is the one every tab
+wears, native in the app: the sidebar's mark (the back chevron while search is
+open), the centred title Discover, Chats. The field (`.discover-search`, at the
+top of `.view--discover`) is an ordinary web input, so its tap and keyboard are
+WebKit's own, and it scrolls away with the page; the filter disc slides in
+beside it as a page control. A drag on the page puts the keyboard down. Three
+versions put the field IN the bar and each made Discover's header the odd one
+out: CSS glass beside My Circle's native (1.8), a native `TriaSearchField`
+whose caret and keyboard were worse (2026-11-05), and a web field with the
+native material cut around it (2026-11-06, a few hours). All three are deleted:
+`mountToolbar` has no `field`, there is no `#toolbar-field` or
+`body.toolbar-field`. The 1.8 notes below about the field in the bar are history.
 
 ## A photo colour is pinned (2026-11-05)
 
@@ -941,16 +942,11 @@ web the phone nav simply drops its round +.
 **Updates left the chat list.** The Chats tab's dot is chats only; Updates has
 its own, on its own tab since 2026-11-01.
 
-**Discover has no title; its search field IS the header.** One web field,
-always open, no X (`mountToolbar({ field })`, `#toolbar-field`,
-`.discover-search`), at full content width. It leaves with the header on a read
-down and comes back on a scroll up, except while it holds the caret. On that one
-route the web draws the whole bar in every shell: `body.toolbar-field` sends the
-native toolbar off duty and re-enables the CSS material under the native gate,
-because native glass would blur a web field beneath it. Discover's filter dial
-is gone too, so it is always the gallery with every type
+**Discover had no title; its search field WAS the header** (until 2026-11-06,
+when the field moved into the page, see "Discover's bar is every tab's bar").
+Discover's filter dial is gone too, so it is always the gallery with every type
 (`discoverFilter`/`discoverView` are constants, a stored `tria:discoverView` is
-ignored). `TriaSearchField`/`searchSpec` have no caller now.
+ignored).
 
 **The top bar, cleaned up (2026-10-22).** No painted header: the native header
 is the system's bar material (`TriaToolbarMaterial`, `.systemChromeMaterial`,

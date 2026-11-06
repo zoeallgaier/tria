@@ -1072,13 +1072,9 @@
        controls went quiet and half didn't. */
     const overlaid = () => document.body.style.overflow === 'hidden';
 
-    // The last is Discover's search filter, at the field's end. It is sent
-    // shut too, as an idle control (see controlSpec's `hidden`), so native
-    // fades it in and out where it stands instead of popping it.
     const CONTROL_SEL =
       '#toolbar-page .toolbar-btn, #toolbar-page .toolbar-cta, ' +
-      '#toolbar-actions .toolbar-btn, #toolbar-actions .toolbar-cta, ' +
-      '#toolbar-field .discover-filter-slot .toolbar-btn';
+      '#toolbar-actions .toolbar-btn, #toolbar-actions .toolbar-cta';
     let mounted = {};         // key → the web element each native control stands for
     let toldBar = '';         // the last payload, so an unchanged bar costs nothing
     let lastControls = null;  // …and the last MEASURED one, for a bar that is off duty
@@ -1251,9 +1247,7 @@
       const rect = el.getBoundingClientRect();
       const styles = getComputedStyle(el);
       const cta = el.classList.contains('toolbar-cta');
-      // A picked search filter wears the band as a washed pill does.
-      const tinted = cta || el.classList.contains('toolbar-commit')
-        || el.matches('.discover-filter-slot .masthead-filter[data-active]');
+      const tinted = cta || el.classList.contains('toolbar-commit');
       const fill = tinted ? washFill(el) : { colors: [], tint: '' };
       // Only a tint sends its own ink; a wash and a bare control both take the
       // system's, which flips with the paper. See the ink note in fabSpec.
@@ -1281,12 +1275,10 @@
         // TriaToolbar.attachMenu) is still there and simply never asked.
         menu: false,
         // The editor's Save is mounted before it is earned and fades in on the
-        // keystroke that earns it, and Discover's filter is there while its
-        // slot is shut. Read from their own classes rather than from computed
-        // visibility, which the gate in app.css sets on every control in the
-        // bar and would therefore report every one of them as idle.
-        hidden: el.classList.contains('toolbar-commit--idle')
-          || !!el.closest('.discover-filter-slot:not(.is-open)'),
+        // keystroke that earns it. Read from its own class rather than from
+        // computed visibility, which the gate in app.css sets on every control
+        // in the bar and would therefore report every one of them as idle.
+        hidden: el.classList.contains('toolbar-commit--idle'),
         // The chats button's dot (chatsBtnEl), as a resolved colour, and empty for
         // none: the same one-payload shape setDots gives the tab bar's.
         dot: dotInk(el),
@@ -1330,58 +1322,6 @@
         size: parseFloat(styles.fontSize) || 16.8,
         ink: toRgb(styles.color) || '',
       };
-    }
-
-    /* ── DISCOVER'S FIELD STAYS WEB, AND THE MATERIAL STEPS AROUND IT ───────
-       (2026-11-06.) Native glass is above every web pixel, so the bar's
-       material would blur a web field under it. Until 2026-11-05 that sent the
-       whole bar to CSS on Discover; for one day the field was native instead
-       (TriaSearchField), and its caret and keyboard were worse than WebKit's
-       own (Zoe: "the tap is slow ... keyboard doesnt go down easily"). Now the
-       field is the web's and the rest of the bar is native like every tab's:
-       native cuts the field's pill out of its material (TriaToolbar's hole) and
-       the field carries its own blur in CSS (see the gate in app.css).
-
-       THE FIELD'S END GLIDES while the filter slot opens or shuts (its width,
-       on --dur-move), so a hole measured mid-move would be a hole in the wrong
-       place. While that tween runs, the spec says where the field's width began
-       and where it ends, the curve, and how far in the tween is, read off the
-       CSS transition itself, and native runs the same move on its own clock
-       rather than being chased a frame at a time. */
-    function holeSpec() {
-      const input = document.querySelector('#toolbar-field:not([hidden]) .discover-search-field');
-      if (!input) return null;
-      const box = input.getBoundingClientRect();
-      if (!box.width) return null;
-      const hole = {
-        x: box.left, y: box.top, w: box.width, h: box.height,
-        r: Math.min(box.height / 2, parseFloat(getComputedStyle(input).borderTopLeftRadius) || 0),
-      };
-      const slot = input.parentElement.querySelector('.discover-filter-slot');
-      const run = slot && slot.getAnimations ? slot.getAnimations()
-        .find(a => a.transitionProperty === 'width' && a.playState === 'running') : null;
-      if (run) {
-        // The input fills what the slot leaves, so its width at either end of
-        // the move is its width now plus the slot's change from here.
-        const frames = run.effect.getKeyframes();
-        const timing = run.effect.getComputedTiming();
-        const slotNow = slot.getBoundingClientRect().width;
-        const ends = [frames[0], frames[frames.length - 1]].map(f => parseFloat(f && f.width));
-        const ease = String(timing.easing || getComputedStyle(slot).transitionTimingFunction)
-          .match(/-?[\d.]+/g);
-        if (ends.every(Number.isFinite) && timing.duration > 0) {
-          hole.move = {
-            from: box.width + slotNow - ends[0],
-            to: box.width + slotNow - ends[1],
-            dur: timing.duration / 1000,
-            ease: ease && ease.length === 4 ? ease.map(Number) : [0.25, 0.1, 0.25, 1],
-          };
-          // How far in, sent beside the payload rather than in it: it changes on
-          // every push of the same move, and an unchanged bar sends nothing.
-          hole.into = (timing.localTime || 0) / 1000;
-        }
-      }
-      return hole;
     }
 
     /* THE WORDMARK'S BOX AND DRAWING (1.8). The drawing is icons/wordmark.svg,
@@ -1451,9 +1391,7 @@
       const gated = document.body.classList.contains('gate');
       // body.toolbar-live means "this bar is a page's own" — false under the
       // gate and in the frames between boot and the first route landing, both
-      // of which want no bar rather than an empty one. A route whose bar holds
-      // a web field (Discover) is on duty like any other: the material steps
-      // around the field (holeSpec).
+      // of which want no bar rather than an empty one.
       const onDuty = !!bar && !gated && !overlaid()
         && document.body.classList.contains('toolbar-live');
 
@@ -1500,16 +1438,10 @@
         title: titleSpec(bar),
         mark: onDuty ? markSpec() : null,
         controls,
-        // The web field native's material leaves clear. Null on every route
-        // but Discover.
-        hole: onDuty ? holeSpec() : null,
       };
-      const into = payload.hole ? payload.hole.into : undefined;
-      if (payload.hole) delete payload.hole.into;
       const signature = JSON.stringify(payload);
       if (signature === toldBar) return;
       toldBar = signature;
-      if (into !== undefined) payload.hole.into = into;
       call('setToolbar', { bar: payload }).catch(() => {});
     }
 
@@ -6514,9 +6446,7 @@
      an empty one with a material on it, which is what the class buys (see
      body.toolbar-live in app.css). */
   function resetToolbar() {
-    document.body.classList.remove('toolbar-live', 'toolbar-field');
-    const field = document.getElementById('toolbar-field');
-    if (field) { field.hidden = true; field.innerHTML = ''; }
+    document.body.classList.remove('toolbar-live');
     const mark = document.getElementById('toolbar-mark');
     if (mark) mark.hidden = true;
     const page = document.getElementById('toolbar-page');
@@ -6533,22 +6463,13 @@
   // own `actions` param) — `title` is plain text (textContent, not innerHTML),
   // since it's read back by AT-adjacent tooling less carefully than markup and
   // a page name is never anything but text anyway.
-  // `field` (1.8) is a page's own field IN the bar, filling the row between the
-  // two sides. Discover's search is the one caller. It is web in every shell;
-  // in the app the rest of the bar is native as on every route, and native
-  // glass is a layer above every web pixel, so the material leaves the field's
-  // pill clear (holeSpec) and the field brings its own blur (the gate at the
-  // end of app.css).
   // `mark` (1.8) centres the italic "tria" wordmark on the bar, where a title
   // would sit. My Circle is the one caller, the way Instagram's home feed wears
   // its logo, and it takes the place of that page's big nameplate.
-  function mountToolbar({ leading = '', title = '', actions = '', field = '', mark = false } = {}) {
+  function mountToolbar({ leading = '', title = '', actions = '', mark = false } = {}) {
     document.body.classList.add('toolbar-live');
     const markEl = document.getElementById('toolbar-mark');
     if (markEl) markEl.hidden = !mark;
-    document.body.classList.toggle('toolbar-field', !!field);
-    const fieldEl = document.getElementById('toolbar-field');
-    if (fieldEl) { fieldEl.hidden = !field; fieldEl.innerHTML = field; }
     const page = document.getElementById('toolbar-page');
     const titleEl = document.getElementById('toolbar-title');
     const actionsEl = document.getElementById('toolbar-actions');
@@ -17034,8 +16955,14 @@
         `</button>` +
       `</div>`;
 
-    /* SEARCH IS THE HEADER (1.8). One field, always open, coming and going with
-       the header itself. It is web in every shell (see mountToolbar's `field`).
+    /* SEARCH LEADS THE PAGE (2026-11-06). One web field at the top of the
+       page, under the same bar every tab wears (sidebar mark, the title,
+       Chats). It sat IN the bar from 1.8, which made Discover's header the
+       odd one out in every version tried: CSS glass beside My Circle's
+       native, then a native field whose keyboard was worse than WebKit's,
+       then a web field with the native material cut around it (Zoe:
+       "SIMPLIFY and make the headers CONSISTENT"). In the page it is an
+       ordinary field, so its tap and keyboard are WebKit's own.
        Empty is the whole page; typing turns it into results: people first, as
        compact rows, then posts, then circles (Zoe).
 
@@ -17063,16 +16990,15 @@
         `</span>` +
       `</div>`;
 
-    // My Circle's bar around a field (Zoe, 2026-11-05): the sidebar's mark
-    // leads, Chats trails, and the field takes the rest of the row.
     mountToolbar({
       leading: Store.isAuthed() ? sideBtnEl('discover-side-btn') : '',
-      field: searchBar,
+      title: 'Discover',
       actions: Store.isAuthed() ? chatsBtnEl('#/discover') : '',
     });
 
     view.innerHTML =
       `<section class="view view--discover">` +
+        searchBar +
         (Store.isAuthed() ? '' :
           `<p class="guest-note">You’re looking around signed out. ` +
             `<a class="about-more" href="#/join">Make an account</a> to join a circle.</p>`) +
@@ -17090,7 +17016,6 @@
     const squareEl = view.querySelector('#discover-square');
     const squareFeed = view.querySelector('#square-feed');
     const squareFoot = view.querySelector('#square-foot');
-    // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
     const leadBtn = document.getElementById('discover-side-btn');
     const filterBtn = document.getElementById('discover-filter-btn');
@@ -17492,7 +17417,7 @@
       });
     }
 
-    // Escape empties the bar, the one way out a keyboard reader has without an X.
+    // Escape empties the search, the one way out a keyboard reader has without an X.
     searchEl.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && (searchEl.value || discoverType !== 'all')) {
         discoverQuery = searchEl.value = '';

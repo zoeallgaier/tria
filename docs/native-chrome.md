@@ -1168,17 +1168,16 @@ value still in flight.
 
 ## Discover's search
 
-**Retired in 1.8 (2026-10-21).** Discover has no nameplate, and its search is
-an ordinary web input that IS the header: always open, no X, mounted in the
-bar's field slot (`mountToolbar({ field })`), leaving with the header on a read
-down. Zoe's calls. On that route the web draws the whole bar in every shell:
-`body.toolbar-field` puts the native toolbar off duty in `pushToolbar` and the
-gate's exception brings the CSS material back, because native glass is a layer
-above every web pixel and would blur the field. It doesn't sit on the keyboard,
-so it needs no native caret.
-`TriaSearchField` and `searchSpec` are still in the tree and receive
-`{live: false}` on every push, since the page has no `.toolbar-search-shell`
-any more. What follows is the history.
+**Out of the bar for good (2026-11-06).** Discover's bar is every tab's
+native bar (sidebar mark, title, Chats) and its search is an ordinary web
+input at the top of the page, so nothing here touches it. Each way of keeping
+a field IN the bar cost the bar its consistency: in 1.8 the web drew Discover's
+whole bar (`body.toolbar-field` sent native off duty, since native glass is a
+layer above every web pixel and would blur the field), on 2026-11-05 the field
+was a native `TriaSearchField` (consistent glass, worse caret and keyboard),
+and for a few hours on 2026-11-06 the native material had the field's pill cut
+out of its mask, with the filter slot's glide re-run natively off the CSS
+transition's timing. All of it is deleted. What follows is the older history.
 
 **Discover's search field went native second, and it is a change of mind.**
 
