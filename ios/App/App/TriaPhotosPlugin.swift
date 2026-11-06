@@ -149,6 +149,8 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
     /// on a 36pt disc, with 44pt for the finger (`TriaRollMore`). A tap says
     /// `rollMore`; app.js raises Take a photo and All photos.
     private let more = TriaRollMore()
+    /// The disc's flip has played: once per roll, and a roll is one composer visit.
+    private var hinted = false
 
     init(limit: Int, emit: @escaping (String, [String: Any]) -> Void) {
         self.emit = emit
@@ -227,6 +229,9 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         let fresh = now.filter { !picked.contains($0.0) }
         picked = ids
         gone.forEach { emit("rollUnpick", ["id": $0]) }
+        // The first photo picked this visit flips the disc to the frame and
+        // back, once, so it says the library is behind it too.
+        if !fresh.isEmpty && !hinted { hinted = true; more.hint() }
         for (id, provider) in fresh {
             TriaPhotoLoad.image(provider) { [weak self] result in
                 DispatchQueue.main.async {
@@ -243,10 +248,17 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
 }
 
 /// The roll's camera disc: a 36pt circle of blur with a dark tint and a white
-/// 20pt camera outline, its touch area reaching 44pt.
+/// 20pt camera outline, its touch area reaching 44pt. The glyph is its own
+/// image view (not the button's), so `hint()` can swap it with the system's
+/// symbol replace transition: camera, the frame, camera, about a second in all,
+/// and nothing under Reduce Motion. Only the glyph redraws, so it costs nothing.
 final class TriaRollMore: UIButton {
     static let side: CGFloat = 36
     private let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+    private let icon = UIImageView()
+    private static let weight = UIImage.SymbolConfiguration(pointSize: 15, weight: .regular)
+    private static let camera = UIImage(systemName: "camera", withConfiguration: weight)
+    private static let frame = UIImage(systemName: "photo", withConfiguration: weight)
 
     init() {
         super.init(frame: .zero)
@@ -256,11 +268,20 @@ final class TriaRollMore: UIButton {
         blur.layer.borderWidth = 0.5
         blur.layer.borderColor = UIColor.white.withAlphaComponent(0.25).cgColor
         insertSubview(blur, at: 0)
-        let glyph = UIImage(systemName: "camera",
-                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
-        setImage(glyph, for: .normal)
-        tintColor = .white
-        adjustsImageWhenHighlighted = false
+        icon.image = Self.camera
+        icon.tintColor = .white
+        icon.contentMode = .center
+        icon.isUserInteractionEnabled = false
+        addSubview(icon)
+    }
+
+    func hint() {
+        guard #available(iOS 17.0, *), !UIAccessibility.isReduceMotionEnabled,
+              let frame = Self.frame, let camera = Self.camera else { return }
+        icon.setSymbolImage(frame, contentTransition: .replace.downUp)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
+            self?.icon.setSymbolImage(camera, contentTransition: .replace.downUp)
+        }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been used") }
 
@@ -268,7 +289,7 @@ final class TriaRollMore: UIButton {
         super.layoutSubviews()
         blur.frame = bounds
         blur.layer.cornerRadius = bounds.height / 2
-        if let img = imageView { bringSubviewToFront(img) }
+        icon.frame = bounds
     }
 
     override var isHighlighted: Bool {
