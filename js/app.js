@@ -22666,17 +22666,18 @@
   }
 
   /* A PHOTO COLOUR IS PINNED (Zoe, 2026-11-05: "my pfp color keeps changing,
-     make sure it picks one and stays"). A sample is an average of a decoded,
-     resized picture, and the decode differs by device, by the renderer's copy
-     versus the original, and by this device's own crop just after an upload;
-     on a photo with little colour in it, a few levels of drift swing the hue
-     right round. So the FIRST answer for a face is kept: per device in
-     `tria:tone:<hash>`, and for your own face in your row, as
-     `users.accent = 'p:<hex>:<hash>'`, so every device and every reader wears
-     the one you got. The hash is of the avatar URL, so a new photo (from any
-     build, even one that never heard of this) simply fails to match and is
-     sampled and pinned afresh. An older build reads the pin as an unknown slug,
-     which it already treats as "sample the photo". */
+     make sure it picks one and stays"). A sample was an average of a 14px
+     redraw of whichever copy loaded (the renderer's, the original, or this
+     device's own crop just after an upload), and on a photo with little
+     colour in it a few levels of drift swung the hue right round. So:
+     - THE SAME PIXELS: always the stored original, drawn at one fixed size
+       (FACE_N) and averaged here, never by the browser's 14px downscale.
+     - THE FIRST ANSWER KEPT: per device in `tria:tone:<hash of the URL>`, so
+       a face is one colour on this phone for good; a new photo is a new hash.
+     NOTHING IS WRITTEN TO users.accent. For one evening the pin lived there
+     as 'p:<hex>:<hash>', and older binaries lit their nav in Tria's colours
+     over it (Zoe), so any such value is read as Photo, its hex seeded into
+     this device's keep, and written back to null (photo) to heal the row. */
   const PHOTO_PIN = /^p:([0-9a-f]{6}):([0-9a-z]+)$/i;
   const isPhotoAccent = (a) => !a || PHOTO_PIN.test(a);
   const faceHash = (url) => {
@@ -22686,31 +22687,70 @@
     return h.toString(36);
   };
   const toneHex = (c) => [c.r, c.g, c.b].map(v => v.toString(16).padStart(2, '0')).join('');
-  const tonePinning = new Set();
+  let pinHealed = false;
+  function healPin() {
+    const me = Store.isAuthed() ? Store.currentUser() : null;
+    if (pinHealed || !me || !PHOTO_PIN.test(me.accent || '')) return;
+    pinHealed = true;
+    const m = PHOTO_PIN.exec(me.accent);
+    if (m[2] === faceHash(me.avatar)) { try { localStorage.setItem('tria:tone:' + m[2], m[1].toLowerCase()); } catch {} }
+    Promise.resolve(Store.updateAccent(null)).catch(() => {});
+  }
+  const FACE_N = 64;
+  const faceCache = new Map();
+  function sampleFace(url) {
+    const src = fullSrc(url);
+    if (faceCache.has(src)) return faceCache.get(src);
+    const job = new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.decoding = 'async';
+      img.onload = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = FACE_N;
+          const ctx = cv.getContext('2d', { willReadFrequently: true });
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, FACE_N, FACE_N);
+          const d = ctx.getImageData(0, 0, FACE_N, FACE_N).data;
+          let R = 0, G = 0, B = 0, W = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const r = d[i], g = d[i + 1], b = d[i + 2];
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            const sat = mx ? (mx - mn) / mx : 0;
+            const w = sat * sat + 0.05;
+            R += r * w; G += g * w; B += b * w; W += w;
+          }
+          resolve(glowNorm(R / W, G / W, B / W, 1.75));
+        } catch { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+    faceCache.set(src, job);
+    return job;
+  }
   function photoTone(u) {
+    healPin();
     if (!u || !u.avatar) return Promise.resolve(null);
     const h = faceHash(u.avatar);
-    const m = PHOTO_PIN.exec(u.accent || '');
-    if (m && m[2] === h) return Promise.resolve(cssToRgb('#' + m[1]));
     const KEY = 'tria:tone:' + h;
     let kept = null;
     try { kept = localStorage.getItem(KEY); } catch {}
-    const pin = (rgb) => {
-      const me = Store.isAuthed() ? Store.currentUser() : null;
-      if (!rgb || !me || me.id !== u.id || me.avatar !== u.avatar) return;
-      if (!isPhotoAccent(me.accent) || tonePinning.has(h)) return;
-      tonePinning.add(h);
-      Promise.resolve(Store.updateAccent(`p:${toneHex(rgb)}:${h}`)).catch(() => {});
-    };
-    if (kept && /^[0-9a-f]{6}$/i.test(kept)) {
-      const rgb = cssToRgb('#' + kept);
-      pin(rgb);
-      return Promise.resolve(rgb);
+    if (!kept) {
+      const m = PHOTO_PIN.exec(u.accent || '');
+      if (m && m[2] === h) kept = m[1];
     }
-    return sampleColor(sizedSrc(u.avatar, 40)).then((rgb) => {
-      if (rgb) { try { localStorage.setItem(KEY, toneHex(rgb)); } catch {} pin(rgb); }
-      return rgb;
-    }, () => null);
+    if (kept && /^[0-9a-f]{6}$/i.test(kept)) return Promise.resolve(cssToRgb('#' + kept));
+    // The original first; a refusal (CORS, a gone file) falls back to the old
+    // sized sample so the colour never goes missing.
+    return sampleFace(u.avatar)
+      .then(rgb => rgb || sampleColor(sizedSrc(u.avatar, 40)))
+      .then((rgb) => {
+        if (rgb) { try { localStorage.setItem(KEY, toneHex(rgb)); } catch {} }
+        return rgb;
+      }, () => null);
   }
 
   /* ── Your colour on the buttons ──────────────────────────────────────────────

@@ -24,11 +24,13 @@ The same files also serve a website; that is a byproduct, not a target. See
 ## A photo colour is pinned (2026-11-05)
 
 **The first sample of a face is kept** (Zoe: "my pfp color keeps changing"):
-`photoTone` is the one way to a photo's colour. Your own is written to your row
-as `users.accent = 'p:<hex>:<hash of the avatar URL>'` (`PHOTO_PIN`,
-`isPhotoAccent`: null or a pin both mean Photo), every face per device in
-`tria:tone:<hash>`. A new photo fails the hash and is pinned afresh; an older
-build reads the pin as an unknown slug, which it samples. The native lit tab
+`photoTone` is the one way to a photo's colour: the stored ORIGINAL drawn at
+64px and averaged in JS (`sampleFace`), kept per device in `tria:tone:<hash of
+the avatar URL>`. **Never write anything but a key, 'default', 'none' or null to
+`users.accent`**: for one evening the pin lived there as `'p:<hex>:<hash>'`
+and older binaries lit their nav in Tria's colours over it. `healPin` seeds
+this device from any such value and writes null back; `PHOTO_PIN` and
+`isPhotoAccent` still read one as Photo. The native lit tab
 wears `--heart` for every colour, as the web's does (a photo sent its paler
 band stop).
 
