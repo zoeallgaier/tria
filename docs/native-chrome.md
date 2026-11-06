@@ -1168,16 +1168,20 @@ value still in flight.
 
 ## Discover's search
 
-**Out of the bar for good (2026-11-06).** Discover's bar is every tab's
-native bar (sidebar mark, title, Chats) and its search is an ordinary web
-input at the top of the page, so nothing here touches it. Each way of keeping
-a field IN the bar cost the bar its consistency: in 1.8 the web drew Discover's
-whole bar (`body.toolbar-field` sent native off duty, since native glass is a
-layer above every web pixel and would blur the field), on 2026-11-05 the field
-was a native `TriaSearchField` (consistent glass, worse caret and keyboard),
-and for a few hours on 2026-11-06 the native material had the field's pill cut
-out of its mask, with the filter slot's glide re-run natively off the CSS
-transition's timing. All of it is deleted. What follows is the older history.
+**Native, in the bar, for good (2026-11-06, the evening).** Discover's bar is
+the sidebar's mark, a native `TriaSearchField` and Chats, the field in the
+bar's own glass container, so the header is My Circle's glass. Native glass is
+a layer above every web pixel, so a field in a native bar is native or it is
+blurred; every other answer cost the bar its consistency (1.8: the web drew
+Discover's whole bar; a few hours on 2026-11-06: the material cut around a web
+field, with the filter slot's glide re-run natively; another few: the field at
+the top of the page, where it scrolled away). The web input stays as the model
+and the box (`searchSpec`). **The filter left the field's end** for a chip row
+in the page, so the box never moves and native only ever sets a frame. The two
+faults of the 2026-11-05 field are fixed in the class: the page tap that put
+the keys away no longer swallows the touch (a result is one tap), the scroll
+view's `keyboardDismissMode` is `.onDrag` while it holds the caret, and a tap
+anywhere on the capsule takes the caret. What follows is the older history.
 
 **Discover's search field went native second, and it is a change of mind.**
 

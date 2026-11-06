@@ -1324,6 +1324,48 @@
       };
     }
 
+    /* ── DISCOVER'S SEARCH, IN THE HEADER (2026-11-06) ──────────────────────
+       Native draws it (TriaSearchField), so Discover's bar is the same Liquid
+       Glass as every tab's: native glass is above every web pixel, so a web
+       field in a native bar was either blurred, or cost Discover a CSS bar of
+       its own, or the material cut around it. The web input stays in the bar,
+       invisible under the gate, as the model and the box measured here. Its
+       box never moves on its own (the filter is in the page), so this is one
+       rect. `blur` is a count the page bumps to put the caret down. */
+    let searchBlurSeq = 0;
+    let searchCaret = false;
+    const searchHooks = {};
+    function searchSpec() {
+      const input = document.querySelector('#toolbar-field:not([hidden]) #discover-search');
+      if (!input) return { live: false };
+      const box = input.getBoundingClientRect();
+      if (!box.width) return { live: false };
+      const cs = getComputedStyle(input);
+      const ico = input.parentElement.querySelector('.discover-search-ico');
+      const icoBox = ico ? ico.getBoundingClientRect() : null;
+      const svg = ico && ico.querySelector('svg');
+      return {
+        live: true,
+        x: box.left, y: box.top, w: box.width, h: box.height,
+        fieldLeft: parseFloat(cs.paddingLeft) || 0,
+        fieldRight: parseFloat(cs.paddingRight) || 0,
+        glyph: svg ? svg.outerHTML : '',
+        glyphSize: icoBox ? icoBox.width : 20,
+        glyphX: icoBox ? icoBox.left + icoBox.width / 2 - box.left : 25,
+        text: input.value,
+        placeholder: input.getAttribute('placeholder') || '',
+        label: input.getAttribute('aria-label') || '',
+        ink: toRgb(cs.color) || '',
+        caret: toRgb(cs.caretColor) || toRgb(cs.color) || '',
+        muted: cssColour('var(--muted)'),
+        blur: searchBlurSeq,
+      };
+    }
+    // The page's two questions of the native field: put the caret down, and
+    // does it hold one.
+    function blurSearch() { if (!live) return; searchBlurSeq += 1; scheduleToolbar(); }
+    const searchHasCaret = () => live && searchCaret;
+
     /* THE WORDMARK'S BOX AND DRAWING (1.8). The drawing is icons/wordmark.svg,
        fetched once (it is in the bundle, so this is a local read) and handed
        over as markup like every glyph on this bridge; native draws it as a
@@ -1438,6 +1480,8 @@
         title: titleSpec(bar),
         mark: onDuty ? markSpec() : null,
         controls,
+        // Discover's field, and `live: false` on every other route.
+        search: onDuty ? searchSpec() : { live: false },
       };
       const signature = JSON.stringify(payload);
       if (signature === toldBar) return;
@@ -2104,6 +2148,16 @@
             { eventName: 'toolbarPick' }, (ev) => { if (ev) pickMenu(ev.id, ev.index); });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'menuPick' }, (ev) => { if (ev) pickAnchored(ev.token, ev.index); });
+          // Discover's search field: a keystroke, and the caret coming or going.
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'searchText' }, (ev) => {
+              if (searchHooks.text) searchHooks.text((ev && ev.text) || '');
+            });
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'searchFocus' }, (ev) => {
+              searchCaret = !!(ev && ev.focused);
+              if (searchHooks.focus) searchHooks.focus(searchCaret);
+            });
           // The comment bar's five. Each one hands the fact straight to the web
           // half that already owns it — the textarea, the form, the pane walk —
           // and none of them decides anything here.
@@ -2332,7 +2386,7 @@
     const forgetPages = () => { if (live) call('pagerForget').catch(() => {}); };
 
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
-             postBarText, postBarHooks, pickPhoto,
+             postBarText, postBarHooks, pickPhoto, searchHooks, blurSearch, searchHasCaret,
              glowLight, forgetPages, live: isLive };
   })();
 
@@ -6450,7 +6504,13 @@
      an empty one with a material on it, which is what the class buys (see
      body.toolbar-live in app.css). */
   function resetToolbar() {
-    document.body.classList.remove('toolbar-live');
+    document.body.classList.remove('toolbar-live', 'toolbar-field');
+    const field = document.getElementById('toolbar-field');
+    if (field) { field.hidden = true; field.innerHTML = ''; }
+    // The native field's keystrokes are this route's; a search that is leaving
+    // can't type into the next one.
+    delete NativeChrome.searchHooks.text;
+    delete NativeChrome.searchHooks.focus;
     const mark = document.getElementById('toolbar-mark');
     if (mark) mark.hidden = true;
     const page = document.getElementById('toolbar-page');
@@ -6470,10 +6530,17 @@
   // `mark` (1.8) centres the italic "tria" wordmark on the bar, where a title
   // would sit. My Circle is the one caller, the way Instagram's home feed wears
   // its logo, and it takes the place of that page's big nameplate.
-  function mountToolbar({ leading = '', title = '', actions = '', mark = false } = {}) {
+  // `field` is a page's own field IN the bar, filling the row between the two
+  // sides, where a title would sit. Discover's search is the one caller. On the
+  // web it is the field; in the app it is the model and the ruler, and native
+  // draws it (searchSpec, TriaSearchField).
+  function mountToolbar({ leading = '', title = '', actions = '', field = '', mark = false } = {}) {
     document.body.classList.add('toolbar-live');
     const markEl = document.getElementById('toolbar-mark');
     if (markEl) markEl.hidden = !mark;
+    document.body.classList.toggle('toolbar-field', !!field);
+    const fieldEl = document.getElementById('toolbar-field');
+    if (fieldEl) { fieldEl.hidden = !field; fieldEl.innerHTML = field; }
     const page = document.getElementById('toolbar-page');
     const titleEl = document.getElementById('toolbar-title');
     const actionsEl = document.getElementById('toolbar-actions');
@@ -16959,50 +17026,43 @@
         `</button>` +
       `</div>`;
 
-    /* SEARCH LEADS THE PAGE (2026-11-06). One web field at the top of the
-       page, under the same bar every tab wears (sidebar mark, the title,
-       Chats). It sat IN the bar from 1.8, which made Discover's header the
-       odd one out in every version tried: CSS glass beside My Circle's
-       native, then a native field whose keyboard was worse than WebKit's,
-       then a web field with the native material cut around it (Zoe:
-       "SIMPLIFY and make the headers CONSISTENT"). In the page it is an
-       ordinary field, so its tap and keyboard are WebKit's own.
+    /* SEARCH IS THE HEADER (Zoe, 2026-11-06: "I want the search to still
+       always be available in the header"). The bar is the sidebar's mark, the
+       field and Chats, and it comes and goes with the header like every tab's.
+       In the app native draws the field (TriaSearchField) in the bar's own
+       glass; on the web it is this input (mountToolbar's `field`). For a few
+       hours on 2026-11-06 the field sat at the top of the page instead, and it
+       scrolled away.
        Empty is the whole page; typing turns it into results: people first, as
        compact rows, then posts, then circles (Zoe).
 
-       WHILE IT IS OPEN A FILTER COMES IN ON ITS RIGHT (Zoe, 2026-10-25), the
-       sliders disc the other pages wear, in the field's own row: its slot opens
-       and the field's end eases over to make room (.discover-filter-slot). It
-       narrows the search to People or one post type, leaving out the rest, and
-       with nothing typed it is everyone, or every post of that type you can
-       read. A song is never searched, so Music isn't offered. */
+       UNDER THE HEADER, THE CHIPS (Zoe, same day: "filters below the
+       search/header with trending tags"): the filter, then the room's
+       trending tags (paintChips). The filter narrows the search to People or
+       one post type, and with nothing typed it is everyone, or every post of
+       that type you can read; a song is never searched, so Music isn't
+       offered. A tag runs as a search for its word. */
     const typeFilters = [FILTERS[0], { key: 'people', label: 'People', ico: 'friends' },
       ...FILTERS.slice(1).filter(f => f.key !== 'song')];
-    const placeholderFor = (type) => type === 'all' ? 'Search people, posts and circles'
+    const placeholderFor = (type) => type === 'all' ? 'Search Tria'
       : `Search ${type === 'people' ? 'people' : TYPE_PLURAL[type]}`;
-    const openAtMount = !!discoverQuery.trim() || discoverType !== 'all';
     const searchBar =
       `<div class="discover-search" role="search">` +
         `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
         `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
           `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
-          `placeholder="${esc(placeholderFor(discoverType))}" aria-label="Search Tria">` +
-        // Open from the first frame when a search is already standing, so a
-        // re-render doesn't play the arrival again.
-        `<span class="discover-filter-slot${openAtMount ? ' is-open' : ''}">` +
-          filterBtnEl('discover-filter-btn', discoverType, 'Filter the search') +
-        `</span>` +
+          `placeholder="${esc(placeholderFor(discoverType))}" aria-label="Search people, posts and circles">` +
       `</div>`;
 
     mountToolbar({
       leading: Store.isAuthed() ? sideBtnEl('discover-side-btn') : '',
-      title: 'Discover',
+      field: searchBar,
       actions: Store.isAuthed() ? chatsBtnEl('#/discover') : '',
     });
 
     view.innerHTML =
       `<section class="view view--discover">` +
-        searchBar +
+        `<nav class="discover-chips" id="discover-chips" aria-label="Filter and trending tags"></nav>` +
         (Store.isAuthed() ? '' :
           `<p class="guest-note">You’re looking around signed out. ` +
             `<a class="about-more" href="#/join">Make an account</a> to join a circle.</p>`) +
@@ -17020,32 +17080,24 @@
     const squareEl = view.querySelector('#discover-square');
     const squareFeed = view.querySelector('#square-feed');
     const squareFoot = view.querySelector('#square-foot');
+    const chipsEl = view.querySelector('#discover-chips');
+    // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
     const leadBtn = document.getElementById('discover-side-btn');
-    const filterBtn = document.getElementById('discover-filter-btn');
 
-    /* WHILE SEARCH IS OPEN THE LEADING MARK IS A WAY BACK (Zoe; the + was,
-       while it led, until 2026-11-05, and the sidebar's mark is now). Open is
-       the field holding the caret or a query, or a type picked, or the filter
-       in hand (its sheet up, or the focus handed back to it as the sheet
-       closes): the mark turns into the back chevron and the filter slides in,
-       and pressing the chevron empties the field and the filter, drops the
-       keyboard and puts the mark back.
-       Both buttons swallow their mousedown so the tap doesn't blur the field
-       first, which would close the search under the finger. */
+    /* WHILE SEARCH IS OPEN THE LEADING MARK IS A WAY BACK (Zoe). Open is the
+       field holding the caret or a query, a type picked, or the filter's sheet
+       up: the sidebar's mark turns into the back chevron, and pressing it
+       empties the words and the filter, drops the keyboard and puts the mark
+       back. The chevron swallows its mousedown so the tap doesn't blur the
+       field first, which would close the search under the finger. */
     let searchOpen = null;
     const syncOpen = () => {
-      const open = document.activeElement === searchEl || document.activeElement === filterBtn
-        || filterBtn?.getAttribute('aria-expanded') === 'true'
+      const open = document.activeElement === searchEl || NativeChrome.searchHasCaret()
         || !!discoverQuery.trim() || discoverType !== 'all';
       if (open === searchOpen) return;
       searchOpen = open;
       holdHeader(open);
-      if (filterBtn) {
-        filterBtn.parentElement.classList.toggle('is-open', open);
-        filterBtn.tabIndex = open ? 0 : -1;
-        filterBtn.setAttribute('aria-hidden', String(!open));
-      }
       if (!leadBtn) return;
       leadBtn.innerHTML = open ? svgIcon('chevron', 'toolbar-back-ico') : svgIcon('sidebar');
       leadBtn.setAttribute('aria-label', open ? 'Close search' : 'Your circles and people');
@@ -17054,16 +17106,32 @@
       // The face changed under native's copy of it.
       NativeChrome.sync();
     };
+    // The words, set from the page (a tag, the chevron): the native field is
+    // told on the next push, since a value is no attribute an observer sees.
+    /* A TAG IS ASKED FOR ITS POSTS (Zoe, 2026-11-06: "when tapping a tag lets
+       bring up posts instead of people, but search results show people
+       first"). The word a tag put in the field reads as that tag: the posts
+       wearing it, no people and no circles. Typing anything makes it a search
+       again. */
+    let tagQuery = null;
+    const setQuery = (text, tag = null) => {
+      tagQuery = tag;
+      discoverQuery = searchEl.value = text;
+      NativeChrome.sync();
+    };
     const setType = (key) => {
       discoverType = key;
-      syncFilterBtn('discover-filter-btn', key);
       searchEl.placeholder = placeholderFor(key);
+    };
+    const dropCaret = () => {
+      if (document.activeElement === searchEl) searchEl.blur();
+      NativeChrome.blurSearch();
     };
     // Empties the bar: the words, the type and the caret.
     const closeSearch = () => {
-      discoverQuery = searchEl.value = '';
+      setQuery('');
       setType('all');
-      if (document.activeElement === searchEl || document.activeElement === filterBtn) document.activeElement.blur();
+      dropCaret();
       paintNow();
       syncOpen();
     };
@@ -17072,26 +17140,103 @@
       if (!searchOpen) { openFeedSide(); return; }
       closeSearch();
     });
-    filterBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
-    filterBtn?.addEventListener('click', (e) => {
-      openFilterDial(e.currentTarget, {
-        current: discoverType,
-        filters: typeFilters,
-        label: 'Filter the search',
-        onPick: (key) => {
-          if (key === discoverType) return;
-          setType(key);
-          paintNow();
-          syncOpen();
-        },
+    searchEl.addEventListener('focus', syncOpen);
+    searchEl.addEventListener('blur', syncOpen);
+    // In the app the caret is in the native field: its keystrokes land here as
+    // the input's own, and its focus opens the search.
+    NativeChrome.searchHooks.text = (text) => {
+      if (searchEl.value === text) return;
+      searchEl.value = text;
+      searchEl.dispatchEvent(new Event('input'));
+    };
+    NativeChrome.searchHooks.focus = () => syncOpen();
+
+    /* THE CHIPS: the filter, then the trending tags (Zoe, 2026-11-06; the
+       old trending rail, 2.0 took it out with the masonry wall). A tag TRENDS
+       when it repeats: two or more posts you could find with a search, the
+       last 30 days counting double, so this month's words lead and an old
+       favourite still fills a quiet room. Never a daily's own tag (the daily
+       has its card). No count on a chip. With none repeating, the filter
+       stands alone. The row stays put while you search, so a tag you are
+       standing in is always one tap from off. */
+    const TAGS_MAX = 10;
+    const RECENT_MS = 30 * 24 * 60 * 60 * 1000;
+    const trendingTags = () => {
+      const now = Date.now();
+      const findable = new Set(Store.discover({ addressed: true }));
+      const n = new Map();
+      Store.posts().forEach((p) => {
+        if (p.repostOf || p.communityId || p.type === 'song' || p.moment || Blocks.has(p.author)) return;
+        if (p.author !== me && !findable.has(p)) return;
+        const weight = now - (Date.parse(p._ts) || 0) < RECENT_MS ? 2 : 1;
+        new Set((p.tags || []).map(t => String(t).trim().toLowerCase().replace(/^#/, '')))
+          .forEach((k) => {
+            if (!k || k === 'daily' || k.startsWith('daily-')) return;
+            const was = n.get(k) || { posts: 0, score: 0 };
+            n.set(k, { posts: was.posts + 1, score: was.score + weight });
+          });
       });
-      // The keyboard goes down for the sheet. The sheet is up by now (its
-      // button says so), so the search stays open through the blur.
-      searchEl.blur();
-    });
-    [searchEl, filterBtn].forEach(el => {
-      el?.addEventListener('focus', syncOpen);
-      el?.addEventListener('blur', syncOpen);
+      return [...n.entries()].filter(([, x]) => x.posts > 1)
+        .sort((a, b) => b[1].score - a[1].score || a[0].localeCompare(b[0]))
+        .slice(0, TAGS_MAX).map(([k]) => k);
+    };
+    // The filter is built once (it anchors its own sheet); a pick names its
+    // type beside the sliders and washes it in the band.
+    chipsEl.innerHTML =
+      `<button type="button" class="pill-quiet discover-chip discover-chip--filter" ` +
+          `id="discover-filter-btn" aria-haspopup="menu" aria-expanded="false" ` +
+          `aria-label="Filter the search">` +
+        svgIcon('sliders', 'discover-chip-ico') + `<span class="discover-chip-type"></span>` +
+      `</button>` +
+      `<span class="discover-chip-tags"></span>`;
+    const filterChip = chipsEl.firstElementChild;
+    const tagsEl = chipsEl.lastElementChild;
+    let chipTags = null;
+    const paintChips = () => {
+      if (!chipTags) chipTags = trendingTags();
+      const picked = discoverType !== 'all' && typeFilters.find(f => f.key === discoverType);
+      filterChip.classList.toggle('is-on', !!picked);
+      filterChip.lastElementChild.textContent = picked ? picked.label : '';
+      const on = discoverQuery.trim().toLowerCase().replace(/^#/, '');
+      const html = chipTags.map(t =>
+        `<button type="button" class="pill-quiet discover-chip${t === on ? ' is-on' : ''}" ` +
+            `data-tag="${esc(t)}" aria-pressed="${t === on}">` +
+          esc(t) +
+        `</button>`).join('');
+      if (tagsEl.dataset.sig === html) return;
+      tagsEl.dataset.sig = html;
+      tagsEl.innerHTML = html;
+    };
+    // A tap on a chip leaves the caret where it was on the web.
+    chipsEl.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+    chipsEl.addEventListener('click', (e) => {
+      const chip = e.target.closest('.discover-chip');
+      if (!chip) return;
+      if (chip === filterChip) {
+        // The keyboard goes down for the sheet.
+        dropCaret();
+        openFilterDial(chip, {
+          current: discoverType,
+          filters: typeFilters,
+          label: 'Filter the search',
+          onPick: (key) => {
+            if (key === discoverType) return;
+            setType(key);
+            NativeChrome.sync();
+            paintNow();
+            syncOpen();
+          },
+        });
+        return;
+      }
+      // A tag runs as a search for its word, and a second tap takes it off.
+      // The answer is the point, so the keyboard stays down.
+      const tag = chip.dataset.tag;
+      const on = discoverQuery.trim().toLowerCase().replace(/^#/, '') === tag;
+      setQuery(on ? '' : tag, on ? null : tag);
+      dropCaret();
+      paintNow();
+      syncOpen();
     });
 
     // Rank a person against the query: 2 = a name-word or @username STARTS with
@@ -17131,6 +17276,9 @@
       !p.repostOf && !p.communityId && p.type !== 'song' && !p.moment && !Blocks.has(p.author)
       && (type === 'all' || p.type === type)
       && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
+    // A tag's posts: the same set, by the tag itself rather than the words.
+    const postsTagged = (tag, type) => postsMatching('', type).filter(p =>
+      (p.tags || []).some(t => String(t).trim().toLowerCase().replace(/^#/, '') === tag));
     let discoverable = new Set();
 
     // Searching, the people come first but don't bury the posts: the best few
@@ -17230,18 +17378,25 @@
       const answers = occ ? dailyAnswers(occ) : [];
       // A search's circles. Unsearched they live in the square (paintSquare).
       // People, or a post type, has no circles in it.
-      const rooms = type === 'all' && q ? communitiesMatching(q) : [];
+      const byTag = !!q && q === tagQuery;
+      const rooms = type === 'all' && q && !byTag ? communitiesMatching(q) : [];
       const roomsHtml = communitiesSectionHtml(rooms);
       const rail = searching ? [] : peopleForRail();
+      // The tags are read again on any paint outside a search, and held while
+      // one stands, so the row never shifts under a tag you are in.
+      if (!searching) chipTags = null;
+      paintChips();
       // Whoever is on the rail now stays on it for the rest of this visit.
       rail.forEach(x => railKept.add(x.u.username));
       paintSquare(searching, occ, rail);
       // Under People it is everyone who matches, at once (everyone, unsearched).
-      const matched = type === 'people' || (q && type === 'all') ? peopleMatching(q) : [];
+      const matched = byTag ? []
+        : type === 'people' || (q && type === 'all') ? peopleMatching(q) : [];
       const people = type === 'people' || allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
       const morePeople = matched.length > people.length;
       if (searching) discoverable = new Set(Store.discover({ addressed: true }));
-      const found = searching && type !== 'people' ? postsMatching(q, type) : [];
+      const found = !searching || type === 'people' ? []
+        : byTag ? postsTagged(q, type) : postsMatching(q, type);
       // The markup is the description of what changed, so it signs the paint;
       // a person's row carries a tie, so their friendStatus is in it too.
       const sig = JSON.stringify([q, type, roomsHtml, occ && [occ.slug, answers.length],
@@ -17311,7 +17466,7 @@
     // A found post's tag searches for that tag.
     const wireFoundCard = (card) => card.querySelectorAll('.tag[data-tag]').forEach(btn =>
       btn.addEventListener('click', () => {
-        discoverQuery = searchEl.value = btn.dataset.tag;
+        setQuery(btn.dataset.tag, btn.dataset.tag.trim().toLowerCase().replace(/^#/, ''));
         paintNow();
         syncOpen();
       }));
@@ -17440,14 +17595,18 @@
       searchTimer = setTimeout(() => { if (bodyEl.isConnected) paint(); }, SEARCH_BEAT);
     };
     const paintNow = () => { clearTimeout(searchTimer); paint(); };
-    searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); syncOpen(); });
+    searchEl.addEventListener('input', () => {
+      tagQuery = null;
+      discoverQuery = searchEl.value;
+      paintSoon();
+      syncOpen();
+    });
 
     /* A DRAG ON THE PAGE PUTS THE KEYBOARD AWAY, the way a system search does
-       (Zoe, 2026-11-06: "keyboard doesnt go down easily"). A tap off the field
-       already blurs it, Return does, a result's tap leaves the page; this is
-       the one a thumb reaches for while reading the results. The query stays
-       standing, so the search stays open (syncOpen). On the section, so it
-       goes with the render that wired it. */
+       (Zoe, 2026-11-06: "keyboard doesnt go down easily"). This is the web's;
+       in the app the caret is native and the scroll view's `.onDrag` does it
+       (TriaSearchField). The query stays standing, so the search stays open
+       (syncOpen). On the section, so it goes with the render that wired it. */
     let dragFrom = null;
     const page = view.querySelector('.view--discover');
     page.addEventListener('touchstart', (e) => {

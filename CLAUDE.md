@@ -21,21 +21,31 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
-## Discover's bar is every tab's bar (2026-11-06)
+## Discover's search is the header; chips under it (2026-11-06)
 
-**Discover's search is the first thing in the PAGE, not in the bar** (Zoe:
-"SIMPLIFY and make the headers CONSISTENT"). The bar is the one every tab
-wears, native in the app: the sidebar's mark (the back chevron while search is
-open), the centred title Discover, Chats. The field (`.discover-search`, at the
-top of `.view--discover`) is an ordinary web input, so its tap and keyboard are
-WebKit's own, and it scrolls away with the page; the filter disc slides in
-beside it as a page control. A drag on the page puts the keyboard down. Three
-versions put the field IN the bar and each made Discover's header the odd one
-out: CSS glass beside My Circle's native (1.8), a native `TriaSearchField`
-whose caret and keyboard were worse (2026-11-05), and a web field with the
-native material cut around it (2026-11-06, a few hours). All three are deleted:
-`mountToolbar` has no `field`, there is no `#toolbar-field` or
-`body.toolbar-field`. The 1.8 notes below about the field in the bar are history.
+**Discover's bar is the sidebar's mark, the search field and Chats** (Zoe: "I
+want the search to still always be available in the header"), and it comes
+and goes with the header like every tab's. **In the app the field is native**
+(`TriaSearchField`, in the bar's own glass container beside the discs), so the
+header is the same Liquid Glass as My Circle's; native glass is above every web
+pixel, so a web field in a native bar can't be. The web input stays in the bar
+(`mountToolbar`'s `field`, `#toolbar-field`), invisible under the gate, as the
+model and the box measured (`searchSpec`); keystrokes come back as
+`searchText`, the caret as `searchFocus`, `NativeChrome.blurSearch` puts it
+down. The first native field (2026-11-05) had a slow tap and a keyboard that
+wouldn't go: its page tap was SWALLOWED to drop the keys (so a result took two
+taps) and only a drag into the keys dropped them. Now a page tap goes through
+and drops them, any drag drops them (`.onDrag`), and the whole capsule takes
+the caret. **Under the header, the chips** (`.discover-chips`, Zoe: "filters
+below the search/header with trending tags"): the filter (the sliders, naming
+its type once one is picked) and up to ten trending tags (`trendingTags`: a tag
+on two or more findable posts, the last 30 days counting double, never a
+daily's), each THE BUTTON at its quiet weight, chosen ones washed. A tag runs
+as a search for its word, a second tap takes it off. The filter no longer
+slides in at the field's end, so the field's box never moves and nothing is
+animated across the bridge. Tried and gone the same day: the field at the top
+of the page (it scrolled away), and a web field with the native material cut
+around it.
 
 ## The camera roll is how a photo gets in (2026-11-06)
 
