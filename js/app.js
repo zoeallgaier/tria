@@ -2138,6 +2138,14 @@
       call('setTabs', { tabs: tabSpec(), fab: fabSpec() }).then((res) => {
         live = true;
         stampBottom(res && res.bottom);
+        /* The fab above was read BEFORE this answer, and the reader's colour
+           usually lands while it is in flight (a palette pick stamps on the
+           first route, a photo after its decode). repaint() returns early
+           while !live, so that stamp was dropped and the lit tab and the +
+           stayed in Tria's colours until the colour was changed again (Zoe,
+           2026-11-05: "if I simply reset the color its fine"). Send it again
+           now that someone is listening. */
+        repaint();
         // The answer the nav already worked out, on the first frame there is
         // somewhere to send it. See the note on setDots.
         setDots(null);
