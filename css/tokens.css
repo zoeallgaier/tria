@@ -361,6 +361,12 @@
      what stands in for one, and the two have to agree or the photo jumps when
      you walk from one to the other. */
   --identity-air: 1.7rem;
+  /* The ONE gap under a profile's identity (2026-11-06, Zoe: "tighten up the
+     padding below the pfp and profile info ... even below and above buttons").
+     It sits over the Edit/Share row, and under whatever comes next: that row,
+     else the pins, else the posts. One number, so the buttons have the same
+     air on both sides by construction. */
+  --account-gap: 1.1rem;
 
   /* Type scale — Instrument Serif carries the display sizes (mastheads, headlines,
      names); Oxygen carries the functional layer. Bigger, bolder, editorial. */

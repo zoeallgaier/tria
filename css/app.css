@@ -5362,8 +5362,15 @@ button.poll-option:disabled { cursor: default; }
      of 1.3, so nothing reads it any more and `position: relative` went with
      them (nothing else in here is out of flow). It is a token again for a
      different reason: the profile EDITOR opens on the same photo and has to
-     open it at the same height, so --identity-air is read by both. */
-  padding-block: var(--identity-air);
+     open it at the same height, so --identity-air is read by both.
+
+     AIR ABOVE ONLY (2026-11-06). The bottom padding is gone: what follows the
+     identity (the Edit/Share row inside it, the pins, the posts) carries
+     --account-gap itself, so the gap under the face is the same whether or not
+     there are buttons, and the buttons sit evenly between the two. A bottom
+     padding here stacked on the pins' and the feed's own margins, which was
+     3.4rem to the pins and 4.1rem to the posts. */
+  padding-block: var(--identity-air) 0;
   /* The type axis, shared with the masthead, the shelf and the feed's text. */
   padding-inline: var(--inset);
 }
@@ -7292,8 +7299,12 @@ button.poll-option:disabled { cursor: default; }
 /* Their posts sit below the card as a single-author column, with a clear gap so
    the card reads as its own header, not the top of the feed. A general sibling
    and not an adjacent one since 1.5: the pins host always sits between the two,
-   even when it is empty and drawing nothing. */
-.account ~ .feed { margin-top: 2.4rem; }
+   even when it is empty and drawing nothing. The gap is --account-gap, the same
+   air the buttons and the pins have under the identity (2026-11-06; it was a
+   clear 2.4rem on top of the card's own bottom padding). Under pins it stays the
+   wider 2.4rem: a 10px grid gap and a post would otherwise read as one grid. */
+.account ~ .feed { margin-top: var(--account-gap); }
+.pins-host:not(:empty) ~ .feed { margin-top: 2.4rem; }
 
 /* ── Pinned cards ─────────────────────────────────────────────────────────────
    Up to three things somebody holds above their own wall, between the identity
@@ -7321,7 +7332,7 @@ button.poll-option:disabled { cursor: default; }
 
 .pins {
   max-width: var(--feed-width);
-  margin: 1.7rem auto 0;
+  margin: var(--account-gap) auto 0;
 }
 .pin-grid {
   --pin-gap: 10px;
@@ -7644,7 +7655,7 @@ button.poll-option:disabled { cursor: default; }
    both the emphasis it earns and a fixed place to reach for. */
 .account-actions {
   display: flex;
-  margin-top: 1.1rem;
+  margin-top: var(--account-gap);
   gap: 0.5rem;
 }
 
