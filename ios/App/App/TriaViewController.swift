@@ -101,6 +101,15 @@ class TriaViewController: CAPBridgeViewController {
         // handler competing with the scroll.
         webView?.allowsBackForwardNavigationGestures = true
 
+        // BUT NEVER ON A TAB (Zoe, 2026-11-06: Profile swiped "back" to
+        // Discover). A tab is a root, not a pushed page, so the history behind
+        // it is just the last tab you were on, and sideways between tabs is
+        // TriaPager's. The swipe is switched per route: off on the four tabs,
+        // on everywhere else, where there really is a page to go back to.
+        routeWatch = webView?.observe(\.url, options: [.initial, .new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.syncBackSwipe() }
+        }
+
         // Swipe in from the left edge for the sidebar, on My Circle and Discover
         // (2026-11-01 on My Circle's right edge; the left, and Discover too,
         // since 2026-11-05). Native, because the web view's own back swipe holds
@@ -133,6 +142,23 @@ class TriaViewController: CAPBridgeViewController {
         webView?.scrollView.backgroundColor = Self.paper
     }
 
+    private var routeWatch: NSKeyValueObservation?
+
+    /// The route off the web view's URL: `/`, `/discover`, `/c/dnd`.
+    fileprivate var route: String {
+        let fragment = webView?.url?.fragment ?? ""
+        return fragment.split(separator: "?", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+    }
+
+    private static let tabRoots: Set<String> = ["", "/", "/discover", "/updates", "/profile"]
+
+    private func syncBackSwipe() {
+        let onTab = Self.tabRoots.contains(route)
+        if webView?.allowsBackForwardNavigationGestures == onTab {
+            webView?.allowsBackForwardNavigationGestures = !onTab
+        }
+    }
+
     @objc private func sideEdgeSwiped(_ gesture: UIScreenEdgePanGestureRecognizer) {
         guard gesture.state == .began else { return }
         webView?.evaluateJavaScript("window.triaOpenSide?.()", completionHandler: nil)
@@ -144,8 +170,6 @@ extension TriaViewController: UIGestureRecognizerDelegate {
     /// load) and `#/discover`. Everywhere else the edge stays the web view's
     /// back swipe. Begun here, it owns the edge: back never runs under it.
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        let fragment = webView?.url?.fragment ?? ""
-        let route = fragment.split(separator: "?", omittingEmptySubsequences: false).first.map(String.init) ?? ""
         return route.isEmpty || route == "/" || route == "/discover"
     }
 
