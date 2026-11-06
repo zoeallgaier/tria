@@ -56,7 +56,8 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setGlow", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pagerShot", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pagerPainted", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "pagerForget", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "pagerForget", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pagerGlide", returnType: CAPPluginReturnPromise)
     ]
 
     /// Built on the first `setTabs` and kept for the life of the app. Nil until
@@ -600,6 +601,17 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    /// A button that goes to the next tab over goes the way a swipe would, so
+    /// the move teaches the swipe (Zoe: My Circle's Find people and circles).
+    /// `ok: false` when there is no pager or the tab isn't beside this one;
+    /// the page then routes on its own.
+    @objc func pagerGlide(_ call: CAPPluginCall) {
+        let route = call.getString("route") ?? ""
+        DispatchQueue.main.async { [weak self] in
+            call.resolve(["ok": self?.pager?.glide(to: route) ?? false])
+        }
+    }
+
     /// Signed out: the pictures are of someone's feed.
     @objc func pagerForget(_ call: CAPPluginCall) {
         DispatchQueue.main.async { [weak self] in
@@ -628,6 +640,7 @@ protocol TriaPagerControl: AnyObject {
     func shoot(route: String)
     func painted(seq: Int)
     func forget()
+    func glide(to route: String) -> Bool
 }
 
 // MARK: - The bar
@@ -1319,6 +1332,22 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
 
     func forget() { shots.removeAll() }
 
+    /// The swipe with no finger: the same pick up and the same spring, from
+    /// the tab on the glass to the one beside it. A shade slower than a
+    /// thrown page, since nobody's hand is carrying it.
+    func glide(to route: String) -> Bool {
+        let from = routeNow
+        guard flight == nil, cover == nil, !dragging,
+              let i = routes.firstIndex(of: from), let j = routes.firstIndex(of: route),
+              abs(j - i) == 1, width > 0 else { return false }
+        heard = from
+        keeps = false
+        pickUp()
+        guard leaves[j - i] != nil else { fly(0, velocity: 0); return false }
+        fly(j - i, velocity: 0, duration: Metric.glide)
+        return true
+    }
+
     @objc private func memoryWarned() { shots.removeAll() }
 
     // MARK: The touch
@@ -1415,22 +1444,22 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
 
     // MARK: The flight
 
-    private func fly(_ side: Int, velocity: CGFloat) {
+    private func fly(_ side: Int, velocity: CGFloat, duration: TimeInterval = Metric.spring) {
         let end = -CGFloat(side) * width
         let gap = end - offset
         // The spring's unit is the distance left, so the finger's speed carries
         // into it. Capped, or a flick from nearly home rings.
         let carried = abs(gap) > 1 ? min(14, max(-14, velocity / gap)) : 0
-        let spring = UISpringTimingParameters(duration: Metric.spring, bounce: 0,
+        let spring = UISpringTimingParameters(duration: duration, bounce: 0,
                                               initialVelocity: CGVector(dx: carried, dy: 0))
-        let animator = UIViewPropertyAnimator(duration: Metric.spring, timingParameters: spring)
+        let animator = UIViewPropertyAnimator(duration: duration, timingParameters: spring)
         animator.isUserInteractionEnabled = true
         animator.addAnimations { [weak self] in self?.place(end) }
         animator.addCompletion { [weak self] _ in self?.landed(side) }
         flight = animator
         animator.startAnimation()
         if side != 0, let index = routes.firstIndex(of: here) { go(routes[index + side]) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Metric.landed) { [weak self, weak animator] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + Metric.landed * duration / Metric.spring) { [weak self, weak animator] in
             guard let self, let animator, self.flight === animator else { return }
             self.finishFlight()
         }

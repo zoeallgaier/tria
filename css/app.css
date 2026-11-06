@@ -2065,6 +2065,12 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   text-align: center;
 }
 .feed-empty--welcome { padding-top: 3rem; display: grid; gap: 0.7rem; }
+/* Inside #feed, a FLEX column, .feed-empty's auto margins shrink-wrap it (the
+   .pgrid--frames trap): a profile's "No posts yet. No rush." is short, so its
+   pills were squeezed to their words (Zoe: "smashed"). Take the column back,
+   and on a phone, where #feed bleeds to the screen's edge, the gutter too. */
+.feed > .feed-empty--welcome { align-self: stretch; margin-inline: 0; }
+@media (max-width: 680px) { .feed > .feed-empty--welcome { padding-inline: var(--gutter); } }
 .feed-empty--welcome p { margin: 0 auto; max-width: 30ch; line-height: 1.5; }
 .welcome-head {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
@@ -10092,6 +10098,17 @@ body.thread-live .lightbox { z-index: 320; }
   margin-top: 0.8rem;
 }
 .crop-actions .crop-replace { margin: 0; }
+/* Edit profile's Use this photo, beside Choose another and the same size,
+   the commit of the pair (THE BUTTON's geometry is the component's). */
+.crop-use {
+  padding: 0.5rem 1.1rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: var(--radius-pill);
+}
+.crop-stage .crop-actions { margin-top: 0.15rem; }
 .crop-actions:not(:has(.crop-replace:not([hidden]))) { display: none; }
 
 /* ── THE CAROUSEL PREVIEW (2026-11-06, wireFrameCapture) ─────────────────────

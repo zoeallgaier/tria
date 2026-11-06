@@ -2385,9 +2385,21 @@
     // Signed out, the tabs' pictures are of someone else's world.
     const forgetPages = () => { if (live) call('pagerForget').catch(() => {}); };
 
+    /* A button that goes to the tab beside this one goes as a swipe would
+       (TriaPager.glide), so the move shows the pages can be swiped. Native
+       answers pagerGo for the route, as on a real swipe; anything else (no
+       pager, an older binary, not a neighbour) routes as a link does. */
+    const glideTo = async (route) => {
+      let ok = false;
+      if (live) {
+        try { ok = !!((await call('pagerGlide', { route })) || {}).ok; } catch (_) { ok = false; }
+      }
+      if (!ok) go(route);
+    };
+
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
              postBarText, postBarHooks, pickPhoto, searchHooks, blurSearch, searchHasCaret,
-             glowLight, forgetPages, live: isLive };
+             glowLight, forgetPages, glideTo, live: isLive };
   })();
 
   /* ── Right-sized images ──────────────────────────────────────────────────────
@@ -6653,7 +6665,10 @@
   // conversation, read up as much as down, and its header names who you are
   // talking to, so it stays put on every scroll.
   let headerHeld = false;
-  function holdsHeader() { return headerHeld || location.hash.startsWith('#/chat/'); }
+  function holdsHeader() {
+    // The first run's circles too: its way on is the bar's Not now / Continue.
+    return headerHeld || location.hash.startsWith('#/chat/') || location.hash === '#/welcome/circles';
+  }
   function holdHeader(on) {
     if (on === headerHeld) return;
     headerHeld = on;
@@ -10351,7 +10366,13 @@
               `<img id="pf-cropimg" alt="" draggable="false">` +
             `</div>` +
             `<p class="crop-hint" id="pf-crophint"></p>` +
-            `<div class="crop-replace" id="pf-replace" role="button" tabindex="0">Choose another</div>` +
+            // Use this photo settles the crop and gives the face and its rows
+            // back, so Theme is still there after a photo (Zoe: a new account
+            // picked a photo first and lost the colour).
+            `<div class="crop-actions">` +
+              `<div class="crop-replace" id="pf-replace" role="button" tabindex="0">Choose another</div>` +
+              `<button type="button" class="publish-fill crop-use" id="pf-crop-use">Use this photo</button>` +
+            `</div>` +
           `</div>` +
           // Identity as one combo box — display name as the serif headline, bio as
           // the note beneath it — mirroring the composer's title+note and signup.
@@ -10582,7 +10603,7 @@
     // rest of the crop machinery, and the listeners wired above this line call
     // these on a tap that can only happen after the whole render has run.
     function pfDirty() {
-      return !!pfCropper
+      return !!pfCropper || !!pfShot
         || nameEl.value !== nameStart
         || bioEl.value !== (u.bio || '')
         || pronounsEl.value !== (u.pronouns || '')
@@ -10640,6 +10661,9 @@
     const pfHint = view.querySelector('#pf-crophint');
     const pfSave = pfSaveBtn;   // in the bar, not in #view
     let pfCropper = null;
+    // A crop settled with Use this photo and not yet saved (Edit profile only:
+    // the first run saves it as it settles).
+    let pfShot = null;
     // Two gestures, one of which doesn't exist on the device you're holding, so
     // name the one that does.
     pfHint.textContent = finePointer()
@@ -10673,6 +10697,38 @@
     }));
     pfReplace.addEventListener('click', openPicker);
     pfReplace.addEventListener('keydown', pickKey);
+
+    /* Use this photo: the crop becomes the face beside its rows, so Theme (and
+       its Photo swatch) is there after a photo. The first run saves it now, so
+       the Theme sheet offers the new face's own colour and the wash takes it;
+       Edit profile holds it for Save, so the X can still throw it away. */
+    view.querySelector('#pf-crop-use').addEventListener('click', () => {
+      if (!pfCropper) return;
+      let shot = null;
+      try { shot = pfCropper.export(512); } catch { shot = null; }
+      if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
+      errEl.textContent = '';
+      pfCropper.destroy();
+      pfCropper = null;
+      pfStage.hidden = true;
+      pfPhotoRow.hidden = false;
+      const face = pfFigure.querySelector('.pf-photo-avatar');
+      face.classList.add('avatar--photo');
+      face.innerHTML = `<img src="${esc(shot)}" alt="" decoding="async">`;
+      pfPick.querySelector('.pf-row-label').textContent = 'New photo';
+      hapticTap('LIGHT');
+      if (welcome) {
+        Store.updateAvatar(shot).then(r => {
+          if (!r.ok) { toast(r.error); return; }
+          syncThemeIcon();
+          if (view.contains(face)) paintWash(Store.currentUser(), 'profile');
+        });
+        paintWash(Store.currentUser(), 'profile');
+      } else {
+        pfShot = shot;
+      }
+      syncAnswers();
+    });
 
     // Save waits for the crop to decode: export() reads the image, so committing
     // early is how a pick that never landed used to take the whole submit down
@@ -10724,7 +10780,7 @@
       // InvalidStateError straight out of this handler on an image that never
       // loaded, which left the name and bio saved, the photo not, and the page
       // sitting there with nothing said either way.
-      let shot = null;
+      let shot = pfShot;
       if (pfCropper) {
         try { shot = pfCropper.export(512); } catch { shot = null; }
         if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
@@ -15779,16 +15835,20 @@
           list.map(c => communityCardHtml(c, { pick: true })).join('') +
         `</section>` +
         `<div class="welcome-foot">` +
-          `<button type="button" class="publish-fill welcome-next" id="welcome-done"></button>` +
           `<a class="welcome-start" href="#/c/new" id="welcome-start">Start your own circle</a>` +
         `</div>` +
       `</section>`;
 
-    const doneBtn = view.querySelector('#welcome-done');
+    const doneBtn = document.getElementById('welcome-done');
+    let doneOn = joinedAny();
     const syncDone = () => {
-      doneBtn.textContent = list.some(c => Store.inCommunity(c.id)) ? 'Done' : 'Not now';
+      const on = joinedAny();
+      if (on === doneOn) return;
+      doneOn = on;
+      doneBtn.className = `toolbar-cta ${on ? 'publish-fill' : 'pill-quiet'}`;
+      doneBtn.textContent = on ? 'Continue' : 'Not now';
+      NativeChrome.sync();
     };
-    syncDone();
     doneBtn.addEventListener('click', () => { finishWelcome(); go('#/'); });
     view.querySelector('#welcome-start').addEventListener('click', finishWelcome);
 
