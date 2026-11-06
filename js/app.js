@@ -8020,10 +8020,10 @@
         wirePoll(frame, p, {});
       }
       if (!pg.s.mine) markMomentSeen(p);
-      // A song's frame plays its preview by itself, as ambient audio the
-      // ringer switch silences; any other frame stops it.
+      // A song's frame plays its preview by itself, ringer switch or not;
+      // any other frame stops it.
       const play = pg.el.querySelector('.mv-play');
-      if (!play.hidden && previewAutoplays()) {
+      if (!play.hidden) {
         if (preview.btn !== play) playPreview(play, true);
       } else stopPreview();
       if (how === 'frame' && !prefersReduced()) {
@@ -14355,12 +14355,12 @@
 
      ONE CLIP AT A TIME, through one Audio element. The button that plays it
      wears a ring that runs round it over the clip (paintPlay). A Moment's
-     song starts by itself (Zoe: "play it automatically if a user's sound is
-     on"), as AMBIENT audio, which the ringer switch silences and which mixes
-     with whatever the phone is already playing; a tap on a play button is
-     PLAYBACK, which plays through the switch, as any music app does. That is
-     the Audio Session API (iOS 16.4); without it a Moment never starts on its
-     own on an iPhone, since an older WebKit's media ignores the switch. */
+     song starts by itself. EVERY clip is PLAYBACK audio, which plays through
+     the ringer switch (Zoe, 2026-11-06: "I should be able to hear with my
+     ringer off"), as a music app does: the Audio Session API says so on iOS
+     16.4 and up, and an older WebKit's media ignores the switch anyway.
+     Ambient, which the switch silences, was tried first the same day, with a
+     volume press to turn it up; it read as broken. */
   const PREVIEW_KEY = 'tria:previews';
   let previewMap = null;
   const previewCache = () => {
@@ -14456,38 +14456,7 @@
     if (run) run.style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(1, t))));
   }
 
-  const preview = { audio: null, btn: null, turn: 0, raf: 0, ambient: false };
-  /* A VOLUME BUTTON IS "SOUND ON" (Zoe, 2026-11-06: "if I hit my volume
-     buttons at all up or down even if ringer is off audio still plays"), as
-     on Instagram: a press, either way, turns a playing Moment's song from
-     ambient to playback, so the switch no longer silences it, and every song
-     after it plays the same way until the app goes to the background. Only
-     the app can hear the buttons (TriaSettings' `volumeButton`). */
-  let soundOn = false;
-  function volumePressed() {
-    soundOn = true;
-    const b = preview.btn;
-    if (b && preview.ambient) {
-      preview.ambient = false;
-      setAudioSession('playback');
-      // WebKit settles the session when playback starts, so start it again
-      // where it was; the clip doesn't jump.
-      const a = preview.audio;
-      if (a && !a.paused) { a.pause(); a.play().catch(() => {}); }
-      return;
-    }
-    // A Moment's song that couldn't start by itself (an older iOS) starts now.
-    if (!b && momentsAway) {
-      const play = document.querySelector('.mv-page .mv-play:not([hidden])');
-      if (play && play.isConnected) playPreview(play, false);
-    }
-  }
-  if (nativeShell()) {
-    try {
-      window.Capacitor.nativeCallback('TriaSettings', 'addListener',
-        { eventName: 'volumeButton' }, () => volumePressed());
-    } catch { /* an older binary: the switch decides */ }
-  }
+  const preview = { audio: null, btn: null, turn: 0, raf: 0 };
   const setAudioSession = (type) => {
     try { if (navigator.audioSession) navigator.audioSession.type = type; } catch { /* not settable */ }
   };
@@ -14499,13 +14468,9 @@
     preview.btn = null;
     setAudioSession('auto');
   }
-  // May a Moment's song start by itself here? Only where the ringer switch
-  // can silence it, or where there is no ringer switch.
-  const appleTouch = () => /iP(hone|ad|od)/.test(navigator.userAgent) ||
-    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  const previewAutoplays = () => soundOn || 'audioSession' in navigator || !appleTouch();
-
-  async function playPreview(btn, ambient) {
+  // `auto` is a Moment starting its own song: a clip that isn't there is
+  // simply not played, with no toast and the disc kept.
+  async function playPreview(btn, auto) {
     stopPreview();
     const turn = preview.turn;
     const s = songOfPlay(btn);
@@ -14518,12 +14483,10 @@
     if (!url) {
       paintPlay(btn, false, 0);
       preview.btn = null;
-      if (!ambient) { btn.hidden = true; toast('No preview for this one.'); }
+      if (!auto) { btn.hidden = true; toast('No preview for this one.'); }
       return;
     }
-    if (soundOn) ambient = false;
-    preview.ambient = ambient;
-    setAudioSession(ambient ? 'ambient' : 'playback');
+    setAudioSession('playback');
     const a = preview.audio || (preview.audio = new Audio());
     a.preload = 'auto';
     if (a.src !== url) a.src = url;
@@ -14560,9 +14523,7 @@
     if (preview.btn && preview.btn.dataset.key === b.dataset.key) { stopPreview(); return; }
     playPreview(b, false);
   });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { stopPreview(); soundOn = false; }
-  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopPreview(); });
 
   /* Null for anything but a 200: a private playlist is a 401 or a 404, and to
      the picker those are one answer. A THROW is caught into the same null,

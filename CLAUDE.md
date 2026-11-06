@@ -32,17 +32,14 @@ from a play disc under the heart on the rail (`.mv-play`). Nothing is stored:
 `song.apple`, else by title and artist (exact match only; a Spotify paste
 names no artist, so it has none, nor an album or playlist), kept per device in
 `tria:previews`. One clip at a time (`playPreview`, `stopPreview`, stopped by
-route(), the viewer's close and slide, and backgrounding). **Autoplay is
-AMBIENT** (`navigator.audioSession`, iOS 16.4), which the ringer switch
-silences; a tap is PLAYBACK. Without the API an iPhone never autoplays
-(`previewAutoplays`), since older WebKit media ignores the switch. **A volume
-button press, up or down, is sound on** (Zoe: "even if ringer is off audio
-still plays"): `TriaSettings` sends `volumeButton` (KVO on `outputVolume`
-plus the system's `SystemVolumeDidChange`, which also fires at either end),
-and `volumePressed` turns a playing clip to playback and keeps `soundOn` until
-the app is backgrounded. The play
-mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play icon").
-**Not yet heard on a phone**: that WKWebView honours `ambient` is unverified.
+route(), the viewer's close and slide, and backgrounding). **Every clip is
+PLAYBACK audio and plays through the ringer switch, autoplay included** (Zoe:
+"I should be able to hear with my ringer off"; `navigator.audioSession.type`,
+iOS 16.4, and older WebKit media ignores the switch anyway). Tried and gone
+the same day: autoplay as AMBIENT (the switch silenced it) with a native
+volume-button watcher to turn it up (`SystemVolumeDidChange`, undocumented).
+The play mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play
+icon").
 
 ## Discover's search is the header; chips under it (2026-11-06)
 

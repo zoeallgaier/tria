@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-import AVFoundation
 import Capacitor
 
 /// One method: open this app's own page in iOS Settings.
@@ -64,39 +63,6 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         NotificationCenter.default.addObserver(self, selector: #selector(linkOpened(_:)),
                                                name: .capacitorOpenUniversalLink, object: nil)
         if let url = ApplicationDelegateProxy.shared.lastURL { sendLink(url) }
-        watchVolumeButtons()
-    }
-
-    /// A press of either volume button, as a `volumeButton` event (Zoe,
-    /// 2026-11-06: "if I hit my volume buttons at all up or down even if
-    /// ringer is off audio still plays"). app.js turns a Moment's song from
-    /// ambient, which the ringer switch silences, to playback, as Instagram
-    /// does. Two sources: `outputVolume` (public, but it only moves while our
-    /// audio session is active and never past the top or bottom), and the
-    /// system's own `SystemVolumeDidChange` note, which also fires for a
-    /// press at either end. Either one alone is enough to send the event.
-    private var volumeWatch: NSKeyValueObservation?
-    private var lastVolumeSent = Date.distantPast
-    private func watchVolumeButtons() {
-        volumeWatch = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.sendVolume() }
-        }
-        NotificationCenter.default.addObserver(self, selector: #selector(systemVolume(_:)),
-                                               name: Notification.Name("SystemVolumeDidChange"), object: nil)
-    }
-    @objc private func systemVolume(_ note: Notification) {
-        // Only a press, never a route change (headphones in or out).
-        let info = note.userInfo ?? [:]
-        let reason = (info["Reason"] ?? info["AVSystemController_AudioVolumeChangeReasonNotificationParameter"]) as? String
-        if let reason, reason != "ExplicitVolumeChange" { return }
-        DispatchQueue.main.async { self.sendVolume() }
-    }
-    private func sendVolume() {
-        // One press can arrive by both roads; once is enough.
-        let now = Date()
-        if now.timeIntervalSince(lastVolumeSent) < 0.15 { return }
-        lastVolumeSent = now
-        notifyListeners("volumeButton", data: [:])
     }
 
     @objc private func linkOpened(_ note: Notification) {
