@@ -12299,7 +12299,7 @@
     if (!me) return Promise.resolve('');
     if (accentOf(me.accent) || me.accent === 'none') return Promise.resolve(me.accent);
     if (me.accent || !me.avatar) return Promise.resolve('');
-    return sampleColor(sizedSrc(me.avatar, 40)).then(rgb => (rgb ? nearestAccent(rgb) : null));
+    return sampleFace(me.avatar).then(rgb => (rgb ? nearestAccent(rgb) : null));
   }
   // A photo that wouldn't sample (null) leaves the icon as it is. Nothing
   // stored and an alternate icon on means a pick from before this was the
@@ -16161,7 +16161,7 @@
     const picked = u.accent !== 'default' && accentOf(u.accent);
     if (picked) return Promise.resolve([dark ? picked.hex : (picked.ink || picked.hex)]);
     if (u.accent === 'default' || !u.avatar) return Promise.resolve(TRIA_STARS);
-    return sampleColor(sizedSrc(u.avatar, 40))
+    return sampleFace(u.avatar)
       .then(rgb => (rgb ? [heartsFrom(rgb)[dark ? 'dk' : 'lt']] : TRIA_STARS), () => TRIA_STARS);
   }
   function friendInks(username) {
@@ -22572,12 +22572,52 @@
   // showing the colour you will actually get.
   const accentCss = (key) => (accentOf(key) || {}).hex || null;
 
+  /* OKLab (Björn Ottosson's), for averaging a photo the way an eye does. Two
+     things the old sRGB average got wrong, both measured on 2026-11-05:
+     gamma-encoded channels are not light, so averaging them skews the hue, and
+     HSV saturation calls a near-black pixel fully saturated (10,0,0 is 1.0), so
+     a dark photo's faint shadow tint outvoted its real colour. A dark room with
+     a green plant came out BLUE, 218 degrees, a colour in neither. OKLab's
+     chroma goes to zero at black and white on its own, so shadows and
+     highlights carry no vote they haven't earned, and the same photo reads
+     green, 126. */
+  const srgbLin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const linSrgb = (v) => {
+    v = Math.max(0, Math.min(1, v));
+    return Math.round((v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255);
+  };
+  function toOklab(r, g, b) {
+    r = srgbLin(r); g = srgbLin(g); b = srgbLin(b);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [
+      0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+    ];
+  }
+  function fromOklab(L, a, b) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+    return {
+      r: linSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      g: linSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      b: linSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+    };
+  }
+
   // Sample a single representative colour from an image (data-URI). Draws it tiny
-  // and takes a saturation-weighted average — so a photo's signature colour leads
-  // over flat greys — then normalises it to an even, gentle glow (steady hue,
-  // lifted saturation, mid lightness) so dark or washed-out photos tint alike.
-  function sampleColor(src) {
-    if (sampleCache.has(src)) return Promise.resolve(sampleCache.get(src));
+  // and takes a CHROMA-weighted average in OKLab (above), so a photo's signature
+  // colour leads over flat greys, shadows and highlights, then normalises it to
+  // an even glow (steady hue, lifted saturation, mid lightness) so dark or
+  // washed-out photos tint alike. `round` reads only the circle a face is drawn
+  // in: a profile photo's corners are never seen, so they get no say.
+  function sampleFace(url) { return sampleColor(sizedSrc(url, 40), true); }
+  function sampleColor(src, round) {
+    const ck = (round ? 'o:' : '') + src;
+    if (sampleCache.has(ck)) return Promise.resolve(sampleCache.get(ck));
     return new Promise(resolve => {
       const img = new Image();
       // Photos now live on Supabase Storage (cross-origin). Request them with CORS
@@ -22588,28 +22628,37 @@
       img.onload = () => {
         let out = null;
         try {
-          const n = 14;
+          const n = 16;
           const cv = document.createElement('canvas');
           cv.width = cv.height = n;
           const ctx = cv.getContext('2d', { willReadFrequently: true });
           ctx.drawImage(img, 0, 0, n, n);
           const d = ctx.getImageData(0, 0, n, n).data;
-          let R = 0, G = 0, B = 0, W = 0;
+          const mid = (n - 1) / 2, r2 = (n / 2) * (n / 2);
+          let L = 0, A = 0, B = 0, W = 0;
           for (let i = 0; i < d.length; i += 4) {
-            const r = d[i], g = d[i + 1], b = d[i + 2];
-            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-            const sat = mx ? (mx - mn) / mx : 0;
-            const w = sat * sat + 0.05;      // saturated pixels lead the average
-            R += r * w; G += g * w; B += b * w; W += w;
+            if (d[i + 3] < 128) continue;    // a cut-out's clear edge
+            if (round) {
+              const x = (i >> 2) % n - mid, y = Math.floor((i >> 2) / n) - mid;
+              if (x * x + y * y > r2) continue;
+            }
+            const [l, a, b] = toOklab(d[i], d[i + 1], d[i + 2]);
+            // Chroma squared leads, the way saturation squared did; the floor
+            // (chroma 0.02 squared) lets a nearly grey photo still find its tint.
+            const w = a * a + b * b + 0.0004;
+            L += l * w; A += a * w; B += b * w; W += w;
           }
-          // 1.75x: a saturation-weighted AVERAGE is still an average, and comes
-          // out limper than any pixel that fed it. A chosen hex needs no such
-          // rescue, which is the only difference between the two sources.
-          // (1.5x into 0.5-0.85 until 2026-11-04, Zoe: more saturation, so
-          // the photo option reads as the photo's colour, not a pastel of it.)
-          out = glowNorm(R / W, G / W, B / W, 1.75);
+          if (W) {
+            const c = fromOklab(L / W, A / W, B / W);
+            // 1.75x: a weighted AVERAGE is still an average, and comes out
+            // limper than any pixel that fed it. A chosen hex needs no such
+            // rescue, which is the only difference between the two sources.
+            // (1.5x into 0.5-0.85 until 2026-11-04, Zoe: more saturation, so
+            // the photo option reads as the photo's colour, not a pastel of it.)
+            out = glowNorm(c.r, c.g, c.b, 1.75);
+          }
         } catch { out = null; }
-        sampleCache.set(src, out);
+        sampleCache.set(ck, out);
         resolve(out);
       };
       // A sized copy the renderer refused: sample the original instead (this
@@ -22617,7 +22666,7 @@
       img.onerror = () => {
         if (fullSrc(src) === src) { resolve(null); return; }
         resizeOff = true;
-        sampleColor(fullSrc(src)).then(resolve);
+        sampleColor(fullSrc(src), round).then(resolve);
       };
       img.src = src;
     });
@@ -22756,7 +22805,7 @@
     const picked = u.accent !== 'default' && accentCss(u.accent);
     if (picked) return Promise.resolve(picked);
     if (u.accent === 'default' || !u.avatar) return Promise.resolve('tria');
-    return sampleColor(sizedSrc(u.avatar, 40))
+    return sampleFace(u.avatar)
       .then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : 'tria'), () => 'tria');
   }
   // The band a palette KEY paints. One home, because the picker's discs and
@@ -22933,7 +22982,7 @@
     // colour off a photograph and there isn't one, which is not the same as
     // asking for no colour at all.
     if (!me.avatar) return set(null);
-    sampleColor(sizedSrc(me.avatar, 40)).then(rgb => set(rgb || null));
+    sampleFace(me.avatar).then(rgb => set(rgb || null));
   }
 
   // A person's colour: a palette pick if they made one, otherwise sampled from
@@ -22974,7 +23023,7 @@
     const picked = accentCss(user.accent);
     if (picked) return done(picked);
     if (!user.avatar) return done(null);                      // nothing to sample
-    sampleColor(sizedSrc(user.avatar, 40)).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
+    sampleFace(user.avatar).then(rgb => done(rgb && `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`));
   }
 
   // Light the wash. Three callers, two modes, ONE resolved colour: a profile page,
@@ -23961,9 +24010,9 @@
     // the one route that borrows another's highlight: it is somewhere you went,
     // but it is somewhere INSIDE your profile, so that tab stays lit rather than
     // the nav going blank while you edit.
-    // Every chat page sits inside Chats, so it keeps Chats lit: the sidebar's
-    // own row on desktop, and on a phone and natively the tab whose bar you
-    // opened it from (renderNav, chatsFrom).
+    // Every chat page sits inside Chats: the sidebar lights its own row on
+    // desktop, and on a phone no tab is lit (the folded native bar wears the
+    // Chats mark, hereFor).
     renderNav(path === '#/profile/edit' ? '#/profile'
       : path.startsWith('#/chat') ? '#/chats' : path);
 
