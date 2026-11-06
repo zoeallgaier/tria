@@ -7702,27 +7702,47 @@
      A person's stack, read a frame at a time (Zoe, 2026-11-04: "where people
      can tap through and like or comment, but this needs to be on brand").
      Tria's, not a black story player: the page's paper, a wash blooming off
-     the top-right corner (a photo's own colour, else the poster's), a hairline
-     segment per frame, their face and name in the byline's type, and the
-     content set the way the feed sets it (a headline in the serif, a note
-     in its light weight, a song's sleeve rounded like every cover).
+     the top-right corner (a photo's own colour, else the poster's), their face
+     and name in the byline's type, and the content set the way the feed sets
+     it (a headline in the serif, a note in its light weight, a song's sleeve
+     rounded like every cover).
 
      NOTHING ADVANCES BY ITSELF. Tria doesn't push a reader along, and a long
      note is meant to be read, so a frame stays until you tap. Tap the right
      of the screen for the next, the left for the one before, past the ends
      into the next or last person. A double tap likes it (the gesture songs
-     already taught), a swipe sideways changes person, a pull down closes,
-     and a pull UP replies (Zoe, 2026-11-05, as a story does).
-     Holding your OWN frame opens its edit and delete sheet (Zoe), holding
-     anyone else's hides the chrome so the picture stands alone. A carousel
-     is a frame per photo. The foot is Reply and the heart.
+     already taught), and a hold hides the chrome so the picture stands alone,
+     or on your OWN frame opens its edit and delete sheet (Zoe).
+
+     ONE THING MOVES PER GESTURE (Zoe, 2026-11-06: "the full screen should
+     move down to dismiss rather than just some content"). A pull down carries
+     the whole screen with the finger, shrinking a little and rounding its
+     corners as the page shows through behind it; let go past DISMISS_AT, or
+     on a flick, and it falls away, else it springs back. A sideways drag is a
+     PAGE drag: each person is a whole page (face, frame, rail, dots), and the
+     next one comes in beside it one to one with the finger, as the tabs do
+     (TriaPager), going on 28% of the width or a flick. A pull UP replies
+     (Zoe, 2026-11-05, as a story does): the frame rises against a stiffening
+     spring and the reply disc lights past REPLY_AT.
+     Vertical paging between people (Reels' grammar) was weighed the same day
+     and passed over: it gives one axis three jobs (next person, close,
+     reply), and a swipe through faces is the infinite feed Tria isn't.
+
+     THE RAIL. The reactions stand on the right, stacked (Zoe: "tiktok/reels
+     style"), glass discs at THE BUTTON's quiet weight since a photo can be
+     behind them: the heart, Reply, then the •••. Words are set clear of the
+     rail's lane; a tall photo runs under it. Under everything, a frame's
+     place in the stack is a row of soft dots, the current one a pill, and a
+     stack of one shows none (Zoe: "no need for the line indicator if it's
+     only one moment").
 
      A REPLY IS A MESSAGE, never a comment (Zoe, 2026-11-05: "adding a comment
-     should actually be replies"): Reply to <name> opens your DM with them,
-     the frame waiting on the bar (replyToSong), and so does a pull up past
-     REPLY_AT, which lights the pill as it arms. Someone you can't message,
-     and your own frame, have no Reply: the foot is the heart alone, and
-     yours opens who liked it, as in a feed. Replies land in your chats. */
+     should actually be replies"): Reply opens your DM with them, the frame
+     waiting on the bar (replyToSong). Someone you can't message, and your own
+     frame, have no Reply, and your own heart opens who liked it, as in a
+     feed. Every frame has a •••: yours edits and deletes, anyone else's
+     reports and blocks (App Store 1.2: user content must be reportable where
+     it is seen, and its author blockable). */
 
   /* It is an overlay, not a route: it locks the page as a sheet does, which
      stands the native chrome down (`overlaid`), and route() closes it on any
@@ -7731,6 +7751,10 @@
   const dismissMoments = () => { if (momentsAway) momentsAway(); };
   const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
   const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
+  const DISMISS_AT = 110;      // a pull down past this closes the viewer
+  const MV_GAP = 12;           // paper between two people's pages as they slide
+  const MV_SETTLE = 'cubic-bezier(0.3, 1.25, 0.5, 1)';   // a spring home
+  const MV_GLIDE = 'cubic-bezier(0.22, 1, 0.36, 1)';     // a page going on
 
   function momentFrames(stack) {
     return stack.posts.flatMap(p => p.images && p.images.length > 1 && !isVideoUrl(p.image || '')
@@ -7738,6 +7762,12 @@
       : [{ post: p, src: null, i: 0 }]);
   }
   const momentWhen = (p) => (p.moment ? momentAge(p) : 'On repeat this week');
+  // The picture a frame shows, for its wash and for the reply's chip.
+  const framePicture = (f) => {
+    const p = f.post;
+    if (p.song) return p.song.art || '';
+    return f.src || (p.image ? (isVideoUrl(p.image) ? p.poster || '' : p.image) : '');
+  };
 
   function momentFrameHtml(f) {
     const p = f.post;
@@ -7747,7 +7777,7 @@
       (f.i === 0 ? linkTilesHtml(p) + pollWidgetHtml(p) : '');
     if (p.song) {
       const s = p.song;
-      return `<div class="mv-frame mv-frame--words"><div class="mv-words">` +
+      return `<div class="mv-frame mv-frame--words mv-frame--song"><div class="mv-words">` +
           `<span class="mv-sleeve${s.art ? ' pin-cover' : ''}"` +
             `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true">${s.art ? '' : svgIcon('music')}</span>` +
           `<p class="mv-song-title">${esc(s.title)}</p>` +
@@ -7775,48 +7805,46 @@
     return `<div class="mv-frame mv-frame--words"><div class="mv-words${big ? ' mv-words--big' : ''}">${words}</div></div>`;
   }
 
+  /* Moves an element to `to` (inline styles) and animates there from wherever
+     it is drawn now, a running glide included, so a page caught mid-slide
+     carries on from where the finger left it. Resolves true once it lands,
+     false if something cut it off (a new press), so a caller tidying up after
+     it never clears a drag that has begun since. */
+  function mvGlide(el, to, ms, easing) {
+    const cs = getComputedStyle(el);
+    const from = {};
+    for (const k of Object.keys(to)) from[k] = cs[k];
+    el.getAnimations().forEach(a => a.cancel());
+    Object.assign(el.style, to);
+    if (prefersReduced() || !el.animate) return Promise.resolve(true);
+    const frames = [{}, {}];
+    for (const k of Object.keys(to)) {
+      frames[0][k] = from[k];
+      frames[1][k] = getComputedStyle(el)[k];
+    }
+    return el.animate(frames, { duration: ms, easing }).finished.then(() => true, () => false);
+  }
+
   function openMoments(who, opener) {
     if (momentsAway || sheetOpen) return;
     const stacks = momentStacks();
-    let si = stacks.findIndex(s => s.u.username === who);
-    if (si < 0) return;
+    const start = stacks.findIndex(s => s.u.username === who);
+    if (start < 0) return;
     const me = Store.session();
-    let frames = [];
-    let fi = 0;
-    // A stack opens on the first frame you haven't seen, as stories do.
-    const enter = (i, at) => {
-      si = i;
-      frames = momentFrames(stacks[si]);
-      const seen = seenMoments();
-      const first = stacks[si].mine ? -1 : frames.findIndex(f => !seen.has(String(f.post.id)));
-      fi = at === 'end' ? frames.length - 1 : first < 0 ? 0 : first;
-    };
-    enter(si);
 
     const root = document.createElement('div');
     root.className = 'mv';
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
-    root.innerHTML =
-      `<div class="mv-top">` +
-        `<div class="mv-bars" aria-hidden="true"></div>` +
-        `<div class="mv-head"></div>` +
-      `</div>` +
-      `<div class="mv-stage"></div>` +
-      `<div class="mv-foot">` +
-        `<button type="button" class="mv-reply pill-quiet">${svgIcon('reply')}<span></span></button>` +
-        `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
-      `</div>`;
-    const bars = root.querySelector('.mv-bars');
-    const head = root.querySelector('.mv-head');
-    const stage = root.querySelector('.mv-stage');
-    const likeBtn = root.querySelector('.mv-like');
-    const replyBtn = root.querySelector('.mv-reply');
-    document.body.appendChild(root);
-    document.body.style.overflow = 'hidden';
-    requestAnimationFrame(() => root.classList.add('open'));
+    root.innerHTML = `<div class="mv-veil" aria-hidden="true"></div><div class="mv-card"></div>`;
+    const veil = root.firstElementChild;
+    const card = root.lastElementChild;
 
-    const cur = () => frames[fi];
+    let page = null;   // the person on screen: { el, si, s, frames, fi, name, stage }
+    let side = null;   // the person a sideways drag is bringing in: { d, pg }
+    let busy = false;  // a page sliding home, so a press waits
+
+    const cur = () => page.frames[page.fi];
     const own = () => cur().post.author === me;
     const canReply = () => !own() && canMessage(cur().post.author);
 
@@ -7827,112 +7855,160 @@
       for (const { target: el } of seen) el.classList.toggle('is-long', el.scrollHeight > el.clientHeight + 1);
     }) : null;
 
-    const paintLike = () => {
-      const p = cur().post;
-      if (own()) {
-        likeBtn.classList.remove('liked');
-        likeBtn.setAttribute('aria-label', 'Who liked it');
-        likeBtn.removeAttribute('aria-pressed');
-        return;
-      }
-      const on = !!Store.reactionOf(p.id);
-      likeBtn.classList.toggle('liked', on);
-      likeBtn.setAttribute('aria-pressed', String(on));
-      likeBtn.setAttribute('aria-label', on ? 'Unlike' : 'Like');
-    };
-
     // The wash: a photo's or a song's sleeve's own colour on a picture frame
     // (Zoe: "make the background gradient match images rather than someones
     // profile", then "album covers the way they match photos"), the
-    // poster's colour, as their profile wears it, on anything else. Only
-    // repainted when its source changes, so a frame of the same person's words
-    // doesn't flicker.
-    let tint = 0;
-    let washedBy = '';
-    const wash = (f, u) => {
-      const p = f.post;
-      const pic = p.song ? p.song.art || '' : f.src || (p.image ? (isVideoUrl(p.image) ? p.poster || '' : p.image) : '');
+    // poster's colour, as their profile wears it, on anything else. Each page
+    // wears its own, so it travels with the page, and it is only repainted
+    // when its source changes, so a frame of the same person's words doesn't
+    // flicker.
+    const wash = (pg, f) => {
+      const pic = framePicture(f);
+      const u = pg.s.u;
       const by = pic ? 'pic:' + pic : 'who:' + u.username;
-      if (by === washedBy) return;
-      washedBy = by;
-      const mine = ++tint;
+      if (by === pg.washedBy) return;
+      pg.washedBy = by;
+      const mine = ++pg.tint;
       // A sleeve that won't sample (a host that refuses CORS) falls back to the
       // poster's colour rather than to no wash at all.
       const tone = pic
         ? sampleColor(sizedSrc(pic, 40)).then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : personTone(u)), () => personTone(u))
         : personTone(u);
       tone.then((tone) => {
-        if (mine !== tint) return;
-        root.classList.remove('mv--wash', 'mv--tria');
-        for (const k of 'abc') root.style.removeProperty('--wash-' + k);
+        if (mine !== pg.tint) return;
+        const el = pg.el;
+        el.classList.remove('mv--wash', 'mv--tria');
+        for (const k of 'abc') el.style.removeProperty('--wash-' + k);
         if (tone === 'none') return;
         const rgb = tone !== 'tria' && cssToRgb(tone);
-        if (rgb) stopsAround(rgb, WASH_ARC).forEach((c, i) => root.style.setProperty('--wash-' + 'abc'[i], c));
-        root.classList.add(rgb ? 'mv--wash' : 'mv--tria');
+        if (rgb) stopsAround(rgb, WASH_ARC).forEach((c, i) => el.style.setProperty('--wash-' + 'abc'[i], c));
+        el.classList.add(rgb ? 'mv--wash' : 'mv--tria');
       });
     };
 
-    const paint = (how) => {
-      const s = stacks[si];
-      const f = cur();
-      const p = f.post;
-      bars.innerHTML = frames.map((_, i) => `<span class="mv-bar${i <= fi ? ' is-on' : ''}"></span>`).join('');
-      const name = s.mine ? 'You' : (s.u.name || s.u.username);
-      // Every frame has a •••: yours edits and deletes, anyone else's reports
-      // and blocks (App Store 1.2: user content must be reportable where it
-      // is seen, and its author blockable).
-      const more = true;
-      head.innerHTML =
-        `<a class="mv-who" href="#/u/${encodeURIComponent(s.u.username)}">` +
-          avatarEl(s.u, { cls: 'mv-avatar' }) +
-          `<span class="mv-who-text"><span class="mv-name">${esc(name)}</span>` +
-          `<span class="mv-when">${esc(momentWhen(p))}</span></span>` +
-        `</a>` +
-        (more ? `<button type="button" class="mv-btn mv-more" aria-label="More">${svgIcon('dots')}</button>` : '') +
-        `<button type="button" class="mv-btn mv-close" aria-label="Close">${svgIcon('close')}</button>`;
-      root.setAttribute('aria-label', `${name}’s moments, ${fi + 1} of ${frames.length}`);
-      head.querySelector('.mv-close').addEventListener('click', () => close());
-      head.querySelector('.mv-more')?.addEventListener('click', () => openFrameMenu());
-      stage.innerHTML = momentFrameHtml(f);
-      const frame = stage.firstElementChild;
+    const paintLike = (pg = page) => {
+      const p = pg.frames[pg.fi].post;
+      const btn = pg.el.querySelector('.mv-like');
+      if (p.author === me) {
+        btn.classList.remove('liked');
+        btn.setAttribute('aria-label', 'Who liked it');
+        btn.removeAttribute('aria-pressed');
+        return;
+      }
+      const on = !!Store.reactionOf(p.id);
+      btn.classList.toggle('liked', on);
+      btn.setAttribute('aria-pressed', String(on));
+      btn.setAttribute('aria-label', on ? 'Unlike' : 'Like');
+    };
+
+    // The frame on screen is the one that is live: watched, wired, seen.
+    const live = (how) => {
+      const pg = page;
+      const p = cur().post;
+      const frame = pg.stage.firstElementChild;
+      root.setAttribute('aria-label', `${pg.name}’s moments, ${pg.fi + 1} of ${pg.frames.length}`);
       if (fits) {
         fits.disconnect();
         frame.querySelectorAll('.mv-words, .mv-caption').forEach(el => fits.observe(el));
       }
-      wireLinkTiles(frame);
-      wirePoll(frame, p, {});
-      const vid = frame.querySelector('video');
-      const sound = frame.querySelector('.mv-sound');
-      if (vid && sound) sound.addEventListener('click', () => {
-        vid.muted = !vid.muted;
-        sound.setAttribute('aria-pressed', String(!vid.muted));
-        sound.setAttribute('aria-label', vid.muted ? 'Play with sound' : 'Mute');
-        sound.innerHTML = svgIcon(vid.muted ? 'mute' : 'sound');
-      });
-      replyBtn.hidden = !canReply();
-      replyBtn.querySelector('span').textContent = `Reply to ${displayNameOf(p.author)}`;
-      paintLike();
-      wash(f, s.u);
-      if (!s.mine) markMomentSeen(p);
-      if (prefersReduced() || !how) return;
-      const from = how === 'person' ? `translateX(${dirX * 36}px)` : 'none';
-      frame.animate([{ opacity: 0, transform: from }, { opacity: 1, transform: 'none' }],
-        { duration: how === 'person' ? 280 : 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+      if (!frame.dataset.wired) {
+        frame.dataset.wired = '1';
+        wirePoll(frame, p, {});
+      }
+      if (!pg.s.mine) markMomentSeen(p);
+      if (how === 'frame' && !prefersReduced()) {
+        frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+      }
     };
 
-    let dirX = 1;
-    const step = (d) => {
-      dirX = d;
-      if (fi + d >= 0 && fi + d < frames.length) { fi += d; paint('frame'); return; }
-      if (si + d < 0 || si + d >= stacks.length) { if (d > 0) close(); return; }
-      enter(si + d, d < 0 ? 'end' : null);
-      paint('person');
+    const showFrame = (pg, how) => {
+      const f = pg.frames[pg.fi];
+      const p = f.post;
+      pg.el.querySelector('.mv-when').textContent = momentWhen(p);
+      pg.el.querySelectorAll('.mv-dot').forEach((d, i) => d.classList.toggle('is-on', i === pg.fi));
+      const rep = pg.el.querySelector('.mv-reply');
+      rep.hidden = p.author === me || !canMessage(p.author);
+      rep.setAttribute('aria-label', `Reply to ${displayNameOf(p.author)}`);
+      paintLike(pg);
+      pg.stage.innerHTML = momentFrameHtml(f);
+      wireLinkTiles(pg.stage);
+      wash(pg, f);
+      if (pg === page) live(how);
     };
-    const person = (d) => {
-      if (si + d < 0 || si + d >= stacks.length) { if (d > 0) close(); return; }
-      dirX = d;
-      enter(si + d);
-      paint('person');
+
+    // A PAGE is one person, built whole and set in the card, so a sideways
+    // drag can carry the next one in beside it; only its frame changes as you
+    // tap. It opens on the first frame you haven't seen, as stories do.
+    const pageFor = (si, at) => {
+      const s = stacks[si];
+      const frames = momentFrames(s);
+      const seen = seenMoments();
+      const fi = at === 'end' ? frames.length - 1
+        : s.mine ? 0 : Math.max(0, frames.findIndex(f => !seen.has(String(f.post.id))));
+      const name = s.mine ? 'You' : (s.u.name || s.u.username);
+      const el = document.createElement('div');
+      el.className = 'mv-page' + (frames.length > 1 ? ' has-dots' : '');
+      el.innerHTML =
+        `<div class="mv-head">` +
+          `<a class="mv-who" href="#/u/${encodeURIComponent(s.u.username)}">` +
+            avatarEl(s.u, { cls: 'mv-avatar' }) +
+            `<span class="mv-who-text"><span class="mv-name">${esc(name)}</span>` +
+            `<span class="mv-when"></span></span>` +
+          `</a>` +
+          `<button type="button" class="mv-btn mv-close" aria-label="Close">${svgIcon('close')}</button>` +
+        `</div>` +
+        `<div class="mv-stage"></div>` +
+        `<div class="mv-rail">` +
+          `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
+          `<button type="button" class="mv-reply pill-quiet">${svgIcon('reply')}</button>` +
+          `<button type="button" class="mv-more pill-quiet" aria-label="More">${svgIcon('dots')}</button>` +
+        `</div>` +
+        (frames.length > 1
+          ? `<div class="mv-dots" aria-hidden="true">${frames.map(() => '<span class="mv-dot"></span>').join('')}</div>`
+          : '');
+      card.appendChild(el);
+      const pg = { el, si, s, frames, fi, name, stage: el.querySelector('.mv-stage'), washedBy: '', tint: 0 };
+      showFrame(pg);
+      return pg;
+    };
+    const span = () => card.clientWidth + MV_GAP;
+
+    // The next person comes in from the side they are on, and takes over.
+    const slideIn = (nb, d, ms = 320) => {
+      busy = true;
+      const old = page;
+      old.el.querySelector('video')?.pause();
+      page = nb;
+      Promise.all([
+        mvGlide(old.el, { transform: `translateX(${-d * span()}px)` }, ms, MV_GLIDE),
+        mvGlide(nb.el, { transform: 'translateX(0px)' }, ms, MV_GLIDE),
+      ]).then(() => {
+        old.el.remove();
+        nb.el.style.transform = '';
+        busy = false;
+        if (momentsAway === close) live('person');
+      });
+    };
+
+    const step = (d) => {
+      const n = page.fi + d;
+      if (n >= 0 && n < page.frames.length) { page.fi = n; showFrame(page, 'frame'); return; }
+      const to = page.si + d;
+      if (to < 0) return;
+      if (to >= stacks.length) { close(); return; }
+      const nb = pageFor(to, d < 0 ? 'end' : null);
+      nb.el.style.transform = `translateX(${d * span()}px)`;
+      slideIn(nb, d, 300);
+    };
+
+    // The person a sideways drag is reaching for, built once per direction.
+    const neighbour = (d) => {
+      if (side && side.d === d) return side.pg;
+      if (side) { side.pg.el.remove(); side = null; }
+      const to = page.si + d;
+      if (to < 0 || to >= stacks.length) return null;
+      side = { d, pg: pageFor(to) };
+      return side.pg;
     };
 
     const like = (x, y) => {
@@ -7956,22 +8032,18 @@
     const setLike = async (p, next) => {
       if (liking) return;
       liking = true;
-      likeBtn.classList.toggle('liked', !!next);
-      if (next) burstSparkles(likeBtn);
+      const btn = page.el.querySelector('.mv-like');
+      btn.classList.toggle('liked', !!next);
+      if (next) burstSparkles(btn);
       const res = await Store.setReaction(p.id, next).catch(() => null);
       liking = false;
       if (!res || !res.ok) toast('Couldn’t save that like, try again.');
       if (cur().post === p) paintLike();
     };
-    likeBtn.addEventListener('click', () => {
-      const p = cur().post;
-      if (own()) { openLikesSheet(p); return; }
-      hapticTap('LIGHT');
-      setLike(p, Store.reactionOf(p.id) ? null : 'heart');
-    });
     // The DM, the frame on its bar. A pull up has already buzzed as it armed.
-    const reply = (pulled) => { if (canReply()) replyToSong(cur().post, replyBtn, pulled); };
-    replyBtn.addEventListener('click', () => reply(false));
+    const reply = (pulled) => {
+      if (canReply()) replyToSong(cur().post, page.el.querySelector('.mv-reply'), pulled, framePicture(cur()));
+    };
 
     // Your own frame's sheet: edit and delete, or your song's.
     const openFrameMenu = () => {
@@ -7988,25 +8060,71 @@
       openMyMoment(p, close);
     };
 
-    // A pull up arms the reply past REPLY_AT: the pill takes the wash and the
+    // Every button in a page, the one on screen only.
+    card.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b || busy || !page.el.contains(b)) return;
+      if (b.classList.contains('mv-close')) close();
+      else if (b.classList.contains('mv-more')) openFrameMenu();
+      else if (b.classList.contains('mv-reply')) reply(false);
+      else if (b.classList.contains('mv-like')) {
+        const p = cur().post;
+        if (own()) { openLikesSheet(p); return; }
+        hapticTap('LIGHT');
+        setLike(p, Store.reactionOf(p.id) ? null : 'heart');
+      } else if (b.classList.contains('mv-sound')) {
+        const vid = page.stage.querySelector('video');
+        if (!vid) return;
+        vid.muted = !vid.muted;
+        b.setAttribute('aria-pressed', String(!vid.muted));
+        b.setAttribute('aria-label', vid.muted ? 'Play with sound' : 'Mute');
+        b.innerHTML = svgIcon(vid.muted ? 'mute' : 'sound');
+      }
+    });
+
+    // A pull up arms the reply past REPLY_AT: the disc takes the wash and the
     // finger feels it, as a message's swipe to reply does.
     const aimReply = (p) => {
       const armed = p.axis === 'y' && p.dy <= -REPLY_AT && canReply();
       if (armed === p.armed) return;
       p.armed = armed;
-      replyBtn.classList.toggle('is-on', armed);
+      page.el.querySelector('.mv-reply').classList.toggle('is-on', armed);
       if (armed) hapticTap('LIGHT');
     };
 
-    /* The stage's own gestures. A link, a button, a poll or a tile keeps its
-       tap; anything else is the viewer's. */
+    // The whole screen, pulled down: it follows the finger, shrinking a little
+    // and rounding toward the display's corners, the page behind it coming up
+    // out of the dim.
+    const pullCard = (dy) => {
+      const h = card.clientHeight || 1;
+      const k = Math.min(1, dy / h);
+      card.style.transform = dy > 0 ? `translateY(${dy}px) scale(${1 - 0.14 * k})` : '';
+      card.style.borderRadius = dy > 0 ? `${Math.min(44, dy * 0.4)}px` : '';
+      veil.style.opacity = String(1 - Math.min(1, dy / (h * 0.55)));
+    };
+    // The frame, pulled up: it rises at half the finger's pace and stiffens
+    // once armed; on a frame with no Reply it only gives a little, so nothing
+    // is promised.
+    const riseFrame = (up) => {
+      const frame = page.stage.firstElementChild;
+      if (!frame) return;
+      const rise = !canReply() ? Math.min(18, up * 0.12)
+        : up <= REPLY_AT ? up * 0.5 : REPLY_AT * 0.5 + (up - REPLY_AT) * 0.12;
+      frame.style.transform = up > 0 ? `translateY(${-rise}px)` : '';
+    };
+
+    /* The card's gestures. A link, a button, a poll or a tile keeps its tap;
+       anywhere else a drag is the viewer's, and a tap on the stage steps. */
     const KEEP = 'a, button, input, textarea, .poll, [data-tile]';
     let press = null;
     let lastTap = 0;
     let tapTimer = 0;
-    stage.addEventListener('pointerdown', (e) => {
-      if (e.button > 0 || e.target.closest(KEEP)) return;
-      press = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false, held: false, axis: '', armed: false };
+    card.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || busy || e.target.closest(KEEP)) return;
+      if (press) clearTimeout(press.timer);
+      press = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, vx: 0, vy: 0,
+        lx: e.clientX, ly: e.clientY, lt: e.timeStamp,
+        moved: false, held: false, axis: '', armed: false, onStage: !!e.target.closest('.mv-stage') };
       const mine = press;
       press.timer = setTimeout(() => {
         if (press !== mine || mine.moved) return;
@@ -8015,50 +8133,92 @@
         else root.classList.add('is-held');
       }, 420);
     });
-    stage.addEventListener('pointermove', (e) => {
-      if (!press || press.held) return;
+    card.addEventListener('pointermove', (e) => {
+      if (!press || press.held || e.pointerId !== press.id) return;
       press.dx = e.clientX - press.x;
       press.dy = e.clientY - press.y;
+      // Velocity, smoothed, for a flick.
+      const dt = Math.max(1, e.timeStamp - press.lt);
+      press.vx = press.vx * 0.4 + ((e.clientX - press.lx) / dt) * 0.6;
+      press.vy = press.vy * 0.4 + ((e.clientY - press.ly) / dt) * 0.6;
+      press.lx = e.clientX; press.ly = e.clientY; press.lt = e.timeStamp;
       if (!press.moved && Math.hypot(press.dx, press.dy) < 10) return;
       if (!press.moved) {
         press.moved = true;
         clearTimeout(press.timer);
         press.axis = Math.abs(press.dy) > Math.abs(press.dx) ? 'y' : 'x';
+        try { card.setPointerCapture(press.id); } catch { /* already gone */ }
+        // A spring still settling hands over to the finger.
+        for (const el of [card, veil, page.el, page.stage.firstElementChild]) el?.getAnimations().forEach(a => a.cancel());
       }
       aimReply(press);
-      const frame = stage.firstElementChild;
-      if (!frame || prefersReduced()) return;
-      frame.style.transition = 'none';
-      // Up, the frame rises at half the finger's pace and stiffens once armed;
-      // on a frame with no Reply it only gives a little, so nothing is promised.
-      const up = Math.max(0, -press.dy);
-      const rise = !canReply() ? Math.min(18, up * 0.12)
-        : up <= REPLY_AT ? up * 0.5 : REPLY_AT * 0.5 + (up - REPLY_AT) * 0.12;
-      frame.style.transform = press.axis === 'x' ? `translateX(${press.dx * 0.5}px)`
-        : press.dy < 0 ? `translateY(${-rise}px)`
-        : `translateY(${press.dy}px) scale(${1 - Math.min(0.08, press.dy / 2400)})`;
-    }, { passive: true });
-    const lift = (e) => {
-      const was = press;
-      press = null;
-      if (!was) return;
-      clearTimeout(was.timer);
-      root.classList.remove('is-held');
-      replyBtn.classList.remove('is-on');
-      const frame = stage.firstElementChild;
-      const settle = () => {
-        if (!frame) return;
-        frame.style.transition = 'transform 0.3s var(--spring)';
-        frame.style.transform = '';
-      };
-      if (was.held || e.type === 'pointercancel') { settle(); return; }
-      if (was.moved) {
-        if (was.axis === 'y' && was.dy > 110) { close(); return; }
-        settle();
-        if (was.armed) { reply(true); return; }
-        if (was.axis === 'x' && Math.abs(was.dx) > 70) person(was.dx < 0 ? 1 : -1);
+      if (prefersReduced()) return;
+      if (press.axis === 'y') {
+        pullCard(Math.max(0, press.dy));
+        riseFrame(Math.max(0, -press.dy));
         return;
       }
+      const d = press.dx < 0 ? 1 : -1;
+      const nb = neighbour(d);
+      // Past the first or last person the page only gives, as a scroll's end does.
+      const dx = nb ? press.dx : press.dx * 0.3;
+      page.el.style.transform = `translateX(${dx}px)`;
+      if (nb) nb.el.style.transform = `translateX(${dx + d * span()}px)`;
+    }, { passive: true });
+
+    const settleY = () => {
+      mvGlide(card, { transform: 'none', borderRadius: '0px' }, 420, MV_SETTLE).then((ok) => {
+        if (ok) { card.style.transform = ''; card.style.borderRadius = ''; }
+      });
+      mvGlide(veil, { opacity: '1' }, 300, 'ease-out');
+      const frame = page.stage.firstElementChild;
+      if (frame && frame.style.transform) {
+        mvGlide(frame, { transform: 'translateY(0px)' }, 380, MV_SETTLE).then((ok) => { if (ok) frame.style.transform = ''; });
+      }
+    };
+    const settleX = () => {
+      if (page.el.style.transform) {
+        const el = page.el;
+        mvGlide(el, { transform: 'translateX(0px)' }, 420, MV_SETTLE).then((ok) => { if (ok) el.style.transform = ''; });
+      }
+      if (!side) return;
+      const { d, pg } = side;
+      side = null;
+      mvGlide(pg.el, { transform: `translateX(${d * span()}px)` }, 320, MV_GLIDE).then(() => pg.el.remove());
+    };
+
+    const lift = (e) => {
+      const was = press;
+      if (!was || e.pointerId !== was.id) return;
+      press = null;
+      clearTimeout(was.timer);
+      root.classList.remove('is-held');
+      page.el.querySelector('.mv-reply').classList.remove('is-on');
+      if (was.held || e.type === 'pointercancel') { settleY(); settleX(); return; }
+      if (was.moved) {
+        if (was.axis === 'y') {
+          if (was.dy > DISMISS_AT || (was.dy > 24 && was.vy > 0.5)) { fall(); return; }
+          settleY();
+          if (was.armed) reply(true);
+          return;
+        }
+        const w = span();
+        const d = side ? side.d : (was.dx < 0 ? 1 : -1);
+        const far = Math.abs(was.dx) > w * 0.28 || (Math.abs(was.vx) > 0.45 && Math.sign(was.vx) === -d);
+        // Reduced motion drew no neighbour while dragging, so it is built here.
+        const nb = far && (side ? side.pg : neighbour(d));
+        if (nb) {
+          if (!nb.el.style.transform) nb.el.style.transform = `translateX(${d * w}px)`;
+          side = null;
+          slideIn(nb, d);
+          return;
+        }
+        // Past the last person, a swipe on closes, as a tap past the end does.
+        if (far && d > 0 && page.si === stacks.length - 1) { fall('side'); return; }
+        settleX();
+        return;
+      }
+      if (!was.onStage) return;
       const x = e.clientX, y = e.clientY;
       const go = () => step(x < root.clientWidth / 3 ? -1 : 1);
       if (own()) { go(); return; }   // nothing to like, so no wait
@@ -8073,17 +8233,19 @@
       clearTimeout(tapTimer);
       tapTimer = setTimeout(go, MOMENT_TAP_MS);
     };
-    stage.addEventListener('pointerup', lift);
-    stage.addEventListener('pointercancel', lift);
-    stage.addEventListener('contextmenu', (e) => { if (!e.target.closest(KEEP)) e.preventDefault(); });
+    // On the document, so a lift over a sheet the hold raised still lands.
+    document.addEventListener('pointerup', lift);
+    document.addEventListener('pointercancel', lift);
+    card.addEventListener('contextmenu', (e) => { if (!e.target.closest(KEEP)) e.preventDefault(); });
 
     const onKey = (e) => {
       if (sheetOpen) return;
       if (e.key === 'Escape') close();
+      else if (busy) return;
       else if (e.key === 'ArrowRight') step(1);
       else if (e.key === 'ArrowLeft') step(-1);
       else if (e.key === 'Tab') {
-        const f = [...root.querySelectorAll('a[href], button')];
+        const f = [...page.el.querySelectorAll('a[href], button:not([hidden])')];
         if (!f.length) return;
         const first = f[0], last = f[f.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -8092,23 +8254,52 @@
     };
     document.addEventListener('keydown', onKey);
 
-    function close() {
+    // Let go of a pull down (or a swipe past the last person): the screen keeps
+    // going the way the finger sent it, and the page is simply there under it.
+    function fall(how) {
+      if (momentsAway !== close) return;
+      busy = true;
+      const h = card.clientHeight;
+      const to = how === 'side'
+        ? { transform: `translateX(${-span()}px)` }
+        : { transform: `translateY(${h}px) scale(0.86)`, borderRadius: '44px' };
+      veil.getAnimations().forEach(a => a.cancel());
+      if (!prefersReduced()) veil.animate([{ opacity: getComputedStyle(veil).opacity }, { opacity: 0 }], { duration: 260, fill: 'forwards' });
+      mvGlide(card, to, 280, 'cubic-bezier(0.25, 0.6, 0.35, 1)').then(() => close('gone'));
+    }
+
+    function close(how) {
       if (momentsAway !== close) return;
       momentsAway = null;
       clearTimeout(tapTimer);
       if (fits) fits.disconnect();
       document.removeEventListener('keydown', onKey);
-      root.querySelector('video')?.pause();
-      root.classList.remove('open');
+      document.removeEventListener('pointerup', lift);
+      document.removeEventListener('pointercancel', lift);
+      root.querySelectorAll('video').forEach(v => v.pause());
       if (!sheetOpen) document.body.style.overflow = '';
-      if (opener && opener.isConnected && opener.focus) opener.focus();
-      setTimeout(() => root.remove(), prefersReduced() ? 0 : 240);
+      if (opener && opener.isConnected && opener.focus) opener.focus({ preventScroll: true });
+      if (how === 'gone' || prefersReduced()) root.remove();
+      else {
+        root.classList.remove('open');
+        if (card.animate) card.animate([{ transform: 'none' }, { transform: 'scale(0.97)' }], { duration: 220, easing: 'ease-in', fill: 'forwards' });
+        setTimeout(() => root.remove(), 240);
+      }
       paintOnRepeat();   // what was seen stops glowing
     }
+
+    document.body.appendChild(root);
+    document.body.style.overflow = 'hidden';
     momentsAway = close;
-    dirX = 1;
-    paint('person');
-    requestAnimationFrame(() => head.querySelector('.mv-close')?.focus());
+    page = pageFor(start);
+    live('open');
+    requestAnimationFrame(() => {
+      root.classList.add('open');
+      if (!prefersReduced() && card.animate) {
+        card.animate([{ transform: 'scale(0.97)' }, { transform: 'none' }], { duration: 340, easing: MV_SETTLE });
+      }
+      page.el.querySelector('.mv-close')?.focus({ preventScroll: true });
+    });
   }
 
   /* Told ONCE, under the rail (Zoe, 2026-10-26: "a quiet soft cta"): a week
@@ -8133,10 +8324,12 @@
      DM with the poster, the song or Moment waiting on the bar as a reply
      waits (setChatSong), sent as its own link. The chat's chevron pops back
      to My Circle rather than to Chats (chatPopsTo), since that is where the
-     reader came from. `quiet` when a gesture already buzzed as it armed. */
-  let songReply = null;   // { chatId, post } for the chat this tap opens
+     reader came from. `quiet` when a gesture already buzzed as it armed;
+     `pic` is the frame's own picture, so a carousel's chip shows the photo
+     that was answered, not the first. */
+  let songReply = null;   // { chatId, post, pic } for the chat this tap opens
   let chatPopsTo = null;  // the chat whose back chevron pops (see renderChat)
-  async function replyToSong(post, btn, quiet) {
+  async function replyToSong(post, btn, quiet, pic) {
     if (btn.dataset.busy) return;
     if (!quiet) hapticTap('LIGHT');
     const dm = Store.chats().find(ch => ch.kind === 'direct' && ch.other === post.author
@@ -8153,7 +8346,7 @@
       id = res.id;
     }
     if (post.song) rememberSong(post.song);
-    songReply = { chatId: id, post };
+    songReply = { chatId: id, post, pic };
     chatPopsTo = id;
     go(`#/chat/${encodeURIComponent(id)}`);
   }
@@ -18805,11 +18998,17 @@
   }
 
   /* The song a reply answers (replyToSong), waiting over the bar the way a
-     message being answered does: the same glass chip, worn with the sleeve,
-     and the field asking to reply to its owner. The send carries the song's
-     link under the words; the chip's X takes it back and leaves a plain DM. */
+     message being answered does: the same glass chip, and the field asking
+     to reply to its owner. The send carries the song's link under the words;
+     the chip's X takes it back and leaves a plain DM.
+     A MOMENT WAITS THE SAME WAY, led by what it showed (2026-11-06, Zoe:
+     "text moments get the correct reply preview, no album art"): a song its
+     sleeve in the round crop (Zoe, 2026-10-26), a photo the photo answered
+     in a soft square (round, it read as a face), a clip its poster with a
+     small play mark, and words nothing at all, so the chip is a message
+     reply's with the moment's words in it. */
   let chatSong = null;   // { post } while one waits
-  function setChatSong(post) {
+  function setChatSong(post, pic) {
     chatSong = post ? { post } : null;
     const bar = postBarEl();
     if (!bar) return;
@@ -18830,17 +19029,21 @@
       tray.className = 'postbar-attach postbar-reply postbar-song';
       bar.appendChild(tray);
     }
-    // A Moment waits the same way, its picture for the sleeve.
     const s = post.song || null;
-    const pic = s ? s.art : post.image ? (isVideoUrl(post.image) ? post.poster : post.image) : '';
-    const art = pic && !s ? sizedSrc(pic, 48) : pic;
+    const clip = !s && isVideoUrl(post.image || '');
+    const shown = s ? s.art || '' : pic || (clip ? post.poster || '' : post.image || '');
+    const lead = s
+      ? `<span class="postbar-song-art${shown ? ' pin-cover' : ''}"${shown
+          ? ` style="background-image:url('${encodeURI(shown)}')"` : ''} aria-hidden="true"></span>`
+      : shown
+        ? `<span class="postbar-moment-pic${clip ? ' is-clip' : ''}" style="background-image:url('${encodeURI(sizedSrc(shown, 96))}')" ` +
+            `aria-hidden="true">${clip ? svgIcon('play') : ''}</span>`
+        : '';
     const who = displayNameOf(post.author);
     const what = s ? 'song' : 'moment';
     const said = s ? s.title : momentWords(post);
     tray.innerHTML =
-      `<div class="postbar-reply-chip postbar-song-chip">` +
-        `<span class="postbar-song-art${art ? ' pin-cover' : ''}"${art
-          ? ` style="background-image:url('${encodeURI(art)}')"` : ''} aria-hidden="true"></span>` +
+      `<div class="postbar-reply-chip postbar-song-chip${lead ? '' : ' is-words'}">` + lead +
         `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> ${what}${said ? ': ' + esc(said) : ''}</span>` +
         `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the ${what}">${svgIcon('close')}</button>` +
       `</div>`;
@@ -19115,7 +19318,7 @@
     // way the editors' does (a pushed entry is there to pop).
     const pops = chatPopsTo === id;
     chatPopsTo = pops ? id : null;
-    const answering = songReply && songReply.chatId === id ? songReply.post : null;
+    const answering = songReply && songReply.chatId === id ? songReply : null;
     songReply = null;
     mountToolbar({
       leading: pops ? toolbarBackEl('', 'My Circle', 'chat-back') : toolbarBackEl('#/chats', 'Chats'),
@@ -19222,7 +19425,7 @@
       });
       // The song waits on the bar with the caret in the field, once the native
       // bar has been told the page has one.
-      if (answering) requestAnimationFrame(() => { if (section.isConnected) setChatSong(answering); });
+      if (answering) requestAnimationFrame(() => { if (section.isConnected) setChatSong(answering.post, answering.pic); });
     }
 
     // Open on the newest message, after the router has settled the scroll,

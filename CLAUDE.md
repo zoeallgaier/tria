@@ -232,26 +232,51 @@ Moment; with nothing up, your place is a round + saying **Share a moment**
 add-moments.sql). **A tap opens the viewer** (`openMoments`, an overlay that
 locks the page like a sheet, so the native chrome stands down, and route()
 closes it): Tria's paper with a wash off the top-right corner (a photo or a song
-takes its picture's own colour, Zoe; anything else, or a sleeve that won't sample, the poster's), bare ••• and x
-glyphs (no pills: the paper is always behind them), a
-hairline segment per frame (a carousel is a frame per photo), face, name, age,
-the content set as the feed sets it (a short note big in the serif, a song's
-sleeve, title and Listen). **Nothing advances by itself**: tap right for next,
-left for back, on into the next person; a swipe sideways changes person, a pull
-down closes, **a pull up replies** (past `REPLY_AT`, 70px, the Reply pill lights
-and a LIGHT haptic arms it, Zoe 2026-11-05), a double tap likes (the heart where the finger was), a hold hides
-the chrome, and on your OWN opens Edit moment and Delete moment (`openMyMoment`,
-or Listen/Change song/Take it down for your song). **A reply is a message, not
-a comment** (Zoe, 2026-11-05: "adding a comment should actually be replies"):
-the foot is **Reply to <name>** (`replyToSong`, your DM with the frame on its
-bar) and the heart; your own frame, or someone you can't message, has the heart
-alone (yours opens Likes), and only your own frame has a •••. Words take the
+takes its picture's own colour, Zoe; anything else, or a sleeve that won't sample, the poster's), face, name, age
+and a bare x (the paper is always behind it), the content set as the feed sets it
+(a short note big in the serif, a song's sleeve, title and Listen). **Nothing
+advances by itself**: tap right for next, left for back, on into the next
+person, a double tap likes (the heart where the finger was), a hold hides the
+chrome, and on your OWN opens Edit moment and Delete moment (`openMyMoment`, or
+Listen/Change song/Take it down for your song).
+**One thing moves per gesture (2026-11-06, Zoe: "the full screen should move
+down to dismiss rather than just some content").** Three layers: `.mv`, the
+`.mv-veil` dim over the page behind, and `.mv-card`, the whole screen. A pull
+down carries the CARD with the finger, shrinking a little and rounding its
+corners as the page shows through; past `DISMISS_AT` (110px) or on a flick it
+falls away, else it springs back. Each person is a whole `.mv-page` (face,
+frame, rail, dots, and its own wash), so **a sideways drag is a page drag**:
+the next person's page comes in beside it one to one, going on 28% of the
+width or a flick (`slideIn`, `mvGlide`), and a tap past a person's last frame
+slides the same way. Past the last person a swipe on closes. **A pull up
+replies** (past `REPLY_AT`, 70px, the frame rising against a stiffening spring,
+the Reply disc washing and a LIGHT haptic arming it, Zoe 2026-11-05).
+**Vertical paging between people was weighed and passed over** (Zoe floated
+Reels' grammar, "not married to vertical scroll"): one axis would carry three
+jobs (next person, close, reply), and a swipe through faces is the infinite
+feed Tria isn't.
+**The reactions are a rail on the right** (Zoe: "stack them like tiktok/reels
+style"), `.mv-rail`: the heart, Reply, the •••, glass discs at THE BUTTON's
+quiet weight (a photo may be behind them), no counts, at one height on every
+page. Words are set clear of its lane (`--mv-lane`); a tall photo runs under it.
+**A stack of one has no indicator; two or more get soft dots at the foot**, the
+current one a pill (`.mv-dots`, Zoe: "no need for the gross instagram line
+indicator if its only one moment"). The hairline segments are gone.
+**A reply is a message, not a comment** (Zoe, 2026-11-05: "adding a comment
+should actually be replies"): Reply (`replyToSong`) is your DM with the frame
+on its bar. Your own frame, or someone you can't message, has no Reply, and
+your own heart opens Likes. Every frame has a ••• (yours edits, anyone else's
+reports and blocks). **The chip on the bar is led by what the frame showed**
+(`setChatSong(post, pic)`, Zoe 2026-11-06: "text moments get the correct reply
+preview (no album art)"): a song its sleeve in the round crop, a photo the very
+photo answered (a carousel's, not its first) in a 12px soft square, a clip its
+poster with a small play mark, words nothing at all (`.is-words`, padded as a
+message reply). Words take the
 vertical pan only when they really scroll (`.is-long`, a ResizeObserver), so the
 pulls work on a short note. **The viewer is one reading column** (2026-11-06,
-`--mv-col` 36rem, `--mv-side`): the bar, stage and foot take the same side
-inset, 14px on any phone and centred on a desktop, where the words and the
-Reply pill used to run the window's full width. The stage stays full width, so
-the tap zones (left third back, the rest forward) and swipes are unchanged.
+`--mv-col` 36rem, `--mv-side`): the head, stage and rail take the same side
+inset, 14px on any phone and centred on a desktop. The stage stays full width, so
+the tap zones (left third back, the rest forward) are unchanged.
 Words frames are set in a further 10px (24px from a phone's edge) with 0.75rem
 of air above and below the scroller; a pictured frame fills the column.
 The rail's own double tap and hold are gone (`wireSongGestures` deleted).

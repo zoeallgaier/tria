@@ -5776,34 +5776,65 @@ button.poll-option:disabled { cursor: default; }
 /* ── The Moments viewer (openMoments) ────────────────────────────────────────
    Tria's paper, not a black player, with the poster's wash blooming off the
    top-right corner as on their profile (the person card's mix, at full
-   screen), a hairline segment per frame, and the content set as the feed
-   sets it. Under the sheets (300), over everything else. */
+   screen), and the content set as the feed sets it. Under the sheets (300),
+   over everything else.
+   THREE LAYERS. .mv is the fixed frame; .mv-veil is the dim over the page
+   behind, seen only while a pull down carries .mv-card (the whole screen,
+   its paper and everything on it) off with the finger; each person is an
+   .mv-page in the card, whole, so a sideways drag slides the next one in
+   beside it. The motion is all inline (openMoments); the CSS is the rest. */
 .mv {
   position: fixed;
   inset: 0;
   z-index: 250;
-  display: flex;
-  flex-direction: column;
   isolation: isolate;
-  background: var(--bg);
   color: var(--text);
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
   opacity: 0;
-  transform: scale(0.97);
-  transition: opacity 0.22s var(--ease-soft), transform 0.34s var(--spring);
+  transition: opacity 0.22s var(--ease-soft);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+  /* ONE READING COLUMN (2026-11-06): 14px in on every phone, centred on a
+     desktop, so a note is never the window's width. The stage stays full
+     width, so a tap anywhere reads as left third or the rest. */
+  --mv-col: 36rem;
+  --mv-side: max(14px, calc((100% - var(--mv-col)) / 2));
+  --mv-disc: 48px;
+  /* The rail's lane: words are set clear of it, a picture may run under. */
+  --mv-lane: calc(var(--mv-disc) + 12px);
 }
-.mv.open { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .mv, .mv.open { transform: none; transition: opacity 0.15s linear; } }
+.mv.open { opacity: 1; }
+.mv-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, #000 34%, transparent);
+  pointer-events: none;
+}
+.mv-card {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background: var(--bg);
+  transform-origin: 50% 35%;
+  touch-action: none;
+}
+.mv-page {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 .mv--tria {
   --wash-a: var(--brand-start);
   --wash-b: color-mix(in srgb, var(--brand-start), var(--brand-end));
   --wash-c: var(--brand-end);
 }
-.mv::before {
+.mv-page::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -5822,7 +5853,7 @@ button.poll-option:disabled { cursor: default; }
   transition: opacity 0.4s ease;
 }
 @supports (background: linear-gradient(in oklab, #000, #fff)) {
-  .mv::before {
+  .mv-page::before {
     background: linear-gradient(115deg in oklab,
       color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
       color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
@@ -5831,31 +5862,16 @@ button.poll-option:disabled { cursor: default; }
 }
 :is(.mv--wash, .mv--tria)::before { opacity: 1; }
 
-/* ONE READING COLUMN (2026-11-06). The viewer is fixed to the whole window, so
-   on a desktop the header, a note and the Reply pill all ran the window's full
-   width, the words 1400px long. The bar, the stage and the foot take the same
-   side inset: 14px where the screen is narrower than the column (every phone),
-   else whatever centres the column. The stage itself stays full width, so a
-   tap anywhere still reads as left third or the rest (`step` in openMoments),
-   and a swipe starts anywhere. */
-.mv {
-  --mv-col: 36rem;
-  --mv-side: max(14px, calc((100% - var(--mv-col)) / 2));
+/* A hold hides the chrome, so the picture stands alone. */
+.mv-head, .mv-rail, .mv-dots { transition: opacity 0.2s var(--ease-soft); }
+.mv.is-held :is(.mv-head, .mv-rail, .mv-dots) { opacity: 0; }
+.mv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px var(--mv-side) 0;
 }
-.mv-top, .mv-foot { padding-inline: var(--mv-side); transition: opacity 0.2s var(--ease-soft); }
-.mv.is-held :is(.mv-top, .mv-foot) { opacity: 0; }
-.mv-top { padding-top: 8px; }
-/* Hairlines, as fine as a story's (Zoe: "smaller like the lines on the story"). */
-.mv-bars { display: flex; gap: 3px; padding-inline: 2px; }
-.mv-bar {
-  flex: 1;
-  height: 2px;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--text) 18%, transparent);
-  transition: background-color 0.2s var(--ease-soft);
-}
-.mv-bar.is-on { background: color-mix(in srgb, var(--text) 85%, transparent); }
-.mv-head { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-height: 44px; }
 .mv-who {
   flex: 1;
   min-width: 0;
@@ -5873,6 +5889,7 @@ button.poll-option:disabled { cursor: default; }
 .mv-btn {
   width: 40px;
   height: 40px;
+  margin-right: -8px;
   padding: 0;
   border: 0;
   background: none;
@@ -5892,11 +5909,10 @@ button.poll-option:disabled { cursor: default; }
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 14px var(--mv-side);
-  touch-action: none;
+  padding: 14px var(--mv-side) 12px;
   cursor: pointer;
 }
-.mv-frame { flex: 1; min-width: 0; min-height: 0; will-change: transform; }
+.mv-frame { flex: 1; min-width: 0; min-height: 0; }
 /* A picture fills what's left, its caption under it. */
 .mv-frame--pic {
   display: grid;
@@ -5920,9 +5936,10 @@ button.poll-option:disabled { cursor: default; }
   object-fit: contain;
   -webkit-user-drag: none;
 }
+/* The clip's sound sits on the picture's left, the rail's side being taken. */
 .mv-sound {
   position: absolute;
-  right: 10px;
+  left: 10px;
   bottom: 10px;
   width: 40px;
   height: 40px;
@@ -5932,19 +5949,28 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
 }
 .mv-sound svg { width: 20px; height: 20px; }
-.mv-caption { max-height: 32dvh; overflow-y: auto; }
-/* Words alone sit in the middle, and a long note scrolls. */
-/* Words are set in from the column's edge (a pictured frame fills it), so a
-   note sits clear of the screen and of the avatar's gutter, 24px in on a phone
-   (Zoe: "padded properly"). The scroller keeps a little air above and below
-   its words, or a long note's first and last lines are cut flush against the
-   bar and the foot; it also keeps a serif's overhang from being clipped by the
-   overflow it needs to scroll. */
-.mv-frame--words { display: flex; flex-direction: column; justify-content: center; padding-inline: 10px; }
+.mv-caption { max-height: 32dvh; overflow-y: auto; padding-right: var(--mv-lane); }
+/* Words alone sit in the middle, and a long note scrolls. They are set in
+   from the column's edge (a pictured frame fills it), so a note sits clear of
+   the screen and of the avatar's gutter (Zoe: "padded properly"), and clear
+   of the rail's lane on the right. The scroller keeps a little air above and
+   below its words, or a long note's first and last lines are cut flush; it
+   also keeps a serif's overhang from being clipped by the overflow it needs
+   to scroll. */
+.mv-frame--words {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: 10px;
+  padding-right: var(--mv-lane);
+}
+/* A song is centred, so it keeps the lane on both sides. */
+.mv-frame--song { padding-inline: var(--mv-lane); }
 .mv-words {
   max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding-block: 0.75rem;
 }
 /* Only words that really scroll take the vertical pan (`is-long`, measured in
    openMoments); anywhere else a pull up replies and a pull down closes. */
@@ -5973,7 +5999,7 @@ button.poll-option:disabled { cursor: default; }
 /* A song: the sleeve big and rounded like every cover, then its name. */
 .mv-sleeve {
   display: block;
-  width: min(72vw, 300px, 42dvh);
+  width: min(100%, 300px, 42dvh);
   aspect-ratio: 1;
   margin: 0 auto 1.2rem;
   border-radius: var(--radius-art);
@@ -6005,43 +6031,62 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-listen svg { width: 18px; height: 18px; }
 
-/* Reply to <name> and the heart. With no Reply (your own frame, or someone
-   you can't message) the heart keeps its corner. */
-.mv-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 6px; padding-bottom: 10px; }
-.mv-reply {
-  flex: 1;
-  min-width: 0;
-  height: 52px;
-  padding: 0 18px;
-  border-radius: 26px;
+/* THE RAIL (Zoe, 2026-11-06: "stack them like tiktok/reels style"): the
+   heart, Reply, the •••, on the right in the lower third, glass discs at THE
+   BUTTON's quiet weight since a photo may be behind them. No count under any
+   of them. With no Reply (your own frame, or someone you can't message) the
+   others close up. */
+.mv-rail {
+  position: absolute;
+  z-index: 2;
+  right: var(--mv-side);
+  /* The same height whether or not the page has dots, so it never jumps
+     as one person's page slides in for another's. */
+  bottom: calc(env(safe-area-inset-bottom) + 38px);
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font: inherit;
-  font-weight: 400;
-  color: var(--muted);
-  cursor: pointer;
-  text-align: left;
+  flex-direction: column;
+  gap: 12px;
 }
-.mv-reply[hidden] { display: none; }
-/* Armed by a pull up: the wash comes on and the words take the page's ink. */
-.mv-reply.is-on { color: var(--text); }
-.mv-reply span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mv-reply svg { width: 22px; height: 22px; flex: none; }
-.mv-like {
-  --burst: var(--heart);
-  width: 52px;
-  height: 52px;
+.mv-rail button {
+  width: var(--mv-disc);
+  height: var(--mv-disc);
   padding: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  flex: none;
+  color: var(--text);
   cursor: pointer;
 }
-.mv-like svg { width: 24px; height: 24px; transition: transform 0.3s var(--spring); }
+.mv-rail button[hidden] { display: none; }
+.mv-rail svg { width: 23px; height: 23px; transition: transform 0.3s var(--spring); }
+.mv-rail button:active svg { transform: scale(0.88); }
+.mv-like { --burst: var(--heart); }
 .mv-like.liked svg { fill: var(--heart); stroke: var(--heart); }
-.mv-like:active svg { transform: scale(0.88); }
+/* Armed by a pull up: the disc takes the wash and its arrow leans in. */
+.mv-reply.is-on svg { transform: scale(1.14); }
+
+/* WHERE YOU ARE IN A STACK, soft and out of the way (Zoe: "no need for the
+   gross instagram line indicator if its only one moment"): a row of dots at
+   the foot, the current one a pill, drawn only for a stack of two or more.
+   A position, not a tally, as a carousel's 1/4 is. */
+.mv-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding-bottom: 6px;
+  pointer-events: none;
+}
+.mv-page:not(.has-dots) .mv-stage { padding-bottom: 26px; }
+.mv-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+  transition: width 0.3s var(--ease), background-color 0.3s var(--ease-soft);
+}
+.mv-dot.is-on { width: 18px; background: color-mix(in srgb, var(--text) 62%, transparent); }
 /* The double tap's heart, where the finger was, in the reader's --heart. */
 .mv-pop {
   --burst: var(--heart);
@@ -8567,6 +8612,22 @@ button.poll-option:disabled { cursor: default; }
   border-radius: 50%;   /* a round crop, as tall as the bar's disc (Zoe, 2026-10-26) */
   background: var(--glass-bg-panel) center / cover no-repeat;
 }
+/* A photo Moment's lead: the photo answered, a soft square rather than the
+   sleeve's round crop, which read as a face; a clip's poster wears a small
+   play mark. A Moment of words has no lead, so it pads as a message's reply. */
+.postbar-moment-pic {
+  flex: 0 0 auto;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--glass-bg-panel) center / cover no-repeat;
+}
+.postbar-moment-pic svg { width: 16px; height: 16px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45)); }
+.postbar-song-chip.is-words { padding-left: 1rem; }
 @keyframes postbar-song-in {
   from { opacity: 0; transform: translateY(10px) scale(0.94); }
 }
