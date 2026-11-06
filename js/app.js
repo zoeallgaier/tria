@@ -17431,6 +17431,31 @@
       if (!searchOpen) { openFeedSide(); return; }
       closeSearch();
     });
+    /* THE TAP NEVER REACHES THE NATIVE FOCUS (Zoe, 2026-11-06: "search jumps
+       up away then comes back on tap ... only after scrolling"). WebKit's focus
+       reveals the field by scrolling the page under the fixed bar, so the bar
+       rode up and snapped back; at the top there was nothing to scroll. The
+       comment box's trap and the comment box's fix (takeFocus): swallow the
+       mousedown and ask for focus with preventScroll, inside the gesture so the
+       keys still rise. Only the first tap: once it holds the caret a tap places
+       it as usual. */
+    searchEl.addEventListener('mousedown', (e) => {
+      if (document.activeElement === searchEl) return;
+      e.preventDefault();
+      try { searchEl.focus({ preventScroll: true }); } catch { searchEl.focus(); }
+    });
+    // The net, as the comment box keeps (park): a reveal WebKit runs anyway, as
+    // the keys animate, is put back for a third of a second.
+    searchEl.addEventListener('focus', () => {
+      const y = window.scrollY;
+      let frames = 0;
+      const keep = () => {
+        if (document.activeElement !== searchEl) return;
+        if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+        if (++frames < 24) requestAnimationFrame(keep);
+      };
+      requestAnimationFrame(keep);
+    });
     searchEl.addEventListener('focus', syncOpen);
     searchEl.addEventListener('blur', syncOpen);
     // In the app the caret is in the native field: its keystrokes land here as
@@ -17452,13 +17477,21 @@
        standing in is always one tap from off. */
     const TAGS_MAX = 10;
     const RECENT_MS = 30 * 24 * 60 * 60 * 1000;
+    // A CIRCLE'S POST IS FINDABLE too (Zoe, 2026-11-06: "make sure the tags
+    // include posts from within circles"): a public circle's, which anyone can
+    // read, and an invite-only one's for its members. The tags and the search
+    // a tag runs read the same rule, so a chip never lands on nothing.
+    const circleFindable = (p) => {
+      const c = p.communityId && Store.community(p.communityId);
+      return !!c && (!c.inviteOnly || Store.inCommunity(c.id));
+    };
     const trendingTags = () => {
       const now = Date.now();
       const findable = new Set(Store.discover({ addressed: true }));
       const n = new Map();
       Store.posts().forEach((p) => {
-        if (p.repostOf || p.communityId || p.type === 'song' || p.moment || Blocks.has(p.author)) return;
-        if (p.author !== me && !findable.has(p)) return;
+        if (p.repostOf || p.type === 'song' || p.moment || Blocks.has(p.author)) return;
+        if (p.author !== me && !(p.communityId ? circleFindable(p) : findable.has(p))) return;
         const weight = now - (Date.parse(p._ts) || 0) < RECENT_MS ? 2 : 1;
         new Set((p.tags || []).map(t => String(t).trim().toLowerCase().replace(/^#/, '')))
           .forEach((k) => {
@@ -17560,13 +17593,14 @@
       .map(x => x.u);
 
     // Every post I can read that says the words: the room's (hand-addressed
-    // ones too) and my own, never a repost, a circle's or a song (those are
-    // read in their circle and in On repeat). Newest first, as posts() is.
+    // ones too), a circle's I could find (circleFindable) and my own, never a
+    // repost or a song (read in On repeat). Newest first, as posts() is.
     // A picked type narrows it to that type; an empty query is all of them.
     const postsMatching = (q, type) => Store.posts().filter(p =>
-      !p.repostOf && !p.communityId && p.type !== 'song' && !p.moment && !Blocks.has(p.author)
+      !p.repostOf && p.type !== 'song' && !p.moment && !Blocks.has(p.author)
       && (type === 'all' || p.type === type)
-      && (p.author === me || discoverable.has(p)) && postHaystack(p).includes(q));
+      && (p.author === me || (p.communityId ? circleFindable(p) : discoverable.has(p)))
+      && postHaystack(p).includes(q));
     // A tag's posts: the same set, by the tag itself rather than the words.
     const postsTagged = (tag, type) => postsMatching('', type).filter(p =>
       (p.tags || []).some(t => String(t).trim().toLowerCase().replace(/^#/, '') === tag));
