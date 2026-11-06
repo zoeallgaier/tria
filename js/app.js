@@ -8323,7 +8323,7 @@
     momentsAway = close;
     close.at = () => ({ who: page.s.u.username, post: String(cur().post.id), i: cur().i });
     page = pageFor(start);
-    const instant = !!back;   // a return: already there, nothing rises
+    const instant = !!back && !back.rise;   // a return: already there, nothing rises
     back = null;   // only the first page lands on the filed frame
     live('open');
     if (instant) {
@@ -11728,6 +11728,43 @@
      photo branch, `canSocial` and `canJoin` all mean exactly what they already
      meant. That is the whole design: a post reads the same in both places, and
      the page is only the place where it is allowed to be complete. */
+  /* A MOMENT HAS NO PAGE a reader sees (Zoe, 2026-11-06). A link to one is
+     the viewer ON that Moment, and a like's link (`?pane=likers`) on your own
+     has Likes up over it, as its heart opens them. `momentLink` reads a href;
+     null for anything else, or a Moment that has gone or isn't on the rail. */
+  function momentLink(href) {
+    const m = /^#\/p\/([^?]+)(?:\?(.*))?$/.exec(href || '');
+    if (!m || !Store.session()) return null;
+    const id = decodeURIComponent(m[1]);
+    const post = Store.posts().find(p => String(p.id) === id);
+    if (!post || !post.moment || Blocks.has(post.author)) return null;
+    const stack = momentStacks().find(s => s.posts.some(p => String(p.id) === id));
+    if (!stack) return null;
+    const likers = new URLSearchParams(m[2] || '').get('pane') === 'likers' &&
+      post.author === Store.session();
+    return { who: stack.u.username, post, likers };
+  }
+  function openMomentLink(m, rise) {
+    openMoments(m.who, null, { who: m.who, post: String(m.post.id), i: 0, rise });
+    if (m.likers && momentsAway) openLikesSheet(m.post);
+  }
+  /* A TAP on such a link (an Updates row, a link in a note or a message) never
+     navigates: the viewer rises over the page you're on, and closing it leaves
+     you exactly there, nothing re-drawn under it, so nothing flashes. Bubble
+     phase, last, so a handler that turns the tap aside first (an Updates row's
+     face going to the person) still wins. */
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const a = e.target instanceof Element && e.target.closest('a[href^="#/p/"]');
+    if (!a || momentsAway || sheetOpen) return;
+    const m = momentLink(a.getAttribute('href'));
+    if (!m) return;
+    e.preventDefault();
+    openMomentLink(m, true);
+  });
+  // ARRIVING at one (a push, a universal link, the address bar) has no page to
+  // stay on: My Circle, the rail's own home, with the viewer already up.
+  let momentLanding = null;
   function renderPost(id, pane) {
     // The cache is the permission. Every row in it came back through
     // `can_view_post`, so a post you may not read is simply not here — there is
@@ -11736,6 +11773,14 @@
     const post = Store.posts().find(p => String(p.id) === String(id));
     const subj = subjectOf(post);
     const gone = !post || !subj || Blocks.has(post.author) || Blocks.has(subj.author);
+
+    const asMoment = !gone && post.moment &&
+      momentLink(`#/p/${encodeURIComponent(id)}${pane === 'likers' ? '?pane=likers' : ''}`);
+    if (asMoment) {
+      momentLanding = asMoment;
+      location.replace('#/');   // hashchange → route(), which opens it
+      return;
+    }
 
     const back = postBackTarget();
     mountToolbar({
@@ -25171,6 +25216,10 @@
       while (momentReturn.size > 20) momentReturn.delete(momentReturn.keys().next().value);
     }
     dismissMoments();
+    if (momentLanding && (location.hash || '#/').split('?')[0] === '#/') {
+      const m = momentLanding; momentLanding = null;
+      openMomentLink(m, false);   // already up as the page draws, nothing rises
+    }
     const momentBack = momentReturn.get(arriving);
     if (momentBack) {
       momentReturn.delete(arriving);
