@@ -7772,9 +7772,11 @@
   function momentFrameHtml(f) {
     const p = f.post;
     const note = f.i === 0 ? cardNoteHtml(p, true) : '';
+    // A Moment's tags are worn as a post wears them (Zoe, 2026-11-06: "I don't
+    // see tags on moments"), after its words, on its first frame.
     const words = (f.i === 0 && p.title ? `<h2 class="mv-title">${esc(p.title)}</h2>` : '') +
       (note ? `<div class="mv-note">${note}</div>` : '') +
-      (f.i === 0 ? linkTilesHtml(p) + pollWidgetHtml(p) : '');
+      (f.i === 0 ? linkTilesHtml(p) + pollWidgetHtml(p) + tagChips(p) : '');
     if (p.song) {
       const s = p.song;
       return `<div class="mv-frame mv-frame--words mv-frame--song"><div class="mv-words">` +
@@ -7795,9 +7797,11 @@
             `playsinline autoplay muted loop></video>` +
           `<button type="button" class="mv-sound pill-quiet" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute')}</button>`
         : `<img class="mv-pic" src="${esc(sizedSrc(still, 600))}" alt="${esc(notePlain(p.note) || p.title || 'Photo')}" draggable="false">`;
-      return `<div class="mv-frame mv-frame--pic">` +
-          `<figure class="mv-media">${media}</figure>` +
+      // The words over the picture, as a post sets them (Zoe, 2026-11-06:
+      // "text with frames on moments should go above like posts").
+      return `<div class="mv-frame mv-frame--pic${words ? ' has-caption' : ''}">` +
           (words ? `<div class="mv-caption">${words}</div>` : '') +
+          `<figure class="mv-media">${media}</figure>` +
         `</div>`;
     }
     // Words alone. A short note with no headline is set big, in the serif.
@@ -8065,6 +8069,9 @@
       const b = e.target.closest('button');
       if (!b || busy || !page.el.contains(b)) return;
       if (b.classList.contains('mv-close')) close();
+      // A tag is a search for its word, as it is on Discover; the navigation
+      // closes the viewer (route()).
+      else if (b.classList.contains('tag') && b.dataset.tag) { discoverQuery = b.dataset.tag; go('#/discover'); }
       else if (b.classList.contains('mv-more')) openFrameMenu();
       else if (b.classList.contains('mv-reply')) reply(false);
       else if (b.classList.contains('mv-like')) {
@@ -19854,6 +19861,7 @@
     const C = window.Capacitor;
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollPick' }, (ev) => rollHandler?.pick(ev));
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollUnpick' }, (ev) => rollHandler?.unpick(ev));
+    C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollMore' }, () => rollHandler?.menu?.());
   }
   let onCaptureChange = null;     // set by the Post composer so the type indicator re-reads when a frame lands/clears
   let justPostedId = null;   // id of a just-published post → sparkle it in when the feed next paints
@@ -19891,8 +19899,8 @@
   // thing lives under a .frame-field wrapper the type filter reveals on Frame and
   // folds away when you move off it (clearFrame). The dropzone hides once media
   // lands (the crop/trim preview takes over); "Choose another" swaps the pick.
-  function frameFieldHtml() {
-    return `<div class="field frame-field" hidden>` +
+  function frameFieldHtml(moment = false) {
+    return `<div class="field frame-field${moment ? ' frame-field--moment' : ''}" hidden>` +
         `<label for="c-file">Photos or a clip</label>` +
         `<input id="c-file" type="file" accept="image/*,video/*" multiple hidden>` +
         // A div, not a <button>: iOS standalone PWAs paint a native pressed-state
@@ -19904,17 +19912,19 @@
           `<span class="dropzone-label">Choose photos or a clip</span>` +
         `</div>` +
         `<div class="combo-frame">` +
-          // A carousel's tray: one thumb per photo, tap to look, × to take it out, +
-          // to add. ABOVE the preview, because a portrait preview fills the screen
-          // and anything under it is behind the tab bar the moment the pick lands.
-          `<div class="stills" id="c-stills" role="group" aria-label="Photos in this post" hidden></div>` +
-          `<div class="crop crop--free" id="c-crop" hidden>` +
-            `<img id="c-cropimg" alt="" draggable="false">` +
-            // With the camera roll, the preview's own x is how a photo comes
-            // out (the roll only puts them in); hidden otherwise.
-            `<button type="button" class="media-x" id="c-crop-x" aria-label="Remove this photo" hidden>` +
-              `${svgIcon('close', 'media-x-ico')}</button>` +
+          // THE PREVIEW IS THE POST (2026-11-06, Zoe: "a preview of the
+          // carousel I can swipe through"): every photo in a row you swipe,
+          // shaped as the feed will shape it, its x on its own corner and its
+          // place in the corner the feed's count uses. A Moment's is a
+          // filmstrip, each photo at its own shape, as the viewer shows them.
+          `<div class="cc" id="c-cc" hidden>` +
+            `<div class="cc-track" id="c-cc-track" aria-roledescription="carousel" aria-label="Photos in this post"></div>` +
+            `<span class="cc-count" id="c-cc-count" aria-hidden="true" hidden></span>` +
           `</div>` +
+          // The order: a thumb per photo, the one on screen ringed. Tap to
+          // look, drag sideways to move it (wireFrameCapture's `order`).
+          `<div class="cc-order" id="c-stills" role="group" aria-label="Order of photos" hidden></div>` +
+          `<p class="cc-hint" id="c-cc-hint" hidden>Drag a photo to change the order.</p>` +
           `<div class="trim" id="c-trim" hidden>` +
             `<div class="trim-stage">` +
               `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
@@ -20001,22 +20011,21 @@
       `</div>` +
       `<div class="compose-circle" id="c-circle" hidden></div>` +
       pollFieldHtml() +
-      frameFieldHtml() +
-      // The camera roll's row (wireRoll), app only: Take a photo and All
-      // photos, then the strip, where native lays Apple's picker on a box that
-      // only holds its place in the form.
+      // The camera roll's row (wireRoll), app only: the strip, where native
+      // lays Apple's picker on a box that only holds its place in the form,
+      // with ONE camera disc on its top right corner (native, TriaRoll's
+      // `more`) that raises Take a photo and All photos (Zoe, 2026-11-06:
+      // "one icon in the corner ... that would bring up all the options").
+      // It sits ABOVE
+      // the preview, so a pick grows the post under the row and the row never
+      // moves under the finger reaching for the next one.
       (roll
-        ? `<div class="compose-roll${opts.moment ? ' compose-roll--moment' : ''}" id="c-roll" hidden>` +
-            `<div class="roll-tools">` +
-              `<button type="button" class="roll-tool pill-quiet" id="c-roll-camera" aria-label="Take a photo">` +
-                `${svgIcon('camera', 'roll-tool-ico')}</button>` +
-              `<button type="button" class="roll-tool pill-quiet" id="c-roll-all" aria-label="All photos and clips">` +
-                `${svgIcon('image', 'roll-tool-ico')}</button>` +
-            `</div>` +
+        ? `<div class="compose-roll" id="c-roll" hidden>` +
             `<div class="roll-strip" id="c-roll-strip" role="group" aria-label="Recent photos"></div>` +
             `<input id="c-camera" type="file" accept="image/*" capture="environment" hidden>` +
           `</div>`
         : '') +
+      frameFieldHtml(opts.moment) +
       (song ? songFieldHtml({ moment: opts.moment }) : '') +
       (event ? eventFieldHtml() : '') +
       audienceFieldHtml('c');
@@ -20528,11 +20537,19 @@
             `<span class="post-progress-label" id="c-progress-label"></span>` +
             `<div class="post-progress-track"><div class="post-progress-fill" id="c-progress-fill"></div></div>` +
           `</div>` +
-          `<button class="composer-submit composer-post publish-fill" type="submit">Share</button>` +
+          // THE SEND ROW (2026-11-06, Zoe: "where to best put share and
+          // audience"): who it reaches and Share, side by side at the foot,
+          // the way a message is addressed and sent in one place. mountFields
+          // moves the audience field in here; a quote's keeps its place in
+          // the form, since its hint needs the column's width.
+          `<div class="compose-send" id="c-send">` +
+            `<button class="composer-submit composer-post publish-fill" type="submit">Share</button>` +
+          `</div>` +
         `</form>` +
       `</section>`;
 
     const fieldsEl = view.querySelector('#c-fields');
+    const formEl = view.querySelector('#composer');   // the audience lock lives in its send row
     const titleEl = view.querySelector('.masthead-title');
     titleEl?.classList.add('masthead-title--swap');   // hosts the outgoing ghost word
     let family = null;              // 'base' (the one post form) | 'quote' | 'song'
@@ -20604,7 +20621,9 @@
     function clearFrame() {
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null; videoCapture = null; stills = [];
-      fieldsEl.querySelector('#c-crop')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-cc')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-cc-track')?.replaceChildren();
+      fieldsEl.querySelector('#c-cc-hint')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-stills')?.replaceChildren();
       fieldsEl.querySelector('#c-stills')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-addmore')?.setAttribute('hidden', '');
@@ -20656,7 +20675,7 @@
       const mode = defaultAudience();
       if (mode === pubAudience.mode) return;
       pubAudience = { mode, users: [] };
-      syncAudienceLock(fieldsEl);
+      syncAudienceLock(formEl);
     }
 
     function mountFields() {
@@ -20720,6 +20739,17 @@
         pubAudienceTouched = true;
       }
       fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily && !moment, song: !daily, moment });
+      // The audience joins Share in the send row, in THE BUTTON's quiet
+      // weight beside Share's commit; its label stays for a screen reader.
+      const aud = family === 'base' && fieldsEl.querySelector('.aud-field');
+      if (aud) {
+        aud.classList.add('aud-field--send');
+        aud.querySelector('label')?.classList.add('visually-hidden');
+        aud.querySelector('.aud-lock')?.classList.add('pill-quiet');
+        const send = formEl.querySelector('#c-send');
+        send?.classList.add('compose-send--aud');
+        send?.prepend(aud);
+      }
       const cNote = fieldsEl.querySelector('#c-note');
       wireMentions(cNote);
       wireRichEditor(cNote, fieldsEl.querySelector('#c-note-count'));
@@ -20732,7 +20762,7 @@
         wireAttachBar();
         // The lock rides the attach bar's bottom-left. A song is read only on
         // My Circle, so the sheet leaves your circles off while one is attached.
-        wireAudienceLock(fieldsEl, null, {
+        wireAudienceLock(formEl, null, {
           rooms: () => pubType !== 'song' && !moment,
           wide: !moment,
           // A circle's card goes to people who aren't in it yet, so the
@@ -20743,7 +20773,7 @@
       } else if (qa && qa.open) {
         // Every circle you're in, the one the post was said in included: a quote
         // there is the post talked about where it lives.
-        wireAudienceLock(fieldsEl, null, { rooms: true });
+        wireAudienceLock(formEl, null, { rooms: true });
       }
       applyBaseSurface();
     }
@@ -20953,7 +20983,7 @@
       if (pubAudience.mode === 'community' && pubAudience.community === sharing.id) {
         pubAudience = { mode: defaultAudience(), users: [] };
         pubAudienceTouched = false;
-        syncAudienceLock(fieldsEl);
+        syncAudienceLock(formEl);
       }
       tile.hidden = false;
       tile.innerHTML = circleTileHtml(sharing) +
@@ -21077,11 +21107,21 @@
       listenRoll();
 
       // Take a photo: the system camera, straight in (capture on the input).
-      fieldsEl.querySelector('#c-roll-camera')?.addEventListener('click', () => {
+      const takePhoto = () => {
         if (stills.length >= MAX_STILLS) { full(); return; }
         camera.value = '';
         camera.click();
-      });
+      };
+      // The roll's camera disc (native, on the strip's corner) asks for this
+      // sheet: the two ways in that aren't a recent photo.
+      rollHandler.menu = () => {
+        if (gone || sheetOpen) return;
+        hapticTap('LIGHT');
+        openSheet({ items: [
+          { label: 'Take a photo', icon: 'camera', run: takePhoto },
+          { label: 'All photos', icon: 'image', run: () => allPhotos() },
+        ] });
+      };
       camera?.addEventListener('change', () => {
         const f = camera.files && camera.files[0];
         if (!f) return;
@@ -21098,7 +21138,7 @@
 
       // All photos: the library in a sheet, the post's own picks ticked in it.
       let asking = false;
-      fieldsEl.querySelector('#c-roll-all')?.addEventListener('click', async () => {
+      const allPhotos = async () => {
         if (asking) return;
         const room = MAX_STILLS - frame.loose();
         if (room < 1) { full(); return; }
@@ -21126,7 +21166,7 @@
         open();
         frame.setLibrary(items);
         syncType();
-      });
+      };
 
       const ro = new ResizeObserver(() => sync());
       ro.observe(fieldsEl);
@@ -21196,8 +21236,11 @@
     const file     = root.querySelector('#c-file');
     const frameField = root.querySelector('.frame-field');
     const dropzone = root.querySelector('#c-dropzone');
-    const cropEl   = root.querySelector('#c-crop');
-    const imgEl    = root.querySelector('#c-cropimg');
+    const ccEl     = root.querySelector('#c-cc');
+    const track    = root.querySelector('#c-cc-track');
+    const countEl  = root.querySelector('#c-cc-count');
+    const hintEl   = root.querySelector('#c-cc-hint');
+    const filmstrip = !!frameField?.classList.contains('frame-field--moment');
     const trimEl     = root.querySelector('#c-trim');
     const trimVideo  = root.querySelector('#c-trimvideo');
     const trimSound  = root.querySelector('#c-trimsound');
@@ -21213,7 +21256,6 @@
     const addMore  = root.querySelector('#c-addmore');
     const stillsEl = root.querySelector('#c-stills');
     const errEl    = () => document.getElementById('c-error');
-    const cropX    = root.querySelector('#c-crop-x');
     const trimX    = root.querySelector('#c-trim-x');
 
     // THE CAMERA ROLL'S WAY IN (wireRoll). `rollMode` is on wherever the roll
@@ -21227,7 +21269,10 @@
     let rollMode = false;
     const api = {
       changed: null, untick: null, cleared: null,
-      setRollMode(on) { rollMode = !!on; },
+      setRollMode(on) {
+        rollMode = !!on;
+        frameField?.classList.toggle('frame-field--roll', rollMode);   // the roll's own label is enough
+      },
       has: (id) => stills.some(s => s.rollId === id),
       ids: () => stills.filter(s => s.rollId).map(s => s.rollId),
       loose: () => stills.filter(s => !s.rollId).length,
@@ -21264,16 +21309,6 @@
       clip: (f) => handleLibraryVideo(f),
       error: (msg) => showPickError(msg),
     };
-    // The x on the preview takes out the photo you're looking at; the tray
-    // above a carousel picks which one that is.
-    cropX?.addEventListener('pointerdown', (e) => e.stopPropagation());
-    cropX?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!stills.length) return;
-      stills.splice(sel, 1);
-      hapticTap('LIGHT');
-      showStill(sel);
-    });
     trimX?.addEventListener('pointerdown', (e) => e.stopPropagation());
     trimX?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -21335,24 +21370,6 @@
     addMore.addEventListener('click', pickMore);
     addMore.addEventListener('keydown', pickKey(pickMore));
 
-    const trayAct = (e) => {
-      const x = e.target.closest('[data-x]');
-      if (x) {
-        e.stopPropagation();
-        const i = +x.dataset.x;
-        stills.splice(i, 1);
-        showStill(i < sel ? sel - 1 : sel);
-        return;
-      }
-      if (e.target.closest('.still-add')) { pickMore(); return; }
-      const t = e.target.closest('.still');
-      if (t) showStill(+t.dataset.i);
-    };
-    stillsEl.addEventListener('click', trayAct);
-    stillsEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trayAct(e); }
-    });
-
     file.addEventListener('change', () => {
       const files = [...(file.files || [])];
       // A cancelled "Add more" leaves the flag up; it only means anything with a set to add to.
@@ -21376,12 +21393,12 @@
       }
     });
 
-    // ── Photo → native-aspect preview ────────────────────────────────────────
+    // ── Photo → the carousel preview ─────────────────────────────────────────
     // One photo is a Frame, as it always was; two to six are a carousel, and the
-    // model is the same list either way. Each still keeps its own detached <img>
-    // for export() to draw from, so the big preview is free to show whichever one
-    // was tapped in the tray. The first is the cover, and `cropper` always points
-    // at it, which is what the type inference and a single photo's submit read.
+    // model is the same list either way. Each still keeps its own <img> for
+    // export() to draw from, and that same <img> is the one its slide shows. The
+    // first is the cover, and `cropper` always points at it, which is what the
+    // type inference and a single photo's submit read.
     let sel = 0, stillsHold = 0;
     function finishPhoto(dataUrl) { finishStills([dataUrl], false); }
     function finishStills(srcs, adding, rollIds) {
@@ -21397,22 +21414,36 @@
       sel = Math.max(0, Math.min(stills.length - 1, i));
       if (frameField) frameField.hidden = false;   // the surface appears now the still has landed
       if (dropzone) dropzone.hidden = true;        // the preview takes over from the upload field
-      cropEl.hidden = false;
+      const arriving = ccEl.hidden;
+      ccEl.hidden = false;
       // Swapping in from a video pick — tear the trim surface down.
       tPlaying = false;
       try { trimVideo.pause(); } catch {}
       trimEl.hidden = true;
       replace.hidden = false;
       replace.textContent = stills.length > 1 ? 'Start over' : 'Choose another';
-      // One photo offers "Add more" as a pill; a set has the + at the end of its tray.
+      // One photo offers "Add more" as a pill; a set has the + at the end of its order.
       addMore.hidden = stills.length !== 1;
       if (rollMode) { replace.hidden = true; addMore.hidden = true; }
-      if (cropX) cropX.hidden = !rollMode;
       videoCapture = null;
       cropper = stills[0].api;
-      imgEl.style.transform = '';
-      imgEl.src = stills[sel].src;
-      renderTray();
+      if (!arriving) unsnap(520);   // the row is about to change under its snap (see goTo)
+      paintSlides();
+      paintOrder();
+      // The first photo blooms in where the preview will be; after that the
+      // row glides to the one asked for (a new pick, or the neighbour of one
+      // taken out), so whatever just changed is what you're looking at.
+      if (arriving) {
+        track.scrollLeft = 0;
+        goTo(sel, false);
+        if (!prefersReduced()) {
+          ccEl.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }],
+            { duration: 360, easing: CC_EASE });
+        }
+      } else {
+        goTo(sel, true);
+      }
+      paintPlace();
       onCaptureChange?.();   // a still landed → the Post composer flips its type mark to Frame
       api.changed?.();
       // Hold Post until every still decodes — export() reads naturalWidth, so
@@ -21431,58 +21462,357 @@
         s.im.addEventListener('error', done, { once: true });
       }))).then(() => { if (hold === stillsHold) submitBtn.disabled = false; });
     }
-    // The last photo taken out of the tray: back to the upload field.
+    // The last photo taken out: back to the upload field (or, under the roll,
+    // the surface folds away).
     function dropStills() {
       stills = []; cropper = null; sel = 0; ++stillsHold;
-      cropEl.hidden = true;
+      ccEl.hidden = true;
+      track.replaceChildren();
+      delete track.dataset.r;
+      track.style.aspectRatio = '';
       replace.hidden = true;
       addMore.hidden = true;
       stillsEl.hidden = true;
       stillsEl.replaceChildren();
-      imgEl.removeAttribute('src');
+      if (hintEl) hintEl.hidden = true;
       if (dropzone) dropzone.hidden = false;
       onCaptureChange?.();
       api.changed?.();
       const b = document.querySelector('.composer-submit');
       if (b) b.disabled = false;
     }
-    // Built as nodes, not a string: each src is a whole photo as a data URI, and
-    // six of those through the HTML parser is a lot of text to parse for a thumb.
-    function renderTray() {
-      stillsEl.replaceChildren();
-      stillsEl.hidden = stills.length < 2;
-      if (stills.length < 2) return;
-      stills.forEach((s, i) => {
-        const t = document.createElement('div');
-        t.className = 'still' + (i === sel ? ' is-on' : '');
-        t.setAttribute('role', 'button');
-        t.tabIndex = 0;
-        t.dataset.i = String(i);
-        t.setAttribute('aria-pressed', String(i === sel));
-        t.setAttribute('aria-label', `Show photo ${i + 1}`);
-        const im = document.createElement('img');
-        im.alt = '';
-        im.draggable = false;
-        im.src = s.src;
-        const x = document.createElement('span');
-        x.className = 'still-x';
-        x.setAttribute('role', 'button');
-        x.tabIndex = 0;
-        x.dataset.x = String(i);
-        x.setAttribute('aria-label', `Remove photo ${i + 1}`);
-        x.innerHTML = svgIcon('close', 'still-x-ico');
-        if (rollMode) t.append(im); else t.append(im, x);
-        stillsEl.append(t);
-      });
-      if (rollMode || stills.length >= MAX_STILLS) return;
-      const add = document.createElement('div');
-      add.className = 'still still-add';
-      add.setAttribute('role', 'button');
-      add.tabIndex = 0;
-      add.setAttribute('aria-label', 'Add more photos');
-      add.innerHTML = svgIcon('close', 'still-add-ico');   // a × turned 45° is a +
-      stillsEl.append(add);
+
+    /* ── The carousel preview (2026-11-06) ────────────────────────────────────
+       A scroll-snapped row, so a swipe is the system's own scroll, momentum
+       and all, and nothing here fights the finger. Each still is ONE node
+       for its whole life (`s.slide`, holding the still's own <img>, the one
+       export() draws from, so a photo is decoded once however often the row
+       changes) and the row is a keyed diff, never a rebuild.
+
+       A post's row is the post: the box the feed will draw, shaped off the
+       cover (a single photo's own shape up to 4:5 tall, a carousel's cover
+       between 4:5 and 3:2), every photo covering it, a gap apart, the count in
+       the corner. A Moment's is a FILMSTRIP: each photo at its own shape on one
+       height, its neighbours showing at the edges, since the viewer shows a
+       Moment's photo whole. */
+    const CC_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+    let ccHeld = false;   // a finger on the row: nothing re-aims it under the finger
+    const fitSlide = (s) => {
+      const w = s.im.naturalWidth, h = s.im.naturalHeight;
+      if (w && h && s.slide) s.slide.style.setProperty('--ar', Math.min(2.4, Math.max(0.5, w / h)).toFixed(4));
+    };
+    function slideFor(s) {
+      if (s.slide) return s.slide;
+      const el = document.createElement('div');
+      el.className = 'cc-slide';
+      s.im.alt = '';
+      s.im.draggable = false;
+      s.im.className = 'cc-pic';
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'media-x cc-x';
+      x.innerHTML = svgIcon('close', 'media-x-ico');
+      el.append(s.im, x);
+      s.slide = el;
+      if (s.im.complete && s.im.naturalWidth) fitSlide(s);
+      else {
+        s.im.addEventListener('load', () => {
+          fitSlide(s);
+          if (s === stills[0]) shape();
+          if (filmstrip && !ccHeld && stills.includes(s)) goTo(sel, false);
+        }, { once: true });
+      }
+      return el;
     }
+    function paintSlides() {
+      const want = stills.map(slideFor);
+      for (const c of [...track.children]) if (!want.includes(c)) c.remove();
+      want.forEach((el, k) => {
+        if (track.children[k] !== el) track.insertBefore(el, track.children[k] || null);
+        el.dataset.i = String(k);
+        el.querySelector('.cc-x').setAttribute('aria-label', `Remove photo ${k + 1}`);
+      });
+      shape();
+    }
+    // The box, shaped off the cover. A change of shape (a new cover, a second
+    // photo making it a carousel) tweens the height, so the form under it
+    // slides instead of jumping. The roll is above it and never moves.
+    function shape() {
+      if (filmstrip) return;
+      const c = stills[0] && stills[0].im;
+      const w = c && c.naturalWidth, h = c && c.naturalHeight;
+      if (!w || !h) return;
+      const r = (stills.length > 1 ? Math.min(Math.max(w / h, 4 / 5), 3 / 2)
+        : frameIsTall(w, h) ? 4 / 5 : w / h).toFixed(4);
+      if (track.dataset.r === r) return;
+      const was = track.dataset.r ? track.offsetHeight : 0;
+      if (was) unsnap(520);
+      track.dataset.r = r;
+      track.style.aspectRatio = r;
+      const now = track.offsetHeight;
+      if (was && now && Math.abs(was - now) > 1 && !prefersReduced()) {
+        track.animate([{ height: was + 'px' }, { height: now + 'px' }], { duration: 320, easing: CC_EASE });
+      }
+    }
+    // Scroll to photo `k`: a post's is flush in its box, a Moment's centred
+    // in the filmstrip (the ends clamp to the row's own edges).
+    // While the row glides by itself, its snapping stands down: WebKit
+    // re-snaps to the photo it last settled on whenever the row's layout
+    // changes (a reorder, the box's height tween), which would pull the
+    // preview back to the old photo half way through the glide.
+    let snapBack = 0;
+    function unsnap(ms) {
+      track.style.scrollSnapType = 'none';
+      clearTimeout(snapBack);
+      snapBack = setTimeout(() => { track.style.scrollSnapType = ''; }, ms);
+    }
+    function goTo(k, smooth) {
+      const el = track.children[k];
+      if (!el) return;
+      const left = filmstrip ? el.offsetLeft - (track.clientWidth - el.offsetWidth) / 2 : el.offsetLeft;
+      const to = Math.max(0, Math.min(track.scrollWidth - track.clientWidth, left));
+      if (Math.abs(track.scrollLeft - to) < 1) return;
+      if (smooth) unsnap(520);
+      try {
+        track.scrollTo({ left: to, behavior: smooth && !prefersReduced() ? 'smooth' : 'auto' });
+      } catch { track.scrollLeft = to; }
+    }
+    // The photo on screen: the one nearest the row's middle, or the last
+    // once the row is scrolled to its end.
+    function nearest() {
+      const kids = track.children;
+      const max = track.scrollWidth - track.clientWidth;
+      if (!kids.length || track.scrollLeft <= 1) return 0;
+      if (max > 0 && track.scrollLeft >= max - 1) return kids.length - 1;
+      const mid = track.scrollLeft + track.clientWidth / 2;
+      let best = 0, gap = Infinity;
+      for (let k = 0; k < kids.length; k++) {
+        const d = Math.abs(kids[k].offsetLeft + kids[k].offsetWidth / 2 - mid);
+        if (d < gap) { gap = d; best = k; }
+      }
+      return best;
+    }
+    // Where you are, said in the count and the ring on its thumb.
+    function paintPlace() {
+      const n = stills.length;
+      countEl.hidden = n < 2 || filmstrip;
+      countEl.textContent = `${sel + 1}/${n}`;
+      stillsEl.querySelectorAll('.cc-thumb:not(.cc-add)').forEach((t, k) => {
+        t.classList.toggle('is-on', k === sel);
+        t.setAttribute('aria-pressed', String(k === sel));
+      });
+      track.setAttribute('aria-label', n > 1 ? `Photo ${sel + 1} of ${n}` : 'Photo');
+    }
+    let placeRaf = 0;
+    track.addEventListener('scroll', () => {
+      if (placeRaf) return;
+      placeRaf = requestAnimationFrame(() => {
+        placeRaf = 0;
+        const k = nearest();
+        if (k !== sel && stills[k]) { sel = k; paintPlace(); }
+      });
+    }, { passive: true });
+    track.addEventListener('pointerdown', () => { ccHeld = true; });
+    for (const ev of ['pointerup', 'pointercancel']) track.addEventListener(ev, () => { ccHeld = false; });
+
+    // A photo's own x: it shrinks away, and the row closes over the gap.
+    track.addEventListener('click', (e) => {
+      const x = e.target.closest('.cc-x');
+      if (!x) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const slide = x.closest('.cc-slide');
+      const s = stills.find(t => t.slide === slide);
+      if (!s || slide.classList.contains('is-going')) return;
+      slide.classList.add('is-going');
+      hapticTap('LIGHT');
+      const out = () => {
+        const k = stills.indexOf(s);
+        if (k < 0) return;
+        stills.splice(k, 1);
+        showStill(Math.min(k, stills.length - 1));
+      };
+      if (prefersReduced()) { out(); return; }
+      slide.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.9)' }],
+        { duration: 200, easing: CC_EASE, fill: 'forwards' }).finished.then(out, out);
+    });
+
+    /* ── The order (Zoe, 2026-11-06: "change the order of my images") ─────────
+       A thumb per photo under the preview, sized so all six fit the column
+       with no scroll of their own, which is what lets a sideways drag BE the
+       reorder with no hold first: the strip is `touch-action: pan-y`, so a
+       finger going down the page still scrolls it, and one going sideways
+       lifts the thumb. The others make room as it passes (a selection tick
+       per place), and on the lift every thumb glides to where it now is (a
+       FLIP) and the preview glides to the photo you moved. The first is the
+       cover. Arrow keys move a focused thumb. Thumbs are a canvas drawn once
+       from the still, so six of them never decode six more photos. */
+    const ORDER_TAUGHT = 'tria:carousel-order-taught';
+    const orderTaught = () => { try { return localStorage.getItem(ORDER_TAUGHT) === '1'; } catch { return false; } };
+    const teachOrder = () => {
+      try { localStorage.setItem(ORDER_TAUGHT, '1'); } catch {}
+      if (hintEl) hintEl.hidden = true;
+    };
+    const THUMB_PX = 120;
+    function thumbFor(s) {
+      if (s.thumb) return s.thumb;
+      const t = document.createElement('div');
+      t.className = 'cc-thumb';
+      t.setAttribute('role', 'button');
+      t.tabIndex = 0;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = THUMB_PX;
+      cv.setAttribute('aria-hidden', 'true');
+      const draw = () => {
+        const w = s.im.naturalWidth, h = s.im.naturalHeight;
+        if (!w || !h) return;
+        const k = Math.max(THUMB_PX / w, THUMB_PX / h);
+        try { cv.getContext('2d').drawImage(s.im, (THUMB_PX - w * k) / 2, (THUMB_PX - h * k) / 2, w * k, h * k); } catch {}
+      };
+      if (s.im.complete && s.im.naturalWidth) draw();
+      else s.im.addEventListener('load', draw, { once: true });
+      t.append(cv);
+      s.thumb = t;
+      return t;
+    }
+    let addTile = null;   // the web's + at the order's end (the roll has its own ways in)
+    const orderThumbs = () => [...stillsEl.querySelectorAll('.cc-thumb:not(.cc-add)')];
+    // Repaint the order, gliding each thumb from where it was drawn (a
+    // dragged one included) to its place. `pre` runs between the two reads.
+    function paintOrder(pre) {
+      const n = stills.length;
+      const wasShown = !stillsEl.hidden;
+      stillsEl.hidden = n < 2;
+      if (hintEl) hintEl.hidden = n < 2 || orderTaught();
+      if (n < 2) { pre?.(); stillsEl.replaceChildren(); return; }
+      const want = stills.map(thumbFor);
+      if (!rollMode && n < MAX_STILLS) {
+        if (!addTile) {
+          addTile = document.createElement('div');
+          addTile.className = 'cc-thumb cc-add';
+          addTile.setAttribute('role', 'button');
+          addTile.tabIndex = 0;
+          addTile.setAttribute('aria-label', 'Add more photos');
+          addTile.innerHTML = svgIcon('close', 'cc-add-ico');   // a × turned 45° is a +
+        }
+        want.push(addTile);
+      }
+      const before = new Map();
+      if (wasShown) for (const el of stillsEl.children) before.set(el, el.getBoundingClientRect().left);
+      pre?.();
+      stillsEl.replaceChildren(...want);
+      stills.forEach((s, k) => {
+        s.thumb.dataset.i = String(k);
+        s.thumb.setAttribute('aria-label', `Photo ${k + 1} of ${n}${k === 0 ? ', the cover' : ''}. Drag or use the arrow keys to move it.`);
+      });
+      if (prefersReduced()) return;
+      for (const el of want) {
+        const was = before.get(el);
+        if (was == null) {
+          el.animate([{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'none' }],
+            { duration: 260, easing: CC_EASE });
+          continue;
+        }
+        const dx = was - el.getBoundingClientRect().left;
+        if (Math.abs(dx) > 0.5) {
+          el.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 300, easing: CC_EASE });
+        }
+      }
+    }
+    // Move photo `from` to `to`: the order, the cover, the row, the place.
+    function movePhoto(from, to, pre) {
+      const moved = to !== from && stills[from] && to >= 0 && to < stills.length;
+      if (moved) {
+        unsnap(520);   // before the slides move, so nothing re-snaps to the old photo
+        const [s] = stills.splice(from, 1);
+        stills.splice(to, 0, s);
+        cropper = stills[0].api;
+      }
+      paintOrder(pre);
+      if (!moved) return;
+      paintSlides();
+      sel = to;
+      goTo(sel, true);
+      paintPlace();
+      teachOrder();
+    }
+
+    let drag = null;      // { t, id, x, y, from, to, on, step } while a thumb is held
+    let swallowAt = 0;    // a drag's lift also clicks; that click is not a tap
+    stillsEl.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || drag) return;
+      const t = e.target.closest('.cc-thumb:not(.cc-add)');
+      if (!t) return;
+      drag = { t, id: e.pointerId, x: e.clientX, y: e.clientY, from: +t.dataset.i, to: +t.dataset.i, on: false, step: 0 };
+    });
+    stillsEl.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.on) {
+        if (Math.hypot(dx, dy) < 6) return;
+        if (Math.abs(dy) > Math.abs(dx)) { drag = null; return; }   // the page's scroll
+        drag.on = true;
+        const ts = orderThumbs();
+        drag.step = ts.length > 1 ? ts[1].offsetLeft - ts[0].offsetLeft : drag.t.offsetWidth + 8;
+        try { stillsEl.setPointerCapture(drag.id); } catch {}
+        ts.forEach(el => el.getAnimations().forEach(a => a.cancel()));
+        stillsEl.classList.add('is-sorting');
+        drag.t.classList.add('is-lifted');
+        hapticTap('LIGHT');
+      }
+      const n = stills.length;
+      // It follows the finger, leaning a little past either end.
+      const lo = -drag.from * drag.step, hi = (n - 1 - drag.from) * drag.step;
+      const x = dx < lo ? lo + (dx - lo) * 0.25 : dx > hi ? hi + (dx - hi) * 0.25 : dx;
+      drag.t.style.transform = `translateX(${x.toFixed(1)}px) scale(1.1)`;
+      const to = Math.max(0, Math.min(n - 1, drag.from + Math.round(x / drag.step)));
+      if (to === drag.to) return;
+      drag.to = to;
+      haptic('selectionChanged');
+      orderThumbs().forEach((el, k) => {
+        if (el === drag.t) return;
+        const shift = k > drag.from && k <= to ? -drag.step : k < drag.from && k >= to ? drag.step : 0;
+        el.style.transform = shift ? `translateX(${shift}px)` : '';
+      });
+    });
+    const endDrag = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag;
+      drag = null;
+      if (!d.on) return;
+      swallowAt = performance.now();
+      try { stillsEl.releasePointerCapture(d.id); } catch {}
+      const to = e.type === 'pointercancel' ? d.from : d.to;
+      if (to !== d.from) hapticTap('LIGHT');
+      movePhoto(d.from, to, () => {
+        stillsEl.classList.remove('is-sorting');
+        d.t.classList.remove('is-lifted');
+        orderThumbs().forEach(el => { el.style.transform = ''; });
+      });
+    };
+    stillsEl.addEventListener('pointerup', endDrag);
+    stillsEl.addEventListener('pointercancel', endDrag);
+    stillsEl.addEventListener('click', (e) => {
+      if (performance.now() - swallowAt < 450) { swallowAt = 0; return; }
+      if (e.target.closest('.cc-add')) { pickMore(); return; }
+      const t = e.target.closest('.cc-thumb');
+      if (!t || !stills[+t.dataset.i]) return;
+      sel = +t.dataset.i;
+      paintPlace();
+      goTo(sel, true);
+    });
+    stillsEl.addEventListener('keydown', (e) => {
+      const t = e.target.closest('.cc-thumb');
+      if (!t) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t.click(); return; }
+      const d = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+      if (!d || t.classList.contains('cc-add')) return;
+      e.preventDefault();
+      const from = +t.dataset.i;
+      if (from + d < 0 || from + d >= stills.length) return;
+      movePhoto(from, from + d);
+      t.focus();
+    });
     // Several files at once, or anything from "Add more". A carousel is photos
     // only, and six at most: whatever doesn't fit is left out and said so, and
     // what does fit still lands.
@@ -21528,12 +21858,16 @@
     async function finishVideo(blob) {
       if (frameField) frameField.hidden = false;   // the surface appears now the clip has landed
       if (dropzone) dropzone.hidden = true;        // the trim surface takes over from the upload field
-      cropEl.hidden = true;
+      ccEl.hidden = true;
+      track.replaceChildren();
+      delete track.dataset.r;
+      track.style.aspectRatio = '';
       cropper = null;
       stills = [];
       api.untick?.();   // a clip is a post of its own: the roll's ticks go
       stillsEl.hidden = true;
       stillsEl.replaceChildren();
+      if (hintEl) hintEl.hidden = true;
       addMore.hidden = true;
       replace.textContent = 'Choose another';
       trimEl.hidden = false;

@@ -5949,7 +5949,14 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
 }
 .mv-sound svg { width: 20px; height: 20px; }
+/* Words over the picture, as a post sets them (2026-11-06): the caption takes
+   what it needs (up to a third of the screen, then it scrolls) and the picture
+   sits straight under it, at the top of what's left, not floated mid-page. */
+.mv-frame--pic.has-caption { grid-template-rows: auto minmax(0, 1fr); }
+.mv-frame--pic.has-caption .mv-media { align-items: flex-start; }
 .mv-caption { max-height: 32dvh; overflow-y: auto; padding-right: var(--mv-lane); }
+.mv-caption .mv-title { font-size: 1.9rem; }
+.mv-caption .tags, .mv-words .tags { margin-top: 0.85rem; }
 /* Words alone sit in the middle, and a long note scrolls. They are set in
    from the column's edge (a pictured frame fills it), so a note sits clear of
    the screen and of the avatar's gutter (Zoe: "padded properly"), and clear
@@ -9657,39 +9664,24 @@ body.thread-live .lightbox { z-index: 320; }
    preview below, a video swaps in the .trim surface (the dropzone hides while
    they show). Content, not floating chrome. */
 /* THE CAMERA ROLL (2026-11-06, wireRoll, TriaPhotosPlugin.swift), the app's
-   way in to a photo: Take a photo and All photos as two quiet discs, then the
-   strip, the box Apple's picker is laid on. The strip only holds the place:
-   native reads its rect and its corner, the page's flat-card one, and its fill
-   is what shows for the moment before the picker draws. A Moment's row is
-   taller, since a Moment is so often just a photo. */
+   way in to a photo: the strip, the box Apple's picker is laid on, with one
+   camera disc on its bottom right (native, TriaRoll's `more`: the picker
+   draws over every web pixel in the box) raising Take a photo and All photos
+   (Zoe: "one icon in the corner ... bottom right corner"). The strip
+   only holds the place: native reads its rect and its corner, the page's
+   flat-card one, and its fill is what shows for the moment before the picker
+   draws. 140px on every post, the size a Moment's was (Zoe), so a recent photo
+   is big enough to know at a glance. The preview grows UNDER this row, so the
+   row never moves while a finger is picking. */
 .compose-roll {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  height: 104px;
   margin-top: 1.1rem;
 }
-.compose-roll--moment { height: 140px; }
 .compose-roll[hidden] { display: none; }
-.roll-tools {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-}
-.roll-tool {
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--text);
-}
-.roll-tool-ico { width: 22px; height: 22px; }
 .roll-strip {
-  flex: 1;
-  min-width: 0;
+  height: 140px;
   border-radius: var(--radius-soft);
   background: var(--surface-2);
 }
@@ -10093,65 +10085,186 @@ body.thread-live .lightbox { z-index: 320; }
 .crop-actions .crop-replace { margin: 0; }
 .crop-actions:not(:has(.crop-replace:not([hidden]))) { display: none; }
 
-/* A carousel's tray in the composer: a thumb per photo, the one in the big
-   preview ringed, a × on each to take it out. */
-.stills {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.6rem;
-  padding: 3px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.stills::-webkit-scrollbar { display: none; }
-.stills[hidden] { display: none; }
-.still {
+/* ── THE CAROUSEL PREVIEW (2026-11-06, wireFrameCapture) ─────────────────────
+   The composer's photos are a row you swipe, the system's own scroll snapped
+   a photo at a time, so it has iOS's momentum and never a hand-rolled one.
+   A post's row is the box the feed will draw (`aspect-ratio` set off the
+   cover in JS), the photos a gap apart and clipped by the box's own rounded
+   corners, like `.deck`; each wears its x where the feed wears nothing, and
+   the count sits in the feed's corner. Under the roll, so it grows downward
+   and the native row above never moves. */
+.frame-field--roll > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.frame-field--roll { margin-top: 0.9rem; }
+.cc {
   position: relative;
-  flex: 0 0 auto;
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-field);
-  cursor: pointer;
-  opacity: 0.7;
-  box-shadow: inset 0 0 0 1px var(--rule);
-  -webkit-tap-highlight-color: transparent;
-  transition: opacity var(--dur-micro), box-shadow var(--dur-micro);
+  /* clip-path, not overflow + radius, for the reason .deck gives. */
+  clip-path: inset(0 round var(--radius-soft));
 }
-.still img {
+.cc[hidden] { display: none; }
+.cc-track {
+  --cc-gap: 10px;
+  position: relative;
+  display: flex;
+  gap: var(--cc-gap);
+  /* Width stated, so while the height tweens (shape()) aspect-ratio can't
+     derive a width from it and widen the row past the column. */
+  width: 100%;
+  aspect-ratio: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cc-track::-webkit-scrollbar { display: none; }
+.cc-slide {
+  position: relative;
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  border-radius: var(--radius-soft);
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.cc-pic {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: inherit;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.cc-slide.is-going { pointer-events: none; }
+/* The count, in .deck-count's material and corner. */
+.cc-count {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 1;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  padding: 0.16rem 0.55rem;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   pointer-events: none;
 }
-.still.is-on { opacity: 1; box-shadow: 0 0 0 2px var(--text); }
-.still-add {
+.cc-count[hidden] { display: none; }
+
+/* A MOMENT'S FILMSTRIP: one height, each photo at its own shape (`--ar`, set
+   off the photo), its neighbours showing at the column's edges so the row
+   says it scrolls, as the viewer shows a Moment's photo whole. No box clips
+   it: the strip runs to the column's edge and each photo keeps its corner. */
+.frame-field--moment .cc { clip-path: none; }
+.frame-field--moment .cc-track {
+  --cc-h: min(48dvh, 400px);
+  aspect-ratio: auto;
+  height: var(--cc-h);
+  align-items: center;
+}
+.frame-field--moment .cc-slide {
+  flex: 0 0 auto;
+  height: auto;
+  width: min(100%, calc(var(--cc-h) * var(--ar, 0.8)));
+  aspect-ratio: var(--ar, 0.8);
+}
+/* One photo stands in the middle (auto margins collapse once the row
+   overflows, so a long strip still starts at its first). */
+.frame-field--moment .cc-slide:first-child { margin-left: auto; }
+.frame-field--moment .cc-slide:last-child { margin-right: auto; }
+
+/* THE ORDER: a thumb per photo, all six fitting the column, so a sideways
+   drag is the reorder and needs no hold (`touch-action: pan-y` leaves the
+   page its vertical scroll). The one on screen is ringed in ink; a lifted one
+   rises a little and the rest make room on the signature ease. */
+.cc-order {
+  display: flex;
+  gap: 8px;
+  margin-top: -4px;          /* the frame's 12px gap, less the ring's room */
+  padding: 3px;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cc-order[hidden] { display: none; }
+.cc-thumb {
+  position: relative;
+  flex: 0 0 min(56px, calc((100% - 40px) / 6));
+  aspect-ratio: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: grab;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  opacity: 0.72;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity var(--dur-micro), box-shadow var(--dur-micro);
+}
+.cc-thumb canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
+.cc-thumb.is-on { opacity: 1; box-shadow: 0 0 0 2px var(--text); }
+.cc-order.is-sorting .cc-thumb:not(.is-lifted) { transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity var(--dur-micro); }
+.cc-thumb.is-lifted {
+  z-index: 2;
+  opacity: 1;
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px var(--text), 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+.cc-add {
   display: grid;
   place-items: center;
   opacity: 1;
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--rule);
-}
-.still-add-ico { width: 22px; height: 22px; transform: rotate(45deg); }
-@media (hover: hover) { .still-add:hover { color: var(--text); } }
-.still-x {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
   cursor: pointer;
+  color: var(--muted);
+  background: none;
 }
-/* A bigger target than the mark, but kept to the thumb's top-right quarter: the
-   middle of the thumb is "show this one", and a × reaching it deletes on a look. */
-.still-x::before { content: ''; position: absolute; inset: -6px; }
-.still-x-ico { width: 11px; height: 11px; }
+.cc-add-ico { width: 22px; height: 22px; transform: rotate(45deg); }
+@media (hover: hover) { .cc-add:hover { color: var(--text); } }
+.cc-hint {
+  margin: -6px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.cc-hint[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cc-order.is-sorting .cc-thumb:not(.is-lifted) { transition: none; }
+}
+
+/* THE SEND ROW (2026-11-06): who it reaches and Share, side by side at the
+   form's foot, both THE BUTTON at 52px, the audience at its quiet weight
+   (`.pill-quiet`, added as mountFields moves it in) and Share at its commit.
+   The audience takes what's left, its words ellipsed; Share keeps its width.
+   A quote's audience stays a field in the form, and Share runs full width. */
+.compose-send {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 1.6rem;
+}
+.composer .compose-send .composer-post { margin-top: 0; }
+.compose-send .aud-field--send { flex: 1 1 0; min-width: 0; margin: 0; }
+.composer .compose-send--aud .composer-post { flex: 0 0 auto; width: auto; min-width: 8.5rem; padding-inline: 1.6rem; }
+.aud-field--send .aud-lock {
+  height: 100%;
+  min-height: 52px;
+  padding: 0 1.05rem;
+  border-radius: var(--radius-pill);
+  border: var(--pill-edge);
+  background: var(--glass-bg);
+  font-weight: 700;
+}
+.aud-field--send .aud-lock-ico,
+.aud-field--send .aud-lock-chev { color: var(--text); opacity: 0.7; }
 @media (hover: hover) {
   .crop-replace:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 28%, transparent); }
 }

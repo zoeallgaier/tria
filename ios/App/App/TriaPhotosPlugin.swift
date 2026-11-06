@@ -140,6 +140,13 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
     private let emit: (String, [String: Any]) -> Void
     /// The asset ids ticked in the row, as last reported or deselected.
     private var picked: [String] = []
+    /// THE CAMERA DISC (Zoe, 2026-11-06: "one icon in the corner on top of
+    /// the photo scroller ... just the camera icon"), on the strip's bottom
+    /// right. Native, because the picker is drawn over every web pixel in its
+    /// box. A dark scrim and a white glyph, the web's `.media-x` material, so
+    /// it reads on any photo. A tap says `rollMore`; app.js raises Take a
+    /// photo and All photos.
+    private let more = UIButton(type: .system)
 
     init(limit: Int, emit: @escaping (String, [String: Any]) -> Void) {
         self.emit = emit
@@ -158,13 +165,26 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         clip.backgroundColor = .clear
         clip.alpha = 0
         clip.isHidden = true
+        let glyph = UIImage(systemName: "camera.fill",
+                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
+        more.setImage(glyph, for: .normal)
+        more.tintColor = .white
+        more.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        more.layer.cornerRadius = 22
+        more.layer.borderWidth = 1
+        more.layer.borderColor = UIColor.white.withAlphaComponent(0.22).cgColor
+        more.accessibilityLabel = "Take a photo or see all photos"
+        more.addTarget(self, action: #selector(tapMore), for: .touchUpInside)
     }
+
+    @objc private func tapMore() { emit("rollMore", [:]) }
 
     func attach(host: UIViewController, scroller: UIScrollView) {
         host.addChild(picker)
         picker.view.frame = clip.bounds
         picker.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         clip.addSubview(picker.view)
+        clip.addSubview(more)
         scroller.addSubview(clip)
         picker.didMove(toParent: host)
     }
@@ -173,6 +193,10 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         guard rect.width > 0, rect.height > 0 else { return }
         if clip.frame != rect { clip.frame = rect }
         clip.layer.cornerRadius = radius
+        // Inset by the corner's own curve, so it sits concentric in it.
+        let side: CGFloat = 44, inset: CGFloat = max(8, radius * 0.38)
+        more.frame = CGRect(x: rect.width - side - inset, y: rect.height - side - inset, width: side, height: side)
+        clip.bringSubviewToFront(more)
     }
 
     func setShown(_ shown: Bool) {
