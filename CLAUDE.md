@@ -35,7 +35,12 @@ names no artist, so it has none, nor an album or playlist), kept per device in
 route(), the viewer's close and slide, and backgrounding). **Autoplay is
 AMBIENT** (`navigator.audioSession`, iOS 16.4), which the ringer switch
 silences; a tap is PLAYBACK. Without the API an iPhone never autoplays
-(`previewAutoplays`), since older WebKit media ignores the switch. The play
+(`previewAutoplays`), since older WebKit media ignores the switch. **A volume
+button press, up or down, is sound on** (Zoe: "even if ringer is off audio
+still plays"): `TriaSettings` sends `volumeButton` (KVO on `outputVolume`
+plus the system's `SystemVolumeDidChange`, which also fires at either end),
+and `volumePressed` turns a playing clip to playback and keeps `soundOn` until
+the app is backgrounded. The play
 mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play icon").
 **Not yet heard on a phone**: that WKWebView honours `ambient` is unverified.
 

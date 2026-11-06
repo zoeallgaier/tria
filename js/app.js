@@ -14456,7 +14456,38 @@
     if (run) run.style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(1, t))));
   }
 
-  const preview = { audio: null, btn: null, turn: 0, raf: 0 };
+  const preview = { audio: null, btn: null, turn: 0, raf: 0, ambient: false };
+  /* A VOLUME BUTTON IS "SOUND ON" (Zoe, 2026-11-06: "if I hit my volume
+     buttons at all up or down even if ringer is off audio still plays"), as
+     on Instagram: a press, either way, turns a playing Moment's song from
+     ambient to playback, so the switch no longer silences it, and every song
+     after it plays the same way until the app goes to the background. Only
+     the app can hear the buttons (TriaSettings' `volumeButton`). */
+  let soundOn = false;
+  function volumePressed() {
+    soundOn = true;
+    const b = preview.btn;
+    if (b && preview.ambient) {
+      preview.ambient = false;
+      setAudioSession('playback');
+      // WebKit settles the session when playback starts, so start it again
+      // where it was; the clip doesn't jump.
+      const a = preview.audio;
+      if (a && !a.paused) { a.pause(); a.play().catch(() => {}); }
+      return;
+    }
+    // A Moment's song that couldn't start by itself (an older iOS) starts now.
+    if (!b && momentsAway) {
+      const play = document.querySelector('.mv-page .mv-play:not([hidden])');
+      if (play && play.isConnected) playPreview(play, false);
+    }
+  }
+  if (nativeShell()) {
+    try {
+      window.Capacitor.nativeCallback('TriaSettings', 'addListener',
+        { eventName: 'volumeButton' }, () => volumePressed());
+    } catch { /* an older binary: the switch decides */ }
+  }
   const setAudioSession = (type) => {
     try { if (navigator.audioSession) navigator.audioSession.type = type; } catch { /* not settable */ }
   };
@@ -14472,7 +14503,7 @@
   // can silence it, or where there is no ringer switch.
   const appleTouch = () => /iP(hone|ad|od)/.test(navigator.userAgent) ||
     (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  const previewAutoplays = () => 'audioSession' in navigator || !appleTouch();
+  const previewAutoplays = () => soundOn || 'audioSession' in navigator || !appleTouch();
 
   async function playPreview(btn, ambient) {
     stopPreview();
@@ -14490,6 +14521,8 @@
       if (!ambient) { btn.hidden = true; toast('No preview for this one.'); }
       return;
     }
+    if (soundOn) ambient = false;
+    preview.ambient = ambient;
     setAudioSession(ambient ? 'ambient' : 'playback');
     const a = preview.audio || (preview.audio = new Audio());
     a.preload = 'auto';
@@ -14527,7 +14560,9 @@
     if (preview.btn && preview.btn.dataset.key === b.dataset.key) { stopPreview(); return; }
     playPreview(b, false);
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stopPreview(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { stopPreview(); soundOn = false; }
+  });
 
   /* Null for anything but a 200: a private playlist is a 401 or a 404, and to
      the picker those are one answer. A THROW is caught into the same null,
