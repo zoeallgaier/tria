@@ -7754,7 +7754,10 @@
   /* A navigation out of the viewer (a face to a profile, a reply to a chat, a
      tag to Discover) files where it was under the entry it left, and a back
      onto that entry opens it again on the same frame, so nobody has to find
-     the Moment twice (Zoe, 2026-11-06). Keyed by navStamp's token. */
+     the Moment twice (Zoe, 2026-11-06). Keyed by navStamp's token. Never for
+     a profile (Zoe: "not if I tap their profile"), and the return is drawn
+     whole in the same task as the route, before the page under it paints,
+     with no fade, so My Circle never flashes. */
   const momentReturn = new Map();
   const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
   const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
@@ -8309,9 +8312,16 @@
     momentsAway = close;
     close.at = () => ({ who: page.s.u.username, post: String(cur().post.id), i: cur().i });
     page = pageFor(start);
+    const instant = !!back;   // a return: already there, nothing rises
     back = null;   // only the first page lands on the filed frame
     live('open');
-    requestAnimationFrame(() => {
+    if (instant) {
+      root.style.transition = 'none';
+      root.classList.add('open');
+      void root.offsetWidth;
+      root.style.transition = '';
+      page.el.querySelector('.mv-close')?.focus({ preventScroll: true });
+    } else requestAnimationFrame(() => {
       root.classList.add('open');
       if (!prefersReduced() && card.animate) {
         card.animate([{ transform: 'scale(0.97)' }, { transform: 'none' }], { duration: 340, easing: MV_SETTLE });
@@ -25132,7 +25142,8 @@
     // in. Its own close() is what runs, so the scroll lock, the focus return and
     // the exit animation are the sheet's, unchanged.
     dismissSheet();
-    if (momentsAway && momentsAway.at && prevHere && prevHere !== arriving) {
+    if (momentsAway && momentsAway.at && prevHere && prevHere !== arriving
+        && !(location.hash || '').startsWith('#/u/')) {
       momentReturn.set(prevHere, momentsAway.at());
       while (momentReturn.size > 20) momentReturn.delete(momentReturn.keys().next().value);
     }
@@ -25140,7 +25151,7 @@
     const momentBack = momentReturn.get(arriving);
     if (momentBack) {
       momentReturn.delete(arriving);
-      setTimeout(() => { if (navHere === arriving) openMoments(momentBack.who, null, momentBack); }, 0);
+      openMoments(momentBack.who, null, momentBack);
     }
 
     // Your colour on the primary buttons. Above the gate check on purpose: it is
