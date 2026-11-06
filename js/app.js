@@ -7043,6 +7043,8 @@
   function composeRows() {
     const occ = todaysDaily();
     return [
+      // The row is every type the composer infers, so its mark AND its word
+      // cycle through them (POST_CYCLE, Zoe, 2026-11-06: no "Post").
       { key: 'note',     label: 'Note' },
       // No Activity row since 2026-11-04 (Zoe): a plan is the composer's
       // calendar button, as a link, a photo and a poll are.
@@ -7085,7 +7087,58 @@
         icon: row.icon || TYPE_GLYPH[row.key] || 'pencil',
         run: () => run(row),
       })),
+      wire: (scrim) => { stopCycle = cyclePostRow(scrim.querySelector('.sheet-item[data-i="0"]')); },
+      onClose: () => { stopCycle?.(); stopCycle = null; },
     });
+  }
+  let stopCycle = null;
+
+  /* THE FIRST ROW CYCLES (Zoe, 2026-11-06: "have the icons rotate between
+     frames and polls and links", then "include titles I hate the word
+     post"): one row stands for every type the composer infers, so its glyph
+     and its word walk them together, New note, New frame, New find, New poll,
+     New activity, a long hold on each and a short swap in the composer
+     nameplate's own move (title-rise/title-sink, smaller). Any of them opens
+     the plain composer. Reduced motion keeps Note. VoiceOver hears the five
+     at once, never the swap. */
+  const POST_CYCLE = ['note', 'photo', 'find', 'poll', 'activity'];
+  const POST_CYCLE_MS = 1900;
+  function cyclePostRow(row) {
+    const ico = row?.querySelector('.sheet-ico');
+    const word = row?.querySelector('span');
+    if (!ico || !word || prefersReduced()) return null;
+    row.setAttribute('aria-label', 'Note, frame, find, poll or activity');
+    const wrap = (el, cls) => {
+      const box = document.createElement('span');
+      box.className = cls;
+      box.setAttribute('aria-hidden', 'true');
+      el.replaceWith(box);
+      box.appendChild(el);
+      return box;
+    };
+    ico.classList.remove('sheet-ico');
+    const icoBox = wrap(ico, 'sheet-ico sheet-cycle sheet-cycle--ico');
+    const wordBox = wrap(word, 'sheet-cycle sheet-cycle--word');
+    const swap = (box, next) => {
+      const old = box.lastElementChild;
+      old.classList.remove('is-in');
+      old.classList.add('is-out');
+      old.addEventListener('animationend', () => old.remove(), { once: true });
+      next.classList.add('is-in');
+      box.appendChild(next);
+    };
+    let i = 0;
+    const timer = setInterval(() => {
+      i = (i + 1) % POST_CYCLE.length;
+      const type = POST_CYCLE[i];
+      const tmp = document.createElement('span');
+      tmp.innerHTML = svgIcon(TYPE_GLYPH[type]);
+      swap(icoBox, tmp.firstElementChild);
+      const w = document.createElement('span');
+      w.textContent = TYPE_LABEL[type];
+      swap(wordBox, w);
+    }, POST_CYCLE_MS);
+    return () => clearInterval(timer);
   }
 
   function renderHome() {

@@ -3844,6 +3844,23 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .sheet-item:focus-visible,
 .sheet-cancel:focus-visible { outline: none; }
 .sheet-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
+/* The New sheet's first row walks the post types, glyph and word together
+   (cyclePostRow): the nameplate's rise and sink, scaled down. The outgoing
+   one is laid over the incoming, so the row never reflows. */
+.sheet-cycle { position: relative; display: inline-block; }
+.sheet-cycle--ico > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sheet-cycle--word > span { display: inline-block; }
+.sheet-cycle--word > .is-out { position: absolute; left: 0; top: 0; width: max-content; }
+.sheet-cycle > .is-in  { animation: ico-rise var(--dur-move) var(--ease); }
+.sheet-cycle > .is-out { animation: ico-sink var(--dur-move) var(--ease) forwards; pointer-events: none; }
+@keyframes ico-rise {
+  from { opacity: 0; transform: translateY(5px);  filter: blur(3px); }
+  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+}
+@keyframes ico-sink {
+  from { opacity: 1; transform: translateY(0);    filter: blur(0); }
+  to   { opacity: 0; transform: translateY(-5px); filter: blur(3px); }
+}
 
 .sheet-item--danger { color: var(--danger); }
 .sheet-item--danger .sheet-ico { color: currentColor; }
