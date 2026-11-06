@@ -149,7 +149,9 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
     /// on a 36pt disc, with 44pt for the finger (`TriaRollMore`). A tap says
     /// `rollMore`; app.js raises Take a photo and All photos.
     private let more = TriaRollMore()
-    /// The disc's flip has played: once per roll, and a roll is one composer visit.
+    /// The disc's flip has played: once per roll, and a roll is one composer
+    /// visit. It plays as the row first shows (Zoe: "just when someone visits
+    /// the page at first"), a beat after the fade in, so the eye is there.
     private var hinted = false
 
     init(limit: Int, emit: @escaping (String, [String: Any]) -> Void) {
@@ -198,6 +200,13 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
     func setShown(_ shown: Bool) {
         let target: CGFloat = shown ? 1 : 0
         if shown { clip.isHidden = false }
+        if shown && !hinted {
+            hinted = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                guard let self, !self.clip.isHidden else { return }
+                self.more.hint()
+            }
+        }
         if clip.alpha == target { if !shown { clip.isHidden = true }; return }
         // Away at once (a sheet must never open under it), back with a fade.
         if !shown { clip.alpha = 0; clip.isHidden = true; return }
@@ -229,9 +238,6 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         let fresh = now.filter { !picked.contains($0.0) }
         picked = ids
         gone.forEach { emit("rollUnpick", ["id": $0]) }
-        // The first photo picked this visit flips the disc to the frame and
-        // back, once, so it says the library is behind it too.
-        if !fresh.isEmpty && !hinted { hinted = true; more.hint() }
         for (id, provider) in fresh {
             TriaPhotoLoad.image(provider) { [weak self] result in
                 DispatchQueue.main.async {
@@ -275,14 +281,40 @@ final class TriaRollMore: UIButton {
         addSubview(icon)
     }
 
+    /// The composer's type mark's pop (`type-pop` in app.css): the new glyph
+    /// comes in from 55% and -14 degrees, overshoots to 114% and 3, and settles,
+    /// in 0.36s on the signature ease. The frame, a beat, then the camera.
     func hint() {
-        guard #available(iOS 17.0, *), !UIAccessibility.isReduceMotionEnabled,
+        guard !UIAccessibility.isReduceMotionEnabled,
               let frame = Self.frame, let camera = Self.camera else { return }
-        icon.setSymbolImage(frame, contentTransition: .replace.downUp)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
-            self?.icon.setSymbolImage(camera, contentTransition: .replace.downUp)
-        }
+        pop(to: frame)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in self?.pop(to: camera) }
     }
+
+    private func pop(to image: UIImage) {
+        let rad = { (deg: CGFloat) in deg * .pi / 180 }
+        let pose = { (k: CGFloat, deg: CGFloat) in CGAffineTransform(rotationAngle: rad(deg)).scaledBy(x: k, y: k) }
+        icon.layer.removeAllAnimations()
+        icon.image = image
+        icon.transform = pose(0.55, -14)
+        icon.alpha = 0
+        // --ease, cubic-bezier(0.16, 1, 0.3, 1), over the whole pop.
+        let timing = UICubicTimingParameters(controlPoint1: CGPoint(x: 0.16, y: 1), controlPoint2: CGPoint(x: 0.3, y: 1))
+        let run = UIViewPropertyAnimator(duration: 0.36, timingParameters: timing)
+        run.addAnimations {
+            UIView.animateKeyframes(withDuration: 0, delay: 0, options: [.calculationModeCubic]) {
+                UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.55) {
+                    self.icon.transform = pose(1.14, 3)
+                    self.icon.alpha = 1
+                }
+                UIView.addKeyframe(withRelativeStartTime: 0.55, relativeDuration: 0.45) {
+                    self.icon.transform = .identity
+                }
+            }
+        }
+        run.startAnimation()
+    }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been used") }
 
     override func layoutSubviews() {
