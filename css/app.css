@@ -11200,6 +11200,92 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .person-card-slot .friend-tie { width: 100%; }
 .person-card-slot .friend-go { display: none; }
 
+/* CIRCLES ARE A RAIL (Zoe, 2026-11-05), the people rail's strip holding the
+   daily's card in its wider shape: one card and a peek of the next on a
+   phone, every circle kept (no More circles). The cards stand one height, so
+   the foot is pushed to the bottom and the name and about are clamped; the
+   face is 80px, the people card's, so the two rails read as one system. */
+.community-strip {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0 auto 0.95rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.community-strip::-webkit-scrollbar { display: none; }
+@media (max-width: 680px) {
+  .community-strip { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
+}
+.view--discover .community-strip .daily-card {
+  flex: 0 0 auto;
+  width: min(330px, calc(100vw - 2 * var(--gutter) - 2.75rem));
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  scroll-snap-align: start;
+}
+.community-strip .community-card-pic { width: 80px; height: 80px; }
+.community-strip .daily-prompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.community-strip .daily-hint {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.community-strip .daily-foot { margin-top: auto; padding-top: 0.95rem; }
+
+/* THE SQUARE (Zoe, 2026-11-05): this week's public posts under the daily, in
+   My Circle's reading column, with circles and people set between them
+   (paintSquare). No hairline over the first post: the daily card ends on its
+   own edge (Zoe). A piece set between (.feed-extra) is boxed, so it needs no
+   rule of its own and the post after it none either. It ends: a quiet line,
+   then Share Tria. */
+.square[hidden] { display: none; }
+/* The daily to the first post: My Circle's Moments rail to its first post
+   (.nowplaying's 2rem, Zoe: "match the circle feed below moments"). */
+.discover-body > .daily-card { margin-bottom: 2rem; }
+/* Generous air around a piece set between the posts (Zoe, 2026-11-05: "a
+   bit more generous with padding above and below cards and also in between
+   the sides"): about twice the column's gap over and under it, and the rails'
+   cards a wider gap apart. */
+.square-feed > .feed-extra {
+  margin-block: 1rem;
+  animation: rise var(--dur-slow) var(--ease) backwards;
+}
+.square-feed :is(.community-strip, .person-strip) { gap: 0.9rem; }
+.square-feed .daily-card,
+.square-feed .person-rail { margin: 0 auto; }
+.square-feed .community-strip { margin-bottom: 0; }
+/* The column bleeds to the screen's edges on a phone; a lone circle card
+   takes the gutter back, and a rail runs edge to edge, padded by it. */
+@media (max-width: 680px) {
+  .square-feed > .feed-extra > .daily-card { margin-inline: var(--gutter); }
+  .square-feed :is(.community-strip, .person-strip) { margin-inline: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .square-feed > .feed-extra { animation: none; } }
+.square-end {
+  max-width: var(--feed-width);
+  margin: 0.9rem auto 0;
+  padding: 1.6rem 0.5rem 0.4rem;
+  border-top: 1px solid var(--rule);
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+@media (max-width: 680px) {
+  .square-end { margin-inline: calc(-1 * var(--gutter)); padding-inline: calc(var(--gutter) + 0.5rem); }
+}
+/* With nothing posted, the line is the square's first word and wears no rule. */
+.square-foot.is-quiet .square-end { border-top: 0; margin-top: 0; padding-top: 0.6rem; }
+
 /* A circle's face: its photo, or Discover's woven triad on the chat list's
    glyph disc when it has none. Round, like every face in the app. */
 .community-pic {

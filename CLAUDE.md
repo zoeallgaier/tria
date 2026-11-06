@@ -21,6 +21,32 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## Discover is a town square (2026-11-05)
+
+**Discover has posts again** (Zoe: "include peoples posts if they are public
+... like a town square"), undoing 2.0's "shows no posts". It is search, today's
+daily, then **the square** (`Store.square`, `paintSquare`): this WEEK's
+public posts, meaning Anyone posts and posts in PUBLIC circles (never
+invite-only), friends' included, yours not, no reposts, nothing `offFeed`,
+today's daily answers left to the daily's card, at most TWO a person
+(`SQUARE_EACH`), newest first and never ranked, as My Circle's own cards in the
+reading column (not the old masonry wall). **It ends**: "That's the square for
+this week.", then Share Tria. **Circles and people are set between the posts on
+a fixed rhythm, never at random** (Zoe asked for random; Claude pushed back:
+random reshuffles under the thumb and reads as a slot): a circle's card under
+the first post said in it if you're not in it, then rails in HANDFULS of about
+8 (`RAIL_SIZE`, split evenly), circles and people taking turns from the 3rd
+post, 4 posts apart (`RAIL_GAP`), no two pieces within 3 posts
+(`SQUARE_GAP`), the rest at the foot so every circle is always on the page.
+**The little algorithm** (Zoe: "a little one is fine if it gets people
+connected") is only in what is set between: circles your friends are in lead,
+then by life, yours last; people by friends in common. A piece between is a
+`.feed-extra` that `syncCards` diffs like a card (`nodeFor`), so a repaint
+never re-rises the column. Circles are a sideways rail of the wider daily
+card (`communityRailHtml`, 80px faces, Start a circle ending the last rail);
+a search's circles stay a stack. No hairline over the first post; the daily
+has My Circle's 2rem under it, like the Moments rail.
+
 ## Moments (2026-11-04)
 
 **A Moment is an ordinary post that lasts a day** (Zoe: "24hr posts ... they can

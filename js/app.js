@@ -7533,17 +7533,32 @@
     next();
   }
 
+  /* A list may hold more than posts: an item with `extra` is a piece of the
+     page set between the cards (the square's circle cards and rails), its
+     markup in `html`, its node a `.feed-extra` keyed and diffed like a card.
+     Its signature is its markup, so it only rebuilds when it changed. */
+  const MANAGED = ':scope > :is(.card, .feed-extra)';
+  function extraNode(x) {
+    const el = document.createElement('div');
+    el.className = 'feed-extra';
+    el.dataset.id = x.id;
+    el.dataset.sig = x.html;
+    el.innerHTML = x.html;
+    return el;
+  }
+  const nodeFor = (p) => (p.extra ? extraNode(p) : makeCard(p));
+
   function syncCards(container, list, wire, after, lazy = false) {
     // This container's unbuilt tail is built on below from the new list; any
     // other container's is paid in full first (Discover stacks several).
     if (cardsOwed && cardsOwed.container === container) dropCards(); else payCards();
     const desired = new Set(list.map(p => String(p.id)));
-    container.querySelectorAll(':scope > .card').forEach(c => {
+    container.querySelectorAll(MANAGED).forEach(c => {
       if (!desired.has(c.dataset.id)) c.remove();          // gone from the feed
     });
-    container.querySelectorAll(':scope > :not(.card)').forEach(n => n.remove()); // stale empty-state
+    container.querySelectorAll(':scope > :not(.card, .feed-extra)').forEach(n => n.remove()); // stale empty-state
     const existing = new Map();
-    container.querySelectorAll(':scope > .card').forEach(c => existing.set(c.dataset.id, c));
+    container.querySelectorAll(MANAGED).forEach(c => existing.set(c.dataset.id, c));
 
     // The last card already on the page. Everything up to it is placed in the
     // first pass whatever the limit, so a new post can't be left out of the
@@ -7564,7 +7579,7 @@
         if (!old && made >= limit && i > lastOld) return false;
         let node;
         if (old) {
-          const fresh = makeCard(p);
+          const fresh = nodeFor(p);
           if (fresh.dataset.sig === old.dataset.sig) {
             node = old;                          // unchanged — leave the live node alone
           } else {
@@ -7583,7 +7598,7 @@
             node = fresh;
           }
         } else {
-          node = makeCard(p);                    // brand-new post — rise it in
+          node = nodeFor(p);                     // brand-new post — rise it in
           if (late) node.style.animation = 'none';
           else node.style.animationDelay = staggerDelay(i);
           wire(node);
@@ -15521,15 +15536,26 @@
 
   // `after` is whatever Discover puts under the circles themselves (the people
   // rail); it still shows with no circles at all.
-  function communitiesSectionHtml(list, { search = false, after = '' } = {}) {
-    if (!Store.communitiesReady()) return after;
-    if (search && !list.length) return '';
+  // A search's circles: a stack under their caption, as People and Posts are.
+  function communitiesSectionHtml(list) {
+    if (!Store.communitiesReady() || !list.length) return '';
     return `<section class="communities" aria-label="Circles">` +
-        // Searching, it is captioned like People and Posts above it.
-        (search ? `<p class="discover-kicker">Circles</p>` : communityStartHtml()) +
+        `<p class="discover-kicker">Circles</p>` +
         list.map(c => communityCardHtml(c)).join('') +
-        after +
       `</section>`;
+  }
+
+  /* CIRCLES ARE A RAIL (Zoe, 2026-11-05), the people rail's sideways strip in
+     the daily card's wider shape, set into the square (see paintSquare), so
+     every circle stays on Discover (Zoe: they are "inevitably a large part of
+     tria like subreddits") without a stack of them on top. The dashed Start a
+     circle card ENDS the rail, where you land once you have looked through
+     every room. */
+  function communityRailHtml(list) {
+    const cards = list.map(c => communityCardHtml(c)).join('') + communityStartHtml();
+    return cards
+      ? `<section class="community-rail" aria-label="Circles"><div class="community-strip">${cards}</div></section>`
+      : '';
   }
 
   // The inside of the circle form's Who can join field: the audience lock's
@@ -16970,9 +16996,19 @@
           `<p class="guest-note">You’re looking around signed out. ` +
             `<a class="about-more" href="#/join">Make an account</a> to join a circle.</p>`) +
         `<div class="discover-body" id="discover-body"></div>` +
+        // THE SQUARE (Store.square): its own box under the body, never inside
+        // its innerHTML, so a repaint up there (a join, a pull) diffs these
+        // cards in place instead of rebuilding and re-rising every post.
+        `<section class="square" id="discover-square" aria-label="The square">` +
+          `<div class="feed square-feed" id="square-feed"></div>` +
+          `<div class="square-foot" id="square-foot"></div>` +
+        `</section>` +
       `</section>`;
 
     const bodyEl = view.querySelector('#discover-body');
+    const squareEl = view.querySelector('#discover-square');
+    const squareFeed = view.querySelector('#square-feed');
+    const squareFoot = view.querySelector('#square-foot');
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
     const leadBtn = document.getElementById('discover-side-btn');
@@ -17181,14 +17217,14 @@
       // owes you an answer rather than a card.
       const occ = searching ? null : todaysDaily();
       const answers = occ ? dailyAnswers(occ) : [];
+      // A search's circles. Unsearched they live in the square (paintSquare).
       // People, or a post type, has no circles in it.
-      const rooms = type !== 'all' ? [] : q ? communitiesMatching(q) : communitiesInOrder();
+      const rooms = type === 'all' && q ? communitiesMatching(q) : [];
+      const roomsHtml = communitiesSectionHtml(rooms);
       const rail = searching ? [] : peopleForRail();
       // Whoever is on the rail now stays on it for the rest of this visit.
       rail.forEach(x => railKept.add(x.u.username));
-      const railHtml = peopleRailHtml(rail);
-      // The rail sits under the circles (Zoe, 2026-10-23; it was over them).
-      const roomsHtml = communitiesSectionHtml(rooms, { search: searching, after: railHtml });
+      paintSquare(searching, occ, rail);
       // Under People it is everyone who matches, at once (everyone, unsearched).
       const matched = type === 'people' || (q && type === 'all') ? peopleMatching(q) : [];
       const people = type === 'people' || allPeopleFor === q ? matched : matched.slice(0, PEOPLE_FIRST);
@@ -17232,13 +17268,13 @@
       // Chats does; every paint after it (a pull, a join, a keystroke) swaps in
       // place without the cards rising again.
       if (bodyEl.dataset.risen) bodyEl.classList.add('is-still');
-      // Searching, the results run people, posts, circles; otherwise the page
-      // is the daily, then the circles with the people rail inside them.
+      // Searching, the results run people, posts, circles; otherwise the body
+      // is the daily alone, and the square under it is the rest of the page.
       bodyEl.innerHTML = searching
         ? peopleHtml + postsHtml + roomsHtml + none
-        : (occ ? dailyCardEl(occ, answers) : '') + roomsHtml + shareAsk;
+        : (occ ? dailyCardEl(occ, answers) : '');
       if (!bodyEl.dataset.risen) {
-        const risers = bodyEl.querySelectorAll('.daily-card, .person-rail, .friends-share');
+        const risers = bodyEl.querySelectorAll('.daily-card');
         risers.forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
         if (risers.length) bodyEl.dataset.risen = '1';
       }
@@ -17255,7 +17291,6 @@
         ?.addEventListener('click', () => answerDaily(occ));
       wireCommunityJoins(bodyEl);
       wireCommunityStart(bodyEl);
-      if (!searching) wireShare();
       // The Add on a person's row. It binds to the BODY, once (it refuses a
       // second binding), which is what lets it survive every repaint.
       bodyEl.querySelectorAll('.person-card[data-user]').forEach(washPersonCard);
@@ -17270,9 +17305,137 @@
         syncOpen();
       }));
 
+    /* THE SQUARE, the page under the daily (Zoe, 2026-11-05). Searching, it
+       steps aside (the results are the page) and keeps its cards for the way
+       back. Its posts are cards in the reading column, My Circle's own, never
+       tiles: Tria is for words read well, and a card brings the comment sheet,
+       the heart and Read more with it. Today's daily answers are left to the
+       daily's card above, which is their door today.
+
+       CIRCLES AND PEOPLE ARE SET BETWEEN THE POSTS (Zoe: "shuffle in the
+       circles and people cards in the feed, instead of it just sitting on
+       top"), on a fixed rhythm rather than at random, so nothing moves under
+       the thumb between pulls and nothing reads as a slot to keep pulling:
+       - a circle's own card UNDER a post said in it, the first time that
+         circle comes up and only one you're not in, which is the square's
+         straight line from a post to Join;
+       - every other circle as the rail after the third post, then the
+         people rail after the seventh;
+       - never two of these within SQUARE_GAP posts of each other (a circle
+         that comes up too soon waits for its next post), and whatever never
+         found a place closes the column, so every circle is always here.
+       THE LITTLE ALGORITHM (Zoe: "without a heavy algorithm but like a little
+       one is fine if it gets people connected") is only in what is set
+       between: circles your friends are in lead the rail, then the liveliest,
+       and yours go last (the sidebar already lists them); people are most
+       friends in common first (peopleForRail). The posts are never ranked:
+       newest first, as the About page promises.
+       The foot says the square ends, then Share Tria, the page's last word. */
+    /* RAILS COME IN HANDFULS (Zoe, 2026-11-05: "10 people or circles at a time
+       with more groups to not make it overwhelming"): a rail holds about
+       RAIL_SIZE cards, split evenly (13 circles are 7 and 6, never 8 and 5),
+       and the handfuls take turns down the column, circles first, at least
+       RAIL_GAP posts apart. A sideways rail is rarely scrolled past its first
+       few cards, so a second handful further down is a second look, not more
+       of the same row. Start a circle ends the LAST circles rail. */
+    const SQUARE_GAP = 3;
+    const RAIL_FIRST = 3;
+    const RAIL_GAP = 4;
+    const RAIL_SIZE = 8;
+    let squareFootSig = null;
+    const friendsIn = (c) => Store.communityMembers(c.id)
+      .filter(u => Store.isFriend(u) && !Blocks.has(u)).length;
+    const handfuls = (list) => {
+      if (!list.length) return [];
+      const k = Math.ceil(list.length / RAIL_SIZE), size = Math.ceil(list.length / k);
+      return Array.from({ length: k }, (_, i) => list.slice(i * size, (i + 1) * size));
+    };
+    const squareItems = (posts, rail) => {
+      const ready = Store.communitiesReady();
+      const items = [];
+      const carded = new Set();
+      // Placeholders, in turn order; their markup is filled in once every
+      // circle met under a post is known (the rails leave those out).
+      const circleRails = [], peopleRails = handfuls(rail).map((h, i) =>
+        ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }));
+      // How many circle handfuls there will be is only known at the end, so
+      // the queue holds up to the most there could be and the empty ones drop.
+      const roomCount = ready ? communitiesInOrder().length : 0;
+      const maxCircleRails = ready ? Math.max(1, Math.ceil(roomCount / RAIL_SIZE)) : 0;
+      for (let i = 0; i < maxCircleRails; i++) circleRails.push({ extra: true, id: 'x:circles:' + i });
+      const queue = [];
+      for (let i = 0; i < Math.max(circleRails.length, peopleRails.length); i++) {
+        if (circleRails[i]) queue.push(circleRails[i]);
+        if (peopleRails[i]) queue.push(peopleRails[i]);
+      }
+      let n = 0, since = SQUARE_GAP, sinceRail = RAIL_GAP;
+      for (const p of posts) {
+        items.push(p);
+        n++; since++; sinceRail++;
+        if (since < SQUARE_GAP) continue;
+        const c = ready && p.communityId && Store.community(p.communityId);
+        if (c && !carded.has(c.id) && !Store.inCommunity(c.id) && !(c.owner && Blocks.has(c.owner))) {
+          carded.add(c.id);
+          items.push({ extra: true, id: 'x:c:' + c.id, html: communityCardHtml(c) });
+        } else if (queue.length && n >= RAIL_FIRST && sinceRail >= RAIL_GAP) {
+          items.push(queue.shift());
+          sinceRail = 0;
+        } else continue;
+        since = 0;
+      }
+      items.push(...queue);
+      // The circles rails: every circle not already met under a post, the ones
+      // your friends are in first, yours last.
+      if (ready) {
+        const all = communitiesInOrder().filter(c => !carded.has(c.id));
+        const theirs = all.filter(c => !Store.inCommunity(c.id))
+          .map(c => ({ c, f: friendsIn(c) }))
+          .sort((a, b) => b.f - a.f)            // stable: life breaks the tie
+          .map(x => x.c);
+        const groups = handfuls(theirs.concat(all.filter(c => Store.inCommunity(c.id))));
+        // With no circle left to show, the one rail is Start a circle alone.
+        if (!groups.length) groups.push([]);
+        groups.forEach((g, i) => {
+          if (!circleRails[i]) return;
+          const last = i === groups.length - 1;
+          circleRails[i].html = last ? communityRailHtml(g)
+            : `<section class="community-rail" aria-label="Circles"><div class="community-strip">` +
+                g.map(c => communityCardHtml(c)).join('') + `</div></section>`;
+        });
+      }
+      return items.filter(x => !x.extra || x.html);
+    };
+    // A piece set between the posts is wired as the page wires it above.
+    const wireSquareNode = (node) => {
+      if (!node.classList.contains('feed-extra')) { wireFoundCard(node); return; }
+      wireCommunityJoins(node);
+      wireCommunityStart(node);
+      node.querySelectorAll('.person-card[data-user]').forEach(washPersonCard);
+    };
+    function paintSquare(searching, occ, rail) {
+      squareEl.hidden = searching;
+      if (searching) return;
+      const tag = occ && occ.tag;
+      const list = Store.square().filter(p => !Blocks.has(p.author)
+        && !(tag && (p.tags || []).includes(tag)));
+      syncCards(squareFeed, squareItems(list, rail), wireSquareNode, null, true);
+      // The people rail's Add, bound once to the column.
+      wireTieList(squareFeed);
+      const footSig = list.length ? 'end' : 'quiet';
+      if (footSig === squareFootSig) return;
+      squareFootSig = footSig;
+      squareFoot.innerHTML =
+        `<p class="square-end">${list.length
+          ? 'That’s the square for this week.'
+          : 'It’s quiet in the square this week. Post to Anyone and it shows up here.'}</p>` +
+        shareAsk;
+      squareFoot.classList.toggle('is-quiet', !list.length);
+      wireShare();
+    }
+
     // Share Tria: native share sheet where it exists, clipboard copy otherwise.
     function wireShare() {
-      const shareBtn = bodyEl.querySelector('.friends-share-copy');
+      const shareBtn = squareFoot.querySelector('.friends-share-copy');
       if (!shareBtn) return;
       shareBtn.addEventListener('click', async () => {
         const result = await shareOrCopy({ title: 'Tria', text: 'Join me on Tria', url: 'https://triaonline.com' });

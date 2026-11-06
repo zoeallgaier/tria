@@ -1612,6 +1612,13 @@ are whoever ANSWERED going or maybe and is still in it, plus anyone brought
 into the plan's own chat: the members who never said a word are not "waiting",
 and nobody is woken up about a plan in a circle they never answered.
 
+**Superseded 2026-11-05: Discover is a town square** (see CLAUDE.md). The
+paragraph below is the 2.0 history. The square is `Store.square()`: a week of
+posts that are public by audience (Anyone) or by place (a public circle, which
+RLS already serves to anyone, circle-public-posts.sql), at most two a person,
+no reposts, nothing offFeed. It widens nothing: the cache only holds what RLS
+handed over, and "Anyone" has always said "Everyone on Tria, friend or not".
+
 **Discover is circles, and shows no posts** (Zoe, 2026-10-22: "remove the
 posts from the Discover feed. THIS is the new way to discover."). It went there
 in two steps on the same day: first the post grid gave up six tiles per circle

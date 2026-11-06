@@ -1286,6 +1286,38 @@ const Store = (() => {
     });
   }
 
+  /* THE SQUARE (Zoe, 2026-11-05: "include peoples posts if they are public ...
+     like a town square"). Discover's posts, under its circles and people: what
+     was said in public this week. Public means one of two things: a post set
+     to Anyone ("Everyone on Tria, friend or not", the audience sheet's own
+     promise), or a post in a PUBLIC circle, which anyone can already read
+     (circle-public-posts.sql) and which is the square's way into that circle.
+     An invite-only circle's posts stay in it.
+     It ENDS: a week, and at most SQUARE_EACH posts a person, each one's newest,
+     so a busy week from one person can't fill it. Friends are in it (a square
+     without your neighbours in it is not a square); you are not, since your
+     own posts are already in My Circle and on your profile. No reposts (it is
+     people's own words), and nothing offFeed (a Moment or a song).
+     Newest first, never ranked, as posts() is. Blocks are app.js's (Blocks). */
+  const SQUARE_MS = 7 * 24 * 60 * 60 * 1000;
+  const SQUARE_EACH = 2;
+  function square(now = Date.now()) {
+    const from = now - SQUARE_MS;
+    const each = new Map();
+    return posts().filter(p => {
+      if (p.author === state.session || p.repostOf || offFeed(p)) return false;
+      if (Date.parse(p._ts || 0) < from) return false;
+      if (p.communityId) {
+        const c = community(p.communityId);
+        if (!c || c.inviteOnly) return false;
+      } else if (p.audience !== 'public') return false;
+      const n = each.get(p.author) || 0;
+      if (n >= SQUARE_EACH) return false;
+      each.set(p.author, n + 1);
+      return true;
+    });
+  }
+
   // All posts, newest first, by real server timestamp (stable). Sorted once per
   // version of the array rather than once per caller — feed(), discover(),
   // postsBy() and half a dozen lookups in app.js all come through here, and a
@@ -4221,7 +4253,7 @@ const Store = (() => {
 
   return {
     init, refresh, whenFresh, primePost, threadPrint, newerPosts, reloadChats,
-    users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, posts, postsBy, audienceCount, audienceOf,
+    users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, square, posts, postsBy, audienceCount, audienceOf,
     // Auth
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,
