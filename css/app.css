@@ -6068,6 +6068,10 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
   color: var(--text);
   cursor: pointer;
+  /* THE BUTTON's glass is a fill with no blur; over a photo it needs the
+     blur to read, so the rail's discs frost what's behind them. */
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 .mv-rail button[hidden] { display: none; }
 .mv-rail svg { width: 23px; height: 23px; transition: transform 0.3s var(--spring); }
