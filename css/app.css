@@ -1545,7 +1545,9 @@ body.toolbar-live .view { padding-top: 1rem; }
    copy sits before the outline and only shows where you are, hiding it. A
    page no tab names (Chats, a friend's profile) lights none. */
 .nav-link .nav-ico--on { display: none; }
-.nav-link[aria-current="page"] .nav-ico--on { display: block; }
+.nav-link[aria-current="page"] .nav-ico--on { display: block; color: var(--heart); }
+/* The solid mark wears the reader's heart, Tria's green on Tria's own ramp
+   (2026-11-05), as the native bar's lit tab does (`tabTint` in fabSpec). */
 .nav-link[aria-current="page"] .nav-ico--on + .nav-ico { display: none; }
 /* Where you are: full ink on a soft neutral capsule (the site's 8%), and a
    lighter one under the pointer. Hover only on a real pointer, so a first tap

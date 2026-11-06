@@ -936,7 +936,9 @@
            the neutral is a row inked with the paper's opposite, which is what
            `liveInk` already is, said twice and drifting. Only an ACCENT crosses
            here; empty still means the tab picks its own. */
-        tabTint: accent,
+        // Tria's own ramp lights the tab in Tria's green (Zoe, 2026-11-05),
+        // --heart resolved for the live scheme; "none" still sends nothing.
+        tabTint: accent || (fill.ramp ? toRgb(probe('color: var(--heart)').color || '') || '' : ''),
         /* THE INK, AND THE + IS THE ONE THING HERE THAT ALWAYS NAMES ONE.
 
            controlSpec points at this note and still keeps the older rule: only a tint sends its own ink, and empty is what
