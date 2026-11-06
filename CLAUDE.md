@@ -476,7 +476,7 @@ ever missing again, the hold offers Delete alone (`Store.commentEditReady`). Com
 18). The sheet is `min(66dvh, 640px)` tall and keeps the 6px inset every sheet
 has. **A tap on a card's headline or words raises the sheet too** (Zoe,
 2026-11-04: "tap title or content", `wireComments` clicks the glyph; a link,
-mention or the quoted tile keeps its own tap). **A tap on the panel's empty space closes it** (Zoe, 2026-11-04, `SHEET_EMPTY`), not one that only lets go of a held comment; with the keys up the first tap only lowers them. **The post page stays** for Read
+mention or the quoted tile keeps its own tap). **A tap anywhere on the panel closes it, the comments themselves included** (Zoe, 2026-11-04 for the empty space, 2026-11-06 for the rows: "tap the background of comments to close the comments too"), except on something with a tap of its own (`SHEET_KEEPS`: a name, a mention, a heart, a photo, a link's tile, a held comment's pills), and not one that only lets go of a held comment; with the keys up the first tap only lowers them. **The post page stays** for Read
 more, Updates rows and links; a desktop (wider than 680px, not native) keeps
 the glyph a link, so the words lead there.
 

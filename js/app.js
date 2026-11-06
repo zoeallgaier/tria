@@ -1093,20 +1093,21 @@
        controls went quiet and half didn't. */
     const overlaid = () => document.body.style.overflow === 'hidden';
 
-    // The last is Discover's search filter, a disc beside the native field
-    // while its slot is open.
+    // The last is Discover's search filter, at the field's end. It is sent
+    // shut too, as an idle control (see controlSpec's `hidden`), so native
+    // fades it in and out where it stands instead of popping it.
     const CONTROL_SEL =
       '#toolbar-page .toolbar-btn, #toolbar-page .toolbar-cta, ' +
       '#toolbar-actions .toolbar-btn, #toolbar-actions .toolbar-cta, ' +
-      '#toolbar-field .discover-filter-slot.is-open .toolbar-btn';
+      '#toolbar-field .discover-filter-slot .toolbar-btn';
     let mounted = {};         // key → the web element each native control stands for
     let toldBar = '';         // the last payload, so an unchanged bar costs nothing
     let lastControls = null;  // …and the last MEASURED one, for a bar that is off duty
     let barQueued = false;
 
-    // The one <svg> actually showing. Discover's search control holds two,
-    // stacked in a single grid cell and cross-faded (the magnifier and the X),
-    // so "the first one" is wrong exactly where it matters.
+    // The one <svg> actually showing, for a control that stacks two in one
+    // grid cell and cross-fades them (the comment bar's face and its discard
+    // mark), where "the first one" is wrong exactly where it matters.
     function liveGlyph(el) {
       const marks = [...el.querySelectorAll('svg')];
       if (marks.length < 2) return marks[0] ? marks[0].outerHTML : '';
@@ -1301,10 +1302,12 @@
         // TriaToolbar.attachMenu) is still there and simply never asked.
         menu: false,
         // The editor's Save is mounted before it is earned and fades in on the
-        // keystroke that earns it. Read from its own class rather than from
-        // computed visibility, which the gate in app.css sets on every control
-        // in the bar and would therefore report every one of them as idle.
-        hidden: el.classList.contains('toolbar-commit--idle'),
+        // keystroke that earns it, and Discover's filter is there while its
+        // slot is shut. Read from their own classes rather than from computed
+        // visibility, which the gate in app.css sets on every control in the
+        // bar and would therefore report every one of them as idle.
+        hidden: el.classList.contains('toolbar-commit--idle')
+          || !!el.closest('.discover-filter-slot:not(.is-open)'),
         // The chats button's dot (chatsBtnEl), as a resolved colour, and empty for
         // none: the same one-payload shape setDots gives the tab bar's.
         dot: dotInk(el),
@@ -1341,11 +1344,8 @@
       const styles = getComputedStyle(el);
       return {
         text,
-        // Both of the classes that answer this are the stylesheet's own: the
-        // title is in once the big serif one has gone, and out again while
-        // Discover's field is open over the space it wants.
-        visible: !!bar && bar.classList.contains('topbar--title-visible')
-          && !bar.classList.contains('topbar--searching'),
+        // The stylesheet's own answer: in once the big serif one has gone.
+        visible: !!bar && bar.classList.contains('topbar--title-visible'),
         x: rect.left, y: rect.top, w: rect.width, h: rect.height,
         // 1.05rem, from the rule rather than from a number restated in Swift.
         size: parseFloat(styles.fontSize) || 16.8,
@@ -1353,45 +1353,57 @@
       };
     }
 
-    /* ── DISCOVER'S SEARCH, THE ONE FIELD IN THIS BAR (2026-11-05) ───────────
-       Native draws it (TriaSearchField) so Discover's bar can be Liquid Glass
-       like every other tab's: native glass is above every web pixel, so while
-       the field was web the whole bar had to be CSS (Zoe: "the glass needs to
-       be consistent between circle and discover"). The web input stays in the
-       bar, invisible under the gate, as the model and the box measured here:
-       its rect is the capsule, its padding the text's inset, its glyph the
-       capsule's. `blur` is a count the page bumps to put the caret down. */
-    let searchBlurSeq = 0;
-    let searchCaret = false;
-    function searchSpec() {
-      const input = document.querySelector('#toolbar-field:not([hidden]) #discover-search');
-      if (!input) return { live: false };
+    /* ── DISCOVER'S FIELD STAYS WEB, AND THE MATERIAL STEPS AROUND IT ───────
+       (2026-11-06.) Native glass is above every web pixel, so the bar's
+       material would blur a web field under it. Until 2026-11-05 that sent the
+       whole bar to CSS on Discover; for one day the field was native instead
+       (TriaSearchField), and its caret and keyboard were worse than WebKit's
+       own (Zoe: "the tap is slow ... keyboard doesnt go down easily"). Now the
+       field is the web's and the rest of the bar is native like every tab's:
+       native cuts the field's pill out of its material (TriaToolbar's hole) and
+       the field carries its own blur in CSS (see the gate in app.css).
+
+       THE FIELD'S END GLIDES while the filter slot opens or shuts (its width,
+       on --dur-move), so a hole measured mid-move would be a hole in the wrong
+       place. While that tween runs, the spec says where the field's width began
+       and where it ends, the curve, and how far in the tween is, read off the
+       CSS transition itself, and native runs the same move on its own clock
+       rather than being chased a frame at a time. */
+    function holeSpec() {
+      const input = document.querySelector('#toolbar-field:not([hidden]) .discover-search-field');
+      if (!input) return null;
       const box = input.getBoundingClientRect();
-      const cs = getComputedStyle(input);
-      const ico = input.parentElement.querySelector('.discover-search-ico');
-      const icoBox = ico ? ico.getBoundingClientRect() : null;
-      const svg = ico && ico.querySelector('svg');
-      return {
-        live: true,
+      if (!box.width) return null;
+      const hole = {
         x: box.left, y: box.top, w: box.width, h: box.height,
-        fieldLeft: parseFloat(cs.paddingLeft) || 0,
-        fieldRight: parseFloat(cs.paddingRight) || 0,
-        glyph: svg ? svg.outerHTML : '',
-        glyphSize: icoBox ? icoBox.width : 20,
-        glyphX: icoBox ? icoBox.left + icoBox.width / 2 - box.left : 25,
-        text: input.value,
-        placeholder: input.getAttribute('placeholder') || '',
-        label: input.getAttribute('aria-label') || '',
-        ink: toRgb(cs.color) || '',
-        caret: toRgb(cs.caretColor) || toRgb(cs.color) || '',
-        muted: cssColour('var(--muted)'),
-        blur: searchBlurSeq,
+        r: Math.min(box.height / 2, parseFloat(getComputedStyle(input).borderTopLeftRadius) || 0),
       };
+      const slot = input.parentElement.querySelector('.discover-filter-slot');
+      const run = slot && slot.getAnimations ? slot.getAnimations()
+        .find(a => a.transitionProperty === 'width' && a.playState === 'running') : null;
+      if (run) {
+        // The input fills what the slot leaves, so its width at either end of
+        // the move is its width now plus the slot's change from here.
+        const frames = run.effect.getKeyframes();
+        const timing = run.effect.getComputedTiming();
+        const slotNow = slot.getBoundingClientRect().width;
+        const ends = [frames[0], frames[frames.length - 1]].map(f => parseFloat(f && f.width));
+        const ease = String(timing.easing || getComputedStyle(slot).transitionTimingFunction)
+          .match(/-?[\d.]+/g);
+        if (ends.every(Number.isFinite) && timing.duration > 0) {
+          hole.move = {
+            from: box.width + slotNow - ends[0],
+            to: box.width + slotNow - ends[1],
+            dur: timing.duration / 1000,
+            ease: ease && ease.length === 4 ? ease.map(Number) : [0.25, 0.1, 0.25, 1],
+          };
+          // How far in, sent beside the payload rather than in it: it changes on
+          // every push of the same move, and an unchanged bar sends nothing.
+          hole.into = (timing.localTime || 0) / 1000;
+        }
+      }
+      return hole;
     }
-    // The page's two questions of the native field: put the caret down, and
-    // does it hold one.
-    function blurSearch() { searchBlurSeq += 1; scheduleToolbar(); }
-    const searchHasCaret = () => live && searchCaret;
 
     /* THE WORDMARK'S BOX AND DRAWING (1.8). The drawing is icons/wordmark.svg,
        fetched once (it is in the bundle, so this is a local read) and handed
@@ -1460,9 +1472,9 @@
       const gated = document.body.classList.contains('gate');
       // body.toolbar-live means "this bar is a page's own" — false under the
       // gate and in the frames between boot and the first route landing, both
-      // of which want no bar rather than an empty one.
-      // Discover's field is native too since 2026-11-05 (searchSpec), so a
-      // route with one is on duty like any other.
+      // of which want no bar rather than an empty one. A route whose bar holds
+      // a web field (Discover) is on duty like any other: the material steps
+      // around the field (holeSpec).
       const onDuty = !!bar && !gated && !overlaid()
         && document.body.classList.contains('toolbar-live');
 
@@ -1509,13 +1521,16 @@
         title: titleSpec(bar),
         mark: onDuty ? markSpec() : null,
         controls,
-        // Sent whether or not it is open, so the box native shrinks back INTO is
-        // never a stale one. Absent from every route but Discover.
-        search: onDuty ? searchSpec() : { live: false },
+        // The web field native's material leaves clear. Null on every route
+        // but Discover.
+        hole: onDuty ? holeSpec() : null,
       };
+      const into = payload.hole ? payload.hole.into : undefined;
+      if (payload.hole) delete payload.hole.into;
       const signature = JSON.stringify(payload);
       if (signature === toldBar) return;
       toldBar = signature;
+      if (into !== undefined) payload.hole.into = into;
       call('setToolbar', { bar: payload }).catch(() => {});
     }
 
@@ -1876,11 +1891,6 @@
     // registered once, at start(), and find whatever bar is mounted through
     // this — the same shape `mounted` gives the toolbar.
     const postBarHooks = {};
-    // Discover's search field, the toolbar's half of the same arrangement: the
-    // caret is over there, the input in the DOM is still the model, and these
-    // are the page's answers to what the reader does to it.
-    const searchHooks = {};
-    let searchFocus = true;
 
     /* THE FACE CROSSES AS PIXELS, NOT AS A URL. It is already in the page,
        already fetched with CORS (avatarEl sets crossorigin so the ambient wash
@@ -2213,18 +2223,6 @@
             { eventName: 'postBarDiscard' }, () => {
               if (postBarHooks.discard) postBarHooks.discard();
             });
-          // Discover's search capsule. Same shape as the comment bar's: native
-          // holds the caret, and every one of these hands the fact to the web
-          // half that already owns it.
-          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
-            { eventName: 'searchText' }, (ev) => {
-              if (searchHooks.text) searchHooks.text((ev && ev.text) || '');
-            });
-          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
-            { eventName: 'searchFocus' }, (ev) => {
-              searchCaret = !!(ev && ev.focused);
-              if (searchHooks.focus) searchHooks.focus(searchCaret);
-            });
           /* HOW FAR THE KEYBOARD REACHES INTO THE PAGE, and in this shell it is
              the only signal there is. A keyboard raised for a NATIVE field is
              positioned against the window and the web view is never told about
@@ -2389,11 +2387,6 @@
     // expensive rows to build wants to know before it builds them.
     const isLive = () => live;
 
-    // Said by openSearch on the frame before it flips the class, because "does
-    // this open want the caret" is an intent rather than a state and there is
-    // nothing in the DOM that records it.
-    function wantSearchFocus(wanted) { searchFocus = !!wanted; }
-
     // The comment bar's photo, picked in the system's own picker. Resolves
     // { data, type } (base64), { error }, or {} for a cancel; rejects on a
     // binary that predates it, and the caller falls back to the file input.
@@ -2433,8 +2426,7 @@
     const facePixels = (img) => avatarPixels(img, 84);
 
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu, facePixels,
-             postBarText, postBarHooks, searchHooks, wantSearchFocus, pickPhoto,
-             blurSearch, searchHasCaret,
+             postBarText, postBarHooks, pickPhoto,
              glowLight, forgetPages, live: isLive };
   })();
 
@@ -6149,8 +6141,13 @@
     changed();
   }
 
-  // The thread sheet's empty space: the panel and the list's own boxes.
-  const SHEET_EMPTY = ['sheet', 'sheet-grab', 'sheet-title', 'sheet-items', 'thread', 'thread-list', 'thread-empty'];
+  // What in the thread sheet answers a tap of its own: a name, a mention, a
+  // heart, a photo, a link's tile, a held comment's pills. A tap on anything
+  // else closes the sheet, the comments themselves included (Zoe, 2026-11-06:
+  // "tap the background of comments to close the comments too"; until then
+  // only the panel's empty space did).
+  const SHEET_KEEPS = 'a, button, input, textarea, select, label, iframe, video, audio, ' +
+    '[contenteditable], [data-tile], .comment-actions';
 
   function openThreadSheet(post) {
     if (sheetOpen) return;
@@ -6177,11 +6174,12 @@
         root = scrim.querySelector('.thread');
         paintThread(root, post);
         wireCommentHold(root, post, repaint);
-        // A tap on the panel's empty space closes it (Zoe, 2026-11-04). A tap
-        // that only lets go of a held comment doesn't.
+        // A tap on the panel or a comment closes it (SHEET_KEEPS). A tap that
+        // only lets go of a held comment doesn't, and the lift that ends a
+        // hold never arrives here (wireCommentHold swallows it).
         window.addEventListener('pointerdown', noteHeld, true);
         scrim.querySelector('.sheet').addEventListener('click', (e) => {
-          if (!wasHeld && SHEET_EMPTY.some((c) => e.target.classList.contains(c))) close();
+          if (!wasHeld && !e.target.closest(SHEET_KEEPS)) close();
         });
       },
       onClose: () => {
@@ -6555,23 +6553,18 @@
     if (actions) actions.innerHTML = '';
     setToolbarSides(0);
     headerHeld = false;
-    document.querySelector('.topbar')?.classList.remove('topbar--title-visible', 'topbar--searching');
-    // The native capsule's hooks go with the page that wired them, so a late
-    // keystroke from a search that is leaving can't land on the next route. The
-    // capsule itself goes on the push the class removal above provokes.
-    delete NativeChrome.searchHooks.text;
-    delete NativeChrome.searchHooks.focus;
+    document.querySelector('.topbar')?.classList.remove('topbar--title-visible');
   }
   // `leading`/`actions` are markup (already-safe, same contract as mastheadEl's
   // own `actions` param) — `title` is plain text (textContent, not innerHTML),
   // since it's read back by AT-adjacent tooling less carefully than markup and
   // a page name is never anything but text anyway.
   // `field` (1.8) is a page's own field IN the bar, filling the row between the
-  // two sides. Discover's search is the one caller. It is web in every shell:
-  // body.toolbar-field tells NativeChrome to stand its toolbar down on this
-  // route (native glass is a layer above every web pixel, so it would blur a web
-  // field under it) and tells the stylesheet to draw the CSS bar's material
-  // even under native chrome. See the gate at the end of app.css.
+  // two sides. Discover's search is the one caller. It is web in every shell;
+  // in the app the rest of the bar is native as on every route, and native
+  // glass is a layer above every web pixel, so the material leaves the field's
+  // pill clear (holeSpec) and the field brings its own blur (the gate at the
+  // end of app.css).
   // `mark` (1.8) centres the italic "tria" wordmark on the bar, where a title
   // would sit. My Circle is the one caller, the way Instagram's home feed wears
   // its logo, and it takes the place of that page's big nameplate.
@@ -6594,10 +6587,6 @@
     // beside the tokens it's made of (see .toolbar-title's max-width). The
     // busier side sets it, because the title is centered on the bar and has to
     // clear both sides by the same amount to still be centered.
-    //
-    // Children, not buttons: Discover's search group is one child holding a
-    // button and a glass shell, and the shell is absolutely placed over the bar,
-    // so the group occupies exactly one control's worth of row.
     //
     // A control that carries WORDS is wider than a disc and says so with
     // data-slots — the daily's "Add yours" pill, the one of these that isn't a
@@ -17137,7 +17126,6 @@
     let searchOpen = null;
     const syncOpen = () => {
       const open = document.activeElement === searchEl || document.activeElement === filterBtn
-        || NativeChrome.searchHasCaret()
         || filterBtn?.getAttribute('aria-expanded') === 'true'
         || !!discoverQuery.trim() || discoverType !== 'all';
       if (open === searchOpen) return;
@@ -17166,7 +17154,6 @@
       discoverQuery = searchEl.value = '';
       setType('all');
       if (document.activeElement === searchEl || document.activeElement === filterBtn) document.activeElement.blur();
-      NativeChrome.blurSearch();
       paintNow();
       syncOpen();
     };
@@ -17191,7 +17178,6 @@
       // The keyboard goes down for the sheet. The sheet is up by now (its
       // button says so), so the search stays open through the blur.
       searchEl.blur();
-      NativeChrome.blurSearch();
     });
     [searchEl, filterBtn].forEach(el => {
       el?.addEventListener('focus', syncOpen);
@@ -17545,14 +17531,26 @@
     };
     const paintNow = () => { clearTimeout(searchTimer); paint(); };
     searchEl.addEventListener('input', () => { discoverQuery = searchEl.value; paintSoon(); syncOpen(); });
-    // In the app the caret is in the native field (TriaSearchField): its
-    // keystrokes land here as the input's own, and its focus opens the search.
-    NativeChrome.searchHooks.text = (text) => {
-      if (searchEl.value === text) return;
-      searchEl.value = text;
-      searchEl.dispatchEvent(new Event('input'));
-    };
-    NativeChrome.searchHooks.focus = () => syncOpen();
+
+    /* A DRAG ON THE PAGE PUTS THE KEYBOARD AWAY, the way a system search does
+       (Zoe, 2026-11-06: "keyboard doesnt go down easily"). A tap off the field
+       already blurs it, Return does, a result's tap leaves the page; this is
+       the one a thumb reaches for while reading the results. The query stays
+       standing, so the search stays open (syncOpen). On the section, so it
+       goes with the render that wired it. */
+    let dragFrom = null;
+    const page = view.querySelector('.view--discover');
+    page.addEventListener('touchstart', (e) => {
+      dragFrom = document.activeElement === searchEl && e.touches.length === 1
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    }, { passive: true });
+    page.addEventListener('touchmove', (e) => {
+      if (!dragFrom || document.activeElement !== searchEl) return;
+      const t = e.touches[0];
+      if (Math.hypot(t.clientX - dragFrom.x, t.clientY - dragFrom.y) < 10) return;
+      dragFrom = null;
+      searchEl.blur();
+    }, { passive: true });
 
     // A re-pull while you're standing here repaints the body in place. A quiet
     // refresh skips a live search; an explicit tab re-tap (`force`) does not.

@@ -114,7 +114,7 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
        last screenful of every route is not scrollable to while one is up. Off
        the app, `visualViewport` at least SAYS so and app.js does the arithmetic
        (see trackKeyboard). Here it says nothing at all — the fields that raise
-       this keyboard are native (`TriaPostBar`, `TriaSearchField`), the keyboard
+       this keyboard are native (`TriaPostBar`), the keyboard
        is positioned against the window rather than against the web view, and
        WebKit is never told any of it happened. So a reader tapped the comment
        bar and the thread they were answering went behind the keys with no way to
@@ -122,9 +122,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
 
        ONE OBSERVER, ON THE PLUGIN, not on the bars. Every keyboard in the app is
        the same fact about the page, whoever raised it — our comment bar, our
-       find bar, Discover's search capsule, or a web field in the composer — and
-       the page's answer to all four is the same reserve. Putting it on the bar
-       would have meant two copies of it and would have missed the other two.
+       find bar, or a web field like the composer's or Discover's search — and
+       the page's answer to all of them is the same reserve. Putting it on the
+       bar would have meant two copies of it and would have missed the web's.
 
        WHAT IS REPORTED is the reach BEYOND the safe area, because the foot of
        every page already reserves that: the home indicator's strip is under the
@@ -377,16 +377,6 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 }
                 toolbar.onPick = { [weak self] id, index in
                     self?.notifyListeners("toolbarPick", data: ["id": id, "index": index])
-                }
-                // Discover's search capsule: a keystroke, the X, and a caret put
-                // down without the X. Each one is handed to the web half that
-                // already owns it — the input, `closeSearch`, `foldIfEmpty` —
-                // and none of them is decided here.
-                toolbar.onSearchText = { [weak self] text in
-                    self?.notifyListeners("searchText", data: ["text": text])
-                }
-                toolbar.onSearchFocus = { [weak self] on in
-                    self?.notifyListeners("searchFocus", data: ["focused": on])
                 }
                 toolbar.install(in: host, scroller: self.bridge?.webView?.scrollView)
                 self.toolbar = toolbar
@@ -1676,10 +1666,104 @@ final class TriaToolbarMaterial: UIVisualEffectView {
         // or to the page underneath.
         isUserInteractionEnabled = false
         alpha = 0
+        cutout.isUserInteractionEnabled = false
+        cutout.shape.fillRule = .evenOdd
+        cutout.shape.fillColor = UIColor.black.cgColor
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /* THE HOLE (2026-11-06). Discover's search field is a WEB field, and this
+       blur is above every web pixel, so over the field it would blur the very
+       thing it is the bar for. So the field's pill is cut out of it, and the
+       field brings its own blur in CSS (`holeSpec` in app.js, the gate in
+       app.css). For one day the field was native instead, so the material
+       had nothing to step around; its caret and keyboard were worse than
+       WebKit's own and it went (Zoe: "the search bar being css is fine but
+       the buttons and bg for header should at least all be consistent").
+
+       It is the view's `mask`, the one way a UIVisualEffectView takes one: the
+       whole bar, with the pill cut out of it even-odd.
+
+       A MOVE IS RUN HERE, NOT CHASED. The field's end glides while the filter
+       slot opens or shuts, and a hole re-sent on every frame would trail it by
+       the bridge. The spec says where the move began and ends, its curve and
+       how far into it the web is, and the path runs the same move on its own
+       clock. One move is started once, however many pushes it spans. */
+    private final class Cutout: UIView {
+        override class var layerClass: AnyClass { CAShapeLayer.self }
+        var shape: CAShapeLayer { layer as! CAShapeLayer }
+    }
+    private let cutout = Cutout()
+    private var hole: CGRect = .null
+    private var holeRadius: CGFloat = 0
+    private var moveKey = ""
+
+    func cut(_ spec: [String: Any]?) {
+        guard let spec else {
+            hole = .null
+            moveKey = ""
+            cutout.shape.removeAllAnimations()
+            mask = nil
+            return
+        }
+        let n = { (key: String) in TriaToolbar.number(spec[key]) }
+        hole = CGRect(x: n("x"), y: n("y"), width: n("w"), height: n("h"))
+        holeRadius = min(n("r"), hole.height / 2)
+        if cutout.frame != bounds { cutout.frame = bounds }
+        if mask !== cutout { mask = cutout }
+        guard let move = spec["move"] as? [String: Any] else {
+            moveKey = ""
+            cutout.shape.removeAnimation(forKey: "move")
+            cutout.shape.path = path(width: hole.width)
+            return
+        }
+        let m = { (key: String) in TriaToolbar.number(move[key]) }
+        let from = m("from"), to = m("to"), duration = Double(m("dur"))
+        let key = "\(hole.minX),\(hole.minY),\(hole.height)|\(from)|\(to)|\(duration)"
+        cutout.shape.path = path(width: to)
+        guard key != moveKey else { return }
+        moveKey = key
+        guard duration > 0, !UIAccessibility.isReduceMotionEnabled else {
+            cutout.shape.removeAnimation(forKey: "move")
+            return
+        }
+        let ease = (move["ease"] as? [Any])?.map { Float(TriaToolbar.number($0)) } ?? []
+        let glide = CABasicAnimation(keyPath: "path")
+        glide.fromValue = path(width: from)
+        glide.toValue = path(width: to)
+        glide.duration = duration
+        glide.timingFunction = ease.count == 4
+            ? CAMediaTimingFunction(controlPoints: ease[0], ease[1], ease[2], ease[3])
+            : CAMediaTimingFunction(name: .easeOut)
+        // Where the web's tween already is, so the two run in step.
+        let into = min(max(0, Double(TriaToolbar.number(spec["into"]))), duration)
+        glide.beginTime = cutout.shape.convertTime(CACurrentMediaTime(), from: nil) - into
+        glide.fillMode = .backwards
+        cutout.shape.add(glide, forKey: "move")
+    }
+
+    /// The bar with the field's pill out of it, the pill `width` wide from its
+    /// left edge (only its end ever moves). Core Graphics' rounded rect, not
+    /// UIKit's: UIBezierPath's corners are continuous, and the field's are
+    /// CSS's circular ones.
+    private func path(width: CGFloat) -> CGPath {
+        let p = CGMutablePath()
+        p.addRect(cutout.bounds)
+        guard !hole.isNull, width > 0, hole.height > 0 else { return p }
+        let pill = CGRect(x: hole.minX, y: hole.minY, width: width, height: hole.height)
+        let r = max(0, min(holeRadius, pill.width / 2, pill.height / 2) - 0.001)
+        p.addPath(CGPath(roundedRect: pill, cornerWidth: r, cornerHeight: r, transform: nil))
+        return p
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard cutout.frame != bounds else { return }
+        cutout.frame = bounds
+        if !hole.isNull, moveKey.isEmpty { cutout.shape.path = path(width: hole.width) }
+    }
 }
 
 /// Watches the web view's scroll offset, and answers the two questions the
@@ -1751,14 +1835,8 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     var onTap: ((String) -> Void)?
     var onMenu: ((String, Int) -> Void)?
     var onPick: ((String, Int) -> Void)?
-    /// Discover's search, which is the one control in this bar that holds a
-    /// caret. See `TriaSearchField`.
-    var onSearchText: ((String) -> Void)?
-    var onSearchFocus: ((Bool) -> Void)?
 
     private var controls: [String: TriaToolbarButton] = [:]
-    private var search: TriaSearchField?
-    private weak var scroller: UIScrollView?
     /* OXYGEN, IN THE ONE FORM UIKIT CAN READ.
 
        The stylesheet's `font-family: 'Oxygen'` is a `woff2` in `css/fonts/`,
@@ -1841,7 +1919,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     /// `materialFrame`). A nested glass element honours alpha.
     private func syncAway(animated: Bool) {
         for control in controls.values { control.setAway(!controlsUp, animated: animated) }
-        search?.setAway(!controlsUp, animated: animated)
     }
 
     /// With the finger or a spring around it, so nothing here animates by itself.
@@ -1850,7 +1927,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     func setPageFade(_ fade: CGFloat) {
         pageFade = fade
         for control in controls.values { control.setFade(fade) }
-        search?.setFade(fade)
         syncMaterial(animated: false)
         syncTitle(animated: false)
     }
@@ -1895,7 +1971,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         contentView.addSubview(markBox)
         host.addSubview(material)
         host.addSubview(self)
-        self.scroller = scroller
         if let scroller {
             watch = TriaScrollWatch(of: scroller) { [weak self] state in
                 guard let self, state != self.scroll else { return }
@@ -1941,6 +2016,7 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
             guard let id = item["id"] as? String, !id.isEmpty else { continue }
             seen.insert(id)
             let control: TriaToolbarButton
+            let arriving = controls[id] == nil
             if let existing = controls[id] {
                 control = existing
             } else {
