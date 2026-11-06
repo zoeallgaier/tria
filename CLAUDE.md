@@ -21,6 +21,21 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## A new friend gets the stars (2026-11-05)
+
+**When a tie turns mutual, `celebrateFace`'s stars burst off their face, half
+in YOUR colour and half in THEIRS, alternating** (Zoe: "a mix of each users
+color preferences"; `celebrateFriend`, `friendInks`). Only becoming friends,
+never a request or a follow (`madeFriends` compares the status before and
+after). Whoever completes it sees it: a profile's button (via
+`celebrateArrival`, the face waits on its decode), a list row or Discover's
+person card, and Accept in Updates (measured before the row is repainted away,
+so the stars burst where it was). Each colour is that person's heart rule
+(`starInks`): a pick's hex (its `ink` on paper), a photo's sample through
+`heartsFrom`, `--mono-heart` for None, Tria's two ends for the default. The
+twinkle replaces the LIGHT tap on that path. The code landed inside 9db51b7
+(a parallel session's commit).
+
 ## Discover is a town square (2026-11-05)
 
 **Discover has posts again** (Zoe: "include peoples posts if they are public
