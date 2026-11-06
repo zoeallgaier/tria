@@ -9024,6 +9024,7 @@ button.poll-option:disabled { cursor: default; }
   transition: border-color var(--dur-micro);
 }
 .aud-lock-ico { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
+.aud-lock-pic { width: 22px; height: 22px; margin: -2px; }
 .aud-lock-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aud-lock-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
 @media (hover: hover) { .aud-lock:hover { border-color: var(--muted); } }
@@ -9134,8 +9135,9 @@ button.poll-option:disabled { cursor: default; }
 .aud-modes { display: flex; flex-direction: column; }
 .aud-mode {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   grid-template-rows: auto auto;
+  align-content: center;
   gap: 0.04rem 0.6rem;
   width: 100%;
   text-align: left;
@@ -9149,7 +9151,8 @@ button.poll-option:disabled { cursor: default; }
 }
 .aud-mode + .aud-mode { position: relative; }
 .aud-mode + .aud-mode::before {
-  content: ""; position: absolute; left: 0.9rem; right: 0.9rem; top: 0;
+  /* Starts where the words do, past the face, as a sheet row's does. */
+  content: ""; position: absolute; left: calc(0.9rem + 44px + 0.85rem); right: 0.9rem; top: 0;
   border-top: 1px solid var(--rule);
 }
 .aud-mode[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 9%, transparent); }
@@ -9160,10 +9163,46 @@ button.poll-option:disabled { cursor: default; }
 @media (hover: hover) {
   .aud-mode:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 }
-.aud-mode-t { grid-column: 1; font-weight: 700; font-size: 0.95rem; }
-.aud-mode-d { grid-column: 1; font-size: 0.82rem; color: var(--muted); }
+.aud-mode-t { grid-column: 2; align-self: end; font-weight: 700; font-size: 0.95rem; }
+.aud-mode-d { grid-column: 2; align-self: start; font-size: 0.82rem; color: var(--muted); }
+/* Each row's face (Zoe, 2026-11-05: "icons and pfps"): 44px, the checklist's
+   avatar, so the modes, the people and your circles share one column of faces
+   and one left edge for their words (the gap matches .aud-pick's 0.85rem). A
+   glyph sits on the circle mark's disc; two friends pair like a group's
+   picture, one up left, one down right on a paper ring. */
+.aud-mode-lead {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-right: 0.25rem;
+  flex-shrink: 0;
+}
+.aud-mode-lead--glyph {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.aud-mode-lead--glyph svg { width: 46%; height: 46%; }
+.aud-mode-lead .aud-mode-face { width: 44px; height: 44px; font-size: 1.4rem; }
+.aud-mode-lead--pair .aud-mode-face {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  font-size: 1rem;
+}
+.aud-mode-lead--pair .aud-mode-face:first-child { top: 0; left: 0; }
+.aud-mode-lead--pair .aud-mode-face + .aud-mode-face {
+  right: 0;
+  bottom: 0;
+  box-shadow: 0 0 0 2px var(--surface);
+}
 .aud-mode-tick {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1 / span 2;
   align-self: center;
   width: 18px;

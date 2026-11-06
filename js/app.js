@@ -19483,7 +19483,9 @@
     // found under; the other three keep the globe and the padlock.
     const glyph = pubAudience.mode === 'public' ? 'globe'
       : pubAudience.mode === 'community' ? 'circle' : 'lock';
-    return svgIcon(glyph, 'aud-lock-ico') +
+    // A circle with a photo wears it, as its row in the sheet does.
+    const c = pubAudience.mode === 'community' && Store.community(pubAudience.community);
+    return (c && c.avatar ? communityPicHtml(c, 'aud-lock-pic', 22) : svgIcon(glyph, 'aud-lock-ico')) +
       `<span class="aud-lock-label">${esc(audienceLockText())}</span>` +
       (chevron ? svgIcon('chevDown', 'aud-lock-chev') : '');
   }
@@ -19608,14 +19610,32 @@
     const pickRows = friends
       .map((f, i) => pickRowHtml(f, { on: chosen.has(f.username), i })).join('');
 
+    // EVERY ROW LEADS WITH A FACE (Zoe, 2026-11-05: "icons and pfps ... for
+    // easier picking"), 44px, the checklist's own, so one column of faces runs
+    // down the whole panel. Anyone is the globe the field wears; My circle is
+    // two of your friends, paired like a group's picture; Choose people is the
+    // friends mark until someone is ticked, then who is; a circle is its photo.
+    const glyphLead = (g) => `<span class="aud-mode-lead aud-mode-lead--glyph" aria-hidden="true">${svgIcon(g)}</span>`;
+    const facesLead = (us, g) => {
+      if (!us.length) return glyphLead(g);
+      if (us.length === 1) return `<span class="aud-mode-lead" aria-hidden="true">${avatarEl(us[0], { cls: 'aud-mode-face', px: 44 })}</span>`;
+      return `<span class="aud-mode-lead aud-mode-lead--pair" aria-hidden="true">` +
+        us.slice(0, 2).map(u => avatarEl(u, { cls: 'aud-mode-face', px: 30 })).join('') + `</span>`;
+    };
+    const chosenLead = () => facesLead([...chosen].map(n => Store.user(n)).filter(Boolean), 'friends');
+    const leadFor = (m) => m === 'public' ? glyphLead('globe')
+      : m === 'circle' ? facesLead(friends.filter(f => f.avatar).concat(friends.filter(f => !f.avatar)).slice(0, 2), 'lock')
+      : chosenLead();
     const modeBtn = (m, t, d) =>
       `<button type="button" class="aud-mode" data-mode="${m}" aria-pressed="${mode === m}">` +
+        leadFor(m) +
         `<span class="aud-mode-t">${t}</span><span class="aud-mode-d">${d}</span>` +
         `<span class="aud-mode-tick" aria-hidden="true"></span>` +
       `</button>`;
     const roomBtn = (c) =>
       `<button type="button" class="aud-mode aud-mode--community" data-mode="community" data-room="${esc(c.id)}" ` +
           `aria-pressed="${mode === 'community' && room === c.id}">` +
+        communityPicHtml(c, 'aud-mode-lead', 44) +
         `<span class="aud-mode-t">${esc(c.name)}</span>` +
         `<span class="aud-mode-d">Only the people in ${esc(communityHandle(c))}</span>` +
         `<span class="aud-mode-tick" aria-hidden="true"></span>` +
@@ -19680,6 +19700,9 @@
             const u = b.dataset.user;
             if (chosen.has(u)) chosen.delete(u); else chosen.add(u);
             b.setAttribute('aria-checked', String(chosen.has(u)));
+            // Choose people's face is who you've picked, so it follows the ticks.
+            const lead = scrim.querySelector('.aud-mode[data-mode="list"] .aud-mode-lead');
+            if (lead) lead.outerHTML = chosenLead();
             commit();
           }));
       },
