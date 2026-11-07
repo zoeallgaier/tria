@@ -15513,11 +15513,6 @@
     // picture too. A small picture card keeps the
     // plain line over its shade.
     const rich = (!pic || wide) && said ? cardNoteHtml(p, true) : '';
-    // On a words card the note is set as the feed sets it (Zoe: "reflect the
-    // contents styles"): its paragraphs, line breaks, headings, bold and
-    // italic, under the title when there is one. A picture card keeps the
-    // plain line over its shade.
-    const rich = !pic && said ? cardNoteHtml(p, true) : '';
     const p = item.post;
     // A video Frame with no stored poster has no still, so it is words, the
     // same rule the feed's own frames follow.
