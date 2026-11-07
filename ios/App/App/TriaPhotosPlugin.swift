@@ -52,11 +52,13 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
     /// The All photos sheet while it is up (PHPicker holds its delegate weakly).
     private var sheet: TriaLibrarySheet?
 
-    /// `{ limit, selected: [asset ids] }` resolves `{ items: [...] }` (see
-    /// `TriaLibrarySheet`) or `{ cancelled: true }`: backing out is an answer.
+    /// `{ limit, selected: [asset ids], videos }` resolves `{ items: [...] }`
+    /// (see `TriaLibrarySheet`) or `{ cancelled: true }`: backing out is an
+    /// answer. `videos` shows clips alone, for the clip editor's Add clip.
     @objc func pick(_ call: CAPPluginCall) {
         let limit = call.getInt("limit") ?? 6
         let selected = (call.getArray("selected") ?? []).compactMap { $0 as? String }
+        let videos = call.getBool("videos") ?? false
         DispatchQueue.main.async { [weak self] in
             guard let self, let root = self.bridge?.viewController else {
                 call.resolve(["cancelled": true])
@@ -64,7 +66,7 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             var top: UIViewController = root
             while let shown = top.presentedViewController { top = shown }
-            let sheet = TriaLibrarySheet(limit: limit, selected: selected) { [weak self] items in
+            let sheet = TriaLibrarySheet(limit: limit, selected: selected, videos: videos) { [weak self] items in
                 if let items { call.resolve(["items": items]) } else { call.resolve(["cancelled": true]) }
                 DispatchQueue.main.async { self?.sheet = nil }
             }
@@ -343,18 +345,20 @@ final class TriaRollMore: UIButton {
 final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
     private let limit: Int
     private let selected: [String]
+    private let videos: Bool
     private let done: ([[String: Any]]?) -> Void
     private var finished = false
 
-    init(limit: Int, selected: [String], done: @escaping ([[String: Any]]?) -> Void) {
+    init(limit: Int, selected: [String], videos: Bool = false, done: @escaping ([[String: Any]]?) -> Void) {
         self.limit = limit
         self.selected = selected
+        self.videos = videos
         self.done = done
     }
 
     func present(from host: UIViewController) {
         var config = PHPickerConfiguration(photoLibrary: .shared())
-        config.filter = .any(of: [.images, .videos])
+        config.filter = videos ? .videos : .any(of: [.images, .videos])
         config.selectionLimit = max(1, limit)
         config.selection = .ordered
         config.preselectedAssetIdentifiers = selected
@@ -374,7 +378,9 @@ final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
         // Cancel, or nothing left ticked: the post stays as it is (its own x
         // is how a photo comes out).
         guard !results.isEmpty else { finish(nil); return }
-        TriaPhotoLoad.clearClips()
+        // No clearing here: a post can hold several clips from several sheets
+        // now, so the folder is emptied only by `TriaClip.clear`, as the
+        // editor empties or the post goes out (TriaClipPlugin.swift).
         var items = [[String: Any]?](repeating: nil, count: results.count)
         let group = DispatchGroup()
         let lock = NSLock()
@@ -403,11 +409,9 @@ final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
 
 /// Reading a pick into what crosses the bridge, shared by the roll and the sheet.
 enum TriaPhotoLoad {
-    private static var clipsDir: URL {
-        FileManager.default.temporaryDirectory.appendingPathComponent("tria-clips", isDirectory: true)
-    }
+    private static var clipsDir: URL { TriaClipCore.dir }
 
-    /// Each sheet's clips replace the last one's, so tmp never fills with them.
+    /// The clips and their cuts go together, when the editor is done with them.
     static func clearClips() {
         try? FileManager.default.removeItem(at: clipsDir)
     }

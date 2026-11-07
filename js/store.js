@@ -4358,6 +4358,20 @@ function niceDate(iso) {
   return SHORT_DAY.format(d);
 }
 
+// How long ago a timestamp was: "Just now", "5m ago", "3h ago", then niceDate's
+// "yesterday", "3d ago" and "Jun 28". Falls back to the day when there is no
+// timestamp (an older cached row).
+function niceAgo(ts, day) {
+  const t = Date.parse(ts || '');
+  if (!t) return day ? niceDate(day) : '';
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return mins + 'm ago';
+  if (mins < 1440) return Math.floor(mins / 60) + 'h ago';
+  const d = day ? niceDate(day) : '';
+  return d === 'today' ? 'yesterday' : d;
+}
+
 // An activity's when-line: "Today · 6:30 PM", "Tomorrow", else "Sat, Jul 12".
 // Forward-looking phrasing (vs niceDate's ago-phrasing) — plans point ahead.
 function eventWhenLabel(dateStr, timeStr) {

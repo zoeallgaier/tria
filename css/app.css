@@ -4506,9 +4506,11 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 /* No margin here — the triangle's optical nudge lives in ICONS.play's own path. */
 .frame-play-ico { width: 18px; height: 18px; }
 .frame-video--playing .frame-play { opacity: 0; }
-/* A 2px cyan hairline pinned to the frame's bottom edge — information, not
-   motion, so it stays even under reduced motion (the clip just never advances
-   it in that case). */
+/* A 2px hairline pinned to the frame's bottom edge, in the READER'S band
+   (2026-11-06, Zoe: the video bars "match the users color preference"; it
+   was Tria's ramp for everyone). Information, not motion, so it stays even
+   under reduced motion (the clip just never advances it in that case). The
+   clip editor's preview wears the same one, being the post. */
 .frame-progress {
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -4519,7 +4521,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   display: block;
   height: 100%;
   width: 0%;
-  background: var(--brand-band);
+  background: var(--pill-band);
 }
 
 /* ── Lightbox ──────────────────────────────────────────────────────────── */
@@ -4543,6 +4545,80 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .lightbox img,
 .lightbox video { max-width: 92vw; max-height: 90vh; border-radius: var(--radius-soft); }
 .lightbox video { background: #000; }
+
+/* THE LIGHTBOX CLIP (2026-11-06, wireLightboxClip): Tria's controls over the
+   picture's foot instead of the system's grey strip. The scrub bar is a
+   white track with the READER'S band filling it and a white knob, on a soft
+   shade so it reads on a bright frame; the sound disc is the feed's, sat
+   above it; the play disc shows while it's paused. */
+.lb-clip {
+  position: relative;
+  margin: 0;
+  line-height: 0;
+  border-radius: var(--radius-soft);
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.lb-clip video { display: block; }
+.lb-clip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 84px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.34));
+  pointer-events: none;
+  z-index: 1;
+}
+.lb-clip .frame-play { transition: opacity var(--dur-quick) var(--ease); }
+.lb-clip.is-playing .lb-paused { opacity: 0; }
+.lb-clip .lb-sound { bottom: 48px; }
+.lb-scrub {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 8px;
+  height: 36px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+  cursor: pointer;
+  outline: none;
+}
+.lb-track {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+  transition: height var(--dur-quick) var(--ease);
+}
+.lb-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: var(--pill-band);
+}
+.lb-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transition: transform var(--dur-quick) var(--ease);
+}
+.lb-clip.is-scrubbing .lb-track { height: 6px; }
+.lb-clip.is-scrubbing .lb-knob { transform: scale(1.3); }
+.lb-scrub:focus-visible .lb-knob { box-shadow: 0 0 0 3px var(--pill-ink), 0 1px 4px rgba(0, 0, 0, 0.35); }
 
 /* A carousel's pager: where you are, and two real buttons. It sits on the veil,
    which is always dark, so it is white-on-smoke in both schemes rather than glass
@@ -6164,11 +6240,13 @@ button.poll-option:disabled { cursor: default; }
   justify-content: center;
   padding-right: var(--mv-lane);
 }
-/* A poll keeps everything left, but runs the column's width with the same
-   10px on both sides (Zoe, 2026-11-06: it "looked short and squished left"
-   with the rail's lane on its right). It sits in the middle of the stage,
-   clear of the rail low on the right. */
-.mv-frame--poll { padding-right: 0; }
+/* A poll keeps everything left and runs nearly the column's width (Zoe,
+   2026-11-06: it "looked short and squished left" with the whole rail's lane
+   on its right), stopping 24px short of the gutter so a reach for the rail's
+   column never lands on an option (Zoe: "slightly less than full width to
+   avoid accidental taps"). It sits in the middle of the stage, clear of the
+   rail low on the right. */
+.mv-frame--poll { padding-right: 24px; }
 .mv-frame--poll .poll { margin: 1.2rem 0 0; }
 .mv-frame--poll .poll-meta { margin-top: 0.8rem; }
 .mv-words {
@@ -9299,11 +9377,10 @@ button.card-song-play:active { transform: scale(0.9); }
    the reader's accent, and is now simply gone — the composer is paper. What still
    answers "what am I making" is the nameplate and the type mark beside it. */
 
-/* Post progress — the composer's shared bar for a video's two slow phases (local
-   trim re-encode, then the byte-level upload). Flat editorial, not glass: it's
-   inline status on a content form, so it sits quiet above the Post button. The
-   fill wears a still slice of the publish quintet so it reads as the same brand
-   gesture as the button it feeds, without competing with it. */
+/* Post progress — the composer's one bar for a clip's wait: in the app the
+   cut (Preparing, its first quarter), then the byte-level upload. Flat
+   editorial, not glass: it's inline status on a content form, so it sits
+   quiet above the Share button, in the band that button wears. */
 .post-progress {
   display: flex;
   flex-direction: column;
@@ -9342,8 +9419,9 @@ button.card-song-play:active { transform: scale(0.9); }
   height: 100%;
   width: 0;
   border-radius: inherit;
-  /* Tria's ramp, flat: 2.0 took the lit rims off everything. */
-  background: linear-gradient(90deg, var(--brand-start), var(--brand-end));
+  /* The reader's own band (2026-11-06; it was Tria's ramp for everyone),
+     the one Share wears, so the bar reads as the button's own wait. */
+  background: var(--pill-band);
   transition: width var(--dur-quick) ease-out;
 }
 .post-progress-label {
@@ -10132,247 +10210,340 @@ body.thread-live .lightbox { z-index: 320; }
    font: inherit) — muted, reading like that field's placeholder prompt. */
 .dropzone-label { font: inherit; }
 
-/* ── Trim surface — the post-capture review + iOS-style scrubber ────────────
-   A recorded or library-picked clip plays here (looping inside the window),
-   with a filmstrip below carrying a draggable ≤10s selection. The stage reads
-   like the capture surface (dark, contain-fit); the strip is a flat editorial
-   control (content, not floating chrome), with the Frame's own cyan accent on
-   the window + handles. See wireFrameCapture / finishVideo. */
-.trim { display: flex; flex-direction: column; gap: 12px; }
-.trim[hidden] { display: none; }
+/* ── THE CLIP EDITOR (2026-11-06, clipEditor in app.js) ─────────────────────
+   Zoe: "vine style editing meets modern reels edits UI ... imovie style bars
+   ... the preview should match the post size". Three parts down the column,
+   each one job: the PREVIEW (the post's own box), the POST (one bar for its
+   15 seconds, a clip per strip), the CLIP (the trimmer for the one picked).
+   Everything that marks a choice wears the reader's band (--pill-band, the
+   ink on it --pill-ink): the trimmer's frame and grips, the picked clip's
+   ring, the progress lines. The playheads are white, as every editor's are,
+   since they ride on pictures. Flat editorial controls, not glass, except
+   the discs over the picture, which are the feed's own. */
+.ed { display: flex; flex-direction: column; gap: 12px; }
+.ed[hidden] { display: none; }
 
-/* The stage hugs the clip's own aspect ratio — width shrinks to fit-content and
-   centres, so a tall (portrait) clip no longer pillarboxes and a wide one no
-   longer letterboxes. The video is sized by its own max-width/height (keeping
-   its native ratio), and the stage wraps it exactly, so no matte ever shows. */
-.trim-stage {
+/* THE PREVIEW IS THE POST: the column's width, the shape the feed reserves
+   (set in JS: the first clip's, held to 4:5 tall), the feed photo's corner
+   and inset rule. The clips are drawn in a box of their OWN shape centred in
+   it, each covering it, so a tall clip crops here exactly where the feed
+   crops it. clip-path, not overflow and a radius: a <video> is its own layer
+   and WebKit won't round it from a parent's overflow. */
+.ed-stage {
   position: relative;
-  width: -webkit-fit-content;   /* older iOS Safari needs the prefix, else falls to full-width */
-  width: fit-content;
-  max-width: 100%;
-  margin-inline: auto;
+  width: 100%;
+  aspect-ratio: 4 / 5;
   border-radius: var(--radius-soft);
-  overflow: hidden;
+  clip-path: inset(0 round var(--radius-soft));
   background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.trim-video {
-  display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 46vh;
-  object-fit: contain;
+/* A Moment's is the viewer's: its own shape, at the photo filmstrip's height. */
+.frame-field--moment .ed-stage {
+  width: min(100%, calc(min(48dvh, 400px) * var(--ed-ar, 0.5625)));
+  margin-inline: auto;
 }
-/* ── Trim loading + reveal ───────────────────────────────────────────────────
-   While we read metadata + sample the filmstrip off this one element, the clip is
-   being seeked around. We hide those frames, hold the surface open with a calm
-   cyan shimmer (the photo-type colour), then reveal the preview + strip together
-   once playback starts — a settle, never a pop. */
-.trim-video {
-  transition: opacity var(--dur-slow) var(--ease);
+.ed-canvas {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  width: 100%;
+  transform: translateY(-50%);
 }
-.trim-loading {
+.ed-video {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+}
+.ed-video.is-on { opacity: 1; }
+.ed-stage .frame-play { transition: opacity var(--dur-quick) var(--ease); }
+.ed-stage.is-playing .ed-paused,
+.ed--loading .ed-paused { opacity: 0; }
+
+/* Getting ready: a calm sweep of the reader's own colour over the empty box
+   while the first clip is read, and the controls under it held in place
+   (hidden, not gone) so nothing jumps when it lands. */
+.ed-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
   display: none;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   color: var(--muted);
   font-size: 0.85rem;
-  letter-spacing: 0.01em;
   pointer-events: none;
 }
-.trim-loading-dot {
+.ed--loading .ed-loading { display: flex; }
+.ed--loading .ed-stage {
+  background-image: linear-gradient(100deg,
+    transparent 38%, color-mix(in srgb, var(--heart) 14%, transparent) 50%, transparent 62%);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: ed-shimmer 1.25s linear infinite;
+}
+.ed--loading .ed-video,
+.ed--loading .ed-sound,
+.ed--loading .frame-progress { opacity: 0; }
+.ed--loading .ed-post,
+.ed--loading .ed-trim,
+.ed--loading .ed-meta,
+.ed--loading .ed-hint { visibility: hidden; }
+.ed-loading-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--brand-end);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-end) 55%, transparent);
-  animation: trim-pulse 1.1s var(--ease-soft) infinite;
+  background: var(--heart);
+  animation: ed-pulse 1.1s var(--ease-soft) infinite;
 }
-.trim--loading .trim-stage {
-  min-height: 200px;
-  /* A soft brand sweep over the neutral placeholder — reads as "developing." */
-  background-image: linear-gradient(100deg,
-    transparent 38%,
-    color-mix(in srgb, var(--brand-start) 16%, transparent) 50%,
-    transparent 62%);
-  background-size: 220% 100%;
-  background-repeat: no-repeat;
-  animation: trim-shimmer 1.25s linear infinite;
-}
-.trim--loading .trim-video { opacity: 0; }
-.trim--loading .trim-loading { display: flex; }
-.trim--loading .reel {
-  pointer-events: none;   /* no scrubbing until the preview is ready */
-  background-image: linear-gradient(100deg,
-    transparent 38%,
-    color-mix(in srgb, var(--brand-start) 16%, transparent) 50%,
-    transparent 62%);
-  background-size: 220% 100%;
-  background-repeat: no-repeat;
-  animation: trim-shimmer 1.25s linear infinite;
-}
-/* Nothing to see behind the shimmer — hide the frame/scrims/playhead/ticks until
-   the clip is ready, so they don't flash in over the neutral track. */
-.trim--loading .reel-frame,
-.trim--loading .reel-scrim,
-.trim--loading .reel-playhead,
-.trim--loading .reel-ticks { opacity: 0; }
-@keyframes trim-shimmer {
+@keyframes ed-shimmer {
   from { background-position: 220% 0; }
   to   { background-position: -120% 0; }
 }
-@keyframes trim-pulse {
-  0%   { transform: scale(0.85); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-end) 55%, transparent); }
-  70%  { transform: scale(1);    box-shadow: 0 0 0 7px transparent; }
-  100% { transform: scale(0.85); box-shadow: 0 0 0 0 transparent; }
+@keyframes ed-pulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.55; }
+  50%      { transform: scale(1);   opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .trim-video { transition: none; }
-  .trim--loading .trim-stage,
-  .trim--loading .reel { animation: none; }
-  .trim-loading-dot { animation: none; }
+
+/* THE POST: one bar that IS the 15 seconds. A clip is a strip of its own
+   frames as wide as it runs; the room after them is a dashed slot with the
+   + in it, gone once the post is full. touch-action: pan-y gives the page
+   its scroll and leaves the sideways drags (scrub, move) to us. */
+.ed-post {
+  position: relative;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
-.trim-sound {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 36px;
-  height: 36px;
+.ed-post[hidden] { display: none; }
+.ed-bars {
+  display: flex;
+  gap: 3px;
+  height: 44px;
+}
+.ed-bar {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
   padding: 0;
   border: 0;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: color-mix(in srgb, #000 45%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  cursor: pointer;
-}
-.trim-sound-ico { width: 20px; height: 20px; }
-
-/* ── Trim reel ───────────────────────────────────────────────────────────────
-   A full-width, horizontally-scrollable thumbnail filmstrip with a fixed centered
-   selection frame. You SCROLL the reel to choose the moment and drag the frame's
-   ends to set length (≤10s). Content, not floating chrome, in the Frame's cyan
-   accent. Thumbnails are a progressive enhancement (neutral cells if a sample comes
-   back blank); the frame + ticks + scrims carry it either way. The frame/scrims/
-   playhead are absolutely positioned within .reel-wrap and offset by 21px (the
-   ticks row: 15px tall + 6px gap) so they overlay the 60px reel exactly. */
-.reel-wrap { position: relative; }
-.reel-ticks { position: relative; height: 15px; margin-bottom: 6px; overflow: hidden; }
-.reel-tick {
-  position: absolute;
-  top: 0;
-  left: 0;
-  font: 600 10px/1 ui-monospace, monospace;
-  color: var(--muted);
-  letter-spacing: .02em;
-  white-space: nowrap;
-  transition: opacity var(--dur-slow) var(--ease);
-}
-.reel {
-  position: relative;
-  height: 60px;
-  border-radius: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  border-radius: 10px;
+  overflow: hidden;
   background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick) var(--ease);
 }
-.reel::-webkit-scrollbar { display: none; }
-.reel-track { position: relative; height: 100%; }
-.reel-thumb {
+.ed-strip {
   position: absolute;
-  top: 0;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+.ed-strip i,
+.ed-film i {
+  flex: 0 0 auto;
   height: 100%;
   background-size: cover;
   background-position: center;
-  background-color: color-mix(in srgb, var(--surface-2) 65%, #000);
+  background-color: color-mix(in srgb, var(--surface-2) 70%, #000);
 }
-/* The fixed selection frame + scrims + playhead do NOT scroll — the reel moves
-   under them. The frame is CSS-centered; JS sets its width. */
-.reel-frame {
+/* The picked clip wears the band as a ring: the trimmer's frame, small. */
+.ed-bar.is-sel::after,
+.ed-win::before {
+  content: '';
   position: absolute;
-  top: 21px;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  box-sizing: border-box;
-  border: 2px solid var(--brand-start);
+  inset: 0;
+  border-radius: inherit;
+  background: var(--pill-band);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.ed-bar.is-sel::after { padding: 2.5px; }
+/* Held: it lifts off the bar and follows the finger, the others part for it. */
+.ed-bar.is-lifted {
+  z-index: 2;
+  transition: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+}
+.ed-room {
+  flex: 1 1 auto;
+  min-width: 44px;
+  height: 100%;
+  padding: 0 0 0 7px;
+  display: flex;
+  align-items: center;
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--text) 24%, transparent);
   border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ed-room-add {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: var(--pill-edge);
+}
+.ed-room-add svg { width: 16px; height: 16px; }
+.ed-room.is-busy .ed-room-add { animation: ed-pulse 1.1s var(--ease-soft) infinite; }
+.ed-head,
+.ed-thead {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
   pointer-events: none;
   z-index: 3;
-  transition: opacity var(--dur-slow) var(--ease);
 }
-.reel-scrim {
+.ed-head[hidden],
+.ed-thead[hidden] { display: none; }
+
+/* THE CLIP: the picked clip's whole source across the width, its kept part
+   framed in the band, grips on the frame's ends in the ink that rides the
+   band, outside it shaded back toward the paper. The film is inset by a
+   grip's width either side, so a window at the very start or end still has
+   its grip on the page. */
+.ed-trim {
+  --ed-grip: 16px;
+  position: relative;
+  height: 56px;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.ed-film {
   position: absolute;
-  top: 21px;
+  top: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  left: var(--ed-grip);
+  right: var(--ed-grip);
+  display: flex;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.ed-shade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--ed-grip);
+  width: 0;
+  background: color-mix(in srgb, var(--bg) 64%, transparent);
+  pointer-events: none;
+}
+.ed-shade--l { border-radius: 8px 0 0 8px; }
+.ed-shade--r { border-radius: 0 8px 8px 0; }
+.ed-win {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 0;
+  border-radius: 10px;
   pointer-events: none;
   z-index: 2;
-  transition: opacity var(--dur-slow) var(--ease);
 }
-.reel-handle {
+.ed-win::before { padding: 2.5px var(--ed-grip); }
+.ed-end {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 22px;
-  background: var(--brand-start);
+  top: 0;
+  bottom: 0;
+  width: var(--ed-grip);
+  display: grid;
+  place-items: center;
   pointer-events: auto;
   touch-action: none;
   cursor: ew-resize;
+  border-radius: 10px;
+  outline: none;
 }
-.reel-handle--l { left: -2px; border-radius: 10px 0 0 10px; }
-.reel-handle--r { right: -2px; border-radius: 0 10px 10px 0; }
-.reel-handle::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+.ed-end--l { left: 0; }
+.ed-end--r { right: 0; }
+/* The grip: a short bar in the band's own ink. */
+.ed-end::after {
+  content: '';
   width: 3px;
-  height: 20px;
+  height: 18px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--brand-start) 30%, #000);
+  background: var(--pill-ink);
+  opacity: 0.8;
 }
-.reel-playhead {
-  position: absolute;
-  top: 18px;
-  bottom: -3px;
-  width: 2px;
-  border-radius: 2px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
-  pointer-events: none;
-  z-index: 4;
-  transition: opacity var(--dur-slow) var(--ease);
-}
-.trim-meta {
+/* 44pt to the finger, 16 to the eye. */
+.ed-end::before { content: ''; position: absolute; inset: -6px -12px; }
+.ed-end:focus-visible { box-shadow: 0 0 0 2px var(--text); }
+
+/* Under them: the post's length on a wash of the reader's colour, then Split
+   and Remove, THE BUTTON at its quiet weight, then the one line saying what
+   the bars do. */
+.ed-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0;
-  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 34px;
 }
-.trim-dur {
+.ed-time {
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: .9rem;
-  padding: 2px 9px;
-  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
   color: var(--text);
-  background: color-mix(in srgb, var(--brand-start) 22%, transparent);
+  background: color-mix(in srgb, var(--heart) 16%, transparent);
 }
-.trim-hint { color: var(--muted); font-size: .8rem; }
+.ed-acts { margin-left: auto; display: flex; gap: 8px; }
+.ed-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px 0 11px;
+  font: inherit;
+  font-size: 0.85rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.ed-act[hidden] { display: none; }
+.ed-act[aria-disabled="true"] { opacity: 0.4; }
+.ed-act-ico { width: 16px; height: 16px; }
+.ed-hint {
+  margin: -4px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ed--loading .ed-stage,
+  .ed-loading-dot,
+  .ed-room.is-busy .ed-room-add { animation: none; }
+  .ed-bar { transition: none; }
+}
+
 
 .crop {
   position: relative;
@@ -11133,6 +11304,11 @@ body[data-ambient="none"] .pf-row-swatch {
   .lightbox { padding: 0; }
   .lightbox img,
   .lightbox video { width: 100%; max-width: 100vw; max-height: 100dvh; border-radius: 0; }
+  /* A clip spans the screen too, and its scrub bar clears the home indicator. */
+  .lb-clip { width: 100%; border-radius: 0; }
+  .lb-scrub { bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .lb-clip .lb-sound { bottom: calc(48px + env(safe-area-inset-bottom)); }
+  .lb-clip::after { height: calc(84px + env(safe-area-inset-bottom)); }
 
 
   /* Content-list rows break out to the screen edges so their hovers + hairline

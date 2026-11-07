@@ -53,6 +53,9 @@ class TriaViewController: CAPBridgeViewController {
         // The composer's camera roll (TriaPhotosPlugin.swift). Missing, or on
         // iOS 15 and 16, the row never shows and the photo button is the way in.
         bridge?.registerPluginInstance(TriaPhotosPlugin())
+        // The clip editor's cut, filmstrip and camera (TriaClipPlugin.swift).
+        // Missing, the editor is the web's: one clip, posted as its original.
+        bridge?.registerPluginInstance(TriaClipPlugin())
         // A tap that launched the app, if it beat the bridge here. See TriaLaunchTap.
         if let router = bridge?.notificationRouter { TriaLaunchTap.shared.replay(into: router) }
     }

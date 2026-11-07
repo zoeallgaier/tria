@@ -21,6 +21,36 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## The clip editor (2026-11-06)
+
+**A clip post is up to 15 seconds, stitched from up to ten clips** (Zoe:
+"vine style editing meets modern reels edits UI ... imovie style bars",
+research in the commit). `clipEditor` in app.js replaces the old trim reel:
+the preview IS the post (the first clip's shape held to the feed's 4:5, a
+Moment's its own shape), two `<video>`s taking turns so a cut is a swap; under
+it **the post bar** (one bar per clip, width by length, the selected one ringed
+in the reader's `--pill-band`, a dashed + while there is room), and under that
+**the trimmer** for the selected clip (its whole source as a filmstrip, the
+window in the band with grips in `--pill-ink`, 0.5s least). Tap a bar to pick
+and jump, drag along the bars to scrub, hold one (320ms) to lift and reorder.
+Split (at the playhead) and Remove sit by the length chip; the x clears it all
+(confirming with two or more). **Adding shares the 15s**: a lone first clip
+takes up to 15, else each new one takes an equal share and the others give
+way pro rata (`makeRoom`), so the + never hides. **In the app the post is a
+real cut**: `TriaClipPlugin.swift` (`TriaClip.inspect`, `compose`, `record`,
+`clear`) stitches with AVFoundation to H.264 .mp4, each clip covering a canvas
+capped at 1920x1080, Rec. 709, 30fps, fast start, progress as `clipProgress`
+filling the first quarter of the one upload bar ("Preparing"). Its tmp folder
+is TriaPhotos' too, emptied only by `clear` (`paths`, so a fresh pick
+survives). **The web, and iOS 15 and 16's file input, keep one clip posted as
+its original with its window in the filename** (`clipPostData`'s fallback),
+now also when only the end was trimmed (that posted whole before). Every bar
+wears the band: the preview's and the feed's progress, the upload, the
+lightbox's own scrubber (`wireLightboxClip`, tap to pause, a sound toggle; the
+system controls are gone). A Moment's clip loops its window too, with no
+progress line (it would read as the story indicator Zoe removed). No sounds,
+text or filters: on purpose.
+
 ## A song plays its preview (2026-11-06)
 
 **A song row's play disc plays Apple's 30 second preview, a ring in `--heart`

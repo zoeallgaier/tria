@@ -316,6 +316,10 @@
     // Edit profile's row (Zoe, 2026-10-22: "use gear icon for edit profile").
     gear:    '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     camera:  '<path d="M3.5 10A3 3 0 0 1 6.5 7H7l1.4-2h7.2L17 7h.5a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3z"/><circle cx="12" cy="13" r="3.3"/>',
+    // The clip editor's two (2026-11-06): Record a clip, a video camera in
+    // the camera's own soft body, and Split, the scissors every editor cuts with.
+    video:   '<rect x="3.5" y="6.5" width="12" height="11" rx="3.2"/><path d="M15.5 10.7 20.5 8v8l-5-2.7"/>',
+    split:   '<circle cx="6.5" cy="7" r="2.5"/><circle cx="6.5" cy="17" r="2.5"/><path d="M8.6 8.5 19.5 17.5"/><path d="M8.6 15.5 19.5 6.5"/>',
     comment: '<path d="M4 8.5A3.5 3.5 0 0 1 7.5 5h9A3.5 3.5 0 0 1 20 8.5v4a3.5 3.5 0 0 1-3.5 3.5H11l-4 3v-3h0.5A3.5 3.5 0 0 1 4 12.5z"/>',
     heart:   '<path d="M12 20.3 4.7 12.9a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8a4.6 4.6 0 0 1 6.5 6.5z"/>',
     // The headcount control's glyph, both states in one drawing. The person sits
@@ -2554,7 +2558,7 @@
   function bylineEl(post) {
     const u = Store.user(post.author);
     const name = esc(u ? u.name : post.author);
-    const meta = esc(niceDate(post.date));
+    const meta = esc(niceAgo(post._ts, post.date));
     return `<header class="byline">` +
         `<a class="byline-link" href="#/u/${esc(encodeURIComponent(post.author))}">` +
           avatarEl(u || { name: post.author }) +
@@ -2586,7 +2590,7 @@
   // where the header already establishes whose column this is. Just the date
   // — no repeated avatar + name down the page.
   function soloMetaEl(post) {
-    return `<p class="card-solometa"><span>${esc(niceDate(post.date))}</span></p>`;
+    return `<p class="card-solometa"><span>${esc(niceAgo(post._ts, post.date))}</span></p>`;
   }
 
   // ── Long notes → "Read more" ───────────────────────────────────────────────
@@ -3854,7 +3858,7 @@
           (room ? `<span class="card-passed-room"> in <b>${esc(communityHandle(room))}</b></span>` : '') +
         `</span>` +
         `<span class="dot">·</span>` +
-        `<span>${esc(niceDate(post.date))}</span>` +
+        `<span>${esc(niceAgo(post._ts, post.date))}</span>` +
       `</a>`;
   };
 
@@ -3868,7 +3872,7 @@
     // Where it was said, when that was a circle: a quote can carry a circle's
     // post out to people who have never been in it.
     const room = orig.communityId && Store.community(orig.communityId);
-    const meta = esc(niceDate(orig.date)) +
+    const meta = esc(niceAgo(orig._ts, orig.date)) +
       (room ? ` <span class="dot">·</span> ${esc(communityHandle(room))}` : '');
     // A quoted Frame runs full bleed to the tile's own corner, which is why the
     // tile clips rather than padding the image: a photo inset inside a 14px box
@@ -4925,9 +4929,10 @@
     : null;
 
   // Loop a <video> inside a stored trim window [start,end] instead of playing the
-  // whole file. We upload originals now, so a trimmed post carries its window in the
-  // URL (clipWindowFromUrl); the feed clip and the lightbox both honor it here. No
-  // window (a whole ≤10s clip) → no-op, the element plays/loops the entire file.
+  // whole file. A clip posted from the web (and every clip before 2026-11-06)
+  // is its original with the window in the URL (clipWindowFromUrl); the feed,
+  // the lightbox, a pin and a Moment all honour it here. A cut from the app has
+  // no window: the file is the post, and this is a no-op.
   function wireClipWindow(video, win) {
     if (!win) return;
     video.loop = false;   // native loop restarts at 0 — we own the loop inside the window
@@ -5692,7 +5697,7 @@
           `</p>` +
           (link ? linkTileHtml(link.href) : '') +
           commentPhotoHtml(c, name) +
-          `<p class="comment-meta">${esc(niceDate(c.date))}</p>` +
+          `<p class="comment-meta">${esc(niceAgo(c._ts, c.date))}</p>` +
         `</div>` +
         commentLikeHtml(c, post) +
       `</li>`;
@@ -8057,6 +8062,11 @@
         };
         mark();
         pic.addEventListener(pic.tagName === 'VIDEO' ? 'loadedmetadata' : 'load', mark, { once: true });
+        // A clip loops its trim window, as it does in the feed (a Moment
+        // used to play the whole original behind a web-trimmed clip). No
+        // progress line: a Moment fills the screen, and a line along it is
+        // the story indicator Moments left out on purpose.
+        if (pic.tagName === 'VIDEO') wireClipWindow(pic, clipWindowFromUrl(p.image));
       }
       wireLinkTiles(pg.stage);
       wash(pg, f);
@@ -8407,8 +8417,11 @@
       if (sheetOpen) return;
       if (e.key === 'Escape') close();
       else if (busy) return;
-      else if (e.key === 'ArrowRight') step(1);
-      else if (e.key === 'ArrowLeft') step(-1);
+      else if (e.metaKey || e.ctrlKey || e.altKey) return;
+      else if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); step(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); reply(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); fall('down'); }
       else if (e.key === 'Tab') {
         const f = [...page.el.querySelectorAll('a[href], button:not([hidden])')];
         if (!f.length) return;
@@ -15121,9 +15134,7 @@
     return link.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0];
   }
   const momentAge = (post) => {
-    const mins = Math.max(0, Math.round((Date.now() - Date.parse(post._ts || 0)) / 60000));
-    return mins < 1 ? 'Just now' : mins < 60 ? `${mins}m ago`
-      : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : niceDate(dayMT(post._ts));   // your own, past its day
+    return niceAgo(post._ts, dayMT(post._ts));   // your own, past its day
   };
   function nowPlayingEl() {
     if (!Store.songsReady()) return statusRailEl();
@@ -16051,7 +16062,7 @@
           `</span>` +
           `<span class="song-lines">` +
             `<span class="song-title">${esc(saidOf(post) || TYPE_LABEL[post.type] || 'Post')}</span>` +
-            `<span class="song-artist">${esc((TYPE_LABEL[post.type] || 'Post') + ' · ' + niceDate(p.date))}</span>` +
+            `<span class="song-artist">${esc((TYPE_LABEL[post.type] || 'Post') + ' · ' + niceAgo(p._ts, p.date))}</span>` +
           `</span>` +
         `</button>`;
     };
@@ -18711,7 +18722,7 @@
           `<span class="notif-body">` +
             `<span class="notif-text"><strong>${name}</strong> ${what}</span>` +
             (quote ? `<span class="notif-quote">${quote}</span>` : '') +
-            (n._ts ? `<span class="notif-date">${esc(niceDate(dayMT(n._ts)))}</span>` : '') +
+            (n._ts ? `<span class="notif-date">${esc(niceAgo(n._ts, dayMT(n._ts)))}</span>` : '') +
           `</span>` +
           `<span class="notif-dot" aria-hidden="true"></span>` +
           notifThumbHtml(n.kind === 'circlejoin' ? null : post, n.kind === 'circlejoin' ? room : null) +
@@ -19091,12 +19102,10 @@
       faces.map(u => avatarEl(u, { cls: 'comment-avatar chat-avatar' })).join('') + `</span>`;
   }
 
-  // A time today, a date before that, in the ledger's own date words.
+  // How long ago, then a date, in the ledger's own date words.
   function chatWhen(ts) {
     if (!ts) return '';
-    if (dayMT(ts) === dayMT(Date.now()))
-      return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    return niceDate(dayMT(ts));
+    return niceAgo(ts, dayMT(ts));
   }
 
   function chatPreview(c) {
@@ -20608,32 +20617,45 @@
           // look, drag sideways to move it (wireFrameCapture's `order`).
           `<div class="cc-order" id="c-stills" role="group" aria-label="Order of photos" hidden></div>` +
           `<p class="cc-hint" id="c-cc-hint" hidden>Drag a photo to change the order.</p>` +
-          `<div class="trim" id="c-trim" hidden>` +
-            `<div class="trim-stage">` +
-              `<video class="trim-video" id="c-trimvideo" playsinline muted loop></video>` +
-              `<div class="trim-loading" aria-live="polite"><span class="trim-loading-dot"></span>Getting your clip ready</div>` +
-              `<button type="button" class="trim-sound" id="c-trimsound" ` +
-                `aria-label="Toggle sound" aria-pressed="false">${svgIcon('mute', 'trim-sound-ico')}</button>` +
-              `<button type="button" class="media-x" id="c-trim-x" aria-label="Remove this clip" hidden>` +
+          // THE CLIP EDITOR (clipEditor): the preview, which is the post; the
+          // post's bar, every clip as long as it runs out of 15 seconds; the
+          // trimmer for the clip picked; its length and two acts.
+          `<div class="ed" id="c-ed" hidden>` +
+            `<div class="ed-stage" id="c-ed-stage">` +
+              `<div class="ed-canvas" id="c-ed-canvas">` +
+                `<video class="ed-video is-on" playsinline muted preload="auto"></video>` +
+                `<video class="ed-video" playsinline muted preload="auto"></video>` +
+              `</div>` +
+              `<span class="frame-play ed-paused" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+              `<div class="ed-loading" aria-live="polite"><span class="ed-loading-dot"></span>Getting your clip ready</div>` +
+              `<button type="button" class="frame-sound ed-sound" id="c-ed-sound" aria-label="Play with sound" ` +
+                `aria-pressed="false">${svgIcon('mute', 'frame-sound-ico')}</button>` +
+              `<button type="button" class="media-x" id="c-ed-x" aria-label="Remove the clip" hidden>` +
                 `${svgIcon('close', 'media-x-ico')}</button>` +
+              `<div class="frame-progress" aria-hidden="true"><span class="frame-progress-fill" id="c-ed-fill"></span></div>` +
             `</div>` +
-            `<div class="reel-wrap" id="c-reelwrap">` +
-              `<div class="reel-ticks" id="c-reelticks" aria-hidden="true"></div>` +
-              `<div class="reel" id="c-reel">` +
-                `<div class="reel-track" id="c-reeltrack"></div>` +
-              `</div>` +
-              `<div class="reel-scrim" id="c-reelscriml" aria-hidden="true"></div>` +
-              `<div class="reel-scrim" id="c-reelscrimr" aria-hidden="true"></div>` +
-              `<div class="reel-frame" id="c-reelframe" role="slider" aria-label="Trim window">` +
-                `<span class="reel-handle reel-handle--l" data-edge="l" aria-hidden="true"></span>` +
-                `<span class="reel-handle reel-handle--r" data-edge="r" aria-hidden="true"></span>` +
-              `</div>` +
-              `<div class="reel-playhead" id="c-reelplayhead" aria-hidden="true"></div>` +
+            `<div class="ed-post" id="c-ed-post" role="group" aria-label="Your clips, in order" hidden>` +
+              `<div class="ed-bars" id="c-ed-bars"></div>` +
+              `<span class="ed-head" id="c-ed-head" aria-hidden="true"></span>` +
             `</div>` +
-            `<p class="trim-meta">` +
-              `<span class="trim-dur" id="c-trimdur">0.0s</span>` +
-              `<span class="trim-hint">Scroll to choose the moment. Drag the ends to set length, up to 10 seconds.</span>` +
-            `</p>` +
+            `<div class="ed-trim" id="c-ed-trim">` +
+              `<div class="ed-film" id="c-ed-film" aria-hidden="true"></div>` +
+              `<span class="ed-shade ed-shade--l" aria-hidden="true"></span>` +
+              `<span class="ed-shade ed-shade--r" aria-hidden="true"></span>` +
+              `<div class="ed-win" id="c-ed-win">` +
+                `<span class="ed-end ed-end--l" role="slider" tabindex="0" aria-label="Where this clip starts"></span>` +
+                `<span class="ed-end ed-end--r" role="slider" tabindex="0" aria-label="Where this clip ends"></span>` +
+              `</div>` +
+              `<span class="ed-thead" id="c-ed-thead" aria-hidden="true"></span>` +
+            `</div>` +
+            `<div class="ed-meta">` +
+              `<span class="ed-time" id="c-ed-time" aria-live="polite">0.0s</span>` +
+              `<span class="ed-acts">` +
+                `<button type="button" class="pill-quiet ed-act" id="c-ed-split" hidden>${svgIcon('split', 'ed-act-ico')}<span>Split</span></button>` +
+                `<button type="button" class="pill-quiet ed-act" id="c-ed-remove" hidden>${svgIcon('trash', 'ed-act-ico')}<span>Remove</span></button>` +
+              `</span>` +
+            `</div>` +
+            `<p class="ed-hint" id="c-ed-hint"></p>` +
           `</div>` +
           `<div class="crop-actions">` +
             `<div class="crop-replace" id="c-addmore" role="button" tabindex="0" hidden>Add more</div>` +
@@ -21310,7 +21332,7 @@
       fieldsEl.querySelector('#c-stills')?.replaceChildren();
       fieldsEl.querySelector('#c-stills')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-addmore')?.setAttribute('hidden', '');
-      fieldsEl.querySelector('#c-trim')?.setAttribute('hidden', '');
+      fieldsEl.querySelector('#c-ed')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-replace')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-dropzone')?.removeAttribute('hidden');
       const file = fieldsEl.querySelector('#c-file'); if (file) file.value = '';
@@ -21802,8 +21824,25 @@
         hapticTap('LIGHT');
         openSheet({ items: [
           { label: 'Take a photo', icon: 'camera', run: takePhoto },
+          // The camera in video mode, straight into the clip editor.
+          ...(clipCutter() ? [{ label: 'Record a clip', icon: 'video', run: () => recordClip() }] : []),
           { label: 'All photos', icon: 'image', run: () => allPhotos() },
         ] });
+      };
+      const recordClip = async () => {
+        if (asking || stills.length) {
+          if (stills.length) frame.error('Photos and clips go in separate posts. Take the photos out first.');
+          return;
+        }
+        asking = true;
+        let r = null;
+        try { r = await cutCall('record', { max: MAX_CLIP_SEC }); } catch {}
+        asking = false;
+        if (gone || !r || r.cancelled) return;
+        if (r.error || !r.path) { frame.error(r.error || 'Couldn’t keep that clip. Try again.'); return; }
+        open();
+        frame.clips([{ path: r.path, type: r.type }]);
+        syncType();
       };
       camera?.addEventListener('change', () => {
         const f = camera.files && camera.files[0];
@@ -21832,16 +21871,14 @@
         if (gone || !res || res.cancelled || !Array.isArray(res.items) || !res.items.length) return;
         const items = res.items.filter(it => !it.error);
         if (items.length < res.items.length) frame.error(res.items.find(it => it.error).error);
+        // Clips go to the editor, as many as were ticked, in the order they
+        // were (the editor lays them end to end). Photos and clips are two
+        // kinds of post, so a mix keeps the photos out.
         const clips = items.filter(it => it.path);
         if (clips.length) {
-          if (items.length > 1) { frame.error('A carousel is photos only. Share a clip as its own post.'); return; }
-          let blob = null;
-          try { blob = await (await fetch(C.convertFileSrc(clips[0].path))).blob(); } catch {}
-          if (gone) return;
-          if (!blob) { frame.error('Couldn’t read that clip. Try another.'); return; }
-          const type = clips[0].type || blob.type || 'video/quicktime';
+          if (clips.length < items.length) frame.error('Photos and clips go in separate posts, so the photos were left out.');
           open();
-          frame.clip(new File([blob], 'clip', { type }));
+          frame.clips(clips.map(it => ({ path: it.path, type: it.type })));
           syncType();
           return;
         }
@@ -21901,17 +21938,19 @@
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
   // photo previews at its native aspect (no crop); a picked video drops into the
-  // in-app trim surface, where you pick the ≤10s window to keep. The cut/re-encode
-  // happens once, on Post (see submitComposer).
-  const MAX_CLIP_SEC = 10;                              // the published clip cap — the trimmer enforces it
-  const MAX_SOURCE_SEC = 180;                          // longest source we accept (Tria trims it down to ≤10s)
-  const TRIM_MIN_SEC = 1;                               // shortest window you can drag to
-  // The upload ceiling: the Storage `media` bucket's file_size_limit (150 MB). We
-  // upload the ORIGINAL clip (no in-browser re-encode — that real-time re-encode is
-  // what stripped audio on iOS Safari, a WebKit MediaRecorder+WebAudio bug), so a
-  // trim is stored as a play-window, not a cut. This is therefore the real gate:
-  // anything over it can't post. Caught on the client, at pick time and pre-upload,
-  // with copy that says what to do — not a generic server error.
+  // clip editor (clipEditor), where clips are trimmed and, in the app, laid end
+  // to end. The cut happens once, on Share (see submitComposer).
+  const MAX_CLIP_SEC = 15;     // the longest a clip post runs, every clip in it together (Zoe, 2026-11-06; it was 10)
+  const MAX_CLIPS = 10;        // the most clips one post stitches
+  const MAX_SOURCE_SEC = 180;  // the longest source taken (Tria trims it down)
+  const TRIM_MIN_SEC = 0.5;    // the shortest a clip can be trimmed to
+  // The upload ceiling: the Storage `media` bucket's file_size_limit (150 MB).
+  // In the app a post uploads its CUT (TriaClipPlugin.swift), which is far
+  // under it. The web, and a clip the phone can't reach as a file, upload the
+  // ORIGINAL with its window stamped on (no in-browser re-encode: that one
+  // stripped audio on iOS Safari, a WebKit MediaRecorder+WebAudio bug), and for
+  // those this is the real gate, caught at pick time and before the upload with
+  // copy that says what to do rather than a generic server error.
   const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;
   const MAX_STILLS = 6;                                 // a carousel's most photos (posts_images_shape agrees)
 
@@ -21924,22 +21963,10 @@
     const countEl  = root.querySelector('#c-cc-count');
     const hintEl   = root.querySelector('#c-cc-hint');
     const filmstrip = !!frameField?.classList.contains('frame-field--moment');
-    const trimEl     = root.querySelector('#c-trim');
-    const trimVideo  = root.querySelector('#c-trimvideo');
-    const trimSound  = root.querySelector('#c-trimsound');
-    const reel       = root.querySelector('#c-reel');
-    const reelTrack  = root.querySelector('#c-reeltrack');
-    const reelTicks  = root.querySelector('#c-reelticks');
-    const reelFrame  = root.querySelector('#c-reelframe');
-    const reelScrimL = root.querySelector('#c-reelscriml');
-    const reelScrimR = root.querySelector('#c-reelscrimr');
-    const reelPlay   = root.querySelector('#c-reelplayhead');
-    const trimDur    = root.querySelector('#c-trimdur');
     const replace  = root.querySelector('#c-replace');
     const addMore  = root.querySelector('#c-addmore');
     const stillsEl = root.querySelector('#c-stills');
     const errEl    = () => document.getElementById('c-error');
-    const trimX    = root.querySelector('#c-trim-x');
 
     // THE CAMERA ROLL'S WAY IN (wireRoll). `rollMode` is on wherever the roll
     // stands in for the photo button, and then the roll, the camera and All
@@ -21989,15 +22016,10 @@
           showStill(sel);
         }
       },
-      clip: (f) => handleLibraryVideo(f),
+      // Clips from All photos or the camera, as native files (`{ path, type }`).
+      clips: (items) => openClips(items),
       error: (msg) => showPickError(msg),
     };
-    trimX?.addEventListener('pointerdown', (e) => e.stopPropagation());
-    trimX?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hapticTap('LIGHT');
-      api.cleared?.();
-    });
 
     // Put a pick rejection where it can't be missed. iOS holds the user in the
     // Photos sheet while it exports the pick (we're not even running yet), so by
@@ -22011,29 +22033,60 @@
       try { err.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' }); } catch {}
     }
 
-    // Reel state — tD = full clip duration; [tStart,tEnd] = the selected ≤10s window;
-    // selLen = its length; PPS = pixels-per-second zoom; lead = constant side padding
-    // (half the initial frame) so the frame's edges sit flush with the clip at both
-    // scroll extremes; frameW0 = the initial frame width; vw = the reel's on-screen
-    // width. Everything visible derives from reel.scrollLeft + selLen. cells[] are the
-    // thumbnail tiles. All hoisted so the listeners wired once below read live values;
-    // finishVideo/buildReel reset them per clip. tPlaying gates the playback loop.
-    let tD = 0, tStart = 0, tEnd = 0, selLen = 0, PPS = 0, lead = 0, frameW0 = 0, vw = 0;
-    let tPlaying = false, dragging = null, cells = [];
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // THE CLIP EDITOR. It owns every clip from the first landing to the last
+    // taken out, and tells this surface three things: the clips changed (so
+    // `videoCapture` is the editor while it holds any), it emptied (back to
+    // the upload field, or under the roll the surface folds), and an error.
+    const editor = clipEditor(root, {
+      moment: filmstrip,
+      changed(state) {
+        videoCapture = state;
+        onCaptureChange?.();   // a clip landing or going flips the type mark
+      },
+      emptied() {
+        videoCapture = null;
+        root.querySelector('#c-ed').hidden = true;
+        replace.hidden = true;
+        if (rollMode) { api.cleared?.(); return; }
+        if (dropzone) dropzone.hidden = false;
+        onCaptureChange?.();
+      },
+      error: (msg) => showPickError(msg),
+    });
 
-    // Switching post type (or re-mounting) tears this surface down — release the
-    // trim clip's object URL so a played preview doesn't leak. mountFields calls
-    // this via stopActiveCapture before replacing the DOM.
-    function teardown() {
-      tPlaying = false;
-      try { trimVideo.pause(); } catch {}
-      // Drop the source and reload so iOS actually frees the decoder (not just
-      // pauses it) — the Post-time re-encode needs that one decoder slot.
-      try { trimVideo.removeAttribute('src'); trimVideo.load(); } catch {}
-      if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
-    }
+    // Switching post type (or re-mounting) tears this surface down: the
+    // editor lets go of its players and the files behind them. mountFields
+    // calls this via stopActiveCapture before replacing the DOM.
+    const teardown = () => editor.teardown();
     stopActiveCapture = teardown;
+
+    // A clip, or clips, landing: the photos go (a clip is a post of its own)
+    // and the editor takes over the surface.
+    function toEditor() {
+      if (frameField) frameField.hidden = false;
+      if (dropzone) dropzone.hidden = true;
+      ccEl.hidden = true;
+      track.replaceChildren();
+      delete track.dataset.r;
+      track.style.aspectRatio = '';
+      cropper = null;
+      stills = [];
+      api.untick?.();   // the roll's ticks go with the photos
+      stillsEl.hidden = true;
+      stillsEl.replaceChildren();
+      if (hintEl) hintEl.hidden = true;
+      addMore.hidden = true;
+      replace.textContent = 'Choose another';
+      replace.hidden = rollMode;
+      editor.rollMode(rollMode);
+    }
+    function openClips(items) {
+      const err = errEl();
+      if (err) err.textContent = '';
+      stopActiveCapture = teardown;   // a fold dropped it; the clips are back
+      toEditor();
+      editor.add(items, { fresh: !videoCapture });
+    }
 
     // Open the OS picker. The upload dropzone and the post-pick "Choose another"
     // button both lead here — one way in, the system does the rest.
@@ -22061,8 +22114,13 @@
       if (!files.length) return;
       if (adding || files.length > 1) { pickStills(files, adding); return; }
       const f = files[0];
-      if (f.type.startsWith('video/')) handleLibraryVideo(f);
-      else if (f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES) {
+      if (f.type.startsWith('video/')) {
+        // The web posts its original (a trim is a window on it, not a cut),
+        // so a file over the bucket's ceiling can never go up: say so now,
+        // not after the trimming. Speak to size, since length alone is fine.
+        if (f.size > MAX_UPLOAD_BYTES) { showPickError('That clip is over 150 MB. Please pick a shorter or smaller clip.'); return; }
+        openClips([{ file: f }]);
+      } else if (f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES) {
         // GIFs upload as their original bytes (see initPhotoPreview) — no
         // in-browser re-encode to shrink them, so the bucket ceiling is the
         // real gate. Catch it here rather than after the read.
@@ -22099,10 +22157,9 @@
       if (dropzone) dropzone.hidden = true;        // the preview takes over from the upload field
       const arriving = ccEl.hidden;
       ccEl.hidden = false;
-      // Swapping in from a video pick — tear the trim surface down.
-      tPlaying = false;
-      try { trimVideo.pause(); } catch {}
-      trimEl.hidden = true;
+      // Swapping in from a clip: the editor lets its clips go.
+      editor.clear();
+      root.querySelector('#c-ed').hidden = true;
       replace.hidden = false;
       replace.textContent = stills.length > 1 ? 'Start over' : 'Choose another';
       // One photo offers "Add more" as a pill; a set has the + at the end of its order.
@@ -22534,297 +22591,832 @@
       else if (take.length < photos.length) showPickError('One post holds six photos, so the rest were left out.');
     }
 
-    // ── Video → trim reel ────────────────────────────────────────────────────
-    // A picked clip of any length (≤3 min) lands here. The native <video> loops the
-    // selected window as a preview; below it a full-width, horizontally-scrollable
-    // thumbnail reel lets you SCROLL to choose the moment and drag the frame's ends
-    // to set length (≤10s). videoCapture holds the ORIGINAL blob plus the window; the
-    // cut/re-encode happens once, on Post (submitComposer).
-    //
-    // Thumbnails ARE sampled here — canvas-from-video works on real iOS Safari
-    // (confirmed on-device; the old blank preview was the reveal gate, not the draw).
-    // Sampling runs behind the loading shimmer so the seeking never shows, and it is
-    // best-effort: any black/failed frame just leaves a neutral cell, so the reel
-    // still scrubs perfectly even where a device's canvas readback misbehaves. The
-    // preview itself is pure native playback (the one thing iOS does reliably).
-    async function finishVideo(blob) {
-      if (frameField) frameField.hidden = false;   // the surface appears now the clip has landed
-      if (dropzone) dropzone.hidden = true;        // the trim surface takes over from the upload field
-      ccEl.hidden = true;
-      track.replaceChildren();
-      delete track.dataset.r;
-      track.style.aspectRatio = '';
-      cropper = null;
-      stills = [];
-      api.untick?.();   // a clip is a post of its own: the roll's ticks go
-      stillsEl.hidden = true;
-      stillsEl.replaceChildren();
-      if (hintEl) hintEl.hidden = true;
-      addMore.hidden = true;
-      replace.textContent = 'Choose another';
-      trimEl.hidden = false;
-      replace.hidden = rollMode;
-      if (trimX) trimX.hidden = !rollMode;
+    return api;
+  }
 
-      const mimeType = blob.type || 'video/mp4';
-      const ext = /mp4/i.test(mimeType) ? 'mp4' : /webm/i.test(mimeType) ? 'webm' : 'mov';
+  /* ── THE CLIP EDITOR (2026-11-06) ─────────────────────────────────────────
+     Zoe: "vine style editing meets modern reels edits UI ... imovie style bars
+     ... simpler and easier to work with ... the preview should match the post
+     size". Three things down the page, each with one job:
 
-      // Reset per-clip state.
-      tPlaying = false; dragging = null; tD = 0;
-      trimEl.classList.add('trim--loading');   // calm placeholder while metadata reads (heavy 4K/iCloud clips)
+     THE PREVIEW IS THE POST: the box the feed draws (the first clip's shape,
+     held to 4:5 tall; a Moment's at its own shape, as the viewer shows it),
+     every clip COVERING it the way the cut will (TriaClipCore.cover), looping
+     the whole post as a Frame loops in the feed, with the feed's own sound
+     disc and progress line. A tap pauses it; the x takes the clip out.
 
-      if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} }
-      const url = URL.createObjectURL(blob);
-      trimVideo._url = url;
-      trimVideo.muted = true;
-      trimSound.setAttribute('aria-pressed', 'false');
-      trimSound.innerHTML = svgIcon('mute', 'trim-sound-ico');
-      trimVideo.src = url;
+     THE POST is one bar for the 15 seconds a clip post can run (iMovie's
+     bars, Vine's cap): each clip a strip of its own frames, as wide as it
+     runs, and the room left after them with a + in it. A tap picks a clip, a
+     drag along the bar scrubs the post and leaves it there (that is how you
+     aim Split), and a hold lifts a clip to move it. In the app only: the cut
+     that joins clips is native (TriaClipPlugin.swift).
 
-      // Metadata (duration + native size) off the preview element itself.
-      const meta = await loadClipMeta(trimVideo);
-      tD = meta.duration;
+     THE CLIP is the trimmer for the one picked: its whole source fit to the
+     width (no scrolling, the iOS Photos trimmer's way), the part kept framed
+     in the reader's band. Drag an end to trim, the middle to slide, or tap
+     the film to bring the window there. Letting go plays the clip from its
+     start.
 
-      // 3-minute source cap. Tria trims any clip down to ≤10s, but a longer source is
-      // a heavier seek + re-encode than we want to promise, so bounce it kindly back
-      // to the picker. (Unknown-duration blobs report ≤10s and pass — those are quick
-      // MediaRecorder captures, never long library picks.)
-      if (meta.known && tD > MAX_SOURCE_SEC) {
-        showPickError('That video is longer than 3 minutes. Trim it in Photos first, or pick a shorter one.');
-        tPlaying = false;
-        try { trimVideo.pause(); trimVideo.removeAttribute('src'); trimVideo.load(); } catch {}
-        if (trimVideo._url) { try { URL.revokeObjectURL(trimVideo._url); } catch {} trimVideo._url = null; }
-        trimEl.classList.remove('trim--loading');
-        trimEl.hidden = true;
-        replace.hidden = true;
-        videoCapture = null;
-        if (dropzone) dropzone.hidden = false;      // no clip landed — restore the upload field
-        onCaptureChange?.();                         // unlight the Photo tool + reset the type mark
-        if (rollMode) api.cleared?.();               // the roll has no upload field: fold it away
+     Under them: the post's length, Split (at the playhead) and Remove (the
+     picked clip), and one line saying what the bars do.
+
+     A clip is `{ key, src, path, file, dur, w, h, audio, start, end, frames }`.
+     `path` is a native file TriaClip can cut; `file` a web File, posted as its
+     original and a window (one clip only). The state the composer reads is
+     `{ clips, cut }`: `cut()` is there when every clip is native. */
+  const clipCutter = () => nativeShell() && !!window.Capacitor?.isPluginAvailable?.('TriaClip');
+  const cutCall = (m, o) => window.Capacitor.nativePromise('TriaClip', m, o || {});
+  // The cut's progress, heard once for the app's life and handed to whoever asked.
+  let clipProgressTo = null, clipListening = false;
+  function listenClipProgress() {
+    if (clipListening) return;
+    clipListening = true;
+    window.Capacitor.nativeCallback('TriaClip', 'addListener', { eventName: 'clipProgress' },
+      (ev) => clipProgressTo?.(+(ev && ev.p) || 0));
+  }
+
+  function clipEditor(root, hooks) {
+    const el = root.querySelector('#c-ed');
+    const $ = (s) => el.querySelector(s);
+    const stage = $('#c-ed-stage'), canvas = $('#c-ed-canvas');
+    const vids = [...el.querySelectorAll('.ed-video')];
+    const soundBtn = $('#c-ed-sound'), xBtn = $('#c-ed-x'), fillEl = $('#c-ed-fill');
+    const postEl = $('#c-ed-post'), barsEl = $('#c-ed-bars'), headEl = $('#c-ed-head');
+    const trimEl = $('#c-ed-trim'), filmEl = $('#c-ed-film'), winEl = $('#c-ed-win');
+    const shadeL = $('.ed-shade--l'), shadeR = $('.ed-shade--r'), theadEl = $('#c-ed-thead');
+    const timeEl = $('#c-ed-time'), hintEl = $('#c-ed-hint');
+    const splitBtn = $('#c-ed-split'), removeBtn = $('#c-ed-remove');
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const END = 16;    // the trimmer's grip, and the film's inset either side for it
+    const GAP = 3;     // between the post's bars
+
+    let clips = [], sel = 0, cur = 0, on = 0, keys = 0;
+    let wantPlay = !prefersReduced();   // the reader's pause; reduced motion starts paused
+    let held = null;                    // a finger that owns the preview (a trim, a scrub, a lift)
+    let inView = true, busy = 0, roll = false, muted = true;
+    // The editor lives as long as its element is on the page.
+    const alive = () => el.isConnected;
+
+    const len = (c) => c.end - c.start;
+    const total = () => clips.reduce((s, c) => s + len(c), 0);
+    const offsetOf = (i) => clips.slice(0, i).reduce((s, c) => s + len(c), 0);
+    const left = () => Math.max(0, MAX_CLIP_SEC - total());
+    // The most clip `i` may run: its source, and the post's room around the others.
+    const roomFor = (i) => Math.min(clips[i].dur, MAX_CLIP_SEC - (total() - len(clips[i])));
+    const native = () => clipCutter() && clips.length > 0 && clips.every(c => c.path);
+    // The + stays while there's a clip's room to give (makeRoom shares the time).
+    const canAdd = () => native() && clips.length < MAX_CLIPS;
+    const ROOM_MIN = 44;   // the + slot's least width, held out of the bar's scale
+    const frameAt = (c, t) => {
+      const f = c.frames;
+      if (!f || !f.length) return '';
+      return f[clamp(Math.floor(t / c.dur * f.length), 0, f.length - 1)] || '';
+    };
+
+    // While the first clip is still being read the post already holds a clip
+    // (so the roll stands down and the type mark is a Frame's), but not one
+    // Share can send yet: `loading`.
+    function state() {
+      if (!clips.length) return busy ? { clips, loading: true } : null;
+      return {
+        clips,
+        loading: busy > 0,
+        first: clips[0],
+        cut: native() ? cut : null,
+        pause: () => { held = 'post'; vids.forEach(v => v.pause()); },
+        resume: () => { held = null; play(); },
+      };
+    }
+    const changed = () => hooks.changed?.(state());
+
+    /* ── The player: two <video>s taking turns ─────────────────────────────
+       One plays the clip on screen while the other waits on the next clip's
+       first frame, so a cut in the preview is a swap, not a load. Two is the
+       most a phone is asked to decode at once. */
+    function hold(v, c, t) {
+      if (v._src !== c.src) { v._src = c.src; v.src = c.src; }
+      v._clip = c;
+      seek(v, t);
+    }
+    // A seek waits for the last to land, and then takes only the newest ask,
+    // so a fast drag never queues up a trail of frames behind the finger.
+    function seek(v, t) {
+      v._want = t;
+      if (v.readyState < 1) {
+        if (!v._meta) {
+          v._meta = true;
+          v.addEventListener('loadedmetadata', () => { v._meta = false; if (v._want != null) seek(v, v._want); }, { once: true });
+        }
         return;
       }
-
-      selLen = Math.min(tD, MAX_CLIP_SEC);
-      tStart = 0; tEnd = selLen;
-      videoCapture = { blob, mimeType, ext, duration: tD, durationKnown: meta.known,
-                       start: tStart, end: tEnd, poster: null, tint: null,
-                       dims: (meta.w && meta.h) ? { w: meta.w, h: meta.h } : null };
-      onCaptureChange?.();   // a clip landed → the Post composer flips its type mark to Frame
-
-      // Build the reel geometry + tiles + ticks, reflect the initial window.
-      buildReel(tD, meta.w, meta.h);
-      layoutReel();
-
-      // Sample thumbnails off this same element (still hidden behind the shimmer, so
-      // the seeking never shows), then cue the window's start, play, and reveal on a
-      // genuine moving frame. A guard drops the loading state regardless, so a clip
-      // that refuses muted autoplay still shows its first frame.
-      await sampleThumbs();
-      tPlaying = true;
-      scrubTo(tStart);
-      const reveal = () => trimEl.classList.remove('trim--loading');
-      trimVideo.addEventListener('playing', reveal, { once: true });
-      trimVideo.addEventListener('canplay', reveal, { once: true });
-      setTimeout(reveal, 1200);
-      trimVideo.play().catch(reveal);
+      if (v._seeking) return;
+      const w = v._want;
+      v._want = null;
+      v._seeking = true;
+      const done = () => {
+        v._seeking = false;
+        if (v._want != null) seek(v, v._want);
+      };
+      v.addEventListener('seeked', done, { once: true });
+      try { v.currentTime = w; } catch { v.removeEventListener('seeked', done); v._seeking = false; }
+    }
+    const playing = () => wantPlay && !held && inView && clips.length > 0 && !busy;
+    function reveal() {
+      vids.forEach((x, k) => {
+        x.classList.toggle('is-on', k === on);
+        if (k !== on) x.pause();
+      });
+    }
+    // Clip `i` on screen at its source time `t`.
+    function show(i, t) {
+      if (!clips.length) return;
+      cur = clamp(i, 0, clips.length - 1);
+      const c = clips[cur];
+      if (vids[on]._clip !== c && vids[1 - on]._clip === c) on = 1 - on;
+      const v = vids[on];
+      if (v._clip !== c) hold(v, c, t); else seek(v, t);
+      vids[1 - on].pause();
+      if (playing()) {
+        // The new clip shows once it is really moving; the old one holds
+        // its last frame until then, never a blank.
+        const p = v.play();
+        if (!v.paused && v.readyState >= 3) reveal();
+        else { v.addEventListener('playing', reveal, { once: true }); setTimeout(reveal, 300); }
+        Promise.resolve(p).catch(reveal);
+      } else {
+        reveal();
+      }
+      cueNext();
+      paintPlaying();
+    }
+    function cueNext() {
+      if (clips.length < 2) return;
+      const n = clips[(cur + 1) % clips.length];
+      const o = vids[1 - on];
+      if (o._clip !== n) hold(o, n, n.start);
+    }
+    function play() {
+      const v = vids[on];
+      if (playing()) v.play().catch(() => {});
+      else v.pause();
+      paintPlaying();
+    }
+    function paintPlaying() {
+      stage.classList.toggle('is-playing', playing());
+    }
+    // The post time under the playhead.
+    function postTime() {
+      const c = clips[cur];
+      if (!c) return 0;
+      return offsetOf(cur) + clamp(vids[on].currentTime - c.start, 0, len(c));
+    }
+    function seekPost(T, keepPlaying) {
+      T = clamp(T, 0, Math.max(0, total() - 0.02));
+      let i = 0, acc = 0;
+      while (i < clips.length - 1 && acc + len(clips[i]) <= T) { acc += len(clips[i]); i++; }
+      const c = clips[i];
+      show(i, c.start + (T - acc));
+      if (keepPlaying) play();
     }
 
-    // Build the reel for a freshly-loaded clip. Reads the reel's on-screen width NOW
-    // (it's visible), lays out a constant-padding track wide enough to scroll the
-    // whole clip under the centered frame, tiles empty thumbnail cells + time ticks,
-    // and parks the scroll at the start. sampleThumbs fills the cells afterward.
-    function buildReel(duration, w, h) {
-      vw = reel.clientWidth || 340;
-      selLen = Math.min(MAX_CLIP_SEC, duration);
-      // Aim the initial window at ~62% of the viewport width.
-      PPS = clamp((vw * 0.62) / Math.max(0.1, selLen), 8, 120);
-      frameW0 = selLen * PPS;
-      // Side padding = half the initial frame, held constant, so the frame's edges
-      // sit flush with the clip at both scroll extremes (no dead space) and the tiles
-      // never reflow when the window is resized.
-      lead = (vw - frameW0) / 2;
-      const trackW = lead * 2 + duration * PPS;
-      reelTrack.style.width = trackW + 'px';
-      reelTrack.innerHTML = '';
-      reelTicks.innerHTML = '';
-      reel.scrollLeft = 0;
-
-      // Thumbnail tiles — one every ~thumbW px, capped so sampling stays quick even
-      // on a 3-minute source.
-      const ar = (w && h) ? w / h : 16 / 9;
-      const thumbW = Math.max(34, Math.round(60 * ar));
-      const count = clamp(Math.ceil(duration * PPS / thumbW), 4, 16);
-      const cellW = duration * PPS / count;
-      cells = [];
-      for (let i = 0; i < count; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'reel-thumb';
-        cell.style.left = (lead + i * cellW) + 'px';
-        cell.style.width = Math.ceil(cellW) + 'px';
-        reelTrack.appendChild(cell);
-        cells.push(cell);
+    let ticking = false;
+    function tick() {
+      if (!alive()) { ticking = false; return; }
+      requestAnimationFrame(tick);
+      if (!clips.length || el.hidden) return;
+      const c = clips[cur], v = vids[on];
+      if (!held && !v._seeking && v._clip === c) {
+        if (v.currentTime >= c.end - 0.03 || v.ended) {
+          if (clips.length === 1) { seek(v, c.start); if (playing()) v.play().catch(() => {}); }
+          else { const n = (cur + 1) % clips.length; show(n, clips[n].start); }
+        } else if (v.currentTime < c.start - 0.2) {
+          seek(v, c.start);
+        }
       }
-
-      // Time ticks, labelled at the clip's real seconds, scrolling with the reel.
-      const step = duration <= 20 ? 5 : duration <= 60 ? 15 : 30;
-      for (let t = 0; t <= duration + 0.01; t += step) {
-        const el = document.createElement('span');
-        el.className = 'reel-tick';
-        el.textContent = tickLabel(t);
-        el.style.left = (lead + t * PPS) + 'px';
-        reelTicks.appendChild(el);
-      }
+      paintHeads();
     }
 
-    // Fill the tiles with real frames sampled off the preview element. Best-effort: a
-    // black/failed draw leaves the cell neutral (the reel still scrubs), so a device
-    // where canvas-from-video misbehaves degrades to a plain bar rather than breaking.
-    async function sampleThumbs() {
-      if (!cells.length) return;
-      const w = trimVideo.videoWidth || 16, h = trimVideo.videoHeight || 9;
-      const th = 120, tw = Math.max(1, Math.round(th * w / h));
-      // iOS WebKit draws a never-played <video> to canvas as TRANSPARENT — the
-      // element has to present a real frame before seek-and-draw lands pixels.
-      // Prime it with a brief muted play (allowed without a gesture; we're still
-      // behind the shimmer), then sample paused.
+    /* ── Drawing ───────────────────────────────────────────────────────── */
+    // The box is the post's: the first clip's shape, held to the feed's 4:5
+    // ceiling, and the clips drawn in a box of their own shape centred in it,
+    // so the preview crops exactly where the feed will.
+    function shape() {
+      const c = clips[0];
+      if (!c || !c.w || !c.h) return;
+      canvas.style.aspectRatio = `${c.w} / ${c.h}`;
+      stage.style.setProperty('--ed-ar', (c.w / c.h).toFixed(4));
+      stage.style.aspectRatio = hooks.moment || !frameIsTall(c.w, c.h) ? `${c.w} / ${c.h}` : '4 / 5';
+    }
+
+    function unit() {
+      const w = postEl.clientWidth || 320;
+      // The + slot keeps its least width even on a full post, so the scale
+      // is the bar less that slot when it shows.
+      return Math.max(0, w - GAP * clips.length - (canAdd() ? ROOM_MIN : 0)) / MAX_CLIP_SEC;
+    }
+    // A strip of frames `width` wide over [from, to] of clip `c`, each cell
+    // the shape of the clip at the strip's height.
+    function cellsHtml(c, from, to, width, height) {
+      const ar = clamp((c.w && c.h) ? c.w / c.h : 1, 0.5, 1.8);
+      const cw = Math.max(16, height * ar);
+      const n = clamp(Math.ceil(width / cw), 1, 40);
+      let html = '';
+      for (let k = 0; k < n; k++) {
+        const src = frameAt(c, from + (k + 0.5) / n * (to - from));
+        html += `<i style="width:${cw.toFixed(1)}px${src ? `;background-image:url(${src})` : ''}"></i>`;
+      }
+      return html;
+    }
+    function paintPost() {
+      postEl.hidden = !native();
+      if (postEl.hidden) return;
+      const u = unit(), h = barsEl.clientHeight || 44;
+      const bars = clips.map((c, i) => {
+        const w = Math.max(14, len(c) * u);
+        return `<button type="button" class="ed-bar${i === sel ? ' is-sel' : ''}" data-i="${i}" ` +
+            `style="width:${w.toFixed(1)}px" aria-pressed="${i === sel}" ` +
+            `aria-label="Clip ${i + 1}, ${fmtClip(len(c))}">` +
+            `<span class="ed-strip">${cellsHtml(c, c.start, c.end, w, h)}</span></button>`;
+      }).join('');
+      const room = canAdd()
+        ? `<button type="button" class="ed-room${busy ? ' is-busy' : ''}" aria-label="Add a clip">` +
+            `<span class="ed-room-add">${svgIcon('plus')}</span></button>`
+        : '';
+      barsEl.innerHTML = bars + room;
+    }
+    // Only the widths, while a finger trims: the cells are redrawn on the lift.
+    function sizePost() {
+      if (postEl.hidden) return;
+      const u = unit();
+      barsEl.querySelectorAll('.ed-bar').forEach((b) => {
+        const c = clips[+b.dataset.i];
+        if (c) b.style.width = Math.max(14, len(c) * u).toFixed(1) + 'px';
+      });
+    }
+
+    const filmW = () => Math.max(1, (trimEl.clientWidth || 320) - END * 2);
+    function paintFilm() {
+      const c = clips[sel];
+      if (!c) return;
+      filmEl.innerHTML = cellsHtml(c, 0, c.dur, filmW(), filmEl.clientHeight || 56);
+      layoutTrim();
+    }
+    function layoutTrim() {
+      const c = clips[sel];
+      if (!c) return;
+      const fw = filmW(), pps = fw / c.dur;
+      const x0 = END + c.start * pps, x1 = END + c.end * pps;
+      winEl.style.transform = `translateX(${(x0 - END).toFixed(1)}px)`;
+      winEl.style.width = (x1 - x0 + END * 2).toFixed(1) + 'px';
+      shadeL.style.width = Math.max(0, x0 - END).toFixed(1) + 'px';
+      shadeR.style.left = x1.toFixed(1) + 'px';
+      shadeR.style.width = Math.max(0, END + fw - x1).toFixed(1) + 'px';
+      const l = winEl.querySelector('.ed-end--l'), r = winEl.querySelector('.ed-end--r');
+      l.setAttribute('aria-valuetext', `Starts at ${fmtClip(c.start)}`);
+      r.setAttribute('aria-valuetext', `Ends at ${fmtClip(c.end)}, ${fmtClip(len(c))} long`);
+      paintMeta();
+    }
+    function paintHeads() {
+      const c = clips[cur], v = vids[on];
+      if (!c) return;
+      const T = postTime(), all = total() || 1;
+      fillEl.style.width = (clamp(T / all, 0, 1) * 100).toFixed(2) + '%';
+      if (!postEl.hidden) {
+        // The bar's own geometry, so the head sits on the frames it is showing.
+        const bar = barsEl.querySelector(`.ed-bar[data-i="${cur}"]`);
+        if (bar && !bar.classList.contains('is-lifted')) {
+          const x = bar.offsetLeft + clamp((v.currentTime - c.start) / (len(c) || 1), 0, 1) * bar.offsetWidth;
+          headEl.style.transform = `translateX(${x.toFixed(1)}px)`;
+          headEl.hidden = false;
+        } else headEl.hidden = true;
+      }
+      const showT = cur === sel && !(held === 'trim');
+      theadEl.hidden = !showT;
+      if (showT) theadEl.style.transform = `translateX(${(END + v.currentTime / c.dur * filmW()).toFixed(1)}px)`;
+      const can = splitAt() != null;
+      if (splitBtn.getAttribute('aria-disabled') !== String(!can)) splitBtn.setAttribute('aria-disabled', String(!can));
+    }
+    function paintMeta() {
+      timeEl.textContent = fmtClip(total());
+      const nat = native();
+      splitBtn.hidden = !nat;
+      removeBtn.hidden = clips.length < 2;
+      hintEl.textContent = !nat ? 'Drag the ends to trim, up to 15 seconds.'
+        : clips.length > 1 ? 'Tap a clip to trim it. Hold one to move it.'
+        : 'Drag the ends to trim. Add clips with the +.';
+    }
+    function paintAll() {
+      shape();
+      paintPost();
+      paintFilm();
+      paintMeta();
+      paintHeads();
+    }
+
+    /* ── Clips in ──────────────────────────────────────────────────────── */
+    const FRAMES = 14;
+    async function fromPath(it) {
+      const C = window.Capacitor;
+      const info = await cutCall('inspect', { path: it.path, frames: FRAMES, height: 112 });
+      return {
+        key: ++keys, src: C.convertFileSrc(it.path), path: it.path, type: it.type || 'video/quicktime',
+        dur: +info.duration || 0, w: +info.w || 0, h: +info.h || 0, audio: !!info.audio,
+        frames: (info.frames || []).map(f => f ? `data:image/jpeg;base64,${f}` : ''),
+      };
+    }
+    // The web's way: the length and shape off a <video>, the frames drawn off
+    // it, seeked around behind the loading shimmer.
+    async function fromFile(f) {
+      const v = vids[1 - on];
+      const url = URL.createObjectURL(f);
+      v._src = url; v._clip = null; v.src = url; v.muted = true;
+      const meta = await loadClipMeta(v);
+      const c = { key: ++keys, src: url, file: f, type: f.type || 'video/mp4', dur: meta.duration,
+        known: meta.known, w: meta.w, h: meta.h, audio: true, frames: [] };
+      if (meta.known && meta.duration <= MAX_SOURCE_SEC) c.frames = await drawFrames(v, c.dur, FRAMES);
+      return c;
+    }
+    async function drawFrames(v, dur, n) {
+      const w = v.videoWidth || 16, h = v.videoHeight || 9;
+      const th = 112, tw = Math.max(1, Math.round(th * w / h));
+      // A never-played <video> draws to a canvas as transparent on iOS
+      // WebKit, so it plays a moment first (muted, behind the shimmer).
       try {
-        await trimVideo.play();
+        await v.play();
         await new Promise((res) => {
           const tm = setTimeout(res, 350);
-          if (typeof trimVideo.requestVideoFrameCallback === 'function')
-            trimVideo.requestVideoFrameCallback(() => { clearTimeout(tm); res(); });
+          if (typeof v.requestVideoFrameCallback === 'function') v.requestVideoFrameCallback(() => { clearTimeout(tm); res(); });
         });
       } catch {}
-      trimVideo.pause();
-      for (let i = 0; i < cells.length; i++) {
-        const t = Math.min((i + 0.5) * tD / cells.length, Math.max(0, tD - 0.05));
-        await seekPaint(trimVideo, t, 900);
+      v.pause();
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        await seekPaint(v, Math.min((i + 0.5) * dur / n, Math.max(0, dur - 0.05)), 900);
         try {
-          const c = document.createElement('canvas'); c.width = tw; c.height = th;
-          const g = c.getContext('2d');
-          g.drawImage(trimVideo, 0, 0, tw, th);
-          // A failed WebKit draw leaves the canvas transparent, which a JPEG data
-          // URL would flatten to a solid black tile — so gate on ALPHA, not
-          // colour. Checking colour here would also throw away genuinely dark
-          // frames (night clips, letterboxed edges), which is why the reel could
-          // come up all-neutral on iPhone.
-          const px = g.getImageData(tw >> 1, th >> 1, 1, 1).data;
-          if (px[3]) cells[i].style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.7)})`;
-        } catch {}
+          const cv = document.createElement('canvas'); cv.width = tw; cv.height = th;
+          const g = cv.getContext('2d');
+          g.drawImage(v, 0, 0, tw, th);
+          // Gate on ALPHA: a failed WebKit draw is transparent, a dark frame is not.
+          out.push(g.getImageData(tw >> 1, th >> 1, 1, 1).data[3] ? cv.toDataURL('image/jpeg', 0.7) : '');
+        } catch { out.push(''); }
       }
+      return out;
     }
 
-    // Derive [tStart,tEnd] from the current scroll + selLen, and reflect it onto the
-    // frame width, the dimming scrims, the ticks, the duration pill, and videoCapture
-    // (so Post always cuts the currently-shown selection). The frame is CSS-centered;
-    // everything else is positioned to line up with it.
-    function layoutReel() {
-      if (!tD) return;
-      const centerTime = (reel.scrollLeft + frameW0 / 2) / PPS;
-      tStart = clamp(centerTime - selLen / 2, 0, Math.max(0, tD - selLen));
-      tEnd = Math.min(tD, tStart + selLen);
-      const frameW = selLen * PPS;
-      const frameLeft = (vw - frameW) / 2;
-      reelFrame.style.width = frameW + 'px';
-      reelScrimL.style.left = '0'; reelScrimL.style.width = Math.max(0, frameLeft) + 'px';
-      reelScrimR.style.left = (frameLeft + frameW) + 'px';
-      reelScrimR.style.width = Math.max(0, vw - frameLeft - frameW) + 'px';
-      trimDur.textContent = fmtClip(tEnd - tStart);
-      reelFrame.setAttribute('aria-valuetext',
-        `${fmtClip(tEnd - tStart)} selected, from ${fmtClip(tStart)} to ${fmtClip(tEnd)}`);
-      // Ticks ride with the reel (they live in a non-scrolling strip).
-      const sx = reel.scrollLeft;
-      for (const el of reelTicks.children) el.style.transform = `translateX(calc(-50% - ${sx}px))`;
-      if (videoCapture) { videoCapture.start = tStart; videoCapture.end = tEnd; }
-    }
-
-    // Move the preview to time t and reposition the playhead (used by scroll, drag,
-    // and the loop reset).
-    const scrubTo = (t) => { try { trimVideo.currentTime = t; } catch {} positionPlayhead(); };
-    // The playhead lives inside the fixed centered frame, tracking the fraction of
-    // the way through the selected window.
-    const positionPlayhead = () => {
-      if (!tD || !selLen) return;
-      const f = clamp((trimVideo.currentTime - tStart) / selLen, 0, 1);
-      const frameW = selLen * PPS, frameLeft = (vw - frameW) / 2;
-      reelPlay.style.left = (frameLeft + f * frameW) + 'px';
-    };
-
-    // Scroll the reel → move the window through the clip (the frame stays centered).
-    // Scrubbing the preview live as you scroll gives the "scroll through the video"
-    // feel. Gated on tPlaying so the programmatic scrollLeft reset in buildReel (and
-    // any scroll before a clip is loaded) doesn't scrub.
-    reel.addEventListener('scroll', () => {
-      if (dragging || !tPlaying) return;
-      layoutReel();
-      scrubTo(tStart);
-    });
-
-    // Loop preview playback inside [tStart,tEnd]; the playhead tracks position inside
-    // the frame. Driven per-frame off rAF — not `timeupdate` (only ~4x/sec, the clip
-    // would visibly overrun tEnd before looping) and not requestVideoFrameCallback,
-    // which iOS WebKit stalls (same lesson as the re-encode draw loop): a stalled
-    // tick means nothing clamps playback to the window, so the looping preview
-    // drifts off the trimmer's selection entirely.
-    const previewTick = () => {
-      if (!trimVideo.isConnected) return;   // surface torn down — end this loop (a remount wires a fresh one)
-      if (tD && tPlaying && !dragging) {
-        // Loop the instant we reach the window's end (or fall before its start).
-        if (trimVideo.currentTime >= tEnd || trimVideo.currentTime < tStart - 0.1) {
-          trimVideo.currentTime = tStart;
-        }
-        positionPlayhead();
-      }
-      requestAnimationFrame(previewTick);
-    };
-    requestAnimationFrame(previewTick);
-
-    trimSound.addEventListener('click', () => {
-      trimVideo.muted = !trimVideo.muted;
-      trimSound.setAttribute('aria-pressed', String(!trimVideo.muted));
-      trimSound.innerHTML = svgIcon(trimVideo.muted ? 'mute' : 'sound', 'trim-sound-ico');
-    });
-
-    // ── Handle drag: change the window's length around its centre ──────────────
-    // The reel stays put; only the frame grows/shrinks. The dragged handle tracks the
-    // finger 1:1, and because the frame is centred the window grows symmetrically —
-    // so selLen changes by twice the drag. Clamped to [1s, min(10s, clip)].
-    reelFrame.querySelectorAll('.reel-handle').forEach((hb) => {
-      hb.addEventListener('pointerdown', (e) => {
-        if (!tD) return;
-        dragging = { edge: hb.dataset.edge, x: e.clientX, len0: selLen };
-        hb.setPointerCapture?.(e.pointerId);
-        e.preventDefault();
-      });
-      hb.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        const dSec = (e.clientX - dragging.x) / (PPS || 1);
-        const delta = dragging.edge === 'r' ? dSec : -dSec;
-        selLen = clamp(dragging.len0 + delta * 2, Math.min(TRIM_MIN_SEC, tD), Math.min(MAX_CLIP_SEC, tD));
-        layoutReel();
-        // Scrub to the edge being dragged so you see the exact frame (the loop is
-        // paused while dragging).
-        scrubTo(dragging.edge === 'r' ? Math.max(0, tEnd - 0.06) : tStart);
-      });
-      const end = () => { if (dragging) { dragging = null; scrubTo(tStart); trimVideo.play().catch(() => {}); } };
-      hb.addEventListener('pointerup', end);
-      hb.addEventListener('pointercancel', end);
-    });
-
-    async function handleLibraryVideo(f) {
-      if (f.size > MAX_UPLOAD_BYTES) {
-        // We upload the original (a trim is a play-window, not a cut), so a source
-        // over the bucket ceiling can never post — bounce it up front, not after
-        // the trim dance. Speak to size, since length alone is fine.
-        showPickError('That clip is over 150 MB. Please pick a shorter or smaller clip.');
+    /* NEW CLIPS SHARE THE POST'S 15 SECONDS. A first clip alone takes all of
+       them (its own length, if shorter). After that each new clip comes in at
+       an even share, the 15 seconds over how many clips the post will hold
+       (or its own length, if shorter), and when the post hasn't that much
+       room the clips already in it that run LONGER than the share give it
+       up, from their ends, in proportion. A clip already at or under the
+       share is never touched, so a careful trim stays put. Without this, one
+       long clip filled the post and the + went with it: stitching was a
+       thing you'd never find. */
+    function makeRoom(fresh) {
+      if (!clips.length && fresh.length === 1) {
+        const c = fresh[0];
+        c.start = 0;
+        c.end = Math.min(c.dur, MAX_CLIP_SEC);
+        clips.push(c);
         return;
       }
-      const err = errEl();
-      if (err) err.textContent = '';
-      // Any length is fine — the trim surface enforces the ≤10s cut.
-      await finishVideo(f);
+      const share = MAX_CLIP_SEC / (clips.length + fresh.length);
+      fresh.forEach((c) => { c.start = 0; c.end = Math.min(c.dur, share); });
+      const need = fresh.reduce((s, c) => s + len(c), 0) - left();
+      if (need > 0.001) {
+        const over = clips.map(c => Math.max(0, len(c) - share));
+        const spare = over.reduce((s, x) => s + x, 0);
+        const k = spare > 0 ? Math.min(1, need / spare) : 0;
+        clips.forEach((c, i) => { c.end -= over[i] * k; });
+      }
+      clips.push(...fresh);
     }
-    return api;
+
+    // `items`: `{ path, type }` from native, or `{ file }` from the web's picker.
+    async function add(items, { fresh } = {}) {
+      if (!items || !items.length) return;
+      if (fresh) clear(true);
+      el.hidden = false;
+      run();
+      if (!clips.length) el.classList.add('ed--loading');
+      busy++;
+      changed();
+      paintPost();
+      paintPlaying();
+      const said = (m) => hooks.error?.(m);
+      let tooLong = false, full = false, unreadable = false;
+      const got = [];
+      for (const it of items) {
+        if (!alive()) return;
+        // The web stitches nothing: a second clip replaces the first.
+        if (it.file && (clips.length || got.length)) { clear(true); got.length = 0; }
+        if (clips.length + got.length >= MAX_CLIPS) { full = true; break; }
+        let c = null;
+        try { c = it.path ? await fromPath(it) : await fromFile(it.file); } catch {}
+        if (!alive()) return;
+        if (!c || !(c.dur > 0)) { unreadable = true; continue; }
+        if (c.known !== false && c.dur > MAX_SOURCE_SEC) { tooLong = true; continue; }
+        got.push(c);
+      }
+      if (got.length) {
+        makeRoom(got);
+        sel = clips.length - got.length;   // the first of them, playing from its start
+      }
+      busy--;
+      if (!busy) el.classList.remove('ed--loading');
+      if (tooLong) said('That video is longer than 3 minutes. Trim it in Photos first, or pick a shorter one.');
+      else if (unreadable) said('Couldn’t read that clip. Try another.');
+      else if (full) said('That’s ten clips, the most one post holds.');
+      if (!clips.length) { if (!busy) { changed(); hooks.emptied?.(); } return; }
+      paintAll();
+      changed();
+      // A new clip plays from its own start, so what just landed is what you see.
+      show(sel, clips[sel].start);
+      play();
+    }
+
+    /* ── Picking, trimming ─────────────────────────────────────────────── */
+    function select(i, jump) {
+      if (i === sel && !jump) return;
+      sel = clamp(i, 0, clips.length - 1);
+      barsEl.querySelectorAll('.ed-bar').forEach((b) => {
+        const on = +b.dataset.i === sel;
+        b.classList.toggle('is-sel', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      paintFilm();
+      if (jump) { show(sel, clips[sel].start); play(); }
+    }
+
+    let drag = null;
+    trimEl.addEventListener('pointerdown', (e) => {
+      const c = clips[sel];
+      if (!c || drag || (e.button && e.button > 0)) return;
+      const r = trimEl.getBoundingClientRect(), x = e.clientX - r.left, pps = filmW() / c.dur;
+      const x0 = END + c.start * pps, x1 = END + c.end * pps;
+      const kind = e.target.closest('.ed-end--l') ? 'l'
+        : e.target.closest('.ed-end--r') ? 'r'
+        : (x >= x0 && x <= x1) ? 'mid' : 'tap';
+      drag = { kind, id: e.pointerId, x0: e.clientX, y0: e.clientY, x, start: c.start, end: c.end, pps, moved: false, capped: false };
+      if (kind !== 'tap') { try { trimEl.setPointerCapture(e.pointerId); } catch {} }
+    });
+    trimEl.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x0;
+      if (!drag.moved) {
+        if (Math.abs(dx) < 4 && Math.abs(e.clientY - drag.y0) < 4) return;
+        if (drag.kind === 'tap') { drag = null; return; }   // a swipe on the film is the page's
+        drag.moved = true;
+        held = 'trim';
+        trimEl.classList.add('is-trimming');
+        if (cur !== sel) show(sel, clips[sel].start);
+        play();
+      }
+      const c = clips[sel], dt = dx / drag.pps;
+      const min = Math.min(TRIM_MIN_SEC, c.dur), most = roomFor(sel);
+      let want;
+      if (drag.kind === 'l') {
+        want = drag.end - (drag.start + dt);
+        c.start = clamp(drag.start + dt, Math.max(0, drag.end - most), drag.end - min);
+        seek(vids[on], c.start);
+      } else if (drag.kind === 'r') {
+        want = drag.end + dt - drag.start;
+        c.end = clamp(drag.end + dt, drag.start + min, Math.min(c.dur, drag.start + most));
+        seek(vids[on], Math.max(c.start, c.end - 0.05));
+      } else {
+        const L = drag.end - drag.start;
+        c.start = clamp(drag.start + dt, 0, c.dur - L);
+        c.end = c.start + L;
+        seek(vids[on], c.start);
+      }
+      // The post's 15 seconds, felt once as the end meets them.
+      if (want != null && most < c.dur - 0.01) {
+        if (want > most + 0.02 && !drag.capped) { drag.capped = true; hapticTap('LIGHT'); }
+        else if (want < most - 0.3) drag.capped = false;
+      }
+      layoutTrim();
+      sizePost();
+    });
+    const endTrim = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag;
+      drag = null;
+      const c = clips[sel];
+      if (!d.moved) {
+        if (d.kind !== 'tap' || e.type === 'pointercancel') return;
+        // A tap on the film brings the window there, centred on the tap.
+        const L = len(c), t = (d.x - END) / d.pps;
+        c.start = clamp(t - L / 2, 0, c.dur - L);
+        c.end = c.start + L;
+        layoutTrim();
+      }
+      held = null;
+      trimEl.classList.remove('is-trimming');
+      paintPost();
+      changed();
+      show(sel, c.start);
+      play();
+    };
+    trimEl.addEventListener('pointerup', endTrim);
+    trimEl.addEventListener('pointercancel', endTrim);
+    // The ends by keyboard: a tenth of a second a press.
+    winEl.addEventListener('keydown', (e) => {
+      const end = e.target.closest('.ed-end');
+      if (!end || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      const c = clips[sel], d = e.key === 'ArrowLeft' ? -0.1 : 0.1;
+      const min = Math.min(TRIM_MIN_SEC, c.dur), most = roomFor(sel);
+      if (end.classList.contains('ed-end--l')) c.start = clamp(c.start + d, Math.max(0, c.end - most), c.end - min);
+      else c.end = clamp(c.end + d, c.start + min, Math.min(c.dur, c.start + most));
+      layoutTrim();
+      paintPost();
+      changed();
+    });
+
+    /* ── The post's bar: tap to pick, drag to scrub, hold to move ──────── */
+    let g = null;
+    const barAt = (x) => {
+      const bs = [...barsEl.querySelectorAll('.ed-bar')];
+      return bs.find(b => x >= b.offsetLeft && x <= b.offsetLeft + b.offsetWidth) || null;
+    };
+    // The post time under an x on the bar: within a clip, its share of it.
+    function timeAtX(x) {
+      const bs = [...barsEl.querySelectorAll('.ed-bar')];
+      if (!bs.length) return 0;
+      let acc = 0;
+      for (let i = 0; i < bs.length; i++) {
+        const b = bs[i], c = clips[i];
+        if (x < b.offsetLeft + b.offsetWidth || i === bs.length - 1) {
+          return acc + clamp((x - b.offsetLeft) / (b.offsetWidth || 1), 0, 1) * len(c);
+        }
+        acc += len(c);
+      }
+      return acc;
+    }
+    postEl.addEventListener('pointerdown', (e) => {
+      if (g || (e.button && e.button > 0) || !clips.length) return;
+      const bar = e.target.closest('.ed-bar'), room = e.target.closest('.ed-room');
+      g = { id: e.pointerId, x0: e.clientX, y0: e.clientY, bar, room, i: bar ? +bar.dataset.i : -1, mode: null, timer: 0 };
+      if (bar && clips.length > 1) g.timer = setTimeout(() => lift(), 320);
+    });
+    postEl.addEventListener('pointermove', (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+      if (!g.mode) {
+        if (Math.hypot(dx, dy) < 8) return;
+        clearTimeout(g.timer);
+        if (Math.abs(dy) > Math.abs(dx) || g.room) { g = null; return; }   // the page's scroll
+        g.mode = 'scrub';
+        held = 'scrub';
+        wantPlay = false;   // a scrub is aiming, so it stays where it's left
+        try { postEl.setPointerCapture(e.pointerId); } catch {}
+      }
+      if (g.mode === 'scrub') {
+        const x = e.clientX - barsEl.getBoundingClientRect().left;
+        seekPost(timeAtX(x), false);
+      } else if (g.mode === 'lift') {
+        moveLift(dx);
+      }
+    });
+    const endPost = (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const s = g;
+      g = null;
+      clearTimeout(s.timer);
+      if (s.mode === 'lift') { dropLift(e.type === 'pointercancel'); return; }
+      if (s.mode === 'scrub') { held = null; play(); return; }
+      if (e.type === 'pointercancel') return;
+      if (s.room) { openAdd(); return; }
+      if (s.bar) { hapticTap('LIGHT'); select(s.i, true); }
+    };
+    postEl.addEventListener('pointerup', endPost);
+    postEl.addEventListener('pointercancel', endPost);
+    // A click is the pointer's job here; keyboard activation still arrives as one.
+    postEl.addEventListener('click', (e) => {
+      if (e.detail) return;
+      const bar = e.target.closest('.ed-bar');
+      if (e.target.closest('.ed-room')) openAdd();
+      else if (bar) select(+bar.dataset.i, true);
+    });
+
+    // Moving a clip. The lifted bar follows the finger and the others part
+    // for it, each on its own transform; the drop reorders and the bars
+    // glide from where they were drawn to their new places.
+    let lifted = null;
+    function lift() {
+      if (!g || g.mode) return;
+      const bs = [...barsEl.querySelectorAll('.ed-bar')];
+      lifted = { i: g.i, bars: bs, left: bs.map(b => b.offsetLeft), w: bs.map(b => b.offsetWidth), to: g.i };
+      g.mode = 'lift';
+      held = 'lift';
+      try { postEl.setPointerCapture(g.id); } catch {}
+      bs[g.i].classList.add('is-lifted');
+      headEl.hidden = true;
+      hapticTap('LIGHT');
+      play();
+    }
+    function moveLift(dx) {
+      const L = lifted, a = L.i, n = L.bars.length;
+      const lo = -L.left[a], hi = (L.left[n - 1] + L.w[n - 1]) - (L.left[a] + L.w[a]);
+      dx = clamp(dx, lo, hi);
+      const mid = L.left[a] + L.w[a] / 2 + dx;
+      // Where it would land: past the middle of every other bar it has crossed.
+      let to = 0;
+      for (let k = 0; k < n; k++) if (k !== a && L.left[k] + L.w[k] / 2 < mid) to++;
+      L.to = to;
+      const order = L.bars.map((_, k) => k).filter(k => k !== a);
+      order.splice(to, 0, a);
+      let x = 0;
+      order.forEach((k) => {
+        if (k !== a) L.bars[k].style.transform = `translateX(${(x - L.left[k]).toFixed(1)}px)`;
+        x += L.w[k] + GAP;
+      });
+      L.bars[a].style.transform = `translateX(${dx.toFixed(1)}px) scale(1.06)`;
+    }
+    function dropLift(cancel) {
+      const L = lifted;
+      lifted = null;
+      held = null;
+      if (!L) return;
+      // Where each clip is drawn right now, transforms and all, by its key.
+      const from = new Map(L.bars.map((b, k) => [clips[k].key, b.getBoundingClientRect().left]));
+      const moved = !cancel && L.to !== L.i;
+      if (moved) {
+        const curClip = clips[cur];
+        const [c] = clips.splice(L.i, 1);
+        clips.splice(L.to, 0, c);
+        sel = L.to;
+        cur = Math.max(0, clips.indexOf(curClip));
+      }
+      paintPost();
+      paintFilm();
+      // The glide: each clip from where it was drawn to its place now.
+      if (!prefersReduced()) {
+        barsEl.querySelectorAll('.ed-bar').forEach((b) => {
+          const x = from.get(clips[+b.dataset.i].key);
+          if (x == null) return;
+          const dx = x - b.getBoundingClientRect().left;
+          if (Math.abs(dx) < 1) return;
+          b.animate([{ transform: `translateX(${dx.toFixed(1)}px)` }, { transform: 'none' }],
+            { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+        });
+      }
+      if (moved) changed();
+      play();
+    }
+
+    /* ── Acts ──────────────────────────────────────────────────────────── */
+    // Split cuts the clip under the playhead there, if both halves can stand.
+    function splitAt() {
+      if (!native() || clips.length >= MAX_CLIPS) return null;
+      const c = clips[cur], v = vids[on];
+      if (!c || v._clip !== c) return null;
+      const t = v.currentTime;
+      return (t - c.start >= TRIM_MIN_SEC && c.end - t >= TRIM_MIN_SEC) ? t : null;
+    }
+    splitBtn.addEventListener('click', () => {
+      const t = splitAt();
+      if (t == null) { hooks.error?.('Move the playhead into a clip to split it there.'); return; }
+      hapticTap('LIGHT');
+      const c = clips[cur];
+      const right = { ...c, key: ++keys, start: t };
+      c.end = t;
+      clips.splice(cur + 1, 0, right);
+      sel = cur + 1;
+      paintAll();
+      changed();
+      show(sel, right.start);
+    });
+    removeBtn.addEventListener('click', () => {
+      if (clips.length < 2) return;
+      hapticTap('LIGHT');
+      drop(sel);
+    });
+    function drop(i) {
+      const [gone] = clips.splice(i, 1);
+      vids.forEach(v => { if (v._clip === gone) v._clip = null; });
+      sel = clamp(i, 0, clips.length - 1);
+      if (!clips.length) { clear(); hooks.emptied?.(); return; }
+      paintAll();
+      changed();
+      show(sel, clips[sel].start);
+    }
+    // The x: one clip goes at once; a post of several asks first, since
+    // it would throw the whole edit away.
+    xBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    xBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hapticTap('LIGHT');
+      const out = () => { clear(); hooks.emptied?.(); };
+      if (clips.length < 2) { out(); return; }
+      openSheet({ title: 'Remove these clips?', items: [{ label: 'Remove all clips', icon: 'trash', danger: true, run: out }] });
+    });
+    soundBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      muted = !muted;
+      vids.forEach(v => { v.muted = muted; });
+      soundBtn.setAttribute('aria-pressed', String(!muted));
+      soundBtn.setAttribute('aria-label', muted ? 'Play with sound' : 'Mute');
+      soundBtn.innerHTML = svgIcon(muted ? 'mute' : 'sound', 'frame-sound-ico');
+      if (!muted && !wantPlay) { wantPlay = true; play(); }
+    });
+    // A tap on the preview pauses it, and plays it again.
+    stage.addEventListener('click', (e) => {
+      if (e.target.closest('button') || !clips.length) return;
+      wantPlay = !wantPlay;
+      play();
+    });
+
+    // Add: the camera, or the library's clips. Native only, like the bar.
+    let asking = false;
+    function openAdd() {
+      if (!canAdd() || asking || sheetOpen) return;
+      hapticTap('LIGHT');
+      openSheet({ items: [
+        { label: 'Record a clip', icon: 'video', run: () => record() },
+        { label: 'Choose clips', icon: 'image', run: () => choose() },
+      ] });
+    }
+    async function record() {
+      if (asking) return;
+      asking = true;
+      let r = null;
+      try { r = await cutCall('record', { max: Math.max(1, left()) }); } catch {}
+      asking = false;
+      if (!alive() || !r || r.cancelled) return;
+      if (r.error || !r.path) { hooks.error?.(r.error || 'Couldn’t keep that clip. Try again.'); return; }
+      add([{ path: r.path, type: r.type }]);
+    }
+    async function choose() {
+      if (asking) return;
+      asking = true;
+      let r = null;
+      try {
+        r = await window.Capacitor.nativePromise('TriaPhotos', 'pick',
+          { limit: Math.max(1, MAX_CLIPS - clips.length), videos: true, selected: [] });
+      } catch {}
+      asking = false;
+      if (!alive() || !r || r.cancelled || !Array.isArray(r.items)) return;
+      const got = r.items.filter(it => it.path);
+      if (got.length < r.items.length) hooks.error?.((r.items.find(it => it.error) || {}).error || 'Couldn’t read that clip. Try another.');
+      add(got);
+    }
+
+    /* ── Life ──────────────────────────────────────────────────────────── */
+    // Off screen, the preview rests.
+    const io = 'IntersectionObserver' in window
+      ? new IntersectionObserver(([en]) => { inView = !!(en && en.isIntersecting); play(); }, { threshold: 0.2 })
+      : null;
+    io?.observe(stage);
+    const ro = 'ResizeObserver' in window ? new ResizeObserver(() => { if (clips.length) { paintPost(); paintFilm(); } }) : null;
+    ro?.observe(el);
+    const run = () => { if (!ticking) { ticking = true; requestAnimationFrame(tick); } };
+
+    // Every clip goes: a photo landing, a fresh pick, the post out. `quiet`
+    // when something else is about to say what the post holds.
+    function clear(quiet) {
+      held = null;
+      clips.forEach(c => { if (c.file && c.src) { try { URL.revokeObjectURL(c.src); } catch {} } });
+      const paths = [...new Set(clips.filter(c => c.path).map(c => c.path))];
+      clips = []; sel = 0; cur = 0;
+      vids.forEach(v => {
+        v.pause();
+        v._clip = null; v._src = null; v._want = null; v._seeking = false;
+        // Drop the source so iOS frees the decoder, not just pauses it.
+        try { v.removeAttribute('src'); v.load(); } catch {}
+      });
+      barsEl.replaceChildren();
+      filmEl.replaceChildren();
+      el.classList.remove('ed--loading');
+      // Their files too, by name: the next pick's may be landing beside them.
+      if (paths.length && clipCutter()) cutCall('clear', { paths }).catch(() => {});
+      if (!quiet) changed();
+    }
+
+    // The cut, on Share: every clip's window, end to end, one file.
+    async function cut(onProgress) {
+      listenClipProgress();
+      clipProgressTo = onProgress || null;
+      const c0 = clips[0];
+      try {
+        return await cutCall('compose', {
+          clips: clips.map(c => ({ path: c.path, start: c.start, end: c.end })),
+          width: c0.w, height: c0.h,
+        });
+      } finally {
+        clipProgressTo = null;
+      }
+    }
+
+    return {
+      add,
+      clear,
+      rollMode(r) { roll = !!r; xBtn.hidden = !roll; },
+      // The surface folding or the page leaving: every clip goes, and the
+      // editor stays ready for the next one while its element is on the page.
+      teardown() { clear(); },
+    };
   }
 
   // Read a just-loaded clip's duration + native size straight off the preview
@@ -22940,18 +23532,12 @@
     });
   }
 
-  // Short-clip duration label: "8.2s" reads better than "0:08" for a ≤10s window.
+  // Short-clip duration label: "8.2s" reads better than "0:08" for a post of
+  // 15 seconds at most.
   function fmtClip(sec) {
     const s = Math.max(0, sec || 0);
     return s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
                    : `${s.toFixed(1)}s`;
-  }
-
-  // Reel timeline tick — whole-second clock time ("0:05", "1:30"). (fmtClip is for
-  // the duration pill and reads "8.2s"; the ticks want clock time instead.)
-  function tickLabel(sec) {
-    const s = Math.max(0, Math.floor(sec || 0));
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
   // A whole-image preview that keeps the photo's native aspect ratio. export()
@@ -23259,6 +23845,7 @@
     if (quotingPost) return submitQuote(errEl);
 
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
+    let clipPost = null;   // the clip editor's state, when this is a clip (clipPostData)
     // The song this one replaces, read before the new one exists (myWeekSong).
     // A song in a Moment is for the day and replaces nothing.
     // Since 2026-11-06 no song replaces another (songs are Moments), so this
@@ -23327,34 +23914,10 @@
       data.title = val('c-title');
       if (!cropper && !videoCapture) { errEl.textContent = 'Capture or choose a frame first.'; return; }
       if (videoCapture) {
-        const vc = videoCapture;
-        // We upload the ORIGINAL clip — no in-browser re-encode (that real-time pass
-        // is what stripped audio on iOS Safari). A trim is stored as a play-window,
-        // not a cut, so the original's size is the real gate: catch it here, before
-        // the upload, with copy that says what to do rather than a generic server
-        // error. The trim surface stays live (we haven't freed the decoder yet), so
-        // they can drag a shorter selection or pick again.
-        if (vc.blob.size > MAX_UPLOAD_BYTES) {
-          errEl.textContent = 'That clip is over 150 MB. Please choose a shorter or smaller clip.';
-          return;
-        }
-        data.video = vc.blob;
-        data.imageDims = vc.dims || null;   // native size → filename -WxH stamp + feed reserve box
-        // Store a play-window unless the post is simply a whole, known-≤10s clip:
-        // a moved start, an unmeasured length, or an over-cap source all get windowed
-        // to [start, start+10] so the feed + lightbox loop just that stretch.
-        const windowed = vc.start > 0.05 || !vc.durationKnown || vc.duration > MAX_CLIP_SEC + 0.1;
-        if (windowed) data.clip = { start: vc.start, end: Math.min(vc.end, vc.start + MAX_CLIP_SEC) };
-        // Free the preview decoder before we grab the poster (iOS hands out one).
-        if (stopActiveCapture) stopActiveCapture();
-        // Poster + tint from the window's first frame, so the feed still opens on the
-        // moment the clip starts on. Best-effort — the feed self-paints via #t= if
-        // this fails. The row's dims come from vc.dims (native), not this downscaled
-        // still, so the reserve box keeps the clip's true aspect.
-        try {
-          const g = await grabPosterFromBlob(vc.blob, { atSec: vc.start, maxEdge: 1280 });
-          if (g.dataUrl) { data.poster = g.dataUrl; data.imageTint = await tintFromDataUrl(g.dataUrl); }
-        } catch {}
+        // The clip's media is made after the guidelines gate below (a cut
+        // takes a few seconds, and is wasted on a post that can't go out).
+        if (videoCapture.loading || !videoCapture.clips.length) { errEl.textContent = 'Your clip is still getting ready.'; return; }
+        clipPost = videoCapture;
       } else if (stills.length > 1) {
         // A carousel: every still exported in deal order, cover first. `dims` is
         // read after export() in the same literal, which is what sets it.
@@ -23400,6 +23963,21 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
     errEl.textContent = '';
 
+    // A clip: its cut (in the app) or its original, ready to go up. One bar
+    // for the whole wait, the cut its first quarter, the upload the rest.
+    const failed = () => {
+      clearPostProgress();
+      hapticEvent('ERROR');
+      if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
+      clipPost?.resume?.();
+    };
+    let upFrom = 0;
+    if (clipPost) {
+      const made = await clipPostData(clipPost, data, errEl).catch(() => false);
+      if (!made) { failed(); return; }
+      upFrom = clipPost.cut ? 0.25 : 0;
+    }
+
     // A video shows a real, byte-level upload bar (it's the big transfer). Photos
     // and text posts are small enough that a spinner-word says enough; the bar
     // stays hidden for them.
@@ -23408,16 +23986,16 @@
     // reading "Sharing…" with the whole post sitting in the form and no way to
     // send it. The worst freeze in the app, and the least visible.
     const res = await Store.createPost(data, {
-      onProgress: data.video ? (p) => setPostProgress('Uploading', p) : undefined,
+      onProgress: data.video ? (p) => setPostProgress('Uploading', upFrom + p * (1 - upFrom)) : undefined,
     }).catch(() => null);
     if (!res || !res.ok) {
       errEl.textContent = (res && res.error) || 'Couldn’t share that, try again.';
-      clearPostProgress();
-      hapticEvent('ERROR');
-      if (btn) { btn.disabled = false; btn.textContent = 'Share'; }
+      failed();
       return;
     }
     clearPostProgress();
+    // The clips and their cut are spent: the folder goes.
+    if (clipPost && clipCutter()) cutCall('clear').catch(() => {});
     // Publishing earns the twinkle (Zoe, 2026-10-23: the new face's sparkly
     // haptic, on new posts too, in place of the one success buzz). It's the
     // end of a piece of work, not an acknowledgement of a tap, and it lands
@@ -23516,6 +24094,56 @@
     if (res.post) justPostedId = String(res.post.id);
     pubType = 'note';
     go('#/');
+  }
+
+  // A clip post's media, made on Share. In the app it is the CUT: every clip's
+  // window end to end in one file (TriaClipPlugin.swift) with its own first
+  // frame for the poster, and nothing stamped on the name, since the file IS
+  // the post. On the web, or if one clip's cut fails, it is the original with
+  // its window stamped on (`data.clip`), the way every clip posted before.
+  // Resolves false having said why in `errEl`.
+  async function clipPostData(vc, data, errEl) {
+    vc.pause?.();
+    if (vc.cut) {
+      setPostProgress('Preparing', 0);
+      let out = null;
+      try { out = await vc.cut((p) => setPostProgress('Preparing', p * 0.25)); } catch {}
+      if (out && out.path) {
+        let blob = null;
+        try { blob = await (await fetch(window.Capacitor.convertFileSrc(out.path))).blob(); } catch {}
+        if (blob && blob.size) {
+          data.video = blob.type === 'video/mp4' ? blob : new Blob([blob], { type: 'video/mp4' });
+          data.imageDims = { w: Math.round(out.w), h: Math.round(out.h) };
+          if (out.poster) {
+            data.poster = `data:image/jpeg;base64,${out.poster}`;
+            data.imageTint = await tintFromDataUrl(data.poster);
+          }
+          return true;
+        }
+      }
+      if (vc.clips.length > 1) { errEl.textContent = 'Couldn’t put your clips together. Try again.'; return false; }
+    }
+    const c = vc.clips[0];
+    let src = c.file || null;
+    if (!src && c.path) {
+      try { src = await (await fetch(window.Capacitor.convertFileSrc(c.path))).blob(); } catch {}
+    }
+    if (!src) { errEl.textContent = 'Couldn’t read that clip. Try another.'; return false; }
+    if (src.size > MAX_UPLOAD_BYTES) { errEl.textContent = 'That clip is over 150 MB. Please choose a shorter or smaller clip.'; return false; }
+    data.video = src.type ? src : new Blob([src], { type: c.type || 'video/mp4' });
+    data.imageDims = (c.w && c.h) ? { w: Math.round(c.w), h: Math.round(c.h) } : null;
+    // A window unless the post is the whole file: a moved start, a moved END
+    // (a clip trimmed only at its end used to post whole), an unmeasured
+    // length, or a source over the cap.
+    const windowed = c.start > 0.05 || c.end < c.dur - 0.05 || c.known === false || c.dur > MAX_CLIP_SEC + 0.1;
+    if (windowed) data.clip = { start: c.start, end: Math.min(c.end, c.start + MAX_CLIP_SEC) };
+    // The poster from the window's first frame, best effort: the feed paints
+    // the clip's own first frame through #t= without one.
+    try {
+      const g = await grabPosterFromBlob(data.video, { atSec: c.start, maxEdge: 1280 });
+      if (g.dataUrl) { data.poster = g.dataUrl; data.imageTint = await tintFromDataUrl(g.dataUrl); }
+    } catch {}
+    return true;
   }
 
   // The composer's progress affordance for a video post's network upload (the big
@@ -23638,8 +24266,18 @@
     // original once that has arrived and decoded (below, after the flight).
     const shown = !isVideo && originEl ? (originEl.currentSrc || originEl.src || '') : '';
     const first = shown && shown !== src && fullSrc(shown) === src ? shown : src;
+    // A clip wears Tria's controls, not the system's grey strip (2026-11-06,
+    // Zoe: the time bar in the reader's colour): a tap pauses, the sound disc
+    // the feed has, and a scrub bar along the foot in the reader's band.
     lightbox.innerHTML = isVideo
-      ? `<video src="${esc(src + (win ? '#t=' + Math.max(win.start, 0.001) : ''))}" playsinline controls autoplay></video>`
+      ? `<figure class="lb-clip">` +
+          `<video src="${esc(src + (win ? '#t=' + Math.max(win.start, 0.001) : ''))}" playsinline autoplay></video>` +
+          `<span class="frame-play lb-paused" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+          `<button type="button" class="frame-sound lb-sound" aria-label="Mute" aria-pressed="true">${svgIcon('sound', 'frame-sound-ico')}</button>` +
+          `<div class="lb-scrub" role="slider" tabindex="0" aria-label="Where the clip is" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">` +
+            `<span class="lb-track"><span class="lb-fill"></span></span><span class="lb-knob"></span>` +
+          `</div>` +
+        `</figure>`
       : `<img src="${esc(first)}" alt="${esc(alt || '')}">`;
     if (first !== src) {
       const full = new Image();
@@ -23672,13 +24310,14 @@
       });
       syncLbPager();
     }
-    // Native video controls (scrub, pause) must not bubble into the backdrop's
-    // click-to-close; tapping the photo itself, though, still closes as before.
+    // The clip's own controls never reach the backdrop's click-to-close; a tap
+    // on the picture pauses instead (the dim around it still closes).
     if (isVideo) {
-      const v = lightbox.querySelector('video');
-      v.addEventListener('click', e => e.stopPropagation());
+      const fig = lightbox.querySelector('.lb-clip');
+      const v = fig.querySelector('video');
       wireClipWindow(v, win);
-      wireLightboxDrag(v, true);   // swipe-out to dismiss, without stealing the native controls
+      wireLightboxClip(fig, v, win);
+      wireLightboxDrag(fig, true);   // swipe-out to dismiss, from anywhere but the scrub bar
     }
     lbClosing = false;
     lbOrigin = null;
@@ -23727,6 +24366,91 @@
       pic.addEventListener('error', () => { pic.style.opacity = ''; }, { once: true });
     }
   }
+  // The lightbox clip's controls. A tap on the picture pauses and plays it
+  // (the play disc says which), the sound disc is the feed's, and the scrub
+  // bar runs along the foot in the reader's band: its place is the clip's
+  // share of its window (or of the whole file), drawn every frame while it
+  // plays, and a drag holds the clip under the finger and lets it go on from
+  // wherever it was left.
+  function wireLightboxClip(fig, v, win) {
+    const bar = fig.querySelector('.lb-scrub');
+    const fill = fig.querySelector('.lb-fill'), knob = fig.querySelector('.lb-knob');
+    const sound = fig.querySelector('.lb-sound');
+    const cl = (x) => Math.max(0, Math.min(1, x));
+    const span = () => win ? [win.start, win.end] : [0, Number.isFinite(v.duration) ? v.duration : 0];
+    const draw = (f) => {
+      fill.style.transform = `scaleX(${f.toFixed(4)})`;
+      knob.style.left = (f * 100).toFixed(2) + '%';
+      bar.setAttribute('aria-valuenow', String(Math.round(f * 100)));
+    };
+    let scrubbing = false, wasPlaying = false, aim = null;
+    const frame = () => {
+      if (!fig.isConnected) return;
+      if (!scrubbing) {
+        const [a, b] = span();
+        draw(b > a ? cl((v.currentTime - a) / (b - a)) : 0);
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    const sync = () => fig.classList.toggle('is-playing', !v.paused);
+    ['play', 'playing', 'pause'].forEach(ev => v.addEventListener(ev, sync));
+
+    fig.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.target.closest('.lb-sound, .lb-scrub')) return;
+      if (v.paused) v.play().catch(() => {}); else v.pause();
+    });
+    sound.addEventListener('click', (e) => {
+      e.stopPropagation();
+      v.muted = !v.muted;
+      sound.setAttribute('aria-pressed', String(!v.muted));
+      sound.setAttribute('aria-label', v.muted ? 'Play with sound' : 'Mute');
+      sound.innerHTML = svgIcon(v.muted ? 'mute' : 'sound', 'frame-sound-ico');
+    });
+
+    // Where the finger is on the bar, as a time; a quick seek while it moves
+    // (fastSeek lands on the nearest keyframe at once), the exact frame on the lift.
+    const at = (x) => {
+      const r = bar.getBoundingClientRect(), [a, b] = span();
+      const f = cl((x - r.left) / (r.width || 1));
+      draw(f);
+      return a + f * (b - a);
+    };
+    bar.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (!(span()[1] > span()[0])) return;
+      scrubbing = true;
+      wasPlaying = !v.paused;
+      v.pause();
+      fig.classList.add('is-scrubbing');
+      try { bar.setPointerCapture(e.pointerId); } catch {}
+      aim = at(e.clientX);
+      try { v.currentTime = aim; } catch {}
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (!scrubbing) return;
+      aim = at(e.clientX);
+      try { if (typeof v.fastSeek === 'function') v.fastSeek(aim); else v.currentTime = aim; } catch {}
+    });
+    const lift = () => {
+      if (!scrubbing) return;
+      scrubbing = false;
+      fig.classList.remove('is-scrubbing');
+      if (aim != null) { try { v.currentTime = aim; } catch {} }
+      if (wasPlaying) v.play().catch(() => {});
+    };
+    bar.addEventListener('pointerup', lift);
+    bar.addEventListener('pointercancel', lift);
+    bar.addEventListener('click', (e) => e.stopPropagation());
+    bar.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const [a, b] = span();
+      try { v.currentTime = Math.max(a, Math.min(b, v.currentTime + (e.key === 'ArrowLeft' ? -1 : 1))); } catch {}
+    });
+  }
+
   function closeLightbox() {
     if (!lightbox || lbClosing) return;
     lbClosing = true;                 // reset by the next openLightbox
