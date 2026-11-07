@@ -449,7 +449,11 @@ final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
 
 /// Reading a pick into what crosses the bridge, shared by the roll and the sheet.
 enum TriaPhotoLoad {
-    private static var clipsDir: URL { TriaClipCore.dir }
+    /// The clip editor's folder (`TriaClipCore.dir`), named here too so this
+    /// file builds on its own: Xcode once failed to see across to it.
+    private static var clipsDir: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("tria-clips", isDirectory: true)
+    }
 
     /// The clips and their cuts go together, when the editor is done with them.
     static func clearClips() {

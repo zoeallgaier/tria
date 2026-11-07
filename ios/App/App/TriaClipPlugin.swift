@@ -82,9 +82,9 @@ public class TriaClipPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         let shape = CGSize(width: call.getDouble("width") ?? 1080, height: call.getDouble("height") ?? 1920)
-        Task {
+        Task { [weak self] in
             do {
-                let out = try await TriaClipCore.compose(parts, shape: shape) { [weak self] p in
+                let out = try await TriaClipCore.compose(parts, shape: shape) { p in
                     self?.notifyListeners("clipProgress", data: ["p": p])
                 }
                 call.resolve(out)
