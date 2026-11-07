@@ -7842,15 +7842,23 @@
       (f.i === 0 ? linkTilesHtml(p) + pollWidgetHtml(p) + tagChips(p) : '');
     if (p.song) {
       const s = p.song;
-      return `<div class="mv-frame mv-frame--words mv-frame--song"><div class="mv-words">` +
-          `<span class="mv-sleeve${s.art ? ' pin-cover' : ''}"` +
-            `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true">${s.art ? '' : svgIcon('music')}</span>` +
-          `<p class="mv-song-title">${esc(s.title)}</p>` +
-          (songSub(s) ? `<p class="mv-song-sub">${esc(songSub(s))}</p>` : '') +
-          `<a class="mv-listen pill-quiet" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
-            `data-out="system">${svgIcon('music')}<span>Listen</span></a>` +
-          words +
-        `</div></div>`;
+      // ONE LAYOUT FOR EVERY MOMENT (Zoe, 2026-11-06: "all types of moments
+      // should have a consistent layout"): the thing itself centred, here the
+      // sleeve, and its words at the foot on the caption's line, as a picture's.
+      return `<div class="mv-frame mv-frame--song">` +
+          `<div class="mv-song-art"><span class="mv-sleeve${s.art ? ' pin-cover' : ''}"` +
+            `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true">${s.art ? '' : svgIcon('music')}</span></div>` +
+          `<div class="mv-caption">` +
+            `<p class="mv-song-title">${esc(s.title)}</p>` +
+            (songSub(s) ? `<p class="mv-song-sub">${esc(songSub(s))}</p>` : '') +
+            `<a class="mv-listen pill-quiet" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
+              `data-out="system">${svgIcon('music')}<span>Listen</span></a>` +
+            (words
+              ? `<div class="mv-caption-text">${words}</div>` +
+                `<button type="button" class="mv-readmore" aria-expanded="false">Read more</button>`
+              : '') +
+          `</div>` +
+        `</div>`;
     }
     const still = f.src || p.image;
     if (still) {
@@ -7945,7 +7953,8 @@
       const btn = cap.querySelector('.mv-readmore');
       btn.textContent = open ? 'Less' : 'Read more';
       btn.setAttribute('aria-expanded', String(open));
-      if (!open) cap.firstElementChild.scrollTop = 0;
+      const text = cap.querySelector('.mv-caption-text');
+      if (!open && text) text.scrollTop = 0;
     };
 
     // The wash: a photo's or a song's sleeve's own colour on a picture frame

@@ -5833,9 +5833,24 @@ button.poll-option:disabled { cursor: default; }
      width, so a tap anywhere reads as left third or the rest. */
   --mv-col: 36rem;
   --mv-side: max(14px, calc((100% - var(--mv-col)) / 2));
-  --mv-disc: 48px;
-  /* The rail's lane: words are set clear of it, a picture may run under. */
-  --mv-lane: calc(var(--mv-disc) + 12px);
+  /* THE GRID (2026-11-06, Zoe: "make sure its in a nice grid"). Left, the
+     gutter: the face, the dots and every Moment's words start on it. Right,
+     the rail's icons stand on the same gutter as the x, in a lane the words
+     keep clear of. Foot, ONE LINE (--mv-base, set with --mv-foot below): the
+     last line of the words and the bottom of the rail's last icon both sit on
+     it, whatever the Moment is. */
+  --mv-hit: 44px;
+  /* Every icon in the viewer at the top bar's 24px (.toolbar-btn svg), the
+     size each glyph is drawn at (Zoe: "make sure the icons are the proper
+     size"). */
+  --mv-ico: 24px;
+  --mv-inset: calc((var(--mv-hit) - var(--mv-ico)) / 2);
+  /* The rail's reactions are half again as big (Zoe: "make the reaction
+     icons 1.5x bigger or so"), in a 48px hit box. */
+  --mv-react: 34px;
+  --mv-react-hit: 48px;
+  --mv-react-inset: calc((var(--mv-react-hit) - var(--mv-react)) / 2);
+  --mv-lane: calc(var(--mv-react) + 16px);
 }
 .mv.open { opacity: 1; }
 .mv-veil {
@@ -5922,9 +5937,10 @@ button.poll-option:disabled { cursor: default; }
 .mv-when { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.02em; }
 /* Bare glyphs (Zoe): the viewer's paper is always behind them. */
 .mv-btn {
-  width: 40px;
-  height: 40px;
-  margin-right: -8px;
+  /* The x's icon stands on the gutter, over the rail's. */
+  width: var(--mv-hit);
+  height: var(--mv-hit);
+  margin-right: calc(-1 * var(--mv-inset));
   padding: 0;
   border: 0;
   background: none;
@@ -5936,7 +5952,7 @@ button.poll-option:disabled { cursor: default; }
   flex: none;
   cursor: pointer;
 }
-.mv-btn svg { width: 22px; height: 22px; }
+.mv-btn svg { width: var(--mv-ico); height: var(--mv-ico); }
 .mv-btn:active { opacity: 0.5; }
 
 .mv-stage {
@@ -5944,7 +5960,7 @@ button.poll-option:disabled { cursor: default; }
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 14px var(--mv-side) 12px;
+  padding: 14px var(--mv-side) var(--mv-lift);
   cursor: pointer;
 }
 .mv-frame { flex: 1; min-width: 0; min-height: 0; }
@@ -5984,15 +6000,24 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
 }
 .mv-sound svg { width: 20px; height: 20px; }
-/* Edge to edge, the foot is the caption's, so the sound sits under the x. */
+/* Edge to edge, the foot is the caption's, so the sound sits under the x,
+   a bare icon on the rail's column. */
 .mv-frame--pic .mv-sound {
   z-index: 1;
   left: auto;
   bottom: auto;
-  right: calc(var(--mv-side) + 4px);
+  right: calc(var(--mv-side) - var(--mv-inset));
   top: calc(env(safe-area-inset-top) + 84px);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  width: var(--mv-hit);
+  height: var(--mv-hit);
+  background: none;
+  border: 0;
+  color: var(--text);
+}
+.mv-frame--pic .mv-sound svg {
+  width: var(--mv-ico);
+  height: var(--mv-ico);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--bg) 70%, transparent));
 }
 /* EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge, and
    put captions and content below like tiktok and reels ... seriously don't
@@ -6005,8 +6030,6 @@ button.poll-option:disabled { cursor: default; }
    with a regular opacity layer ... I fear we went overboard"); feathered
    bands, a blurred copy of the photo and a top scrim were all tried and cut
    the same day. */
-.mv-page.is-pic { --mv-under: calc(env(safe-area-inset-bottom) + var(--mv-foot)); }
-.mv-page.is-pic.no-reply { --mv-under: calc(env(safe-area-inset-bottom) + 22px); }
 .mv-page.is-pic .mv-stage { position: static; }
 .mv-page.is-pic :is(.mv-head, .mv-dots, .mv-foot) { position: relative; z-index: 1; }
 /* The frame is the page-sized layer, so a pull up (a transform on the frame)
@@ -6019,7 +6042,7 @@ button.poll-option:disabled { cursor: default; }
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0 0 var(--mv-under);
+  padding: 0 0 var(--mv-base);
 }
 .mv-frame--pic .mv-media {
   position: absolute;
@@ -6061,7 +6084,7 @@ button.poll-option:disabled { cursor: default; }
   position: relative;
   z-index: 1;
   isolation: isolate;
-  padding: 14px calc(var(--mv-side) + var(--mv-lane)) 10px var(--mv-side);
+  padding: 14px calc(var(--mv-side) + var(--mv-lane)) 0 var(--mv-side);
 }
 /* At the foot: under a long caption, under any caption on a 9:16 or taller
    picture, and on one with no words, under Reply alone. It runs on under
@@ -6081,12 +6104,12 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-frame--pic.is-tall:not(.has-words) .mv-media::before {
   inset: auto 0 0;
-  height: calc(var(--mv-under) + var(--mv-feather));
+  height: calc(var(--mv-base) + var(--mv-feather));
   z-index: 1;
 }
 .mv-frame--pic.is-tall .mv-caption::before,
 .mv-caption.is-cut::before {
-  inset: calc(-1 * var(--mv-feather)) 0 calc(-1 * var(--mv-under));
+  inset: calc(-1 * var(--mv-feather)) 0 calc(-1 * var(--mv-base));
   z-index: -1;
 }
 .mv-caption .mv-title { font-size: 1.6rem; }
@@ -6114,10 +6137,11 @@ button.poll-option:disabled { cursor: default; }
 .mv-readmore {
   display: none;
   margin: 4px 0 0;
-  padding: 4px 0;
+  padding: 4px 0 0;
   border: 0;
   background: none;
   color: var(--muted);
+  line-height: 1;
   font: inherit;
   font-size: 0.9rem;
   font-weight: 700;
@@ -6138,16 +6162,13 @@ button.poll-option:disabled { cursor: default; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-left: 10px;
   padding-right: var(--mv-lane);
 }
-/* A song is centred, so it keeps the lane on both sides. */
-.mv-frame--song { padding-inline: var(--mv-lane); }
 /* A poll keeps everything left, but runs the column's width with the same
    10px on both sides (Zoe, 2026-11-06: it "looked short and squished left"
    with the rail's lane on its right). It sits in the middle of the stage,
    clear of the rail low on the right. */
-.mv-frame--poll { padding-right: 10px; }
+.mv-frame--poll { padding-right: 0; }
 .mv-frame--poll .poll { margin: 1.2rem 0 0; }
 .mv-frame--poll .poll-meta { margin-top: 0.8rem; }
 .mv-words {
@@ -6180,12 +6201,23 @@ button.poll-option:disabled { cursor: default; }
   text-wrap: pretty;
 }
 .mv-words :is(.card-link, .card-yt, .card-page, .card-circle, .card-song, .poll) { margin-top: 1rem; }
-/* A song: the sleeve big and rounded like every cover, then its name. */
+/* A SONG is laid out as a picture is: the sleeve centred in the stage, big
+   and rounded like every cover, and its name, Listen and any words at the
+   foot, on the gutter and the base line, as a caption. */
+.mv-frame--song {
+  display: flex;
+  flex-direction: column;
+}
+.mv-song-art {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
 .mv-sleeve {
   display: block;
   width: min(100%, 300px, 42dvh);
   aspect-ratio: 1;
-  margin: 0 auto 1.2rem;
   border-radius: var(--radius-art);
   background: var(--glass-bg-panel) center / cover;
   border: var(--glass-edge);
@@ -6193,60 +6225,68 @@ button.poll-option:disabled { cursor: default; }
 .mv-sleeve.pin-cover { border: 0; }
 .mv-sleeve:not(.pin-cover) { display: grid; place-items: center; color: var(--muted); }
 .mv-sleeve svg { width: 30%; height: 30%; stroke-width: 1.2; }
+/* In the stage the gutter is already paid, so only the lane is kept. */
+.mv-frame--song .mv-caption { padding: 14px var(--mv-lane) 0 0; }
 .mv-song-title {
   margin: 0;
-  text-align: center;
   font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-size: 1.9rem;
+  font-size: 1.6rem;
   line-height: 1.1;
   text-wrap: balance;
 }
-.mv-song-sub { margin: 0.3rem 0 0; text-align: center; color: var(--muted); }
+.mv-song-sub { margin: 0.25rem 0 0; color: var(--muted); }
 .mv-listen {
   display: flex;
   width: fit-content;
   align-items: center;
   gap: 0.5rem;
-  margin: 1.1rem auto 0.6rem;
-  padding: 0 1.4rem;
-  min-height: 44px;
-  border-radius: 22px;
+  margin: 0.85rem 0 0;
+  padding: 0 1.2rem;
+  min-height: 40px;
+  border-radius: 20px;
   text-decoration: none;
 }
 .mv-listen svg { width: 18px; height: 18px; }
+.mv-listen + .mv-caption-text { margin-top: 0.85rem; }
 
 /* THE RAIL (Zoe, 2026-11-06: "stack them like tiktok/reels style"): the
-   heart, Reply, the •••, on the right in the lower third, glass discs at THE
-   BUTTON's quiet weight since a photo may be behind them. No count under any
-   of them. With no Reply (your own frame, or someone you can't message) the
-   others close up. */
+   heart, the song's play, the •••, on the right. BARE ICONS (Zoe: "just use
+   the icons themselves, I dont love the circle buttons"), each in a 44px hit
+   box, the icon's right edge on the gutter under the x and the last icon's
+   foot on the base line (--mv-inset pays back the hit box). A soft halo of
+   paper keeps an icon readable over a photo. No count under any of them. */
 .mv-rail {
   position: absolute;
   z-index: 2;
-  right: var(--mv-side);
-  /* Over the reply foot, at the same height whether or not the page has a
-     Reply, so it never jumps as one person's page slides in for another's. */
-  bottom: calc(env(safe-area-inset-bottom) + var(--mv-foot) + 14px);
+  right: calc(var(--mv-side) - var(--mv-react-inset));
+  bottom: calc(var(--mv-base) - var(--mv-react-inset));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 .mv-rail button {
-  width: var(--mv-disc);
-  height: var(--mv-disc);
+  width: var(--mv-react-hit);
+  height: var(--mv-react-hit);
   padding: 0;
+  border: 0;
   border-radius: 50%;
+  background: none;
   display: grid;
   place-items: center;
   color: var(--text);
   cursor: pointer;
-  /* THE BUTTON's glass is a fill with no blur; over a photo it needs the
-     blur to read, so the rail's discs frost what's behind them. */
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  -webkit-tap-highlight-color: transparent;
 }
+.mv-rail button.pill-quiet { background: none; border: 0; }
 .mv-rail button[hidden] { display: none; }
-.mv-rail svg { width: 23px; height: 23px; transition: transform 0.3s var(--spring); }
+.mv-rail svg {
+  width: var(--mv-react);
+  height: var(--mv-react);
+  /* Thinned so the bigger heart's line stays near the bar's weight. */
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--bg) 70%, transparent));
+  transition: transform 0.3s var(--spring);
+}
 .mv-rail button:active svg { transform: scale(0.88); }
 .mv-like { --burst: var(--heart); }
 .mv-like.liked svg { fill: var(--heart); stroke: var(--heart); }
@@ -6256,9 +6296,21 @@ button.poll-option:disabled { cursor: default; }
    "Reply to Ana", centred, no pill (Zoe). A tap opens the DM, a pull up from
    anywhere does too; armed, the words take the ink and the chevron rises. Hidden on your own frame or someone you
    can't message, and the stage takes the room. */
-.mv { --mv-foot: 66px; }
+.mv {
+  /* The Reply foot's true height (its chevron and words), held to it below,
+     since the stage measures from the foot and the rail and a picture's
+     caption measure from this. */
+  --mv-foot: 56px;
+  /* The base line's air over Reply. */
+  --mv-lift: 26px;
+  /* Over Reply, and at the same height with no Reply, so nothing on it
+     jumps as one person's page slides in for another's. */
+  --mv-base: calc(env(safe-area-inset-bottom) + var(--mv-foot) + var(--mv-lift));
+}
 .mv-foot {
   flex: none;
+  height: var(--mv-foot);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6266,7 +6318,7 @@ button.poll-option:disabled { cursor: default; }
   padding: 0 var(--mv-side) 0;
 }
 .mv-foot[hidden] { display: none; }
-.mv-page.no-reply .mv-stage { padding-bottom: 26px; }
+.mv-page.no-reply .mv-stage { padding-bottom: calc(var(--mv-foot) + var(--mv-lift)); }
 .mv-swipe {
   display: grid;
   color: var(--muted);
@@ -6604,12 +6656,13 @@ button.card-song-play:active { transform: scale(0.9); }
 @media (prefers-reduced-motion: reduce) {
   .song-play.is-loading .song-play-ico { animation: none; opacity: 0.6; }
 }
-/* On the Moments rail, under the heart: the rail's glass disc, the ring
-   round its edge. */
+/* On the Moments rail, under the heart: a bare icon, the ring still running
+   round it while it plays (Zoe: "ring can still go around the play
+   button"), drawn round the hit box. */
 .mv-rail .mv-play { position: relative; }
 .mv-rail .mv-play .song-ring,
-.mv-rail .mv-play:active .song-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
-.mv-rail .mv-play .song-play-ico svg { width: 21px; height: 21px; }
+.mv-rail .mv-play:active .song-ring { width: 100%; height: 100%; transform: rotate(-90deg); filter: none; }
+.mv-rail .mv-play .song-play-ico svg { width: calc(var(--mv-react) - 4px); height: calc(var(--mv-react) - 4px); }
 
 /* ── A Find's YouTube video, on its card (2.0, 2026-10-25) ─────────────────
    The song's and the quote's tile (a --surface fill, a --rule hairline, the

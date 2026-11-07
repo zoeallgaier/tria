@@ -302,9 +302,18 @@ Reels' grammar, "not married to vertical scroll"): one axis would carry three
 jobs (next person, close, reply), and a swipe through faces is the infinite
 feed Tria isn't.
 **The reactions are a rail on the right** (Zoe: "stack them like tiktok/reels
-style"), `.mv-rail`: the heart, the song's play, the •••, glass discs at THE BUTTON's
-quiet weight (a photo may be behind them), no counts, at one height on every
-page, over the reply foot. Words are set clear of its lane (`--mv-lane`); a tall photo runs under it.
+style"), `.mv-rail`: the heart, the song's play (its ring still runs round it),
+the •••, **bare 24px icons, no discs** (Zoe: "I dont love the circle buttons";
+the top bar's glyph size), a soft paper halo for a photo behind, no counts.
+**The viewer is a grid** (2026-11-06): every Moment's words and the face start
+on the gutter; every icon, the x included, ends on it (`--mv-inset` pays back
+the 44px hit box); words keep clear of the rail's lane (`--mv-lane`); and ONE
+BASE LINE (`--mv-base`: the Reply foot, held to its true 56px `--mv-foot`, plus
+`--mv-lift`) carries both the last line of the words and the foot of the last
+icon. **Every type is laid out alike** (Zoe: "all types of moments should have
+a consistent layout"): the thing itself centred (a picture, a song's sleeve, or
+the words), its words at the foot as a caption: a song's title, artist and
+Listen moved there from under the sleeve.
 **A stack of one has no indicator; two or more get soft dots under the face**
 (2026-11-06, left under the avatar; they were at the foot until Reply took it), the
 current one a pill (`.mv-dots`, Zoe: "no need for the gross instagram line
