@@ -7860,11 +7860,17 @@
             `playsinline autoplay muted loop></video>` +
           `<button type="button" class="mv-sound pill-quiet" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute')}</button>`
         : `<img class="mv-pic" src="${esc(sizedSrc(still, 600))}" alt="${esc(notePlain(p.note) || p.title || 'Photo')}" draggable="false">`;
-      // The words over the picture, as a post sets them (Zoe, 2026-11-06:
-      // "text with frames on moments should go above like posts").
+      // EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge,
+      // and put captions and content below like tiktok and reels"): the
+      // picture fills the page, never cropped, a blur of itself behind it, and
+      // the words sit at its foot on a scrim.
+      const back = video ? p.poster : still;
       return `<div class="mv-frame mv-frame--pic${words ? ' has-caption' : ''}">` +
+          `<figure class="mv-media">` +
+            (back ? `<img class="mv-backdrop" src="${esc(sizedSrc(back, 40))}" alt="" aria-hidden="true" draggable="false">` : '') +
+            media +
+          `</figure>` +
           (words ? `<div class="mv-caption">${words}</div>` : '') +
-          `<figure class="mv-media">${media}</figure>` +
         `</div>`;
     }
     // Words alone. A short note with no headline is set big, in the serif.
@@ -8014,6 +8020,7 @@
       if (!play.hidden) setPlaySong(play, p.song);
       paintLike(pg);
       pg.stage.innerHTML = momentFrameHtml(f);
+      pg.el.classList.toggle('is-pic', !!pg.stage.querySelector('.mv-frame--pic'));
       wireLinkTiles(pg.stage);
       wash(pg, f);
       if (pg === page) live(how);

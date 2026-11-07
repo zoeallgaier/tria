@@ -324,6 +324,14 @@ pulls work on a short note. **The viewer is one reading column** (2026-11-06,
 `--mv-col` 36rem, `--mv-side`): the head, stage and rail take the same side
 inset, 14px on any phone and centred on a desktop. The stage stays full width, so
 the tap zones (left third back, the rest forward) are unchanged.
+**A photo or clip Moment is edge to edge** (Zoe, 2026-11-06: "full edge to
+edge ... captions and content below like tiktok and reels ... don't overdo
+this"): the page takes `.is-pic`, the frame becomes the page-sized layer (so a
+pull up still carries it), the picture is centred and never cropped
+(`contain`) on a blur of itself (`.mv-backdrop`, the 40px render), and two
+scrims: the page's own paper at the top (the status bar's clock can't be
+recoloured, so the head keeps the scheme) and a dark one at the foot, where the
+caption, the rail and Reply are white. The clip's sound sits under the x.
 Words frames are set in a further 10px (24px from a phone's edge) with 0.75rem
 of air above and below the scroller; a pictured frame fills the column.
 The rail's own double tap and hold are gone (`wireSongGestures` deleted).

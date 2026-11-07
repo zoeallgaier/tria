@@ -5984,18 +5984,99 @@ button.poll-option:disabled { cursor: default; }
   place-items: center;
 }
 .mv-sound svg { width: 20px; height: 20px; }
-/* Words over the picture, as a post sets them (2026-11-06): the caption takes
-   what it needs (up to a third of the screen, then it scrolls), the picture
-   sits straight under it, and the two are centred in the stage AS ONE (Zoe:
-   "the content sits much too high"). The picture's row grows to the photo's
-   own height and no further than the room left (minmax(0, max-content)), so
-   a short pair floats in the middle and a tall photo still fits. */
-.mv-frame--pic.has-caption {
-  grid-template-rows: auto minmax(0, max-content);
-  align-content: center;
+/* Edge to edge, the foot is the caption's, so the sound sits under the x. */
+.mv-frame--pic .mv-sound {
+  z-index: 1;
+  left: auto;
+  bottom: auto;
+  right: calc(var(--mv-side) + 4px);
+  top: calc(env(safe-area-inset-top) + 84px);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.22);
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
-.mv-caption { max-height: 32dvh; overflow-y: auto; padding-right: var(--mv-lane); }
-.mv-caption .mv-title { font-size: 1.9rem; }
+/* EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge, and
+   put captions and content below like tiktok and reels ... seriously don't
+   overdo this"). On a picture frame the stage lets go of its box, so the
+   media is the whole PAGE: the picture centred and never cropped, a blur of
+   itself filling round it, and two scrims. The top one is the page's own
+   paper, so the face, the x and the status bar's clock (which we can't
+   recolour) read in either scheme; the bottom one is dark, and the caption,
+   the rail and Reply are white on it. The caption sits at the foot, clear of
+   the rail's lane, and scrolls past a third of the screen. */
+.mv-page.is-pic .mv-stage { position: static; }
+.mv-page.is-pic :is(.mv-head, .mv-dots, .mv-foot) { position: relative; z-index: 1; }
+.mv-page.is-pic::before { opacity: 0; }
+/* The frame itself is the page-sized layer, so a pull up (a transform on the
+   frame) carries the picture and its words together. */
+.mv-page.is-pic .mv-frame--pic {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 var(--mv-side) calc(env(safe-area-inset-bottom) + var(--mv-foot) + 4px);
+}
+.mv-page.is-pic.no-reply .mv-frame--pic { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
+.mv-frame--pic .mv-media {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  overflow: hidden;
+  background: #000;
+}
+.mv-frame--pic .mv-pic {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}
+.mv-backdrop {
+  position: absolute;
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  filter: blur(28px) brightness(0.7);
+  -webkit-user-drag: none;
+}
+.mv-frame--pic .mv-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, color-mix(in srgb, var(--bg) 86%, transparent),
+      color-mix(in srgb, var(--bg) 58%, transparent) calc(env(safe-area-inset-top) + 64px),
+      transparent calc(env(safe-area-inset-top) + 150px)),
+    linear-gradient(to top, rgba(0, 0, 0, 0.62),
+      rgba(0, 0, 0, 0.28) 32%, transparent 52%);
+}
+.mv-page.is-pic :is(.mv-rail, .mv-foot) { --text: #fff; --muted: rgba(255, 255, 255, 0.78); }
+.mv-page.is-pic .mv-rail button {
+  background: rgba(0, 0, 0, 0.22);
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+}
+.mv-caption {
+  position: relative;
+  z-index: 1;
+  max-height: 32dvh;
+  overflow-y: auto;
+  padding-right: var(--mv-lane);
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.78);
+  color: #fff;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.3);
+}
+.mv-caption .mv-title { font-size: 1.7rem; }
+.mv-caption .mv-note { font-size: 1.05rem; }
 .mv-caption .tags, .mv-words .tags { margin-top: 0.85rem; }
 /* Words alone sit in the middle, and a long note scrolls. They are set in
    from the column's edge (a pictured frame fills it), so a note sits clear of
