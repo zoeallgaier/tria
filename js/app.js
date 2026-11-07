@@ -15472,14 +15472,15 @@
     const metaEl = (words) => words ? `<span class="pin-meta"><span>${esc(words)}</span></span>` : '';
     // Your own card's ••• sits in its top right corner (Zoe, 2026-11-04), and
     // its headline keeps clear of it (pin--own).
-    const card = ({ cls, type, pic, say, gist, meta, open, glow = '' }) =>
+    const card = ({ cls, type, pic, say, gist, rich, meta, open, glow = '' }) =>
       `<article class="pin ${pic ? 'pin--pic' : 'pin--words'}${wide ? ' pin--wide' : ''}${more ? ' pin--own' : ''}${cls || ''}" ` +
           `data-i="${at}" data-key="${esc(pinKey(e))}" data-type="${esc(type)}">` +
         glow + (pic || '') +
         `<span class="pin-body">` +
           `<span class="pin-face">` +
             (say ? `<span class="pin-say">${esc(say)}</span>` : '') +
-            (gist ? `<span class="pin-gist">${esc(gist)}</span>` : '') +
+            (rich ? `<div class="pin-gist pin-rich">${rich}</div>`
+              : gist ? `<span class="pin-gist">${esc(gist)}</span>` : '') +
           `</span>` +
           `<span class="pin-foot">${meta}</span>` +
         `</span>` +
@@ -15506,6 +15507,11 @@
       });
     }
 
+    // On a words card the note is set as the feed sets it (Zoe: "reflect the
+    // contents styles"): its paragraphs, line breaks, headings, bold and
+    // italic, under the title when there is one. A picture card keeps the
+    // plain line over its shade.
+    const rich = !pic && said ? cardNoteHtml(p, true) : '';
     const p = item.post;
     // A video Frame with no stored poster has no still, so it is words, the
     // same rule the feed's own frames follow.
@@ -15528,7 +15534,8 @@
     const gist = p.title && said ? said : (!said && !p.title && page.title ? page.about || '' : '');
     const meta = metaEl(p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime) : domain);
     return card({
-      cls: link.unread ? ' pin--unread' : '', type: p.type, pic, say: head, gist, meta,
+      cls: link.unread ? ' pin--unread' : '', type: p.type, pic,
+      say: rich ? p.title || '' : head, gist, rich, meta,
       open: `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(head || 'Open this post')}"></a>`,
     });
   }
@@ -15790,6 +15797,16 @@
     return () => {
       cancelPress();
       document.removeEventListener('pointermove', onMove);
+      if (last.classList.contains('pin-rich')) {
+        // Blocks don't line clamp: the box is cut at the last whole line that
+        // fits, read off the body's line height, and fades under it.
+        last.style.maxHeight = '';
+        const lh = parseFloat(getComputedStyle(last).lineHeight);
+        const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
+        if (lh > 0 && last.scrollHeight > room + 1) last.style.maxHeight = Math.max(lh, Math.floor((room + 1) / lh) * lh) + 'px';
+        last.classList.toggle('is-cut', last.scrollHeight > last.clientHeight + 1);
+        return;
+      }
       document.removeEventListener('pointerup', onUp);
       document.removeEventListener('pointercancel', onUp);
       document.removeEventListener('touchmove', blockScroll);

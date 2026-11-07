@@ -7646,6 +7646,20 @@ button.card-song-play:active { transform: scale(0.9); }
 .pin-foot:empty { display: none; }
 .pin-meta {
   display: flex;
+/* A words card's note, set as the feed sets it: paragraphs, lines, headings,
+   bold and italic, at the pin's size and on the note's own rhythm, scaled. */
+.pin-face > .pin-rich { display: block; color: var(--text); }
+.pin-rich.is-cut {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent);
+}
+.pin-rich .card-note { margin: 0; font-size: inherit; line-height: 1.42; }
+.pin-rich .card-note + .card-note { margin-top: 0.6rem; }
+.pin-rich .card-h1 { font-size: 1.3rem; }
+.pin-rich .card-h2 { font-size: 1.12rem; }
+.pin-rich :is(.card-note, .card-h1, .card-h2) + :is(.card-h1, .card-h2) { margin-top: 0.8rem; }
+.pin-rich :is(.card-h1, .card-h2) + .card-note { margin-top: 0.25rem; }
+.pin-rich > :first-child { margin-top: 0; }
   min-width: 0;
   font-size: 0.8rem;
   color: var(--muted);
