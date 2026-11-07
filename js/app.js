@@ -490,6 +490,10 @@
     // Three horizontal bars of unequal length — the plain "poll" glyph on the
     // composer's attach toggle (reads clearer at button scale than the type burst).
     poll:    '<path d="M5 7.5h13"/><path d="M5 12h9"/><path d="M5 16.5h11"/>',
+    // A Take (Zoe, 2026-11-07): a rounded five point star, plumper than the
+    // Sunny charm's sharp one so the two never read as one mark. TAKE_STAR is
+    // the same outline, filled, for a rating.
+    star:    '<path d="M11.14 4.83Q12 3.2 12.86 4.83L14.25 7.44Q14.88 8.64 16.21 8.87L19.12 9.38Q20.94 9.7 19.66 11.02L17.6 13.14Q16.66 14.11 16.85 15.45L17.27 18.38Q17.53 20.2 15.87 19.39L13.22 18.1Q12 17.5 10.78 18.1L8.13 19.39Q6.47 20.2 6.73 18.38L7.15 15.45Q7.34 14.11 6.4 13.14L4.34 11.02Q3.06 9.7 4.88 9.38L7.79 8.87Q9.12 8.64 9.75 7.44Z"/>',
     // Discover's two formats. Four rounded squares for the masonry wall, three
     // lines for the reading column — the pair every OS uses for exactly this
     // switch, so it needs no label to be read.
@@ -2480,7 +2484,7 @@
   // the right of the byline. The colour is the type's own (via the CSS class) —
   // except a past activity, which greys out and reads as done.
   const TYPE_LABEL = { note: 'Note', find: 'Find', photo: 'Frame', activity: 'Activity', poll: 'Poll',
-    song: 'Music' };
+    song: 'Music', take: 'Take' };
   // The same five, pluralised — for prose that has to name a type in the plural
   // ("No frames out here yet" when a filter empties Discover's grid).
   // The same five, pluralised, PLUS reposts — which is a filter row on a profile
@@ -2489,7 +2493,7 @@
   // and FILTERS: those are the quintet, and a repost has no hue, no heart and no
   // dot on the pull ring.
   const TYPE_PLURAL = { note: 'notes', find: 'finds', photo: 'frames', activity: 'activities', poll: 'polls',
-    song: 'music', repost: 'reposts' };
+    song: 'music', take: 'takes', repost: 'reposts' };
   // Zoe's poll mark — a hand-drawn pink burst/asterisk (icons/poll.svg). This is
   // the TYPE identity glyph (masthead + filter); the composer's attach toggle uses
   // the plainer line glyph in ICONS ('poll') for legibility at button scale, the
@@ -2521,6 +2525,8 @@
     activity: 'cal',
     // 1.8's sixth (add-song-posts.sql): a music note.
     song:     'music',
+    // 2.0's seventh (add-takes.sql): a rounded star.
+    take:     'star',
   };
   // The "All" filter's own mark — a pentad, one dot per post type, gathered
   // into a ring. Says "all five" literally instead of a generic four-dot grid.
@@ -2566,6 +2572,7 @@
             `<span class="byline-meta">${meta}</span>` +
           `</span>` +
         `</a>` +
+        takeStarsHtml(post) +
       `</header>`;
   }
 
@@ -2589,7 +2596,7 @@
   // where the header already establishes whose column this is. Just the date
   // — no repeated avatar + name down the page.
   function soloMetaEl(post) {
-    return `<p class="card-solometa"><span>${esc(niceAgo(post._ts, post.date))}</span></p>`;
+    return `<p class="card-solometa"><span>${esc(niceAgo(post._ts, post.date))}</span>${takeStarsHtml(post)}</p>`;
   }
 
   // ── Long notes → "Read more" ───────────────────────────────────────────────
@@ -2974,6 +2981,12 @@
                       `${svgIcon('image', 'rt-attach-ico')}</button>`) +
                 `<button type="button" class="rt-attach rt-attach--poll" id="${idp}-add-poll" ` +
                   `aria-label="Add a poll" aria-pressed="false">${svgIcon('poll', 'rt-attach-ico')}</button>` +
+                // A Take (Zoe, 2026-11-07), next to polls: a film, a show, a
+                // book or a podcast, and its stars.
+                (opts.take
+                  ? `<button type="button" class="rt-attach" id="${idp}-add-take" ` +
+                      `aria-label="Add a take" aria-pressed="false">${svgIcon('star', 'rt-attach-ico')}</button>`
+                  : '') +
                 // The Music button is back (Zoe, 2026-11-04), since the New
                 // sheet's Music row became Moment: a note with a song is a
                 // Music post, a Moment with one is a song for a day.
@@ -3989,7 +4002,7 @@
         : '';
     // A poll's question stands in for a title, or the tile would be an avatar over
     // nothing: the options live on the original's card and this is an excerpt.
-    const head = orig.title || (orig.poll && orig.poll.q) || '';
+    const head = orig.title || (orig.poll && orig.poll.q) || (orig.take && orig.take.title) || '';
     const title = head ? `<p class="quoted-title">${esc(head)}</p>` : '';
     const say = noteSaid(orig);
     const body = say ? `<p class="quoted-note">${esc(say)}</p>` : '';
@@ -4002,6 +4015,7 @@
               `<span class="quoted-name">${name}</span>` +
               `<span class="quoted-meta">${meta}</span>` +
             `</span>` +
+            takeStarsHtml(orig) +
           `</span>` +
           title + body +
         `</div>` +
@@ -4150,6 +4164,7 @@
         noteHtml +
         (tiles ? tagChips(post) + tiles : '') +
         songTileHtml(post) +
+        takeTileHtml(post) +
         pollWidgetHtml(post) +
         locationHtml +
         whenHtml +
@@ -4176,6 +4191,49 @@
      (songLink). The play disc at the end is its own button (Zoe, 2026-11-06):
      it plays the song's 30 second preview with a ring running round it
      (songPlayHtml, playPreview). */
+  /* A TAKE (Zoe, 2026-11-07): a post about a film, a show, a book or a
+     podcast, Letterboxd's way. Its stars ride the byline's right, beside the
+     face, name and date (takeStarsHtml), and the thing itself is a tile under
+     the words: the poster, its title, and what it is with its year and who
+     made it, the whole tile a link out to its page (TMDB's or Apple's).
+     A rating is HALF STARS as a whole number, 1 to 10; only the stars given
+     are drawn, a half as the left half of one, in the page's ink. */
+  const TAKE_STAR = 'M11.14 4.83Q12 3.2 12.86 4.83L14.25 7.44Q14.88 8.64 16.21 8.87L19.12 9.38Q20.94 9.7 19.66 11.02L17.6 13.14Q16.66 14.11 16.85 15.45L17.27 18.38Q17.53 20.2 15.87 19.39L13.22 18.1Q12 17.5 10.78 18.1L8.13 19.39Q6.47 20.2 6.73 18.38L7.15 15.45Q7.34 14.11 6.4 13.14L4.34 11.02Q3.06 9.7 4.88 9.38L7.79 8.87Q9.12 8.64 9.75 7.44Z';
+  const TAKE_KIND = { film: 'Film', show: 'Show', book: 'Book', podcast: 'Podcast' };
+  const takeRating = (t) => { const r = Math.round(+((t || {}).rating) || 0); return r >= 1 && r <= 10 ? r : 0; };
+  // "3½" for a screen reader's label and the composer's readout.
+  const starWords = (r) => {
+    const n = Math.floor(r / 2), half = r % 2;
+    return `${n || (half ? '' : '0')}${half ? '½' : ''} star${r <= 2 ? '' : 's'}`;
+  };
+  function takeStarsHtml(post) {
+    const r = post && post.type === 'take' ? takeRating(post.take) : 0;
+    if (!r) return '';
+    const whole = `<svg class="take-star" viewBox="3 3 18 18" aria-hidden="true"><path d="${TAKE_STAR}"/></svg>`;
+    const half = `<svg class="take-star take-star--half" viewBox="3 3 9 18" aria-hidden="true"><path d="${TAKE_STAR}"/></svg>`;
+    return `<span class="take-stars" role="img" aria-label="${esc(starWords(r))}">` +
+      whole.repeat(Math.floor(r / 2)) + (r % 2 ? half : '') + `</span>`;
+  }
+  const takeSub = (t) => [TAKE_KIND[t.kind], t.year, t.by].filter(Boolean).join(' · ');
+  function takeArtHtml(t, cls = '') {
+    return `<span class="take-art take-art--${esc(t.kind || 'film')}${cls ? ' ' + cls : ''}${t.art ? ' pin-cover' : ''}"` +
+      (t.art ? ` style="background-image:url('${encodeURI(t.art)}')"` : '') + ` aria-hidden="true">` +
+      (t.art ? '' : svgIcon('star', 'take-art-ico')) + `</span>`;
+  }
+  function takeTileHtml(post) {
+    const t = post.type === 'take' && post.take;
+    if (!t || !t.title) return '';
+    const inner = takeArtHtml(t) +
+      `<span class="take-lines">` +
+        `<span class="take-title">${esc(t.title)}</span>` +
+        (takeSub(t) ? `<span class="take-sub">${esc(takeSub(t))}</span>` : '') +
+      `</span>`;
+    return /^https:\/\//.test(t.link || '')
+      ? `<a class="card-take" href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" data-out="system" ` +
+          `aria-label="${esc([t.title, takeSub(t)].filter(Boolean).join(', '))}">${inner}</a>`
+      : `<div class="card-take">${inner}</div>`;
+  }
+
   const songTileHtml = (post) => post.type === 'song' && post.song ? songRowHtml(post.song) : '';
   function songRowHtml(s) {
     const sub = songSub(s);
@@ -6376,6 +6434,23 @@
         `</div>` + aud;
     }
 
+    // A Take: the words, then what it is about (fixed: a different film is a
+    // different take) and its stars, which can change.
+    if (post.type === 'take' && post.take) {
+      const t = post.take;
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What did you think?', { tools: false, tags, poem: isPoemNote(post.note) }) +
+        `<div class="field take-field">` +
+          `<div class="take-now take-now--fixed">` +
+            takeArtHtml(t, 'take-art--now') +
+            `<span class="take-lines">` +
+              `<span class="take-title">${esc(t.title)}</span>` +
+              (takeSub(t) ? `<span class="take-sub">${esc(takeSub(t))}</span>` : '') +
+            `</span>` +
+          `</div>` +
+          takeRateHtml('e', takeRating(t)) +
+        `</div>` + aud;
+    }
+
     // post (Note) and photo (Frame) share the rich editor — a Frame is a full post
     // that also carries media, so it gets the same headline + rich caption (both
     // optional; the image carries the post). Prefilled from the stored note (a
@@ -6835,6 +6910,7 @@
     { key: 'find',     label: 'Finds' },
     { key: 'photo',    label: 'Frames' },
     { key: 'poll',     label: 'Polls' },
+    { key: 'take',     label: 'Takes' },
     { key: 'activity', label: 'Activities' },
     { key: 'song',     label: 'Music' },
   ];
@@ -9745,7 +9821,7 @@
   // now, so it's a last resort rather than the first look.
   const linkSub = (p) => postLinks(p).length ? domainOf(postLinks(p)[0]) : '';
   const saidOf = (p) =>
-    noteSaid(p) || p.title || (p.poll && p.poll.q) || (p.song && p.song.title) || linkSub(p);
+    noteSaid(p) || p.title || (p.poll && p.poll.q) || (p.song && p.song.title) || (p.take && p.take.title) || linkSub(p);
 
   // Everything that isn't a photo speaks instead: what it said, set in the
   // serif, with a quiet second line where the type has one worth adding. A
@@ -10176,11 +10252,13 @@
     // type and one layout isn't a choice — but a single photo earns one on its
     // own, because Frames isn't a narrowing, it's the wall.
     const types = new Set(list.map(p => p.type));
-    // Finds after Frames on a profile's tabs (Zoe, 2026-11-07).
-    const tabOrder = ['note', 'photo', 'find'];
-    const rank = (k) => { const i = tabOrder.indexOf(k); return i < 0 ? tabOrder.length : i; };
-    const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))
-      .sort((a, b) => rank(a.key) - rank(b.key))];
+    // FOUR TABS AT MOST: All, Frames, Takes, Reposts (Zoe, 2026-11-07: "far
+    // too many options"). A tab earns its place by changing what the page IS:
+    // Frames is the wall, Takes the shelf, Reposts another axis. Notes, Finds,
+    // Polls and Activities only narrowed the same feed, so they live in All.
+    const tabTypes = ['photo', 'take'];
+    const filters = [FILTERS[0], ...tabTypes.filter(k => types.has(k))
+      .map(k => FILTERS.find(f => f.key === k))];
     // Reposts get a row of their own, APPENDED rather than slotted into the
     // ladder. All → the five types reads as one run from widest to narrowest, and
     // a repost is a different axis (not what they made, but what they passed on),
@@ -10192,7 +10270,9 @@
     // two rows would otherwise overlap and the dial's checkmark would be lying.
     if (types.has('repost'))
       filters.push({ key: 'repost', label: 'Reposts', ico: 'repost' });
-    const canFilter = filters.length > 2 || types.has('photo');
+    // A strip only when a tab narrows something (they've posted more than its
+    // one type) or is the wall: someone with nothing but takes gets none.
+    const canFilter = filters.length > 1 && (types.size > 1 || types.has('photo'));
     if (profileFilterFor !== u.username) { profileFilter = 'all'; profileFilterFor = u.username; }
     // The world moves under a held filter (their last frame gets deleted while
     // you're standing in the wall), so re-check rather than trust it.
@@ -12767,6 +12847,7 @@
     if (noteEl && noteEl.isContentEditable)
       wireRichEditor(noteEl, form.querySelector('#e-note-count'));
       wireTagRow(form);
+    wireTakeRate(form.querySelector('.take-rate-row'));
     // The sheet commits as you tap, so every tap has to re-ask the bar. syncAnswers
     // is declared below and this only ever runs from a click, so the reference is
     // live by then.
@@ -13718,7 +13799,8 @@
        the sheet, where it names a picture and nothing else. */
     // A song has no words of its own (the track is the post), so its card came
     // out blank: it goes out as a link too.
-    const cardable = own && post.type !== 'activity' && post.type !== 'poll' && post.type !== 'song';
+    // A Take's card would need its poster and stars drawn; not yet.
+    const cardable = own && post.type !== 'activity' && post.type !== 'poll' && post.type !== 'song' && post.type !== 'take';
     const items = [{ label: 'Share', icon: 'send', run: () => (cardable
       ? openStoryCardSheet(cardSpecFor(post), postLink(post))
       : handOver(postShare(post))) }];
@@ -14707,6 +14789,9 @@
   // The track a Music post will carry, picked on the composer's song surface.
   // Module scope because submitComposer reads it, the way it reads `cropper`.
   let composeSong = null;
+  // The film, show, book or podcast a Take is about. Module scope for the
+  // same reason; its stars are the field's own (takeRateHtml).
+  let composeTake = null;
 
   function answerDaily(occ) {
     if (!occ || myAnswer(occ)) return;   // one each — the UI shouldn't have offered
@@ -14984,6 +15069,222 @@
       if (out.length === 8) break;
     }
     return out;
+  }
+
+  /* A TAKE'S SEARCH (2026-11-07). One field finds films, shows, books and
+     podcasts at once, as one list, each row saying what it is.
+
+       - Films and shows are TMDB's (the catalogue Letterboxd runs on, fresh
+         the week a film is announced), with the v3 key in config.js. Apple's
+         search answers no movies at all any more and junk for TV, measured
+         the day this was built ("dune", "oppenheimer", "barbie": nothing).
+       - Books and podcasts are Apple's, keyless, the songs' own search.
+
+     Three requests a search, so the debounce is longer than the songs' and
+     every answer is kept for the session (takeHits): Apple rate limits by IP
+     at about twenty a minute. A search that finds nothing offers the words
+     back as a film named as typed, so a take is never a dead end. */
+  const TMDB = 'https://api.themoviedb.org/3';
+  const TMDB_ART = 'https://image.tmdb.org/t/p/w342';
+  const tmdbKey = () => (window.TRIA_CONFIG || {}).tmdbKey || '';
+  const appleArt = (url) => String(url || '').replace(/\/\d+x\d+bb\./, '/600x600bb.');
+  const yearOf = (d) => (/^\d{4}/.exec(d || '') || [''])[0];
+  const takeHits = new Map();
+  function takeOfTmdb(r) {
+    const film = r.media_type === 'movie';
+    const title = (film ? r.title : r.name) || '';
+    return {
+      kind: film ? 'film' : 'show', title: title.slice(0, 160),
+      year: yearOf(film ? r.release_date : r.first_air_date),
+      art: r.poster_path ? TMDB_ART + r.poster_path : '',
+      link: `https://www.themoviedb.org/${film ? 'movie' : 'tv'}/${r.id}`,
+      src: 'tmdb', id: String(r.id), _pop: r.popularity || 0,
+    };
+  }
+  const takeOfApple = (kind) => (r) => ({
+    kind, title: String((kind === 'book' ? r.trackName : r.collectionName || r.trackName) || '').slice(0, 160),
+    year: kind === 'book' ? yearOf(r.releaseDate) : '',
+    by: String(r.artistName || '').slice(0, 120),
+    art: appleArt(r.artworkUrl100 || r.artworkUrl60),
+    link: r.trackViewUrl || r.collectionViewUrl || '',
+    src: 'apple', id: String(r.trackId || r.collectionId || ''),
+  });
+  async function lookUpTakes(q, signal) {
+    const key = q.toLowerCase();
+    if (takeHits.has(key)) return takeHits.get(key);
+    const tk = tmdbKey();
+    const [screen, books, pods] = await Promise.all([
+      tk ? getJson(`${TMDB}/search/multi?api_key=${tk}&query=${encodeURIComponent(q)}&include_adult=false`, signal) : null,
+      getJson(`${ITUNES}/search?term=${encodeURIComponent(q)}&media=ebook&entity=ebook&limit=6`, signal),
+      getJson(`${ITUNES}/search?term=${encodeURIComponent(q)}&media=podcast&entity=podcast&limit=4`, signal),
+    ]);
+    if (signal.aborted) return null;
+    if (!screen && !books && !pods) return { hits: [], state: 'Couldn’t reach the search. Try again in a moment.' };
+    const films = ((screen || {}).results || [])
+      .filter(r => (r.media_type === 'movie' || r.media_type === 'tv') && (r.poster_path || r.popularity > 2))
+      .map(takeOfTmdb).filter(t => t.title).slice(0, 6);
+    const seen = new Set();
+    const dedupe = (list) => list.filter(t => {
+      const k = `${t.kind}|${t.title}|${t.by || ''}`.toLowerCase();
+      if (!t.title || seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+    const bk = dedupe(((books || {}).results || []).map(takeOfApple('book'))).slice(0, 3);
+    const pd = dedupe(((pods || {}).results || []).map(takeOfApple('podcast'))).slice(0, 2);
+    // The best four on screen lead, then the books and podcasts, then the rest.
+    const hits = [...films.slice(0, 4), ...bk, ...pd, ...films.slice(4)].map(({ _pop, ...t }) => t);
+    const out = hits.length
+      ? { hits, state: '' }
+      : { hits: [{ kind: 'film', title: q.slice(0, 160) }], state: '' };
+    takeHits.set(key, out);
+    return out;
+  }
+  // Who made it, read once a film or show is picked: its director, or who
+  // created the show. One request, and the take goes out without it if it
+  // doesn't come back in time.
+  async function takeMaker(t) {
+    const tk = tmdbKey();
+    if (t.src !== 'tmdb' || !t.id || !tk) return '';
+    if (t.kind === 'film') {
+      const j = await getJson(`${TMDB}/movie/${encodeURIComponent(t.id)}/credits?api_key=${tk}`);
+      return String(((j && j.crew) || []).find(c => c.job === 'Director')?.name || '').slice(0, 120);
+    }
+    const j = await getJson(`${TMDB}/tv/${encodeURIComponent(t.id)}?api_key=${tk}`);
+    return String(((j && j.created_by) || [])[0]?.name || '').slice(0, 120);
+  }
+  function takeHitHtml(t, i) {
+    return `<button type="button" class="take-hit" data-i="${i}">` +
+        takeArtHtml(t, 'take-art--hit') +
+        `<span class="take-lines">` +
+          `<span class="take-title">${esc(t.title)}</span>` +
+          `<span class="take-sub">${esc(t.src ? takeSub(t) : 'Just as you typed it')}</span>` +
+        `</span>` +
+      `</button>`;
+  }
+
+  /* THE STARS, one control for the composer and the editor. A finger on
+     them is the rating, in half stars: a tap fills them in a sweep, each
+     star waiting on the one before it the way a like's ink rises (Zoe,
+     2026-11-07: no scale pop, "cleaner and more Tria"), and a drag follows
+     the finger at once, a selection tick on each step. A tap on the rating
+     you already have takes it off. They wear the reader's own colour
+     (--heart), and as they settle the poll vote's sparkles twinkle off the
+     last lit star in it (Zoe, 2026-11-07), once the sweep has landed. The
+     value lives in a hidden input (`<idp>-take-rating`), so
+     the editor's dirty check reads it like any field. pan-y keeps the page
+     scrolling under a vertical drag that starts on them. */
+  function takeRateHtml(idp, r = 0) {
+    const star = `<span class="take-rate-star">` +
+        `<svg class="take-rate-off" viewBox="3 3 18 18" aria-hidden="true"><path d="${TAKE_STAR}"/></svg>` +
+        `<svg class="take-rate-on" viewBox="3 3 18 18" aria-hidden="true"><path d="${TAKE_STAR}"/></svg>` +
+      `</span>`;
+    return `<div class="take-rate-row">` +
+        `<input type="hidden" id="${idp}-take-rating" value="${takeRating({ rating: r })}">` +
+        `<div class="take-rate" role="slider" tabindex="0" aria-label="Your rating" ` +
+          `aria-valuemin="0" aria-valuemax="5">${star.repeat(5)}</div>` +
+        `<span class="take-rate-say" aria-hidden="true"></span>` +
+      `</div>`;
+  }
+  function wireTakeRate(row) {
+    const input = row && row.querySelector('input[type="hidden"]');
+    const rate = row && row.querySelector('.take-rate');
+    if (!input || !rate) return;
+    const say = row.querySelector('.take-rate-say');
+    const stars = [...rate.querySelectorAll('.take-rate-star')];
+    const fillOf = (r, i) => Math.max(0, Math.min(2, r - i * 2));   // 0, 1 (half) or 2
+    let value = takeRating({ rating: input.value });
+    let drag = null;
+    let landsAt = 0;   // when the last sweep finishes, for the sparkles
+    const paint = (r, from) => {
+      const up = r > from;
+      const first = up ? Math.floor(from / 2) : Math.ceil(from / 2) - 1;
+      let wait = 0;
+      stars.forEach((st, i) => {
+        const steps = up ? i - first : first - i;
+        const w = !drag?.moved && fillOf(r, i) !== fillOf(from, i) ? Math.max(0, steps) * 55 : 0;
+        wait = Math.max(wait, w);
+        st.style.setProperty('--take-wait', `${w}ms`);
+        st.style.setProperty('--take-fill', `${(2 - fillOf(r, i)) * 50}%`);
+      });
+      landsAt = performance.now() + wait + (drag?.moved ? 80 : 240);
+      rate.setAttribute('aria-valuenow', String(r / 2));
+      rate.setAttribute('aria-valuetext', r ? starWords(r) : 'No rating');
+      if (say) say.textContent = r ? starWords(r) : 'Tap or slide to rate';
+      row.classList.toggle('is-rated', r > 0);
+    };
+    const set = (r) => {
+      if (r === value) return;
+      const from = value;
+      value = r;
+      input.value = String(r);
+      paint(r, from);
+      haptic('selectionChanged');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    const at = (x) => {
+      const a = stars[0].getBoundingClientRect(), b = stars[4].getBoundingClientRect();
+      if (x < a.left - 6) return 0;
+      const f = (x - a.left) / Math.max(1, b.right - a.left);
+      return Math.max(1, Math.min(10, Math.ceil(f * 10)));
+    };
+    rate.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      drag = { x: e.clientX, was: value, moved: false };
+      try { rate.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      haptic('selectionStart');
+      set(at(e.clientX));
+    });
+    rate.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      if (!drag.moved && Math.abs(e.clientX - drag.x) > 6) {
+        drag.moved = true;
+        rate.classList.add('is-dragging');
+      }
+      if (drag.moved) set(at(e.clientX));
+    });
+    // The poll's burst (POLL_SPARKS, .spark), off the last lit star: its
+    // middle, or a half star's middle.
+    let burstTimer = 0;
+    const sparkle = () => {
+      clearTimeout(burstTimer);
+      rate.querySelectorAll('.take-burst').forEach(b => b.remove());
+      if (!value || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const r = value;
+      burstTimer = setTimeout(() => {
+        if (value !== r) return;
+        const st = stars[Math.ceil(r / 2) - 1];
+        if (!st) return;
+        const b = document.createElement('span');
+        b.className = 'take-burst';
+        b.setAttribute('aria-hidden', 'true');
+        if (r % 2) b.style.left = '30%';
+        // Spread to clear a 40px star (the poll's ring is drawn for a row's
+        // edge); the same stars, spins and stagger.
+        b.innerHTML = POLL_SPARKS.map(p =>
+          `<span class="spark" style="--x:${p.x * 1.75}px;--y:${p.y * 1.75}px;--s:${Math.round(p.s * 1.15)}px;` +
+            `--r:${p.r}deg;animation-delay:${p.d}ms"></span>`).join('');
+        st.appendChild(b);
+        setTimeout(() => b.remove(), 900);
+      }, Math.max(0, landsAt - performance.now()));
+    };
+    const end = (e, cancel) => {
+      if (!drag) return;
+      if (!cancel && !drag.moved && drag.was && at(e.clientX) === drag.was) set(0);
+      if (!cancel) sparkle();
+      haptic('selectionEnd');
+      rate.classList.remove('is-dragging');
+      drag = null;
+    };
+    rate.addEventListener('pointerup', (e) => end(e, false));
+    rate.addEventListener('pointercancel', (e) => end(e, true));
+    rate.addEventListener('keydown', (e) => {
+      const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1
+        : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      set(Math.max(0, Math.min(10, value + step)));
+    });
+    paint(value, value);
   }
 
   /* SONG PREVIEWS (Zoe, 2026-11-06: "play previews of songs people post").
@@ -16195,7 +16496,9 @@
     // A video Frame with no stored poster has no still, so it is words, the
     // same rule the feed's own frames follow.
     const still = p.image && !isClip ? p.image : (p.poster || '');
-    const link = still ? { url: postLinks(p)[0] || '' } : pinLinkPicture(p);
+    // A Take's poster is its picture, and what it is about its foot.
+    const tk = p.type === 'take' && p.take;
+    const link = still || (tk && tk.art) ? { url: postLinks(p)[0] || '' } : pinLinkPicture(p);
     const page = link.meta || {};
     const domain = link.url ? domainOf(link.url) : '';
     // The post's own words lead. A headline over a note is the headline over
@@ -16204,13 +16507,16 @@
     const said = noteSaid(p) || (p.poll && p.poll.q) || '';
     // A square tile: the small copy when the upload has one.
     const pic = still ? picEl(thumbUrl(still), { tint: p.tint })
+      : tk && tk.art ? picEl(tk.art)
       : link.image ? picEl(link.image, { cls: ' pin-pic--link' + (link.yt ? ' pin-pic--yt' : '') }) : '';
     // A picture with nothing said over it is only the picture; words always
     // have something to set, the type's name at the very least.
     const head = p.title && said ? p.title
-      : (said || p.title || page.title || (pic ? '' : domain || TYPE_LABEL[p.type] || 'Post'));
+      : (said || p.title || page.title || (tk && tk.title) || (pic ? '' : domain || TYPE_LABEL[p.type] || 'Post'));
     const gist = p.title && said ? said : (!said && !p.title && page.title ? page.about || '' : '');
-    const meta = metaEl(p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime) : domain);
+    const meta = metaEl(p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
+      : tk ? [said || p.title ? tk.title : '', takeRating(tk) ? starWords(takeRating(tk)) : ''].filter(Boolean).join(' · ')
+      : domain);
     // On a words card the note is set as the feed sets it (Zoe: "reflect the
     // contents styles"): its paragraphs, line breaks, headings, bold and
     // italic, under the title when there is one, the wide card beside its
@@ -18612,7 +18918,8 @@
       let h = haystacks.get(p);
       if (h === undefined) {
         h = [p.title, notePlain(p.note), (p.tags || []).join(' '),
-          p.song && p.song.title, p.song && p.song.artist].filter(Boolean).join(' ').toLowerCase();
+          p.song && p.song.title, p.song && p.song.artist,
+          p.take && p.take.title, p.take && p.take.by].filter(Boolean).join(' ').toLowerCase();
         haystacks.set(p, h);
       }
       return h;
@@ -19494,6 +19801,7 @@
         (cls === ' notif-thumb--clip' ? `<span class="notif-play">${svgIcon('play')}</span>` : '') +
       `</span>`;
     if (post.song && post.song.art) return pic(post.song.art, ' notif-thumb--art');
+    if (post.take && post.take.art) return pic(post.take.art);
     if (post.image) {
       if (!isVideoUrl(post.image)) return pic(post.image);
       if (post.poster) return pic(post.poster, ' notif-thumb--clip');
@@ -21442,8 +21750,9 @@
     // (see applyBaseSurface in renderPublish).
     // Not on a daily answer: a song is read on On repeat, never on its page.
     const song = opts.song !== false && Store.songsReady();
+    const take = !opts.moment && Store.takesReady();
     const roll = rollLikely();
-    return richNoteField('c', '', '', randomNotePlaceholder(), { event, song, roll, tags: {} }) +
+    return richNoteField('c', '', '', randomNotePlaceholder(), { event, song, take, roll, tags: {} }) +
       `<div class="field" id="c-link-row" hidden>` +
         `<label for="c-url">Link</label>` +
         `<input id="c-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -21451,6 +21760,7 @@
       `</div>` +
       `<div class="compose-circle" id="c-circle" hidden></div>` +
       pollFieldHtml() +
+      (take ? takeFieldHtml() : '') +
       // The camera roll's row (wireRoll), app only: the strip, where native
       // lays Apple's picker on a box that only holds its place in the form,
       // with ONE camera disc on its top right corner (native, TriaRoll's
@@ -21494,6 +21804,21 @@
         `</div>` +
         `<button type="button" class="poll-add-opt" id="c-poll-add">Add option</button>` +
         `<p class="field-hint">2 to 4 choices. Closes a day after you post it.</p>` +
+      `</div>`;
+  }
+
+  // The Take surface, shipped hidden like the poll's: what it is about (one
+  // search for films, shows, books and podcasts), then the stars. The pick
+  // sits where the field was, with an x to search again.
+  function takeFieldHtml() {
+    return `<div class="field take-field" id="c-take-row" hidden>` +
+        `<div class="take-now" id="c-take-now" hidden></div>` +
+        `<input id="c-take-q" class="song-input take-input" type="search" ` +
+          `placeholder="Search a film, show, book or podcast" ` +
+          `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
+          `aria-label="Search a film, show, book or podcast">` +
+        `<div class="take-results" id="c-take-results" aria-live="polite"></div>` +
+        takeRateHtml('c') +
       `</div>`;
   }
 
@@ -21999,6 +22324,7 @@
     let wantPoll = false;           // poll surface open → this post is a Poll
     let wantEvent = false;          // place + time open → this post is an Activity
     let wantSong = false;           // song surface open → this post is Music
+    let wantTake = false;           // take surface open → this post is a Take
     let roll = null;                // the camera roll's { sync, ticks } (wireRoll), app only
 
     // The type is INFERRED from what's attached: a place and a time first (an
@@ -22011,6 +22337,7 @@
       if (wantEvent) return 'activity';
       if (wantPhoto || cropper || videoCapture) return 'photo';
       if (wantPoll) return 'poll';
+      if (wantTake) return 'take';
       if (wantSong) return 'song';
       if (wantLink) return 'find';
       return 'note';
@@ -22044,6 +22371,7 @@
       fieldsEl.querySelector('#c-add-poll')?.setAttribute('aria-pressed', String(pubType === 'poll'));
       fieldsEl.querySelector('#c-add-event')?.setAttribute('aria-pressed', String(pubType === 'activity'));
       fieldsEl.querySelector('#c-add-song')?.setAttribute('aria-pressed', String(pubType === 'song'));
+      fieldsEl.querySelector('#c-add-take')?.setAttribute('aria-pressed', String(pubType === 'take'));
       // The headline stops being optional on an activity — it is the plan's name and
       // submitComposer refuses one without it — so the box says so up front instead
       // of letting the reader find out at the foot of the form. Same field either
@@ -22051,6 +22379,12 @@
       const titleInput = fieldsEl.querySelector('#c-title');
       if (titleInput) {
         titleInput.placeholder = pubType === 'activity' ? 'Picnic at the park' : 'Title (optional)';
+      }
+      // A Take's words are the review, so the box asks for them.
+      const noteBox = fieldsEl.querySelector('#c-note');
+      if (noteBox && family === 'base') {
+        noteBox.dataset.ph ??= noteBox.dataset.placeholder || '';
+        noteBox.dataset.placeholder = pubType === 'take' ? 'What did you think?' : noteBox.dataset.ph;
       }
       syncDefaultAudience();
       roll?.sync();   // another attachment folds the camera roll away, and back
@@ -22095,6 +22429,8 @@
       if (eventRow) eventRow.hidden = !wantEvent;
       const songRow = fieldsEl.querySelector('#c-song-row');
       if (songRow) songRow.hidden = !wantSong;
+      const takeRow = fieldsEl.querySelector('#c-take-row');
+      if (takeRow) takeRow.hidden = !wantTake;
     }
 
     // A public account's posts default to Anyone (continuity: their notes, finds and
@@ -22135,6 +22471,8 @@
       wantEvent = false;
       wantSong = false;
       composeSong = null;
+      wantTake = false;
+      composeTake = null;
       pubAudience = { mode: defaultAudience(), users: [] };
       pubAudienceTouched = false;
       // Arrived from a circle's Post button: the post is for that circle until
@@ -22250,6 +22588,7 @@
       const pollBtn  = fieldsEl.querySelector('#c-add-poll');
       const eventBtn = fieldsEl.querySelector('#c-add-event');
       const songBtn  = fieldsEl.querySelector('#c-add-song');
+      const takeBtn  = fieldsEl.querySelector('#c-add-take');
       // The attachments are one-at-a-time: turning one on folds the others so
       // the inferred type is never ambiguous. Photo owns a live picker/capture, so
       // clearing it routes through clearFrame (stops any stream); the others
@@ -22262,10 +22601,12 @@
       // A folded song surface keeps its pick: a mis-tap costs the tap back. Only submitComposer reads it, and only for
       // a post that is still Music.
       const foldSong  = () => { wantSong = false; };
+      // A folded take keeps its pick and stars, as a song does.
+      const foldTake  = () => { wantTake = false; };
       linkBtn?.addEventListener('click', () => {
         wantLink = !wantLink;
         document.getElementById('c-error').textContent = '';
-        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); foldSong(); }
+        if (wantLink) { foldPhoto(); foldPoll(); foldEvent(); foldSong(); foldTake(); }
         applyBaseSurface();
         syncType();
         if (wantLink) fieldsEl.querySelector('#c-url')?.focus();
@@ -22275,7 +22616,7 @@
         wantPhoto = opening;
         document.getElementById('c-error').textContent = '';
         if (opening) {
-          foldLink(); foldPoll(); foldEvent(); foldSong();
+          foldLink(); foldPoll(); foldEvent(); foldSong(); foldTake();
           applyBaseSurface();                          // reveal the frame field first
           fieldsEl.querySelector('#c-file')?.click();  // then pop the picker
         } else {
@@ -22286,7 +22627,7 @@
       pollBtn?.addEventListener('click', () => {
         wantPoll = !wantPoll;
         document.getElementById('c-error').textContent = '';
-        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); foldSong(); }
+        if (wantPoll) { foldPhoto(); foldLink(); foldEvent(); foldSong(); foldTake(); }
         applyBaseSurface();
         syncType();
       });
@@ -22296,20 +22637,96 @@
       eventBtn?.addEventListener('click', () => {
         wantEvent = !wantEvent;
         document.getElementById('c-error').textContent = '';
-        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); foldSong(); }
+        if (wantEvent) { foldPhoto(); foldLink(); foldPoll(); foldSong(); foldTake(); }
         applyBaseSurface();
         syncType();
       });
       songBtn?.addEventListener('click', () => {
         wantSong = !wantSong;
         document.getElementById('c-error').textContent = '';
-        if (wantSong) { foldPhoto(); foldLink(); foldPoll(); foldEvent(); }
+        if (wantSong) { foldPhoto(); foldLink(); foldPoll(); foldEvent(); foldTake(); }
         applyBaseSurface();
         syncType();
         if (wantSong && !composeSong) fieldsEl.querySelector('#c-song-q')?.focus();
       });
+      takeBtn?.addEventListener('click', () => {
+        wantTake = !wantTake;
+        document.getElementById('c-error').textContent = '';
+        if (wantTake) { foldPhoto(); foldLink(); foldPoll(); foldEvent(); foldSong(); }
+        applyBaseSurface();
+        syncType();
+        if (wantTake && !composeTake) fieldsEl.querySelector('#c-take-q')?.focus();
+      });
       wirePollOpts();
       wireSongField();
+      wireTakeField();
+    }
+
+    // The Take surface: the search (lookUpTakes), the pick, and the stars.
+    function wireTakeField() {
+      const input = fieldsEl.querySelector('#c-take-q');
+      const resEl = fieldsEl.querySelector('#c-take-results');
+      const nowEl = fieldsEl.querySelector('#c-take-now');
+      if (!input || !resEl || !nowEl) return;
+      let hits = [], timer = 0, ctrl = null;
+      const paintNow = () => {
+        const t = composeTake;
+        nowEl.hidden = !t;
+        input.hidden = !!t;
+        nowEl.innerHTML = t
+          ? takeArtHtml(t, 'take-art--now') +
+            `<span class="take-lines">` +
+              `<span class="take-title">${esc(t.title)}</span>` +
+              (takeSub(t) ? `<span class="take-sub">${esc(takeSub(t))}</span>` : '') +
+            `</span>` +
+            `<button type="button" class="song-clear take-clear" aria-label="Search again">×</button>`
+          : '';
+        nowEl.querySelector('.take-clear')?.addEventListener('click', () => {
+          composeTake = null;
+          paintNow();
+          input.focus();
+        });
+      };
+      const paint = (state) => {
+        if (state) { resEl.innerHTML = `<p class="feed-empty">${esc(state)}</p>`; return; }
+        resEl.innerHTML = hits.map(takeHitHtml).join('');
+      };
+      resEl.addEventListener('click', (e) => {
+        const b = e.target.closest('.take-hit');
+        const t = b && hits[+b.dataset.i];
+        if (!t || !t.title) return;
+        composeTake = { ...t };
+        hapticTap('LIGHT');
+        hits = [];
+        input.value = '';
+        paint('');
+        paintNow();
+        input.blur();
+        // Who made it, filled in behind the pick (a director, a show's creator).
+        if (!t.by) {
+          const picked = composeTake;
+          takeMaker(t).then((by) => {
+            if (by && composeTake === picked) { composeTake = { ...picked, by }; paintNow(); }
+          }).catch(() => {});
+        }
+      });
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const q = input.value.trim();
+          ctrl?.abort();
+          if (!q) { hits = []; paint(''); return; }
+          ctrl = new AbortController();
+          paint('Looking…');
+          const found = await lookUpTakes(q, ctrl.signal);
+          if (!found) return;
+          hits = found.hits;
+          paint(found.state);
+        }, 420);
+      });
+
+      wireTakeRate(fieldsEl.querySelector('#c-take-row .take-rate-row'));
+      paintNow();
     }
 
     // The song surface's search. Debounced like the picker page's, for the same
@@ -22479,7 +22896,7 @@
       const overlaid = () => sheetOpen || !!document.querySelector('.sheet-scrim')
         || !!fieldsEl.querySelector('.mention-list:not([hidden])');
       const shown = () => ok && !gone && family === 'base'
-        && !wantLink && !wantPoll && !wantEvent && !wantSong && !videoCapture;
+        && !wantLink && !wantPoll && !wantEvent && !wantSong && !wantTake && !videoCapture;
       function sync() {
         if (gone) return;
         const show = shown();
@@ -22722,7 +23139,7 @@
   }
   const ATTACH_BTN = {
     find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
-    activity: '#c-add-event', momentSong: '#c-add-song',
+    activity: '#c-add-event', momentSong: '#c-add-song', take: '#c-add-take',
   };
 
   // The Frame capture surface: a plain file picker (photo or video). A picked
@@ -24867,6 +25284,16 @@
       data.title = val('c-title');
       if (!composeSong) { errEl.textContent = 'Pick a song first.'; return; }
       data.song = composeSong;
+    } else if (pubType === 'take') {
+      // The words are optional, as on Letterboxd: a take can be its stars.
+      data.title = val('c-title');
+      if (!composeTake) { errEl.textContent = 'Pick what your take is about first.'; return; }
+      const t = composeTake;
+      data.take = { kind: TAKE_KIND[t.kind] ? t.kind : 'film', title: String(t.title).slice(0, 160) };
+      for (const k of ['year', 'by', 'src', 'id']) if (t[k]) data.take[k] = String(t[k]).slice(0, 160);
+      for (const k of ['art', 'link']) if (/^https:\/\//.test(t[k] || '')) data.take[k] = t[k];
+      const rating = takeRating({ rating: val('c-take-rating') });
+      if (rating) data.take.rating = rating;
     } else {
       data.title = val('c-title');
       if (!data.title && !data.note) {
@@ -25168,6 +25595,12 @@
       // Headline + caption both optional (the image carries the post), but save the
       // title so an edited Frame keeps/gains its headline like a Note.
       data.title = val('e-title');
+    } else if (post.type === 'take' && post.take) {
+      // The words stay optional; the stars are written back with what they rate.
+      data.title = val('e-title');
+      const { rating: _, ...take } = post.take;
+      const rating = takeRating({ rating: val('e-take-rating') });
+      data.take = rating ? { ...take, rating } : take;
     }
 
     const res = await Store.updatePost(id, data);
@@ -26810,6 +27243,9 @@
           // something Apple reviews. So the web page keeps the fold in full,
           // which is where the enquiries come from anyway.
           (nativeShell() ? '' : businessHtml) + feedbackHtml +
+          // TMDB's terms ask for their credit in an About (add-takes.sql).
+          `<p class="about-credit">Film and show details for Takes come from TMDB. ` +
+            `This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` +
         `</div>` +
       `</section>`;
 

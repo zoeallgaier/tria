@@ -56,7 +56,7 @@ create table public.users (
 create table public.posts (
   id         uuid primary key default gen_random_uuid(),
   author     uuid not null references public.users(id) on delete cascade,
-  type       text not null check (type in ('note','find','photo','activity','poll','song','repost')),
+  type       text not null check (type in ('note','find','photo','activity','poll','song','take','repost')),
   -- A repost IS a post row, pointing at the one it passes along. Cascading, so a
   -- deleted original takes its reposts with it (quotes included — a quote is a
   -- sentence ABOUT one post, not a post that stands alone). 'repost' is a sixth
@@ -75,6 +75,7 @@ create table public.posts (
   event_date date,                          -- the day an activity happens (sorts + retires past plans)
   event_time text,                          -- optional 'HH:MM' straight from <input type="time">
   song       jsonb,                         -- { title, artist?, art?, apple?, spotify?, youtube?, kind? } for music posts; see add-song-posts.sql
+  take       jsonb,                         -- { kind, title, year?, by?, art?, link?, src?, id?, rating? (half stars, 1-10) } for takes; see add-takes.sql
   moment     boolean not null default false, -- lasts a day, on the rail and in no feed; see add-moments.sql
   -- Who can see this post, authoritatively — the account's `private` flag does
   -- NOT gate reads (it only picks the composer's default). 'circle' means
@@ -106,6 +107,17 @@ create table public.posts (
   constraint posts_song_shape check (
     (type = 'song' and song is not null and song ? 'title')
     or (type <> 'song' and song is null)
+  ),
+  -- A take carries the thing it is about, and nothing else does (add-takes.sql).
+  constraint posts_take_shape check (
+    (type = 'take' and take is not null
+       and jsonb_typeof(take) = 'object'
+       and take ? 'title'
+       and take->>'kind' in ('film','show','book','podcast')
+       and (not take ? 'rating'
+            or (jsonb_typeof(take->'rating') = 'number'
+                and (take->>'rating')::numeric in (1,2,3,4,5,6,7,8,9,10))))
+    or (type <> 'take' and take is null)
   ),
   -- A carousel is a photo post whose cover is also its `image` (add-carousels.sql).
   constraint posts_images_shape check (

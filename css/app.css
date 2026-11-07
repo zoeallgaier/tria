@@ -2138,7 +2138,8 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
    below it (see .comments-panel). Text entries (post / find): content inset to
    match the photo text column; the type reads from the colored tag, not a rule. */
 .card--note .card-main, .card--find .card-main, .card--activity .card-main,
-.card--poll .card-main, .card--quote .card-main, .card--song .card-main {
+.card--poll .card-main, .card--quote .card-main, .card--song .card-main,
+.card--take .card-main {
   padding: 0.35rem var(--inset);
 }
 
@@ -11570,7 +11571,7 @@ body[data-ambient="none"] .pf-row-swatch {
   .feed { margin-inline: calc(-1 * var(--gutter)); gap: 0.9rem; }
   .card--note .card-main, .card--find .card-main, .card--activity .card-main,
   .card--poll .card-main, .card--quote .card-main,
-  .card--song .card-main { padding-inline: var(--gutter); }
+  .card--song .card-main, .card--take .card-main { padding-inline: var(--gutter); }
   .card--photo .card-actions { padding-inline: var(--gutter); }
   /* Thread aligns to the phone text column (the gutter), rule still in the gutter. */
   /* The page's own inset at phone width, matching .card-main's gutter above.
@@ -12896,3 +12897,202 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
    hidden; .pf-account's own display would otherwise win over [hidden]. */
 .pf-settings[hidden],
 .pf-account[hidden] { display: none; }
+
+
+/* ── A Take (2026-11-07, Zoe) ─────────────────────────────────────────────────
+   A post about a film, a show, a book or a podcast, with up to five stars.
+   THE STARS ride the byline's right (Zoe: "to the right of people's
+   pfps/name/date"), only the ones given, a half as the left half of one, in
+   the reader's own colour, as a liked heart is. THE TILE is the song's tile with
+   a poster in the sleeve's place: 2:3 for a film, a show or a book, square
+   for a podcast, at the corner the photos wear. */
+.take-stars {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  /* A touch in from the column's edge (Zoe: "just so slightly left"), so the
+     row doesn't read as pinned to the wall. */
+  margin-inline-end: 6px;
+  color: var(--heart);
+}
+.take-star { display: block; width: 15px; height: 15px; fill: currentColor; }
+.take-star--half { width: 7.5px; }
+.card-solometa .take-stars { margin-inline-start: auto; }
+.quoted-who .take-stars { margin-inline-start: auto; }
+.quoted-who .take-star { width: 12px; height: 12px; }
+.quoted-who .take-star--half { width: 6px; }
+.take-now--fixed { margin-bottom: 0; }
+
+.card-take {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0.9rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-soft);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-micro);
+}
+a.card-take:active { transform: scale(0.985); }
+.card-take + * { margin-top: 0.9rem; }
+.take-art {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-img);
+  background-color: var(--glass-bg-panel);
+  background-size: cover;
+  background-position: center;
+  border: var(--glass-edge);
+  color: var(--muted);
+}
+.take-art.pin-cover { border: 0; }
+.take-art--podcast { aspect-ratio: 1; }
+.take-art-ico { width: 40%; height: auto; opacity: 0.6; }
+.take-art--hit { width: 40px; border-radius: 8px; }
+.take-art--now { width: 64px; border-radius: 10px; }
+.take-lines { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1 1 auto; }
+.take-title {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.take-sub {
+  font-size: var(--kicker);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-take .take-title {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.24rem;
+  line-height: 1.16;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.card-take .take-sub { font-size: 0.8rem; letter-spacing: 0.02em; white-space: normal; }
+
+/* The composer's surface: the search, its rows, the pick, then the stars. */
+.take-field .take-input[hidden],
+.take-now[hidden] { display: none; }
+.take-results { display: flex; flex-direction: column; margin-top: 0.35rem; }
+.take-results:empty { display: none; }
+.take-results .feed-empty { margin: 0.6rem 0; }
+.take-hit,
+.take-now {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.take-hit:active,
+.take-hit:hover { background: var(--glass-bg); }
+.take-hit .take-title,
+.take-now .take-title { font-size: 0.95rem; white-space: nowrap; }
+.take-now {
+  padding: 0.5rem;
+  border: var(--glass-edge);
+  background: var(--glass-bg-panel);
+  border-radius: calc(10px + 0.5rem);
+  cursor: default;
+}
+
+/* THE STARS, centred under what they rate, with the words for them under
+   the row. Each star's fill is the outline's copy clipped from the right
+   (--take-fill: 100% empty, 50% half, 0 full), so a half is the same drawing
+   cut down the middle, and it flows in on the signature ease, each star
+   waiting on the one before it (--take-wait, set by wireTakeRate) the way a
+   like's ink rises. Under a dragging finger it follows at once. No scale:
+   the colour moving is the whole animation (Zoe, 2026-11-07). */
+.take-rate-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 1.1rem;
+}
+.take-rate {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  outline: none;
+}
+.take-rate-star {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+  --take-fill: 100%;
+  --take-wait: 0ms;
+}
+.take-rate-star svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.take-rate-off {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  opacity: 0.5;
+}
+.take-rate-on {
+  fill: var(--heart);
+  stroke: var(--heart);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  -webkit-clip-path: inset(0 var(--take-fill) 0 0);
+  clip-path: inset(0 var(--take-fill) 0 0);
+  transition: clip-path var(--dur-quick) var(--ease) var(--take-wait),
+    -webkit-clip-path var(--dur-quick) var(--ease) var(--take-wait);
+}
+.take-rate.is-dragging .take-rate-on { transition-duration: 80ms; transition-delay: 0ms; }
+/* The poll vote's sparkles (POLL_SPARKS), off the last lit star, in the
+   reader's colour. */
+.take-burst {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 2;
+  pointer-events: none;
+  --burst: var(--heart);
+}
+.take-burst .spark {
+  left: 0; top: 0;
+  animation: like-fly 0.5s linear both, spark-fade 0.5s ease-in-out both;
+}
+.take-rate:focus-visible { outline: 2px solid var(--rule); outline-offset: 4px; border-radius: 10px; }
+.take-rate-say {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: color var(--dur-micro);
+}
+.take-rate-row.is-rated .take-rate-say { color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .take-rate-on { transition: none; }
+}
+.about-credit { margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }

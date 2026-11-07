@@ -25,10 +25,15 @@ The same files also serve a website; that is a byproduct, not a target. See
 
 **The bar's filter disc and dial are gone from every profile; the types are a
 strip of tabs between the pins and the posts** (Zoe: "like a swipable
-instagram filter for profiles post types"): All's pentad, then the glyph of
-each type they've posted (Notes, Frames, Finds, then the rest, Zoe), Reposts last, in even columns (`.profile-tabs`),
-the one you're on in ink with a short line under it that slides. Same rows
-and the same "nothing to narrow, no strip" rule as the dial had. **A sideways
+instagram filter for profiles post types"): **four at most, All, Frames,
+Takes, Reposts** (Zoe, the same day: "far too many options"), each only if
+they've posted it, in even columns (`.profile-tabs`), the one you're on in
+ink with a short line under it that slides. A tab earns its place by changing
+what the page IS (the wall, the shelf, another axis); Notes, Finds, Polls and
+Activities only narrowed the same feed, so they live in All. Notes was the
+one pushback (writing is Tria's heart): bring it back first if a photo
+poster's words get hard to find. No strip when nothing narrows (one type
+only, unless it is Frames, the wall). **A sideways
 drag on the posts goes to the next type** (`wireProfileTabs`): the pane and
 the line follow the finger one to one (a quarter past either end), past 28% or
 a flick it goes; the next pane is not built under the finger, so the old one

@@ -80,7 +80,7 @@ const Store = (() => {
   //     those of circles I am in (circle-privacy.sql)
   //   communityPrivacyReady: whether circle-privacy.sql has run (invite only)
   //   communityAccentReady: whether circle-accent.sql has run (a circle's theme)
-  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, momentsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
+  const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, momentsReady: false, takesReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
                          communities: [], communityMembers: [], communitiesReady: false,
                          communityToolsReady: false, communityInvites: [], communityPrivacyReady: false,
@@ -342,6 +342,9 @@ const Store = (() => {
     // A Moment (add-moments.sql): an ordinary post that lasts a day, read on
     // the rail over My Circle and in no feed (see offFeed).
     if (p.moment) o.moment = true;
+    // A Take's subject and its stars (add-takes.sql): { kind, title, year?, by?,
+    // art?, link?, src?, id?, rating? }, rating in half stars, 1 to 10.
+    if (p.take && typeof p.take === 'object' && p.take.title) o.take = p.take;
     // A repost points at the post it passes along. Absent on every other row, and
     // absent on ALL rows until reposts.sql has run — the client tolerates that the
     // same way it tolerates every other pending migration.
@@ -603,6 +606,8 @@ const Store = (() => {
       state.songsReady ? { data: [], error: null } : sb.from('posts').select('song').limit(1),
       // Whether a post can be a Moment yet (add-moments.sql). The same latch.
       state.momentsReady ? { data: [], error: null } : sb.from('posts').select('moment').limit(1),
+      // Whether a post can be a Take yet (add-takes.sql). The same latch.
+      state.takesReady ? { data: [], error: null } : sb.from('posts').select('take').limit(1),
       // Headcount is the opposite: who's in IS the point of an activity, so the
       // rows are readable by everyone (the table may not exist yet on an old DB —
       // loadWorld tolerates the error and leaves the list empty).
@@ -649,7 +654,7 @@ const Store = (() => {
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, sg, mo, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci, ca] = read;
+    const [u, p, c, l, cl, sg, mo, tk, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci, ca] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -694,6 +699,8 @@ const Store = (() => {
     else if (sg.error.code === '42703') state.songsReady = false;
     if (!mo.error) state.momentsReady = true;
     else if (mo.error.code === '42703') state.momentsReady = false;
+    if (!tk.error) state.takesReady = true;
+    else if (tk.error.code === '42703') state.takesReady = false;
     // Comment likes arrive in their own migration, so a MISSING table says the
     // hearts are not wired up yet, and the app draws none rather than a heart
     // that silently springs back on every tap. Any other error is a blip and
@@ -2099,6 +2106,7 @@ const Store = (() => {
     if (data.eventTime) row.event_time = data.eventTime;
     if (data.song)     row.song = data.song;   // { title, artist?, art?, apple?, spotify?, youtube?, kind? }
     if (data.moment)   row.moment = true;
+    if (data.take)     row.take = data.take;   // { kind, title, year?, by?, art?, link?, src?, id?, rating? }
     if (data.video) {
       try {
         const vExt = /mp4/i.test(data.video.type) ? 'mp4' : /webm/i.test(data.video.type) ? 'webm' : 'mov';
@@ -2159,6 +2167,14 @@ const Store = (() => {
       const missing = error.code === '42703' || error.code === 'PGRST204';
       return { ok: false, error: missing
         ? 'Carousels aren’t switched on yet. Share one photo for now.'
+        : 'Couldn’t publish, try again.' };
+    }
+    if (error && row.take) {
+      // A DB without add-takes.sql refuses the column or the type.
+      console.warn('[tria] take refused:', error.code, error.message);
+      const missing = error.code === '42703' || error.code === 'PGRST204' || error.code === '23514';
+      return { ok: false, error: missing
+        ? 'Takes aren’t switched on yet.'
         : 'Couldn’t publish, try again.' };
     }
     if (error && row.song) {
@@ -2414,6 +2430,8 @@ const Store = (() => {
       if (k in data) patch[COLS[k]] = data[k] || null;
     }
     if ('tags' in data) patch.tags = data.tags || [];
+    // A Take's subject and stars are written whole, like the song's shape.
+    if ('take' in data && before.type === 'take' && data.take && data.take.title) patch.take = data.take;
 
     // The same coercion createPost states, and it has to be stated twice because
     // both doors write the column: "choose people" with nobody chosen is your
@@ -2631,6 +2649,9 @@ const Store = (() => {
   // Whether a post can be a Moment (add-moments.sql). Until then the New
   // sheet keeps its Music row and offers no Moment.
   const momentsReady = () => !!state.momentsReady;
+  // Whether a post can be a Take (add-takes.sql). Until then the composer has
+  // no Take button.
+  const takesReady = () => !!state.takesReady;
   const reactionOf = (postId) => mineIn(state.likes, postId) ? 'heart' : null;
 
   // Like a post ('heart') or take the like back (null).
@@ -4393,7 +4414,7 @@ const Store = (() => {
     commentsFor, addComment, deleteComment,
     // Likes
     likesFor, likeCountFor, likedByMe, toggleLike,
-    reactionOf, setReaction, songsReady, momentsReady, momentLive, MOMENT_MS, ownMoment,
+    reactionOf, setReaction, songsReady, momentsReady, takesReady, momentLive, MOMENT_MS, ownMoment,
     commentLikesReady, commentLikeCount, commentLikedByMe, toggleCommentLike,
     // Headcount
     headcountFor, rsvpsFor, myRsvp, setRsvp, calendarLink,

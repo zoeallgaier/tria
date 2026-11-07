@@ -18,4 +18,12 @@ window.TRIA_CONFIG = {
      It does not let Tria read anything from Instagram and it is not what would
      put Tria in Instagram's share row. See docs/social-links.md, Stage 4. */
   metaAppId: '2472037233323838',
+
+  /* TMDB's v3 API key, for a Take's film and show search (add-takes.sql).
+     Like the publishable key, it is meant to ride in an app: it only reads
+     TMDB's public catalogue, and TMDB's terms are free for non-commercial use
+     with their credit in About (aboutSheet). A commercial Tria needs their
+     commercial licence. Without it the search still finds books and podcasts
+     on Apple, and a film can be typed in by name. */
+  tmdbKey: '5de3d50bbbb893c06ddb90eb5cc991bf',
 };

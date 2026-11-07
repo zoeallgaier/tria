@@ -73,7 +73,7 @@ async function userByName(username: string) {
   return data;
 }
 async function postById(id: string) {
-  const { data } = await supabase.from('posts').select('id,author,type,title,note').eq('id', id).single();
+  const { data } = await supabase.from('posts').select('id,author,type,title,note,take').eq('id', id).single();
   return data;
 }
 // The circle a post is addressed to (add-circles.sql), or null. Asked on its
@@ -150,6 +150,9 @@ function plain(t: string): string {
 function postLabel(post: Row | null): string {
   const t = (post?.title || plain((post?.note as string) ?? '')).trim();
   if (t) { const s = t.length > 44 ? t.slice(0, 44).trimEnd() + '…' : t; return `“${s}”`; }
+  // A Take with no words of its own names what it's about (add-takes.sql).
+  const about = (post?.take as { title?: string } | null)?.title;
+  if (about) { const s = about.length > 40 ? about.slice(0, 40).trimEnd() + '…' : about; return `your take on ${s}`; }
   return post?.type === 'photo' ? 'your frame' : 'your post';
 }
 // The app's SONG_IN_TEXT: a music service's link in a message.
