@@ -15509,6 +15509,12 @@
 
     // On a words card the note is set as the feed sets it (Zoe: "reflect the
     // contents styles"): its paragraphs, line breaks, headings, bold and
+    // italic, under the title when there is one, the wide card beside its
+    // picture too. A small picture card keeps the
+    // plain line over its shade.
+    const rich = (!pic || wide) && said ? cardNoteHtml(p, true) : '';
+    // On a words card the note is set as the feed sets it (Zoe: "reflect the
+    // contents styles"): its paragraphs, line breaks, headings, bold and
     // italic, under the title when there is one. A picture card keeps the
     // plain line over its shade.
     const rich = !pic && said ? cardNoteHtml(p, true) : '';
