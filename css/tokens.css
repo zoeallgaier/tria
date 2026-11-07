@@ -321,8 +321,11 @@
      holding a cover at a known size and pad reads --art-round to stay
      concentric with it (see .card-song, .song-now, .pin--song). A FIFTH, down
      from a quarter, the same day (Zoe: "a bit less rounding on the album
-     art"), with the soft corner below carrying the cuteness instead. */
-  --art-round:  0.2;
+     art"), with the soft corner below carrying the cuteness instead. A
+     SEVENTH since 2026-11-06 (Zoe: "a bit less rounded as to not mess with
+     album art too much, but stay on brand"): still plainly soft, still past
+     a photo's corner at every size, but a cover's own edge reads again. */
+  --art-round:  0.14;
   --radius-art: calc(var(--art-round) * 100%);
   /* The rest of the corner scale, tokenised so the ladder is enforced not
      remembered (see the design system note in CLAUDE.md). */

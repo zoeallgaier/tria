@@ -40,6 +40,12 @@ the same day: autoplay as AMBIENT (the switch silenced it) with a native
 volume-button watcher to turn it up (`SystemVolumeDidChange`, undocumented).
 The play mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play
 icon").
+**A clip plays through Web Audio, never an Audio element, so iOS shows no Now
+Playing player** (Zoe: "I dont wanna see nor need the ios homescreen player";
+`clipBuffer`, `audioCtx`, Apple's clip host answers CORS `*`; before 16.4 the
+element stays, since there Web Audio obeys the switch). **Pausing a Moment's
+song hushes them all** (`preview.hushed`): none starts by itself until the app
+comes back from the background; a tap on a disc still plays it.
 
 ## Discover's search is the header; chips under it (2026-11-06)
 

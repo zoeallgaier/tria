@@ -8030,10 +8030,13 @@
           ? `<div class="mv-dots" aria-hidden="true">${frames.map(() => '<span class="mv-dot"></span>').join('')}</div>`
           : '') +
       // any other frame stops it.
+      // Once you've paused one, none starts by itself until the app is
+      // opened again (preview.hushed); its disc still plays on a tap.
       const play = pg.el.querySelector('.mv-play');
-      if (!play.hidden) {
-        if (preview.btn !== play) playPreview(play, true);
-      } else stopPreview();
+      if (play.hidden) stopPreview();
+      else if (preview.btn === play) { /* already playing */ }
+      else if (preview.hushed) stopPreview();
+      else playPreview(play, true);
       if (how === 'frame' && !prefersReduced()) {
         frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
       }
@@ -14373,7 +14376,7 @@
      `tria:previews`, so every song ever posted plays and a second play asks
      nothing.
 
-     ONE CLIP AT A TIME, through one Audio element. The button that plays it
+     ONE CLIP AT A TIME, through Web Audio (an Audio element before iOS 16.4). The button that plays it
      wears a ring that runs round it over the clip (paintPlay). A Moment's
      song starts by itself. EVERY clip is PLAYBACK audio, which plays through
      the ringer switch (Zoe, 2026-11-06: "I should be able to hear with my
@@ -14476,7 +14479,36 @@
     if (run) run.style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(1, t))));
   }
 
-  const preview = { audio: null, btn: null, turn: 0, raf: 0 };
+  /* NO PLAYER ON THE LOCK SCREEN (Zoe, 2026-11-06: "I dont wanna see nor
+     need the ios homescreen player coming up"). WebKit hands any playing
+     Audio element to Now Playing, so where the Audio Session API is (iOS
+     16.4, what lets a clip through the ringer switch) the clip is decoded and
+     played through Web Audio instead, which Now Playing never sees. Apple's
+     clip host answers CORS with `*`. Older WebKit keeps the element: its Web
+     Audio would be silenced by the switch. `hushed`: a Moment's song paused
+     by hand keeps every Moment quiet until the app is opened again. */
+  const preview = { audio: null, btn: null, turn: 0, raf: 0, src: null, hushed: false };
+  const webAudio = !!(navigator.audioSession && (window.AudioContext || window.webkitAudioContext));
+  let audioCtx = null;
+  const ctxNow = () => {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+    return audioCtx;
+  };
+  // iOS lets a context start only inside a tap: every tap tries, cheaply.
+  if (webAudio) {
+    document.addEventListener('touchend', () => { if (audioCtx && audioCtx.state !== 'running') ctxNow(); }, true);
+  }
+  const clipBuffers = new Map();   // url -> Promise<AudioBuffer>, the last few
+  function clipBuffer(url) {
+    if (clipBuffers.has(url)) return clipBuffers.get(url);
+    const p = fetch(url).then(r => { if (!r.ok) throw new Error('clip'); return r.arrayBuffer(); })
+      .then(b => new Promise((ok, no) => ctxNow().decodeAudioData(b, ok, no)));
+    p.catch(() => clipBuffers.delete(url));
+    clipBuffers.set(url, p);
+    if (clipBuffers.size > 6) clipBuffers.delete(clipBuffers.keys().next().value);
+    return p;
+  }
   const setAudioSession = (type) => {
     try { if (navigator.audioSession) navigator.audioSession.type = type; } catch { /* not settable */ }
   };
@@ -14497,27 +14529,54 @@
     preview.btn = btn;
     btn.classList.add('is-loading');
     paintPlay(btn, true, 0);
+    if (webAudio) ctxNow();   // still inside the tap, before any await
     const url = await previewUrl(s).catch(() => '');
     if (turn !== preview.turn) return;
-    btn.classList.remove('is-loading');
     if (!url) {
+      btn.classList.remove('is-loading');
       paintPlay(btn, false, 0);
       preview.btn = null;
       if (!auto) { btn.hidden = true; toast('No preview for this one.'); }
       return;
     }
     setAudioSession('playback');
-    const a = preview.audio || (preview.audio = new Audio());
-    a.preload = 'auto';
-    if (a.src !== url) a.src = url;
-    try { a.currentTime = 0; } catch { /* not loaded yet */ }
-    a.onended = () => { if (turn === preview.turn) stopPreview(); };
-    try { await a.play(); } catch {
-      // Refused (a browser wanting a tap first): the disc simply waits for one.
-      if (turn === preview.turn) { paintPlay(btn, false, 0); preview.btn = null; }
-      return;
+    // Where the clip is, 0 to 1, whichever way it plays.
+    let at;
+    if (webAudio) {
+      const buf = await clipBuffer(url).catch(() => null);
+      if (turn !== preview.turn) return;
+      const ctx = ctxNow();
+      if (!buf || ctx.state !== 'running') {
+        // Not loaded, or no tap has started sound yet: the disc waits for one.
+        btn.classList.remove('is-loading');
+        paintPlay(btn, false, 0);
+        preview.btn = null;
+        setAudioSession('auto');
+        return;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.onended = () => { if (turn === preview.turn) stopPreview(); };
+      const t0 = ctx.currentTime;
+      src.start();
+      preview.src = src;
+      at = () => (ctx.currentTime - t0) / (buf.duration || 30);
+    } else {
+      const a = preview.audio || (preview.audio = new Audio());
+      a.preload = 'auto';
+      if (a.src !== url) a.src = url;
+      try { a.currentTime = 0; } catch { /* not loaded yet */ }
+      a.onended = () => { if (turn === preview.turn) stopPreview(); };
+      try { await a.play(); } catch {
+        // Refused (a browser wanting a tap first): the disc simply waits for one.
+        if (turn === preview.turn) { btn.classList.remove('is-loading'); paintPlay(btn, false, 0); preview.btn = null; }
+        return;
+      }
+      if (turn !== preview.turn) { a.pause(); return; }
+      at = () => a.currentTime / (a.duration || 30);
     }
-    if (turn !== preview.turn) { a.pause(); return; }
+    btn.classList.remove('is-loading');
     const tick = () => {
       if (turn !== preview.turn) return;
       let b = preview.btn;
@@ -14529,7 +14588,7 @@
         if (!b) { stopPreview(); return; }
         preview.btn = b;
       }
-      paintPlay(b, true, a.currentTime / (a.duration || 30));
+      paintPlay(b, true, at());
       preview.raf = requestAnimationFrame(tick);
     };
     tick();
@@ -14540,10 +14599,20 @@
     const b = e.target.closest && e.target.closest('.song-play');
     if (!b) return;
     e.preventDefault();
-    if (preview.btn && preview.btn.dataset.key === b.dataset.key) { stopPreview(); return; }
+    const moment = b.classList.contains('mv-play');
+    if (preview.btn && preview.btn.dataset.key === b.dataset.key) {
+      if (moment) preview.hushed = true;
+      stopPreview();
+      return;
+    }
+    if (moment) preview.hushed = false;
     playPreview(b, false);
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stopPreview(); });
+  // Opening the app again lets Moments' songs start by themselves again.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopPreview();
+    else preview.hushed = false;
+  });
 
   /* Null for anything but a 200: a private playlist is a 401 or a 404, and to
      the picker those are one answer. A THROW is caught into the same null,
