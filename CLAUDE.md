@@ -26,7 +26,7 @@ The same files also serve a website; that is a byproduct, not a target. See
 **The bar's filter disc and dial are gone from every profile; the types are a
 strip of tabs between the pins and the posts** (Zoe: "like a swipable
 instagram filter for profiles post types"): All's pentad, then the glyph of
-each type they've posted, Reposts last, in even columns (`.profile-tabs`),
+each type they've posted (Notes, Frames, Finds, then the rest, Zoe), Reposts last, in even columns (`.profile-tabs`),
 the one you're on in ink with a short line under it that slides. Same rows
 and the same "nothing to narrow, no strip" rule as the dial had. **A sideways
 drag on the posts goes to the next type** (`wireProfileTabs`): the pane and

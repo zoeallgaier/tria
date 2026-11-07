@@ -10120,7 +10120,11 @@
     // type and one layout isn't a choice — but a single photo earns one on its
     // own, because Frames isn't a narrowing, it's the wall.
     const types = new Set(list.map(p => p.type));
-    const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))];
+    // Finds after Frames on a profile's tabs (Zoe, 2026-11-07).
+    const tabOrder = ['note', 'photo', 'find'];
+    const rank = (k) => { const i = tabOrder.indexOf(k); return i < 0 ? tabOrder.length : i; };
+    const filters = [FILTERS[0], ...FILTERS.slice(1).filter(f => types.has(f.key))
+      .sort((a, b) => rank(a.key) - rank(b.key))];
     // Reposts get a row of their own, APPENDED rather than slotted into the
     // ladder. All → the five types reads as one run from widest to narrowest, and
     // a repost is a different axis (not what they made, but what they passed on),
