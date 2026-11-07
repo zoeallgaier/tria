@@ -6055,7 +6055,7 @@ button.poll-option:disabled { cursor: default; }
     transform-origin: 50% 50%;
   }
   .mv-page { padding-top: 0; padding-bottom: 0; }
-  .mv-card { --mv-base: calc(var(--mv-foot) + var(--mv-lift)); }
+  .mv-card { --mv-base: calc(var(--mv-foot) + var(--mv-lift)); --mv-band: 0px; }
 }
 
 /* A hold hides the chrome, so the picture stands alone. */
@@ -6227,6 +6227,118 @@ button.poll-option:disabled { cursor: default; }
   inset: calc(-1 * var(--mv-feather)) 0 calc(-1 * var(--mv-base));
   z-index: -1;
 }
+
+/* EXTENDED (2026-11-07, Zoe: "mirror and blur to extend anything around 9:16
+   ... not liking the bars", then "bring back the top blur but only about as
+   much as the status bar or a little past. drop the bottom blur ... the only
+   things on the screen ... should be the content and its beautiful seamless
+   blurred edges"). A picture from 1.7 to 2.3 tall (`is-ext`, momentExtend
+   in app.js) COVERS the screen under a band the status bar's height
+   (`--mv-band`), and the band is its own top edge mirrored and blurred: the
+   canvas over that seam, drawn small and run past the screen's edges so the
+   blur never thins there, on its own layer (translateZ) so the blur is the
+   compositor's and a clip's frame never repaints the page. JS places it
+   (top, height). It fades in over the picture's average colour
+   (`--ext-fill`, the post's tint), and the picture's top feathers into it
+   over 64px, eased, so no edge of the sharp picture shows.
+   A desktop's card has no status bar, so no band: it simply covers. */
+.mv { --mv-band: calc(env(safe-area-inset-top) + 10px); }
+.mv-ext { display: none; }
+.mv-frame--pic.is-ext .mv-media { background: var(--ext-fill, #111); }
+.mv-frame--pic.is-ext .mv-ext {
+  display: block;
+  position: absolute;
+  left: -48px;
+  width: calc(100% + 96px);
+  filter: blur(22px) saturate(1.08);
+  transform: translateZ(0);
+  pointer-events: none;
+  opacity: 0;
+}
+/* On its first paint, no fade: a fade showed the flat colour under it. */
+.mv-frame--pic.is-ext .mv-ext.is-on { opacity: 1; }
+.mv-frame--pic.is-ext :is(.mv-pic, .mv-still) {
+  position: absolute;
+  top: var(--mv-band);
+  left: 0;
+  width: 100%;
+  height: calc(100% - var(--mv-band));
+  object-fit: cover;
+}
+.mv-frame--pic.is-ext .ext-band :is(.mv-pic, .mv-still) {
+  --feather: linear-gradient(transparent, rgba(0, 0, 0, 0.06) 8px, rgba(0, 0, 0, 0.2) 18px,
+    rgba(0, 0, 0, 0.42) 28px, rgba(0, 0, 0, 0.66) 40px, rgba(0, 0, 0, 0.86) 52px, #000 64px);
+  -webkit-mask-image: var(--feather);
+  mask-image: var(--feather);
+}
+/* A CLIP SHOWS ITS POSTER UNTIL IT HAS A FRAME (revealClip in app.js):
+   the poster is an <img> under it, since WebKit drops a video's own poster
+   on play before the first frame is ready and the page showed through.
+   The clip warmed for the next frame waits off screen. */
+.mv-still[hidden] { display: none; }
+.mv-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.mv-still + video.mv-pic:not(.is-drawn) { opacity: 0; }
+.mv-warm {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The picture is the whole screen now, so its words and icons are white,
+   in either scheme, as Reels' and TikTok's are, with NOTHING laid over the
+   picture but under its words (Zoe: "a sweep for visual clutter"): the
+   face, the x, the rail and Reply carry a soft shadow and no scrim; a
+   caption sits on one black scrim eased off to nothing (Larsen's curve, so
+   no line shows where it starts), deeper when folded. A card in the words
+   (a link's tile) is dark glass on it, in either scheme. */
+.mv-page.is-ext {
+  color: #fff;
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.86);
+  --surface: rgba(0, 0, 0, 0.42);
+  --surface-2: rgba(0, 0, 0, 0.5);
+  --rule: rgba(255, 255, 255, 0.16);
+}
+.mv-page.is-ext :is(.mv-head, .mv-caption, .mv-foot) { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 14px rgba(0, 0, 0, 0.3); }
+.mv-page.is-ext :is(.mv-rail, .mv-head, .mv-foot) svg { filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.35)); }
+/* (As specific as the tall frame's veils, which this takes away.) */
+.mv-frame--pic.is-ext:not(.has-words) .mv-media::before,
+.mv-frame--pic.is-ext .mv-media::after { content: none; }
+.mv-frame--pic.is-ext .mv-caption::before {
+  inset: -150px 0 calc(-1 * var(--mv-base));
+  background: linear-gradient(to top,
+    #000 calc(100% - 150px),
+    rgba(0, 0, 0, 0.738) calc(100% - 150px * 0.81),
+    rgba(0, 0, 0, 0.541) calc(100% - 150px * 0.66),
+    rgba(0, 0, 0, 0.382) calc(100% - 150px * 0.53),
+    rgba(0, 0, 0, 0.278) calc(100% - 150px * 0.435),
+    rgba(0, 0, 0, 0.194) calc(100% - 150px * 0.35),
+    rgba(0, 0, 0, 0.126) calc(100% - 150px * 0.27),
+    rgba(0, 0, 0, 0.075) calc(100% - 150px * 0.198),
+    rgba(0, 0, 0, 0.042) calc(100% - 150px * 0.139),
+    rgba(0, 0, 0, 0.021) calc(100% - 150px * 0.09),
+    rgba(0, 0, 0, 0.008) calc(100% - 150px * 0.048),
+    rgba(0, 0, 0, 0.002) calc(100% - 150px * 0.018),
+    transparent);
+  opacity: 0.5;
+}
+.mv-frame--pic.is-ext .mv-caption.is-cut::before { opacity: 0.62; }
+/* A hold takes the layers with the chrome they were there for (the
+   caption's goes with the caption). */
+.mv-media::before, .mv-media::after { transition: opacity 0.2s var(--ease-soft); }
+.mv.is-held .mv-frame--pic .mv-media::before,
+.mv.is-held .mv-frame--pic .mv-media::after { opacity: 0; }
 .mv-caption .mv-title { font-size: 1.6rem; }
 .mv-caption .mv-note { font-size: 1.05rem; line-height: 1.45; }
 /* READ MORE: folded, the words show five lines (Zoe: "2 more lines" than
@@ -6433,6 +6545,10 @@ button.poll-option:disabled { cursor: default; }
   align-items: center;
   gap: 0;
   padding: 0 var(--mv-side) 0;
+  /* Set a little lower than its box (Zoe, 2026-11-07: "bump the position of
+     the chevron and reply text down a bit"), so the base line the words and
+     the rail sit on stays where it is. */
+  transform: translateY(10px);
 }
 .mv-foot[hidden] { display: none; }
 .mv-page.no-reply .mv-stage { padding-bottom: calc(var(--mv-foot) + var(--mv-lift)); }

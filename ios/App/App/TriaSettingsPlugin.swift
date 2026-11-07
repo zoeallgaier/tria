@@ -37,6 +37,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setAppIcon", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pageHead", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "playClip", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "prepareClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise)
     ]
 
@@ -58,6 +59,30 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     private var clipTurn = 0
     /// The play waiting to hear whether its clip started; every path answers it.
     private var clipPending: CAPPluginCall?
+    /// The NEXT Moment's preview, loading paused (`prepareClip`), so a tap to
+    /// it only has to press play: a fresh player had to fetch from Apple first.
+    private var spare: AVPlayer?
+    private var spareURL: URL?
+
+    /// `{ url }` loads that preview into the spare player, paused, replacing
+    /// whatever was there. One at a time.
+    @objc func prepareClip(_ call: CAPPluginCall) {
+        guard let raw = call.getString("url"), let url = URL(string: raw), url.scheme == "https" else {
+            call.resolve()
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.spareURL != url {
+                self.spare?.replaceCurrentItem(with: nil)
+                let player = AVPlayer(playerItem: AVPlayerItem(url: url))
+                player.allowsExternalPlayback = false
+                self.spare = player
+                self.spareURL = url
+            }
+            call.resolve()
+        }
+    }
 
     /// Resolves `{ duration }` once the clip is really playing; rejects if it
     /// can't be loaded. A later play or stop cuts an earlier one off (it
@@ -71,7 +96,9 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { call.reject("Couldn't play it."); return }
-            self.endClip()
+            // One song to the next keeps the session: handing it back and
+            // taking it again cost every tap a beat.
+            self.endClip(release: false)
             self.clipTurn += 1
             let turn = self.clipTurn
             let session = AVAudioSession.sharedInstance()
@@ -82,9 +109,17 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("Couldn't play it.")
                 return
             }
-            let item = AVPlayerItem(url: url)
-            let player = AVPlayer(playerItem: item)
-            player.allowsExternalPlayback = false
+            // The spare, if it was readied for this very preview.
+            let player: AVPlayer
+            if let spare = self.spare, self.spareURL == url, spare.currentItem != nil {
+                player = spare
+                self.spare = nil
+                self.spareURL = nil
+            } else {
+                player = AVPlayer(playerItem: AVPlayerItem(url: url))
+                player.allowsExternalPlayback = false
+            }
+            guard let item = player.currentItem else { call.reject("Couldn't play it."); return }
             self.clip = player
             self.clipPending = call
             self.clipWatch = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
@@ -122,7 +157,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func endClip() {
+    private func endClip(release: Bool = true) {
         if let waiting = clipPending {
             clipPending = nil
             waiting.reject("Couldn't play it.", "STOPPED")
@@ -136,7 +171,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         player.replaceCurrentItem(with: nil)
         clip = nil
         // Hands the speaker back, so music it ducked comes back up.
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        if release { try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation]) }
     }
 
     /// The top of a web page, read so a link in a post can draw its title and

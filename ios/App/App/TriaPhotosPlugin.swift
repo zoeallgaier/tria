@@ -96,7 +96,9 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             var top: UIViewController = root
             while let shown = top.presentedViewController { top = shown }
-            let sheet = TriaLibrarySheet(limit: limit, selected: selected, videos: videos) { [weak self] items in
+            let sheet = TriaLibrarySheet(limit: limit, selected: selected, videos: videos, emit: { [weak self] name, data in
+                self?.notifyListeners(name, data: data)
+            }) { [weak self] items in
                 if let items { call.resolve(["items": items]) } else { call.resolve(["cancelled": true]) }
                 DispatchQueue.main.async { self?.sheet = nil }
             }
@@ -381,17 +383,24 @@ final class TriaRollMore: UIButton {
 /// type }`); a clip as `{ id, path, type }`, a
 /// copy in the app's own tmp folder, read by the web through
 /// `Capacitor.convertFileSrc` (150MB of base64 is not a bridge message).
+/// The sheet closes on Add and answers only once every pick is copied out,
+/// which for clips can be many seconds, so it says at once how many clips are
+/// coming (`pickLoading { clips }`) and the editor shows them on their way.
 final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
     private let limit: Int
     private let selected: [String]
     private let videos: Bool
+    private let emit: (String, [String: Any]) -> Void
     private let done: ([[String: Any]]?) -> Void
     private var finished = false
 
-    init(limit: Int, selected: [String], videos: Bool = false, done: @escaping ([[String: Any]]?) -> Void) {
+    init(limit: Int, selected: [String], videos: Bool = false,
+         emit: @escaping (String, [String: Any]) -> Void = { _, _ in },
+         done: @escaping ([[String: Any]]?) -> Void) {
         self.limit = limit
         self.selected = selected
         self.videos = videos
+        self.emit = emit
         self.done = done
     }
 
@@ -421,6 +430,11 @@ final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
         // No clearing here: a post can hold several clips from several sheets
         // now, so the folder is emptied only by `TriaClip.clear`, as the
         // editor empties or the post goes out (TriaClipPlugin.swift).
+        let clips = results.filter {
+            !selected.contains($0.assetIdentifier ?? "")
+                && $0.itemProvider.hasItemConformingToTypeIdentifier(UTType.movie.identifier)
+        }.count
+        if clips > 0 { emit("pickLoading", ["clips": clips]) }
         var items = [[String: Any]?](repeating: nil, count: results.count)
         let group = DispatchGroup()
         let lock = NSLock()

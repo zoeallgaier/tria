@@ -7753,7 +7753,11 @@
       host.querySelector('[data-np="edit"]')?.addEventListener('click', () => goListening('#/'));
       host.querySelectorAll('[data-np="add"]').forEach(b => b.addEventListener('click', shareMoment));
       host.querySelectorAll('.np-item--stack').forEach(item => {
-        item.querySelector('.np-open').addEventListener('click', (e) => openMoments(item.dataset.who, e.currentTarget));
+        const open = item.querySelector('.np-open');
+        open.addEventListener('click', (e) => openMoments(item.dataset.who, e.currentTarget));
+        // A finger landing on a face fetches what opens first (its picture, a
+        // clip's poster), the tenth of a second before the tap counts.
+        open.addEventListener('pointerdown', () => primeMoments(item.dataset.who), { passive: true });
         ringFor(item);
       });
       host.querySelector('.np-hint-x')?.addEventListener('click', dismissMomentHint);
@@ -7916,7 +7920,7 @@
     e.stopPropagation();
     history.back();
   }, true);
-  const MOMENT_TAP_MS = 260;   // a tap waits this long for a second to make it a like
+  const MOMENT_TAP_MS = 200;   // a tap waits this long for a second to make it a like (260 felt slow)
   const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
   const DISMISS_AT = 110;      // a pull down past this closes the viewer
   const MV_GAP = 12;           // paper between two people's pages as they slide
@@ -7935,6 +7939,131 @@
     if (p.song) return p.song.art || '';
     return f.src || (p.image ? (isVideoUrl(p.image) ? p.poster || '' : p.image) : '');
   };
+
+  /* A PICTURE NEAR 9:16 IS EXTENDED (2026-11-07, Zoe: "mirror and blur to
+     extend anything around 9:16 just for that extra clean look ... not liking
+     the bars on top and bottom"; then "bring back the top blur but only about
+     as much as the status bar or a little past. drop the bottom blur ... the
+     only things on the screen ... should be the content and its beautiful
+     seamless blurred edges. Even if that means losing some side crop").
+     The picture COVERS the screen under a band the status bar's height
+     (`--mv-band`), giving up a little of its sides to do it (a 9:16 photo
+     about a tenth of its width on a phone), and the band is its own top edge
+     MIRRORED and blurred, running on behind the clock. One small canvas over
+     that seam (`.mv-ext`, a sixth of the size, blurred by the compositor on
+     its own layer): the picture's top strip once, then flipped up into the
+     band and out past the screen's edges so the blur never thins there. A
+     clip's strip comes from its poster (`.mv-still`) until the clip has
+     played a moment (Zoe: "prioritize the video content loading"), then from
+     the clip. Only from 1.7 to 2.3 tall: anything squarer would lose too
+     much of its sides and keeps the page's paper and wash; anything taller
+     would lose too much of its top and foot. */
+  const momentExtends = (w, h) => h / w >= 1.7 && h / w <= 2.3;
+  const EXT_K = 1 / 6, EXT_M = 48;   // the canvas's scale, and how far past the screen's edges it runs (as in CSS)
+  const EXT_EVERY = 100;             // ms between a clip's repaints
+  const EXT_WAIT = 600;              // ms a clip plays on its poster's mirror before its own
+  function momentExtend(pic) {
+    const media = pic.parentElement;
+    const canvas = media.querySelector('.mv-ext');
+    if (canvas.dataset.on) return;
+    canvas.dataset.on = '1';
+    const g = canvas.getContext('2d');
+    const video = pic.tagName === 'VIDEO';
+    // What the strip is read from: a still, itself; a clip, its poster until
+    // it is `live`, then itself.
+    const poster = video ? media.querySelector('.mv-still') : null;
+    let still = video ? null : pic, live = false;
+    if (poster) {
+      if (poster.complete && poster.naturalWidth) still = poster;
+      else poster.addEventListener('load', () => { still = poster; paint(); }, { once: true });
+    }
+    let at = null;   // the band and the picture's box under it; null with no band
+    // On a size: the band over the picture, and the canvas sat over its seam.
+    const fit = () => {
+      const bw = media.clientWidth, band = pic.offsetTop, H = pic.offsetHeight;
+      media.classList.toggle('ext-band', band > 2);
+      if (!bw || !H || band <= 2) { at = null; canvas.classList.remove('is-on'); return; }
+      const s = Math.max(1, Math.round((band + EXT_M) * EXT_K));   // the strip, in canvas px
+      at = { s, strip: s / EXT_K, bw, H };
+      canvas.style.top = `${band - at.strip}px`;
+      canvas.style.height = `${2 * at.strip}px`;
+      const W = Math.round((bw + 2 * EXT_M) * EXT_K);
+      if (canvas.width !== W) canvas.width = W;
+      if (canvas.height !== 2 * s) canvas.height = 2 * s;
+      paint();
+    };
+    // A strip of the canvas copied onto itself, mirrored across a line.
+    const mirror = (across, line, sx, sy, sw, sh) => {
+      if (across === 'y') g.setTransform(1, 0, 0, -1, 0, 2 * line);
+      else g.setTransform(-1, 0, 0, 1, 2 * line, 0);
+      g.drawImage(canvas, sx, sy, sw, sh, sx, sy, sw, sh);
+    };
+    // The picture's top strip as it is drawn (covering its box, centred)
+    // under the seam once; then flipped up into the band, and that column
+    // out past each side.
+    const paint = () => {
+      const src = live ? pic : still;
+      const sw = src && (src.naturalWidth || src.videoWidth), sh = src && (src.naturalHeight || src.videoHeight);
+      if (!at || !sw || !sh) return;
+      const { s, strip, bw, H } = at, W = canvas.width, x = Math.round(EXT_M * EXT_K), w = W - 2 * x;
+      const sc = Math.max(bw / sw, H / sh);
+      const rx = (sw - bw / sc) / 2, ry = (sh - H / sc) / 2;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, W, 2 * s);
+      try { g.drawImage(src, rx, ry, bw / sc, Math.min(sh - ry, strip / sc), x, s, w, s); } catch { return; }
+      mirror('y', s, x, s, w, s);
+      mirror('x', x, x, 0, x, 2 * s);
+      mirror('x', x + w, w, 0, x, 2 * s);
+      canvas.classList.add('is-on');
+    };
+    // A clip repaints about ten times a second once it's live, never more:
+    // each paint reads a whole frame of the clip, the one dear part (in iOS
+    // WebKit, every frame cost two and a half times the clip's own playback,
+    // ten a second about as much as it), and behind an 18px blur the lag
+    // doesn't show. -webkit-box-reflect would cost nothing, but iOS draws no
+    // reflection of a video. It goes live a moment after it starts playing,
+    // so its own start is never kept waiting. A still paints only on a size.
+    let req = 0, last = -Infinity, from = Infinity;
+    const rvfc = video && 'requestVideoFrameCallback' in pic;
+    const next = () => { req = rvfc ? pic.requestVideoFrameCallback(step) : requestAnimationFrame(step); };
+    const step = (now) => {
+      if (!pic.paused && pic.readyState >= 2 && now >= from && now - last >= EXT_EVERY) { last = now; live = true; paint(); }
+      next();
+    };
+    const playing = () => { from = performance.now() + EXT_WAIT; };
+    const seeked = () => { if (live) paint(); };
+    if (video) {
+      if (!pic.paused && pic.readyState >= 3) playing();
+      else pic.addEventListener('playing', playing, { once: true });
+      pic.addEventListener('seeked', seeked);
+      next();
+    }
+    // The observer also hears the frame leave (a new frame, a page slid
+    // away, the viewer closed), and that ends it all.
+    const ro = new ResizeObserver(() => {
+      if (media.isConnected) { fit(); return; }
+      ro.disconnect();
+      if (!video) return;
+      if (rvfc) pic.cancelVideoFrameCallback(req); else cancelAnimationFrame(req);
+      pic.removeEventListener('playing', playing);
+      pic.removeEventListener('seeked', seeked);
+    });
+    ro.observe(media);
+  }
+
+  // A clip is shown once it has drawn a frame of its own; until then its
+  // poster (`.mv-still`, under it) is what's there, never the page. Then the
+  // poster goes, or it would show, frozen, through the clip's feathered top.
+  function revealClip(v) {
+    const show = () => {
+      v.classList.add('is-drawn');
+      const still = v.parentElement && v.parentElement.querySelector('.mv-still');
+      if (still) still.hidden = true;
+    };
+    if (v.readyState >= 2 && !v.paused) show();
+    else if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(show);
+    else v.addEventListener('playing', show, { once: true });
+  }
 
   function momentFrameHtml(f) {
     const p = f.post;
@@ -7967,20 +8096,31 @@
     const still = f.src || p.image;
     if (still) {
       const video = !f.src && isVideoUrl(p.image);
+      // A clip's poster is an <img> under it, not the video's own poster:
+      // WebKit drops a poster on play before the first frame is ready (bug
+      // 234743), and the page showed through. The clip shows itself once it
+      // has drawn a frame (revealClip).
       const media = video
-        ? `<video class="mv-pic" src="${esc(p.image)}"${p.poster ? ` poster="${esc(sizedSrc(p.poster, 600))}"` : ''} ` +
-            `playsinline autoplay muted loop></video>`
+        ? (p.poster ? `<img class="mv-still" src="${esc(sizedSrc(p.poster, 600))}" alt="" draggable="false">` : '') +
+          `<video class="mv-pic" src="${esc(p.image)}" playsinline autoplay muted loop preload="auto"></video>`
         : `<img class="mv-pic" src="${esc(sizedSrc(still, 600))}" alt="${esc(notePlain(p.note) || p.title || 'Photo')}" draggable="false">`;
       // EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge,
       // and put captions and content below like tiktok and reels"): the
-      // picture fills the page, never cropped, a blur of itself behind it, and
-      // the words sit at its foot on a scrim.
+      // picture fills the page, never cropped, and the words sit at its foot.
       // The page's own paper and wash fill round the picture (Zoe: "keep the
       // ol white/dark and gradient colored bg instead of the blurred image").
       // A long caption folds with a Read more, as Reels' does (`is-cut`,
       // measured in openMoments).
-      return `<div class="mv-frame mv-frame--pic${words ? ' has-words' : ''}">` +
-          `<figure class="mv-media">${media}</figure>` +
+      // Near 9:16 the picture is EXTENDED to the screen's edges (`is-ext`,
+      // momentExtend), read off the size stamped in its name so the page is
+      // dressed for it from the first frame, in its own average colour until
+      // the picture and its mirror paint.
+      const d = imageDimsFromUrl(video ? p.image : still);
+      const ext = d && momentExtends(d.w, d.h);
+      const tint = f.src ? (p.tints || [])[f.i] : p.tint;
+      return `<div class="mv-frame mv-frame--pic${words ? ' has-words' : ''}${ext ? ' is-ext is-tall' : ''}"` +
+          `${tint ? ` style="--ext-fill:${esc(tint)}"` : ''}>` +
+          `<figure class="mv-media"><canvas class="mv-ext" aria-hidden="true"></canvas>${media}</figure>` +
           (words
             ? `<div class="mv-caption"><div class="mv-caption-text">${words}</div>` +
                 `<button type="button" class="mv-readmore" aria-expanded="false">Read more</button></div>`
@@ -8013,6 +8153,23 @@
       frames[1][k] = getComputedStyle(el)[k];
     }
     return el.animate(frames, { duration: ms, easing }).finished.then(() => true, () => false);
+  }
+
+  // The picture a person's Moments open on, fetched and decoded ahead.
+  function primeMoments(who) {
+    const s = momentStacks().find(x => x.u.username === who);
+    if (!s) return;
+    const frames = momentFrames(s), seen = seenMoments();
+    const f = frames[s.mine ? 0 : Math.max(0, frames.findIndex(x => !seen.has(String(x.post.id))))];
+    if (f) decodeAhead(framePicture(f));
+  }
+  // A picture fetched and decoded now, at the size a Moment draws it.
+  function decodeAhead(src) {
+    if (!src) return;
+    const im = new Image();
+    im.decoding = 'async';
+    im.src = sizedSrc(src, 600);
+    im.decode().catch(() => {});
   }
 
   function openMoments(who, opener, back, only) {
@@ -8074,10 +8231,13 @@
       if (by === pg.washedBy) return;
       pg.washedBy = by;
       const mine = ++pg.tint;
-      // A sleeve that won't sample (a host that refuses CORS) falls back to the
-      // poster's colour rather than to no wash at all.
-      const tone = pic
-        ? sampleColor(sizedSrc(pic, 40)).then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : personTone(u)), () => personTone(u))
+      // A picture's colour is on its post (its tint), so the page wears it at
+      // once with no fetch and no change of colour as it lands; a sleeve, or
+      // a picture from before tints, is sampled. One that won't sample (a host
+      // that refuses CORS) falls back to the poster's colour.
+      const known = !f.post.song && (f.src ? (f.post.tints || [])[f.i] : f.post.tint);
+      const tone = known ? Promise.resolve(known)
+        : pic ? sampleColor(sizedSrc(pic, 40)).then(rgb => (rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : personTone(u)), () => personTone(u))
         : personTone(u);
       tone.then((tone) => {
         if (mine !== pg.tint) return;
@@ -8150,20 +8310,82 @@
       }
       if (!pg.s.mine) markMomentSeen(p);
       // ONE SOUND RULE FOR EVERY MOMENT (Zoe, 2026-11-07: "mute and unmute
-      // rules for music we decided on should extend"). A song's frame plays
-      // its preview by itself and a clip plays with its sound, ringer switch
-      // or not; any other frame stops it. Muting either keeps every Moment
-      // quiet, songs and clips, until the app is opened again
-      // (preview.hushed); a tap on either's speaker brings sound back to all.
+      // rules for music we decided on should extend", then "set all content
+      // to muted by default"). Quiet until a speaker is tapped
+      // (preview.hushed); then a song's frame plays its preview by itself and
+      // a clip plays with its sound, ringer switch or not, until either is
+      // muted or the app is put away. Any other frame stops it.
       const play = pg.el.querySelector('.mv-play');
       if (play.hidden) stopPreview();
       else if (preview.btn === play) { /* already playing */ }
       else if (preview.hushed) stopPreview();
       else playPreview(play, true);
       clipSound(pg, !preview.hushed);
-      if (how === 'frame' && !prefersReduced()) {
+      // Words ease in; a picture is simply there, since a fade would show
+      // the page's paper between two full screen pictures.
+      if (how === 'frame' && !prefersReduced() && !frame.classList.contains('mv-frame--pic')) {
         frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
       }
+      warm(nextFrame());
+    };
+
+    /* WHAT COMES NEXT IS READY (Zoe: "extra snappy"). The next frame's
+       picture (or a clip's poster) is fetched and decoded while this one
+       shows, and a next clip is WARMED: iOS buffers nothing on preload alone,
+       so it starts muted, off screen, and stops on its first frame, and the
+       frame that shows it adopts that very element. One at a time. */
+    let warmed = null;   // { src, v }
+    const dropWarm = () => {
+      if (!warmed) return;
+      const { v } = warmed;
+      warmed = null;
+      v.pause();
+      v.removeAttribute('src');
+      try { v.load(); } catch {}
+      v.remove();
+    };
+    const nextFrame = () => {
+      if (page.fi + 1 < page.frames.length) return page.frames[page.fi + 1];
+      const s = stacks[page.si + 1];
+      if (!s) return null;
+      const frames = momentFrames(s), seen = seenMoments();
+      return frames[s.mine ? 0 : Math.max(0, frames.findIndex(f => !seen.has(String(f.post.id))))];
+    };
+    const warm = (f) => {
+      if (!f) return;
+      const p = f.post;
+      const clip = !f.src && p.image && isVideoUrl(p.image) ? p.image : null;
+      decodeAhead(framePicture(f));
+      // With sound on, a next song is readied too: its preview found and
+      // loading, paused, in the native player's spare, so the tap only
+      // presses play (Zoe: tapping between songs "take[s] a bit longer").
+      if (p.song && !preview.hushed && nativeClips && canPreview(p.song)) {
+        previewUrl(p.song).then(url => url && clipCall('prepareClip', { url })).catch(() => {});
+      }
+      if (!clip || (warmed && warmed.src === clip)) return;
+      dropWarm();
+      const v = document.createElement('video');
+      v.className = 'mv-warm';
+      v.muted = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline', '');
+      v.preload = 'auto';
+      v.src = clip;
+      root.appendChild(v);
+      warmed = { src: clip, v };
+      const t = v.play();
+      if (t) t.then(() => { if (warmed && warmed.v === v) v.pause(); }, () => {});
+    };
+    // The frame about to show a warmed clip takes the warmed element itself.
+    const adoptWarm = (fresh) => {
+      if (!fresh || !warmed || warmed.src !== fresh.getAttribute('src')) return;
+      const { v } = warmed;
+      warmed = null;
+      v.className = fresh.className;
+      v.loop = true;
+      v.autoplay = true;
+      fresh.replaceWith(v);
+      v.play().catch(() => {});
     };
 
     const showFrame = (pg, how) => {
@@ -8180,24 +8402,38 @@
       if (!play.hidden) setPlaySong(play, p.song);
       paintLike(pg);
       pg.stage.innerHTML = momentFrameHtml(f);
+      adoptWarm(pg.stage.querySelector('video.mv-pic'));
       pg.el.classList.toggle('is-pic', !!pg.stage.querySelector('.mv-frame--pic'));
+      pg.el.classList.toggle('is-ext', !!pg.stage.querySelector('.mv-frame.is-ext'));
       // A clip is drawn muted; live() gives the live one its sound.
       paintSound(pg);
       // A picture 9:16 or taller reaches up under the face, so only it wears
       // the top layer (Zoe, 2026-11-06), read off its own size once known.
       const pic = pg.stage.querySelector('.mv-pic');
       if (pic) {
+        const fr = pic.closest('.mv-frame');
         const mark = () => {
           const w = pic.naturalWidth || pic.videoWidth, h = pic.naturalHeight || pic.videoHeight;
-          if (w && h) pic.closest('.mv-frame').classList.toggle('is-tall', h / w >= 1.77);
+          // A picture still loading as the frame was tapped past says nothing.
+          if (!w || !h || !pic.isConnected) return;
+          const ext = momentExtends(w, h);
+          fr.classList.toggle('is-ext', ext);
+          fr.classList.toggle('is-tall', ext || h / w >= 1.77);
+          pg.el.classList.toggle('is-ext', ext);
+          if (ext) momentExtend(pic);
         };
+        // A clip dressed from its name extends at once, on its poster.
+        if (pic.tagName === 'VIDEO' && fr.classList.contains('is-ext')) momentExtend(pic);
         mark();
         pic.addEventListener(pic.tagName === 'VIDEO' ? 'loadedmetadata' : 'load', mark, { once: true });
         // A clip loops its trim window, as it does in the feed (a Moment
         // used to play the whole original behind a web-trimmed clip). No
         // progress line: a Moment fills the screen, and a line along it is
         // the story indicator Moments left out on purpose.
-        if (pic.tagName === 'VIDEO') wireClipWindow(pic, clipWindowFromUrl(p.image));
+        if (pic.tagName === 'VIDEO') {
+          wireClipWindow(pic, clipWindowFromUrl(p.image));
+          revealClip(pic);
+        }
       }
       wireLinkTiles(pg.stage);
       wash(pg, f);
@@ -8591,6 +8827,7 @@
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerup', lift);
       document.removeEventListener('pointercancel', lift);
+      dropWarm();
       root.querySelectorAll('video').forEach(v => v.pause());
       stopPreview();
       if (!sheetOpen) document.body.style.overflow = '';
@@ -14679,10 +14916,12 @@
      16.4, what lets a clip through the ringer switch) the clip is decoded and
      played through Web Audio instead, which Now Playing never sees. Apple's
      clip host answers CORS with `*`. Older WebKit keeps the element: its Web
-     Audio would be silenced by the switch. `hushed`: a Moment's song paused
-     or its clip muted by hand keeps every Moment quiet, songs and clips,
-     until the app is opened again. */
-  const preview = { audio: null, btn: null, turn: 0, raf: 0, src: null, hushed: false, native: false };
+     Audio would be silenced by the switch. `hushed`: Moments are QUIET BY
+     DEFAULT (Zoe, 2026-11-07: "set all content to muted by default so
+     moments transition and load quicker"), songs and clips, as Reels opens;
+     a tap on either's speaker gives every Moment its sound until the app is
+     put away, muting either takes it from all. */
+  const preview = { audio: null, btn: null, turn: 0, raf: 0, src: null, hushed: true, native: false };
   /* IN THE APP THE CLIP PLAYS NATIVELY (Zoe, 2026-11-06: "get rid of dynamic
      island for music and ios player"): Web Audio under the 'playback' session
      still made Tria the Now Playing app, since iOS gives that to any app
@@ -14720,8 +14959,9 @@
     if (clipBuffers.size > 6) clipBuffers.delete(clipBuffers.keys().next().value);
     return p;
   }
+  // Only on a change: a Moment calls this on every frame.
   const setAudioSession = (type) => {
-    try { if (navigator.audioSession) navigator.audioSession.type = type; } catch { /* not settable */ }
+    try { if (navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type; } catch { /* not settable */ }
   };
   function stopPreview() {
     preview.turn++;
@@ -14842,10 +15082,9 @@
     if (moment) preview.hushed = false;
     playPreview(b, false);
   });
-  // Opening the app again lets Moments' songs start by themselves again.
+  // Put away, the app is quiet again: Moments open muted next time.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopPreview();
-    else preview.hushed = false;
+    if (document.hidden) { stopPreview(); preview.hushed = true; }
   });
 
   /* Null for anything but a 200: a private playlist is a 401 or a 404, and to
@@ -20702,6 +20941,21 @@
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollUnpick' }, (ev) => rollHandler?.unpick(ev));
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollMore' }, () => rollHandler?.menu?.());
   }
+  // The library sheet, for All photos and the clip editor's Add clip. It
+  // closes on Add and answers once every pick is copied out of Photos (a clip
+  // can be hundreds of MB, more from iCloud), so it says at once how many
+  // clips are coming (`pickLoading { clips }`), handed to `onLoading`.
+  let pickLoading = null;
+  let pickListening = false;
+  async function pickLibrary(opts, onLoading) {
+    const C = window.Capacitor;
+    if (!pickListening) {
+      pickListening = true;
+      C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'pickLoading' }, (ev) => pickLoading?.(ev));
+    }
+    pickLoading = onLoading;
+    try { return await C.nativePromise('TriaPhotos', 'pick', opts); } finally { pickLoading = null; }
+  }
   let onCaptureChange = null;     // set by the Post composer so the type indicator re-reads when a frame lands/clears
   let justPostedId = null;   // id of a just-published post → sparkle it in when the feed next paints
 
@@ -20774,7 +21028,8 @@
                 `<video class="ed-video" playsinline muted preload="auto"></video>` +
               `</div>` +
               `<span class="frame-play ed-paused" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
-              `<div class="ed-loading" aria-live="polite"><span class="ed-loading-dot"></span>Getting your clip ready</div>` +
+              `<div class="ed-loading" aria-live="polite"><span class="ed-loading-dot"></span>` +
+                `<span class="ed-loading-words">Getting your clip ready</span></div>` +
               `<button type="button" class="frame-sound ed-sound" id="c-ed-sound" aria-label="Play with sound" ` +
                 `aria-pressed="false">${svgIcon('mute', 'frame-sound-ico')}</button>` +
               `<button type="button" class="media-x" id="c-ed-x" aria-label="Remove the clip" hidden>` +
@@ -22052,27 +22307,41 @@
         const room = MAX_STILLS - frame.loose();
         if (room < 1) { full(); return; }
         asking = true;
-        let res = null;
-        try { res = await call('pick', { limit: room, selected: frame.ids() }); } catch {}
+        let res = null, release = null;
+        try {
+          res = await pickLibrary({ limit: room, selected: frame.ids() }, (ev) => {
+            // Clips on their way: the editor shows them coming, Share waits.
+            if (gone || release || !(ev && ev.clips > 0)) return;
+            open();
+            release = frame.expectClips(ev.clips);
+            syncType();
+          });
+        } catch {}
         asking = false;
-        if (gone || !res || res.cancelled || !Array.isArray(res.items) || !res.items.length) return;
-        const items = res.items.filter(it => !it.error);
-        if (items.length < res.items.length) frame.error(res.items.find(it => it.error).error);
+        const ok = !gone && res && !res.cancelled && Array.isArray(res.items);
+        const items = ok ? res.items.filter(it => !it.error) : [];
+        const unread = ok && items.length < res.items.length ? res.items.find(it => it.error).error : '';
         // Clips go to the editor, as many as were ticked, in the order they
         // were (the editor lays them end to end). Photos and clips are two
-        // kinds of post, so a mix keeps the photos out.
+        // kinds of post, so a mix keeps the photos out. What's said is said
+        // after they land, since landing clears the line.
         const clips = items.filter(it => it.path);
         if (clips.length) {
-          if (clips.length < items.length) frame.error('Photos and clips go in separate posts, so the photos were left out.');
           open();
           frame.clips(clips.map(it => ({ path: it.path, type: it.type })));
+          release?.();   // after the editor has them, so it never empties between
           syncType();
+          if (clips.length < items.length) frame.error('Photos and clips go in separate posts, so the photos were left out.');
+          else if (unread) frame.error(unread);
           return;
         }
-        if (!items.length) return;
-        open();
-        frame.setLibrary(items);
-        syncType();
+        release?.();
+        if (items.length) {
+          open();
+          frame.setLibrary(items);
+          syncType();
+        }
+        if (unread) frame.error(unread);
       };
 
       const ro = new ResizeObserver(() => sync());
@@ -22218,6 +22487,13 @@
       },
       // Clips from All photos or the camera, as native files (`{ path, type }`).
       clips: (items) => openClips(items),
+      // Clips said to be on their way (pickLibrary): the editor, showing them
+      // coming. Hands back the release, called once they've landed or not.
+      expectClips(n) {
+        stopActiveCapture = teardown;
+        toEditor();
+        return editor.expect(n);
+      },
       error: (msg) => showPickError(msg),
     };
 
@@ -22838,6 +23114,8 @@
     const shadeL = $('.ed-shade--l'), shadeR = $('.ed-shade--r'), theadEl = $('#c-ed-thead');
     const timeEl = $('#c-ed-time'), hintEl = $('#c-ed-hint');
     const splitBtn = $('#c-ed-split'), removeBtn = $('#c-ed-remove');
+    const loadingEl = $('.ed-loading-words');
+    const loadingSays = (n) => { loadingEl.textContent = n > 1 ? `Getting your ${n} clips ready` : 'Getting your clip ready'; };
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const END = 16;    // the trimmer's grip, and the film's inset either side for it
     const GAP = 3;     // between the post's bars
@@ -23190,6 +23468,8 @@
       if (fresh) clear(true);
       el.hidden = false;
       run();
+      // Still saying how many are on their way (expect), or about to.
+      if (!clips.length && !busy) loadingSays(items.length);
       if (!clips.length) el.classList.add('ed--loading');
       busy++;
       changed();
@@ -23542,16 +23822,17 @@
     async function choose() {
       if (asking) return;
       asking = true;
-      let r = null;
+      let r = null, release = null;
       try {
-        r = await window.Capacitor.nativePromise('TriaPhotos', 'pick',
-          { limit: Math.max(1, MAX_CLIPS - clips.length), videos: true, selected: [] });
+        r = await pickLibrary({ limit: Math.max(1, MAX_CLIPS - clips.length), videos: true, selected: [] },
+          (ev) => { if (alive() && !release && ev && ev.clips > 0) release = expect(ev.clips); });
       } catch {}
       asking = false;
-      if (!alive() || !r || r.cancelled || !Array.isArray(r.items)) return;
-      const got = r.items.filter(it => it.path);
-      if (got.length < r.items.length) hooks.error?.((r.items.find(it => it.error) || {}).error || 'Couldn’t read that clip. Try another.');
+      const ok = alive() && r && !r.cancelled && Array.isArray(r.items);
+      const got = ok ? r.items.filter(it => it.path) : [];
+      if (ok && got.length < r.items.length) hooks.error?.((r.items.find(it => it.error) || {}).error || 'Couldn’t read that clip. Try another.');
       add(got);
+      release?.();   // after add has them, so the editor never empties between
     }
 
     /* ── Life ──────────────────────────────────────────────────────────── */
@@ -23600,9 +23881,30 @@
       }
     }
 
+    // Clips on their way from the library, said as its sheet closes: shown
+    // coming (the loading face, saying how many) with Share held, until they
+    // land or don't. Hands back the release, let go once add has them.
+    function expect(n) {
+      el.hidden = false;
+      loadingSays(n);
+      el.classList.add('ed--loading');
+      busy++;
+      changed();
+      let waiting = true;
+      return () => {
+        if (!waiting) return;
+        waiting = false;
+        if (--busy) return;
+        el.classList.remove('ed--loading');
+        changed();
+        if (!clips.length) hooks.emptied?.();
+      };
+    }
+
     return {
       add,
       clear,
+      expect,
       rollMode(r) { roll = !!r; xBtn.hidden = !roll; },
       // The surface folding or the page leaving: every clip goes, and the
       // editor stays ready for the next one while its element is on the page.
@@ -27263,8 +27565,19 @@
   }
 
   // The caret is in a text field, so a refresh must not rebuild the card someone
-  // is half-way through typing into.
-  const typing = () => !!document.activeElement?.matches?.('input, textarea');
+  // is half-way through typing into. A rich field (the composer's note) counts.
+  const typing = () => !!document.activeElement?.matches?.('input, textarea, [contenteditable="true"]');
+  // A page you fill in: the composer, an editor, a picker. A refresh nobody
+  // asked for never rebuilds one, caret or not: it opens fresh, and would drop
+  // what's written and picked (a photo's upload with it) and the mode it was
+  // opened in (a Moment, a daily, a quote).
+  const fillingIn = () => {
+    const hash = location.hash || '#/';
+    const path = hash.split('?')[0];
+    return ['#/publish', '#/profile/edit', '#/welcome', '#/chats/new', '#/pin/post', '#/c/new'].includes(path)
+      || /^#\/c\/[^/]+\/edit$/.test(path)
+      || (path.startsWith('#/p/') && new URLSearchParams(hash.split('?')[1] || '').has('edit'));
+  };
 
   // The route we still owe a paint for, and the reason a skipped paint has to be
   // remembered at all. `Store.refresh()` replaces the cache BEFORE anything gets
@@ -27930,7 +28243,7 @@
     const repaint = () => {
       if (!stayed()) return;
       if (chat && !waiting()) { chatLive?.(); return; }
-      if (!waiting() && (sheetOpen || typing() || commentDrafted())) return;
+      if (!waiting() && (sheetOpen || typing() || fillingIn() || commentDrafted())) return;
       if (isFeedPage(path)) showWorld(path);
       else route();
     };
@@ -28009,7 +28322,7 @@
       const path = herePath();
       if (!Store.isAuthed()) route();
       else if (['#/', '#/discover', '#/updates', '#/chats'].includes(path)) showWorld(path, { hold: false });
-      else if (!typing()) route();
+      else if (document.getElementById('page-wait') || !(typing() || fillingIn())) route();
     });
     // Charms take their baseline off the real world, never a kept one.
     Store.whenFresh().then(() => { charmsLive = true; noticeCharmsSoon(); syncThemeIcon(); },
