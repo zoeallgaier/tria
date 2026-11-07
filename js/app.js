@@ -18048,6 +18048,9 @@
             `<textarea id="cf-about" class="combo-note" rows="3" maxlength="280" ` +
               `placeholder="What’s it for? (optional)" aria-label="About">${esc(editing ? editing.about : '')}</textarea>` +
           `</div>` +
+          // Who may join and its theme, side by side (Zoe, 2026-11-07); one
+          // alone takes the row.
+          ((privacy || themes) ? `<div class="community-form-pair">` : '') +
           // Who may join, asked the way the composer asks who can see a post
           // (Zoe, 2026-10-23): a field that opens a sheet of the two answers.
           (privacy
@@ -18064,6 +18067,7 @@
                 `<button type="button" class="aud-lock" id="cf-theme"></button>` +
               `</div>`
             : '') +
+          ((privacy || themes) ? `</div>` : '') +
           (editing
             ? `<p class="field-hint">Its link stays triaonline.com/c/${esc(editing.slug)}.</p>`
             : `<div class="field">` +
@@ -18385,7 +18389,7 @@
        hours on 2026-11-06 the field sat at the top of the page instead, and it
        scrolled away.
        Empty is the whole page; typing turns it into results: people first, as
-       compact rows, then posts, then circles (Zoe).
+       compact rows, then circles, then posts (Zoe).
 
        UNDER THE HEADER, THE CHIPS (Zoe, same day: "filters below the
        search/header with trending tags"): the filter, then the room's

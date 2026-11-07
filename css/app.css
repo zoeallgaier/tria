@@ -9638,6 +9638,15 @@ button.card-song-play:active { transform: scale(0.9); }
 }
 .aud-lock-ico { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
 .aud-lock-pic { width: 22px; height: 22px; margin: -2px; }
+/* The circle form's Who can join and Theme, two columns; one alone spans. */
+.community-form-pair {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+.community-form-pair > .field { margin-top: 0; }
 /* The circle form's Theme field: the picked theme's disc, as Edit profile's
    Theme row wears it, the sheet's own fill (a band, Tria's ramp, the photo). */
 .aud-lock-swatch {
