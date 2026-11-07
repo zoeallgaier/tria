@@ -21,6 +21,24 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## A profile's types are tabs you swipe (2026-11-07)
+
+**The bar's filter disc and dial are gone from every profile; the types are a
+strip of tabs between the pins and the posts** (Zoe: "like a swipable
+instagram filter for profiles post types"): All's pentad, then the glyph of
+each type they've posted, Reposts last, in even columns (`.profile-tabs`),
+the one you're on in ink with a short line under it that slides. Same rows
+and the same "nothing to narrow, no strip" rule as the dial had. **A sideways
+drag on the posts goes to the next type** (`wireProfileTabs`): the pane and
+the line follow the finger one to one (a quarter past either end), past 28% or
+a flick it goes; the next pane is not built under the finger, so the old one
+slides on out and the new one is painted and slides in from that side. A drag
+starting on anything with a sideways drag of its own, or the left 24px (back),
+is left alone. The posts are `touch-action: pan-y`, which is also what makes
+`swipeAt` stand the tab pager down over them, so on your own profile a swipe
+on the posts changes type, not tab. A pane painted with the strip scrolled off
+puts the strip back under the header. Not sticky (yet).
+
 ## A circle has a theme, picked as a profile's is (2026-11-07)
 
 **A circle's host picks its colour in the profile's own Theme sheet** (Zoe:
@@ -565,8 +583,8 @@ leaned on private view names. On desktop Chats is still a sidebar row (`rail:
 true`, never a native tab, never swipeable) and the sidebar is always there.
 **Both My Circle and Discover lead with the sidebar's mark** (`sideBtnEl`,
 `.toolbar-side`); while Discover's search is open that mark is the back chevron
-that empties it. **The filter leads on Updates and your own profile** (Zoe: the
-tabs you own), and stays on the right of a friend's profile and Chats. With five
+that empties it. **The filter leads on Updates** (Zoe: the tabs you own), and
+stays on the right of Chats; a profile has none since 2026-11-07 (its type tabs). With five
 tabs the controller ran 10pt past each side of the screen (`tabReach`); that went
 when Updates first left the tab bar.
 

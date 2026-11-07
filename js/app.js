@@ -9934,6 +9934,144 @@
   let profileFilter = 'all';
   let profileFilterFor = null;
   let profileResizeOff = null;   // drops the frame wall's resize listener when the view goes
+
+  /* THE PROFILE'S TYPE TABS (Zoe, 2026-11-07: "like a swipable instagram
+     filter"). A tap on a tab, or a sideways drag on the posts, goes to it.
+     The drag carries the pane one to one with the finger (a quarter of that
+     past the first and last tab) and the line under the tabs follows it; past
+     28% of the width or on a flick it goes. The next pane is not built under
+     the finger, the page would hold every type at once: the one going slides
+     on out, the new one is painted and slides in from the side it came from.
+     A drag that starts on something with a sideways drag of its own (a
+     carousel, a rail, a player) or on the left edge (back) is left alone. The
+     posts take only vertical pans (touch-action in CSS), which is also what
+     tells the tab pager (swipeAt) to stand down over them. */
+  function wireProfileTabs(tabsEl, feedEl, keys, current, pick) {
+    const line = tabsEl.querySelector('.profile-tabs-line');
+    const tabs = [...tabsEl.querySelectorAll('.profile-tab')];
+    const idx = () => Math.max(0, keys.indexOf(current()));
+    const place = (at, glide) => {
+      line.style.transition = glide ? '' : 'none';
+      line.style.transform = `translateX(${at * 100}%)`;
+    };
+    const light = (key) => tabs.forEach(t => {
+      const on = t.dataset.key === key;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+    });
+    place(idx(), false);
+    light(current());
+
+    const pane = (x, fade, how) => {
+      feedEl.style.transition = how || 'none';
+      feedEl.style.transform = x ? `translateX(${x}px)` : '';
+      feedEl.style.opacity = fade ? '0' : '';
+    };
+    // A pane painted with the strip scrolled off stands under the header.
+    const keepStrip = () => {
+      const bar = document.querySelector('.topbar');
+      const top = bar ? bar.getBoundingClientRect().bottom : 0;
+      const at = tabsEl.getBoundingClientRect().top;
+      if (at < top) window.scrollTo(0, window.scrollY + at - top);
+    };
+
+    let seq = 0, moving = false;
+    function go(to) {
+      const from = idx();
+      if (to === from || to < 0 || to >= keys.length) return settle();
+      const dir = to > from ? 1 : -1;
+      const w = feedEl.clientWidth || window.innerWidth;
+      const mine = ++seq;
+      place(to, true);
+      light(keys[to]);
+      if (prefersReduced()) { pick(keys[to]); keepStrip(); pane(0); return; }
+      moving = true;
+      pane(-dir * w * 0.4, true,
+        'transform 150ms cubic-bezier(0.4, 0, 1, 1), opacity 150ms linear');
+      setTimeout(() => {
+        if (mine !== seq || !feedEl.isConnected) return;
+        pick(keys[to]);
+        keepStrip();
+        pane(dir * w * 0.3, true);
+        void feedEl.offsetWidth;
+        pane(0, false, 'transform 0.36s var(--ease), opacity 0.2s linear');
+        setTimeout(() => {
+          if (mine !== seq) return;
+          moving = false;
+          feedEl.style.transition = '';
+        }, 380);
+      }, 150);
+    }
+    function settle() {
+      pane(0, false, 'transform 0.36s var(--ease)');
+      place(idx(), true);
+    }
+
+    tabsEl.addEventListener('click', (e) => {
+      const tab = e.target.closest('.profile-tab');
+      if (tab) go(keys.indexOf(tab.dataset.key));
+    });
+    tabsEl.addEventListener('keydown', (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      const to = idx() + step;
+      if (to < 0 || to >= keys.length) return;
+      e.preventDefault();
+      go(to);
+      tabs[to].focus();
+    });
+
+    const ownsSideways = (el) => {
+      for (; el && el !== feedEl; el = el.parentElement) {
+        if (el.matches('iframe, input, textarea, [contenteditable="true"]')) return true;
+        const s = getComputedStyle(el);
+        if (s.touchAction !== 'auto' && s.touchAction !== 'manipulation') return true;
+        if (/auto|scroll/.test(s.overflowX) && el.scrollWidth > el.clientWidth + 1) return true;
+      }
+      return false;
+    };
+    let t = null;
+    feedEl.addEventListener('touchstart', (e) => {
+      t = null;
+      if (moving || e.touches.length !== 1) return;
+      const p = e.touches[0];
+      if (p.clientX < 24 || ownsSideways(e.target)) return;
+      t = { x: p.clientX, y: p.clientY, dx: 0, axis: '', lx: p.clientX, lt: e.timeStamp, vx: 0 };
+    }, { passive: true });
+    feedEl.addEventListener('touchmove', (e) => {
+      if (!t) return;
+      const p = e.touches[0];
+      const dx = p.clientX - t.x, dy = p.clientY - t.y;
+      if (!t.axis) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        t.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+        if (t.axis === 'y') { t = null; return; }
+        t.x = p.clientX;   // start from here, so the pane doesn't jump the slop
+      }
+      e.preventDefault();
+      const d = p.clientX - t.x;
+      const i = idx(), w = feedEl.clientWidth || window.innerWidth;
+      const edge = (d > 0 && i === 0) || (d < 0 && i === keys.length - 1);
+      t.dx = edge ? d * 0.25 : d;
+      const dt = e.timeStamp - t.lt;
+      if (dt > 0) t.vx = 0.7 * t.vx + 0.3 * ((p.clientX - t.lx) / dt);
+      t.lx = p.clientX; t.lt = e.timeStamp;
+      pane(t.dx);
+      place(Math.min(keys.length - 1, Math.max(0, i - t.dx / w)), false);
+    }, { passive: false });
+    const lift = () => {
+      const g = t;
+      t = null;
+      if (!g || g.axis !== 'x') return;
+      const w = feedEl.clientWidth || window.innerWidth;
+      const dir = g.dx < 0 ? 1 : -1;
+      const flick = Math.abs(g.vx) > 0.45 && Math.sign(g.vx) === Math.sign(g.dx);
+      if (Math.abs(g.dx) > w * 0.28 || flick) go(idx() + dir);
+      else settle();
+    };
+    feedEl.addEventListener('touchend', lift);
+    feedEl.addEventListener('touchcancel', lift);
+  }
   // The pin drag holds three listeners on the DOCUMENT (a gesture that starts on
   // a card keeps going when the finger leaves it), so they outlive the section
   // and have to be handed back by hand — on every repaint of the pins and on the
@@ -10122,35 +10260,34 @@
     // pushed from somewhere, so it takes the toolbar's leading chevron, aimed
     // by backTarget().
     const b = isSelf ? null : backTarget();
-    // The dial rides in the bar with everything else, rightmost, the same slot
-    // it holds on Circle, Discover and Updates — so the control that narrows a
-    // page is in one place in this app and not two.
-    //
-    // It spent 1.3 up to here on a "profile shelf" instead: a micro-caps caption
-    // naming the active pane ("ALL POSTS", "FRAMES") with a bare glyph at its
-    // right, sitting in flow between the identity and the posts. Two arguments
-    // held it there and neither survives. The caption was a third telling of
-    // something the button's own lit hue and the dial's live row already say.
-    // And "the bar carries identity, the shelf narrows the pane it captions" is
-    // a distinction the reader has no way to know they are supposed to be
-    // making — what they see is the one glyph they have already learned three
-    // times, in a different place, drawn a different way, on the fourth page.
-    // Absent when there is nothing to narrow, exactly as before.
-    const filterBtn = canFilter
-      ? filterBtnEl('profile-filter-btn', profileFilter,
-          isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`)
+    /* THE TYPES ARE TABS OVER THE POSTS (Zoe, 2026-11-07: "like a swipable
+       instagram filter for profiles post types"). The bar's filter disc and
+       its dial are gone from a profile: a strip of the type glyphs sits
+       between the pins and the posts, one even column each, the one you're on
+       in ink with a line under it that slides, and a sideways drag on the
+       posts goes to the next type (wireProfileSwipe). Absent when there is
+       nothing to narrow, as the disc was. */
+    const tabsHtml = canFilter
+      ? `<div class="profile-tabs" id="profile-tabs" role="tablist" ` +
+          `aria-label="${esc(isSelf ? 'Your posts' : `${u.name}’s posts`)}" style="--tabs:${filters.length}">` +
+          filters.map(f =>
+            `<button type="button" class="profile-tab" role="tab" data-key="${f.key}" ` +
+              `aria-selected="${f.key === profileFilter}" aria-label="${esc(f.label)}">` +
+              (f.key === 'all' ? ICON_ALL : svgIcon(f.ico || TYPE_GLYPH[f.key])) +
+            `</button>`).join('') +
+          `<span class="profile-tabs-line" aria-hidden="true"></span>` +
+        `</div>`
       : '';
     mountToolbar({
-      // Your own profile wore My Circle's + from 2026-10-23; it is the tab
-      // bar's centre since 2026-11-05, and the filter took its place on the
-      // left (Zoe, as on Chats). A visitor's keeps it on the right, by the tie.
-      leading: b ? toolbarBackEl(b.href, b.label) : isSelf ? filterBtn : '',
+      // Your own profile wore My Circle's + from 2026-10-23, then the filter
+      // (2026-11-05); the filter is the tab strip in the page since 2026-11-07.
+      leading: b ? toolbarBackEl(b.href, b.label) : '',
       // The @HANDLE, since 1.8, Instagram's arrangement: the bar title is up
       // from the first frame on every page now, and the card under it already
       // says the name in big serif, so the bar says the other half of who this
       // is instead of saying the name twice.
       title: '@' + u.username,
-      actions: friendBadge + moreBadge + (isSelf ? '' : filterBtn),
+      actions: friendBadge + moreBadge,
     });
 
     view.innerHTML =
@@ -10203,6 +10340,7 @@
         // for the same reason: rebuilding the whole profile to move one card
         // would re-run the ambient wash and re-decode the photograph.
         `<div class="pins-host" id="pins"></div>` +
+        tabsHtml +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
@@ -10298,7 +10436,8 @@
        thing you asked to change changes. `stage` is the grid entrance, taken on
        a discrete act (landing, picking a row) and parked on a re-deal, same
        contract as Discover's. */
-    const paintPosts = (stage) => {
+    // `still`: the pane is sliding in whole (a tab), so no card rises on its own.
+    const paintPosts = (stage, still) => {
       dropCards();                      // a column still paying out is about to go
       feedEl.textContent = '';
       const shown = profileFilter === 'all' ? list : list.filter(p => p.type === profileFilter);
@@ -10351,7 +10490,7 @@
         const made = [];
         for (let n = 0; i < shown.length && n < limit; i++, n++) {
           const card = makeCard(shown[i], { solo: true });
-          if (late) card.style.animation = 'none';
+          if (late || still) card.style.animation = 'none';
           else card.style.animationDelay = staggerDelay(i);
           frag.appendChild(card);
           made.push(card);
@@ -10383,28 +10522,16 @@
         }));
     }
 
-    // The dial. Picking a row repaints only the pane below the identity and
-    // relights the button's dot in place — no page re-render, so the identity,
-    // its wash and your scroll position all stay exactly where they were.
-    //
-    // document-wide, not view-scoped: the button lives in #toolbar-actions now,
-    // which is outside #view entirely. Same reason syncFilterBtn has always
-    // looked it up that way, and the same contract Circle, Discover and Updates
-    // are already on — resetToolbar clears that node on every navigation, so the
-    // listener dies with it rather than accumulating.
-    document.getElementById('profile-filter-btn')
-      ?.addEventListener('click', (e) => openFilterDial(e.currentTarget, {
-        current: profileFilter,
-        filters,
-        label: isSelf ? 'Filter your posts' : `Filter ${u.name}’s posts`,
-        onPick: (key) => {
-          if (key === profileFilter) return;
-          profileFilter = key;
-          profileFilterFor = u.username;
-          syncFilterBtn('profile-filter-btn', profileFilter);
-          paintPosts(true);
-        },
-      }));
+    // The tabs. A pick repaints only the pane below the identity, so the
+    // identity, its wash and the pins stay exactly where they were.
+    const tabsEl = view.querySelector('#profile-tabs');
+    if (tabsEl) wireProfileTabs(tabsEl, feedEl, filters.map(f => f.key),
+      () => profileFilter,
+      (key) => {
+        profileFilter = key;
+        profileFilterFor = u.username;
+        paintPosts(false, true);
+      });
 
     // JS deals the frame wall's columns, so a WIDTH change is ours to answer —
     // the same contract as Discover's, and it watches width and nothing else for
