@@ -49,22 +49,23 @@ comes back from the background; a tap on a disc still plays it.
 
 ## Discover's search is the header; chips under it (2026-11-06)
 
-**Discover's bar is the sidebar's mark, the search field and Chats** (Zoe: "I
+**Discover's bar is the filter, the search field and Chats** (the filter
+swapped in for the sidebar's mark the same evening, Zoe: "I dont think we need
+the menu on the discover page"; the sidebar and its edge swipe are My Circle's
+alone, and the search's back chevron went with the mark) (Zoe: "I
 want the search to still always be available in the header"), and it comes
-and goes with the header like every tab's. **In the app the field is native**
-(`TriaSearchField`, in the bar's own glass container beside the discs), so the
-header is the same Liquid Glass as My Circle's; native glass is above every web
-pixel, so a web field in a native bar can't be. The web input stays in the bar
-(`mountToolbar`'s `field`, `#toolbar-field`), invisible under the gate, as the
-model and the box measured (`searchSpec`); keystrokes come back as
-`searchText`, the caret as `searchFocus`, `NativeChrome.blurSearch` puts it
-down. The first native field (2026-11-05) had a slow tap and a keyboard that
-wouldn't go: its page tap was SWALLOWED to drop the keys (so a result took two
-taps) and only a drag into the keys dropped them. Now a page tap goes through
-and drops them, any drag drops them (`.onDrag`), and the whole capsule takes
-the caret. **Under the header, the chips** (`.discover-chips`, Zoe: "filters
-below the search/header with trending tags"): the filter (the sliders, naming
-its type once one is picked) and up to ten trending tags (`trendingTags`: a tag
+and goes with the header like every tab's. **The field is the web's input in
+every shell, a flat neutral fill with no edge, never glass** (Zoe: "the buttons
+still glass, not search, like insta, but cleaner"). That works because **the
+bar's band is CSS in the app too** (see "The header is the CSS band"): nothing
+native sits behind the bar any more, so nothing native has to sit over a web
+field in it. The native `TriaSearchField` it replaced the same day is deleted;
+its lessons are in docs/native-chrome.md. A drag on the page puts the keys down.
+**Under the header, the chips** (`.discover-chips`, Zoe: "filters
+below the search/header with trending tags"): up to ten trending tags (the
+filter led them until it moved up into the bar), gone when none trend and
+while a type is picked (Zoe: "If a filter is open or chosen tags dont need to
+be there"; picking a type lets go of a tag) (`trendingTags`: a tag
 on two or more findable posts, the last 30 days counting double, never a
 daily's), each THE BUTTON at its quiet weight, chosen ones washed. A tag runs
 as a search for its word, a second tap takes it off. The filter no longer
@@ -72,6 +73,20 @@ slides in at the field's end, so the field's box never moves and nothing is
 animated across the bridge. Tried and gone the same day: the field at the top
 of the page (it scrolled away), and a web field with the native material cut
 around it.
+
+## The header is the CSS band, the buttons native glass (2026-11-06)
+
+**In the app the top bar's material is `.topbar::before`, the web's own**
+(Zoe: "make it all our hairline css on iOS, but the buttons still glass ...
+that way the glass isn't always so bubbly and prominent up top"): a blur, a
+whisper of paper and ONE 0.5px `--rule` hairline under it, there only once
+content passes under the bar and gone on a read down, as on the web. Native
+draws only the discs, the title and the wordmark on it; `TriaToolbarMaterial`
+(Liquid Glass in 1.4, `.systemChromeMaterial` from 1.8) is deleted. The band
+and the native title agree because both read the same rule off the same scroll
+(`HEADER_SLACK`, `TriaScrollWatch.slack`). **A profile holds its header**,
+yours and everyone's (Zoe: "have headers be sticky on people profiles";
+`holdsHeader`), like a chat and an open search.
 
 ## The camera roll is how a photo gets in (2026-11-06)
 
@@ -1061,8 +1076,8 @@ Discover's filter dial is gone too, so it is always the gallery with every type
 ignored).
 
 **The top bar, cleaned up (2026-10-22).** No painted header: the native header
-is the system's bar material (`TriaToolbarMaterial`, `.systemChromeMaterial`,
-clean bottom edge, nothing hand-shaped), and the CSS band is a blur with a
+was the system's bar material (`TriaToolbarMaterial`, `.systemChromeMaterial`,
+clean bottom edge, nothing hand-shaped; the CSS band since 2026-11-06), and the CSS band is a blur with a
 whisper of paper. A faded edge (a gradient mask) was tried and removed: a masked
 blur reads as fog, not as iOS's progressive soft edge, which a Capacitor web
 view cannot reach. Plain glyph buttons are BARE at the
@@ -1082,8 +1097,8 @@ follows the wordmark's rule, `atTop || headerUp`). A profile's bar says the
 `@handle`, the card says the name. The header leaves on a read down and is back
 on a scroll up on EVERY route, and **the bar's buttons go with it** (Zoe,
 2026-10-22; `.topbar--reading` on the two control slots in CSS,
-`TriaToolbar.syncAway` natively, each disc faded on its own): `holdsHeader()` returns false, so profiles and
-dailies no longer hold theirs. My Circle wears the wordmark and Discover the
+`TriaToolbar.syncAway` natively, each disc faded on its own): dailies no longer hold theirs (profiles
+do again since 2026-11-06). My Circle wears the wordmark and Discover the
 search field in that same centred slot.
 
 **Every secondary menu is one sheet in iOS's share-sheet shape**: openSheet's

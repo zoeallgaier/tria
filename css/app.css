@@ -790,6 +790,12 @@ body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
   background: color-mix(in srgb, var(--bg) 60%, transparent);
   backdrop-filter: blur(20px) saturate(1.6);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  /* AND ONE HAIRLINE (Zoe, 2026-11-06: "make it all our hairline css on iOS,
+     but the buttons still glass ... that way the glass isn't always so bubbly
+     and prominent up top"). It comes and goes with the band, so it only ever
+     marks content passing under the bar. In the app too: this band is the
+     header in every shell, the discs native glass on it. */
+  border-bottom: 0.5px solid var(--rule);
   transition: opacity var(--dur-quick) var(--ease);
 }
 .topbar--bare::before { opacity: 0; }
@@ -1639,8 +1645,12 @@ main {
 /* ── Discover's search, in the header (2026-11-06) ────────────────────────────
    Discover's bar is the sidebar's mark, one field and Chats, the field filling
    the row where a title would sit (mountToolbar's `field`, .toolbar-field), no
-   X (Zoe's calls). In the app native draws the field over this one, which
-   stays as the model and the ruler (the gate at the end of this file).
+   X (Zoe's calls). A web field in every shell: the bar's band is CSS in the
+   app too, so nothing native is over it.
+
+   A FLAT FILL, NOT GLASS (Zoe, 2026-11-06: "the buttons still glass, not
+   search, like insta, but cleaner"): a soft neutral wash of the ink, no edge,
+   so the only glass up top is the discs.
 
    IT GOES WITH THE HEADER. Reading down, the bar leaves (.topbar--reading)
    and the field with it; scroll up and both come back. A field holding the
@@ -1685,9 +1695,9 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   /* 44px tall: the HIG floor for the target, met by the field itself. */
   min-height: 44px;
   padding: 0.65rem 1rem 0.65rem 2.7rem;
-  border: var(--glass-edge);
+  border: none;
   border-radius: var(--radius-pill);
-  background: var(--glass-bg-panel);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
   color: var(--text);
   font: inherit;
   /* 16px, never less: iOS zooms the page into any field set smaller. */
@@ -1712,8 +1722,10 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
    search/header with trending tags"). One sideways row running to the screen's
    edges and scrolled on its own (the tab swipe reads that and leaves it be).
    Every chip is THE BUTTON at its quiet weight, the height of a tag's tap,
-   and a chosen one wears the band (.is-on). The filter leads, a disc with the
-   sliders until a type is picked, when it names the type beside them. */
+   and a chosen one wears the band (.is-on). The filter left for the bar's
+   leading slot (2026-11-06); with no tag trending, or a type picked, the row
+   is gone. */
+.discover-chips:empty, .discover-chips[hidden] { display: none; }
 .discover-chips {
   display: flex;
   gap: 0.5rem;
@@ -1740,10 +1752,6 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.discover-chip--filter { padding: 0 0.85rem 0 0.7rem; }
-.discover-chip--filter:not(.is-on) { width: 38px; padding: 0; }
-.discover-chip-ico { width: 18px; height: 18px; flex: 0 0 auto; }
-.discover-chip-type:empty { display: none; }
 @media (min-width: 681px) {
   .discover-chips { max-width: var(--feed-width); margin-inline: auto; padding-inline: 0; }
 }
@@ -2090,6 +2098,9 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   text-decoration: none;
 }
 .welcome-go.publish-fill { margin-top: 0.8rem; }
+/* The empty profile's button walks the post types like the New sheet's first row. */
+.welcome-go > svg, .welcome-ico { width: 20px; height: 20px; flex-shrink: 0; }
+.welcome-ico svg { width: 100%; height: 100%; }
 
 /* There is deliberately NO `content-visibility: auto` here, and its absence is a
    fix rather than an oversight. It was added by the July 2026 battery pass
@@ -6002,6 +6013,13 @@ button.poll-option:disabled { cursor: default; }
 }
 /* A song is centred, so it keeps the lane on both sides. */
 .mv-frame--song { padding-inline: var(--mv-lane); }
+/* A poll keeps everything left, but runs the column's width with the same
+   10px on both sides (Zoe, 2026-11-06: it "looked short and squished left"
+   with the rail's lane on its right). It sits in the middle of the stage,
+   clear of the rail low on the right. */
+.mv-frame--poll { padding-right: 10px; }
+.mv-frame--poll .poll { margin: 1.2rem 0 0; }
+.mv-frame--poll .poll-meta { margin-top: 0.8rem; }
 .mv-words {
   max-height: 100%;
   overflow-y: auto;
@@ -6012,13 +6030,6 @@ button.poll-option:disabled { cursor: default; }
    openMoments); anywhere else a pull up replies and a pull down closes. */
 .mv-words, .mv-caption { touch-action: none; }
 :is(.mv-words, .mv-caption).is-long { touch-action: pan-y; }
-/* A poll keeps everything left, but runs the column's width with the same
-   10px on both sides (Zoe, 2026-11-06: it "looked short and squished left"
-   with the rail's lane on its right). It sits in the middle of the stage,
-   clear of the rail low on the right. */
-.mv-frame--poll { padding-right: 10px; }
-.mv-frame--poll .poll { margin: 1.2rem 0 0; }
-.mv-frame--poll .poll-meta { margin-top: 0.8rem; }
 .mv-title {
   margin: 0 0 0.6rem;
   font-family: 'Instrument Serif', 'Times New Roman', serif;
@@ -6162,6 +6173,7 @@ button.poll-option:disabled { cursor: default; }
    a tally, as a carousel's 1/4 is. The stage gives back its top padding so
    the frame keeps its height. */
 .mv-dots {
+  flex: none;
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -6173,7 +6185,6 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-dots + .mv-stage { padding-top: 8px; }
 .mv-dot {
-  flex: none;
   width: 6px;
   height: 6px;
   border-radius: 3px;
@@ -7635,17 +7646,6 @@ button.card-song-play:active { transform: scale(0.9); }
 }
 .pin--wide.pin--words .pin-say { font-size: 1.55rem; line-height: 1.1; }
 .pin--wide.pin--words .pin-gist { font-size: 0.92rem; }
-
-.pin-foot {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 20px;
-}
-.pin-foot:empty { display: none; }
-.pin-meta {
-  display: flex;
 /* A words card's note, set as the feed sets it: paragraphs, lines, headings,
    bold and italic, at the pin's size and on the note's own rhythm, scaled. */
 .pin-face > .pin-rich { display: block; color: var(--text); }
@@ -7660,6 +7660,17 @@ button.card-song-play:active { transform: scale(0.9); }
 .pin-rich :is(.card-note, .card-h1, .card-h2) + :is(.card-h1, .card-h2) { margin-top: 0.8rem; }
 .pin-rich :is(.card-h1, .card-h2) + .card-note { margin-top: 0.25rem; }
 .pin-rich > :first-child { margin-top: 0; }
+
+.pin-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+.pin-foot:empty { display: none; }
+.pin-meta {
+  display: flex;
   min-width: 0;
   font-size: 0.8rem;
   color: var(--muted);
@@ -10623,12 +10634,6 @@ body[data-ambient="none"] .pf-row-swatch {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
-  /* OFF THE TABS THERE IS NO BAR (tabbedRoute in app.js, 2026-11-06): Chats, a
-     friend's profile, a circle, any page you went into. Its back chevron is the
-     way out, and its foot keeps only the home indicator's room. Before the
-     comment bar's reserve below, which wins on source order where both hold. */
-  body.nav-off .nav { display: none; }
-  body.nav-off main { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .toast { transition: opacity var(--dur-quick) ease; } }
@@ -10794,6 +10799,12 @@ body[data-ambient="none"] .pf-row-swatch {
   body.postbar-live .nav { display: none; }
   /* The first run's two steps are the whole screen (renderWelcomeCircles). */
   body.welcome-live .nav { display: none; }
+  /* OFF THE TABS THERE IS NO BAR (tabbedRoute in app.js, 2026-11-06): Chats, a
+     friend's profile, a circle, any page you went into. Its back chevron is the
+     way out, and its foot keeps only the home indicator's room. Before the
+     comment bar's reserve below, which wins on source order where both hold. */
+  body.nav-off .nav { display: none; }
+  body.nav-off main { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
 
   .postbar {
     left: 0;
@@ -11783,13 +11794,6 @@ a.daily-answer { text-decoration: none; }
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--rule);
-/* Off the tabs the bar is gone too (setChrome, `nav-off`), so the foot keeps
-   only the home indicator's room, as in the mobile block. Before the comment
-   bar's rule below, which wins on source order where both hold. */
-html[data-chrome="native"] body.nav-off main {
-  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
-}
-
   border-radius: var(--radius-field);
   transition: border-color var(--dur-micro);
 }
@@ -11955,6 +11959,13 @@ html[data-chrome="native"] main {
   padding-bottom: var(--native-chrome-bottom, calc(96px + env(safe-area-inset-bottom)));
 }
 
+/* Off the tabs the bar is gone too (setChrome, `nav-off`), so the foot keeps
+   only the home indicator's room, as in the mobile block. Before the comment
+   bar's rule below, which wins on source order where both hold. */
+html[data-chrome="native"] body.nav-off main {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+}
+
 /* On a post's page the native bars are gone (setChrome) and the comment bar is
    the only thing down here, so the reserve is the BAR's, not the chrome's — the
    same figure the mobile block sets, restated through the native gate so it
@@ -11983,10 +11994,6 @@ html[data-chrome="native"] body.postbar-live main {
    every handler the page wired up is still the only implementation of itself. */
 html[data-chrome="native"] .topbar .toolbar-btn,
 html[data-chrome="native"] .topbar .toolbar-cta { visibility: hidden; }
-/* Discover's field is native too (TriaSearchField): this one stays laid out
-   as the model and the box native measures, and nothing of it shows. */
-html[data-chrome="native"] .toolbar-field .discover-search-field,
-html[data-chrome="native"] .toolbar-field .discover-search-ico { visibility: hidden; }
 /* EXCEPT WHILE A BAR MENU'S CARD IS OPEN (1.8). Those cards are the web's own
    now in every shell (Zoe's call: secondary menus aren't the system's glass),
    and a web overlay sends the native chrome off duty, so the button you just
@@ -12010,42 +12017,12 @@ html[data-chrome="native"] body:has(.bar-menu-scrim) .topbar .toolbar-btn { visi
 html[data-chrome="native"] .topbar .toolbar-title { visibility: hidden; }
 html[data-chrome="native"] .topbar .toolbar-mark { visibility: hidden; }
 
-/* THE BAR'S MATERIAL IS NATIVE IN THE APP, and this is where it stops being
-   CSS. `.topbar::before` is the scroll edge effect — a `--bg` gradient over a
-   `backdrop-filter` — and it was the last thing on this bar the web still drew
-   under the gate. Three reasons it had to go, and only the third is new:
-
-   1. It is half a bar. The controls are real glass and the material was web, so
-      "the header and the buttons don't match" was never a tuning problem: they
-      were two objects with two animations and no way to agree.
-   2. Fading a `backdrop-filter` recomposites the blur every frame, on the
-      most-scrolled surface in the app. That is the cost floor CLAUDE.md refuses
-      everywhere else.
-   3. And the two fades RACED. `.topbar--bare` came off at the same moment
-      `.topbar--hidden` went on, so one gesture started the material fading in
-      and the bar fading out, nested, in opposite directions. That is what
-      "the opacity and the blur are competing" was, and no amount of tuning
-      fixed it while both halves were separate elements. The hide-on-scroll
-      gesture is gone now (the controls stay up and only the material arrives
-      with the scroll), which retires the race but not the first two reasons.
-
-   And the Swift copy of the gradient that first replaced it was not the fix
-   either: a hand-rolled `--bg` wash under `.statusbar-scrim`'s hand-rolled
-   `--bg` wash is two paper scrims stacked over a photograph, which reads as
-   fog. The system's own scroll edge effect was tried next and cannot be reached
-   from a Capacitor webview at all (TriaToolbarMaterial has the paragraph, and
-   it is worth reading before anyone tries it a third time). What draws here now
-   is LIQUID GLASS: one `UIGlassEffect` pane the height of the bar, the same
-   material the discs riding on it are made of. The website keeps
-   `.topbar::before` exactly as it always was.
-
-   AND THE ELEMENT THIS RULE EMPTIES IS NOW EMPTY. Material gone, controls
-   hidden, title hidden: in the app `.topbar` draws nothing at all and only
-   exists to be measured. It does not move either, at either width — the bar's
-   hide-on-scroll is gone and the controls are up on every route, so the only
-   thing that answers to the scroll is the material, which is native here and
-   `.topbar--bare` off-app. */
-html[data-chrome="native"] .topbar::before { content: none; }
+/* THE BAR'S MATERIAL IS `.topbar::before` IN THE APP TOO (2026-11-06), so
+   there is nothing to gate here. It was native for 1.4 through 2.0 (Liquid
+   Glass, then `.systemChromeMaterial`), and Zoe asked for the web's band with
+   its hairline instead, the glass kept for the discs. Native draws the discs,
+   the title and the wordmark on top of it; TriaChromePlugin.swift has the
+   history above TriaScrollWatch. */
 
 /* AND THE STATUS BAR SCRIM GOES WITH IT, in the app only.
 
@@ -12061,9 +12038,7 @@ html[data-chrome="native"] .topbar::before { content: none; }
    one carrying the most opaque paper. Two of them over a photograph is what
    "looks like dogshit" was.
 
-   Its job is done by the material now: real glass rather than a second wash of
-   paint, one object rather than two, and no `env()` arithmetic restated in a
-   second place. */
+   Its job is done by the bar's band, which runs up under the clock. */
 html[data-chrome="native"] .statusbar-scrim { display: none; }
 
 /* ── The comment bar (1.4) ───────────────────────────────────────────────────

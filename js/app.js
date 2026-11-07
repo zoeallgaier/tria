@@ -426,6 +426,9 @@
     link:    '<path d="M10.3 13.7a4 4 0 0 0 6 .43l2.4-2.4a4 4 0 1 0-5.66-5.66l-1.38 1.37"/><path d="M13.7 10.3a4 4 0 0 0-6-.43l-2.4 2.4a4 4 0 1 0 5.66 5.66l1.37-1.37"/>',
     // A pennant on a staff — Report. Rides the report row inside the sheets.
     flag:    '<path d="M6 21V4"/><path d="M6 5h11l-2 3 2 3H6"/>',
+    // A beetle — Report a bug, in your own profile's menu.
+    bug:     '<rect x="8" y="8" width="8" height="11" rx="4"/><path d="M9.5 8a2.5 2.5 0 0 1 5 0"/>' +
+      '<path d="M12 11v8M8 12H4.5M8 16H5M16 12h3.5M16 16h3M9.5 5.5 8 4M14.5 5.5 16 4"/>',
     // No-entry circle — Block a user.
     block:   '<circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/>',
     // A doorway with an arrow stepping out — Log out.
@@ -1332,48 +1335,6 @@
       };
     }
 
-    /* ── DISCOVER'S SEARCH, IN THE HEADER (2026-11-06) ──────────────────────
-       Native draws it (TriaSearchField), so Discover's bar is the same Liquid
-       Glass as every tab's: native glass is above every web pixel, so a web
-       field in a native bar was either blurred, or cost Discover a CSS bar of
-       its own, or the material cut around it. The web input stays in the bar,
-       invisible under the gate, as the model and the box measured here. Its
-       box never moves on its own (the filter is in the page), so this is one
-       rect. `blur` is a count the page bumps to put the caret down. */
-    let searchBlurSeq = 0;
-    let searchCaret = false;
-    const searchHooks = {};
-    function searchSpec() {
-      const input = document.querySelector('#toolbar-field:not([hidden]) #discover-search');
-      if (!input) return { live: false };
-      const box = input.getBoundingClientRect();
-      if (!box.width) return { live: false };
-      const cs = getComputedStyle(input);
-      const ico = input.parentElement.querySelector('.discover-search-ico');
-      const icoBox = ico ? ico.getBoundingClientRect() : null;
-      const svg = ico && ico.querySelector('svg');
-      return {
-        live: true,
-        x: box.left, y: box.top, w: box.width, h: box.height,
-        fieldLeft: parseFloat(cs.paddingLeft) || 0,
-        fieldRight: parseFloat(cs.paddingRight) || 0,
-        glyph: svg ? svg.outerHTML : '',
-        glyphSize: icoBox ? icoBox.width : 20,
-        glyphX: icoBox ? icoBox.left + icoBox.width / 2 - box.left : 25,
-        text: input.value,
-        placeholder: input.getAttribute('placeholder') || '',
-        label: input.getAttribute('aria-label') || '',
-        ink: toRgb(cs.color) || '',
-        caret: toRgb(cs.caretColor) || toRgb(cs.color) || '',
-        muted: cssColour('var(--muted)'),
-        blur: searchBlurSeq,
-      };
-    }
-    // The page's two questions of the native field: put the caret down, and
-    // does it hold one.
-    function blurSearch() { if (!live) return; searchBlurSeq += 1; scheduleToolbar(); }
-    const searchHasCaret = () => live && searchCaret;
-
     /* THE WORDMARK'S BOX AND DRAWING (1.8). The drawing is icons/wordmark.svg,
        fetched once (it is in the bundle, so this is a local read) and handed
        over as markup like every glyph on this bridge; native draws it as a
@@ -1489,7 +1450,6 @@
         mark: onDuty ? markSpec() : null,
         controls,
         // Discover's field, and `live: false` on every other route.
-        search: onDuty ? searchSpec() : { live: false },
       };
       const signature = JSON.stringify(payload);
       if (signature === toldBar) return;
@@ -2156,16 +2116,6 @@
             { eventName: 'toolbarPick' }, (ev) => { if (ev) pickMenu(ev.id, ev.index); });
           window.Capacitor.nativeCallback('TriaChrome', 'addListener',
             { eventName: 'menuPick' }, (ev) => { if (ev) pickAnchored(ev.token, ev.index); });
-          // Discover's search field: a keystroke, and the caret coming or going.
-          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
-            { eventName: 'searchText' }, (ev) => {
-              if (searchHooks.text) searchHooks.text((ev && ev.text) || '');
-            });
-          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
-            { eventName: 'searchFocus' }, (ev) => {
-              searchCaret = !!(ev && ev.focused);
-              if (searchHooks.focus) searchHooks.focus(searchCaret);
-            });
           // The comment bar's five. Each one hands the fact straight to the web
           // half that already owns it — the textarea, the form, the pane walk —
           // and none of them decides anything here.
@@ -2406,7 +2356,7 @@
     };
 
     return { setActive, sync, repaint, setDots, captureMenu, presentMenu,
-             postBarText, postBarHooks, pickPhoto, searchHooks, blurSearch, searchHasCaret,
+             postBarText, postBarHooks, pickPhoto,
              glowLight, forgetPages, glideTo, live: isLive };
   })();
 
@@ -6531,10 +6481,6 @@
     document.body.classList.remove('toolbar-live', 'toolbar-field');
     const field = document.getElementById('toolbar-field');
     if (field) { field.hidden = true; field.innerHTML = ''; }
-    // The native field's keystrokes are this route's; a search that is leaving
-    // can't type into the next one.
-    delete NativeChrome.searchHooks.text;
-    delete NativeChrome.searchHooks.focus;
     const mark = document.getElementById('toolbar-mark');
     if (mark) mark.hidden = true;
     const page = document.getElementById('toolbar-page');
@@ -6555,9 +6501,8 @@
   // would sit. My Circle is the one caller, the way Instagram's home feed wears
   // its logo, and it takes the place of that page's big nameplate.
   // `field` is a page's own field IN the bar, filling the row between the two
-  // sides, where a title would sit. Discover's search is the one caller. On the
-  // web it is the field; in the app it is the model and the ruler, and native
-  // draws it (searchSpec, TriaSearchField).
+  // sides, where a title would sit. Discover's search is the one caller, a web
+  // field in every shell: nothing native is behind the bar any more.
   function mountToolbar({ leading = '', title = '', actions = '', field = '', mark = false } = {}) {
     document.body.classList.add('toolbar-live');
     const markEl = document.getElementById('toolbar-mark');
@@ -6676,10 +6621,15 @@
   // AND A CHAT (Zoe, 2026-10-26: "doesn't need to disappear"): a thread is a
   // conversation, read up as much as down, and its header names who you are
   // talking to, so it stays put on every scroll.
+  //
+  // AND A PROFILE (Zoe, 2026-11-06: "have headers be sticky on people
+  // profiles"): yours and everyone's, `#/u/` and `#/profile` being one page.
   let headerHeld = false;
   function holdsHeader() {
+    const h = location.hash;
     // The first run's circles too: its way on is the bar's Not now / Continue.
-    return headerHeld || location.hash.startsWith('#/chat/') || location.hash === '#/welcome/circles';
+    return headerHeld || h.startsWith('#/chat/') || h.startsWith('#/u/') || h === '#/profile' || h.startsWith('#/profile?')
+      || h === '#/welcome/circles';
   }
   function holdHeader(on) {
     if (on === headerHeld) return;
@@ -7118,8 +7068,19 @@
   function cyclePostRow(row) {
     const ico = row?.querySelector('.sheet-ico');
     const word = row?.querySelector('span');
-    if (!ico || !word || prefersReduced()) return null;
-    row.setAttribute('aria-label', 'Note, frame, find, poll or activity');
+    if (!ico || !word) return null;
+    const stop = cycleTypes(ico, word, 'sheet-ico sheet-cycle sheet-cycle--ico');
+    if (stop) row.setAttribute('aria-label', 'Note, frame, find, poll or activity');
+    return stop;
+  }
+
+  /* The walk itself, shared by the New sheet's first row and the empty
+     profile's button (Zoe, 2026-11-06: "use the animations in the + menu"):
+     `ico` is the glyph's svg, `word` the span holding the type's name, `fmt`
+     sets that name for its sentence. Stops itself once the word leaves the
+     page, so a caller that is repainted away never has to clean up. */
+  function cycleTypes(ico, word, icoCls, fmt = (t) => TYPE_LABEL[t]) {
+    if (prefersReduced()) return null;
     const wrap = (el, cls) => {
       const box = document.createElement('span');
       box.className = cls;
@@ -7129,7 +7090,7 @@
       return box;
     };
     ico.classList.remove('sheet-ico');
-    const icoBox = wrap(ico, 'sheet-ico sheet-cycle sheet-cycle--ico');
+    const icoBox = wrap(ico, icoCls);
     const wordBox = wrap(word, 'sheet-cycle sheet-cycle--word');
     const swap = (box, next) => {
       const old = box.lastElementChild;
@@ -7141,13 +7102,14 @@
     };
     let i = 0;
     const timer = setInterval(() => {
+      if (!wordBox.isConnected) { clearInterval(timer); return; }
       i = (i + 1) % POST_CYCLE.length;
       const type = POST_CYCLE[i];
       const tmp = document.createElement('span');
       tmp.innerHTML = svgIcon(TYPE_GLYPH[type]);
       swap(icoBox, tmp.firstElementChild);
       const w = document.createElement('span');
-      w.textContent = TYPE_LABEL[type];
+      w.textContent = fmt(type);
       swap(wordBox, w);
     }, POST_CYCLE_MS);
     return () => clearInterval(timer);
@@ -8025,10 +7987,6 @@
       }
       if (!pg.s.mine) markMomentSeen(p);
       // A song's frame plays its preview by itself, ringer switch or not;
-        // Where you are in the stack, under the face (Zoe, 2026-11-06).
-        (frames.length > 1
-          ? `<div class="mv-dots" aria-hidden="true">${frames.map(() => '<span class="mv-dot"></span>').join('')}</div>`
-          : '') +
       // any other frame stops it.
       // Once you've paused one, none starts by itself until the app is
       // opened again (preview.hushed); its disc still plays on a tap.
@@ -8085,6 +8043,10 @@
           `</a>` +
           `<button type="button" class="mv-btn mv-close" aria-label="Close">${svgIcon('close')}</button>` +
         `</div>` +
+        // Where you are in the stack, under the face (Zoe, 2026-11-06).
+        (frames.length > 1
+          ? `<div class="mv-dots" aria-hidden="true">${frames.map(() => '<span class="mv-dot"></span>').join('')}</div>`
+          : '') +
         `<div class="mv-stage"></div>` +
         `<div class="mv-rail">` +
           `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
@@ -8146,7 +8108,6 @@
       return side.pg;
     };
 
-      if (Date.now() - dragEnded < 400) return;
     const like = (x, y) => {
       const p = cur().post;
       if (own()) return;
@@ -8175,7 +8136,6 @@
       liking = false;
       if (!res || !res.ok) toast('Couldn’t save that like, try again.');
       if (cur().post === p) paintLike();
-      page.el.querySelector('.mv-foot').classList.toggle('is-armed', armed);
     };
     // The DM, the frame on its bar. A pull up has already buzzed as it armed.
     const reply = (pulled) => {
@@ -8201,10 +8161,10 @@
     card.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b || busy || !page.el.contains(b)) return;
+      if (Date.now() - dragEnded < 400) return;
       if (b.classList.contains('mv-close')) close();
       // A tag is a search for its word, as it is on Discover; the navigation
       // closes the viewer (route()).
-    let dragEnded = 0;
       else if (b.classList.contains('tag') && b.dataset.tag) { discoverQuery = b.dataset.tag; go('#/discover'); }
       else if (b.classList.contains('mv-more')) openFrameMenu();
       else if (b.classList.contains('mv-reply')) reply(false);
@@ -8230,6 +8190,7 @@
       if (armed === p.armed) return;
       p.armed = armed;
       page.el.querySelector('.mv-reply').classList.toggle('is-on', armed);
+      page.el.querySelector('.mv-foot').classList.toggle('is-armed', armed);
       if (armed) hapticTap('LIGHT');
     };
 
@@ -8258,6 +8219,7 @@
        anywhere else a drag is the viewer's, and a tap on the stage steps. */
     const KEEP = 'a, button, input, textarea, .poll, [data-tile]';
     let press = null;
+    let dragEnded = 0;
     let lastTap = 0;
     let tapTimer = 0;
     card.addEventListener('pointerdown', (e) => {
@@ -8284,9 +8246,6 @@
       const dt = Math.max(1, e.timeStamp - press.lt);
       press.vx = press.vx * 0.4 + ((e.clientX - press.lx) / dt) * 0.6;
       press.vy = press.vy * 0.4 + ((e.clientY - press.ly) / dt) * 0.6;
-      page.el.querySelector('.mv-foot').classList.remove('is-armed');
-      // A drag that began on a button never also clicks it.
-      if (was.moved) dragEnded = Date.now();
       press.lx = e.clientX; press.ly = e.clientY; press.lt = e.timeStamp;
       if (!press.moved && Math.hypot(press.dx, press.dy) < 10) return;
       if (!press.moved) {
@@ -8340,6 +8299,9 @@
       clearTimeout(was.timer);
       root.classList.remove('is-held');
       page.el.querySelector('.mv-reply').classList.remove('is-on');
+      page.el.querySelector('.mv-foot').classList.remove('is-armed');
+      // A drag that began on a button never also clicks it.
+      if (was.moved) dragEnded = Date.now();
       if (was.held || e.type === 'pointercancel') { settleY(); settleX(); return; }
       if (was.moved) {
         if (was.axis === 'y') {
@@ -8560,6 +8522,13 @@
           `<button class="welcome-go pill-quiet" type="button" id="welcome-invite">Invite a friend</button>` +
         `</div>`;
         const me = Store.currentUser();
+        // Discover is the next tab over, so the way there is the swipe itself
+        // (Zoe: so people see the pages can be swiped through).
+        feedEl.querySelector('a.welcome-go').addEventListener('click', (e) => {
+          if (!NativeChrome.live()) return;
+          e.preventDefault();
+          NativeChrome.glideTo('#/discover');
+        });
         document.getElementById('welcome-invite').addEventListener('click', () => {
           if (!me) return;
           handOver({ title: 'Tria', text: 'Add me on Tria', url: profileLink(me.username) });
@@ -9899,10 +9868,17 @@
       if (!shown.length && isSelf && profileFilter === 'all') {
         const bare = !u.avatar && !u.bio;
         feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
-          `<p>No posts yet. No rush.</p>` +
-          `<a class="welcome-go publish-fill" href="#/publish">Write your first post</a>` +
+          `<p>You haven't shared anything yet.</p>` +
+          `<a class="welcome-go publish-fill" id="welcome-first" href="#/publish">` +
+            svgIcon(TYPE_GLYPH[POST_CYCLE[0]]) +
+            `<span class="welcome-go-text">Share your first <span>${TYPE_LABEL[POST_CYCLE[0]].toLowerCase()}</span></span>` +
+          `</a>` +
           (bare ? `<a class="welcome-go pill-quiet" href="#/profile/edit">Add a photo and bio</a>` : '') +
         `</div>`;
+        // The + menu's walk through the types, glyph and word together.
+        const first = feedEl.querySelector('#welcome-first');
+        if (first) cycleTypes(first.querySelector('svg'), first.querySelector('.welcome-go-text > span'),
+          'welcome-ico sheet-cycle sheet-cycle--ico', (t) => TYPE_LABEL[t].toLowerCase());
         const edit = feedEl.querySelector('[href="#/profile/edit"]');
         if (edit) edit.addEventListener('click', () => { editorPushed = true; });
         return;
@@ -10035,6 +10011,8 @@
         // under the identity (Zoe, 2026-10-23), so what is left is the rare.
         openGlyphMenu(moreBtn, { label: 'Profile options', items: [
           { label: 'Connect to calendar', icon: 'cal', run: openCalendarSubscribe },
+          // Report a bug lands on the feedback fold, open, in About.
+          { label: 'Report a bug', icon: 'bug', run: () => go('#/about?open=feedback') },
           // The only way into About once 1.3 has hidden the wordmark that used
           // to be it (see the About section). Bottom of the menu: it's the rare
           // one of the three, and it's where the feedback form lives, so it also
@@ -14516,6 +14494,7 @@
     preview.turn++;
     cancelAnimationFrame(preview.raf);
     if (preview.audio) preview.audio.pause();
+    if (preview.src) { try { preview.src.stop(); } catch { /* never started */ } preview.src = null; }
     if (preview.btn) { preview.btn.classList.remove('is-loading'); paintPlay(preview.btn, false, 0); }
     preview.btn = null;
     setAudioSession('auto');
@@ -15507,12 +15486,6 @@
       });
     }
 
-    // On a words card the note is set as the feed sets it (Zoe: "reflect the
-    // contents styles"): its paragraphs, line breaks, headings, bold and
-    // italic, under the title when there is one, the wide card beside its
-    // picture too. A small picture card keeps the
-    // plain line over its shade.
-    const rich = (!pic || wide) && said ? cardNoteHtml(p, true) : '';
     const p = item.post;
     // A video Frame with no stored poster has no still, so it is words, the
     // same rule the feed's own frames follow.
@@ -15534,6 +15507,12 @@
       : (said || p.title || page.title || (pic ? '' : domain || TYPE_LABEL[p.type] || 'Post'));
     const gist = p.title && said ? said : (!said && !p.title && page.title ? page.about || '' : '');
     const meta = metaEl(p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime) : domain);
+    // On a words card the note is set as the feed sets it (Zoe: "reflect the
+    // contents styles"): its paragraphs, line breaks, headings, bold and
+    // italic, under the title when there is one, the wide card beside its
+    // picture too. A small picture card keeps the
+    // plain line over its shade.
+    const rich = (!pic || wide) && said ? cardNoteHtml(p, true) : '';
     return card({
       cls: link.unread ? ' pin--unread' : '', type: p.type, pic,
       say: rich ? p.title || '' : head, gist, rich, meta,
@@ -15798,16 +15777,6 @@
     return () => {
       cancelPress();
       document.removeEventListener('pointermove', onMove);
-      if (last.classList.contains('pin-rich')) {
-        // Blocks don't line clamp: the box is cut at the last whole line that
-        // fits, read off the body's line height, and fades under it.
-        last.style.maxHeight = '';
-        const lh = parseFloat(getComputedStyle(last).lineHeight);
-        const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
-        if (lh > 0 && last.scrollHeight > room + 1) last.style.maxHeight = Math.max(lh, Math.floor((room + 1) / lh) * lh) + 'px';
-        last.classList.toggle('is-cut', last.scrollHeight > last.clientHeight + 1);
-        return;
-      }
       document.removeEventListener('pointerup', onUp);
       document.removeEventListener('pointercancel', onUp);
       document.removeEventListener('touchmove', blockScroll);
@@ -15829,6 +15798,16 @@
       const last = face.lastElementChild;
       if (!last) return;
       last.style.webkitLineClamp = '';
+      if (last.classList.contains('pin-rich')) {
+        // Blocks don't line clamp: the box is cut at the last whole line that
+        // fits, read off the body's line height, and fades under it.
+        last.style.maxHeight = '';
+        const lh = parseFloat(getComputedStyle(last).lineHeight);
+        const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
+        if (lh > 0 && last.scrollHeight > room + 1) last.style.maxHeight = Math.max(lh, Math.floor((room + 1) / lh) * lh) + 'px';
+        last.classList.toggle('is-cut', last.scrollHeight > last.clientHeight + 1);
+        return;
+      }
       const lh = parseFloat(getComputedStyle(last).lineHeight);
       const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
       if (lh > 0) last.style.webkitLineClamp = String(Math.max(1, Math.floor((room + 1) / lh)));
@@ -16187,15 +16166,23 @@
   function renderWelcomeCircles() {
     if (!Store.currentUser()) { go('#/'); return; }
     document.body.classList.add('welcome-live');
-    mountToolbar({
-      leading: toolbarBackEl('#/welcome', 'Create your profile'),
-      title: 'Find your circles',
-    });
     // Public circles first by life, then any you were invited to; one you
     // can't join isn't offered here (Discover still shows it).
     const list = Store.communitiesReady()
       ? communitiesInOrder().filter(c => Store.inCommunity(c.id) || Store.canJoinCommunity(c))
       : [];
+    // The way on is the bar's right (Zoe: so nobody has to scroll every circle
+    // to leave): Not now, quiet, until a circle is joined, then Continue in
+    // the band. The header holds on this page (holdsHeader) so it stays put.
+    const joinedAny = () => list.some(c => Store.inCommunity(c.id));
+    const doneHtml = (on) =>
+      `<button type="button" id="welcome-done" data-slots="2" ` +
+        `class="toolbar-cta ${on ? 'publish-fill' : 'pill-quiet'}">${on ? 'Continue' : 'Not now'}</button>`;
+    mountToolbar({
+      leading: toolbarBackEl('#/welcome', 'Create your profile'),
+      title: 'Find your circles',
+      actions: doneHtml(joinedAny()),
+    });
     view.innerHTML =
       `<section class="view welcome">` +
         `<h1 class="visually-hidden">Find your circles</h1>` +
@@ -17788,15 +17775,21 @@
           `placeholder="${esc(placeholderFor(discoverType))}" aria-label="Search people, posts and circles">` +
       `</div>`;
 
+    /* THE FILTER LEADS THE BAR (Zoe, 2026-11-06: "swap the filter and the menu
+       button on discover, I dont think we need the menu on the discover page").
+       The sidebar's mark is My Circle's alone now, and the chips under the
+       header are the trending tags, put away while a type is picked ("If a
+       filter is open or chosen tags dont need to be there"). A picked type
+       tints the sliders, as on Updates and a profile. */
     mountToolbar({
-      leading: Store.isAuthed() ? sideBtnEl('discover-side-btn') : '',
+      leading: filterBtnEl('discover-filter-btn', discoverType, 'Filter search'),
       field: searchBar,
       actions: Store.isAuthed() ? chatsBtnEl('#/discover') : '',
     });
 
     view.innerHTML =
       `<section class="view view--discover">` +
-        `<nav class="discover-chips" id="discover-chips" aria-label="Filter and trending tags"></nav>` +
+        `<nav class="discover-chips" id="discover-chips" aria-label="Trending tags"></nav>` +
         (Store.isAuthed() ? '' :
           `<p class="guest-note">You’re looking around signed out. ` +
             `<a class="about-more" href="#/join">Make an account</a> to join a circle.</p>`) +
@@ -17817,31 +17810,20 @@
     const chipsEl = view.querySelector('#discover-chips');
     // Document-scoped: the field lives in the bar, outside #view.
     const searchEl = document.getElementById('discover-search');
-    const leadBtn = document.getElementById('discover-side-btn');
+    const filterBtn = document.getElementById('discover-filter-btn');
 
-    /* WHILE SEARCH IS OPEN THE LEADING MARK IS A WAY BACK (Zoe). Open is the
-       field holding the caret or a query, a type picked, or the filter's sheet
-       up: the sidebar's mark turns into the back chevron, and pressing it
-       empties the words and the filter, drops the keyboard and puts the mark
-       back. The chevron swallows its mousedown so the tap doesn't blur the
-       field first, which would close the search under the finger. */
+    // An open search (the caret, a query or a type) holds the header. The way
+    // out is the field's own clear, Escape, or All in the filter: the leading
+    // chevron went with the sidebar's mark.
     let searchOpen = null;
     const syncOpen = () => {
-      const open = document.activeElement === searchEl || NativeChrome.searchHasCaret()
+      const open = document.activeElement === searchEl
         || !!discoverQuery.trim() || discoverType !== 'all';
       if (open === searchOpen) return;
       searchOpen = open;
       holdHeader(open);
-      if (!leadBtn) return;
-      leadBtn.innerHTML = open ? svgIcon('chevron', 'toolbar-back-ico') : svgIcon('sidebar');
-      leadBtn.setAttribute('aria-label', open ? 'Close search' : 'Your circles and people');
-      if (open) leadBtn.removeAttribute('aria-haspopup');
-      else leadBtn.setAttribute('aria-haspopup', 'dialog');
-      // The face changed under native's copy of it.
-      NativeChrome.sync();
     };
-    // The words, set from the page (a tag, the chevron): the native field is
-    // told on the next push, since a value is no attribute an observer sees.
+    // The words, set from the page (a tag, the chevron).
     /* A TAG IS ASKED FOR ITS POSTS (Zoe, 2026-11-06: "when tapping a tag lets
        bring up posts instead of people, but search results show people
        first"). The word a tag put in the field reads as that tag: the posts
@@ -17851,28 +17833,35 @@
     const setQuery = (text, tag = null) => {
       tagQuery = tag;
       discoverQuery = searchEl.value = text;
-      NativeChrome.sync();
     };
     const setType = (key) => {
       discoverType = key;
       searchEl.placeholder = placeholderFor(key);
+      syncFilterBtn('discover-filter-btn', key);
+      // A type is its own answer: the tags step aside until All.
+      chipsEl.hidden = key !== 'all';
     };
     const dropCaret = () => {
       if (document.activeElement === searchEl) searchEl.blur();
-      NativeChrome.blurSearch();
     };
-    // Empties the bar: the words, the type and the caret.
-    const closeSearch = () => {
-      setQuery('');
-      setType('all');
+    // The filter's sheet. The keyboard goes down for it.
+    filterBtn?.addEventListener('mousedown', (e) => e.preventDefault());
+    filterBtn?.addEventListener('click', () => {
       dropCaret();
-      paintNow();
-      syncOpen();
-    };
-    leadBtn?.addEventListener('mousedown', (e) => { if (searchOpen) e.preventDefault(); });
-    leadBtn?.addEventListener('click', () => {
-      if (!searchOpen) { openFeedSide(); return; }
-      closeSearch();
+      openFilterDial(filterBtn, {
+        current: discoverType,
+        filters: typeFilters,
+        label: 'Filter',
+        onPick: (key) => {
+          if (key === discoverType) return;
+          // A type and a tag don't stack: picking one lets go of the tag.
+          if (key !== 'all' && tagQuery) setQuery('');
+          setType(key);
+          NativeChrome.sync();
+          paintNow();
+          syncOpen();
+        },
+      });
     });
     /* THE TAP NEVER REACHES THE NATIVE FOCUS (Zoe, 2026-11-06: "search jumps
        up away then comes back on tap ... only after scrolling"). WebKit's focus
@@ -17901,22 +17890,14 @@
     });
     searchEl.addEventListener('focus', syncOpen);
     searchEl.addEventListener('blur', syncOpen);
-    // In the app the caret is in the native field: its keystrokes land here as
-    // the input's own, and its focus opens the search.
-    NativeChrome.searchHooks.text = (text) => {
-      if (searchEl.value === text) return;
-      searchEl.value = text;
-      searchEl.dispatchEvent(new Event('input'));
-    };
-    NativeChrome.searchHooks.focus = () => syncOpen();
 
-    /* THE CHIPS: the filter, then the trending tags (Zoe, 2026-11-06; the
+    /* THE CHIPS: the trending tags (Zoe, 2026-11-06; the
        old trending rail, 2.0 took it out with the masonry wall). A tag TRENDS
        when it repeats: two or more posts you could find with a search, the
        last 30 days counting double, so this month's words lead and an old
        favourite still fills a quiet room. Never a daily's own tag (the daily
-       has its card). No count on a chip. With none repeating, the filter
-       stands alone. The row stays put while you search, so a tag you are
+       has its card). No count on a chip. With none repeating, the row is
+       gone. The row stays put while you search, so a tag you are
        standing in is always one tap from off. */
     const TAGS_MAX = 10;
     const RECENT_MS = 30 * 24 * 60 * 60 * 1000;
@@ -17947,23 +17928,11 @@
         .sort((a, b) => b[1].score - a[1].score || a[0].localeCompare(b[0]))
         .slice(0, TAGS_MAX).map(([k]) => k);
     };
-    // The filter is built once (it anchors its own sheet); a pick names its
-    // type beside the sliders and washes it in the band.
-    chipsEl.innerHTML =
-      `<button type="button" class="pill-quiet discover-chip discover-chip--filter" ` +
-          `id="discover-filter-btn" aria-haspopup="menu" aria-expanded="false" ` +
-          `aria-label="Filter">` +
-        svgIcon('sliders', 'discover-chip-ico') + `<span class="discover-chip-type"></span>` +
-      `</button>` +
-      `<span class="discover-chip-tags"></span>`;
-    const filterChip = chipsEl.firstElementChild;
-    const tagsEl = chipsEl.lastElementChild;
+    const tagsEl = chipsEl;
+    chipsEl.hidden = discoverType !== 'all';
     let chipTags = null;
     const paintChips = () => {
       if (!chipTags) chipTags = trendingTags();
-      const picked = discoverType !== 'all' && typeFilters.find(f => f.key === discoverType);
-      filterChip.classList.toggle('is-on', !!picked);
-      filterChip.lastElementChild.textContent = picked ? picked.label : '';
       const on = discoverQuery.trim().toLowerCase().replace(/^#/, '');
       const html = chipTags.map(t =>
         `<button type="button" class="pill-quiet discover-chip${t === on ? ' is-on' : ''}" ` +
@@ -17979,23 +17948,6 @@
     chipsEl.addEventListener('click', (e) => {
       const chip = e.target.closest('.discover-chip');
       if (!chip) return;
-      if (chip === filterChip) {
-        // The keyboard goes down for the sheet.
-        dropCaret();
-        openFilterDial(chip, {
-          current: discoverType,
-          filters: typeFilters,
-          label: 'Filter',
-          onPick: (key) => {
-            if (key === discoverType) return;
-            setType(key);
-            NativeChrome.sync();
-            paintNow();
-            syncOpen();
-          },
-        });
-        return;
-      }
       // A tag runs as a search for its word, and a second tap takes it off.
       // The answer is the point, so the keyboard stays down.
       const tag = chip.dataset.tag;

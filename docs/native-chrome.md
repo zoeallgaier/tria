@@ -1168,20 +1168,22 @@ value still in flight.
 
 ## Discover's search
 
-**Native, in the bar, for good (2026-11-06, the evening).** Discover's bar is
-the sidebar's mark, a native `TriaSearchField` and Chats, the field in the
-bar's own glass container, so the header is My Circle's glass. Native glass is
-a layer above every web pixel, so a field in a native bar is native or it is
-blurred; every other answer cost the bar its consistency (1.8: the web drew
-Discover's whole bar; a few hours on 2026-11-06: the material cut around a web
-field, with the filter slot's glide re-run natively; another few: the field at
-the top of the page, where it scrolled away). The web input stays as the model
-and the box (`searchSpec`). **The filter left the field's end** for a chip row
-in the page, so the box never moves and native only ever sets a frame. The two
-faults of the 2026-11-05 field are fixed in the class: the page tap that put
-the keys away no longer swallows the touch (a result is one tap), the scroll
-view's `keyboardDismissMode` is `.onDrag` while it holds the caret, and a tap
-anywhere on the capsule takes the caret. What follows is the older history.
+**A web field again, because the bar's band is CSS in the app (2026-11-06,
+later).** Zoe: "make it all our hairline css on iOS, but the buttons still
+glass, not search, like insta, but cleaner ... that way the glass isn't always
+so bubbly and prominent up top". `.topbar::before` (a blur, a whisper of paper,
+one 0.5px `--rule` hairline) is the header in every shell; native draws only the
+discs, the title and the wordmark on it (`TriaToolbarMaterial` is deleted).
+With nothing native behind the bar, the field can be the web's own input, in a
+flat neutral fill with no edge, so the only glass up top is the discs.
+`TriaSearchField` and its bridge (`searchSpec`, `searchText`, `searchFocus`)
+are deleted. Its two lessons for any native field: a page tap that drops the
+keys must not swallow the touch, and `keyboardDismissMode = .onDrag` is what a
+system search does. The web field puts the keys down on a drag by hand.
+
+Before that, the same day, it was a native `TriaSearchField` in the bar's glass
+container, because native glass is above every web pixel and a web field in a
+native bar was blurred. What follows is the older history.
 
 **Discover's search field went native second, and it is a change of mind.**
 

@@ -166,11 +166,12 @@ class TriaViewController: CAPBridgeViewController {
 }
 
 extension TriaViewController: UIGestureRecognizerDelegate {
-    /// My Circle and Discover, read off the route: `#/` (or no hash on a first
-    /// load) and `#/discover`. Everywhere else the edge stays the web view's
-    /// back swipe. Begun here, it owns the edge: back never runs under it.
+    /// My Circle only, read off the route: `#/` (or no hash on a first load).
+    /// Discover left the sidebar on 2026-11-06 (its filter leads instead).
+    /// Everywhere else the edge stays the web view's back swipe. Begun here, it
+    /// owns the edge: back never runs under it.
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        return route.isEmpty || route == "/" || route == "/discover"
+        return route.isEmpty || route == "/"
     }
 
     /// The web view's own edge swipes wait for this one to fail, so on My Circle

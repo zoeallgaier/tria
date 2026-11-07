@@ -378,14 +378,6 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 toolbar.onPick = { [weak self] id, index in
                     self?.notifyListeners("toolbarPick", data: ["id": id, "index": index])
                 }
-                // Discover's search field: a keystroke and the caret coming or
-                // going, each handed to the web input that is still the model.
-                toolbar.onSearchText = { [weak self] text in
-                    self?.notifyListeners("searchText", data: ["text": text])
-                }
-                toolbar.onSearchFocus = { [weak self] on in
-                    self?.notifyListeners("searchFocus", data: ["focused": on])
-                }
                 toolbar.install(in: host, scroller: self.bridge?.webView?.scrollView)
                 self.toolbar = toolbar
             }
@@ -1219,6 +1211,8 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
         /// The spring, in seconds to look settled. Critically damped: a page
         /// that overshoots shows a slice of the one after it.
         static let spring: TimeInterval = 0.38
+        /// A page sent across by a button (`glide`), slow enough to be seen going.
+        static let glide: TimeInterval = 0.55
         /// When the flight counts as over. A spring's tail runs on for a third
         /// of a second under a point of travel, and the bar was waiting it out
         /// (measured: back at 0.75s on a page that looked landed at 0.4).
@@ -1572,72 +1566,18 @@ protocol TriaToolbarControl: AnyObject {
 /// the controls, because they are buttons in the system's sense, and the
 /// material, because the system had one and we were painting our own. See the
 /// note on `edge` below and docs/native-chrome.md.
-/// THE TOP BAR'S MATERIAL: one pane of Liquid Glass, and nothing else.
-///
-/// Three things have been this, and the order matters because each one failed
-/// for a reason worth not repeating.
-///
-/// 1. `.topbar::before` — a `--bg` gradient over a `backdrop-filter`, in CSS,
-///    because in 1.3 there was nothing else to build it out of.
-/// 2. That same gradient copied into Swift, so the material and the buttons
-///    could animate as one object. Copying it was the mistake. A hand-rolled
-///    paper wash, under `.statusbar-scrim`'s hand-rolled paper wash, over a
-///    photograph, is fog — and no tuning of the stops was going to make a
-///    painted scrim look like the material it was imitating.
-/// 3. `UIScrollEdgeElementContainerInteraction`, the system's own scroll edge
-///    effect, which is the thing both of those were imitating.
-///
-/// **(3) CANNOT WORK IN A CAPACITOR APP, and this is the paragraph to read
-/// before trying it again.** A top edge effect draws in the band a scroll view
-/// reserves at its top — its adjusted content inset — and it draws by sampling
-/// that scroll view's own content. Capacitor pins the web view's
-/// `contentInsetAdjustmentBehavior` to `.never` (`CAPInstanceDescriptor.m`) and
-/// is right to: the page lays out its own safe area with `viewport-fit=cover`
-/// and `env()`, and giving the scroll view an inset would shift every page down
-/// by the notch and break pull-to-refresh, which reads a negative `scrollY`.
-/// Adjusted inset of zero is a band of no height, so the effect was asked for,
-/// accepted, and drew nothing. Handing it a PROXY scroll view carrying the
-/// inset was tried next and drew nothing either, for the second half of the
-/// same reason: an empty scroll view has no content to sample. Both were built,
-/// installed and screenshotted, and both put a page title through the clock.
-///
-/// So (4): the material is a `UIGlassEffect`, which is what the discs riding on
-/// it are already made of. It is one view, one effect, one alpha — no gradient,
-/// no mask, no blur view, no `--bg` stops to keep in step with a stylesheet,
-/// and it refracts what passes under it rather than veiling it.
-///
-/// IT HAS TO BE A SIBLING BEHIND THE BAR, not a child of it: `TriaToolbar` is a
-/// `UIGlassContainerEffect`, and glass inside a glass container is a second
-/// material nested in the first, which the container renders in a pass of its
-/// own.
-@available(iOS 26.0, *)
-final class TriaToolbarMaterial: UIVisualEffectView {
-
-    /* 1.8: THE SYSTEM'S BAR MATERIAL, and (5) on the list above. Zoe: no
-       heading backgrounds, just the default iOS blur. The glass pane read as an
-       object sitting on the page. This is `.systemChromeMaterial`, the material
-       UIKit's own bars wear, with a clean bottom edge, which is the look of
-       iOS 26's `.hard` scroll edge style.
-
-       IT HAD A FADED EDGE FOR ONE BUILD AND IT CAME OFF. A gradient mask on a
-       uniform blur fades the blur's OPACITY, where the system's `.soft` edge
-       grows the blur RADIUS toward the top, and the difference reads at once:
-       the masked one was a band of fog. Zoe's words: it doesn't quite feel
-       native. Simpler and plainer is the native answer here, so there is
-       nothing hand-shaped left on this view. */
-    init() {
-        super.init(effect: UIBlurEffect(style: .systemChromeMaterial))
-        // A backdrop. Every tap in this rect belongs to a control on top of it
-        // or to the page underneath.
-        isUserInteractionEnabled = false
-        alpha = 0
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-}
-
+/// THE TOP BAR'S MATERIAL IS THE WEB'S AGAIN (2026-11-06). Zoe: "make it all
+/// our hairline css on iOS, but the buttons still glass ... that way the glass
+/// isn't always so bubbly and prominent up top". `.topbar::before` draws the
+/// band in every shell, a blur with a whisper of paper and one hairline, and
+/// native draws only the discs, the title and the wordmark on top of it. The
+/// band and the title still agree because both read the same rule off the
+/// same scroll (`HEADER_SLACK`, `TriaScrollWatch.slack`). Before this it was
+/// Liquid Glass, then `.systemChromeMaterial` (`TriaToolbarMaterial`, in git);
+/// the system's own scroll edge effect cannot be reached from a Capacitor web
+/// view at all (its band is the adjusted content inset, which Capacitor pins to
+/// zero). With nothing native behind the bar, Discover's search is a web field
+/// again.
 /// Watches the web view's scroll offset, and answers the two questions the
 /// bar's header is a function of: is the page at its top, and is the reader
 /// going DOWN it.
@@ -1707,14 +1647,8 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     var onTap: ((String) -> Void)?
     var onMenu: ((String, Int) -> Void)?
     var onPick: ((String, Int) -> Void)?
-    /// Discover's search, the one thing in this bar that holds a caret. See
-    /// `TriaSearchField`.
-    var onSearchText: ((String) -> Void)?
-    var onSearchFocus: ((Bool) -> Void)?
 
     private var controls: [String: TriaToolbarButton] = [:]
-    private var search: TriaSearchField?
-    private weak var scroller: UIScrollView?
     /* OXYGEN, IN THE ONE FORM UIKIT CAN READ.
 
        The stylesheet's `font-family: 'Oxygen'` is a `woff2` in `css/fonts/`,
@@ -1746,13 +1680,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
             ?? .systemFont(ofSize: size, weight: .bold)
     }
 
-    /// The bar's material, behind this container rather than in it. See
-    /// TriaToolbarMaterial, which carries the three things this was before.
-    private let material = TriaToolbarMaterial()
-    /// How far past the left, right and top edges the material is pushed, so
-    /// that three of its four glass rims are off-screen. Any value past the
-    /// display's corner radius will do.
-    private var barHeight: CGFloat = 0
     private var watch: TriaScrollWatch?
     /// Whether this route draws a bar at all. Signed out there is none.
     private var live = false
@@ -1783,8 +1710,8 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     private var holdHeader = false
     /// How much of the bar a swipe between tabs has left, 1 at rest. See `TriaPager`.
     private var pageFade: CGFloat = 1
-    /// The header — the material behind the bar and the small title on it — is
-    /// one object in two views, and this is the single answer both wear.
+    /// The header: the web's band behind the bar (`.topbar::before`, on the
+    /// same rule off the same scroll) and the small title on it.
     private var headerUp: Bool { !scroll.atTop && (holdHeader || !scroll.reading) }
     /// The discs, on the wordmark's rule: up at the top of a page and whenever
     /// the header is, gone on a read down (Zoe, 2026-10-22: the top buttons can
@@ -1794,20 +1721,16 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
 
     /// Each disc fades on its own, never `contentView`: alpha on a glass
     /// container leaves its nested glass half-drawn (see the note above
-    /// `materialFrame`). A nested glass element honours alpha.
+    /// `syncBare`). A nested glass element honours alpha.
     private func syncAway(animated: Bool) {
         for control in controls.values { control.setAway(!controlsUp, animated: animated) }
-        search?.setAway(!controlsUp, animated: animated)
     }
 
     /// With the finger or a spring around it, so nothing here animates by itself.
-    /// Every disc on its own, for the reason above, and the material with the
-    /// title, because they are one header.
+    /// Every disc on its own, for the reason above, and the title.
     func setPageFade(_ fade: CGFloat) {
         pageFade = fade
         for control in controls.values { control.setFade(fade) }
-        search?.setFade(fade)
-        syncMaterial(animated: false)
         syncTitle(animated: false)
     }
 
@@ -1849,15 +1772,12 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
         markBox.addSubview(markView)
         markBox.addSubview(markWord)
         contentView.addSubview(markBox)
-        host.addSubview(material)
         host.addSubview(self)
-        self.scroller = scroller
         if let scroller {
             watch = TriaScrollWatch(of: scroller) { [weak self] state in
                 guard let self, state != self.scroll else { return }
                 let crossedTop = state.atTop != self.scroll.atTop
                 self.scroll = state
-                self.syncMaterial(animated: true)
                 self.syncTitle(animated: true)
                 self.syncAway(animated: true)
                 if crossedTop { self.syncBare(animated: true) }
@@ -1870,12 +1790,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
     func apply(spec: [String: Any]) {
         live = spec["live"] as? Bool ?? false
         holdHeader = spec["holdHeader"] as? Bool ?? false
-        // The bar is 60px plus the notch on a phone and 88 on a tablet,
-        // measured by app.js off the CSS bar rather than assumed here. It is
-        // the height of the material and the only geometry it needs.
-        if TriaToolbar.number(spec["height"]) > 0 {
-            barHeight = TriaToolbar.number(spec["height"])
-        }
 
         if let title = spec["title"] as? [String: Any] {
             let text = title["text"] as? String ?? ""
@@ -1928,25 +1842,8 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
             controls.removeValue(forKey: id)
         }
 
-        // Discover's search, built only once a page asks for one: every other
-        // route sends `live: false` and never pays for the view.
-        if let field = spec["search"] as? [String: Any] {
-            if search == nil, field["live"] as? Bool == true {
-                let bar = TriaSearchField()
-                bar.onText = { [weak self] text in self?.onSearchText?(text) }
-                bar.onFocus = { [weak self] on in self?.onSearchFocus?(on) }
-                bar.setFade(pageFade)
-                contentView.addSubview(bar)
-                search = bar
-            }
-            search?.setAway(!controlsUp, animated: false)
-            search?.apply(spec: field, scroller: scroller)
-        }
-
         isHidden = !live
-        syncMaterial(animated: !isHidden)
         syncTitle(animated: !isHidden)
-        material.frame = materialFrame()
     }
 
     /* SINCE 2026-10-22 THE DISCS LEAVE ON A READ DOWN AGAIN, on the header's
@@ -1977,52 +1874,6 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
        re-rendering every frame (`syncVisibility` documents the same trap on the
        bottom bar). What DOES honour alpha is a nested glass ELEMENT, which is
        how the composer's + animates and how each disc was faded here. */
-
-    /* THE MATERIAL LEAVES WITH THE BUTTONS. It briefly did not.
-
-       There was a version that kept the safe-area strip behind when the bar
-       tucked away, on the reasoning that the clock still needs something under
-       it — the job `.statusbar-scrim` was added to do. It is the wrong trade.
-       A reader scrolling down asked for the chrome to go, and a glass tab
-       hanging in the notch after the bar it belonged to has gone is a leftover,
-       not a courtesy. iOS resolves the status bar against what is behind it and
-       is allowed to do that over the page, the way it does in every app that
-       scrolls content under the clock.
-
-       So the material is `live && headerUp`: a route that draws a bar at all,
-       and a header that is currently up. There was a third term, the bar being
-       shown, and it went with the hide-on-scroll gesture above.
-
-       AND IT LEAVES WITH THE TITLE, not on its own. `headerUp` is one property
-       read by both, deliberately: the material and the small title are two
-       views of ONE header, and the whole reason the bar's own hide-on-scroll
-       came out is that two halves of one bar were animating separately and
-       could not be made to agree. Change the rule in `headerUp` or in neither.
-
-       AND IT FADES, it does not shrink. Everything else on this bar fades;
-       nothing in 1.4 enters or leaves by travelling. A collapsing height read
-       as the bar folding up into the notch while the discs on it dissolved in
-       place, which is two animations again. Alpha is safe HERE, unlike on the
-       control container — this view is one plain UIVisualEffectView, not a
-       glass container rendering nested elements in a pass of its own. */
-    // The bar's own height, full width. The glass pane needed its rims pushed
-    // off three sides (`rimSlack`, gone); a blur has none.
-    private func materialFrame() -> CGRect {
-        CGRect(x: 0, y: 0, width: bounds.width, height: max(barHeight, safeAreaInsets.top))
-    }
-
-    private func syncMaterial(animated: Bool) {
-        material.frame = materialFrame()
-        let wanted: CGFloat = (live && headerUp) ? pageFade : 0
-        guard material.alpha != wanted else { return }
-        if animated && !UIAccessibility.isReduceMotionEnabled {
-            UIView.animate(withDuration: 0.24, delay: 0,
-                           options: [.allowUserInteraction, .beginFromCurrentState,
-                                     .curveEaseOut]) { self.material.alpha = wanted }
-        } else {
-            material.alpha = wanted
-        }
-    }
 
     /// The title's arrival: the page's big serif name has scrolled out from
     /// under the bar, the small one takes over, and the header it rides on is
@@ -2459,244 +2310,6 @@ final class TriaToolbarButton: UIVisualEffectView {
         }
     }
 }
-
-/// DISCOVER'S SEARCH, IN THE HEADER (2026-11-06).
-///
-/// Discover's bar is the sidebar's mark, this field, and Chats. Native glass
-/// sits above every web pixel, so a field in a native bar has to be native
-/// too: a web field there was either blurred by the material, or the bar had
-/// to be CSS on Discover alone, or the material had to be cut around it. This
-/// is the bar's own glass, beside the discs, in the same container.
-///
-/// It is the comment bar's arrangement: a real `UITextField` holds the caret
-/// and every keystroke is written back into `#discover-search`, which fires
-/// its own `input`, so the search is the web's code unchanged. The web input
-/// stays in the bar, invisible, as the model and the box measured.
-///
-/// Its geometry never changes on its own (the filter is in the page now, not
-/// at the field's end), so the frame is set, never animated.
-///
-/// THE TWO THINGS THAT WERE WRONG WITH THE FIRST ONE (2026-11-05, Zoe: "the
-/// tap is slow ... keyboard doesnt go down easily"): a tap on the page while
-/// it held the caret was SWALLOWED to put the keyboard down, so a result took
-/// two taps; and the keyboard only went with a drag down INTO it. Here a tap
-/// on the page goes through as well as putting the keys away, any drag on the
-/// page puts them away (`.onDrag`, what a system search does), and the whole
-/// capsule, glyph included, takes the caret on touch down.
-@available(iOS 26.0, *)
-final class TriaSearchField: UIVisualEffectView, UITextFieldDelegate {
-
-    /// A keystroke. The web input is still the model.
-    var onText: ((String) -> Void)?
-    /// The caret arrived (true) or left (false). The web reads "open" off it.
-    var onFocus: ((Bool) -> Void)?
-
-    private let field = UITextField()
-    private let glyph = UIImageView()
-    private weak var scroller: UIScrollView?
-    private var pageTap: UITapGestureRecognizer?
-
-    private var live = false
-    private var drawn = ""
-    /// The web's request to put the caret down (the chevron, the filter's
-    /// sheet), as a counter so a repeat is still news.
-    private var blurSeq = -1
-    private var away = false
-    private var fade: CGFloat = 1
-
-    init() {
-        super.init(effect: UIGlassEffect(style: .regular))
-        cornerConfiguration = .capsule()
-        isHidden = true
-
-        field.borderStyle = .none
-        field.backgroundColor = .clear
-        field.autocorrectionType = .no
-        field.autocapitalizationType = .none
-        field.spellCheckingType = .no
-        field.clearButtonMode = .whileEditing
-        field.returnKeyType = .search
-        field.delegate = self
-        field.addTarget(self, action: #selector(edited), for: .editingChanged)
-        contentView.addSubview(field)
-
-        glyph.contentMode = .center
-        glyph.isUserInteractionEnabled = false
-        glyph.isAccessibilityElement = false
-        contentView.addSubview(glyph)
-
-        // The whole capsule is the field: a touch on the glyph or the padding
-        // takes the caret as a touch on the text does.
-        let press = UITapGestureRecognizer(target: self, action: #selector(pressed))
-        press.cancelsTouchesInView = false
-        addGestureRecognizer(press)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    @objc private func pressed() {
-        if !field.isFirstResponder { field.becomeFirstResponder() }
-    }
-
-    // MARK: State
-
-    /// `spec` is the toolbar payload's `search` object, measured off the
-    /// laid-out web input.
-    func apply(spec: [String: Any], scroller: UIScrollView?) {
-        if self.scroller == nil, let scroller {
-            self.scroller = scroller
-            let tap = UITapGestureRecognizer(target: self, action: #selector(pagePressed))
-            // Through, not swallowed: the tap that puts the keys away is also
-            // the tap on the result you wanted.
-            tap.cancelsTouchesInView = false
-            tap.isEnabled = false
-            scroller.addGestureRecognizer(tap)
-            pageTap = tap
-        }
-        guard spec["live"] as? Bool ?? false else {
-            guard live else { return }
-            live = false
-            drawn = ""
-            field.resignFirstResponder()
-            isHidden = true
-            return
-        }
-
-        let box = CGRect(x: TriaToolbar.number(spec["x"]), y: TriaToolbar.number(spec["y"]),
-                         width: TriaToolbar.number(spec["w"]), height: TriaToolbar.number(spec["h"]))
-
-        // Everything but the text: what the reader types belongs to this side
-        // while it has the caret, and echoing it back would fight the cursor.
-        let signature = spec.filter { !["text", "live", "x", "y", "w", "h", "blur"].contains($0.key) }
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key)=" + String(describing: $0.value) }
-            .joined(separator: "|")
-        if signature != drawn {
-            drawn = signature
-            let ink = (spec["ink"] as? String).flatMap(TriaChromeBar.color(fromHex:)) ?? .label
-            let muted = (spec["muted"] as? String)
-                .flatMap(TriaChromeBar.color(fromHex:)) ?? .secondaryLabel
-            field.font = TriaPostBarPill.face
-            field.textColor = ink
-            field.tintColor = (spec["caret"] as? String)
-                .flatMap(TriaChromeBar.color(fromHex:)) ?? ink
-            field.accessibilityLabel = spec["label"] as? String
-            // The web's placeholder is --muted at 0.75, baked into the colour.
-            field.attributedPlaceholder = NSAttributedString(
-                string: spec["placeholder"] as? String ?? "",
-                attributes: [.font: TriaPostBarPill.face,
-                             .foregroundColor: muted.withAlphaComponent(0.75)])
-            if let mark = spec["glyph"] as? String, !mark.isEmpty {
-                let side = TriaToolbar.number(spec["glyphSize"], fallback: 20)
-                glyph.image = TriaSVG.image(markup: mark, size: side, ink: muted, template: false)
-            }
-            textLeft = TriaToolbar.number(spec["fieldLeft"], fallback: 43)
-            textRight = TriaToolbar.number(spec["fieldRight"], fallback: 16)
-            glyphCentre = TriaToolbar.number(spec["glyphX"], fallback: 25)
-            setNeedsLayout()
-        }
-        if let text = spec["text"] as? String, text != field.text, !field.isFirstResponder {
-            field.text = text
-        }
-        let seq = Int(TriaToolbar.number(spec["blur"]))
-        if seq != blurSeq {
-            // The first push only records where the count stands.
-            if blurSeq >= 0 { field.resignFirstResponder() }
-            blurSeq = seq
-        }
-
-        live = true
-        isHidden = false
-        if frame != box {
-            frame = box
-            layoutIfNeeded()
-        }
-        settle(animated: false)
-    }
-
-    /// The header's rule, as the discs wear it, except while it holds the
-    /// caret: a field fading out from under your thumb mid-word is a bug.
-    func setAway(_ wanted: Bool, animated: Bool) {
-        guard wanted != away else { return }
-        away = wanted
-        settle(animated: animated)
-    }
-
-    func setFade(_ value: CGFloat) {
-        guard value != fade else { return }
-        fade = value
-        settle(animated: false)
-    }
-
-    private func settle(animated: Bool) {
-        let gone = away && !field.isFirstResponder
-        isUserInteractionEnabled = !gone
-        accessibilityElementsHidden = gone
-        let strength: CGFloat = gone ? 0 : fade
-        let move = { self.alpha = strength }
-        if animated && !UIAccessibility.isReduceMotionEnabled {
-            UIView.animate(withDuration: 0.24, delay: 0,
-                           options: [.allowUserInteraction, .beginFromCurrentState], animations: move)
-        } else {
-            move()
-        }
-    }
-
-    // MARK: Geometry
-
-    private var textLeft: CGFloat = 43
-    private var textRight: CGFloat = 16
-    private var glyphCentre: CGFloat = 25
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let box = contentView.bounds
-        glyph.frame = CGRect(x: glyphCentre - 14, y: box.midY - 14, width: 28, height: 28)
-        // The clear button sits inside the field's own right edge, so the field
-        // runs nearly to the capsule's end and keeps a little of the padding.
-        field.frame = CGRect(x: textLeft, y: 0,
-                             width: max(0, box.width - textLeft - min(textRight, 8)),
-                             height: box.height)
-    }
-
-    // MARK: Typing
-
-    @objc private func edited() { onText?(field.text ?? "") }
-
-    @objc private func pagePressed() { field.resignFirstResponder() }
-
-    private func arm(_ editing: Bool) {
-        pageTap?.isEnabled = editing
-        scroller?.keyboardDismissMode = editing ? .onDrag : .none
-    }
-
-    func textFieldDidBeginEditing(_ textField: UITextField) {
-        arm(true)
-        onFocus?(true)
-    }
-
-    func textFieldDidEndEditing(_ textField: UITextField) {
-        arm(false)
-        settle(animated: true)
-        if live { onFocus?(false) }
-    }
-
-    /// The clear button empties the words and leaves the caret, as a system
-    /// search's does; the page hears it as any other edit.
-    func textFieldShouldClear(_ textField: UITextField) -> Bool {
-        DispatchQueue.main.async { [weak self] in self?.onText?("") }
-        return true
-    }
-
-    /// Return puts the keyboard away and leaves the query standing: the page
-    /// has been searching on every letter.
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        return false
-    }
-}
-
 
 // MARK: - Menus
 
