@@ -7975,45 +7975,64 @@ button.card-song-play:active { transform: scale(0.9); }
 /* ── A profile's type tabs (2026-11-07) ──────────────────────────────────────
    Instagram's profile tabs (Zoe: "a swipable instagram filter"): the type
    glyphs in even columns over the posts, the one you're on in ink and the rest
-   muted, a short line under it that slides (and follows a drag on the posts,
-   wireProfileTabs). No hairline across the strip and no fill: type on paper. */
-/* IT STICKS UNDER THE HEADER (Zoe, 2026-11-07: "have the filter snapped to the
-   top"); a profile holds its header, so the place it sticks never moves. Once
-   it's stuck it wears the bar's own band (blur, a whisper of paper) from edge
-   to edge and takes the bar's hairline under itself, so the two read as one
-   header (`.is-stuck`, `body.tabs-stuck`, set off the scroll in
-   wireProfileTabs). Unstuck, it is type on the page's wash. */
+   muted, a short line under it that slides (and follows a drag, see
+   wireProfileTabs). No hairline across the strip and no fill: type on paper.
+
+   ONCE IT SCROLLS UP TO THE HEADER IT JOINS IT (Zoe: "add it to the header
+   when it scrolls far enough ... I don't like that the blur is separated").
+   The strip sticks at the bar's foot, and the bar's own band grows down
+   behind it (`.topbar::before`, its bottom let down by --profile-tabs-h,
+   `body.tabs-stuck`), its hairline moving down to the strip's foot: one
+   blur, one hairline, one header. The strip stands one layer over the bar
+   (101 over 100; nothing between it and the root makes a stacking context, and
+   every overlay is 200 and up) so the blur is behind its glyphs, not over
+   them. A profile holds its header, so the stop never moves.
+
+   On a desktop the bar has no band, so the strip brings its own once stuck. */
+:root { --profile-tabs-h: 46px; }
 .profile-tabs {
   position: sticky;
   top: calc(1rem + var(--topbar-h));
-  z-index: 20;
+  z-index: 101;
   display: flex;
   max-width: var(--feed-width);
   margin-top: var(--account-gap);
+  touch-action: pan-y;            /* sideways is the tabs' own swipe */
+  -webkit-user-select: none;
+  user-select: none;
 }
+.pins-host:not(:empty) ~ .profile-tabs { margin-top: 1.6rem; }
 @media (max-width: 680px) {
   .profile-tabs { top: calc(env(safe-area-inset-top) + var(--topbar-h)); }
+  body.tabs-live .topbar::before {
+    transition: opacity var(--dur-quick) var(--ease), bottom var(--dur-quick) var(--ease);
+  }
+  body.tabs-live .topbar--edge-instant::before { transition: none; }
+  body.tabs-stuck .topbar::before { bottom: calc(-1 * var(--profile-tabs-h)); }
 }
-.profile-tabs::before {
-  content: '';
-  position: absolute;
-  inset: 0 calc(-1 * var(--gutter, 0px));
-  z-index: -1;
-  pointer-events: none;
-  background: color-mix(in srgb, var(--bg) 60%, transparent);
-  backdrop-filter: blur(20px) saturate(1.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  border-bottom: 0.5px solid var(--rule);
-  opacity: 0;
-  transition: opacity var(--dur-quick) var(--ease);
+@media (min-width: 681px) {
+  .profile-tabs::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--bg) 60%, transparent);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    border-bottom: 0.5px solid var(--rule);
+    opacity: 0;
+    transition: opacity var(--dur-quick) var(--ease);
+  }
+  .profile-tabs.is-stuck::before { opacity: 1; }
 }
-.profile-tabs.is-stuck::before { opacity: 1; }
-body.tabs-stuck .topbar::before { border-bottom-color: transparent; }
-.pins-host:not(:empty) ~ .profile-tabs { margin-top: 1.6rem; }
+@media (prefers-reduced-motion: reduce) {
+  body.tabs-live .topbar::before { transition: opacity var(--dur-quick) var(--ease); }
+}
 .profile-tab {
   flex: 1 1 0;
   min-width: 0;
-  height: 46px;
+  height: var(--profile-tabs-h);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8021,11 +8040,11 @@ body.tabs-stuck .topbar::before { border-bottom-color: transparent; }
   border: none;
   background: none;
   color: var(--muted);
-  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition: color var(--dur-micro) var(--ease-soft);
 }
-.profile-tab svg { width: 24px; height: 24px; }
+.profile-tab svg { width: 24px; height: 24px; transition: transform var(--dur-micro) var(--ease-soft); }
+.profile-tab:active svg { transform: scale(0.9); }
 .profile-tab[aria-selected="true"] { color: var(--text); }
 @media (hover: hover) { .profile-tab:hover { color: var(--text); } }
 .profile-tab:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; border-radius: 12px; }

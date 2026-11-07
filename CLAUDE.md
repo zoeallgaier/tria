@@ -36,12 +36,19 @@ slides on out and the new one is painted and slides in from that side. A drag
 starting on anything with a sideways drag of its own, or the left 24px (back),
 is left alone. The posts are `touch-action: pan-y`, which is also what makes
 `swipeAt` stand the tab pager down over them, so on your own profile a swipe
-on the posts changes type, not tab. **The strip sticks under the header**
-(Zoe: "have the filter snapped to the top"): stuck, it wears the bar's band
-edge to edge and takes the bar's hairline (`.is-stuck`, `body.tabs-stuck`,
-`profileTabsOff` drops the scroll watch in route()), and a type picked while
-stuck opens at its own top right under the strip, the pane held a screen tall
-so the strip never moves.
+on the posts changes type, not tab. The strip swipes too. **Once it scrolls up
+to the header it JOINS it** (Zoe: "add it to the header when it scrolls far
+enough ... I don't like that the blur is separated"): it sticks at the bar's
+foot and the bar's OWN band (`.topbar::before`) lets its bottom down by
+`--profile-tabs-h` behind it, so it is one blur and one hairline
+(`body.tabs-stuck`, `body.tabs-live` for the band's transition; a separate
+band on the strip showed a seam). The strip is z 101 over the bar's 100,
+which works only because nothing between it and the root makes a stacking
+context; keep it that way. The desktop bar has no band, so there the strip
+brings its own. A type picked while stuck opens at its own top under the
+strip, a tap on the tab you're on goes back there, and every switch holds the
+pane a screen tall, so the strip never jumps. `profileTabsOff` drops the
+scroll watch in route().
 
 ## A circle has a theme, picked as a profile's is (2026-11-07)
 

@@ -9937,20 +9937,29 @@
   let profileTabsOff = null;     // drops the tabs' scroll watch (wireProfileTabs)
 
   /* THE PROFILE'S TYPE TABS (Zoe, 2026-11-07: "like a swipable instagram
-     filter"). A tap on a tab, or a sideways drag on the posts, goes to it.
-     The drag carries the pane one to one with the finger (a quarter of that
-     past the first and last tab) and the line under the tabs follows it; past
-     28% of the width or on a flick it goes. The next pane is not built under
-     the finger, the page would hold every type at once: the one going slides
-     on out, the new one is painted and slides in from the side it came from.
-     A drag that starts on something with a sideways drag of its own (a
-     carousel, a rail, a player) or on the left edge (back) is left alone. The
-     posts take only vertical pans (touch-action in CSS), which is also what
-     tells the tab pager (swipeAt) to stand down over them. */
+     filter"). A tap on a tab, or a sideways drag on the posts or on the strip,
+     goes to it. The drag carries the pane one to one with the finger (a
+     quarter of that past the first and last tab) and the line under the tabs
+     follows it; past 28% of the width or on a flick it goes. The next pane is
+     not built under the finger, the page would hold every type at once: the
+     one going slides on out, the new one is painted and slides in from the
+     side it came from. A drag that starts on something with a sideways drag of
+     its own (a carousel, a rail, a player) or on the left edge (back) is left
+     alone. Both take only vertical pans (touch-action in CSS), which is also
+     what tells the tab pager (swipeAt) to stand down over them.
+
+     THE STRIP JOINS THE HEADER once it scrolls up to it (Zoe: "add it to the
+     header when it scrolls far enough"): it sticks at the bar's foot and the
+     bar's band grows down behind it (CSS, off `body.tabs-stuck`). A type
+     picked while it's stuck opens at its own top, right under the strip, and
+     a tap on the tab you're on goes back there. Every pane is held at least
+     the screen under the strip tall, so the page never runs out under a short
+     one: the strip never jumps, stuck or not. */
   function wireProfileTabs(tabsEl, feedEl, keys, current, pick) {
     const line = tabsEl.querySelector('.profile-tabs-line');
     const tabs = [...tabsEl.querySelectorAll('.profile-tab')];
     const idx = () => Math.max(0, keys.indexOf(current()));
+    const width = () => feedEl.clientWidth || window.innerWidth;
     const place = (at, glide) => {
       line.style.transition = glide ? '' : 'none';
       line.style.transform = `translateX(${at * 100}%)`;
@@ -9968,13 +9977,11 @@
       feedEl.style.transform = x ? `translateX(${x}px)` : '';
       feedEl.style.opacity = fade ? '0' : '';
     };
-    /* THE STRIP STICKS UNDER THE HEADER (Zoe, 2026-11-07: "snapped to the
-       top"). Stuck, it wears the bar's band and takes its hairline (CSS). And
-       a type picked while stuck opens at its own top, right under the strip,
-       so the strip never moves: the pane is held at least a screen tall, and
-       the page goes to where the posts begin. */
+
+    // Stuck: the strip at its stop under the header.
     const stickAt = () => parseFloat(getComputedStyle(tabsEl).top) || 0;
-    const stuck = () => tabsEl.getBoundingClientRect().top <= stickAt() + 0.5 && window.scrollY > 0;
+    const under = () => stickAt() + tabsEl.offsetHeight;
+    const stuck = () => window.scrollY > 0 && tabsEl.getBoundingClientRect().top <= stickAt() + 0.5;
     let frame = 0;
     const syncStuck = () => {
       frame = 0;
@@ -9985,41 +9992,56 @@
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(syncStuck); };
     profileTabsOff?.();
     window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    document.body.classList.add('tabs-live');
     profileTabsOff = () => {
       cancelAnimationFrame(frame); frame = 0;
       window.removeEventListener('scroll', onScroll);
-      document.body.classList.remove('tabs-stuck');
+      window.removeEventListener('resize', onScroll);
+      document.body.classList.remove('tabs-live', 'tabs-stuck');
       profileTabsOff = null;
     };
     syncStuck();
-    const keepStrip = (wasStuck) => {
-      if (!wasStuck) return;
-      const under = stickAt() + tabsEl.offsetHeight;
-      feedEl.style.minHeight = `${window.innerHeight - under}px`;
+    // A restored scroll lands after the render.
+    requestAnimationFrame(syncStuck);
+
+    // Where the page stands with the pane's first post right under the strip.
+    // Rounded up and a pixel past: a pixel short leaves the strip off its stop.
+    const paneTop = () => {
       const gap = parseFloat(getComputedStyle(feedEl).marginTop) || 0;
-      // Rounded up: a pixel short leaves the strip a pixel off its stop, unstuck.
-      window.scrollTo(0, Math.ceil(window.scrollY + feedEl.getBoundingClientRect().top - gap - under) + 1);
-      syncStuck();
+      return Math.ceil(window.scrollY + feedEl.getBoundingClientRect().top - gap - under()) + 1;
     };
+    const hold = () => { feedEl.style.minHeight = `${Math.max(0, window.innerHeight - under())}px`; };
 
     let seq = 0, moving = false;
     function go(to) {
       const from = idx();
-      if (to === from || to < 0 || to >= keys.length) return settle();
+      if (to < 0 || to >= keys.length) return settle();
+      if (to === from) {
+        // The tab you're on: back to the top of its posts, if you're down them.
+        settle();
+        if (stuck()) window.scrollTo({ top: paneTop(), behavior: prefersReduced() ? 'auto' : 'smooth' });
+        return;
+      }
       const dir = to > from ? 1 : -1;
-      const w = feedEl.clientWidth || window.innerWidth;
+      const w = width();
       const mine = ++seq;
       const wasStuck = stuck();
       place(to, true);
       light(keys[to]);
-      if (prefersReduced()) { pick(keys[to]); keepStrip(wasStuck); pane(0); return; }
+      hold();
+      const land = () => {
+        pick(keys[to]);
+        if (wasStuck) window.scrollTo(0, paneTop());
+        syncStuck();
+      };
+      if (prefersReduced()) { land(); pane(0); return; }
       moving = true;
       pane(-dir * w * 0.4, true,
         'transform 150ms cubic-bezier(0.4, 0, 1, 1), opacity 150ms linear');
       setTimeout(() => {
         if (mine !== seq || !feedEl.isConnected) return;
-        pick(keys[to]);
-        keepStrip(wasStuck);
+        land();
         pane(dir * w * 0.3, true);
         void feedEl.offsetWidth;
         pane(0, false, 'transform 0.36s var(--ease), opacity 0.2s linear');
@@ -10035,9 +10057,12 @@
       place(idx(), true);
     }
 
+    // A click that ends a drag across the strip is the drag's, not a pick.
+    let dragEnded = 0;
     tabsEl.addEventListener('click', (e) => {
       const tab = e.target.closest('.profile-tab');
-      if (tab) go(keys.indexOf(tab.dataset.key));
+      if (!tab || performance.now() - dragEnded < 400) return;
+      go(keys.indexOf(tab.dataset.key));
     });
     tabsEl.addEventListener('keydown', (e) => {
       const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
@@ -10049,8 +10074,9 @@
       tabs[to].focus();
     });
 
-    const ownsSideways = (el) => {
-      for (; el && el !== feedEl; el = el.parentElement) {
+    // The drag, on the posts and on the strip alike.
+    const ownsSideways = (el, root) => {
+      for (; el && el !== root; el = el.parentElement) {
         if (el.matches('iframe, input, textarea, [contenteditable="true"]')) return true;
         const s = getComputedStyle(el);
         if (s.touchAction !== 'auto' && s.touchAction !== 'manipulation') return true;
@@ -10059,46 +10085,48 @@
       return false;
     };
     let t = null;
-    feedEl.addEventListener('touchstart', (e) => {
-      t = null;
-      if (moving || e.touches.length !== 1) return;
-      const p = e.touches[0];
-      if (p.clientX < 24 || ownsSideways(e.target)) return;
-      t = { x: p.clientX, y: p.clientY, dx: 0, axis: '', lx: p.clientX, lt: e.timeStamp, vx: 0 };
-    }, { passive: true });
-    feedEl.addEventListener('touchmove', (e) => {
-      if (!t) return;
-      const p = e.touches[0];
-      const dx = p.clientX - t.x, dy = p.clientY - t.y;
-      if (!t.axis) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        t.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
-        if (t.axis === 'y') { t = null; return; }
-        t.x = p.clientX;   // start from here, so the pane doesn't jump the slop
-      }
-      e.preventDefault();
-      const d = p.clientX - t.x;
-      const i = idx(), w = feedEl.clientWidth || window.innerWidth;
-      const edge = (d > 0 && i === 0) || (d < 0 && i === keys.length - 1);
-      t.dx = edge ? d * 0.25 : d;
-      const dt = e.timeStamp - t.lt;
-      if (dt > 0) t.vx = 0.7 * t.vx + 0.3 * ((p.clientX - t.lx) / dt);
-      t.lx = p.clientX; t.lt = e.timeStamp;
-      pane(t.dx);
-      place(Math.min(keys.length - 1, Math.max(0, i - t.dx / w)), false);
-    }, { passive: false });
     const lift = () => {
       const g = t;
       t = null;
       if (!g || g.axis !== 'x') return;
-      const w = feedEl.clientWidth || window.innerWidth;
+      dragEnded = performance.now();
       const dir = g.dx < 0 ? 1 : -1;
       const flick = Math.abs(g.vx) > 0.45 && Math.sign(g.vx) === Math.sign(g.dx);
-      if (Math.abs(g.dx) > w * 0.28 || flick) go(idx() + dir);
+      if (Math.abs(g.dx) > width() * 0.28 || flick) go(idx() + dir);
       else settle();
     };
-    feedEl.addEventListener('touchend', lift);
-    feedEl.addEventListener('touchcancel', lift);
+    for (const root of [feedEl, tabsEl]) {
+      root.addEventListener('touchstart', (e) => {
+        t = null;
+        if (moving || e.touches.length !== 1) return;
+        const p = e.touches[0];
+        if (p.clientX < 24 || ownsSideways(e.target, root)) return;
+        t = { x: p.clientX, y: p.clientY, dx: 0, axis: '', lx: p.clientX, lt: e.timeStamp, vx: 0 };
+      }, { passive: true });
+      root.addEventListener('touchmove', (e) => {
+        if (!t) return;
+        const p = e.touches[0];
+        const dx = p.clientX - t.x, dy = p.clientY - t.y;
+        if (!t.axis) {
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+          t.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+          if (t.axis === 'y') { t = null; return; }
+          t.x = p.clientX;   // start from here, so the pane doesn't jump the slop
+        }
+        e.preventDefault();
+        const d = p.clientX - t.x;
+        const i = idx(), w = width();
+        const edge = (d > 0 && i === 0) || (d < 0 && i === keys.length - 1);
+        t.dx = edge ? d * 0.25 : d;
+        const dt = e.timeStamp - t.lt;
+        if (dt > 0) t.vx = 0.7 * t.vx + 0.3 * ((p.clientX - t.lx) / dt);
+        t.lx = p.clientX; t.lt = e.timeStamp;
+        pane(t.dx);
+        place(Math.min(keys.length - 1, Math.max(0, i - t.dx / w)), false);
+      }, { passive: false });
+      root.addEventListener('touchend', lift);
+      root.addEventListener('touchcancel', lift);
+    }
   }
   // The pin drag holds three listeners on the DOCUMENT (a gesture that starts on
   // a card keeps going when the finger leaves it), so they outlive the section
