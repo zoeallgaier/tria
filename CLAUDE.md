@@ -21,6 +21,23 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## A circle has a theme, picked as a profile's is (2026-11-07)
+
+**A circle's host picks its colour in the profile's own Theme sheet** (Zoe:
+"the same way pfps are"): Tria, Photo, None and the nine, the same values as
+`users.accent` (null is its photo's colour, else Tria's ramp), in
+`communities.accent` via `set_community_accent` (`supabase/circle-accent.sql`,
+**NOT run** as of 2026-11-07; until it runs `Store.communityAccentReady` is
+false and the form has no Theme field). New circle and Edit circle have a
+**Theme** field under Who can join, and the page behind the form wears it as
+you pick (`syncTheme`, held until Save, like the photo). `openAccentSheet(of,
+pick)` takes the circle and a callback; without them it is your own. **A
+circle's page wears its wash as a profile's does** (`applyAmbient` on `#/c/`,
+`paintWash` with the circle), so every circle washes from its photo or Tria's
+ramp even before the SQL runs. **A host's circle page has three pills, Post,
+Invite and Edit** (Zoe), three even columns (`.community-head .friend-btn`
+drops the 122px floor).
+
 ## Pictures are their own files, no renderer (2026-11-06)
 
 **Every picture loads a file of its own; Supabase's image renderer is gone**

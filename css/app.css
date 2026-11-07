@@ -8403,6 +8403,9 @@ button.card-song-play:active { transform: scale(0.9); }
   text-decoration: none;
 }
 .friend-btn[aria-pressed="true"] { color: var(--muted); font-weight: 400; }
+/* A circle's host has three (Post, Invite, Edit), three equal columns: the
+   122px floor would push the third off a phone's row. */
+.community-head .account-actions .friend-btn { min-width: 0; padding-inline: 0.75rem; }
 @media (hover: hover) {
   .friend-btn[aria-pressed="true"]:hover { color: var(--text); }
 }
@@ -9635,6 +9638,15 @@ button.card-song-play:active { transform: scale(0.9); }
 }
 .aud-lock-ico { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted); }
 .aud-lock-pic { width: 22px; height: 22px; margin: -2px; }
+/* The circle form's Theme field: the picked theme's disc, as Edit profile's
+   Theme row wears it, the sheet's own fill (a band, Tria's ramp, the photo). */
+.aud-lock-swatch {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border-radius: 50%;
+  background-size: cover; background-position: center;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+.aud-lock-swatch.is-none { box-shadow: inset 0 0 0 1.5px var(--muted); }
 .aud-lock-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aud-lock-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
 @media (hover: hover) { .aud-lock:hover { border-color: var(--muted); } }

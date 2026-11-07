@@ -13040,8 +13040,11 @@
      land. So the scrim is deliberately thin (.sheet-scrim--see-through), the
      page's wash stays lit above it, the pick paints SYNCHRONOUSLY, and the
      ring you opened it from wears the current colour the whole time. */
-  function openAccentSheet() {
-    const me = Store.currentUser();
+  /* A CIRCLE'S THEME is this sheet too (Zoe, 2026-11-07: "the same way pfps
+     are"): `of` is the circle as its form holds it (an accent and a face) and
+     `pick` takes the key, so the form can hold it until Save. */
+  function openAccentSheet(of, pick) {
+    const me = of || Store.currentUser();
     if (!me) return;
     // No photo, no photo option — and the fallback is DEFAULT, not 'none'. With
     // nothing to sample the buttons paint the brand ramp, so that is the row
@@ -13104,7 +13107,11 @@
       head,
       wire: (scrim, close) => {
         scrim.querySelectorAll('.swatch').forEach(btn =>
-          btn.addEventListener('click', () => { applyAccent(btn.dataset.accent, current); close(); }));
+          btn.addEventListener('click', () => {
+            if (pick) { if (btn.dataset.accent !== current) { hapticTap('LIGHT'); pick(btn.dataset.accent); } }
+            else applyAccent(btn.dataset.accent, current);
+            close();
+          }));
       },
     });
   }
@@ -17205,7 +17212,11 @@
         ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
         : member
           ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
-            `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>`
+            `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>` +
+            // The host's third, so the theme, photo and words are one tap
+            // away and not only in the ••• (Zoe, 2026-11-07).
+            (c.owner === me
+              ? `<button class="friend-btn pill-quiet" type="button" id="community-edit">Edit</button>` : '')
           : Store.canJoinCommunity(c)
             ? `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`
             : `<span class="friend-btn pill-quiet community-closed" aria-disabled="true">` +
@@ -17296,9 +17307,13 @@
     // The head is rebuilt only when what it says changed: a rebuild swaps the
     // face's <img> for a new one, which blinks, and cuts a celebration short.
     let headNow = '';
+    // Its wash follows its theme and face (a save landing, or put back).
+    let washNow = `${first.accent || ''}|${first.avatar || ''}`;
     const paint = () => {
       const c = Store.community(id);
       if (!c) return false;
+      const wash = `${c.accent || ''}|${c.avatar || ''}`;
+      if (wash !== washNow) { washNow = wash; paintWash(c, 'profile'); }
       const html = headHtml(c);
       if (html !== headNow) {
         headEl.innerHTML = headNow = html;
@@ -17318,6 +17333,10 @@
         go('#/publish');
       });
       headEl.querySelector('#community-invite')?.addEventListener('click', () => openCommunityInvite(Store.community(id) || c));
+      headEl.querySelector('#community-edit')?.addEventListener('click', () => {
+        editorPushed = true;
+        go(`${communityRoute(Store.community(id) || c)}/edit`);
+      });
       const join = headEl.querySelector('#community-join');
       join?.addEventListener('click', async () => {
         if (join.disabled) return;
@@ -17986,6 +18005,7 @@
     // does (circle-privacy.sql).
     const photos = Store.communityToolsReady();
     const privacy = Store.communityPrivacyReady();
+    const themes = Store.communityAccentReady();
     const photoFace = (src) => src
       ? `<span class="avatar avatar--photo community-face-img" aria-hidden="true">` +
           `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 76))}" alt="" decoding="async"></span>`
@@ -18036,6 +18056,14 @@
                 `<button type="button" class="aud-lock" id="cf-join">${communityJoinInner(inviteOnlyNow)}</button>` +
               `</div>`
             : '') +
+          // Its theme, picked in a profile's Theme sheet (Zoe, 2026-11-07),
+          // and the page behind the form wears it as you pick.
+          (themes
+            ? `<div class="field aud-field">` +
+                `<label for="cf-theme">Theme</label>` +
+                `<button type="button" class="aud-lock" id="cf-theme"></button>` +
+              `</div>`
+            : '') +
           (editing
             ? `<p class="field-hint">Its link stays triaonline.com/c/${esc(editing.slug)}.</p>`
             : `<div class="field">` +
@@ -18068,12 +18096,42 @@
     // `photoOff` once Remove was pressed. Neither writes until the commit.
     let cropper = null;
     let photoOff = false;
+    // The picked file, uncropped: what the Theme sheet's Photo disc and the
+    // live wash read while a crop is open.
+    let cropSrc = null;
     stopActiveCrop = () => { if (cropper) cropper.destroy(); };
+    // The theme's pending answer, a profile's accent values (null is the photo).
+    const themeBtn = form.querySelector('#cf-theme');
+    let themePick = editing ? editing.accent || null : null;
+    const themeFace = () => (cropper ? cropSrc : (!photoOff && editing && editing.avatar) || null);
+    const syncTheme = () => {
+      const face = themeFace();
+      const shown = { accent: themePick, avatar: face };
+      if (themeBtn) {
+        const key = !isPhotoAccent(themePick) ? themePick : (face ? 'auto' : 'default');
+        const a = accentOf(key);
+        const css = a ? accentBand(key) : key === 'auto' ? `url(${face})` : key === 'default' ? 'var(--brand-band)' : '';
+        themeBtn.innerHTML =
+          `<span class="aud-lock-swatch${key === 'none' ? ' is-none' : ''}" aria-hidden="true"` +
+            `${css ? ` style="background-image:${esc(css)}"` : ''}></span>` +
+          `<span class="aud-lock-label">${a ? esc(a.label) : key === 'auto' ? 'Photo' : key === 'none' ? 'None' : 'Tria'}</span>` +
+          svgIcon('chevDown', 'aud-lock-chev');
+      }
+      paintWash(shown, 'profile');
+    };
+    if (themeBtn) {
+      syncTheme();
+      themeBtn.addEventListener('click', () => openAccentSheet({ accent: themePick, avatar: themeFace() }, (key) => {
+        themePick = key === 'auto' ? null : key;
+        syncTheme();
+      }));
+    }
 
     const slugNow = () => (slugEl ? slugEl.value.trim().toLowerCase() : '');
+    const themeChanged = () => !!themeBtn && themePick !== (editing ? editing.accent || null : null);
     const changed = () => !!editing && (!!cropper || photoOff
       || nameEl.value.trim() !== editing.name || aboutEl.value.trim() !== editing.about
-      || inviteOnly() !== !!editing.inviteOnly);
+      || inviteOnly() !== !!editing.inviteOnly || themeChanged());
     const sync = () => {
       if (slugEl && !slugTouched) slugEl.value = Store.slugFrom(nameEl.value);
       if (hintEl) {
@@ -18146,6 +18204,7 @@
               pick.hidden = false;
               photoOff = !!(editing && editing.avatar);
               face.innerHTML = photoFace(null);
+              syncTheme();
             } },
           ],
         });
@@ -18170,6 +18229,7 @@
           stage.hidden = false;
           photoOff = false;
           if (cropper) cropper.destroy();
+          cropSrc = reader.result;
           cropper = initCropper(form.querySelector('#cf-crop'), form.querySelector('#cf-cropimg'), reader.result, {
             onReady: () => { saveBtn.disabled = false; },
             onError: () => {
@@ -18178,8 +18238,10 @@
               stage.hidden = true;
               pick.hidden = false;
               errEl.textContent = 'Couldn’t open that photo, try another one.';
+              syncTheme();
             },
           });
+          syncTheme();
         };
         reader.readAsDataURL(f);
       });
@@ -18219,6 +18281,10 @@
             const res = await Store.setCommunityPrivacy(editing.id, inviteOnly()).catch(() => null);
             if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t change who can join, try again.'; return; }
           }
+          if (themeChanged()) {
+            const res = await Store.setCommunityAccent(editing.id, themePick).catch(() => null);
+            if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t save its theme, try again.'; return; }
+          }
           // The photo goes out behind the navigation, optimistic like a face:
           // the circle's head already wears it, and a refusal says so.
           const pending = shot ? Store.setCommunityPhoto(editing.id, shot)
@@ -18252,6 +18318,12 @@
         // The celebration (the twinkle and the stars) waits for the circle's
         // own page, where there is something to sparkle.
         celebrateArrival = 'c/' + slug;
+        // Its theme goes out behind the navigation too, in the cache at once.
+        const themed = themeChanged() ? Store.setCommunityAccent(res.id, themePick) : null;
+        if (themed) themed.then(r => {
+          if (!(r && r.ok)) toast((r && r.error) || 'Couldn’t save its theme, try again.');
+          communityRepaint?.();
+        }, () => {});
         // The photo is in the cache (synchronously, the crop itself) before the
         // page paints, so the face the stars burst from is the one it keeps.
         const pending = shot ? Store.setCommunityPhoto(res.id, shot) : null;
@@ -18712,10 +18784,11 @@
       // Chats does; every paint after it (a pull, a join, a keystroke) swaps in
       // place without the cards rising again.
       if (bodyEl.dataset.risen) bodyEl.classList.add('is-still');
-      // Searching, the results run people, posts, circles; otherwise the body
-      // is the daily alone, and the square under it is the rest of the page.
+      // Searching, the results run people, circles, posts (Zoe, 2026-11-07:
+      // circles second); otherwise the body is the daily alone, and the square
+      // under it is the rest of the page.
       bodyEl.innerHTML = searching
-        ? peopleHtml + postsHtml + roomsHtml + none
+        ? peopleHtml + roomsHtml + postsHtml + none
         : (occ ? dailyCardEl(occ, answers) : '');
       if (!bodyEl.dataset.risen) {
         const risers = bodyEl.querySelectorAll('.daily-card');
@@ -26199,6 +26272,13 @@
     if (path === '#/profile/edit' || path === '#/welcome') { paintWash(Store.currentUser(), 'profile'); return; }
     let user = null;
     if (path.startsWith('#/u/')) user = Store.user(decodeURIComponent(path.slice(4)));
+    // A circle wears its theme as a profile wears its owner's: its page and
+    // its host's editor (which repaints it live as a theme or photo is picked,
+    // `paintCommunityWash`). A new circle starts on Tria's ramp.
+    else if (path.startsWith('#/c/')) {
+      const slug = decodeURIComponent(path.slice(4).split('/')[0]);
+      user = slug === 'new' ? { accent: null } : Store.community(slug);
+    }
     else if (path === '#/profile') user = Store.currentUser();
     if (!user) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = 'none'; return; }
     // A page that IS going to wash keeps the current colour lit while the next

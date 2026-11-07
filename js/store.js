@@ -79,10 +79,12 @@ const Store = (() => {
   //   communityInvites: [{communityId, user(username), by(username)}] — mine, and
   //     those of circles I am in (circle-privacy.sql)
   //   communityPrivacyReady: whether circle-privacy.sql has run (invite only)
+  //   communityAccentReady: whether circle-accent.sql has run (a circle's theme)
   const empty = () => ({ session: null, users: [], posts: [], comments: [], likes: [], songsReady: false, momentsReady: false, commentLikes: [], commentLikesReady: false, headcount: [], pollVotes: [], friends: {}, friendCounts: {}, edgeTs: {}, declines: [], audience: [], blocks: [],
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
                          communities: [], communityMembers: [], communitiesReady: false,
-                         communityToolsReady: false, communityInvites: [], communityPrivacyReady: false });
+                         communityToolsReady: false, communityInvites: [], communityPrivacyReady: false,
+                         communityAccentReady: false });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -641,11 +643,13 @@ const Store = (() => {
       // the circles I am in. A missing table is the answer to whether a circle
       // can be invite only yet.
       readAll('community_invites', ['community_id', 'user_id']),
+      // Whether a circle can wear a theme yet (circle-accent.sql). The same latch.
+      state.communityAccentReady ? { data: [], error: null } : sb.from('communities').select('accent').limit(1),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, sg, mo, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci] = read;
+    const [u, p, c, l, cl, sg, mo, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci, ca] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -770,6 +774,8 @@ const Store = (() => {
     applyCommunityInvites(ci, nameById);
     if (!ct.error) state.communityToolsReady = true;
     else if (ct.error.code === '42703' || isMissing(ct.error)) state.communityToolsReady = false;
+    if (!ca.error) state.communityAccentReady = true;
+    else if (ca.error.code === '42703' || isMissing(ca.error)) state.communityAccentReady = false;
     // A missing function reads as no counts, and the page draws none.
     state.communitySizes = new Map((cs && !cs.error && cs.data || [])
       .map(r => [r.community_id, Number(r.members) || 0]));
@@ -3301,6 +3307,9 @@ const Store = (() => {
     state.communities = (cc.data || []).map(row => ({
       id: row.id, slug: row.slug, name: row.name || row.slug, about: row.about || '',
       avatar: row.avatar || null, inviteOnly: !!row.invite_only,
+      // Its theme, a profile's accent values exactly (circle-accent.sql):
+      // a palette key, 'default', 'none', or null for its photo's colour.
+      accent: row.accent || null,
       owner: nameById.get(row.owner) || null, _ts: row.created_at,
     }));
     if (!cm.error) state.communityMembers = (cm.data || []).map(row => ({
@@ -3323,6 +3332,7 @@ const Store = (() => {
   const communitiesReady = () => !!state.communitiesReady;
   const communityToolsReady = () => !!state.communityToolsReady;
   const communityPrivacyReady = () => !!state.communityPrivacyReady;
+  const communityAccentReady = () => !!state.communityAccentReady;
   // Holds an invite to this circle: me by default, or one of my friends (the
   // Invite sheet's question, answerable for the circles I am in).
   const invitedTo = (id, username) => {
@@ -3521,6 +3531,22 @@ const Store = (() => {
     }
     if (url) localFaces.set(url, dataURI);
     patch(url);
+    return { ok: true };
+  }
+  // The host's theme for the circle, a profile's accent values (circle-accent.sql).
+  // Optimistic, put back on a refusal, like the privacy switch.
+  async function setCommunityAccent(id, accent) {
+    const before = community(id);
+    if (!before) return { ok: false, error: 'That circle has closed.' };
+    accent = accent || null;
+    const patch = (v) => write('communities', cs => cs.map(c =>
+      (c.id === id ? Object.assign({}, c, { accent: v }) : c)));
+    patch(accent);
+    const { error } = await sb.rpc('set_community_accent', { p_community: id, p_accent: accent });
+    if (error) {
+      patch(before.accent);
+      return { ok: false, error: communityError(error, 'Couldn’t save its theme, try again.') };
+    }
     return { ok: true };
   }
   // The host closing a circle outright. Its posts and roster go with it (the
@@ -4386,6 +4412,7 @@ const Store = (() => {
     communityPosts, communityPulse, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,
+    communityAccentReady, setCommunityAccent,
     communityPrivacyReady, invitedTo, canJoinCommunity, setCommunityPrivacy, inviteToCommunity,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
