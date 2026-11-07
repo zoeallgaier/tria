@@ -5991,34 +5991,24 @@ button.poll-option:disabled { cursor: default; }
   bottom: auto;
   right: calc(var(--mv-side) + 4px);
   top: calc(env(safe-area-inset-top) + 84px);
-  color: #fff;
-  background: rgba(0, 0, 0, 0.22);
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 /* EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge, and
    put captions and content below like tiktok and reels ... seriously don't
    overdo this"). On a picture frame the stage lets go of its box and the
-   frame is the whole PAGE, in three layers:
-   - the BLUR: the picture's own 40px render, blurred and dimmed, under
-     everything, the Reply foot included;
-   - the PICTURE, centred and never cropped, ending above the foot on the
-     soft corner, so Reply sits on the calm blur and never on a photo's own
-     words (Zoe's screenshot: a screenshot's tab bar under "Reply to Zoe");
-   - the CAPTION's band, a progressive blur and a dark wash rising out of the
-     foot, so white words never land on words in the picture ("the nightmare
-     of tiktok caption text on cc captions").
-   The top scrim is the page's own paper, so the face, the x and the status
-   bar's clock (which we can't recolour) read in either scheme. */
-.mv-page.is-pic {
-  --mv-under: calc(env(safe-area-inset-bottom) + var(--mv-foot));
-  --mv-round: 0 0 var(--radius-soft) var(--radius-soft);
-}
-.mv-page.is-pic.no-reply { --mv-under: 0px; --mv-round: 0; }
+   frame is the whole PAGE: the picture full bleed, centred and never
+   cropped, on the page's own paper and wash (Zoe: "keep the ol white/dark and
+   gradient colored bg instead of the blurred image bg"), the caption at the
+   foot in the page's ink. A LONG caption (one Read more folds) sits on one
+   plain layer of paper, there for contrast and nothing more (Zoe: "just go
+   with a regular opacity layer ... I fear we went overboard"); feathered
+   bands, a blurred copy of the photo and a top scrim were all tried and cut
+   the same day. */
+.mv-page.is-pic { --mv-under: calc(env(safe-area-inset-bottom) + var(--mv-foot)); }
+.mv-page.is-pic.no-reply { --mv-under: calc(env(safe-area-inset-bottom) + 22px); }
 .mv-page.is-pic .mv-stage { position: static; }
 .mv-page.is-pic :is(.mv-head, .mv-dots, .mv-foot) { position: relative; z-index: 1; }
-.mv-page.is-pic::before { opacity: 0; }
 /* The frame is the page-sized layer, so a pull up (a transform on the frame)
    carries the picture and its words together. */
 .mv-page.is-pic .mv-frame--pic {
@@ -6030,25 +6020,12 @@ button.poll-option:disabled { cursor: default; }
   flex-direction: column;
   justify-content: flex-end;
   padding: 0 0 var(--mv-under);
-  background: #0b0b0c;
-}
-.mv-backdrop {
-  position: absolute;
-  inset: -48px;
-  width: calc(100% + 96px);
-  height: calc(100% + 96px);
-  max-width: none;
-  max-height: none;
-  object-fit: cover;
-  filter: blur(32px) saturate(1.15) brightness(0.55);
-  -webkit-user-drag: none;
 }
 .mv-frame--pic .mv-media {
   position: absolute;
-  inset: 0 0 var(--mv-under);
+  inset: 0;
   height: auto;
   overflow: hidden;
-  border-radius: var(--mv-round);
 }
 .mv-frame--pic .mv-pic {
   position: relative;
@@ -6058,65 +6035,30 @@ button.poll-option:disabled { cursor: default; }
   max-height: none;
   border-radius: 0;
 }
-.mv-frame--pic .mv-media::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(to bottom, color-mix(in srgb, var(--bg) 86%, transparent),
-      color-mix(in srgb, var(--bg) 62%, transparent) calc(env(safe-area-inset-top) + 56px),
-      color-mix(in srgb, var(--bg) 30%, transparent) calc(env(safe-area-inset-top) + 110px),
-      color-mix(in srgb, var(--bg) 10%, transparent) calc(env(safe-area-inset-top) + 150px),
-      transparent calc(env(safe-area-inset-top) + 190px)),
-    linear-gradient(to top, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.12) 16%, transparent 30%);
-}
-.mv-page.is-pic :is(.mv-rail, .mv-foot) { --text: #fff; --muted: rgba(255, 255, 255, 0.78); }
-.mv-page.is-pic .mv-rail button {
-  background: rgba(0, 0, 0, 0.22);
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
-}
 .mv-caption {
   position: relative;
   z-index: 1;
   isolation: isolate;
-  padding: 100px calc(var(--mv-side) + var(--mv-lane)) 14px var(--mv-side);
-  --text: #fff;
-  --muted: rgba(255, 255, 255, 0.78);
-  color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
+  padding: 14px calc(var(--mv-side) + var(--mv-lane)) 10px var(--mv-side);
 }
-.mv-caption::before {
+/* The layer runs on under Reply to the screen's edge, so it never stops in a
+   slab above it. */
+.mv-caption.is-cut::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 0 0 calc(-1 * var(--mv-under));
   z-index: -1;
   pointer-events: none;
-  border-radius: var(--mv-round);
-  /* Dark enough on its own to bury a photo's own words should the blur
-     not draw; the blur is what makes it soft. */
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.06) 24px,
-    rgba(0, 0, 0, 0.2) 52px, rgba(0, 0, 0, 0.4) 80px, rgba(0, 0, 0, 0.56) 104px, rgba(0, 0, 0, 0.7));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  /* FEATHERED (Zoe: "feather edges to smooth a bit more"): the blur eases
-     in over the band's top 100px in steps, so no line shows where it starts. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1) 26px,
-    rgba(0, 0, 0, 0.38) 52px, rgba(0, 0, 0, 0.74) 78px, #000 100px);
-  mask-image: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1) 26px,
-    rgba(0, 0, 0, 0.38) 52px, rgba(0, 0, 0, 0.74) 78px, #000 100px);
-  transition: background-color 0.3s var(--ease-soft);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
 }
-.mv-caption.is-open::before { background-color: rgba(0, 0, 0, 0.18); }
-/* With no Reply foot, the words clear the home indicator themselves. */
-.mv-page.no-reply .mv-caption { padding-bottom: calc(env(safe-area-inset-bottom) + 22px); }
 .mv-caption .mv-title { font-size: 1.6rem; }
 .mv-caption .mv-note { font-size: 1.05rem; line-height: 1.45; }
-/* READ MORE: folded, the words show three lines and fade on the last, and a
-   tap anywhere on them (or on Read more) opens them up to near half the
-   screen, where they scroll; a tap anywhere else folds them again. */
+/* READ MORE: folded, the words show five lines (Zoe: "2 more lines" than
+   three) and fade on the last, and a tap anywhere on them (or on Read more)
+   opens them up to near half the screen, where they scroll; a tap anywhere
+   else folds them again. */
 .mv-caption-text {
-  max-height: calc(1.05rem * 1.45 * 3);
+  max-height: calc(1.05rem * 1.45 * 5);
   overflow: hidden;
   overscroll-behavior: contain;
   transition: max-height 0.34s var(--ease);
@@ -6132,7 +6074,7 @@ button.poll-option:disabled { cursor: default; }
   padding: 4px 0;
   border: 0;
   background: none;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
   font: inherit;
   font-size: 0.9rem;
   font-weight: 700;

@@ -7864,13 +7864,11 @@
       // and put captions and content below like tiktok and reels"): the
       // picture fills the page, never cropped, a blur of itself behind it, and
       // the words sit at its foot on a scrim.
-      // The blur fills the whole page, the Reply foot included, and the
-      // picture ends above the foot on rounded corners, so Reply never sits on
-      // anything a photo says. A long caption folds to three lines with a
-      // Read more, as Reels does (`is-cut`, measured in openMoments).
-      const back = video ? p.poster : still;
-      return `<div class="mv-frame mv-frame--pic${words ? ' has-caption' : ''}">` +
-          (back ? `<img class="mv-backdrop" src="${esc(sizedSrc(back, 40))}" alt="" aria-hidden="true" draggable="false">` : '') +
+      // The page's own paper and wash fill round the picture (Zoe: "keep the
+      // ol white/dark and gradient colored bg instead of the blurred image").
+      // A long caption folds with a Read more, as Reels' does (`is-cut`,
+      // measured in openMoments).
+      return `<div class="mv-frame mv-frame--pic">` +
           `<figure class="mv-media">${media}</figure>` +
           (words
             ? `<div class="mv-caption"><div class="mv-caption-text">${words}</div>` +
