@@ -17845,7 +17845,7 @@
     chipsEl.innerHTML =
       `<button type="button" class="pill-quiet discover-chip discover-chip--filter" ` +
           `id="discover-filter-btn" aria-haspopup="menu" aria-expanded="false" ` +
-          `aria-label="Filter the search">` +
+          `aria-label="Filter">` +
         svgIcon('sliders', 'discover-chip-ico') + `<span class="discover-chip-type"></span>` +
       `</button>` +
       `<span class="discover-chip-tags"></span>`;
@@ -17878,7 +17878,7 @@
         openFilterDial(chip, {
           current: discoverType,
           filters: typeFilters,
-          label: 'Filter the search',
+          label: 'Filter',
           onPick: (key) => {
             if (key === discoverType) return;
             setType(key);
