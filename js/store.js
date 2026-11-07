@@ -1914,7 +1914,7 @@ const Store = (() => {
   // is why photos/videos no longer bloat the database — the column just stores
   // the URL. `contentType`/`ext` come from the caller (the recorder's mimeType on
   // web, the native file's type on device) — never assumed to be JPEG.
-  async function uploadMedia(source, kind, { contentType, ext, dims, clip, onProgress, small } = {}) {
+  async function uploadMedia(source, kind, { contentType, ext, dims, clip, onProgress, sizes } = {}) {
     const me = currentUser();
     if (!me) throw new Error('Not signed in.');
     let blob, type = contentType, extension = ext;
@@ -1937,15 +1937,18 @@ const Store = (() => {
     // The feed/lightbox loop just this window (clipWindowFromUrl); no DB column.
     const win = clip && clip.end > clip.start
       ? `-t${Math.round(clip.start * 1000)}-${Math.round(clip.end * 1000)}` : '';
-    // `-hd` says a small copy sits beside it at `.sm.jpg` (see uploadImage and
-    // app.js's sizedSrc). It goes up first, so a reader never meets the mark
-    // without its copy.
-    const path = `${me.id}/${kind}-${Date.now()}${small ? '-hd' : ''}${win}${dim}.${extension}`;
-    if (small) {
-      const sb2 = await (await fetch(small)).blob();
-      const { error: smallErr } = await sb.storage.from('media')
-        .upload(path.replace(/\.jpg$/, '.sm.jpg'), sb2, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
-      if (smallErr) throw smallErr;
+    // Smaller copies sit beside a photo (see uploadPhoto and app.js's
+    // sizedSrc): `-hd` in the name says a 640 is there at `.sm.jpg`, `-hm`
+    // a 1280 at `.md.jpg` as well. They go up first, so a reader never meets
+    // the mark without its copies.
+    const mark = sizes?.md ? '-hm' : sizes?.sm ? '-hd' : '';
+    const path = `${me.id}/${kind}-${Date.now()}${mark}${win}${dim}.${extension}`;
+    for (const k of ['sm', 'md']) {
+      if (!sizes?.[k]) continue;
+      const copy = typeof sizes[k] === 'string' ? await (await fetch(sizes[k])).blob() : sizes[k];
+      const { error: copyErr } = await sb.storage.from('media')
+        .upload(path.replace(/\.jpg$/, `.${k}.jpg`), copy, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
+      if (copyErr) throw copyErr;
     }
     // Real byte-level progress (videos are the big upload) needs XHR — supabase-js's
     // .upload() runs on fetch with no progress events. We POST straight to the same
@@ -1997,22 +2000,38 @@ const Store = (() => {
     });
   }
   function uploadImage(dataURI, kind, dims) {
+    // Already up (a composer photo goes up as it's picked, uploadPhoto).
+    if (!/^data:/.test(dataURI || '')) return Promise.resolve(dataURI);
     // Cropped/re-encoded photos, posters, and avatars are always canvas JPEGs —
     // but a Frame GIF rides through untouched (see initPhotoPreview), so read
     // its real MIME off the data URI rather than assuming JPEG.
     const m = /^data:([^;]+);/.exec(dataURI);
     const type = m ? m[1] : 'image/jpeg';
     const ext = type === 'image/gif' ? 'gif' : 'jpg';
-    return smallCopy(dataURI, type, dims).then(small =>
-      uploadMedia(dataURI, kind, { contentType: type, ext, dims, small }));
+    return smallCopy(dataURI, type, dims).then(sm =>
+      uploadMedia(dataURI, kind, { contentType: type, ext, dims, sizes: sm ? { sm } : null }));
+  }
+
+  /* A composer photo, its files already made (2026-11-07: natively by
+     TriaPhotoSizes, else by app.js's photoFiles): `{ full, md?, sm?, dims }`,
+     each a Blob or a URL to fetch one from (a native file), or `{ gif, dims }`.
+     The composer calls this the moment a photo lands, so by Share it's up. */
+  async function uploadPhoto(p, { kind = 'photo', onProgress } = {}) {
+    const blob = async (x) => (typeof x === 'string' ? (await fetch(x)).blob() : x);
+    if (p.gif) return uploadMedia(await blob(p.gif), kind, { contentType: 'image/gif', ext: 'gif', dims: p.dims, onProgress });
+    const sizes = {};
+    if (p.sm) sizes.sm = await blob(p.sm);
+    if (p.md) sizes.md = await blob(p.md);
+    return uploadMedia(await blob(p.full), kind, { contentType: 'image/jpeg', ext: 'jpg', dims: p.dims, sizes, onProgress });
   }
 
   /* Every picture is served as its own file (2026-11-06, Zoe: "higher res images
      WITHOUT expensive load times"); Supabase's image renderer is gone, it was
-     billed per picture and ran out of its quota. So a photo bigger than a
-     thumbnail uploads TWICE: the original, up to 2048px, and a SMALL_EDGE copy
-     for every place it is drawn small (a grid tile, an update's preview, a
-     reply chip). Only a JPEG with its size known; a face is already small. */
+     billed per picture and ran out of its quota. A composer photo arrives
+     with its own copies (uploadPhoto); anything else sent as a data URI (a
+     comment's or a message's photo, a clip's poster) gets a SMALL_EDGE copy
+     here, for every place it is drawn small. Only a JPEG with its size known;
+     a face is already small. */
   const SMALL_EDGE = 640;
   async function smallCopy(dataURI, type, dims) {
     if (type !== 'image/jpeg' || !dims || Math.max(dims.w, dims.h) <= SMALL_EDGE * 1.25) return null;
@@ -2034,7 +2053,14 @@ const Store = (() => {
   // Best-effort removal of files a refused post already uploaded, so a failed
   // carousel doesn't leave its photos in the bucket with nothing pointing at them.
   function dropUploads(urls) {
-    const paths = (urls || []).map(u => /\/object\/public\/media\/(.+)$/.exec(u || '')?.[1]).filter(Boolean);
+    const paths = [];
+    for (const u of urls || []) {
+      const p = /\/object\/public\/media\/(.+)$/.exec(u || '')?.[1];
+      if (!p) continue;
+      paths.push(p);   // and its copies (uploadMedia's marks)
+      if (/-h[dm][^/]*\.jpg$/.test(p)) paths.push(p.replace(/\.jpg$/, '.sm.jpg'));
+      if (/-hm[^/]*\.jpg$/.test(p)) paths.push(p.replace(/\.jpg$/, '.md.jpg'));
+    }
     if (paths.length) sb.storage.from('media').remove(paths).catch(() => {});
   }
 
@@ -4332,7 +4358,7 @@ const Store = (() => {
     // Blocking
     isBlocked, block, unblock,
     // Compose
-    createPost, deletePost, updatePost,
+    createPost, deletePost, updatePost, uploadPhoto, dropUploads,
     // Reposts
     createRepost, undoRepost, originalOf, repostable, repostedByMe, myRepostOf,
     canRepost, quoteAudience, repostRulesReady,
@@ -4476,7 +4502,8 @@ function isVideoUrl(url) {
 // A square thumbnail's picture: the small copy when the upload has one (see
 // smallCopy), else the original. No renderer: it was billed per picture.
 function thumbUrl(url) {
-  return /-hd[^/]*\.jpg$/.test(url || '') ? url.replace(/\.jpg$/, '.sm.jpg') : (url || '');
+  const m = /-(hd|hm)[^/]*\.jpg$/.exec(url || '');
+  return m ? url.replace(/\.jpg$/, m[1] === 'hm' ? '.md.jpg' : '.sm.jpg') : (url || '');
 }
 
 // A trimmed clip stamps its play-window into the filename (…-t<startMs>-<endMs>…),

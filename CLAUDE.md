@@ -23,13 +23,27 @@ The same files also serve a website; that is a byproduct, not a target. See
 
 ## Pictures are their own files, no renderer (2026-11-06)
 
-**Every picture loads its original; Supabase's image renderer is gone** (Zoe:
-"higher res images WITHOUT expensive load times"; it billed per picture and hit
-685% of the Pro quota, and with the spend cap on it stops answering). A photo
-now uploads at up to 2048px (JPEG 0.86) plus a 640px copy beside it
-(`.sm.jpg`, marked by `-hd` in the name, `smallCopy` in store.js), and
-`sizedSrc` takes the copy wherever the drawn width fits in it. Older uploads
-and faces are their original. Don't bring the renderer back.
+**Every picture loads a file of its own; Supabase's image renderer is gone**
+(Zoe: "higher res images WITHOUT expensive load times"; it billed per picture,
+hit 685% of the Pro quota, and with the spend cap on it stops answering). Don't
+bring it back. **A composer photo is three JPEGs made the moment it lands**
+(2026-11-07, Zoe: a big photo froze the composer "until things sync and upload
+and icloud"): 2048 (the lightbox), `.md.jpg` 1280 (the feed), `.sm.jpg` 640
+(small places), marked `-hm` in the name; `sizedSrc` takes the smallest that
+covers the drawn width, `fullSrc` the original. In the app they are made
+NATIVELY (`TriaPhotoSizes` in TriaPhotosPlugin.swift: ImageIO's thumbnail
+read of the file, upright, no metadata, P3 kept, 48MP in ~0.2s off the main
+thread; the pickers ask for `.current` so nothing is transcoded first; Take a
+photo is a native camera, `TriaPhotos.camera`), and nothing is decoded or
+base64'd in the page. The web (and iOS 15 and 16) draws them from the
+preview's decoded `<img>` with toBlob (`photoFiles`). **They upload as they're
+picked** (`startUpload`, one still at a time, the cover first) and Share waits
+only for what's left (`photoUrls`, the bar); a still taken out or a composer
+left deletes its files (`sweepUploads`), a refused post's go up again. A
+photo still coming down from iCloud holds its place in the post, shimmering
+(`rollLoading`, `.cc-slide.is-pending`), and holds Share. `-hd` (640 only) is
+the 2026-11-06 scheme, still made for comments', messages' and posters' data
+URIs (`smallCopy`). Older uploads and faces are their one original.
 
 ## The clip editor (2026-11-06)
 
@@ -79,7 +93,10 @@ iOS 16.4, and older WebKit media ignores the switch anyway). Tried and gone
 the same day: autoplay as AMBIENT (the switch silenced it) with a native
 volume-button watcher to turn it up (`SystemVolumeDidChange`, undocumented).
 The play mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play
-icon").
+icon"). **A Moment's disc wears the sound toggle instead** (Zoe, 2026-11-07:
+"use the mute unmute instead of the play button for songs"): `mute` while
+stopped, `sound` while it plays, the ring still running round it
+(`songPlayHtml`'s `ico`).
 **In the app a clip plays NATIVELY, mixable, so iOS shows no Now Playing
 player and no Dynamic Island** (Zoe, 2026-11-06: "get rid of dynamic island for
 music and ios player"; `TriaSettings.playClip`/`stopClip`, an AVPlayer in
@@ -90,7 +107,7 @@ type, `'ambient'`, obeys the ringer switch. The web keeps the paths below.
 **Off the app, a clip plays through Web Audio, never an Audio element** (Zoe: "I dont wanna see nor need the ios homescreen player";
 `clipBuffer`, `audioCtx`, Apple's clip host answers CORS `*`; before 16.4 the
 element stays, since there Web Audio obeys the switch). **Pausing a Moment's
-song hushes them all** (`preview.hushed`): none starts by itself until the app
+song, or muting its clip, hushes them all** (`preview.hushed`): none starts by itself until the app
 comes back from the background; a tap on a disc still plays it.
 
 ## Discover's search is the header; chips under it (2026-11-06)
@@ -378,7 +395,12 @@ vertical pan only when they really scroll (`.is-long`, a ResizeObserver), so the
 pulls work on a short note. **The viewer is one reading column** (2026-11-06,
 `--mv-col` 36rem, `--mv-side`): the head, stage and rail take the same side
 inset, 14px on any phone and centred on a desktop. The stage stays full width, so
-the tap zones (left third back, the rest forward) are unchanged.
+the tap zones (left third back, the rest forward) are unchanged. **On a desktop or an iPad (681px and up) the
+viewer is a phone in the middle** (Zoe, 2026-11-07: "sized and padded
+appropriately on desktop"): `.mv-card` is a 9:16 card, centred, 28px corners,
+the page dimmed 62% round it, a click on the dim closing it, and inside it
+every phone rule holds (full window, a portrait photo ran under the face and
+its caption). The tap zones read the card's box, not the window's.
 **A photo or clip Moment is edge to edge** (Zoe, 2026-11-06: "full edge to
 edge ... captions and content below like tiktok and reels ... don't overdo
 this"): the page takes `.is-pic`, the frame becomes the page-sized layer (so a
@@ -399,8 +421,16 @@ beyond what it covers, and the folded words feather out over their last line
 and a half (Zoe: "feather the text above read more too"); dropping the
 feather when the layer went plain was a mistake she caught. Tried and cut the same day: a blurred copy of the photo behind
 it, a picture ending above Reply on soft corners (its dark band read as a
-slab), feathered blur bands at the foot and the top, and a top scrim. The
-clip's sound sits under the x.
+slab), feathered blur bands at the foot and the top, and a top scrim. **The
+clip's sound is on the rail, in the song's play disc's place** (Zoe,
+2026-11-07, `.mv-sound` in the rail, shown only on a clip's frame), and **a
+clip follows the song's sound rule** (Zoe: "mute and unmute rules for music
+... should extend"): it plays with sound by itself, through the ringer switch
+(`clipSound` takes the PLAYBACK session), muting either a clip or a song
+hushes every Moment until the app is opened again (`preview.hushed`), and a
+tap on either speaker brings sound back to all. A browser that refuses sound
+without a tap plays it muted and the speaker says so. The sound and mute marks are a soft filled speaker
+(playSoft's rounding) with two waves or an x, everywhere.
 Words frames are set in a further 10px (24px from a phone's edge) with 0.75rem
 of air above and below the scroller; a pictured frame fills the column.
 The rail's own double tap and hold are gone (`wireSongGestures` deleted).

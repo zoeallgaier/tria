@@ -2,6 +2,7 @@ import UIKit
 import Capacitor
 import PhotosUI
 import UniformTypeIdentifiers
+import ImageIO
 
 /// THE CAMERA ROLL IN THE COMPOSER (Zoe, 2026-11-06: "make it easier and
 /// seamless to post images"). A row of the reader's recent photos under the
@@ -30,9 +31,10 @@ import UniformTypeIdentifiers
 ///
 /// ── What crosses the bridge ─────────────────────────────────────────────────
 ///
-/// `rollPick { id, data, type }` per new pick (a GIF as its own bytes, anything
-/// else upright and capped at 1600px as a JPEG, like the comment bar's picker),
-/// `rollUnpick { id }` when one is unticked in the row. A still taken out on
+/// `rollLoading { id }` the moment a photo is ticked (it may still be coming
+/// down from iCloud), then `rollPick { id, full, md, sm, w, h, tint }` once its
+/// files are made (`TriaPhotoSizes`; a GIF is still `{ id, data, type }`, its
+/// own bytes), `rollUnpick { id }` when one is unticked in the row. A still taken out on
 /// the web side comes back as `rollDeselect`, which unticks it here without
 /// echoing an unpick.
 @objc(TriaPhotosPlugin)
@@ -44,6 +46,7 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "roll", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "rollDeselect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pick", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "camera", returnType: CAPPluginReturnPromise),
     ]
 
     /// A `TriaRoll` while the composer is up. `AnyObject` so the property can
@@ -51,6 +54,33 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
     private var strip: AnyObject?
     /// The All photos sheet while it is up (PHPicker holds its delegate weakly).
     private var sheet: TriaLibrarySheet?
+    /// The camera while it is up (UIImagePickerController holds its delegate weakly).
+    private var shooter: TriaPhotoCamera?
+
+    /// Take a photo: the system camera, its photo made into the post's files
+    /// here (`TriaPhotoSizes`), so a 12 or 48MP shot never crosses the bridge
+    /// or gets decoded in the page. Resolves like a roll pick, or
+    /// `{ cancelled: true }`, or `{ error }`.
+    @objc func camera(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let root = self.bridge?.viewController else {
+                call.resolve(["cancelled": true])
+                return
+            }
+            guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+                call.resolve(["error": "There’s no camera here."])
+                return
+            }
+            var top: UIViewController = root
+            while let shown = top.presentedViewController { top = shown }
+            let cam = TriaPhotoCamera { [weak self] result in
+                call.resolve(result)
+                DispatchQueue.main.async { self?.shooter = nil }
+            }
+            self.shooter = cam
+            cam.present(from: top)
+        }
+    }
 
     /// `{ limit, selected: [asset ids], videos }` resolves `{ items: [...] }`
     /// (see `TriaLibrarySheet`) or `{ cancelled: true }`: backing out is an
@@ -100,6 +130,8 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
                     call.resolve(["ok": show ? false : true])
                     return
                 }
+                // A new composer: the last one's photo files are spent.
+                TriaPhotoSizes.clear()
                 let made = TriaRoll(limit: call.getInt("limit") ?? 6) { [weak self] name, data in
                     self?.notifyListeners(name, data: data)
                 }
@@ -160,6 +192,10 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         self.emit = emit
         var config = PHPickerConfiguration(photoLibrary: .shared())   // asset ids, no permission
         config.filter = .images
+        // The file as it is (HEIC, usually): `.automatic` may have the picker
+        // transcode the whole original to JPEG first, which is time spent
+        // before Tria even hears of the pick. ImageIO reads HEIC itself.
+        config.preferredAssetRepresentationMode = .current
         config.selectionLimit = max(1, limit)
         config.selection = .continuous
         config.mode = .compact
@@ -241,6 +277,8 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
         picked = ids
         gone.forEach { emit("rollUnpick", ["id": $0]) }
         for (id, provider) in fresh {
+            // At once, so the post shows a place for it while it loads.
+            emit("rollLoading", ["id": id])
             TriaPhotoLoad.image(provider) { [weak self] result in
                 DispatchQueue.main.async {
                     // Unticked (or taken out on the web) while it loaded.
@@ -339,7 +377,8 @@ final class TriaRollMore: UIButton {
 /// sheet, with what the post already holds ticked as it opens
 /// (`preselectedAssetIdentifiers`), so Add hands back the post's whole new
 /// set. A pick already in the post comes back as `{ id, kept: true }` with no
-/// bytes; a photo as `{ id, data, type }`; a clip as `{ id, path, type }`, a
+/// bytes; a photo as `{ id, full, md, sm, w, h, tint }` (a GIF `{ id, data,
+/// type }`); a clip as `{ id, path, type }`, a
 /// copy in the app's own tmp folder, read by the web through
 /// `Capacitor.convertFileSrc` (150MB of base64 is not a bridge message).
 final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
@@ -359,6 +398,7 @@ final class TriaLibrarySheet: NSObject, PHPickerViewControllerDelegate {
     func present(from host: UIViewController) {
         var config = PHPickerConfiguration(photoLibrary: .shared())
         config.filter = videos ? .videos : .any(of: [.images, .videos])
+        config.preferredAssetRepresentationMode = .current   // no transcode first (see TriaRoll)
         config.selectionLimit = max(1, limit)
         config.selection = .ordered
         config.preselectedAssetIdentifiers = selected
@@ -448,26 +488,186 @@ enum TriaPhotoLoad {
             }
             return
         }
+        // The file itself, read by ImageIO at the size it posts at, never
+        // decoded whole (a 48MP photo is 190MB decoded; this touches a sliver).
+        let typeId = provider.registeredTypeIdentifiers.first {
+            UTType($0)?.conforms(to: .image) ?? false
+        }
+        guard let typeId else { decoded(provider, done: done); return }
+        provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, _ in
+            // The file is gone when this returns, so it is read here.
+            if let url, let made = TriaPhotoSizes.make(url: url) { done(made); return }
+            decoded(provider, done: done)
+        }
+    }
+
+    /// The slow way, for a pick with no file ImageIO can read.
+    private static func decoded(_ provider: NSItemProvider, done: @escaping ([String: Any]) -> Void) {
+        let unreadable: [String: Any] = ["error": "Couldn’t read that photo. Try another."]
         guard provider.canLoadObject(ofClass: UIImage.self) else { done(unreadable); return }
         provider.loadObject(ofClass: UIImage.self) { object, _ in
-            guard let image = object as? UIImage, image.size.width > 0, image.size.height > 0 else {
+            guard let image = object as? UIImage, let made = TriaPhotoSizes.make(image: image) else {
                 done(unreadable)
                 return
             }
-            // What the composer exports at is 1400 on the long edge, so 1600
-            // loses nothing and keeps a 48MP photo off the bridge.
-            let cap: CGFloat = 1600
-            let scale = min(1, cap / max(image.size.width, image.size.height))
-            let size = CGSize(width: (image.size.width * scale).rounded(),
-                              height: (image.size.height * scale).rounded())
-            let format = UIGraphicsImageRendererFormat.default()
-            format.scale = 1
-            format.opaque = true
-            let drawn = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-                image.draw(in: CGRect(origin: .zero, size: size))
-            }
-            guard let jpeg = drawn.jpegData(compressionQuality: 0.9) else { done(unreadable); return }
-            done(["data": jpeg.base64EncodedString(), "type": "image/jpeg"])
+            done(made)
+        }
+    }
+}
+
+/// A PHOTO AS TRIA POSTS IT (2026-11-07). Three JPEGs, made once, here, off the
+/// main thread: the photo at up to 2048px (the full-screen viewer), 1280 (the
+/// feed) and 640 (anything small), each upright, sRGB or Display P3 as the
+/// photo was, and stripped of its metadata (no location leaves the phone).
+/// app.js uploads all three as soon as the pick lands and `sizedSrc` picks
+/// between them, so Tria never needs Supabase's image renderer, which billed
+/// per picture. ImageIO's thumbnail call is Apple's own advice for this
+/// (WWDC 2018, "Image and Graphics Best Practices"): it decodes only what the
+/// size needs, where drawing a UIImage decodes all of it first.
+enum TriaPhotoSizes {
+    static let full: CGFloat = 2048
+    static let md: CGFloat = 1280
+    static let sm: CGFloat = 640
+    static let quality: CGFloat = 0.8
+
+    static var dir: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("tria-photos", isDirectory: true)
+    }
+    static func clear() { try? FileManager.default.removeItem(at: dir) }
+
+    static func make(url: URL) -> [String: Any]? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,   // upright
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(full),     // never enlarges
+        ]
+        guard let img = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        return write(img)
+    }
+
+    /// A photo already decoded (the camera's): drawn upright at 2048 first.
+    static func make(image: UIImage) -> [String: Any]? {
+        let pw = image.size.width * image.scale, ph = image.size.height * image.scale
+        guard pw > 0, ph > 0 else { return nil }
+        let k = min(1, full / max(pw, ph))
+        let size = CGSize(width: max(1, (pw * k).rounded()), height: max(1, (ph * k).rounded()))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let drawn = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let cg = drawn.cgImage else { return nil }
+        return write(cg)
+    }
+
+    private static func write(_ img: CGImage) -> [String: Any]? {
+        do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) } catch { return nil }
+        let name = UUID().uuidString
+        guard let fullURL = jpeg(img, name: name) else { return nil }
+        var out: [String: Any] = ["full": fullURL.absoluteString, "w": img.width, "h": img.height, "type": "image/jpeg"]
+        let edge = CGFloat(max(img.width, img.height))
+        var least = img
+        // A 1280 only when it's worth a file of its own, and then always a 640
+        // too (app.js reads `-hm` in a name as both being there).
+        if edge > md * 1.1, let m = scaled(img, to: md), let u = jpeg(m, name: name + ".md") {
+            out["md"] = u.absoluteString
+            least = m
+        }
+        if edge > sm * 1.25, let s = scaled(least, to: sm), let u = jpeg(s, name: name + ".sm") {
+            out["sm"] = u.absoluteString
+            least = s
+        }
+        if let t = tint(least) { out["tint"] = t }
+        return out
+    }
+
+    private static func scaled(_ img: CGImage, to edge: CGFloat) -> CGImage? {
+        let k = edge / CGFloat(max(img.width, img.height))
+        let w = max(1, Int((CGFloat(img.width) * k).rounded()))
+        let h = max(1, Int((CGFloat(img.height) * k).rounded()))
+        let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
+        let own = img.colorSpace?.model == .rgb ? img.colorSpace : nil
+        for space in [own, srgb].compactMap({ $0 }) {
+            guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { continue }
+            ctx.interpolationQuality = .high
+            ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+            if let made = ctx.makeImage() { return made }
+        }
+        return nil
+    }
+
+    private static func jpeg(_ img: CGImage, name: String) -> URL? {
+        let url = dir.appendingPathComponent(name).appendingPathExtension("jpg")
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        return CGImageDestinationFinalize(dest) ? url : nil
+    }
+
+    /// The photo's average colour, `#rrggbb`, for the feed's colour-up: drawn
+    /// to 8x8 in sRGB and averaged.
+    private static func tint(_ img: CGImage) -> String? {
+        let n = 8
+        var px = [UInt8](repeating: 0, count: n * n * 4)
+        let ok: Bool = px.withUnsafeMutableBytes { buf in
+            guard let ctx = CGContext(data: buf.baseAddress, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            ctx.interpolationQuality = .medium
+            ctx.draw(img, in: CGRect(x: 0, y: 0, width: n, height: n))
+            return true
+        }
+        guard ok else { return nil }
+        var r = 0, g = 0, b = 0
+        for i in stride(from: 0, to: px.count, by: 4) { r += Int(px[i]); g += Int(px[i + 1]); b += Int(px[i + 2]) }
+        let c = n * n
+        return String(format: "#%02x%02x%02x", r / c, g / c, b / c)
+    }
+}
+
+/// The system camera for one photo (Take a photo). Not saved to the library,
+/// as the web's capture input never was.
+final class TriaPhotoCamera: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    private let done: ([String: Any]) -> Void
+    private var finished = false
+
+    init(done: @escaping ([String: Any]) -> Void) {
+        self.done = done
+    }
+
+    func present(from host: UIViewController) {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.mediaTypes = [UTType.image.identifier]
+        picker.cameraCaptureMode = .photo
+        picker.delegate = self
+        host.present(picker, animated: true)
+    }
+
+    private func finish(_ result: [String: Any]) {
+        guard !finished else { return }
+        finished = true
+        done(result)
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        finish(["cancelled": true])
+    }
+
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+        guard let image = info[.originalImage] as? UIImage else {
+            finish(["error": "Couldn’t keep that photo. Try again."])
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let made = TriaPhotoSizes.make(image: image)
+            self?.finish(made ?? ["error": "Couldn’t keep that photo. Try again."])
         }
     }
 }

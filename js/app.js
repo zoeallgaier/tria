@@ -442,7 +442,10 @@
     info:    '<circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v5.4"/>' +
       '<circle cx="12" cy="7.9" r="0.95" fill="currentColor" stroke="none"/>',
     // Speaker + waves / speaker + X — the Frame video sound toggle.
-    sound:   '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/>',
+    // Rounded (Zoe, 2026-11-07: "round it and I want two sound lines"): a soft
+    // filled speaker, its corners rounded by a thick round-joined stroke as
+    // playSoft's are, and two waves.
+    sound:   '<path d="M4.6 9.8h2.3l4-3.1v10.6l-4-3.1H4.6z" fill="currentColor" stroke-width="2.4"/><path d="M14.9 9.4a3.8 3.8 0 0 1 0 5.2"/><path d="M17.6 6.8a7.4 7.4 0 0 1 0 10.4"/>',
     // A song (Zoe, 2026-10-22: "use a music note for posting a song instead of
     // the sound icon"). Two beamed notes; the speaker above is a video's sound.
     music:   '<path d="M9 17.5V6l10-2.2v11.5"/><circle cx="6.6" cy="17.5" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/>',
@@ -452,7 +455,7 @@
     moment:  '<circle cx="9.5" cy="14" r="6"/><path d="M6.6 12.5a3.2 3.2 0 0 1 1.7-1.8"/><circle cx="18" cy="6.5" r="2.6"/>',
     // Edit profile's Charms row: the like burst's sparkle, and a small one.
     charm:   '<path d="M10 3c.4 4.6 2.4 6.6 7 7-4.6.4-6.6 2.4-7 7-.4-4.6-2.4-6.6-7-7 4.6-.4 6.6-2.4 7-7z"/><path d="M18 14.5c.2 2 1 2.8 3 3-2 .2-2.8 1-3 3-.2-2-1-2.8-3-3 2-.2 2.8-1 3-3z"/>',
-    mute:    '<path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="m15.5 9.5 4 5"/><path d="m19.5 9.5-4 5"/>',
+    mute:    '<path d="M4.6 9.8h2.3l4-3.1v10.6l-4-3.1H4.6z" fill="currentColor" stroke-width="2.4"/><path d="m15.4 9.8 4.4 4.4"/><path d="m19.8 9.8-4.4 4.4"/>',
     // Filled triangle — the play affordance on a Frame video that hasn't started.
     // Optically centred IN THE PATH, and only here: the bbox (x 7 → 18.5) sits 0.75
     // units right of the box's middle, ~6% of the triangle's width, because a
@@ -2376,27 +2379,33 @@
      So a picture is asked for at the size it is DRAWN, as files, never a
      renderer (2026-11-06: Supabase's renderer bills per picture and Tria ran
      to 685% of its quota, and with the spend cap on it stops answering). A
-     photo uploaded since then is the original (up to 2048px) with a 640px copy
-     beside it, `.sm.jpg`, marked by `-hd` in its name (Store's smallCopy).
-     `sizedSrc(url, cssPx)` takes the copy wherever the drawn width at the
-     screen's density fits in it, and the original everywhere else. Older
+     composer photo since 2026-11-07 is three files made at pick time
+     (TriaPhotoSizes natively, `photoFiles` on the web): the original at up to
+     2048px, `.md.jpg` at 1280 and `.sm.jpg` at 640, marked by `-hm` in its
+     name; `-hd` (2026-11-06, and comments' and messages' photos) has only the
+     640. `sizedSrc(url, cssPx)` takes the smallest that covers the drawn width
+     at the screen's density (never wider than the screen itself), so the feed
+     reads the 1280 and only the lightbox the original (`fullSrc`). Older
      uploads (1400 to 1600px) and faces (512px) are simply their original. */
-  const SMALL_EDGE = 640;
+  const SIZE_SM = 640, SIZE_MD = 1280;
   function sizedSrc(url, cssPx) {
     // A face this device just uploaded draws its own crop, already decoded,
     // rather than fetching itself back (Store.localFace).
     const local = Store.localFace(url);
     if (local) return local;
-    if (!url || !cssPx || !/-hd[^/]*\.jpg$/.test(url)) return url || '';
-    return cssPx * Math.min(3, window.devicePixelRatio || 2) <= SMALL_EDGE
-      ? url.replace(/\.jpg$/, '.sm.jpg') : url;
+    const m = url && cssPx ? /-(hd|hm)[^/]*\.jpg$/.exec(url) : null;
+    if (!m) return url || '';
+    const wide = Math.min(cssPx, window.innerWidth || cssPx) * Math.min(3, window.devicePixelRatio || 2);
+    if (wide <= SIZE_SM) return url.replace(/\.jpg$/, '.sm.jpg');
+    if (m[1] === 'hm' && wide <= SIZE_MD) return url.replace(/\.jpg$/, '.md.jpg');
+    return url;
   }
   // The original behind a sized picture (and any other URL, unchanged).
-  const fullSrc = (url) => url && /-hd[^/]*\.sm\.jpg$/.test(url) ? url.replace(/\.sm\.jpg$/, '.jpg') : url;
-  // Should a small copy ever be missing, the original stands in.
+  const fullSrc = (url) => url && /-h[dm][^/]*\.(sm|md)\.jpg$/.test(url) ? url.replace(/\.(sm|md)\.jpg$/, '.jpg') : url;
+  // Should a copy ever be missing, the original stands in.
   document.addEventListener('error', (e) => {
     const im = e.target;
-    if (!(im instanceof HTMLImageElement) || !/\.sm\.jpg$/.test(im.src)) return;
+    if (!(im instanceof HTMLImageElement) || !/-h[dm][^/]*\.(sm|md)\.jpg$/.test(im.src)) return;
     im.src = fullSrc(im.src);
   }, true);
 
@@ -5579,7 +5588,7 @@
 
   /* A picture picked for a comment, made ready to upload: { src, dims }, or
      { error } with a line for the reader. A GIF keeps its original bytes, since
-     a canvas would flatten it to one frame (see initPhotoPreview), under a
+     a canvas would flatten it to one frame (see photoFiles), under a
      ceiling sized for a reply rather than a post. Anything else is decoded and
      re-encoded as a JPEG no longer than 1600px on its long edge, which is also
      what turns an iPhone's HEIC into something every shell can draw. */
@@ -7848,8 +7857,7 @@
       const video = !f.src && isVideoUrl(p.image);
       const media = video
         ? `<video class="mv-pic" src="${esc(p.image)}"${p.poster ? ` poster="${esc(sizedSrc(p.poster, 600))}"` : ''} ` +
-            `playsinline autoplay muted loop></video>` +
-          `<button type="button" class="mv-sound pill-quiet" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute')}</button>`
+            `playsinline autoplay muted loop></video>`
         : `<img class="mv-pic" src="${esc(sizedSrc(still, 600))}" alt="${esc(notePlain(p.note) || p.title || 'Photo')}" draggable="false">`;
       // EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge,
       // and put captions and content below like tiktok and reels"): the
@@ -7986,6 +7994,34 @@
       btn.setAttribute('aria-label', on ? 'Unlike' : 'Like');
     };
 
+    // A clip's speaker on the rail says what the clip is doing.
+    const paintSound = (pg) => {
+      const snd = pg.el.querySelector('.mv-sound');
+      const vid = pg.stage.querySelector('video');
+      snd.hidden = !vid;
+      if (!vid) return;
+      const on = !vid.muted;
+      snd.setAttribute('aria-pressed', String(on));
+      snd.setAttribute('aria-label', on ? 'Mute' : 'Play with sound');
+      snd.innerHTML = svgIcon(on ? 'sound' : 'mute');
+    };
+    // Only the live page's clip may be heard (a neighbour drawn for a drag
+    // stays muted). With sound, it takes the song's PLAYBACK session, so it
+    // plays through the ringer switch as a song does; a browser that won't
+    // start sound without a tap gets it muted, the speaker saying so.
+    const clipSound = (pg, on) => {
+      const vid = pg.stage.querySelector('video');
+      root.querySelectorAll('video').forEach(v => { if (v !== vid) v.muted = true; });
+      if (!vid) return;
+      vid.muted = !on;
+      if (on) {
+        setAudioSession('playback');
+        const t = vid.play();
+        if (t) t.catch(() => { vid.muted = true; paintSound(pg); vid.play().catch(() => {}); });
+      } else setAudioSession('auto');
+      paintSound(pg);
+    };
+
     // The frame on screen is the one that is live: watched, wired, seen.
     const live = (how) => {
       const pg = page;
@@ -8001,15 +8037,18 @@
         wirePoll(frame, p, {});
       }
       if (!pg.s.mine) markMomentSeen(p);
-      // A song's frame plays its preview by itself, ringer switch or not;
-      // any other frame stops it.
-      // Once you've paused one, none starts by itself until the app is
-      // opened again (preview.hushed); its disc still plays on a tap.
+      // ONE SOUND RULE FOR EVERY MOMENT (Zoe, 2026-11-07: "mute and unmute
+      // rules for music we decided on should extend"). A song's frame plays
+      // its preview by itself and a clip plays with its sound, ringer switch
+      // or not; any other frame stops it. Muting either keeps every Moment
+      // quiet, songs and clips, until the app is opened again
+      // (preview.hushed); a tap on either's speaker brings sound back to all.
       const play = pg.el.querySelector('.mv-play');
       if (play.hidden) stopPreview();
       else if (preview.btn === play) { /* already playing */ }
       else if (preview.hushed) stopPreview();
       else playPreview(play, true);
+      clipSound(pg, !preview.hushed);
       if (how === 'frame' && !prefersReduced()) {
         frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
       }
@@ -8030,6 +8069,8 @@
       paintLike(pg);
       pg.stage.innerHTML = momentFrameHtml(f);
       pg.el.classList.toggle('is-pic', !!pg.stage.querySelector('.mv-frame--pic'));
+      // A clip is drawn muted; live() gives the live one its sound.
+      paintSound(pg);
       // A picture 9:16 or taller reaches up under the face, so only it wears
       // the top layer (Zoe, 2026-11-06), read off its own size once known.
       const pic = pg.stage.querySelector('.mv-pic');
@@ -8083,8 +8124,11 @@
         `<div class="mv-rail">` +
           `<button type="button" class="mv-like pill-quiet">${svgIcon('heart')}</button>` +
           // A song's preview, under the heart (Zoe, 2026-11-06), on a song's
-          // frame only; it starts by itself where it can (live, below).
-          songPlayHtml({ title: '' }, 'mv-play pill-quiet').replace('<button ', '<button hidden ') +
+          // frame only; it starts by itself where it can (live, below). It
+          // wears the sound toggle's marks, muted while it's stopped.
+          songPlayHtml({ title: '' }, 'mv-play pill-quiet', ['mute', 'sound']).replace('<button ', '<button hidden ') +
+          // A clip's sound, in the play disc's place (Zoe, 2026-11-07).
+          `<button type="button" class="mv-sound pill-quiet" hidden aria-label="Play with sound" aria-pressed="false">${svgIcon('mute')}</button>` +
           `<button type="button" class="mv-more pill-quiet" aria-label="More">${svgIcon('dots')}</button>` +
         `</div>` +
         // REPLY IS THE FOOT (Zoe, 2026-11-06: "replies at the bottom ... more
@@ -8213,12 +8257,11 @@
         hapticTap('LIGHT');
         setLike(p, Store.reactionOf(p.id) ? null : 'heart');
       } else if (b.classList.contains('mv-sound')) {
+        // The song disc's rule: muting hushes every Moment, unmuting wakes them.
         const vid = page.stage.querySelector('video');
         if (!vid) return;
-        vid.muted = !vid.muted;
-        b.setAttribute('aria-pressed', String(!vid.muted));
-        b.setAttribute('aria-label', vid.muted ? 'Play with sound' : 'Mute');
-        b.innerHTML = svgIcon(vid.muted ? 'mute' : 'sound');
+        preview.hushed = !vid.muted;
+        clipSound(page, !preview.hushed);
       }
     });
 
@@ -8240,7 +8283,7 @@
       const h = card.clientHeight || 1;
       const k = Math.min(1, dy / h);
       card.style.transform = dy > 0 ? `translateY(${dy}px) scale(${1 - 0.14 * k})` : '';
-      card.style.borderRadius = dy > 0 ? `${Math.min(44, dy * 0.4)}px` : '';
+      card.style.borderRadius = dy > 0 ? `max(var(--mv-card-round, 0px), ${Math.min(44, dy * 0.4)}px)` : '';
       veil.style.opacity = String(1 - Math.min(1, dy / (h * 0.55)));
     };
     // The frame, pulled up: it rises at half the finger's pace and stiffens
@@ -8373,7 +8416,9 @@
       const opened = page.stage.querySelector('.mv-caption.is-open');
       if (opened) { toggleCaption(opened); return; }
       const x = e.clientX, y = e.clientY;
-      const go = () => step(x < root.clientWidth / 3 ? -1 : 1);
+      // The left third of the card, which on a desktop is not the window's.
+      const box = card.getBoundingClientRect();
+      const go = () => step(x - box.left < box.width / 3 ? -1 : 1);
       if (own()) { go(); return; }   // nothing to like, so no wait
       const now = Date.now();
       if (now - lastTap < MOMENT_TAP_MS) {
@@ -8409,6 +8454,8 @@
       }
     };
     document.addEventListener('keydown', onKey);
+    // On a desktop the viewer is a card on a dim; a click on the dim closes it.
+    veil.addEventListener('click', () => { if (!sheetOpen) close(); });
 
     // Let go of a pull down (or a swipe past the last person): the screen keeps
     // going the way the finger sent it, and the page is simply there under it.
@@ -14470,14 +14517,17 @@
   // The disc: a play mark, a pause mark, and the ring that runs round it.
   const RING_R = 18.25;
   const RING_C = 2 * Math.PI * RING_R;
-  function songPlayHtml(s, cls) {
+  // `ico`: the two marks, stopped and playing. A Moment's disc wears the
+  // sound toggle's (Zoe, 2026-11-07: "use the mute unmute instead of the play
+  // button for songs").
+  function songPlayHtml(s, cls, ico = ['playSoft', 'pause']) {
     return `<button type="button" class="song-play ${cls}"${songPlayData(s)}>` +
         `<svg class="song-ring" viewBox="0 0 40 40" aria-hidden="true">` +
           `<circle class="song-ring-run" cx="20" cy="20" r="${RING_R}" ` +
             `stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${RING_C.toFixed(2)}"/>` +
         `</svg>` +
-        `<span class="song-play-ico song-play-ico--play" aria-hidden="true">${svgIcon('playSoft')}</span>` +
-        `<span class="song-play-ico song-play-ico--pause" aria-hidden="true">${svgIcon('pause')}</span>` +
+        `<span class="song-play-ico song-play-ico--play" aria-hidden="true">${svgIcon(ico[0])}</span>` +
+        `<span class="song-play-ico song-play-ico--pause" aria-hidden="true">${svgIcon(ico[1])}</span>` +
       `</button>`;
   }
   const songPlayData = (s) =>
@@ -14500,7 +14550,9 @@
     btn.classList.toggle('is-playing', on);
     btn.setAttribute('aria-pressed', String(on));
     const title = btn.dataset.title || '';
-    btn.setAttribute('aria-label', (on ? 'Pause the preview of ' : 'Play a preview of ') + title);
+    btn.setAttribute('aria-label', btn.classList.contains('mv-play')
+      ? (on ? 'Mute ' : 'Play with sound, ') + title
+      : (on ? 'Pause the preview of ' : 'Play a preview of ') + title);
     const run = btn.querySelector('.song-ring-run');
     if (run) run.style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(1, t))));
   }
@@ -14512,7 +14564,8 @@
      played through Web Audio instead, which Now Playing never sees. Apple's
      clip host answers CORS with `*`. Older WebKit keeps the element: its Web
      Audio would be silenced by the switch. `hushed`: a Moment's song paused
-     by hand keeps every Moment quiet until the app is opened again. */
+     or its clip muted by hand keeps every Moment quiet, songs and clips,
+     until the app is opened again. */
   const preview = { audio: null, btn: null, turn: 0, raf: 0, src: null, hushed: false, native: false };
   /* IN THE APP THE CLIP PLAYS NATIVELY (Zoe, 2026-11-06: "get rid of dynamic
      island for music and ios player"): Web Audio under the 'playback' session
@@ -20505,8 +20558,8 @@
   // place and a time attached, so that is what it is made of now.
   let pubType = 'note';
   let pubCarried = '';       // a circle's link carried in from its Invite sheet (wireCarriedCircle)
-  let cropper = null;        // set once a still is captured/picked; .export() → data-URI
-  let stills = [];           // every picked photo, [{ api, src, im }] in deal order; cropper is stills[0].api
+  let cropper = null;        // the cover still once one is in (stills[0]); the type reads it
+  let stills = [];           // every picked photo in deal order (makeStill)
   let videoCapture = null;   // set once a video is captured/picked; { blob, mimeType, ext, poster, tint, dims }
   let stopActiveCapture = null;   // teardown for the live camera/mic (getUserMedia or native preview)
   let stopRoll = null;            // takes the composer's camera roll down (wireRoll), called by route()
@@ -20528,6 +20581,7 @@
     if (rollListening) return;
     rollListening = true;
     const C = window.Capacitor;
+    C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollLoading' }, (ev) => rollHandler?.loading?.(ev));
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollPick' }, (ev) => rollHandler?.pick(ev));
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollUnpick' }, (ev) => rollHandler?.unpick(ev));
     C.nativeCallback('TriaPhotos', 'addListener', { eventName: 'rollMore' }, () => rollHandler?.menu?.());
@@ -21303,6 +21357,7 @@
     function clearFrame() {
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null; videoCapture = null; stills = [];
+      sweepUploads();
       fieldsEl.querySelector('#c-cc')?.setAttribute('hidden', '');
       fieldsEl.querySelector('#c-cc-track')?.replaceChildren();
       fieldsEl.querySelector('#c-cc-hint')?.setAttribute('hidden', '');
@@ -21367,6 +21422,7 @@
       if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
       cropper = null;
       stills = [];
+      sweepUploads();
       videoCapture = null;
       onCaptureChange = null;
       wantLink = false;
@@ -21758,20 +21814,50 @@
       };
       frame.cleared = fold;
       const full = () => frame.error('That’s six photos, which is as many as one post holds.');
-      const dataSrc = (it) => `data:${it.type || 'image/jpeg'};base64,${it.data}`;
 
+      // A tick lands as `rollLoading` at once and `rollPick` once its files
+      // are made, which is a moment for a photo on the phone and as long as
+      // iCloud takes for one that isn't. Past a short beat the post shows a
+      // place for it, shimmering, and Share waits on it.
+      const waiting = new Map();   // asset id → its beat's timer
       rollHandler = {
+        loading(ev) {
+          if (gone || !ev || !ev.id || frame.has(ev.id) || waiting.has(ev.id)) return;
+          waiting.set(ev.id, setTimeout(() => {
+            waiting.delete(ev.id);
+            if (gone || frame.has(ev.id) || stills.length >= MAX_STILLS) return;
+            open();
+            ticked.add(ev.id);
+            frame.pend(ev.id);
+            syncType();
+          }, 280));
+        },
         pick(ev) {
           if (gone || !ev || !ev.id) return;
+          clearTimeout(waiting.get(ev.id));
+          waiting.delete(ev.id);
+          const bad = ev.error || !(ev.data || ev.full);
+          if (frame.pending(ev.id)) {
+            if (bad) {
+              ticked.delete(ev.id);
+              frame.drop(ev.id);
+              call('rollDeselect', { ids: [ev.id] }).catch(() => {});
+              frame.error(ev.error || 'Couldn’t read that photo. Try another.');
+            } else {
+              frame.fill(ev.id, stillFromNative(ev));
+            }
+            syncType();
+            return;
+          }
           if (frame.has(ev.id)) { ticked.add(ev.id); return; }   // in already, from All photos
-          if (ev.error || !ev.data) {
+          if (bad) {
             call('rollDeselect', { ids: [ev.id] }).catch(() => {});
             frame.error(ev.error || 'Couldn’t read that photo. Try another.');
             return;
           }
           open();
           ticked.add(ev.id);
-          if (!frame.add(ev.id, dataSrc(ev))) {
+          if (!frame.add(ev.id, stillFromNative(ev))) {
             ticked.delete(ev.id);
             call('rollDeselect', { ids: [ev.id] }).catch(() => {});
             full();
@@ -21780,7 +21866,10 @@
           syncType();
         },
         unpick(ev) {
-          if (gone || !ev || !ticked.has(ev.id)) return;
+          if (gone || !ev) return;
+          clearTimeout(waiting.get(ev.id));
+          waiting.delete(ev.id);
+          if (!ticked.has(ev.id)) return;
           ticked.delete(ev.id);
           frame.drop(ev.id);   // frame.changed folds the surface if that was the last
           syncType();
@@ -21789,10 +21878,21 @@
       listenRoll();
 
       // Take a photo: the system camera, straight in (capture on the input).
-      const takePhoto = () => {
+      // In the app the camera is native (TriaPhotos.camera), its photo made
+      // into the post's files there; an older binary has the capture input.
+      const takePhoto = async () => {
         if (stills.length >= MAX_STILLS) { full(); return; }
-        camera.value = '';
-        camera.click();
+        if (asking) return;
+        asking = true;
+        let r;
+        try { r = await call('camera'); } catch { r = undefined; }
+        asking = false;
+        if (r === undefined) { camera.value = ''; camera.click(); return; }
+        if (gone || !r || r.cancelled) return;
+        if (r.error || !r.full) { frame.error(r.error || 'Couldn’t keep that photo. Try again.'); return; }
+        open();
+        if (!frame.add(null, stillFromNative(r))) full();
+        syncType();
       };
       // The roll's camera disc (native, on the strip's corner) asks for this
       // sheet: the two ways in that aren't a recent photo.
@@ -21823,16 +21923,10 @@
       };
       camera?.addEventListener('change', () => {
         const f = camera.files && camera.files[0];
-        if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (gone) return;
-          open();
-          if (!frame.add(null, reader.result)) full();
-          syncType();
-        };
-        reader.onerror = () => frame.error('Couldn’t read that photo, try again.');
-        reader.readAsDataURL(f);
+        if (!f || gone) return;
+        open();
+        if (!frame.add(null, stillFromFile(f))) full();
+        syncType();
       });
 
       // All photos: the library in a sheet, the post's own picks ticked in it.
@@ -21961,13 +22055,27 @@
         frameField?.classList.toggle('frame-field--roll', rollMode);   // the roll's own label is enough
       },
       has: (id) => stills.some(s => s.rollId === id),
-      ids: () => stills.filter(s => s.rollId).map(s => s.rollId),
-      loose: () => stills.filter(s => !s.rollId).length,
-      add(id, src) {
+      pending: (id) => stills.some(s => s.rollId === id && s.pending),
+      // A place for a photo still loading (the roll's rollLoading), then
+      // its picture once it lands.
+      pend(id) {
         if (videoCapture || stills.length >= MAX_STILLS) return false;
         const err = errEl();
         if (err) err.textContent = '';
-        finishStills([src], stills.length > 0, [id]);
+        finishStills([{ rollId: id, pending: true }], stills.length > 0);
+        return true;
+      },
+      fill(id, it) {
+        const s = stills.find(t => t.rollId === id && t.pending);
+        if (s) landStill(s, it);
+      },
+      ids: () => stills.filter(s => s.rollId).map(s => s.rollId),
+      loose: () => stills.filter(s => !s.rollId).length,
+      add(id, it) {
+        if (videoCapture || stills.length >= MAX_STILLS) return false;
+        const err = errEl();
+        if (err) err.textContent = '';
+        finishStills([{ ...it, rollId: id }], stills.length > 0);
         return true;
       },
       drop(id) {
@@ -21984,11 +22092,10 @@
         if (err) err.textContent = '';
         const want = new Set(items.map(i => i.id));
         stills = stills.filter(s => !s.rollId || want.has(s.rollId));
-        const fresh = items.filter(i => i.data && !stills.some(s => s.rollId === i.id))
+        const fresh = items.filter(i => (i.data || i.full) && !stills.some(s => s.rollId === i.id))
           .slice(0, Math.max(0, MAX_STILLS - stills.length));
         if (fresh.length) {
-          finishStills(fresh.map(i => `data:${i.type || 'image/jpeg'};base64,${i.data}`), true,
-            fresh.map(i => i.id));
+          finishStills(fresh.map(i => ({ ...stillFromNative(i), rollId: i.id })), true);
         } else {
           showStill(sel);
         }
@@ -22048,6 +22155,7 @@
       track.style.aspectRatio = '';
       cropper = null;
       stills = [];
+      sweepUploads();
       api.untick?.();   // the roll's ticks go with the photos
       stillsEl.hidden = true;
       stillsEl.replaceChildren();
@@ -22098,16 +22206,14 @@
         if (f.size > MAX_UPLOAD_BYTES) { showPickError('That clip is over 150 MB. Please pick a shorter or smaller clip.'); return; }
         openClips([{ file: f }]);
       } else if (f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES) {
-        // GIFs upload as their original bytes (see initPhotoPreview) — no
+        // GIFs upload as their original bytes (see photoFiles) — no
         // in-browser re-encode to shrink them, so the bucket ceiling is the
         // real gate. Catch it here rather than after the read.
         showPickError('That GIF is over 150 MB. Please choose a smaller one.');
       } else {
         const err = errEl();
         if (err) err.textContent = '';
-        const reader = new FileReader();
-        reader.onload = () => finishPhoto(reader.result);
-        reader.readAsDataURL(f);
+        finishStills([stillFromFile(f)], false);
       }
     });
 
@@ -22118,14 +22224,11 @@
     // first is the cover, and `cropper` always points at it, which is what the
     // type inference and a single photo's submit read.
     let sel = 0, stillsHold = 0;
-    function finishPhoto(dataUrl) { finishStills([dataUrl], false); }
-    function finishStills(srcs, adding, rollIds) {
+    // `items` are makeStill's: { src, files?, gif?, rollId?, pending? }.
+    function finishStills(items, adding) {
       if (!adding) stills = [];
-      srcs.forEach((src, i) => {
-        const im = new Image();
-        stills.push({ api: initPhotoPreview(im, src), src, im, rollId: rollIds ? rollIds[i] : null });
-      });
-      showStill(adding ? stills.length - srcs.length : 0);
+      items.forEach(it => stills.push(makeStill(it)));
+      showStill(adding ? stills.length - items.length : 0);
     }
     function showStill(i) {
       if (!stills.length) { dropStills(); return; }
@@ -22143,7 +22246,8 @@
       addMore.hidden = stills.length !== 1;
       if (rollMode) { replace.hidden = true; addMore.hidden = true; }
       videoCapture = null;
-      cropper = stills[0].api;
+      cropper = stills[0];
+      sweepUploads();   // whatever just came out, its files go too
       if (!arriving) unsnap(520);   // the row is about to change under its snap (see goTo)
       paintSlides();
       paintOrder();
@@ -22163,26 +22267,25 @@
       paintPlace();
       onCaptureChange?.();   // a still landed → the Post composer flips its type mark to Frame
       api.changed?.();
-      // Hold Post until every still decodes — export() reads naturalWidth, so
-      // posting early would ship a 1x1 canvas. 'error' as well as 'load': a picture
-      // that never decodes used to leave Post disabled forever, which reads as the
-      // composer refusing to publish. A newer pick owns the button (stillsHold).
+      // Hold Post until every still has its picture (one still coming down
+      // from iCloud included). `shown` settles on 'error' as well as 'load':
+      // a picture that never decodes used to leave Post disabled forever,
+      // which reads as the composer refusing to publish. A newer pick owns
+      // the button (stillsHold). The UPLOAD never holds it: Share waits for
+      // that, with its bar (photoUrls).
       const submitBtn = document.querySelector('.composer-submit');
-      const pending = stills.filter(s => !(s.im.complete && s.im.naturalWidth));
+      const pending = stills.filter(s => s.pending || !(s.im.complete && s.im.naturalWidth));
       const hold = ++stillsHold;
       if (!submitBtn) return;
       if (!pending.length) { submitBtn.disabled = false; return; }
       submitBtn.disabled = true;
-      Promise.all(pending.map(s => new Promise(done => {
-        if (s.im.complete) { done(); return; }
-        s.im.addEventListener('load', done, { once: true });
-        s.im.addEventListener('error', done, { once: true });
-      }))).then(() => { if (hold === stillsHold) submitBtn.disabled = false; });
+      Promise.all(pending.map(s => s.shown)).then(() => { if (hold === stillsHold) submitBtn.disabled = false; });
     }
     // The last photo taken out: back to the upload field (or, under the roll,
     // the surface folds away).
     function dropStills() {
       stills = []; cropper = null; sel = 0; ++stillsHold;
+      sweepUploads();
       ccEl.hidden = true;
       track.replaceChildren();
       delete track.dataset.r;
@@ -22231,9 +22334,11 @@
       x.innerHTML = svgIcon('close', 'media-x-ico');
       el.append(s.im, x);
       s.slide = el;
+      if (s.pending) el.classList.add('is-pending');
       if (s.im.complete && s.im.naturalWidth) fitSlide(s);
       else {
         s.im.addEventListener('load', () => {
+          el.classList.remove('is-pending');
           fitSlide(s);
           if (s === stills[0]) shape();
           if (filmstrip && !ccHeld && stills.includes(s)) goTo(sel, false);
@@ -22392,7 +22497,7 @@
         try {
           cv.getContext('2d').drawImage(s.im, (THUMB_PX - w * k) / 2, (THUMB_PX - h * k) / 2, w * k, h * k);
           im.src = cv.toDataURL('image/jpeg', 0.85);
-        } catch { im.src = s.src; }
+        } catch { im.src = s.im.src; }
       };
       if (s.im.complete && s.im.naturalWidth) draw();
       else s.im.addEventListener('load', draw, { once: true });
@@ -22452,7 +22557,7 @@
         unsnap(520);   // before the slides move, so nothing re-snaps to the old photo
         const [s] = stills.splice(from, 1);
         stills.splice(to, 0, s);
-        cropper = stills[0].api;
+        cropper = stills[0];
       }
       paintOrder(pre);
       if (!moved) return;
@@ -22555,15 +22660,8 @@
           : 'A carousel is photos only. Share a clip as its own post.');
         return;
       }
-      const srcs = await Promise.all(take.map(f => new Promise((ok, fail) => {
-        const r = new FileReader();
-        r.onload = () => ok(r.result);
-        r.onerror = fail;
-        r.readAsDataURL(f);
-      }))).catch(() => null);
-      if (!file.isConnected) return;   // the composer went away while they read
-      if (!srcs) { showPickError('Couldn’t read those photos, try again.'); return; }
-      finishStills(srcs, adding);
+      if (!file.isConnected) return;   // the composer went away
+      finishStills(take.map(stillFromFile), adding);
       if (photos.length < files.length) showPickError('A carousel is photos only, so the clip was left out.');
       else if (take.length < photos.length) showPickError('One post holds six photos, so the rest were left out.');
     }
@@ -23517,56 +23615,159 @@
                    : `${s.toFixed(1)}s`;
   }
 
-  // A whole-image preview that keeps the photo's native aspect ratio. export()
-  // downscales the longest edge to `maxEdge` (to keep upload size sane) but never
-  // crops — the shape you upload is the shape that posts.
-  function initPhotoPreview(imgEl, src) {
-    imgEl.style.transform = '';
-    imgEl.src = src;
-    // A GIF drawn to canvas would flatten to whatever frame happened to be
-    // showing — the animation is gone for good. Ship the original bytes
-    // untouched instead (same call as video: no in-browser re-encode).
-    const isGif = /^data:image\/gif;/i.test(src);
-    const api = {
-      dims: null,   // {w, h} of the last export — stamped into the upload filename
-      export(maxEdge = 2048) {
-        const iw = imgEl.naturalWidth  || 1;
-        const ih = imgEl.naturalHeight || 1;
-        if (isGif) {
-          api.dims = { w: iw, h: ih };
-          return src;
-        }
-        const scale = Math.min(1, maxEdge / Math.max(iw, ih));
-        const w = Math.max(1, Math.round(iw * scale));
-        const h = Math.max(1, Math.round(ih * scale));
-        api.dims = { w, h };
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-        return canvas.toDataURL('image/jpeg', 0.86);
-      },
-      // The photo's average colour as one #rrggbb string (~7 bytes). Stored on the
-      // post row (not uploaded) so the feed paints the reserved box in the photo's
-      // own colour and the full image fades in over it — a calm colour-up, one
-      // layer, no filtered thumbnail. Downscaling the whole image to a single pixel
-      // IS the average; the source is a local object/data URL so the canvas stays
-      // untainted and getImageData is allowed.
-      tint() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(imgEl, 0, 0, 1, 1);
-        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-        return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-      },
+  /* ── A POST'S PHOTOS GO UP AS THEY'RE PICKED (2026-11-07) ──────────────────
+     Zoe: a big photo froze the composer "until things sync and upload and
+     icloud". The page used to decode the whole photo, draw it again to a
+     canvas, turn that into a base64 string (toDataURL, which blocks), and
+     only start uploading on Share; the image renderer then made the feed's
+     small copies, and it billed per picture. Now:
+
+     - A photo's FILES are made once, as it lands: natively by TriaPhotoSizes
+       (ImageIO reads the photo at the size it posts at, three JPEGs on disk,
+       nothing decoded in the page), else by `photoFiles` from the preview's
+       own decoded <img>, encoded with toBlob. 2048 for the lightbox, 1280 for
+       the feed, 640 for small places (sizedSrc picks).
+     - They go UP at once (`startUpload`), one still at a time, the cover
+       first, while you write; Share only waits for what's left, with the bar
+       (`photoUrls`). Instagram does the same from its caption screen.
+     - A still taken out, or a composer left (route()), has its files deleted
+       (`sweepUploads`). A refused post's are dropped by Store.createPost, so
+       submitComposer sets them to go up again.
+
+     A still is { im, rollId, pending, shown, files, up, frac }: `im` is its
+     preview (the thumbs and slides draw it), `shown` settles once it has a
+     picture, `files` is the promise of what goes up, `up` of its URL. */
+  const uploading = new Set();   // stills whose files have gone, or are going, up
+  let upChain = Promise.resolve();
+  function startUpload(s) {
+    if (s.up) return s.up;
+    uploading.add(s);
+    s.frac = 0;
+    const run = async () => {
+      if (!stills.includes(s)) return null;   // taken out before its turn
+      const f = await s.files;
+      return Store.uploadPhoto(f, { onProgress: (p) => { s.frac = p; s.onFrac?.(); } });
     };
-    return api;
+    const up = upChain.then(run, run);
+    s.up = up;
+    upChain = up.catch(() => {});
+    up.then((url) => { if (url && s.up === up) { s.frac = 1; s.onFrac?.(); } }, () => {});
+    return up;
+  }
+  // Whatever is no longer in the post (or everything, `all`, as the composer
+  // goes) has its files deleted, once its upload settles.
+  function sweepUploads(all) {
+    for (const s of [...uploading]) {
+      if (!all && stills.includes(s)) continue;
+      uploading.delete(s);
+      s.up?.then((url) => { if (url) Store.dropUploads([url]); }, () => {});
+      if (s.blobUrl) URL.revokeObjectURL(s.blobUrl);
+    }
+  }
+  // Share's wait: every still's URL, its size and colour, in order. One that
+  // failed on the way up is tried once more here; a second failure is the post's.
+  async function photoUrls(list, progress) {
+    const tick = () => progress(list.reduce((a, s) => a + (s.frac || 0), 0) / list.length);
+    list.forEach((s) => { s.onFrac = tick; });
+    if (list.some(s => (s.frac || 0) < 1)) tick();   // the bar only while something is left
+    const out = [];
+    for (const s of list) {
+      let url = await (s.up || startUpload(s)).catch(() => null);
+      if (!url) { s.up = null; url = await startUpload(s); }
+      if (!url) throw new Error('No upload.');
+      const f = await s.files;
+      out.push({ url, dims: f.dims, tint: f.tint || null });
+    }
+    return out;
+  }
+
+  // A still, from what makeStill is handed: { src, files?, gif?, rollId?,
+  // pending?, blobUrl? }. A pending one (still loading natively) has no
+  // picture until landStill.
+  function makeStill(it) {
+    const im = new Image();
+    im.decoding = 'async';
+    const s = { im, rollId: it.rollId || null, pending: !!it.pending, blobUrl: it.blobUrl || null };
+    s.shown = new Promise((done) => {
+      im.addEventListener('load', done, { once: true });
+      im.addEventListener('error', done, { once: true });
+    });
+    if (!s.pending) landStill(s, it);
+    return s;
+  }
+  function landStill(s, it) {
+    s.pending = false;
+    s.slide?.classList.remove('is-pending');
+    if (it.blobUrl) s.blobUrl = it.blobUrl;
+    s.im.src = it.src;
+    s.files = it.files ? Promise.resolve(it.files) : photoFiles(s.im, it.gif);
+    s.files.then(() => startUpload(s), () => {});
+  }
+  // A native pick (the roll, All photos, the camera): its files are on disk,
+  // read through convertFileSrc, and the preview is the 1280. A GIF is its
+  // own bytes.
+  function stillFromNative(it) {
+    if (it.data) {
+      const src = `data:${it.type || 'image/jpeg'};base64,${it.data}`;
+      return { src, gif: it.type === 'image/gif' ? src : null };
+    }
+    const at = (p) => (p ? window.Capacitor.convertFileSrc(p) : null);
+    return {
+      src: at(it.md || it.full),
+      files: { full: at(it.full), md: at(it.md), sm: at(it.sm), dims: { w: Math.round(it.w), h: Math.round(it.h) }, tint: it.tint || null },
+    };
+  }
+  // A picked File (the web's input, an older binary's camera): shown from its
+  // own object URL at once, no FileReader, no base64.
+  function stillFromFile(f) {
+    const blobUrl = URL.createObjectURL(f);
+    return { src: blobUrl, blobUrl, gif: f.type === 'image/gif' ? f : null };
+  }
+  // The web's three files, drawn from the preview's own decoded <img> (decoded
+  // once), each from the size above it, encoded with toBlob and a breath
+  // between, so the page keeps answering. Same sizes as TriaPhotoSizes.
+  async function photoFiles(im, gif) {
+    await im.decode();
+    const W = im.naturalWidth, H = im.naturalHeight;
+    if (gif) return { gif, dims: { w: W, h: H }, tint: tintOf(im) };
+    const fit = (edge) => {
+      const k = Math.min(1, edge / Math.max(W, H));
+      return [Math.max(1, Math.round(W * k)), Math.max(1, Math.round(H * k))];
+    };
+    const draw = (from, [w, h]) => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(from, 0, 0, w, h);
+      return c;
+    };
+    const jpeg = (c, q) => new Promise((ok, no) => c.toBlob(b => (b ? ok(b) : no(new Error('No JPEG.'))), 'image/jpeg', q));
+    const breathe = () => new Promise(r => setTimeout(r, 0));
+    let least = draw(im, fit(2048));
+    const out = { full: await jpeg(least, 0.8), dims: { w: least.width, h: least.height } };
+    const edge = Math.max(least.width, least.height);
+    if (edge > 1280 * 1.1) { await breathe(); least = draw(least, fit(1280)); out.md = await jpeg(least, 0.8); }
+    if (edge > 640 * 1.25) { await breathe(); least = draw(least, fit(640)); out.sm = await jpeg(least, 0.78); }
+    out.tint = tintOf(least);
+    return out;
+  }
+  // A picture's average colour as #rrggbb, for the feed's colour-up: drawn to
+  // one pixel (that IS the average). Local sources only, so nothing taints it.
+  function tintOf(src) {
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 1;
+      const g = c.getContext('2d');
+      g.drawImage(src, 0, 0, 1, 1);
+      const [r, gr, b] = g.getImageData(0, 0, 1, 1).data;
+      return '#' + [r, gr, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    } catch { return null; }
   }
 
   /* ── Square cropper (the avatar editor only) ───────────────────────────────
-     Post photos go through initPhotoPreview and keep their aspect; this is the
+     Post photos go through photoFiles and keep their aspect; this is the
      one place in the app that crops, because avatars are the one thing that
      displays round. Cover-fits the image in the square frame, then lets you MOVE
      and SCALE it: drag (one finger) to pan, pinch or scroll to zoom, or drive
@@ -23823,6 +24024,7 @@
 
     const data = { type: pubType, tags: parseTags(val('c-tags')), note: readNoteField('c-note') };
     let clipPost = null;   // the clip editor's state, when this is a clip (clipPostData)
+    let photoPost = null;  // the stills going out, in deal order (photoUrls)
     // The song this one replaces, read before the new one exists (myWeekSong).
     // A song in a Moment is for the day and replaces nothing.
     // Since 2026-11-06 no song replaces another (songs are Moments), so this
@@ -23895,14 +24097,10 @@
         // takes a few seconds, and is wasted on a post that can't go out).
         if (videoCapture.loading || !videoCapture.clips.length) { errEl.textContent = 'Your clip is still getting ready.'; return; }
         clipPost = videoCapture;
-      } else if (stills.length > 1) {
-        // A carousel: every still exported in deal order, cover first. `dims` is
-        // read after export() in the same literal, which is what sets it.
-        data.images = stills.map(s => ({ src: s.api.export(), dims: s.api.dims, tint: s.api.tint() }));
       } else {
-        data.image = cropper.export();
-        data.imageDims = cropper.dims;   // stamped into the filename → zero feed reflow
-        data.imageTint = cropper.tint(); // photo's average colour → colour-up in the feed
+        // Photos: their files have been going up since they were picked;
+        // Share only waits for what's left (photoUrls, after the gate).
+        photoPost = stills.slice();
       }
     } else if (pubType === 'poll') {
       // The QUESTION is the post itself (headline and/or body), same as a Note —
@@ -23954,6 +24152,18 @@
       if (!made) { failed(); return; }
       upFrom = clipPost.cut ? 0.25 : 0;
     }
+    if (photoPost) {
+      const got = await photoUrls(photoPost, (p) => setPostProgress('Uploading', p)).catch(() => null);
+      if (!got) { errEl.textContent = 'Couldn’t upload the photo, try again.'; failed(); return; }
+      if (got.length > 1) {
+        // A carousel, in deal order, cover first.
+        data.images = got.map(g => ({ src: g.url, dims: g.dims, tint: g.tint }));
+      } else {
+        data.image = got[0].url;
+        data.imageDims = got[0].dims;   // stamped into the filename → zero feed reflow
+        data.imageTint = got[0].tint;   // photo's average colour → colour-up in the feed
+      }
+    }
 
     // A video shows a real, byte-level upload bar (it's the big transfer). Photos
     // and text posts are small enough that a spinner-word says enough; the bar
@@ -23967,9 +24177,12 @@
     }).catch(() => null);
     if (!res || !res.ok) {
       errEl.textContent = (res && res.error) || 'Couldn’t share that, try again.';
+      // A refused post drops its files (Store.createPost), so they go up again.
+      photoPost?.forEach(s => { uploading.delete(s); s.up = null; s.frac = 0; });
       failed();
       return;
     }
+    uploading.clear();   // out, and theirs now
     clearPostProgress();
     // The clips and their cut are spent: the folder goes.
     if (clipPost && clipCutter()) cutCall('clear').catch(() => {});
@@ -26494,6 +26707,7 @@
     // outlive the nodes the next render replaces.
     if (stopActiveCapture) { stopActiveCapture(); stopActiveCapture = null; }
     if (stopRoll) { stopRoll(); stopRoll = null; }
+    sweepUploads(true);   // a composer left behind: its photos' files go
     if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
     stopPreview();   // a song preview belongs to the page it was played on
 

@@ -5987,6 +5987,31 @@ button.poll-option:disabled { cursor: default; }
 }
 :is(.mv--wash, .mv--tria)::before { opacity: 1; }
 
+/* ON A DESKTOP (and an iPad), A PHONE IN THE MIDDLE (2026-11-07, Zoe: "make
+   sure images and content is sized and padded appropriately on desktop").
+   Full window, a portrait photo was held by the window's height and ran up
+   under the face and down under its caption, and a note's column floated in a
+   sea of paper. So the whole viewer is a 9:16 card, centred, rounded, the page
+   dimmed round it; inside it every rule is the phone's. A click on the dim
+   closes it. The safe area belongs to the window, not the card. */
+@media (min-width: 681px) {
+  .mv { --mv-card-round: 28px; }
+  .mv-veil { background: color-mix(in srgb, #000 62%, transparent); pointer-events: auto; cursor: pointer; }
+  .mv-card {
+    --mv-card-h: min(920px, calc(100dvh - 48px));
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: min(calc(100vw - 48px), calc(var(--mv-card-h) * 9 / 16));
+    height: var(--mv-card-h);
+    margin: calc(var(--mv-card-h) / -2) 0 0 calc(min(calc(100vw - 48px), calc(var(--mv-card-h) * 9 / 16)) / -2);
+    border-radius: var(--mv-card-round);
+    transform-origin: 50% 50%;
+  }
+  .mv-page { padding-top: 0; padding-bottom: 0; }
+  .mv-card { --mv-base: calc(var(--mv-foot) + var(--mv-lift)); }
+}
+
 /* A hold hides the chrome, so the picture stands alone. */
 .mv-head, .mv-rail, .mv-dots, .mv-foot, .mv-caption { transition: opacity 0.2s var(--ease-soft); }
 .mv.is-held :is(.mv-head, .mv-rail, .mv-dots, .mv-foot, .mv-caption) { opacity: 0; }
@@ -6062,38 +6087,6 @@ button.poll-option:disabled { cursor: default; }
   border-radius: var(--radius-soft);
   object-fit: contain;
   -webkit-user-drag: none;
-}
-/* The clip's sound sits on the picture's left, the rail's side being taken. */
-.mv-sound {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-}
-.mv-sound svg { width: 20px; height: 20px; }
-/* Edge to edge, the foot is the caption's, so the sound sits under the x,
-   a bare icon on the rail's column. */
-.mv-frame--pic .mv-sound {
-  z-index: 1;
-  left: auto;
-  bottom: auto;
-  right: calc(var(--mv-side) - var(--mv-inset));
-  top: calc(env(safe-area-inset-top) + 84px);
-  width: var(--mv-hit);
-  height: var(--mv-hit);
-  background: none;
-  border: 0;
-  color: var(--text);
-}
-.mv-frame--pic .mv-sound svg {
-  width: var(--mv-ico);
-  height: var(--mv-ico);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--bg) 70%, transparent));
 }
 /* EDGE TO EDGE (Zoe, 2026-11-06: "allow images to go full edge to edge, and
    put captions and content below like tiktok and reels ... seriously don't
@@ -6740,7 +6733,9 @@ button.card-song-play:active { transform: scale(0.9); }
 .mv-rail .mv-play { position: relative; }
 .mv-rail .mv-play .song-ring,
 .mv-rail .mv-play:active .song-ring { width: 100%; height: 100%; transform: rotate(-90deg); filter: none; }
-.mv-rail .mv-play .song-play-ico svg { width: calc(var(--mv-react) - 4px); height: calc(var(--mv-react) - 4px); }
+/* The song's disc and the clip's sound wear the same speaker, at one size, a
+   touch under the heart's so the ring has room round it. */
+.mv-rail :is(.mv-play .song-play-ico, .mv-sound) svg { width: calc(var(--mv-react) - 4px); height: calc(var(--mv-react) - 4px); }
 
 /* ── A Find's YouTube video, on its card (2.0, 2026-10-25) ─────────────────
    The song's and the quote's tile (a --surface fill, a --rule hairline, the
@@ -10710,6 +10705,20 @@ body.thread-live .lightbox { z-index: 320; }
   -webkit-user-drag: none;
 }
 .cc-slide.is-going { pointer-events: none; }
+/* A photo still on its way (the roll's rollLoading: iCloud, usually): its
+   place in the post, shimmering in the reader's heart as the clip editor
+   does while it reads, until the picture lands. */
+.cc-slide.is-pending {
+  background-image: linear-gradient(100deg,
+    transparent 38%, color-mix(in srgb, var(--heart) 14%, transparent) 50%, transparent 62%);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: ed-shimmer 1.25s linear infinite;
+}
+.cc-slide.is-pending .cc-pic { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .cc-slide.is-pending { animation: none; background-position: 50% 0; }
+}
 /* The count, in .deck-count's material and corner. */
 .cc-count {
   position: absolute;
