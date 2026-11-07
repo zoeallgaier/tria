@@ -1370,7 +1370,7 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
 
     func gestureRecognizer(_ gesture: UIGestureRecognizer,
                            shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
-        other is UIScreenEdgePanGestureRecognizer
+        other is UIScreenEdgePanGestureRecognizer && !(other is TriaEdgeClaim)
     }
 
     @objc private func panned(_ gesture: UIPanGestureRecognizer) {

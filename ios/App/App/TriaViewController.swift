@@ -104,10 +104,18 @@ class TriaViewController: CAPBridgeViewController {
         // BUT NEVER ON A TAB (Zoe, 2026-11-06: Profile swiped "back" to
         // Discover). A tab is a root, not a pushed page, so the history behind
         // it is just the last tab you were on, and sideways between tabs is
-        // TriaPager's. The swipe is switched per route: off on the four tabs,
-        // on everywhere else, where there really is a page to go back to.
-        routeWatch = webView?.observe(\.url, options: [.initial, .new]) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.syncBackSwipe() }
+        // TriaPager's. The flag itself must stay ON everywhere: WebKit only
+        // records a page's back-swipe snapshot while it is on, so switching it
+        // off on the tabs (d72b312) left no picture of the tab, and swiping back
+        // to it from a pushed page showed white. Instead an edge recognizer of
+        // our own claims both edges on a tab (`TriaEdgeClaim`), and WebKit's
+        // swipes wait for it to fail. It does nothing and runs alongside the
+        // pager, so a drag from the edge still pages between tabs.
+        for edge in [UIRectEdge.left, .right] {
+            let claim = TriaEdgeClaim(target: nil, action: nil)
+            claim.edges = edge
+            claim.delegate = self
+            webView?.addGestureRecognizer(claim)
         }
 
         // Swipe in from the left edge for the sidebar, on My Circle and Discover
@@ -115,7 +123,7 @@ class TriaViewController: CAPBridgeViewController {
         // since 2026-11-05). Native, because the web view's own back swipe holds
         // that edge whenever there is back history, and on a tab the edge must
         // never read as back. See the delegate at the foot.
-        let sideEdge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(sideEdgeSwiped))
+        sideEdge.addTarget(self, action: #selector(sideEdgeSwiped))
         sideEdge.edges = .left
         sideEdge.delegate = self
         webView?.addGestureRecognizer(sideEdge)
@@ -142,7 +150,7 @@ class TriaViewController: CAPBridgeViewController {
         webView?.scrollView.backgroundColor = Self.paper
     }
 
-    private var routeWatch: NSKeyValueObservation?
+    fileprivate let sideEdge = UIScreenEdgePanGestureRecognizer()
 
     /// The route off the web view's URL: `/`, `/discover`, `/c/dnd`.
     fileprivate var route: String {
@@ -150,14 +158,10 @@ class TriaViewController: CAPBridgeViewController {
         return fragment.split(separator: "?", omittingEmptySubsequences: false).first.map(String.init) ?? ""
     }
 
-    private static let tabRoots: Set<String> = ["", "/", "/discover", "/updates", "/profile"]
+    fileprivate var onMyCircle: Bool { route.isEmpty || route == "/" }
 
-    private func syncBackSwipe() {
-        let onTab = Self.tabRoots.contains(route)
-        if webView?.allowsBackForwardNavigationGestures == onTab {
-            webView?.allowsBackForwardNavigationGestures = !onTab
-        }
-    }
+    private static let tabRoots: Set<String> = ["", "/", "/discover", "/updates", "/profile"]
+    fileprivate var onTab: Bool { Self.tabRoots.contains(route) }
 
     @objc private func sideEdgeSwiped(_ gesture: UIScreenEdgePanGestureRecognizer) {
         guard gesture.state == .began else { return }
@@ -171,13 +175,32 @@ extension TriaViewController: UIGestureRecognizerDelegate {
     /// Everywhere else the edge stays the web view's back swipe. Begun here, it
     /// owns the edge: back never runs under it.
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        return route.isEmpty || route == "/"
+        if let claim = gestureRecognizer as? TriaEdgeClaim {
+            // My Circle's left edge is the sidebar's, which already holds it.
+            return onTab && !(claim.edges == .left && onMyCircle)
+        }
+        return onMyCircle
     }
 
-    /// The web view's own edge swipes wait for this one to fail, so on My Circle
-    /// and Discover the sidebar has the left edge, and off them back is untouched.
+    /// The web view's own edge swipes wait for these to fail, so on a tab the
+    /// sidebar or the claim has the edge, and off the tabs back is untouched.
+    /// The sidebar keeps its older, wider rule; a claim holds back WebKit's
+    /// edge swipes only, never the pager or the scroll.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-        other.view === webView
+        guard other.view === webView else { return false }
+        guard gestureRecognizer is TriaEdgeClaim else { return true }
+        return other is UIScreenEdgePanGestureRecognizer
+            && other !== sideEdge && !(other is TriaEdgeClaim)
+    }
+
+    /// A claim is only there to be recognised; it lets the pager run with it.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        gestureRecognizer is TriaEdgeClaim || other is TriaEdgeClaim
     }
 }
+
+/// Holds a screen edge on a tab so WebKit's back and forward swipes never run
+/// there (see `viewDidLoad`). It has no action. `TriaPager` doesn't wait on it.
+final class TriaEdgeClaim: UIScreenEdgePanGestureRecognizer {}
