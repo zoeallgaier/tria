@@ -9003,15 +9003,17 @@ button.card-song-play:active { transform: scale(0.9); }
   border-radius: 50%;   /* a round crop, as tall as the bar's disc (Zoe, 2026-10-26) */
   background: var(--glass-bg-panel) center / cover no-repeat;
 }
-/* A photo Moment's lead: the photo answered, a soft square rather than the
-   sleeve's round crop, which read as a face; a clip's poster wears a small
-   play mark. A Moment of words has no lead, so it pads as a message's reply. */
+/* A photo Moment's lead: the photo answered, in the sleeve's round crop, so
+   it sits in the chip's round end (Zoe, 2026-11-06: "round the little baby
+   image previews in the replys the squircle dont fit"; a 12px soft square
+   before); a clip's poster wears a small play mark. A Moment of words has no
+   lead, so it pads as a message's reply. */
 .postbar-moment-pic {
   flex: 0 0 auto;
   position: relative;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: #fff;

@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Capacitor
+import AVFoundation
 
 /// One method: open this app's own page in iOS Settings.
 ///
@@ -34,8 +35,109 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "appIcon", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setAppIcon", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "pageHead", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "pageHead", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "playClip", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise)
     ]
+
+    /// A song's 30 second preview, played HERE and not in the web view (Zoe,
+    /// 2026-11-06: "get rid of dynamic island for music and ios player").
+    /// iOS makes an app the Now Playing app (the Dynamic Island, the lock
+    /// screen's player) when it plays in a NON-MIXABLE category, and WebKit's
+    /// `navigator.audioSession.type = 'playback'`, the only web way through the
+    /// ringer switch, is exactly that, Web Audio or not. A mixable category can
+    /// never be Now Playing, and WebKit's one mixable type, 'ambient', obeys the
+    /// switch. So the clip plays through an AVPlayer in `.playback` with
+    /// `.mixWithOthers` (through the switch, never Now Playing) and
+    /// `.duckOthers` (someone's own music dips under it rather than fighting
+    /// it, and comes back as it stops). Nothing here ever touches
+    /// MPNowPlayingInfoCenter.
+    private var clip: AVPlayer?
+    private var clipWatch: NSKeyValueObservation?
+    private var clipEnd: NSObjectProtocol?
+    private var clipTurn = 0
+    /// The play waiting to hear whether its clip started; every path answers it.
+    private var clipPending: CAPPluginCall?
+
+    /// Resolves `{ duration }` once the clip is really playing; rejects if it
+    /// can't be loaded. A later play or stop cuts an earlier one off (it
+    /// rejects with "stopped"), and the end of a clip is a `clipEnded` event
+    /// carrying the turn it belonged to.
+    @objc func playClip(_ call: CAPPluginCall) {
+        guard let raw = call.getString("url"), let url = URL(string: raw),
+              url.scheme == "https" else {
+            call.reject("That isn't a clip.")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { call.reject("Couldn't play it."); return }
+            self.endClip()
+            self.clipTurn += 1
+            let turn = self.clipTurn
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
+                try session.setActive(true)
+            } catch {
+                call.reject("Couldn't play it.")
+                return
+            }
+            let item = AVPlayerItem(url: url)
+            let player = AVPlayer(playerItem: item)
+            player.allowsExternalPlayback = false
+            self.clip = player
+            self.clipPending = call
+            self.clipWatch = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
+                DispatchQueue.main.async {
+                    guard let self = self, turn == self.clipTurn, let waiting = self.clipPending else { return }
+                    if p.timeControlStatus == .playing {
+                        self.clipPending = nil
+                        let d = item.duration.seconds
+                        waiting.resolve(["duration": d.isFinite ? d : 30, "turn": turn])
+                    } else if item.status == .failed {
+                        self.endClip()
+                    }
+                }
+            }
+            self.clipEnd = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
+                guard let self = self, turn == self.clipTurn else { return }
+                self.endClip()
+                self.notifyListeners("clipEnded", data: ["turn": turn])
+            }
+            // A clip that never starts (no network) is let go of after 12s.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+                guard let self = self, turn == self.clipTurn, self.clipPending != nil else { return }
+                self.endClip()
+            }
+            player.play()
+        }
+    }
+
+    @objc func stopClip(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.clipTurn += 1
+            self.endClip()
+            call.resolve()
+        }
+    }
+
+    private func endClip() {
+        if let waiting = clipPending {
+            clipPending = nil
+            waiting.reject("Couldn't play it.", "STOPPED")
+        }
+        clipWatch?.invalidate()
+        clipWatch = nil
+        if let end = clipEnd { NotificationCenter.default.removeObserver(end) }
+        clipEnd = nil
+        guard let player = clip else { return }
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        clip = nil
+        // Hands the speaker back, so music it ducked comes back up.
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
 
     /// The top of a web page, read so a link in a post can draw its title and
     /// picture (`linkMeta` in app.js parses it). It has to be native: a page in

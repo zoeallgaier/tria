@@ -14522,7 +14522,23 @@
      clip host answers CORS with `*`. Older WebKit keeps the element: its Web
      Audio would be silenced by the switch. `hushed`: a Moment's song paused
      by hand keeps every Moment quiet until the app is opened again. */
-  const preview = { audio: null, btn: null, turn: 0, raf: 0, src: null, hushed: false };
+  const preview = { audio: null, btn: null, turn: 0, raf: 0, src: null, hushed: false, native: false };
+  /* IN THE APP THE CLIP PLAYS NATIVELY (Zoe, 2026-11-06: "get rid of dynamic
+     island for music and ios player"): Web Audio under the 'playback' session
+     still made Tria the Now Playing app, since iOS gives that to any app
+     playing non-mixable audio. TriaSettings.playClip plays it mixable, which
+     iOS never puts in the Dynamic Island or on the lock screen, and still
+     through the ringer switch. Off for good once a binary says it hasn't the
+     method, so an older build keeps the Web Audio path below. */
+  let nativeClips = nativeShell();
+  const clipCall = (method, args) => window.Capacitor.nativePromise('TriaSettings', method, args || {});
+  if (nativeClips) {
+    try {
+      window.Capacitor.nativeCallback('TriaSettings', 'addListener', { eventName: 'clipEnded' }, () => {
+        if (preview.native) stopPreview();
+      });
+    } catch { nativeClips = false; }
+  }
   const webAudio = !!(navigator.audioSession && (window.AudioContext || window.webkitAudioContext));
   let audioCtx = null;
   const ctxNow = () => {
@@ -14552,6 +14568,7 @@
     cancelAnimationFrame(preview.raf);
     if (preview.audio) preview.audio.pause();
     if (preview.src) { try { preview.src.stop(); } catch { /* never started */ } preview.src = null; }
+    if (preview.native) { preview.native = false; clipCall('stopClip').catch(() => {}); }
     if (preview.btn) { preview.btn.classList.remove('is-loading'); paintPlay(preview.btn, false, 0); }
     preview.btn = null;
     setAudioSession('auto');
@@ -14575,10 +14592,31 @@
       if (!auto) { btn.hidden = true; toast('No preview for this one.'); }
       return;
     }
-    setAudioSession('playback');
     // Where the clip is, 0 to 1, whichever way it plays.
     let at;
-    if (webAudio) {
+    if (nativeClips) {
+      preview.native = true;
+      let res = null;
+      try { res = await clipCall('playClip', { url }); } catch (err) {
+        if (err && err.code === 'UNIMPLEMENTED') nativeClips = false;
+      }
+      if (turn !== preview.turn) return;
+      if (!res && nativeClips) {
+        // Not loaded: the disc goes back to waiting, as on every other path.
+        preview.native = false;
+        btn.classList.remove('is-loading');
+        paintPlay(btn, false, 0);
+        preview.btn = null;
+        return;
+      }
+      if (res) {
+        const t0 = performance.now();
+        const d = (Number(res.duration) || 30) * 1000;
+        at = () => (performance.now() - t0) / d;
+      } else preview.native = false;
+    }
+    if (!at) setAudioSession('playback');
+    if (at) { /* playing natively */ } else if (webAudio) {
       const buf = await clipBuffer(url).catch(() => null);
       if (turn !== preview.turn) return;
       const ctx = ctxNow();

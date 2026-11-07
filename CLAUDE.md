@@ -40,8 +40,14 @@ the same day: autoplay as AMBIENT (the switch silenced it) with a native
 volume-button watcher to turn it up (`SystemVolumeDidChange`, undocumented).
 The play mark is `ICONS.playSoft`, round at every corner (Zoe: "rounded play
 icon").
-**A clip plays through Web Audio, never an Audio element, so iOS shows no Now
-Playing player** (Zoe: "I dont wanna see nor need the ios homescreen player";
+**In the app a clip plays NATIVELY, mixable, so iOS shows no Now Playing
+player and no Dynamic Island** (Zoe, 2026-11-06: "get rid of dynamic island for
+music and ios player"; `TriaSettings.playClip`/`stopClip`, an AVPlayer in
+`.playback` with `.mixWithOthers` and `.duckOthers`, a `clipEnded` event).
+Web Audio was not enough: iOS makes any app playing NON-MIXABLE audio the Now
+Playing app, and WebKit's `'playback'` session is non-mixable; its one mixable
+type, `'ambient'`, obeys the ringer switch. The web keeps the paths below.
+**Off the app, a clip plays through Web Audio, never an Audio element** (Zoe: "I dont wanna see nor need the ios homescreen player";
 `clipBuffer`, `audioCtx`, Apple's clip host answers CORS `*`; before 16.4 the
 element stays, since there Web Audio obeys the switch). **Pausing a Moment's
 song hushes them all** (`preview.hushed`): none starts by itself until the app
@@ -325,7 +331,7 @@ your own heart opens Likes. Every frame has a ••• (yours edits, anyone els
 reports and blocks). **The chip on the bar is led by what the frame showed**
 (`setChatSong(post, pic)`, Zoe 2026-11-06: "text moments get the correct reply
 preview (no album art)"): a song its sleeve in the round crop, a photo the very
-photo answered (a carousel's, not its first) in a 12px soft square, a clip its
+photo answered (a carousel's, not its first) in the sleeve's round crop (Zoe: "the squircle dont fit"; a 12px soft square until 2026-11-06), a clip its
 poster with a small play mark, words nothing at all (`.is-words`, padded as a
 message reply). Words take the
 vertical pan only when they really scroll (`.is-long`, a ResizeObserver), so the
