@@ -270,16 +270,22 @@ the next person's page comes in beside it one to one, going on 28% of the
 width or a flick (`slideIn`, `mvGlide`), and a tap past a person's last frame
 slides the same way. Past the last person a swipe on closes. **A pull up
 replies** (past `REPLY_AT`, 70px, the frame rising against a stiffening spring,
-the Reply disc washing and a LIGHT haptic arming it, Zoe 2026-11-05).
+the reply words inking, their chevron rising and a LIGHT haptic arming it, Zoe
+2026-11-05). **Reply is the foot** (Zoe, 2026-11-06: "replies at the bottom of
+moments, cleanly ... more clear about the swipe up gesture"): `.mv-foot`, a
+soft up chevron over "Reply to Ana", centred, no pill (Zoe: "remove the
+pill"); a tap or a pull up (the words included, a drag never also clicks them)
+opens the DM. Hidden with no Reply (`.no-reply`).
 **Vertical paging between people was weighed and passed over** (Zoe floated
 Reels' grammar, "not married to vertical scroll"): one axis would carry three
 jobs (next person, close, reply), and a swipe through faces is the infinite
 feed Tria isn't.
 **The reactions are a rail on the right** (Zoe: "stack them like tiktok/reels
-style"), `.mv-rail`: the heart, Reply, the •••, glass discs at THE BUTTON's
+style"), `.mv-rail`: the heart, the song's play, the •••, glass discs at THE BUTTON's
 quiet weight (a photo may be behind them), no counts, at one height on every
-page. Words are set clear of its lane (`--mv-lane`); a tall photo runs under it.
-**A stack of one has no indicator; two or more get soft dots at the foot**, the
+page, over the reply foot. Words are set clear of its lane (`--mv-lane`); a tall photo runs under it.
+**A stack of one has no indicator; two or more get soft dots under the face**
+(2026-11-06, left under the avatar; they were at the foot until Reply took it), the
 current one a pill (`.mv-dots`, Zoe: "no need for the gross instagram line
 indicator if its only one moment"). The hairline segments are gone.
 **A reply is a message, not a comment** (Zoe, 2026-11-05: "adding a comment

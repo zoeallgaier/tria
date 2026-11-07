@@ -5886,14 +5886,15 @@ button.poll-option:disabled { cursor: default; }
 :is(.mv--wash, .mv--tria)::before { opacity: 1; }
 
 /* A hold hides the chrome, so the picture stands alone. */
-.mv-head, .mv-rail, .mv-dots { transition: opacity 0.2s var(--ease-soft); }
-.mv.is-held :is(.mv-head, .mv-rail, .mv-dots) { opacity: 0; }
+.mv-head, .mv-rail, .mv-dots, .mv-foot { transition: opacity 0.2s var(--ease-soft); }
+.mv.is-held :is(.mv-head, .mv-rail, .mv-dots, .mv-foot) { opacity: 0; }
+/* A little air over the face, the name and the x (Zoe, 2026-11-06). */
 .mv-head {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 10px var(--mv-side) 0;
+  padding: 22px var(--mv-side) 0;
 }
 .mv-who {
   flex: 1;
@@ -6075,9 +6076,9 @@ button.poll-option:disabled { cursor: default; }
   position: absolute;
   z-index: 2;
   right: var(--mv-side);
-  /* The same height whether or not the page has dots, so it never jumps
-     as one person's page slides in for another's. */
-  bottom: calc(env(safe-area-inset-bottom) + 38px);
+  /* Over the reply foot, at the same height whether or not the page has a
+     Reply, so it never jumps as one person's page slides in for another's. */
+  bottom: calc(env(safe-area-inset-bottom) + var(--mv-foot) + 14px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -6101,24 +6102,71 @@ button.poll-option:disabled { cursor: default; }
 .mv-rail button:active svg { transform: scale(0.88); }
 .mv-like { --burst: var(--heart); }
 .mv-like.liked svg { fill: var(--heart); stroke: var(--heart); }
-/* Armed by a pull up: the disc takes the wash and its arrow leans in. */
-.mv-reply.is-on svg { transform: scale(1.14); }
+
+/* THE REPLY FOOT (Zoe, 2026-11-06: "put replies at the bottom of moments,
+   cleanly ... more clear about the swipe up gesture"): a soft chevron over
+   "Reply to Ana", centred, no pill (Zoe). A tap opens the DM, a pull up from
+   anywhere does too; armed, the words take the ink and the chevron rises. Hidden on your own frame or someone you
+   can't message, and the stage takes the room. */
+.mv { --mv-foot: 66px; }
+.mv-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 0 var(--mv-side) 0;
+}
+.mv-foot[hidden] { display: none; }
+.mv-page.no-reply .mv-stage { padding-bottom: 26px; }
+.mv-swipe {
+  display: grid;
+  color: var(--muted);
+  transition: transform 0.3s var(--spring), color 0.2s var(--ease-soft);
+}
+.mv-swipe svg { width: 26px; height: 18px; stroke-width: 2; overflow: visible; }
+.mv-foot.is-armed .mv-swipe { transform: translateY(-4px); color: var(--text); }
+.mv-reply {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 18px 14px;
+  margin-top: -6px;
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s var(--ease-soft);
+}
+.mv-reply:active, .mv-reply.is-on { color: var(--text); }
+.mv-reply-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* WHERE YOU ARE IN A STACK, soft and out of the way (Zoe: "no need for the
-   gross instagram line indicator if its only one moment"): a row of dots at
-   the foot, the current one a pill, drawn only for a stack of two or more.
-   A position, not a tally, as a carousel's 1/4 is. */
+   gross instagram line indicator if its only one moment"): a row of dots
+   under the face (2026-11-06, it was the foot until Reply took it), the
+   current one a pill, drawn only for a stack of two or more. A position, not
+   a tally, as a carousel's 1/4 is. The stage gives back its top padding so
+   the frame keeps its height. */
 .mv-dots {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   gap: 5px;
-  height: 28px;
-  padding-bottom: 6px;
+  height: 6px;
+  margin: 10px 0 0;
+  padding: 0 calc(var(--mv-side) + 2px);
   pointer-events: none;
 }
-.mv-page:not(.has-dots) .mv-stage { padding-bottom: 26px; }
+.mv-dots + .mv-stage { padding-top: 8px; }
 .mv-dot {
+  flex: none;
   width: 6px;
   height: 6px;
   border-radius: 3px;

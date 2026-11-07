@@ -494,6 +494,7 @@
              '<rect x="13" y="13" width="7" height="7" rx="2.6"/>',
     list:    '<path d="M5 7.5h14"/><path d="M5 12h14"/><path d="M5 16.5h14"/>',
     chevDown: '<path d="m7 10 5 5 5-5"/>',
+    chevUp: '<path d="m7 14 5-5 5 5"/>',
   };
   // Maps link for an activity's location. Apple devices route maps.apple.com
   // to the default maps app (Apple Maps, or Google if set); everything else
@@ -8021,6 +8022,10 @@
       }
       if (!pg.s.mine) markMomentSeen(p);
       // A song's frame plays its preview by itself, ringer switch or not;
+        // Where you are in the stack, under the face (Zoe, 2026-11-06).
+        (frames.length > 1
+          ? `<div class="mv-dots" aria-hidden="true">${frames.map(() => '<span class="mv-dot"></span>').join('')}</div>`
+          : '') +
       // any other frame stops it.
       const play = pg.el.querySelector('.mv-play');
       if (!play.hidden) {
@@ -8037,8 +8042,9 @@
       pg.el.querySelector('.mv-when').textContent = momentWhen(p);
       pg.el.querySelectorAll('.mv-dot').forEach((d, i) => d.classList.toggle('is-on', i === pg.fi));
       const rep = pg.el.querySelector('.mv-reply');
-      rep.hidden = p.author === me || !canMessage(p.author);
-      rep.setAttribute('aria-label', `Reply to ${displayNameOf(p.author)}`);
+      rep.parentElement.hidden = p.author === me || !canMessage(p.author);
+      pg.el.classList.toggle('no-reply', rep.parentElement.hidden);
+      rep.querySelector('.mv-reply-text').textContent = `Reply to ${displayNameOf(p.author)}`;
       const play = pg.el.querySelector('.mv-play');
       play.hidden = !canPreview(p.song);
       if (!play.hidden) setPlaySong(play, p.song);
@@ -8079,12 +8085,15 @@
           // A song's preview, under the heart (Zoe, 2026-11-06), on a song's
           // frame only; it starts by itself where it can (live, below).
           songPlayHtml({ title: '' }, 'mv-play pill-quiet').replace('<button ', '<button hidden ') +
-          `<button type="button" class="mv-reply pill-quiet">${svgIcon('reply')}</button>` +
           `<button type="button" class="mv-more pill-quiet" aria-label="More">${svgIcon('dots')}</button>` +
         `</div>` +
-        (frames.length > 1
-          ? `<div class="mv-dots" aria-hidden="true">${frames.map(() => '<span class="mv-dot"></span>').join('')}</div>`
-          : '');
+        // REPLY IS THE FOOT (Zoe, 2026-11-06: "replies at the bottom ... more
+        // clear about the swipe up gesture"): a chevron over the words, centred,
+        // no pill (Zoe). A tap or a pull up from anywhere, the words included.
+        `<div class="mv-foot">` +
+          `<span class="mv-swipe" aria-hidden="true">${svgIcon('chevUp')}</span>` +
+          `<button type="button" class="mv-reply"><span class="mv-reply-text"></span></button>` +
+        `</div>`;
       card.appendChild(el);
       const pg = { el, si, s, frames, fi, name, stage: el.querySelector('.mv-stage'), washedBy: '', tint: 0 };
       showFrame(pg);
@@ -8131,6 +8140,7 @@
       return side.pg;
     };
 
+      if (Date.now() - dragEnded < 400) return;
     const like = (x, y) => {
       const p = cur().post;
       if (own()) return;
@@ -8159,6 +8169,7 @@
       liking = false;
       if (!res || !res.ok) toast('Couldn’t save that like, try again.');
       if (cur().post === p) paintLike();
+      page.el.querySelector('.mv-foot').classList.toggle('is-armed', armed);
     };
     // The DM, the frame on its bar. A pull up has already buzzed as it armed.
     const reply = (pulled) => {
@@ -8187,6 +8198,7 @@
       if (b.classList.contains('mv-close')) close();
       // A tag is a search for its word, as it is on Discover; the navigation
       // closes the viewer (route()).
+    let dragEnded = 0;
       else if (b.classList.contains('tag') && b.dataset.tag) { discoverQuery = b.dataset.tag; go('#/discover'); }
       else if (b.classList.contains('mv-more')) openFrameMenu();
       else if (b.classList.contains('mv-reply')) reply(false);
@@ -8243,14 +8255,16 @@
     let lastTap = 0;
     let tapTimer = 0;
     card.addEventListener('pointerdown', (e) => {
-      if (e.button > 0 || busy || e.target.closest(KEEP)) return;
+      // The reply bar keeps its tap but also starts a pull up, its whole point.
+      const onReply = !!e.target.closest('.mv-reply');
+      if (e.button > 0 || busy || (e.target.closest(KEEP) && !onReply)) return;
       if (press) clearTimeout(press.timer);
       press = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, vx: 0, vy: 0,
         lx: e.clientX, ly: e.clientY, lt: e.timeStamp,
-        moved: false, held: false, axis: '', armed: false, onStage: !!e.target.closest('.mv-stage') };
+        moved: false, held: false, axis: '', armed: false, onReply, onStage: !!e.target.closest('.mv-stage') };
       const mine = press;
       press.timer = setTimeout(() => {
-        if (press !== mine || mine.moved) return;
+        if (press !== mine || mine.moved || mine.onReply) return;
         mine.held = true;
         if (own()) { hapticTap('LIGHT'); openFrameMenu(); }
         else root.classList.add('is-held');
@@ -8264,6 +8278,9 @@
       const dt = Math.max(1, e.timeStamp - press.lt);
       press.vx = press.vx * 0.4 + ((e.clientX - press.lx) / dt) * 0.6;
       press.vy = press.vy * 0.4 + ((e.clientY - press.ly) / dt) * 0.6;
+      page.el.querySelector('.mv-foot').classList.remove('is-armed');
+      // A drag that began on a button never also clicks it.
+      if (was.moved) dragEnded = Date.now();
       press.lx = e.clientX; press.ly = e.clientY; press.lt = e.timeStamp;
       if (!press.moved && Math.hypot(press.dx, press.dy) < 10) return;
       if (!press.moved) {
