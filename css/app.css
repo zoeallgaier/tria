@@ -5056,12 +5056,18 @@ body.gate main { padding: 0; }
 .rich-note strong, .rich-note b { font-weight: 700; }
 .rich-note em, .rich-note i { font-style: italic; }
 
+/* The styles span the box (Zoe, 2026-11-07: "even and centered across the
+   composer instead of squished left"): every button takes an equal share of
+   the width, so the marks stand evenly apart, the rules between the groups
+   taking only their own hair. */
 .rich-toolbar {
   display: flex;
   align-items: center;
   gap: 0.1rem;
   padding: 0.1rem 0.35rem;
 }
+.rich-toolbar { justify-content: center; }
+.rich-toolbar .rt-btn { flex: 1 1 0; max-width: 4rem; }
 .rt-btn {
   -webkit-appearance: none;
   appearance: none;
