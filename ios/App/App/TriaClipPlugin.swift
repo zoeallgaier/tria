@@ -95,7 +95,7 @@ public class TriaClipPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func record(_ call: CAPPluginCall) {
-        let maxSec = call.getDouble("max") ?? 15
+        let maxSec = call.getDouble("max") ?? 30
         DispatchQueue.main.async { [weak self] in
             guard let self, let root = self.bridge?.viewController else {
                 call.resolve(["cancelled": true])

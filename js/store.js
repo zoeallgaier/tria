@@ -1914,7 +1914,7 @@ const Store = (() => {
   // is why photos/videos no longer bloat the database — the column just stores
   // the URL. `contentType`/`ext` come from the caller (the recorder's mimeType on
   // web, the native file's type on device) — never assumed to be JPEG.
-  async function uploadMedia(source, kind, { contentType, ext, dims, clip, onProgress } = {}) {
+  async function uploadMedia(source, kind, { contentType, ext, dims, clip, onProgress, small } = {}) {
     const me = currentUser();
     if (!me) throw new Error('Not signed in.');
     let blob, type = contentType, extension = ext;
@@ -1937,7 +1937,16 @@ const Store = (() => {
     // The feed/lightbox loop just this window (clipWindowFromUrl); no DB column.
     const win = clip && clip.end > clip.start
       ? `-t${Math.round(clip.start * 1000)}-${Math.round(clip.end * 1000)}` : '';
-    const path = `${me.id}/${kind}-${Date.now()}${win}${dim}.${extension}`;
+    // `-hd` says a small copy sits beside it at `.sm.jpg` (see uploadImage and
+    // app.js's sizedSrc). It goes up first, so a reader never meets the mark
+    // without its copy.
+    const path = `${me.id}/${kind}-${Date.now()}${small ? '-hd' : ''}${win}${dim}.${extension}`;
+    if (small) {
+      const sb2 = await (await fetch(small)).blob();
+      const { error: smallErr } = await sb.storage.from('media')
+        .upload(path.replace(/\.jpg$/, '.sm.jpg'), sb2, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
+      if (smallErr) throw smallErr;
+    }
     // Real byte-level progress (videos are the big upload) needs XHR — supabase-js's
     // .upload() runs on fetch with no progress events. We POST straight to the same
     // Storage REST endpoint it would hit, streaming xhr.upload.onprogress to the
@@ -1994,7 +2003,32 @@ const Store = (() => {
     const m = /^data:([^;]+);/.exec(dataURI);
     const type = m ? m[1] : 'image/jpeg';
     const ext = type === 'image/gif' ? 'gif' : 'jpg';
-    return uploadMedia(dataURI, kind, { contentType: type, ext, dims });
+    return smallCopy(dataURI, type, dims).then(small =>
+      uploadMedia(dataURI, kind, { contentType: type, ext, dims, small }));
+  }
+
+  /* Every picture is served as its own file (2026-11-06, Zoe: "higher res images
+     WITHOUT expensive load times"); Supabase's image renderer is gone, it was
+     billed per picture and ran out of its quota. So a photo bigger than a
+     thumbnail uploads TWICE: the original, up to 2048px, and a SMALL_EDGE copy
+     for every place it is drawn small (a grid tile, an update's preview, a
+     reply chip). Only a JPEG with its size known; a face is already small. */
+  const SMALL_EDGE = 640;
+  async function smallCopy(dataURI, type, dims) {
+    if (type !== 'image/jpeg' || !dims || Math.max(dims.w, dims.h) <= SMALL_EDGE * 1.25) return null;
+    try {
+      const img = new Image();
+      img.src = dataURI;
+      await img.decode();
+      const k = SMALL_EDGE / Math.max(img.naturalWidth, img.naturalHeight);
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.naturalWidth * k));
+      cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+      const g = cv.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, 0, 0, cv.width, cv.height);
+      return cv.toDataURL('image/jpeg', 0.8);
+    } catch { return null; }
   }
 
   // Best-effort removal of files a refused post already uploaded, so a failed
@@ -4439,20 +4473,10 @@ function isVideoUrl(url) {
   return /\.(mp4|webm|mov)$/i.test(url || '');
 }
 
-// A right-sized rendition of a photo/poster already sitting in our own 'media'
-// bucket, via Supabase Storage's on-the-fly image transform — same host, `object`
-// swapped for `render/image`, a width/height/quality query added. A thumbnail
-// slot (a pin's 88px square, say) has no business pulling down the same
-// multi-hundred-KB upload a full post view does just to paint a few thousand
-// pixels; this asks Storage's CDN for a small JPEG instead, pre-cropped to the
-// square the same way `background-size: cover` already treats it. Anything not
-// hosted at our own object endpoint (hotlinked song art) is handed back
-// untouched — the transform only knows about objects already in Storage.
-function thumbUrl(url, cssPx) {
-  const m = /^(.*\/storage\/v1\/)object\/public\/(.+)$/.exec(url || '');
-  if (!m) return url || '';
-  const px = Math.round(cssPx * (window.devicePixelRatio || 2));
-  return `${m[1]}render/image/public/${m[2]}?width=${px}&height=${px}&resize=cover&quality=70`;
+// A square thumbnail's picture: the small copy when the upload has one (see
+// smallCopy), else the original. No renderer: it was billed per picture.
+function thumbUrl(url) {
+  return /-hd[^/]*\.jpg$/.test(url || '') ? url.replace(/\.jpg$/, '.sm.jpg') : (url || '');
 }
 
 // A trimmed clip stamps its play-window into the filename (…-t<startMs>-<endMs>…),

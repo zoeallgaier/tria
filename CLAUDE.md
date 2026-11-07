@@ -21,9 +21,19 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## Pictures are their own files, no renderer (2026-11-06)
+
+**Every picture loads its original; Supabase's image renderer is gone** (Zoe:
+"higher res images WITHOUT expensive load times"; it billed per picture and hit
+685% of the Pro quota, and with the spend cap on it stops answering). A photo
+now uploads at up to 2048px (JPEG 0.86) plus a 640px copy beside it
+(`.sm.jpg`, marked by `-hd` in the name, `smallCopy` in store.js), and
+`sizedSrc` takes the copy wherever the drawn width fits in it. Older uploads
+and faces are their original. Don't bring the renderer back.
+
 ## The clip editor (2026-11-06)
 
-**A clip post is up to 15 seconds, stitched from up to ten clips** (Zoe:
+**A clip post is up to 30 seconds, stitched from up to ten clips** (15 until the same evening; Zoe:
 "vine style editing meets modern reels edits UI ... imovie style bars",
 research in the commit). `clipEditor` in app.js replaces the old trim reel:
 the preview IS the post (the first clip's shape held to the feed's 4:5, a
@@ -34,8 +44,8 @@ in the reader's `--pill-band`, a dashed + while there is room), and under that
 window in the band with grips in `--pill-ink`, 0.5s least). Tap a bar to pick
 and jump, drag along the bars to scrub, hold one (320ms) to lift and reorder.
 Split (at the playhead) and Remove sit by the length chip; the x clears it all
-(confirming with two or more). **Adding shares the 15s**: a lone first clip
-takes up to 15, else each new one takes an equal share and the others give
+(confirming with two or more). **Adding shares the 30s**: a lone first clip
+takes up to 30, else each new one takes an equal share and the others give
 way pro rata (`makeRoom`), so the + never hides. **In the app the post is a
 real cut**: `TriaClipPlugin.swift` (`TriaClip.inspect`, `compose`, `record`,
 `clear`) stitches with AVFoundation to H.264 .mp4, each clip covering a canvas

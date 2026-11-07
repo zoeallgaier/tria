@@ -2373,52 +2373,30 @@
      main-thread decode time it pays, and it was the stutter under the reaction
      fan and under a fast scroll.
 
-     So a picture is asked for at the size it is DRAWN, from Supabase's image
-     renderer (storage/v1/render/image), which answers WebP to WebKit and caches
-     for a year. `sizedSrc(url, cssPx)` rounds the drawn width at the screen's
-     density UP to one of a few fixed widths, so a face in a byline and a face in
-     a comment share one download. Only Supabase objects are rewritten, and never
-     a GIF (the renderer would flatten it) or a video. The lightbox, the share
-     card and Edit profile's crop keep the originals: those are the places a
-     picture is looked AT rather than past.
-
-     THE PLAN'S CAP IS THE RISK, NOT THE BILL. The renderer is billed per
-     distinct source image a month past an included allowance, and with the spend
-     cap on, going past it restricts the renderer instead of charging. So a
-     refused render is survivable by design: the first image that fails to load
-     from it swaps itself for its original, and `resizeOff` sends every later
-     picture this session straight to its original too. Tria still looks the
-     same, it just goes back to the old weight until the next cycle. */
-  const STORE_OBJECT = '/storage/v1/object/public/';
-  const STORE_RENDER = '/storage/v1/render/image/public/';
-  const SIZE_STEPS = [128, 256, 540, 720, 1080];
-  let resizeOff = false;
+     So a picture is asked for at the size it is DRAWN, as files, never a
+     renderer (2026-11-06: Supabase's renderer bills per picture and Tria ran
+     to 685% of its quota, and with the spend cap on it stops answering). A
+     photo uploaded since then is the original (up to 2048px) with a 640px copy
+     beside it, `.sm.jpg`, marked by `-hd` in its name (Store's smallCopy).
+     `sizedSrc(url, cssPx)` takes the copy wherever the drawn width at the
+     screen's density fits in it, and the original everywhere else. Older
+     uploads (1400 to 1600px) and faces (512px) are simply their original. */
+  const SMALL_EDGE = 640;
   function sizedSrc(url, cssPx) {
     // A face this device just uploaded draws its own crop, already decoded,
     // rather than fetching itself back (Store.localFace).
     const local = Store.localFace(url);
     if (local) return local;
-    if (!url || !cssPx || resizeOff || !url.includes(STORE_OBJECT)) return url || '';
-    if (/\.(gif|mp4|mov|m4v|webm)(?=$|[?#])/i.test(url)) return url;
-    const want = Math.ceil(cssPx * Math.min(3, window.devicePixelRatio || 2));
-    const w = SIZE_STEPS.find(step => step >= want) || SIZE_STEPS[SIZE_STEPS.length - 1];
-    // `resize=contain` is not optional. Given a width alone the renderer keeps
-    // the ORIGINAL HEIGHT and crops to the width (its default is cover), so a
-    // 512px avatar at width=128 came back a 128x512 strip of the top of a
-    // head, and the photo accent sampled from it turned the whole app red.
-    // Contain scales to the width and keeps the shape, and never enlarges.
-    return url.replace(STORE_OBJECT, STORE_RENDER) + (url.includes('?') ? '&' : '?') +
-      `width=${w}&quality=75&resize=contain`;
+    if (!url || !cssPx || !/-hd[^/]*\.jpg$/.test(url)) return url || '';
+    return cssPx * Math.min(3, window.devicePixelRatio || 2) <= SMALL_EDGE
+      ? url.replace(/\.jpg$/, '.sm.jpg') : url;
   }
   // The original behind a sized picture (and any other URL, unchanged).
-  const fullSrc = (url) => url && url.includes(STORE_RENDER)
-    ? url.replace(STORE_RENDER, STORE_OBJECT).replace(/[?&]width=\d+&quality=\d+&resize=contain$/, '')
-    : url;
-  // The fallback. Capture phase, because an image's error doesn't bubble.
+  const fullSrc = (url) => url && /-hd[^/]*\.sm\.jpg$/.test(url) ? url.replace(/\.sm\.jpg$/, '.jpg') : url;
+  // Should a small copy ever be missing, the original stands in.
   document.addEventListener('error', (e) => {
     const im = e.target;
-    if (!(im instanceof HTMLImageElement) || !im.src.includes(STORE_RENDER)) return;
-    resizeOff = true;
+    if (!(im instanceof HTMLImageElement) || !/\.sm\.jpg$/.test(im.src)) return;
     im.src = fullSrc(im.src);
   }, true);
 
@@ -5626,7 +5604,7 @@
         });
         return { src, dims: { w: iw, h: ih } };
       }
-      const scale = Math.min(1, 1600 / Math.max(iw, ih));
+      const scale = Math.min(1, 2048 / Math.max(iw, ih));
       const w = Math.max(1, Math.round(iw * scale));
       const h = Math.max(1, Math.round(ih * scale));
       const canvas = document.createElement('canvas');
@@ -15622,9 +15600,8 @@
     // the note's first lines; a link nobody wrote anything over says what its
     // page is called, then what the page says about itself.
     const said = noteSaid(p) || (p.poll && p.poll.q) || '';
-    // The widest square this draws, a column at the grid's cap (thumbUrl
-    // takes the device's pixel ratio on top).
-    const pic = still ? picEl(thumbUrl(still, 220), { tint: p.tint })
+    // A square tile: the small copy when the upload has one.
+    const pic = still ? picEl(thumbUrl(still), { tint: p.tint })
       : link.image ? picEl(link.image, { cls: ' pin-pic--link' + (link.yt ? ' pin-pic--yt' : '') }) : '';
     // A picture with nothing said over it is only the picture; words always
     // have something to set, the type's name at the very least.
@@ -20618,7 +20595,7 @@
           `<div class="cc-order" id="c-stills" role="group" aria-label="Order of photos" hidden></div>` +
           `<p class="cc-hint" id="c-cc-hint" hidden>Drag a photo to change the order.</p>` +
           // THE CLIP EDITOR (clipEditor): the preview, which is the post; the
-          // post's bar, every clip as long as it runs out of 15 seconds; the
+          // post's bar, every clip as long as it runs out of 30 seconds; the
           // trimmer for the clip picked; its length and two acts.
           `<div class="ed" id="c-ed" hidden>` +
             `<div class="ed-stage" id="c-ed-stage">` +
@@ -21940,7 +21917,7 @@
   // photo previews at its native aspect (no crop); a picked video drops into the
   // clip editor (clipEditor), where clips are trimmed and, in the app, laid end
   // to end. The cut happens once, on Share (see submitComposer).
-  const MAX_CLIP_SEC = 15;     // the longest a clip post runs, every clip in it together (Zoe, 2026-11-06; it was 10)
+  const MAX_CLIP_SEC = 30;     // the longest a clip post runs, every clip in it together (Zoe, 2026-11-06; 10, then 15, then 30)
   const MAX_CLIPS = 10;        // the most clips one post stitches
   const MAX_SOURCE_SEC = 180;  // the longest source taken (Tria trims it down)
   const TRIM_MIN_SEC = 0.5;    // the shortest a clip can be trimmed to
@@ -22605,7 +22582,7 @@
      the whole post as a Frame loops in the feed, with the feed's own sound
      disc and progress line. A tap pauses it; the x takes the clip out.
 
-     THE POST is one bar for the 15 seconds a clip post can run (iMovie's
+     THE POST is one bar for the 30 seconds a clip post can run (iMovie's
      bars, Vine's cap): each clip a strip of its own frames, as wide as it
      runs, and the room left after them with a + in it. A tap picks a clip, a
      drag along the bar scrubs the post and leaves it there (that is how you
@@ -22902,7 +22879,7 @@
       const nat = native();
       splitBtn.hidden = !nat;
       removeBtn.hidden = clips.length < 2;
-      hintEl.textContent = !nat ? 'Drag the ends to trim, up to 15 seconds.'
+      hintEl.textContent = !nat ? 'Drag the ends to trim, up to 30 seconds.'
         : clips.length > 1 ? 'Tap a clip to trim it. Hold one to move it.'
         : 'Drag the ends to trim. Add clips with the +.';
     }
@@ -22966,7 +22943,7 @@
 
     /* NEW CLIPS SHARE THE POST'S 15 SECONDS. A first clip alone takes all of
        them (its own length, if shorter). After that each new clip comes in at
-       an even share, the 15 seconds over how many clips the post will hold
+       an even share, the 30 seconds over how many clips the post will hold
        (or its own length, if shorter), and when the post hasn't that much
        room the clips already in it that run LONGER than the share give it
        up, from their ends, in proportion. A clip already at or under the
@@ -23090,7 +23067,7 @@
         c.end = c.start + L;
         seek(vids[on], c.start);
       }
-      // The post's 15 seconds, felt once as the end meets them.
+      // The post's 30 seconds, felt once as the end meets them.
       if (want != null && most < c.dur - 0.01) {
         if (want > most + 0.02 && !drag.capped) { drag.capped = true; hapticTap('LIGHT'); }
         else if (want < most - 0.3) drag.capped = false;
@@ -23533,7 +23510,7 @@
   }
 
   // Short-clip duration label: "8.2s" reads better than "0:08" for a post of
-  // 15 seconds at most.
+  // 30 seconds at most.
   function fmtClip(sec) {
     const s = Math.max(0, sec || 0);
     return s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
@@ -23552,7 +23529,7 @@
     const isGif = /^data:image\/gif;/i.test(src);
     const api = {
       dims: null,   // {w, h} of the last export — stamped into the upload filename
-      export(maxEdge = 1400) {
+      export(maxEdge = 2048) {
         const iw = imgEl.naturalWidth  || 1;
         const ih = imgEl.naturalHeight || 1;
         if (isGif) {
@@ -23567,7 +23544,7 @@
         canvas.width = w;
         canvas.height = h;
         canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-        return canvas.toDataURL('image/jpeg', 0.82);
+        return canvas.toDataURL('image/jpeg', 0.86);
       },
       // The photo's average colour as one #rrggbb string (~7 bytes). Stored on the
       // post row (not uploaded) so the feed paints the reserved box in the photo's
