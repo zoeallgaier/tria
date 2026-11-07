@@ -12,6 +12,18 @@ button, a, label, summary, input, textarea, select, [role="button"], [tabindex] 
   -webkit-tap-highlight-color: transparent;
 }
 
+/* NO PAGE ZOOM (Zoe, 2026-11-07: a quick double tap in the composer, the Aa
+   button above all, zoomed the page in). A double tap that lands anywhere
+   not a control is WebKit's smart zoom, and the Aa's first tap opens the
+   styles panel, so the second lands on whatever slid under the finger. In
+   the app the viewport meta's user-scalable=no takes every zoom away
+   (WKWebView honours it: pinch, double tap, a small field's focus zoom);
+   Safari ignores that for pinch, so this takes the double tap away there.
+   Zero specificity, so every pan-y and none below still wins, and
+   triaSwipeAt already reads manipulation as auto. The lightbox and the crop
+   pinch in JS, never the page's zoom. */
+:where(html, body, button, a, label, summary, [role="button"]) { touch-action: manipulation; }
+
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;   /* no grey flash on tap — app feel */
