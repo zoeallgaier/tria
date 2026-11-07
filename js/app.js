@@ -503,6 +503,18 @@
              '<rect x="4" y="13" width="7" height="7" rx="2.6"/>' +
              '<rect x="13" y="13" width="7" height="7" rx="2.6"/>',
     list:    '<path d="M5 7.5h14"/><path d="M5 12h14"/><path d="M5 16.5h14"/>',
+    // The note toolbar's bullet list: three dots, each leading a line.
+    bullets: '<circle cx="5.5" cy="7" r="1.3" fill="currentColor" stroke="none"/>' +
+             '<circle cx="5.5" cy="12" r="1.3" fill="currentColor" stroke="none"/>' +
+             '<circle cx="5.5" cy="17" r="1.3" fill="currentColor" stroke="none"/>' +
+             '<path d="M10 7h9.5"/><path d="M10 12h9.5"/><path d="M10 17h9.5"/>',
+    // The note toolbar's poem switch (Zoe, 2026-11-07: "the quill would be
+    // cute", then "just quill no line, simplify"): ONE stroke, the stem
+    // curving from the nib to the tip and the edge coming back wide, with a
+    // single step cut in it where the lower vane starts again, as a feather
+    // splits (a little in-and-out notch knotted up at this weight). No app has
+    // a standard mark for a poem; a P read as "paragraph".
+    quill:   '<path d="M4 20C8 15 11.5 9.5 20 3.5c.4 3-.2 5.6-1.6 7.7L15 11.5c.9.8 1.3 1.7.5 2.6-1.8 1.9-5 2.7-9.1 2.8"/>',
     chevDown: '<path d="m7 10 5 5 5-5"/>',
     chevUp: '<path d="m7 14 5-5 5 5"/>',
   };
@@ -2643,7 +2655,7 @@
   // either direction. The render pass is the real trust boundary: a hostile client
   // could POST any `note`, so we never inject stored HTML raw — we rebuild it,
   // escaping every text run and dropping every tag/attribute we don't allow.
-  const RICH_LEAD = /^\s*<(h1|h2|p)>/i;         // our serializer always leads with one of these
+  const RICH_LEAD = /^\s*<(h1|h2|p|ul)>/i;      // our serializer always leads with one of these
   const isRichNote = (s) => RICH_LEAD.test(String(s || ''));
 
   // A LINE BREAK HAS THREE ENCODINGS AND THE WALK MUST NOT PREFER ONE. A block
@@ -2716,7 +2728,20 @@
      before this (a <p> per Return) keeps the paragraph gaps it always had. A
      run of blank lines is one break, and one beside a heading is none (the
      heading's own air does that job). A line keeps its leading spaces, a
-     poem's indent; its trailing ones go. */
+     poem's indent; its trailing ones go.
+
+     THE EDITOR READS LINES ONLY IN A POEM (2026-11-07, Zoe: "keep it standard
+     ... add a 'p' next to bold and italic ... so people can still make poetry
+     on tria"). A note is standard by default, a Return a new paragraph, so
+     serializeNote passes `asLines` only when the field wears `.is-poem` (the
+     P in the toolbar). Storage and render never needed to know: a stanza is
+     already a <p> with <br>s, a standard note a <p> per paragraph.
+
+     A BULLET LIST (`ul`) is a block of its own, `{ tag: 'ul', lines }`, a line
+     per item (an item's own soft breaks kept as <br>). It ends a stanza. A
+     list WebKit nests in a line's <div> is read as if it stood at the root,
+     and an <ol> is read as bullets: the composer only makes one kind. An older
+     build reads a list as a paragraph of lines, which is what it says. */
   function richItems(root, textFn, asLines) {
     const out = [];
     let para = null;
@@ -2732,15 +2757,38 @@
       });
       if (!asLines) end();
     };
-    const blockLevel = (n) => n.nodeType === 1 && /^(div|p|h1|h2)$/i.test(n.tagName);
-    let buf = document.createElement('p');
-    const flush = () => { if (buf.childNodes.length) { read('p', buf); buf = document.createElement('p'); } };
-    root.childNodes.forEach((n) => {
-      if (!blockLevel(n)) { buf.appendChild(n.cloneNode(true)); return; }
+    const isList = (n) => n.nodeType === 1 && /^(ul|ol)$/i.test(n.tagName);
+    const list = (node) => {
+      end();
+      const lines = [];
+      node.childNodes.forEach((c) => {
+        let li = c;
+        if (!(c.nodeType === 1 && /^li$/i.test(c.tagName))) {
+          if (c.nodeType === 3 && !c.nodeValue.trim()) return;
+          li = document.createElement('li');
+          li.appendChild(c.cloneNode(true));
+        }
+        const line = richInline(li, textFn).replace(/\n$/, '').split(BREAK)
+          .map(l => l.replace(/\s+$/, ''))
+          .filter(l => l.replace(/<[^>]+>/g, '').trim()).join('<br>');
+        if (line) lines.push(line);
+      });
+      if (lines.length) out.push({ tag: 'ul', lines });
+    };
+    const blockLevel = (n) => n.nodeType === 1 && /^(div|p|h1|h2|ul|ol)$/i.test(n.tagName);
+    const walk = (parent) => {
+      let buf = document.createElement('p');
+      const flush = () => { if (buf.childNodes.length) { read('p', buf); buf = document.createElement('p'); } };
+      parent.childNodes.forEach((n) => {
+        if (!blockLevel(n)) { buf.appendChild(n.cloneNode(true)); return; }
+        flush();
+        if (isList(n)) list(n);
+        else if (/^(div|p)$/i.test(n.tagName) && [...n.childNodes].some(isList)) walk(n);
+        else read(/^h[12]$/i.test(n.tagName) ? n.tagName.toLowerCase() : 'p', n);
+      });
       flush();
-      read(/^h[12]$/i.test(n.tagName) ? n.tagName.toLowerCase() : 'p', n);
-    });
-    flush(); end();
+    };
+    walk(root); end();
     return out;
   }
 
@@ -2752,28 +2800,42 @@
   // An item as HTML. `cls` maps a tag to its render class (null for the storage
   // form, which carries no classes).
   const itemHtml = (it, cls) =>
-    `<${it.tag}${cls && cls[it.tag] ? ` class="${cls[it.tag]}"` : ''}>${it.lines.join('<br>')}</${it.tag}>`;
+    `<${it.tag}${cls && cls[it.tag] ? ` class="${cls[it.tag]}"` : ''}>` +
+      (it.tag === 'ul' ? `<li>${it.lines.join('</li><li>')}</li>` : it.lines.join('<br>')) +
+    `</${it.tag}>`;
 
   // compose → storage: clean HTML, every text run escaped, mentions kept as tokens.
-  const serializeNote = (editor) => richItems(editor, esc, true).map(it => itemHtml(it)).join('');
+  // A note that OPENS on a list leads with an empty <p>, which reads as nothing:
+  // an older build only takes a note for rich when it starts h1, h2 or p, and
+  // would have shown the tags as words.
+  const serializeNote = (editor) => {
+    const items = richItems(editor, esc, editor.classList.contains('is-poem'));
+    return (items[0]?.tag === 'ul' ? '<p></p>' : '') + items.map(it => itemHtml(it)).join('');
+  };
 
   // storage → feed: same walk, but text flows through richText (so @mentions and
   // links go live) and blocks carry render classes. Safe to inject: fixed tags,
   // all text escaped.
-  const RICH_CLASS = { h1: 'card-h1', h2: 'card-h2', p: 'card-note' };
+  const RICH_CLASS = { h1: 'card-h1', h2: 'card-h2', p: 'card-note', ul: 'card-list' };
   const renderRichNote = (html, author) =>
     richItems(parseNoteHtml(html), (t) => richText(t, author), false)
       .map(it => itemHtml(it, RICH_CLASS)).join('');
 
-  // storage/legacy → editor: clean editable HTML (no classes, no links), in the
-  // EDITOR's reading, a block per line: a paragraph's lines become a <p> each and
-  // a blank `<p><br></p>` stands between two paragraphs, so the field shows the
-  // gaps the feed does and serializes back to the same note.
+  // A note written as a poem: a paragraph that holds more than one line. It
+  // opens in the editor with the P on (richNoteField's `poem`).
+  const isPoemNote = (note) => isRichNote(note) && /<p>(?:(?!<\/p>).)*<br>/i.test(note);
+
+  // storage/legacy → editor: clean editable HTML (no classes, no links). A
+  // standard note is a block per paragraph. A poem is in the EDITOR's reading
+  // of one, a block per line: a stanza's lines become a <p> each and a blank
+  // `<p><br></p>` stands between two stanzas, so the field shows the gaps the
+  // feed does and serializes back to the same note.
   const editorPrefill = (note) => {
     if (!note) return '';
     const items = isRichNote(note)
       ? richItems(parseNoteHtml(note), esc, false)
-      : noteParas(note).map(lines => ({ tag: 'p', lines: lines.map(esc) }));
+      : noteParas(note).map(p => ({ tag: 'p', lines: [esc(p)] }));
+    if (!isPoemNote(note)) return items.map(it => itemHtml(it)).join('');
     return items.map((it, i) => it.tag !== 'p' ? itemHtml(it)
       : (i && items[i - 1].tag === 'p' ? '<p><br></p>' : '') + it.lines.map(l => `<p>${l}</p>`).join('')).join('');
   };
@@ -2827,7 +2889,7 @@
     // how many lines it renders as (a heading, or a paragraph's every line, so a
     // poem's stanza counts as the lines it is) — whichever trips first.
     const plainLen = rich ? note.replace(/<[^>]+>/g, '').length : note.length;
-    const blockCount = (body.match(/<(?:h1|h2|p)[ >]|<br>/g) || []).length;
+    const blockCount = (body.match(/<(?:h1|h2|p|li)[ >]|<br>/g) || []).length;
     if (full) return body;                                   // the page never clamps
     if (plainLen <= READMORE_MIN && blockCount < READMORE_MIN_BLOCKS) return body;
 
@@ -2853,6 +2915,12 @@
         `<span class="rt-sep" aria-hidden="true"></span>` +
         `<button type="button" class="rt-btn rt-b" data-cmd="bold" aria-pressed="false" aria-label="Bold">B</button>` +
         `<button type="button" class="rt-btn rt-i" data-cmd="italic" aria-pressed="false" aria-label="Italic">I</button>` +
+        // The quill is the whole note's: a poem, where a Return is a line and a blank
+        // line ends a stanza. Off, a Return is a new paragraph.
+        `<button type="button" class="rt-btn rt-p" data-cmd="poem" aria-pressed="false" aria-label="Poem">${svgIcon('quill', 'rt-p-ico')}</button>` +
+        `<span class="rt-sep" aria-hidden="true"></span>` +
+        `<button type="button" class="rt-btn rt-ul" data-cmd="ul" aria-pressed="false" aria-label="Bullet list">` +
+          `${svgIcon('bullets', 'rt-ul-ico')}</button>` +
       `</div>`;
   }
 
@@ -2884,7 +2952,7 @@
           `<div class="rich-toolbar-inner">${richToolbarHtml(idp)}</div>` +
         `</div>` +
         `<div class="combo-divider" aria-hidden="true"></div>` +
-        `<div id="${idp}-note" class="combo-note rich-note" contenteditable="true" role="textbox" ` +
+        `<div id="${idp}-note" class="combo-note rich-note${opts.poem ? ' is-poem' : ''}" contenteditable="true" role="textbox" ` +
           `aria-multiline="true" aria-label="Your note" data-placeholder="${esc(notePh)}">${noteHtml || ''}</div>` +
         // TAGS ARE THE FOOT (Zoe, 2026-10-23): a row of chips, one + Tag tap
         // per tag, that wraps and grows the box as it fills, with no rule over
@@ -3043,7 +3111,7 @@
       // empty HEADING is not stray: it is H1 or H2 pressed on an empty note,
       // waiting for its words, and wiping it made a note impossible to start
       // with a heading (and drew the placeholder over its caret).
-      const bare = !editor.textContent.trim() && !editor.querySelector('h1, h2');
+      const bare = !editor.textContent.trim() && !editor.querySelector('h1, h2, ul, ol');
       if (bare && editor.innerHTML !== '') editor.innerHTML = '';
       editor.classList.toggle('is-empty', bare);
       // A blank line is drawn as the paragraph gap it posts as (.is-blank in
@@ -3068,6 +3136,20 @@
       }
       return '';
     };
+    const inList = () => {
+      for (let n = window.getSelection().anchorNode; n && n !== editor; n = n.parentNode) {
+        if (n.nodeType === 1 && n.tagName === 'LI') return true;
+      }
+      return false;
+    };
+    // The editor's own child the caret is in (null when it sits on the root).
+    const caretTop = () => {
+      let n = window.getSelection().anchorNode;
+      if (!n || !editor.contains(n) || n === editor) return null;
+      while (n.parentNode !== editor) n = n.parentNode;
+      return n;
+    };
+    const poem = () => editor.classList.contains('is-poem');
     const syncActive = () => {
       const block = curBlock();
       let bold = false, italic = false;
@@ -3075,6 +3157,7 @@
       const set = (s, on) => { const b = toolbar.querySelector(s); if (b) b.setAttribute('aria-pressed', String(on)); };
       set('.rt-h1', block === 'h1'); set('.rt-h2', block === 'h2');
       set('.rt-b', bold); set('.rt-i', italic);
+      set('.rt-p', poem()); set('.rt-ul', inList());
     };
 
     const exec = (cmd) => {
@@ -3082,6 +3165,17 @@
       if (cmd === 'bold' || cmd === 'italic') {
         document.execCommand('styleWithCSS', false, false);   // semantic <b>/<i>, not styled spans
         document.execCommand(cmd);
+      } else if (cmd === 'ul') {   // a second tap takes the caret's lines back out of the list
+        document.execCommand('insertUnorderedList');
+      } else if (cmd === 'poem') {
+        // A poem's blank lines are its stanza breaks; out of one they would
+        // post as nothing, so they go (all but the one the caret is on).
+        const on = editor.classList.toggle('is-poem');
+        if (!on) {
+          const here = caretTop();
+          editor.querySelectorAll(':scope > .is-blank').forEach((b) => { if (b !== here) b.remove(); });
+        }
+        editor.dispatchEvent(new Event('input', { bubbles: true }));   // what posts changed (the editor's dirty())
       } else {   // h1 / h2 — toggle the caret's block (a second tap drops back to a paragraph)
         document.execCommand('formatBlock', false, curBlock() === cmd ? 'P' : cmd.toUpperCase());
       }
@@ -3100,12 +3194,30 @@
     });
     // Hold typed/inserted text at the cap (deletions and caret moves always pass).
     editor.addEventListener('beforeinput', (e) => {
+      // Out of a poem a Return is a new paragraph, so a second one on the empty
+      // line it made would be a blank line that posts as nothing: it is held,
+      // and the field shows what the post will. In a list the engine's own
+      // Return on an empty item steps out of the list, so that one passes.
+      if (e.inputType === 'insertParagraph' && !poem() && !inList()) {
+        const top = caretTop();
+        if (!(top || editor).textContent.trim() && !/^H[12]$/.test(top?.tagName || '')) { e.preventDefault(); return; }
+      }
       if (!/^insert/.test(e.inputType) || e.inputType === 'insertFromPaste') return;
       const sel = window.getSelection();
       const selLen = sel && !sel.isCollapsed ? sel.toString().length : 0;
       if (len() - selLen + (e.data ? e.data.length : 1) > NOTE_MAX) e.preventDefault();
     });
-    editor.addEventListener('input', () => { syncEmpty(); syncCount(); });
+    editor.addEventListener('input', (e) => {
+      // WebKit leaves the first line as bare words on the root and only wraps
+      // the lines after it, and a margin can't reach bare words, so the first
+      // paragraph sat flush on the second. The caret's line gets its block as
+      // it is typed (never mid-composition, which an edit would break).
+      const top = caretTop();
+      if (top && top.nodeType === 3 && top.nodeValue.trim() && !e.isComposing) {
+        document.execCommand('formatBlock', false, 'div');
+      }
+      syncEmpty(); syncCount();
+    });
     // Track the caret for the toolbar's active state; self-removes once the editor
     // leaves the DOM (composer type-switch, closing an edit) so nothing piles up.
     const onSel = () => {
@@ -5816,7 +5928,7 @@
     // A link, a mention or a button in them keeps its own tap, the quoted
     // tile stays the original's, and a finished selection isn't a tap.
     if (glyph) el.querySelector('.card-main')?.addEventListener('click', (e) => {
-      if (!e.target.closest('.card-title, .card-note, .card-h1, .card-h2, .readmore-clip')) return;
+      if (!e.target.closest('.card-title, .card-note, .card-list, .card-h1, .card-h2, .readmore-clip')) return;
       if (e.target.closest('a, button, .card-quoted')) return;
       if (String(window.getSelection?.() || '')) return;
       glyph.click();
@@ -6231,7 +6343,7 @@
 
     if (post.type === 'find') {
       // A Find: the Note editor, then the link field its one link lives in.
-      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, tags }) +
+      return richNoteField('e', post.title, editorPrefill(post.note), 'What made you want to share it? (optional)', { tools: false, tags, poem: isPoemNote(post.note) }) +
         `<div class="field">` +
           `<label for="e-url">Link</label>` +
           `<input id="e-url" type="url" inputmode="url" autocapitalize="none" ` +
@@ -6248,7 +6360,7 @@
       // `editorPrefill` carries a legacy plain-text note across to paragraphs.
       return richNoteField('e', post.title, editorPrefill(post.note),
           'When to show up, what to bring.',
-          { tools: false, tags, titlePh: 'Picnic at the park' }) +
+          { tools: false, tags, titlePh: 'Picnic at the park', poem: isPoemNote(post.note) }) +
         `<div class="field">` +
           `<label for="e-location">Where</label>` +
           `<input id="e-location" type="text" maxlength="120" ` +
@@ -6269,7 +6381,7 @@
     // optional; the image carries the post). Prefilled from the stored note (a
     // legacy plain-text note upgrades to paragraphs; see editorPrefill).
     const notePh = post.type === 'photo' ? 'Say something about it (optional).' : 'Say it plainly.';
-    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, tags }) + aud;
+    return richNoteField('e', post.title, editorPrefill(post.note), notePh, { tools: false, tags, poem: isPoemNote(post.note) }) + aud;
   }
 
   // iOS Safari leaves an empty date/time input entirely blank (no mm/dd/yyyy
@@ -12934,11 +13046,15 @@
     if (!note) return [];
     const items = isRichNote(note)
       ? richItems(parseNoteHtml(note), esc, false)
-      : noteParas(note).map(lines => ({ tag: 'p', lines: lines.map(esc) }));
+      : noteParas(note).map(p => ({ tag: 'p', lines: [esc(p)] }));
     const plainLine = (l) => l.replace(/<[^>]+>/g, '')
       .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
       .replace(/\s+/g, ' ').trim();
-    return items.map(it => ({ kind: it.tag, text: it.lines.map(plainLine).filter(Boolean).join('\n') }))
+    // A list crosses as lines with their bullets on (FLOW sets it as a paragraph).
+    return items.map(it => ({
+      kind: it.tag === 'ul' ? 'p' : it.tag,
+      text: it.lines.map(plainLine).filter(Boolean).map(l => (it.tag === 'ul' ? '• ' + l : l)).join('\n'),
+    }))
       .filter(b => b.text);
   };
   function cardSpecFor(post) {
@@ -18658,9 +18774,9 @@
     if (!note) return '';
     const hit = notePlainCache.get(note);
     if (hit !== undefined) return hit;
-    // A <br> is a space first, or a stanza's two lines fuse into one word.
+    // A <br> is a space first, or a stanza's two lines fuse into one word (and a list's items).
     const text = isRichNote(note)
-      ? Array.from(parseNoteHtml(note.replace(/<br\s*\/?>/gi, ' ')).childNodes).map(n => n.textContent || '').join(' ')
+      ? Array.from(parseNoteHtml(note.replace(/<br\s*\/?>|<\/li>/gi, ' ')).childNodes).map(n => n.textContent || '').join(' ')
       : note;
     const out = text.replace(/\s+/g, ' ').trim();
     if (notePlainCache.size >= NOTE_PLAIN_MAX) notePlainCache.clear();

@@ -2883,7 +2883,40 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
    what follows. Every gap is a top margin and nothing has a bottom one, so the
    sum never depends on whether margins collapse. It was 0.7rem between
    paragraphs and 0.75rem over an H2, so a heading read as one more paragraph. */
-.card-note + .card-note { margin-top: 1rem; }
+:is(.card-note, .card-list) + :is(.card-note, .card-list) { margin-top: 1rem; }
+
+/* A BULLET LIST (2026-11-07, Zoe: "add bullet points styling"): the note's
+   own type, a soft dot in --muted hung in the gutter so the words keep the
+   note's left edge, and items a little apart, closer than paragraphs. The
+   editor's list wears the same rules. */
+.card-list, .rich-note :is(ul, ol) {
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  list-style: none;
+}
+.card-list {
+  font-size: var(--body);
+  line-height: 1.5;
+  color: var(--text);
+  font-weight: 300;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+:is(.card-list, .rich-note :is(ul, ol)) li { position: relative; }
+:is(.card-list, .rich-note :is(ul, ol)) li + li { margin-top: 0.3rem; }
+:is(.card-list, .rich-note :is(ul, ol)) li::before {
+  content: '';
+  position: absolute;
+  left: -0.95rem;
+  top: calc(0.75em - 0.19rem);
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.75;
+}
+.card-list strong, .card-list b { font-weight: 700; }
+.card-list em, .card-list i { font-style: italic; }
 
 /* ── Rich-note headings + emphasis (blog-style Notes) ──────────────────────────
    Headings are titles, so they stay in Instrument Serif (the "serif = titles"
@@ -2908,9 +2941,9 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   color: var(--text);
   margin: 0;
 }
-:is(.card-note, .card-h1, .card-h2) + .card-h1 { margin-top: 1.6rem; }
-:is(.card-note, .card-h1, .card-h2) + .card-h2 { margin-top: 1.35rem; }
-:is(.card-h1, .card-h2) + .card-note { margin-top: 0.4rem; }
+:is(.card-note, .card-list, .card-h1, .card-h2) + .card-h1 { margin-top: 1.6rem; }
+:is(.card-note, .card-list, .card-h1, .card-h2) + .card-h2 { margin-top: 1.35rem; }
+:is(.card-h1, .card-h2) + :is(.card-note, .card-list) { margin-top: 0.4rem; }
 /* A subheading under its heading, or a heading run onto a second line. */
 .card-h1 + .card-h2 { margin-top: 0.4rem; }
 .card-h1 + .card-h1, .card-h2 + .card-h2 { margin-top: 0.15rem; }
@@ -2936,7 +2969,7 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
    whole note wants the comments under it too. So the teaser stays a teaser. */
 /* A feed card's headline and words open its thread, as its comment glyph does
    (wireComments), so they point like it. The post's own page has no glyph link. */
-.card:has(.card-actions a.card-comment) > .card-main :is(.card-title, .card-note, .card-h1, .card-h2) {
+.card:has(.card-actions a.card-comment) > .card-main :is(.card-title, .card-note, .card-list, .card-h1, .card-h2) {
   cursor: pointer;
 }
 .readmore-clip {
@@ -4989,26 +5022,37 @@ body.gate main { padding: 0; }
   opacity: 0.6;
   pointer-events: none;
 }
-/* The field reads a block as a LINE (see richItems): lines sit flush, and a
-   blank one (`.is-blank`, kept by wireRichEditor, since a CSS selector can't
-   tell `<div><br></div>` from a line of words ending in a <br>) is drawn one
-   rem tall, the paragraph gap it posts as. The headings wear the feed's own
-   rules (above, with .card-h1) and the same air; a blank line beside a heading
-   or another blank posts as nothing, so it gives back what it would add. */
+/* STANDARD (2026-11-07): a block is a PARAGRAPH, so each one stands a rem
+   below the last, the gap it posts with. A second Return on an empty line is
+   held (wireRichEditor), so no blank line sits in the field posting as
+   nothing. The headings wear the feed's own rules (above, with .card-h1) and
+   the same air. */
 .field--rich .rich-note { line-height: 1.5; font-weight: 300; }
 .rich-note :is(p, div) { margin: 0; }
-.rich-note .is-blank { line-height: 1rem; }
+/* (No `>`: WebKit nests a list, and the lines after it, in a line's <div>.) */
+.rich-note :is(p, div, ul, ol) + :is(p, div, ul, ol) { margin-top: 1rem; }
 .rich-note > * + h1 { margin-top: 1.6rem; }
 .rich-note > * + h2 { margin-top: 1.35rem; }
-.rich-note > .is-blank + h1 { margin-top: 0.6rem; }
-.rich-note > .is-blank + h2 { margin-top: 0.35rem; }
-.rich-note > :is(h1, h2) + :not(h1, h2, .is-blank) { margin-top: 0.4rem; }
+.rich-note > :is(h1, h2) + :not(h1, h2) { margin-top: 0.4rem; }
 .rich-note > h1 + h2 { margin-top: 0.4rem; }
 .rich-note > h1 + h1, .rich-note > h2 + h2 { margin-top: 0.15rem; }
-.rich-note > :is(h1, h2) + .is-blank,
-.rich-note > .is-blank + .is-blank,
-.rich-note > .is-blank:first-child { line-height: 0; }
-.rich-note > :is(h1, h2) + .is-blank + :not(h1, h2, .is-blank) { margin-top: 0.4rem; }
+/* A POEM (the P, `.is-poem`) reads a block as a LINE (see richItems): lines
+   sit flush, and a blank one (`.is-blank`, kept by wireRichEditor, since a CSS
+   selector can't tell `<div><br></div>` from a line of words ending in a
+   <br>) is drawn one rem tall, the stanza gap it posts as. A blank line beside
+   a heading, a list or another blank posts as nothing, so it gives back what
+   it would add. */
+.rich-note.is-poem :is(p, div) + :is(p, div) { margin-top: 0; }
+.rich-note.is-poem .is-blank { line-height: 1rem; }
+.rich-note.is-poem > .is-blank + h1 { margin-top: 0.6rem; }
+.rich-note.is-poem > .is-blank + h2 { margin-top: 0.35rem; }
+.rich-note.is-poem > :is(h1, h2) + .is-blank { margin-top: 0; }
+.rich-note.is-poem .is-blank + :is(ul, ol) { margin-top: 0; }
+.rich-note.is-poem > :is(h1, h2) + .is-blank,
+.rich-note.is-poem :is(ul, ol) + .is-blank,
+.rich-note.is-poem > .is-blank + .is-blank,
+.rich-note.is-poem > .is-blank:first-child { line-height: 0; }
+.rich-note.is-poem > :is(h1, h2) + .is-blank + :not(h1, h2, .is-blank) { margin-top: 0.4rem; }
 .rich-note strong, .rich-note b { font-weight: 700; }
 .rich-note em, .rich-note i { font-style: italic; }
 
@@ -5048,6 +5092,8 @@ body.gate main { padding: 0; }
 .rt-h2 { font-family: 'Instrument Serif', 'Times New Roman', serif; font-style: italic; font-size: 1.1rem; }
 .rt-b  { font-family: 'Oxygen', sans-serif; font-weight: 700; font-size: 0.9rem; }
 .rt-i  { font-family: 'Oxygen', sans-serif; font-style: italic; font-size: 0.9rem; }
+/* The quill (a poem) and the bullets, the toolbar's two drawn marks. */
+.rt-p-ico, .rt-ul-ico { width: 20px; height: 20px; }
 .rt-sep { width: 1px; height: 1.1rem; background: var(--rule); margin: 0 0.25rem; flex: none; }
 /* The toggle's own specimen — "Aa" stands for text styles in general. */
 .rt-toggle { flex: none; font-family: 'Instrument Serif', 'Times New Roman', serif; font-size: 1.05rem; }
@@ -6263,7 +6309,7 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-note { font-weight: 300; font-size: 1.15rem; line-height: 1.45; }
 /* The note's paragraphs take the viewer's size, not the feed's. */
-.mv-note :is(.card-note, p) { font-size: inherit; line-height: inherit; font-weight: inherit; }
+.mv-note :is(.card-note, .card-list, p) { font-size: inherit; line-height: inherit; font-weight: inherit; }
 .mv-words--big .mv-note {
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
@@ -7909,12 +7955,12 @@ button.card-song-play:active { transform: scale(0.9); }
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent);
           mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent);
 }
-.pin-rich .card-note { margin: 0; font-size: inherit; line-height: 1.42; }
-.pin-rich .card-note + .card-note { margin-top: 0.6rem; }
+.pin-rich :is(.card-note, .card-list) { margin: 0; font-size: inherit; line-height: 1.42; }
+.pin-rich :is(.card-note, .card-list) + :is(.card-note, .card-list) { margin-top: 0.6rem; }
 .pin-rich .card-h1 { font-size: 1.3rem; }
 .pin-rich .card-h2 { font-size: 1.12rem; }
-.pin-rich :is(.card-note, .card-h1, .card-h2) + :is(.card-h1, .card-h2) { margin-top: 0.8rem; }
-.pin-rich :is(.card-h1, .card-h2) + .card-note { margin-top: 0.25rem; }
+.pin-rich :is(.card-note, .card-list, .card-h1, .card-h2) + :is(.card-h1, .card-h2) { margin-top: 0.8rem; }
+.pin-rich :is(.card-h1, .card-h2) + :is(.card-note, .card-list) { margin-top: 0.25rem; }
 .pin-rich > :first-child { margin-top: 0; }
 
 .pin-foot {

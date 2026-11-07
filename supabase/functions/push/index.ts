@@ -128,8 +128,8 @@ async function canRead(rec: Row, userId: string): Promise<boolean> {
   return false;
 }
 
-// A note may be stored as the client's small HTML subset (<h1>/<h2>/<p>/<strong>/
-// <em>, see richNote in app.js), so anything that quotes one in an alert has to
+// A note may be stored as the client's small HTML subset (<h1>/<h2>/<p>/<ul>/<li>/
+// <strong>/<em>, see richNote in app.js), so anything that quotes one in an alert has to
 // flatten it first or the reader gets "<p>" in their lock screen. Block ends
 // and line breaks (a stanza's <br>) become a space so two paragraphs or two
 // lines don't fuse into one word; the entities the
@@ -138,7 +138,7 @@ async function canRead(rec: Row, userId: string): Promise<boolean> {
 // put through this — a title with a literal < in it would lose the rest of itself.
 function plain(t: string): string {
   return (t || '')
-    .replace(/<\/(p|h1|h2)>|<br\s*\/?>/gi, ' ')
+    .replace(/<\/(p|h1|h2|li)>|<br\s*\/?>/gi, ' ')
     .replace(/<[^>]*>/g, '')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&')

@@ -861,10 +861,29 @@ itself): the audience sheet leaves it off (`except` on `wireAudienceLock`,
 `attachedCircle`), and a post already aimed at it falls back to the default
 as its card goes on.
 
-## A note is paragraphs of lines (2026-10-26)
+## A note is standard; the quill makes it a poem (2026-11-07)
+
+**A Return is a new paragraph by default** (Zoe: "keep it standard and then
+lets add a 'p' next to bold and italic ... so people can still make poetry on
+tria. thats important"), and a second Return on the empty line is held
+(`beforeinput` in `wireRichEditor`), so the field never shows a blank line
+that posts as nothing. **The quill after B and I (`ICONS.quill`, a lowercase p
+until Zoe swapped it the same day: no app has a standard poem mark, and a p
+reads as "paragraph") is the whole note's poem switch** (`.is-poem` on the field, `serializeNote` passes `asLines`): on,
+the rule below holds. Nothing stored knows the mode; an edit reopens as a
+poem when a paragraph holds a `<br>` (`isPoemNote`). WebKit leaves the first
+line as bare words on the root, so the input handler gives it its `<div>`.
+**Bullets** sit after the quill: `insertUnorderedList`, stored as `<ul><li>`
+(`{ tag: 'ul' }` in `richItems`, `.card-list`, a soft `--muted` dot), read
+even when WebKit nests the list in a line's div. A note that opens on a list
+leads with an empty `<p>` so older builds still take it for rich (they draw
+the list as lines). The push function's `plain()` learned `</li>`, so it
+needs a redeploy.
+
+## A poem is paragraphs of lines (2026-10-26)
 
 **A Return is a line, a blank line ends a paragraph** (a poem's stanza), in
-the editor, the feed and the story card alike (`richItems`, `noteParas`). A
+the editor (with the quill on, since 2026-11-07), the feed and the story card alike (`richItems`, `noteParas`). A
 note stores a stanza as ONE `<p>` with `<br>`s; every Return used to become its
 own `<p>` and blank lines were dropped, so a poem's stanzas posted as evenly
 spaced lines. The editor reads a block as a line (`asLines`), storage reads it
