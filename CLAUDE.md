@@ -363,7 +363,12 @@ grid's line. A card is a PICTURE (photo, poster, sleeve, or the picture a link's
 page names, `pinLinkPicture`, read on the phone like a tile) with its words in
 white on a shade, or WORDS: a headline over the note's first lines, ending on a
 whole line (`fitPinWords` measures the clamp), and a foot with the domain, date or
-artist. **The ••• sits in your own card's top right**, no type glyph (Zoe). A
+artist. **A wide pin that is ONLY its photo or clip** (no title, words, tag,
+link, poll or plan) fills the whole wide card (`pin--bare`, Zoe: "all the way
+wide"), and its clip plays muted and looping while on screen
+(`wirePinClips`, the feed's attach and let go rule; reduced motion keeps the
+poster). **Words cut short get a Read more in the foot** (`fitPinWords` adds
+`.pin-readmore` and fits again; the card is the link). **The ••• sits in your own card's top right**, no type glyph (Zoe). A
 drag trades places with the card under the finger and the repaint glides every
 card there (`settlePins`, a FLIP); the menu's rows stay Move up and Move down.
 iOS 15 is the floor, so no container queries: the row reads `100vw`.

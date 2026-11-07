@@ -7676,6 +7676,15 @@ button.card-song-play:active { transform: scale(0.9); }
   color: var(--muted);
 }
 .pin-meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* What fitPinWords adds to a card whose words it had to cut, at the foot's far
+   start, in the feed's Read more voice, or at its far end past a domain. */
+.pin-meta + .pin-readmore { margin-inline-start: auto; }
+.pin-readmore {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
 
 /* Your own card's headline keeps clear of the ••• in the corner; the lines
    under it run full width. */
@@ -7719,8 +7728,8 @@ button.card-song-play:active { transform: scale(0.9); }
 .pin--pic:not(.pin--wide) .pin-meta { color: rgba(255, 255, 255, 0.86); }
 /* Over a picture the dots stand on a small dark blurred disc, the carousel
    count's pill, so they read on any photo. */
-.pin--pic:not(.pin--wide) .pin-more { color: #fff; }
-.pin--pic:not(.pin--wide) .pin-more::before {
+:is(.pin--pic:not(.pin--wide), .pin--bare) .pin-more { color: #fff; }
+:is(.pin--pic:not(.pin--wide), .pin--bare) .pin-more::before {
   content: '';
   position: absolute;
   width: 30px;
@@ -7730,19 +7739,36 @@ button.card-song-play:active { transform: scale(0.9); }
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
-.pin--pic:not(.pin--wide) .pin-more svg { position: relative; width: 18px; height: 18px; }
+:is(.pin--pic:not(.pin--wide), .pin--bare) .pin-more svg { position: relative; width: 18px; height: 18px; }
 /* A picture with nothing to say over it is only the picture. */
 .pin--pic .pin-body:not(:has(.pin-say, .pin-meta)) { display: none; }
 
 /* The wide card's picture is one square on its leading side, on the grid's
    line, and its words take the rest on the card's own paper. */
-.pin--wide.pin--pic .pin-pic {
+.pin--wide.pin--pic:not(.pin--bare) .pin-pic {
   position: relative;
   inset: auto;
   z-index: auto;
   flex: 0 0 var(--pin-row);
   margin: -1px 0 -1px -1px;
 }
+
+/* A wide pin that is only its picture (nothing said, tagged, linked or
+   attached) fills the whole wide card, widescreen, no words side. Its clip
+   plays muted over the poster once it's on screen (wirePinClips); with no
+   poster, the clip paints its own first frame from the start. */
+.pin--bare { border-color: transparent; }
+.pin-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease-soft);
+}
+.pin-pic--clip:not(:has(img)) .pin-clip,
+.pin-pic--clip.is-playing .pin-clip { opacity: 1; }
 
 /* ── The album's own colour ───────────────────────────────────────────────────
    A wide song card blooms its own sleeve behind its words: a blown-up, blurred

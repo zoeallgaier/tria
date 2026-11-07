@@ -15487,9 +15487,28 @@
     }
 
     const p = item.post;
+    const isClip = !!(p.image && isVideoUrl(p.image));
+    // A WIDE PIN THAT IS ONLY ITS PICTURE (Zoe, 2026-11-06: "just an image
+    // without any text or ANYTHING attached") fills the whole wide card, no
+    // words side, and a clip there plays, muted and looping, while it's on
+    // screen (wirePinClips). Anything at all with it, a title, words, a tag, a
+    // link, a poll, a plan, keeps the square beside its words.
+    if (wide && p.image && !p.title && !noteSaid(p) && !p.poll && !p.eventDate &&
+        !shownTags(p).length && !postLinks(p).length) {
+      const label = TYPE_LABEL[p.type] || 'Post';
+      const media = isClip
+        ? `<span class="pin-pic pin-pic--clip${p.poster ? '' : ' is-loaded'}"${p.tint ? ` style="background-color:${esc(p.tint)}"` : ''} aria-hidden="true">` +
+            (p.poster ? `<img src="${esc(sizedSrc(p.poster, 600))}" alt="" decoding="async">` : '') +
+            `<video class="pin-clip" data-src="${esc(p.image)}" playsinline muted loop preload="none"></video></span>`
+        : picEl(sizedSrc(p.image, 600), { tint: p.tint });
+      return card({
+        cls: ' pin--bare', type: p.type, pic: media, meta: '',
+        open: `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(label)}"></a>`,
+      });
+    }
     // A video Frame with no stored poster has no still, so it is words, the
     // same rule the feed's own frames follow.
-    const still = p.image && !isVideoUrl(p.image) ? p.image : (p.poster || '');
+    const still = p.image && !isClip ? p.image : (p.poster || '');
     const link = still ? { url: postLinks(p)[0] || '' } : pinLinkPicture(p);
     const page = link.meta || {};
     const domain = link.url ? domainOf(link.url) : '';
@@ -15797,29 +15816,77 @@
     host.querySelectorAll('.pin--words .pin-face, .pin--wide .pin-face').forEach(face => {
       const last = face.lastElementChild;
       if (!last) return;
-      last.style.webkitLineClamp = '';
-      if (last.classList.contains('pin-rich')) {
-        // Blocks don't line clamp: the box is cut at the last whole line that
-        // fits, read off the body's line height, and fades under it.
-        last.style.maxHeight = '';
+      const fit = () => {
+        last.style.webkitLineClamp = '';
         const lh = parseFloat(getComputedStyle(last).lineHeight);
+        if (last.classList.contains('pin-rich')) {
+          // Blocks don't line clamp: the box is cut at the last whole line that
+          // fits, read off the body's line height, and fades under it.
+          last.style.maxHeight = '';
+          const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
+          if (lh > 0 && last.scrollHeight > room + 1) last.style.maxHeight = Math.max(lh, Math.floor((room + 1) / lh) * lh) + 'px';
+          const cut = last.scrollHeight > last.clientHeight + 1;
+          last.classList.toggle('is-cut', cut);
+          return cut;
+        }
         const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
-        if (lh > 0 && last.scrollHeight > room + 1) last.style.maxHeight = Math.max(lh, Math.floor((room + 1) / lh) * lh) + 'px';
-        last.classList.toggle('is-cut', last.scrollHeight > last.clientHeight + 1);
-        return;
+        if (lh > 0) last.style.webkitLineClamp = String(Math.max(1, Math.floor((room + 1) / lh)));
+        return last.scrollHeight > last.clientHeight + 1;
+      };
+      // Words cut short say so (Zoe, 2026-11-06: "add read more if the content
+      // is TOOOOO long"): a Read more joins the foot, the feed's own words in
+      // the reader's accent, and the words are fitted again over the room it
+      // took. The whole card already opens the post, so it is a label, not a
+      // second link.
+      const foot = face.parentElement.querySelector('.pin-foot');
+      const more = foot && foot.querySelector('.pin-readmore');
+      const cut = fit();
+      if (cut && foot && !more) {
+        foot.insertAdjacentHTML('beforeend', '<span class="pin-readmore" aria-hidden="true">Read more</span>');
+        fit();
+      } else if (!cut && more) {
+        more.remove();
+        if (fit()) { foot.appendChild(more); fit(); }
       }
-      const lh = parseFloat(getComputedStyle(last).lineHeight);
-      const room = face.getBoundingClientRect().bottom - last.getBoundingClientRect().top;
-      if (lh > 0) last.style.webkitLineClamp = String(Math.max(1, Math.floor((room + 1) / lh)));
     });
+  }
+
+  /* A bare wide pin's clip plays, muted and looping, only while it is mostly on
+     screen, and lets go of its source on the way out, the feed's own rule for a
+     Frame (wireFrameVideo): no decoder or bytes kept offscreen. Reduced motion
+     keeps the poster. */
+  const pinClipObserver = ('IntersectionObserver' in window)
+    ? new IntersectionObserver(entries => entries.forEach(({ target: v, isIntersecting }) => {
+        if (!v.isConnected) { pinClipObserver.unobserve(v); }
+        if (isIntersecting && v.isConnected) {
+          if (!v.src) {
+            const win = clipWindowFromUrl(v.dataset.src);
+            v.src = v.dataset.src + '#t=' + (win ? Math.max(win.start, 0.001) : 0.001);
+            if (!v.dataset.wired) { v.dataset.wired = '1'; wireClipWindow(v, win); }
+          }
+          v.play().then(() => v.parentElement?.classList.add('is-playing')).catch(() => {});
+        } else if (v.src) {
+          v.pause();
+          v.parentElement?.classList.remove('is-playing');
+          v.removeAttribute('src'); v.load();
+        }
+      }), { threshold: 0.6 })
+    : null;
+  function wirePinClips(host) {
+    if (!pinClipObserver || prefersReduced()) return;
+    host.querySelectorAll('.pin-clip').forEach(v => pinClipObserver.observe(v));
   }
 
   function wirePins(host, u, ctx, repaint) {
     fitPinWords(host);
+    wirePinClips(host);
     document.fonts?.ready.then(() => { if (host.isConnected) fitPinWords(host); });
     host.querySelectorAll('.pin-pic img').forEach(img => {
       const toWords = () => {
         const card = img.closest('.pin');
+        // A bare pin has no words to fall back on: it keeps its tint (and a
+        // clip still paints its own first frame).
+        if (card.classList.contains('pin--bare')) { img.remove(); return; }
         img.parentElement.remove();
         card.classList.replace('pin--pic', 'pin--words');
         fitPinWords(card);
