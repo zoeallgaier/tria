@@ -28,8 +28,14 @@ The same files also serve a website; that is a byproduct, not a target. See
 `users.accent` (null is its photo's colour, else Tria's ramp), in
 `communities.accent` via `set_community_accent` (`supabase/circle-accent.sql`,
 **NOT run** as of 2026-11-07; until it runs `Store.communityAccentReady` is
-false and the form has no Theme field). New circle and Edit circle have a
-**Theme** field beside Who can join (`.community-form-pair`, two columns, one alone spans), and the page behind the form wears it as
+false and the form has no Theme field). New circle and Edit circle are
+**Edit profile's page** (Zoe: "match the design of profiles edit"): no
+nameplate, the face left with New photo, Theme and Who can join as `.pf-row`
+pills right, the name and about as one combo box with a count, the crop's
+Use this photo; Edit circle commits with the bar's check (idle until
+something changed, the chevron an X over changes) and has Delete circle at
+its foot, New circle commits with Start circle. The page behind the form
+wears the theme as
 you pick (`syncTheme`, held until Save, like the photo). `openAccentSheet(of,
 pick)` takes the circle and a callback; without them it is your own. **A
 circle's page wears its wash as a profile's does** (`applyAmbient` on `#/c/`,

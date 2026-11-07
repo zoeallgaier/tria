@@ -17971,19 +17971,18 @@
     });
   }
 
-  /* STARTING ONE, and its host's editor, are the same form: a name and an about
-     in the composer's combo box, (only when starting) the handle its link is
-     made of, and who may join. A PAGE and not a sheet, for the reason the
-     profile editor is one: the keyboard would cover a sheet's fields.
-
-     It is THE COMPOSER'S PAGE since 2026-10-23 (Zoe: "make the page look a bit
-     more like the standard publish"): the serif nameplate kept on the page,
-     the circle's face where the composer's type mark sits (bigger, since it is
-     a picture and a control), and a full-width Start circle at the foot in
-     place of the bar's check. No lede: Discover's Start card already says what
-     a circle is for, and New activity has no explainer either. And no caret on
-     arrival, on touch: the keyboard covering half the page before anyone has
-     decided to type is the post editor's rule too.
+  /* STARTING ONE, and its host's editor, are the same form, and since
+     2026-11-07 it is EDIT PROFILE'S PAGE (Zoe: "match the design of profiles
+     edit"): no nameplate, the bar names it; the circle's face on the left with
+     its settings as quiet pills on the right (New photo, Theme, Who can join);
+     the name and about as one combo box with the about's count in its foot;
+     then (only when starting) the handle its link is made of. The editor's
+     commit is the bar's check, there only once something changed, and its
+     chevron turns to an X over unsaved changes, as Edit profile's does; its
+     foot is the host's Delete circle, where Edit profile's account zone sits.
+     New circle commits with Start circle at the foot, the first run's Next.
+     A PAGE and not a sheet, for the reason the profile editor is one: the
+     keyboard would cover a sheet's fields. And no caret on arrival, on touch.
 
      The handle follows the name as you type until you touch it, and it is the
      one thing that never changes afterwards, because a link that moves is a
@@ -18000,36 +17999,65 @@
     const back = editing
       ? { href: communityRoute(editing), label: editing.name }
       : { href: '#/discover', label: 'Discover' };
+    const title = editing ? 'Edit circle' : 'New circle';
     // The photo, on a new circle and in the host's editor alike, once the
     // column exists (circle-photo-delete.sql). Invite only, once its table
-    // does (circle-privacy.sql).
+    // does (circle-privacy.sql). Its theme, once its column does
+    // (circle-accent.sql).
     const photos = Store.communityToolsReady();
     const privacy = Store.communityPrivacyReady();
     const themes = Store.communityAccentReady();
-    const photoFace = (src) => src
-      ? `<span class="avatar avatar--photo community-face-img" aria-hidden="true">` +
-          `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 76))}" alt="" decoding="async"></span>`
-      : `<span class="avatar community-face-img community-pf-mark" aria-hidden="true">${svgIcon('circle')}</span>`;
-    // No title in the bar: the nameplate is on the page, as on the composer.
-    mountToolbar({ leading: toolbarBackEl(back.href, back.label) });
+    const faceHtml = (src) => src
+      ? `<span class="avatar pf-photo-avatar avatar--photo" aria-hidden="true">` +
+          `<img src="${esc(src.startsWith('data:') ? src : sizedSrc(src, 150))}" alt="" decoding="async"></span>`
+      : `<span class="avatar pf-photo-avatar community-pf-mark" aria-hidden="true">${svgIcon('circle')}</span>`;
+    const joinRow = (shut) => svgIcon(shut ? 'lock' : 'globe', 'pf-row-ico') +
+      `<span class="pf-row-label">${shut ? 'Invite only' : 'Public'}</span>`;
+    mountToolbar({
+      leading: toolbarBackEl('', back.label, 'cf-cancel'),
+      title,
+      // Edit profile's check, mounted idle (see renderEditProfile). `form=`
+      // reaches the form from the bar, which is outside #view.
+      actions: editing
+        ? `<button type="submit" form="community-form" id="community-save" ` +
+            `class="toolbar-btn toolbar-commit toolbar-commit--idle publish-fill" ` +
+            `aria-label="Save changes">${svgIcon('check')}</button>`
+        : '',
+    });
     if (!Store.communitiesReady()) {
       view.innerHTML = `<section class="view"><p class="feed-empty">Circles aren’t switched on yet.</p></section>`;
       return;
     }
-    const faceBtn = photos
-      ? `<button type="button" class="community-face" id="cf-photo-pick" ` +
-          `aria-label="Change the circle’s photo" title="Change the circle’s photo">` +
-          `<span id="cf-photo-face">${photoFace(editing && editing.avatar)}</span>` +
-          `<span class="community-face-edit" aria-hidden="true">${svgIcon('camera')}</span>` +
-        `</button>`
-      : '';
     const inviteOnlyNow = !!(editing && editing.inviteOnly);
+    const aboutNow = editing ? editing.about : '';
     view.innerHTML =
-      `<section class="view view--community-form">` +
-        mastheadEl('', editing ? 'Edit circle' : 'New circle', faceBtn, { keep: true }) +
-        `<form id="community-form" class="composer community-form" novalidate>` +
-          // The crop, in the form's own column, once a file is picked: the
-          // face in the nameplate steps aside while it is open.
+      `<section class="view">` +
+        `<h1 class="visually-hidden">${title}</h1>` +
+        `<form id="community-form" class="pf-form community-form" novalidate>` +
+          `<div class="pf-photo" id="cf-photo">` +
+            `<div class="pf-photo-figure" id="cf-figure">${faceHtml(editing && editing.avatar)}</div>` +
+            (photos || themes || privacy
+              ? `<div class="pf-photo-rows">` +
+                  (photos
+                    ? `<button type="button" class="pill-quiet pf-row" id="cf-photo-pick">` +
+                        svgIcon('camera', 'pf-row-ico') +
+                        `<span class="pf-row-label">${editing && editing.avatar ? 'New photo' : 'Add photo'}</span></button>`
+                    : '') +
+                  (themes
+                    ? `<button type="button" class="pill-quiet pf-row" id="cf-theme">` +
+                        `<span class="pf-row-swatch" aria-hidden="true"></span>` +
+                        `<span class="pf-row-label">Theme</span></button>`
+                    : '') +
+                  // Who may join, its two answers in a sheet (Zoe, 2026-10-23).
+                  (privacy
+                    ? `<button type="button" class="pill-quiet pf-row" id="cf-join" aria-label="Who can join">` +
+                        joinRow(inviteOnlyNow) + `</button>`
+                    : '') +
+                `</div>`
+              : '') +
+          `</div>` +
+          // The crop, in the form's column, once a file is picked: the face and
+          // its rows step aside while it is open, as on Edit profile.
           (photos
             ? `<input id="cf-file" type="file" accept="image/*" hidden>` +
               `<div class="crop-stage" id="cf-cropstage" hidden>` +
@@ -18037,7 +18065,10 @@
                   `<img id="cf-cropimg" alt="" draggable="false">` +
                 `</div>` +
                 `<p class="crop-hint">${finePointer() ? 'Drag to move, scroll to zoom.' : 'Drag to move, pinch to zoom.'}</p>` +
-                `<div class="crop-replace" id="cf-replace" role="button" tabindex="0">Choose another</div>` +
+                `<div class="crop-actions">` +
+                  `<div class="crop-replace" id="cf-replace" role="button" tabindex="0">Choose another</div>` +
+                  `<button type="button" class="publish-fill crop-use" id="cf-crop-use">Use this photo</button>` +
+                `</div>` +
               `</div>`
             : '') +
           `<div class="field field--combo">` +
@@ -18046,28 +18077,11 @@
               `autocomplete="off" aria-label="Circle name">` +
             `<div class="combo-divider" aria-hidden="true"></div>` +
             `<textarea id="cf-about" class="combo-note" rows="3" maxlength="280" ` +
-              `placeholder="What’s it for? (optional)" aria-label="About">${esc(editing ? editing.about : '')}</textarea>` +
+              `placeholder="What’s it for? (optional)" aria-label="About">${esc(aboutNow)}</textarea>` +
+            `<div class="combo-foot">` +
+              `<span class="combo-count" id="cf-count" aria-hidden="true"></span>` +
+            `</div>` +
           `</div>` +
-          // Who may join and its theme, side by side (Zoe, 2026-11-07); one
-          // alone takes the row.
-          ((privacy || themes) ? `<div class="community-form-pair">` : '') +
-          // Who may join, asked the way the composer asks who can see a post
-          // (Zoe, 2026-10-23): a field that opens a sheet of the two answers.
-          (privacy
-            ? `<div class="field aud-field">` +
-                `<label for="cf-join">Who can join</label>` +
-                `<button type="button" class="aud-lock" id="cf-join">${communityJoinInner(inviteOnlyNow)}</button>` +
-              `</div>`
-            : '') +
-          // Its theme, picked in a profile's Theme sheet (Zoe, 2026-11-07),
-          // and the page behind the form wears it as you pick.
-          (themes
-            ? `<div class="field aud-field">` +
-                `<label for="cf-theme">Theme</label>` +
-                `<button type="button" class="aud-lock" id="cf-theme"></button>` +
-              `</div>`
-            : '') +
-          ((privacy || themes) ? `</div>` : '') +
           (editing
             ? `<p class="field-hint">Its link stays triaonline.com/c/${esc(editing.slug)}.</p>`
             : `<div class="field">` +
@@ -18080,62 +18094,88 @@
               `</div>` +
               `<p class="field-hint" id="cf-slug-hint"></p>`) +
           `<p class="composer-error" id="cf-error" role="alert"></p>` +
-          `<button class="composer-submit composer-post publish-fill" type="submit" id="community-save">` +
-            `${editing ? 'Save' : 'Start circle'}</button>` +
+          (editing
+            // The host's way to close it, where Edit profile keeps Delete
+            // account. Its confirm is the ••• menu's.
+            ? (photos
+                ? `<div class="pf-account">` +
+                    `<button type="button" class="pf-account-btn pill-quiet pf-delete" id="cf-delete">` +
+                      svgIcon('trash') + `Delete circle</button>` +
+                  `</div>`
+                : '')
+            : `<div class="welcome-foot">` +
+                `<button type="submit" class="publish-fill welcome-next" id="community-save">Start circle</button>` +
+              `</div>`) +
         `</form>` +
       `</section>`;
 
     const form = view.querySelector('#community-form');
     const nameEl = form.querySelector('#cf-name');
     const aboutEl = form.querySelector('#cf-about');
+    const countEl = form.querySelector('#cf-count');
     const slugEl = form.querySelector('#cf-slug');
     const hintEl = form.querySelector('#cf-slug-hint');
     const errEl = form.querySelector('#cf-error');
-    const saveBtn = form.querySelector('#community-save');
-    const inviteBtn = form.querySelector('#cf-join');
-    let inviteOnlyPick = inviteOnlyNow;
-    const inviteOnly = () => !!inviteBtn && inviteOnlyPick;
-    let slugTouched = false;
-    // The photo's pending answer: a cropper while a new one is being framed, or
-    // `photoOff` once Remove was pressed. Neither writes until the commit.
-    let cropper = null;
-    let photoOff = false;
-    // The picked file, uncropped: what the Theme sheet's Photo disc and the
-    // live wash read while a crop is open.
-    let cropSrc = null;
-    stopActiveCrop = () => { if (cropper) cropper.destroy(); };
-    // The theme's pending answer, a profile's accent values (null is the photo).
+    // In the bar when editing, in the page when starting one.
+    const saveBtn = document.getElementById('community-save');
+    const leaveBtn = document.getElementById('cf-cancel');
+    const photoRow = form.querySelector('#cf-photo');
+    const figure = form.querySelector('#cf-figure');
+    const pickBtn = form.querySelector('#cf-photo-pick');
+    const joinBtn = form.querySelector('#cf-join');
     const themeBtn = form.querySelector('#cf-theme');
+    let inviteOnlyPick = inviteOnlyNow;
+    const inviteOnly = () => !!joinBtn && inviteOnlyPick;
+    let slugTouched = false;
+    // The photo's pending answer: a cropper while one is being framed, `shotNow`
+    // once Use this photo settled it, or `photoOff` once Remove was pressed.
+    // None of them writes until the commit.
+    let cropper = null;
+    let cropSrc = null;     // the picked file, uncropped, while the crop is open
+    let shotNow = null;
+    let photoOff = false;
+    stopActiveCrop = () => { if (cropper) cropper.destroy(); };
+    const faceNow = () => (cropper ? cropSrc : shotNow || (!photoOff && editing && editing.avatar) || null);
+    const hasPhoto = () => !!(cropper || shotNow || (!photoOff && editing && editing.avatar));
+    // The theme's pending answer, a profile's accent values (null is the photo).
     let themePick = editing ? editing.accent || null : null;
-    const themeFace = () => (cropper ? cropSrc : (!photoOff && editing && editing.avatar) || null);
-    const syncTheme = () => {
-      const face = themeFace();
-      const shown = { accent: themePick, avatar: face };
-      if (themeBtn) {
-        const key = !isPhotoAccent(themePick) ? themePick : (face ? 'auto' : 'default');
-        const a = accentOf(key);
-        const css = a ? accentBand(key) : key === 'auto' ? `url(${face})` : key === 'default' ? 'var(--brand-band)' : '';
-        themeBtn.innerHTML =
-          `<span class="aud-lock-swatch${key === 'none' ? ' is-none' : ''}" aria-hidden="true"` +
-            `${css ? ` style="background-image:${esc(css)}"` : ''}></span>` +
-          `<span class="aud-lock-label">${a ? esc(a.label) : key === 'auto' ? 'Photo' : key === 'none' ? 'None' : 'Tria'}</span>` +
-          svgIcon('chevDown', 'aud-lock-chev');
-      }
-      paintWash(shown, 'profile');
-    };
-    if (themeBtn) {
-      syncTheme();
-      themeBtn.addEventListener('click', () => openAccentSheet({ accent: themePick, avatar: themeFace() }, (key) => {
-        themePick = key === 'auto' ? null : key;
-        syncTheme();
-      }));
-    }
+    const themeChanged = () => !!themeBtn && themePick !== (editing ? editing.accent || null : null);
 
     const slugNow = () => (slugEl ? slugEl.value.trim().toLowerCase() : '');
-    const themeChanged = () => !!themeBtn && themePick !== (editing ? editing.accent || null : null);
-    const changed = () => !!editing && (!!cropper || photoOff
-      || nameEl.value.trim() !== editing.name || aboutEl.value.trim() !== editing.about
-      || inviteOnly() !== !!editing.inviteOnly || themeChanged());
+    const changed = () => !!(cropper || shotNow || photoOff || themeChanged()
+      || nameEl.value.trim() !== (editing ? editing.name : '')
+      || aboutEl.value.trim() !== aboutNow
+      || inviteOnly() !== inviteOnlyNow);
+    // One predicate, both answers, as on Edit profile: the X over unsaved
+    // changes, the check only once there is something to save.
+    const syncAnswers = () => {
+      const dirty = changed();
+      if (leaveBtn) {
+        leaveBtn.innerHTML = dirty ? svgIcon('close') : svgIcon('chevron', 'toolbar-back-ico');
+        leaveBtn.setAttribute('aria-label', dirty ? 'Discard changes' : `Back to ${back.label}`);
+      }
+      if (editing && saveBtn) saveBtn.classList.toggle('toolbar-commit--idle', !dirty);
+    };
+    const leave = () => { if (canPop) history.back(); else go(back.href); };
+    leaveBtn?.addEventListener('click', leave);
+
+    // The page behind the form wears the theme as it is picked, and the Theme
+    // pill's dot is the colour (it reads the wash's --glow-photo).
+    const syncTheme = () => paintWash({ accent: themePick, avatar: faceNow() }, 'profile');
+    themeBtn?.addEventListener('click', () => openAccentSheet({ accent: themePick, avatar: faceNow() }, (key) => {
+      themePick = key === 'auto' ? null : key;
+      syncTheme();
+      syncAnswers();
+    }));
+    syncTheme();
+
+    const updateCount = () => {
+      countEl.textContent = `${aboutEl.value.length}/280`;
+      countEl.classList.toggle('is-full', aboutEl.value.length >= 280);
+    };
+    aboutEl.addEventListener('input', updateCount);
+    updateCount();
+
     const sync = () => {
       if (slugEl && !slugTouched) slugEl.value = Store.slugFrom(nameEl.value);
       if (hintEl) {
@@ -18146,6 +18186,7 @@
           : 'Its link, triaonline.com/c/…, which can’t change later.');
         hintEl.classList.toggle('field-hint--warn', !!problem);
       }
+      syncAnswers();
     };
     slugEl?.addEventListener('input', () => {
       slugTouched = true;
@@ -18159,8 +18200,8 @@
     if (!editing && finePointer()) nameEl.focus();
 
     // Commits as you tap, like the audience sheet: every way out leaves the
-    // same answer, and the field under the sheet changes as you go.
-    inviteBtn?.addEventListener('click', () => {
+    // same answer, and the pill under the sheet changes as you go.
+    joinBtn?.addEventListener('click', () => {
       const modeBtn = (shut, t, d) =>
         `<button type="button" class="aud-mode" data-shut="${shut}" aria-pressed="${inviteOnlyPick === shut}">` +
           `<span class="aud-mode-t">${t}</span><span class="aud-mode-d">${d}</span>` +
@@ -18180,7 +18221,8 @@
           modes.forEach(b => b.addEventListener('click', () => {
             inviteOnlyPick = b.dataset.shut === 'true';
             modes.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-            inviteBtn.innerHTML = communityJoinInner(inviteOnlyPick);
+            joinBtn.innerHTML = joinRow(inviteOnlyPick);
+            syncAnswers();
           }));
         },
       });
@@ -18189,99 +18231,133 @@
     if (photos) {
       const file = form.querySelector('#cf-file');
       const stage = form.querySelector('#cf-cropstage');
-      const pick = view.querySelector('#cf-photo-pick');
-      const face = view.querySelector('#cf-photo-face');
-      const hasPhoto = () => !!cropper || (!photoOff && !!(editing && editing.avatar));
+      const showFace = () => {
+        figure.innerHTML = faceHtml(faceNow());
+        pickBtn.querySelector('.pf-row-label').textContent = hasPhoto() ? 'New photo' : 'Add photo';
+      };
       // Clearing first is what lets re-picking the same file fire `change`.
       const openPicker = () => { file.value = ''; file.click(); };
-      // With a photo on, the face asks which: another, or none. Without one it
-      // goes straight to the picker, as Edit profile's camera does.
-      pick.addEventListener('click', () => {
+      // With a photo on, the face and its pill ask which: another, or none.
+      // Without one they go straight to the picker, as Edit profile's do.
+      const onPick = () => {
         if (!hasPhoto()) { openPicker(); return; }
         openSheet({
           title: 'Circle photo',
           items: [
             { label: 'Choose another', icon: 'camera', run: openPicker },
             { label: 'Remove photo', icon: 'trash', danger: true, run: () => {
-              if (cropper) { cropper.destroy(); cropper = null; }
-              stage.hidden = true;
-              pick.hidden = false;
+              shotNow = null;
               photoOff = !!(editing && editing.avatar);
-              face.innerHTML = photoFace(null);
+              showFace();
               syncTheme();
+              syncAnswers();
             } },
           ],
         });
-      });
+      };
+      pickBtn.addEventListener('click', onPick);
+      figure.addEventListener('click', onPick);
       const replace = form.querySelector('#cf-replace');
       replace.addEventListener('click', openPicker);
       replace.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); }
       });
+      const closeCrop = () => {
+        if (cropper) cropper.destroy();
+        cropper = null;
+        cropSrc = null;
+        stage.hidden = true;
+        photoRow.hidden = false;
+      };
+      // Use this photo: the crop becomes the face beside its rows, so Theme
+      // (and its Photo swatch) is there after a photo.
+      form.querySelector('#cf-crop-use').addEventListener('click', () => {
+        if (!cropper) return;
+        let shot = null;
+        try { shot = cropper.export(512); } catch { shot = null; }
+        if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
+        errEl.textContent = '';
+        closeCrop();
+        shotNow = shot;
+        photoOff = false;
+        showFace();
+        hapticTap('LIGHT');
+        syncTheme();
+        syncAnswers();
+      });
       file.addEventListener('change', () => {
         const f = file.files && file.files[0];
         if (!f) return;
         errEl.textContent = '';
-        saveBtn.disabled = true;      // held until the crop decodes
+        if (saveBtn) saveBtn.disabled = true;      // held until the crop decodes
         const reader = new FileReader();
         reader.onerror = () => {
-          saveBtn.disabled = false;
+          if (saveBtn) saveBtn.disabled = false;
           errEl.textContent = 'Couldn’t read that file, try another photo.';
         };
         reader.onload = () => {
-          pick.hidden = true;
+          photoRow.hidden = true;
           stage.hidden = false;
-          photoOff = false;
           if (cropper) cropper.destroy();
           cropSrc = reader.result;
           cropper = initCropper(form.querySelector('#cf-crop'), form.querySelector('#cf-cropimg'), reader.result, {
-            onReady: () => { saveBtn.disabled = false; },
+            onReady: () => { if (saveBtn) saveBtn.disabled = false; },
             onError: () => {
-              saveBtn.disabled = false;
-              cropper = null;
-              stage.hidden = true;
-              pick.hidden = false;
+              if (saveBtn) saveBtn.disabled = false;
+              closeCrop();
               errEl.textContent = 'Couldn’t open that photo, try another one.';
               syncTheme();
+              syncAnswers();
             },
           });
           syncTheme();
+          syncAnswers();
         };
         reader.readAsDataURL(f);
       });
     }
 
-    // The button is always live, as the composer's Share is, and says what is
-    // missing when it is pressed too early.
+    form.querySelector('#cf-delete')?.addEventListener('click', () => openSheet({
+      title: `Delete ${communityHandle(editing)}? Its posts go with it, for everyone. This can’t be undone.`,
+      items: [{ label: 'Delete circle', icon: 'trash', danger: true, run: async () => {
+        const res = await Store.deleteCommunity(editing.id).catch(() => null);
+        if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t delete it, try again.'); return; }
+        toast(`${communityHandle(editing)} is gone.`);
+        go('#/discover');
+      } }],
+    }));
+
+    // Start circle is always live, as the composer's Share is, and says what
+    // is missing when it is pressed too early.
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (saveBtn.disabled) return;
+      if (saveBtn && saveBtn.disabled) return;
+      // Nothing changed in the editor (Enter in the name field): the way back.
+      if (editing && !changed()) { leave(); return; }
       if (!nameEl.value.trim()) { errEl.textContent = 'Give it a name first.'; return; }
       if (!editing && Store.slugProblem(slugNow())) { errEl.textContent = Store.slugProblem(slugNow()); return; }
-      // Nothing changed in the editor: Save is simply the way back.
-      if (editing && !changed()) { if (canPop) history.back(); else go(communityRoute(editing)); return; }
       if (BLOCKLIST.hits(aboutEl.value, nameEl.value)) {
         errEl.textContent = 'That looks like it breaks our community guidelines. Please revise it.';
         return;
       }
+      // The crop is taken BEFORE anything commits, for Edit profile's reason:
+      // a photo that never decoded must not leave the words saved and the page
+      // saying nothing.
+      let shot = shotNow;
+      if (cropper) {
+        try { shot = cropper.export(512); } catch { shot = null; }
+        if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
+      }
       errEl.textContent = '';
-      saveBtn.disabled = true;
+      if (saveBtn) saveBtn.disabled = true;
       try {
         if (editing) {
-          // The crop is taken BEFORE anything commits, for Edit profile's reason:
-          // a photo that never decoded must not leave the words saved and the
-          // page saying nothing.
-          let shot = null;
-          if (cropper) {
-            try { shot = cropper.export(512); } catch { shot = null; }
-            if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
-          }
           const name = nameEl.value.trim(), about = aboutEl.value.trim();
           if (name !== editing.name || about !== editing.about) {
             const res = await Store.updateCommunity(editing.id, { name, about }).catch(() => null);
             if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t save that, try again.'; return; }
           }
-          if (inviteBtn && inviteOnly() !== !!editing.inviteOnly) {
+          if (joinBtn && inviteOnly() !== inviteOnlyNow) {
             const res = await Store.setCommunityPrivacy(editing.id, inviteOnly()).catch(() => null);
             if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Couldn’t change who can join, try again.'; return; }
           }
@@ -18295,7 +18371,7 @@
             : photoOff ? Store.setCommunityPhoto(editing.id, null) : null;
           // A new face is celebrated on the page that wears it.
           if (shot) celebrateArrival = 'c/' + editing.slug;
-          if (canPop) history.back(); else go(communityRoute(editing));
+          leave();
           if (pending) pending.then(r => {
             if (r && r.ok) { communityRepaint?.(); return; }
             toast((r && r.error) || 'Couldn’t save the photo, try again.');
@@ -18303,16 +18379,9 @@
           }, () => {});
           return;
         }
-        // A new circle's photo is cropped before anything commits too, then
-        // goes out behind the navigation once the circle exists to wear it.
-        let shot = null;
-        if (cropper) {
-          try { shot = cropper.export(512); } catch { shot = null; }
-          if (!shot) { errEl.textContent = 'That photo didn’t load, choose another one.'; return; }
-        }
-        const slug = slugNow();
+        const newSlug = slugNow();
         const res = await Store.createCommunity({
-          slug, name: nameEl.value.trim(), about: aboutEl.value.trim(), inviteOnly: inviteOnly(),
+          slug: newSlug, name: nameEl.value.trim(), about: aboutEl.value.trim(), inviteOnly: inviteOnly(),
         }).catch(() => null);
         if (!res || !res.ok) {
           errEl.textContent = (res && res.error) || 'Couldn’t start that circle, try again.';
@@ -18321,7 +18390,7 @@
         }
         // The celebration (the twinkle and the stars) waits for the circle's
         // own page, where there is something to sparkle.
-        celebrateArrival = 'c/' + slug;
+        celebrateArrival = 'c/' + newSlug;
         // Its theme goes out behind the navigation too, in the cache at once.
         const themed = themeChanged() ? Store.setCommunityAccent(res.id, themePick) : null;
         if (themed) themed.then(r => {
@@ -18333,14 +18402,14 @@
         const pending = shot ? Store.setCommunityPhoto(res.id, shot) : null;
         // In place of the form, so back from the new circle is where you were
         // before you started it, not a form that already did its job.
-        location.replace(`#/c/${encodeURIComponent(slug)}`);
+        location.replace(`#/c/${encodeURIComponent(newSlug)}`);
         if (res.privacyError) toast(res.privacyError);
         if (pending) pending.then(r => {
           if (!(r && r.ok)) toast((r && r.error) || 'Couldn’t save the photo, try again.');
           communityRepaint?.();
         }, () => {});
       } finally {
-        saveBtn.disabled = false;
+        if (saveBtn) saveBtn.disabled = false;
       }
     });
   }
