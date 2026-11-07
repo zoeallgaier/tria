@@ -6035,21 +6035,59 @@ button.poll-option:disabled { cursor: default; }
   max-height: none;
   border-radius: 0;
 }
+/* THE CONTRAST LAYER: one plain layer of paper at 82%, no blur (Zoe: "just
+   go with a regular opacity layer"), FEATHERED on its open edge over
+   --mv-feather (Zoe: "feather edges to smooth"), the feather added beyond
+   what it covers so the words always sit on the full 82%. */
+.mv { --mv-veil: color-mix(in srgb, var(--bg) 82%, transparent); --mv-feather: 64px; }
+/* Under the face, on a picture 9:16 or taller only (`is-tall`, Zoe: "the top
+   contrast doesn't need to be there unless the post is 9:16 or taller"):
+   anything shorter never reaches the head. */
+.mv-frame--pic.is-tall .mv-media::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(env(safe-area-inset-top) + 96px + var(--mv-feather));
+  pointer-events: none;
+  /* Lighter than the foot's (Zoe: "top contrast can be less intense"): only
+     a face, a name and the x sit on it. */
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 60%, transparent) calc(100% - var(--mv-feather)),
+    color-mix(in srgb, var(--bg) 44%, transparent) calc(100% - var(--mv-feather) * 0.72),
+    color-mix(in srgb, var(--bg) 24%, transparent) calc(100% - var(--mv-feather) * 0.44),
+    color-mix(in srgb, var(--bg) 7%, transparent) calc(100% - var(--mv-feather) * 0.18),
+    transparent);
+}
 .mv-caption {
   position: relative;
   z-index: 1;
   isolation: isolate;
   padding: 14px calc(var(--mv-side) + var(--mv-lane)) 10px var(--mv-side);
 }
-/* The layer runs on under Reply to the screen's edge, so it never stops in a
-   slab above it. */
+/* At the foot: under a long caption, under any caption on a 9:16 or taller
+   picture, and on one with no words, under Reply alone. It runs on under
+   Reply to the screen's edge, so it never stops in a slab above it, and
+   feathers up from the caption's top. */
+.mv-frame--pic.is-tall:not(.has-words) .mv-media::before,
+.mv-frame--pic.is-tall .mv-caption::before,
 .mv-caption.is-cut::before {
   content: '';
   position: absolute;
-  inset: 0 0 calc(-1 * var(--mv-under));
-  z-index: -1;
   pointer-events: none;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  background: linear-gradient(to top, var(--mv-veil) calc(100% - var(--mv-feather)),
+    color-mix(in srgb, var(--bg) 62%, transparent) calc(100% - var(--mv-feather) * 0.72),
+    color-mix(in srgb, var(--bg) 34%, transparent) calc(100% - var(--mv-feather) * 0.44),
+    color-mix(in srgb, var(--bg) 10%, transparent) calc(100% - var(--mv-feather) * 0.18),
+    transparent);
+}
+.mv-frame--pic.is-tall:not(.has-words) .mv-media::before {
+  inset: auto 0 0;
+  height: calc(var(--mv-under) + var(--mv-feather));
+  z-index: 1;
+}
+.mv-frame--pic.is-tall .mv-caption::before,
+.mv-caption.is-cut::before {
+  inset: calc(-1 * var(--mv-feather)) 0 calc(-1 * var(--mv-under));
+  z-index: -1;
 }
 .mv-caption .mv-title { font-size: 1.6rem; }
 .mv-caption .mv-note { font-size: 1.05rem; line-height: 1.45; }
@@ -6063,9 +6101,14 @@ button.poll-option:disabled { cursor: default; }
   overscroll-behavior: contain;
   transition: max-height 0.34s var(--ease);
 }
+/* The folded words feather out over their last line and a half, eased in
+   steps like the layer (Zoe: "feather the text above read more too"). */
 .mv-caption.is-cut:not(.is-open) .mv-caption-text {
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.3rem), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.3rem), transparent);
+  --mv-fold: linear-gradient(to bottom, #000 calc(100% - 2.3rem),
+    rgba(0, 0, 0, 0.72) calc(100% - 1.65rem), rgba(0, 0, 0, 0.4) calc(100% - 1rem),
+    rgba(0, 0, 0, 0.14) calc(100% - 0.45rem), transparent);
+  -webkit-mask-image: var(--mv-fold);
+  mask-image: var(--mv-fold);
 }
 .mv-caption.is-open .mv-caption-text { max-height: 46dvh; overflow-y: auto; }
 .mv-readmore {

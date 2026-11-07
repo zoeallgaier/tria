@@ -335,7 +335,14 @@ the viewer's ResizeObserver, `toggleCaption`): a tap on the words opens it to
 and a hold hides it with the chrome. **Only a folded caption gets a contrast
 layer**, one plain 82% layer of paper running on under Reply to the screen's
 edge (Zoe: "just go with a regular opacity layer ... I fear we went
-overboard"). Tried and cut the same day: a blurred copy of the photo behind
+overboard"). **A picture 9:16 or taller** (`is-tall`, read off its own size as
+it loads) reaches the face and the foot, so it wears the layer under any
+caption or, with none, under Reply (`has-words`), and a lighter 60% one under
+the head (Zoe: "top contrast can be less intense"). **Every layer is
+feathered** on its open edge in eased steps over `--mv-feather` (64px), added
+beyond what it covers, and the folded words feather out over their last line
+and a half (Zoe: "feather the text above read more too"); dropping the
+feather when the layer went plain was a mistake she caught. Tried and cut the same day: a blurred copy of the photo behind
 it, a picture ending above Reply on soft corners (its dark band read as a
 slab), feathered blur bands at the foot and the top, and a top scrim. The
 clip's sound sits under the x.

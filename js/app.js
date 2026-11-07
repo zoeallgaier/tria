@@ -7868,7 +7868,7 @@
       // ol white/dark and gradient colored bg instead of the blurred image").
       // A long caption folds with a Read more, as Reels' does (`is-cut`,
       // measured in openMoments).
-      return `<div class="mv-frame mv-frame--pic">` +
+      return `<div class="mv-frame mv-frame--pic${words ? ' has-words' : ''}">` +
           `<figure class="mv-media">${media}</figure>` +
           (words
             ? `<div class="mv-caption"><div class="mv-caption-text">${words}</div>` +
@@ -8038,6 +8038,17 @@
       paintLike(pg);
       pg.stage.innerHTML = momentFrameHtml(f);
       pg.el.classList.toggle('is-pic', !!pg.stage.querySelector('.mv-frame--pic'));
+      // A picture 9:16 or taller reaches up under the face, so only it wears
+      // the top layer (Zoe, 2026-11-06), read off its own size once known.
+      const pic = pg.stage.querySelector('.mv-pic');
+      if (pic) {
+        const mark = () => {
+          const w = pic.naturalWidth || pic.videoWidth, h = pic.naturalHeight || pic.videoHeight;
+          if (w && h) pic.closest('.mv-frame').classList.toggle('is-tall', h / w >= 1.77);
+        };
+        mark();
+        pic.addEventListener(pic.tagName === 'VIDEO' ? 'loadedmetadata' : 'load', mark, { once: true });
+      }
       wireLinkTiles(pg.stage);
       wash(pg, f);
       if (pg === page) live(how);
