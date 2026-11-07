@@ -9934,6 +9934,7 @@
   let profileFilter = 'all';
   let profileFilterFor = null;
   let profileResizeOff = null;   // drops the frame wall's resize listener when the view goes
+  let profileTabsOff = null;     // drops the tabs' scroll watch (wireProfileTabs)
 
   /* THE PROFILE'S TYPE TABS (Zoe, 2026-11-07: "like a swipable instagram
      filter"). A tap on a tab, or a sideways drag on the posts, goes to it.
@@ -9967,12 +9968,38 @@
       feedEl.style.transform = x ? `translateX(${x}px)` : '';
       feedEl.style.opacity = fade ? '0' : '';
     };
-    // A pane painted with the strip scrolled off stands under the header.
-    const keepStrip = () => {
-      const bar = document.querySelector('.topbar');
-      const top = bar ? bar.getBoundingClientRect().bottom : 0;
-      const at = tabsEl.getBoundingClientRect().top;
-      if (at < top) window.scrollTo(0, window.scrollY + at - top);
+    /* THE STRIP STICKS UNDER THE HEADER (Zoe, 2026-11-07: "snapped to the
+       top"). Stuck, it wears the bar's band and takes its hairline (CSS). And
+       a type picked while stuck opens at its own top, right under the strip,
+       so the strip never moves: the pane is held at least a screen tall, and
+       the page goes to where the posts begin. */
+    const stickAt = () => parseFloat(getComputedStyle(tabsEl).top) || 0;
+    const stuck = () => tabsEl.getBoundingClientRect().top <= stickAt() + 0.5 && window.scrollY > 0;
+    let frame = 0;
+    const syncStuck = () => {
+      frame = 0;
+      const on = tabsEl.isConnected && stuck();
+      tabsEl.classList.toggle('is-stuck', on);
+      document.body.classList.toggle('tabs-stuck', on);
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(syncStuck); };
+    profileTabsOff?.();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    profileTabsOff = () => {
+      cancelAnimationFrame(frame); frame = 0;
+      window.removeEventListener('scroll', onScroll);
+      document.body.classList.remove('tabs-stuck');
+      profileTabsOff = null;
+    };
+    syncStuck();
+    const keepStrip = (wasStuck) => {
+      if (!wasStuck) return;
+      const under = stickAt() + tabsEl.offsetHeight;
+      feedEl.style.minHeight = `${window.innerHeight - under}px`;
+      const gap = parseFloat(getComputedStyle(feedEl).marginTop) || 0;
+      // Rounded up: a pixel short leaves the strip a pixel off its stop, unstuck.
+      window.scrollTo(0, Math.ceil(window.scrollY + feedEl.getBoundingClientRect().top - gap - under) + 1);
+      syncStuck();
     };
 
     let seq = 0, moving = false;
@@ -9982,16 +10009,17 @@
       const dir = to > from ? 1 : -1;
       const w = feedEl.clientWidth || window.innerWidth;
       const mine = ++seq;
+      const wasStuck = stuck();
       place(to, true);
       light(keys[to]);
-      if (prefersReduced()) { pick(keys[to]); keepStrip(); pane(0); return; }
+      if (prefersReduced()) { pick(keys[to]); keepStrip(wasStuck); pane(0); return; }
       moving = true;
       pane(-dir * w * 0.4, true,
         'transform 150ms cubic-bezier(0.4, 0, 1, 1), opacity 150ms linear');
       setTimeout(() => {
         if (mine !== seq || !feedEl.isConnected) return;
         pick(keys[to]);
-        keepStrip();
+        keepStrip(wasStuck);
         pane(dir * w * 0.3, true);
         void feedEl.offsetWidth;
         pane(0, false, 'transform 0.36s var(--ease), opacity 0.2s linear');
@@ -27586,6 +27614,8 @@
     // Discover's grid is laid out by JS, so it keeps a resize listener alive.
     // Drop it on the way out; renderDiscover re-arms one on the way back in.
     if (path !== '#/discover') discoverResizeOff?.();
+    // A profile's tabs watch the scroll for when they stick; renderUser re-arms.
+    profileTabsOff?.();
     // A profile's frame wall is the same deal, so it keeps the same listener.
     if (!path.startsWith('#/u/') && path !== '#/profile') {
       profileResizeOff?.();

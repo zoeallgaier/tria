@@ -36,8 +36,12 @@ slides on out and the new one is painted and slides in from that side. A drag
 starting on anything with a sideways drag of its own, or the left 24px (back),
 is left alone. The posts are `touch-action: pan-y`, which is also what makes
 `swipeAt` stand the tab pager down over them, so on your own profile a swipe
-on the posts changes type, not tab. A pane painted with the strip scrolled off
-puts the strip back under the header. Not sticky (yet).
+on the posts changes type, not tab. **The strip sticks under the header**
+(Zoe: "have the filter snapped to the top"): stuck, it wears the bar's band
+edge to edge and takes the bar's hairline (`.is-stuck`, `body.tabs-stuck`,
+`profileTabsOff` drops the scroll watch in route()), and a type picked while
+stuck opens at its own top right under the strip, the pane held a screen tall
+so the strip never moves.
 
 ## A circle has a theme, picked as a profile's is (2026-11-07)
 

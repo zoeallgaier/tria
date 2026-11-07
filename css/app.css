@@ -7977,12 +7977,38 @@ button.card-song-play:active { transform: scale(0.9); }
    glyphs in even columns over the posts, the one you're on in ink and the rest
    muted, a short line under it that slides (and follows a drag on the posts,
    wireProfileTabs). No hairline across the strip and no fill: type on paper. */
+/* IT STICKS UNDER THE HEADER (Zoe, 2026-11-07: "have the filter snapped to the
+   top"); a profile holds its header, so the place it sticks never moves. Once
+   it's stuck it wears the bar's own band (blur, a whisper of paper) from edge
+   to edge and takes the bar's hairline under itself, so the two read as one
+   header (`.is-stuck`, `body.tabs-stuck`, set off the scroll in
+   wireProfileTabs). Unstuck, it is type on the page's wash. */
 .profile-tabs {
-  position: relative;
+  position: sticky;
+  top: calc(1rem + var(--topbar-h));
+  z-index: 20;
   display: flex;
   max-width: var(--feed-width);
   margin-top: var(--account-gap);
 }
+@media (max-width: 680px) {
+  .profile-tabs { top: calc(env(safe-area-inset-top) + var(--topbar-h)); }
+}
+.profile-tabs::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(-1 * var(--gutter, 0px));
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom: 0.5px solid var(--rule);
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.profile-tabs.is-stuck::before { opacity: 1; }
+body.tabs-stuck .topbar::before { border-bottom-color: transparent; }
 .pins-host:not(:empty) ~ .profile-tabs { margin-top: 1.6rem; }
 .profile-tab {
   flex: 1 1 0;
