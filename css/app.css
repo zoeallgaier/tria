@@ -6012,6 +6012,14 @@ button.poll-option:disabled { cursor: default; }
    openMoments); anywhere else a pull up replies and a pull down closes. */
 .mv-words, .mv-caption { touch-action: none; }
 :is(.mv-words, .mv-caption).is-long { touch-action: pan-y; }
+/* So is a poll (Zoe, 2026-11-06: "centered and padded properly"): the lane on
+   both sides, so the options sit in the middle and never under the rail, the
+   question and its words centred over them, the options' own labels left. */
+.mv-frame--poll { padding-inline: var(--mv-lane); }
+.mv-frame--poll :is(.mv-title, .mv-note, .poll-meta) { text-align: center; }
+.mv-frame--poll .tags { justify-content: center; }
+.mv-frame--poll .poll { margin: 1.2rem 0 0; }
+.mv-frame--poll .poll-meta { margin-top: 0.8rem; }
 .mv-title {
   margin: 0 0 0.6rem;
   font-family: 'Instrument Serif', 'Times New Roman', serif;

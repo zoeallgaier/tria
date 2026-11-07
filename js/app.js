@@ -7906,8 +7906,11 @@
         `</div>`;
     }
     // Words alone. A short note with no headline is set big, in the serif.
-    const big = !p.title && note && notePlain(p.note).length <= 140 && !pollWidgetHtml(p);
-    return `<div class="mv-frame mv-frame--words"><div class="mv-words${big ? ' mv-words--big' : ''}">${words}</div></div>`;
+    const poll = f.i === 0 && !!pollWidgetHtml(p);
+    const big = !p.title && note && notePlain(p.note).length <= 140 && !poll;
+    // A poll is centred, its question over the options (Zoe, 2026-11-06).
+    return `<div class="mv-frame mv-frame--words${poll ? ' mv-frame--poll' : ''}">` +
+      `<div class="mv-words${big ? ' mv-words--big' : ''}">${words}</div></div>`;
   }
 
   /* Moves an element to `to` (inline styles) and animates there from wherever
