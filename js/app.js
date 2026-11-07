@@ -7908,7 +7908,7 @@
     // Words alone. A short note with no headline is set big, in the serif.
     const poll = f.i === 0 && !!pollWidgetHtml(p);
     const big = !p.title && note && notePlain(p.note).length <= 140 && !poll;
-    // A poll is centred, its question over the options (Zoe, 2026-11-06).
+    // A poll runs the column's width, left as ever (Zoe, 2026-11-06).
     return `<div class="mv-frame mv-frame--words${poll ? ' mv-frame--poll' : ''}">` +
       `<div class="mv-words${big ? ' mv-words--big' : ''}">${words}</div></div>`;
   }
