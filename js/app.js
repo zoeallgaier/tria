@@ -7864,13 +7864,18 @@
       // and put captions and content below like tiktok and reels"): the
       // picture fills the page, never cropped, a blur of itself behind it, and
       // the words sit at its foot on a scrim.
+      // The blur fills the whole page, the Reply foot included, and the
+      // picture ends above the foot on rounded corners, so Reply never sits on
+      // anything a photo says. A long caption folds to three lines with a
+      // Read more, as Reels does (`is-cut`, measured in openMoments).
       const back = video ? p.poster : still;
       return `<div class="mv-frame mv-frame--pic${words ? ' has-caption' : ''}">` +
-          `<figure class="mv-media">` +
-            (back ? `<img class="mv-backdrop" src="${esc(sizedSrc(back, 40))}" alt="" aria-hidden="true" draggable="false">` : '') +
-            media +
-          `</figure>` +
-          (words ? `<div class="mv-caption">${words}</div>` : '') +
+          (back ? `<img class="mv-backdrop" src="${esc(sizedSrc(back, 40))}" alt="" aria-hidden="true" draggable="false">` : '') +
+          `<figure class="mv-media">${media}</figure>` +
+          (words
+            ? `<div class="mv-caption"><div class="mv-caption-text">${words}</div>` +
+                `<button type="button" class="mv-readmore" aria-expanded="false">Read more</button></div>`
+            : '') +
         `</div>`;
     }
     // Words alone. A short note with no headline is set big, in the serif.
@@ -7928,8 +7933,22 @@
        a long caption), so on every other frame a pull up or down is the
        viewer's. Watched, since a tile's picture can land and tip it over. */
     const fits = typeof ResizeObserver === 'function' ? new ResizeObserver((seen) => {
-      for (const { target: el } of seen) el.classList.toggle('is-long', el.scrollHeight > el.clientHeight + 1);
+      for (const { target: el } of seen) {
+        const over = el.scrollHeight > el.clientHeight + 1;
+        const cap = el.classList.contains('mv-caption-text') ? el.parentElement : null;
+        // A folded caption says whether it was cut; an open one keeps its
+        // Less, and only scrolls (takes the pan) when it still overflows.
+        if (cap && !cap.classList.contains('is-open')) cap.classList.toggle('is-cut', over);
+        el.classList.toggle('is-long', cap ? cap.classList.contains('is-open') && over : over);
+      }
     }) : null;
+    const toggleCaption = (cap) => {
+      const open = cap.classList.toggle('is-open');
+      const btn = cap.querySelector('.mv-readmore');
+      btn.textContent = open ? 'Less' : 'Read more';
+      btn.setAttribute('aria-expanded', String(open));
+      if (!open) cap.firstElementChild.scrollTop = 0;
+    };
 
     // The wash: a photo's or a song's sleeve's own colour on a picture frame
     // (Zoe: "make the background gradient match images rather than someones
@@ -7985,7 +8004,7 @@
       root.setAttribute('aria-label', `${pg.name}’s moments, ${pg.fi + 1} of ${pg.frames.length}`);
       if (fits) {
         fits.disconnect();
-        frame.querySelectorAll('.mv-words, .mv-caption').forEach(el => fits.observe(el));
+        frame.querySelectorAll('.mv-words, .mv-caption-text').forEach(el => fits.observe(el));
       }
       if (!frame.dataset.wired) {
         frame.dataset.wired = '1';
@@ -8167,9 +8186,16 @@
     // Every button in a page, the one on screen only.
     card.addEventListener('click', (e) => {
       const b = e.target.closest('button');
-      if (!b || busy || !page.el.contains(b)) return;
-      if (Date.now() - dragEnded < 400) return;
-      if (b.classList.contains('mv-close')) close();
+      if (busy || Date.now() - dragEnded < 400) return;
+      // A folded caption opens on a tap anywhere on its words, as Reels' does.
+      if (!b) {
+        const cap = e.target.closest('.mv-caption.is-cut');
+        if (cap && page.el.contains(cap) && !e.target.closest('a, [data-tile], .poll')) toggleCaption(cap);
+        return;
+      }
+      if (!page.el.contains(b)) return;
+      if (b.classList.contains('mv-readmore')) toggleCaption(b.parentElement);
+      else if (b.classList.contains('mv-close')) close();
       // A tag is a search for its word, as it is on Discover; the navigation
       // closes the viewer (route()).
       else if (b.classList.contains('tag') && b.dataset.tag) { discoverQuery = b.dataset.tag; go('#/discover'); }
@@ -8236,7 +8262,9 @@
       if (press) clearTimeout(press.timer);
       press = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, vx: 0, vy: 0,
         lx: e.clientX, ly: e.clientY, lt: e.timeStamp,
-        moved: false, held: false, axis: '', armed: false, onReply, onStage: !!e.target.closest('.mv-stage') };
+        moved: false, held: false, axis: '', armed: false, onReply,
+        // A folded caption's tap is its own (it opens, in the click handler).
+        onStage: !!e.target.closest('.mv-stage') && !e.target.closest('.mv-caption.is-cut') };
       const mine = press;
       press.timer = setTimeout(() => {
         if (press !== mine || mine.moved || mine.onReply) return;
@@ -8334,6 +8362,10 @@
         return;
       }
       if (!was.onStage) return;
+      // With a caption open, a tap anywhere else folds it, as Reels does,
+      // rather than stepping on with the words still up.
+      const opened = page.stage.querySelector('.mv-caption.is-open');
+      if (opened) { toggleCaption(opened); return; }
       const x = e.clientX, y = e.clientY;
       const go = () => step(x < root.clientWidth / 3 ? -1 : 1);
       if (own()) { go(); return; }   // nothing to like, so no wait

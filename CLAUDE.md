@@ -328,10 +328,19 @@ the tap zones (left third back, the rest forward) are unchanged.
 edge ... captions and content below like tiktok and reels ... don't overdo
 this"): the page takes `.is-pic`, the frame becomes the page-sized layer (so a
 pull up still carries it), the picture is centred and never cropped
-(`contain`) on a blur of itself (`.mv-backdrop`, the 40px render), and two
-scrims: the page's own paper at the top (the status bar's clock can't be
-recoloured, so the head keeps the scheme) and a dark one at the foot, where the
-caption, the rail and Reply are white. The clip's sound sits under the x.
+(`contain`) on a blur of itself (`.mv-backdrop`, the 40px render, under the
+whole page), and **the picture ends ABOVE the Reply foot on rounded corners**
+(`--mv-under`), so Reply sits on the calm blur, never on a photo's own words
+(Zoe's screenshot: a screenshot's tab bar under "Reply to Zoe"). **The caption
+rides a feathered band** (`.mv-caption::before`: a progressive blur and a dark
+wash dark enough alone, should the blur not draw) so white words never land on
+words in the picture ("the nightmare of tiktok caption text on cc captions").
+**A long caption folds to three lines with Read more** (`is-cut`, measured by
+the viewer's ResizeObserver; `toggleCaption`): a tap on the words or Read more
+opens it to 46dvh where it scrolls, a tap anywhere else folds it rather than
+stepping on, and a hold hides it with the chrome. The top scrim is the page's
+own paper (the status bar's clock can't be recoloured), and the rail and
+Reply are white. The clip's sound sits under the x.
 Words frames are set in a further 10px (24px from a phone's edge) with 0.75rem
 of air above and below the scroller; a pictured frame fills the column.
 The rail's own double tap and hold are gone (`wireSongGestures` deleted).
