@@ -18132,6 +18132,23 @@
           // the roster waits for this one to go). A link leaves the field.
           const q = (sel) => scrim.querySelector(sel);
           q('#community-join')?.addEventListener('click', () => { close(); joinHere(i); });
+          // A member's pills, the page's own (Zoe, 2026-11-08): Post and Edit
+          // leave the field in the tap; Invite waits for this sheet to go,
+          // since sheets don't stack.
+          q('#community-post')?.addEventListener('click', () => {
+            leaving = true;
+            pendingCommunity = c.id;
+            go('#/publish');
+          });
+          q('#community-invite')?.addEventListener('click', () => {
+            close();
+            openCommunityInvite(Store.community(c.id) || c);
+          });
+          q('#community-edit')?.addEventListener('click', () => {
+            leaving = true;
+            editorPushed = true;
+            go(`${communityRoute(Store.community(c.id) || c)}/edit`);
+          });
           q('#community-members')?.addEventListener('click', () => {
             close();
             openCommunityMembers(Store.community(c.id) || c);
@@ -18808,7 +18825,7 @@
           (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
         `</div>` +
       `</div>` +
-      (peek && member ? '' : `<div class="account-actions">${acts}</div>`);
+      `<div class="account-actions">${acts}</div>`;
   }
 
   /* THE HEAD CARRIED UP (Zoe, 2026-11-08: "because the content is the same it
