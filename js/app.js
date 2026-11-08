@@ -10871,13 +10871,36 @@
         mastheadEl('', esc(title)) +
         (list.length
           ? `<section class="communities" id="user-circles">` +
-              list.map(c => communityCardHtml(c)).join('') + `</section>`
+              list.map(c => communityCardHtml(c)).join('') + `</section>` +
+            `<p class="feed-empty" id="user-circles-none" hidden>No circle by that name.</p>`
           : `<p class="feed-empty">${isSelf
               ? 'No circles yet. Explore circles is on Discover.'
               : `${esc(u.name)} isn’t in any circles yet.`}</p>`) +
       `</section>`;
     const el = document.getElementById('user-circles');
-    if (el) wireCommunityJoins(el);
+    if (!el) return;
+    wireCommunityJoins(el);
+
+    // The friends page's find bar, the same job (Zoe, 2026-11-08): a circle
+    // matches on its name, its c/slug and its about.
+    const hayOf = (c) => `${c.name || ''} c/${c.slug || ''} ${c.about || ''}`.toLowerCase();
+    const byId = new Map(list.map(c => [String(c.id), hayOf(c)]));
+    const noneEl = document.getElementById('user-circles-none');
+    mountFindBar({
+      placeholder: 'Search circles',
+      label: `Search ${title}`,
+      onQuery: (q) => {
+        let shown = 0;
+        for (const card of el.children) {
+          const hay = byId.get(card.dataset.community) || '';
+          const hit = !q || hay.includes(q);
+          card.hidden = !hit;
+          if (hit) shown++;
+        }
+        el.hidden = !shown;
+        noneEl.hidden = shown > 0;
+      },
+    });
   }
 
   /* ── Someone's circle, as a PAGE ────────────────────────────────
