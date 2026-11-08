@@ -10351,8 +10351,8 @@
     // stat is a tappable button only for you or a friend, plain text otherwise.
     // A locked profile fences its feed, so its post stat is dropped (a "0 posts"
     // would mislead) and the line carries the friend count alone (no leading dot).
-    // Icons, not words (Zoe, 2026-11-08): a pencil for posts, the triad for
-    // friends, the two people (ICONS.friends) for the circles they're in. Each names itself to a
+    // Icons, not words (Zoe, 2026-11-08): a pencil for posts, the two people for
+    // friends, the triad (the circle mark) for the circles they're in. Each names itself to a
     // screen reader. The circles stat needs rosters, so signed in only.
     const statIco = (key, label) =>
       svgIcon(key, 'account-stat-ico') + `<span class="visually-hidden"> ${label}</span>`;
@@ -10365,7 +10365,7 @@
     const fc = Store.friendCount(u.username);
     const canSeeFriends = (isSelf || isFriend) && fc > 0;
     const friendInner =
-      statIco('circle', fc === 1 ? 'friend' : 'friends') +
+      statIco('friends', fc === 1 ? 'friend' : 'friends') +
       `<span class="account-stat-num">${fc}</span>`;
     const friendStat = canSeeFriends
       ? `<button type="button" class="account-stat account-stat--friends" id="show-friends">${friendInner}</button>`
@@ -10373,7 +10373,7 @@
     const cc = (Store.communitiesReady() && Store.isAuthed()) ? Store.communitiesOf(u.username).length : -1;
     const circleStat = cc < 0 ? ''
       : `<span class="account-stat">` +
-          statIco('friends', cc === 1 ? 'circle' : 'circles') +
+          statIco('circle', cc === 1 ? 'circle' : 'circles') +
           `<span class="account-stat-num">${cc}</span>` +
         `</span>`;
     const statsRow = `<div class="account-stats account-stats--icons">${postStat}${friendStat}${circleStat}</div>`;
