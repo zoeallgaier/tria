@@ -3847,7 +3847,9 @@ const Store = (() => {
         // Bare, and at most one: the entry says "my song goes here" and the song
         // itself lives in `listening_to`. A second window on the same status
         // would draw the same card twice.
-        if (!clean.some(x => x.k === 'song')) clean.push({ k: 'song' });
+        // Song pins are gone (2026-11-08): an old entry is dropped on the
+        // next write.
+        continue;
       }
       if (clean.length === PIN_MAX) break;
     }

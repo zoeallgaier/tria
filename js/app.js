@@ -7188,9 +7188,6 @@
       // The row is every type the composer infers, so its mark AND its word
       // cycle through them (POST_CYCLE, Zoe, 2026-11-06: no "Post").
       { key: 'note',     label: 'Note' },
-      // A Take is its own row (Zoe, 2026-11-08): it presses the composer's
-      // star on mount (ATTACH_BTN.take), as Activity once pressed the calendar.
-      ...(Store.takesReady() ? [{ key: 'take', label: 'Take', icon: 'star' }] : []),
       // No Activity row since 2026-11-04 (Zoe): a plan is the composer's
       // calendar button, as a link, a photo and a poll are.
       // Moment took Music's row (Zoe, 2026-11-04); a song is shared from its
@@ -7246,14 +7243,15 @@
      nameplate's own move (title-rise/title-sink, smaller). Any of them opens
      the plain composer. Reduced motion keeps Note. VoiceOver hears the five
      at once, never the swap. */
-  const POST_CYCLE = ['note', 'photo', 'find', 'poll', 'activity'];
+  // Take joins the walk (Zoe, 2026-11-08), not a row of its own.
+  const POST_CYCLE = ['note', 'photo', 'find', 'poll', 'take', 'activity'];
   const POST_CYCLE_MS = 1900;
   function cyclePostRow(row) {
     const ico = row?.querySelector('.sheet-ico');
     const word = row?.querySelector('span');
     if (!ico || !word) return null;
     const stop = cycleTypes(ico, word, 'sheet-ico sheet-cycle sheet-cycle--ico');
-    if (stop) row.setAttribute('aria-label', 'Note, frame, find, poll or activity');
+    if (stop) row.setAttribute('aria-label', 'Note, frame, find, poll, take or activity');
     return stop;
   }
 
@@ -16484,7 +16482,10 @@
       // resolved the same way a post pin is and drops the same way: no song, or
       // one that has aged out of `freshSong`'s week, and there is no card. The
       // slot stays in the row so the next song lands back in the same place.
-      if (e.k === 'song') { if (u.listening) out.push({ pin: e, song: u.listening, at }); return; }
+      // No more song pins (Zoe, 2026-11-08): with Moments and Music posts, a
+      // pinned listening status is a third copy. A pinned Music POST is a
+      // post pin like any other; an old {k:'song'} entry just draws nothing.
+      if (e.k === 'song') return;
       const row = all.find(p => p.id === e.id);
       const post = row ? subjectOf(row) : null;
       if (!post || Blocks.has(post.author)) return;
@@ -16759,7 +16760,7 @@
     // a song to point at. With one, this is just re-hanging the window you took
     // down, which is a write and not a journey. Without one, the way to pin a
     // song is to have a song, so it opens the picker — where saving pins it.
-    const songRow = pins.some(e => e.k === 'song') ? []
+    const songRow = true ? []
       : [{ label: u.listening ? 'What you’re listening to' : 'A song', icon: 'music',
            run: () => (u.listening
              ? commitPins(pins.concat([{ k: 'song' }]), { toastOk: 'Pinned to your profile.' })
@@ -16785,7 +16786,7 @@
      pinned by hand if some other path ever hands one over; this is the picker
      being opinionated, not the store. */
   // A circle's post stays in its circle, and a profile is not in it.
-  const pinnablePost = (p) => !(p.repostOf && !p.note) && !p.communityId;
+  const pinnablePost = (p) => !(p.repostOf && !p.note) && !p.communityId && !p.moment;
 
   /* Pin a post from its own ••• (openPostMenu). At three, the row does not go
      away and does not do nothing: it asks which of the three to swap out. A
