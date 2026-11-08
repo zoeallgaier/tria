@@ -8141,6 +8141,59 @@
     else v.addEventListener('playing', show, { once: true });
   }
 
+  // Whether a frame says something of its own (a headline or a note), which
+  // is what turns a song Moment from its sleeve into its words.
+  function momentSaid(f) {
+    return f.i === 0 && !!(f.post.title || cardNoteHtml(f.post, true));
+  }
+
+  /* THE TUNE: a song Moment that has words names its song where every other
+     Moment's caption sits, at the foot on the base line (Zoe, 2026-11-07:
+     "include the album cover cleanly but small, maybe where the captions ...
+     already are"), as Apple Music's mini player does: a small sleeve, the
+     title over the artist, the whole row the way to the song. A title too
+     long for the width moves as Apple Music's do: still a beat, then carried
+     left at an even pace until its copy, a gap behind, stands where it began,
+     and round again, its edges feathered only while it moves. Reduced motion
+     keeps it still, cut with an ellipsis. */
+  const TUNE_PACE = 30;     // px a second
+  const TUNE_HOLD = 2200;   // ms still at the start of every pass
+  // The sleeve frame's own caption (Zoe: "this with lil album", then "bigger
+  // album and group the listen button with the info"): the sleeve, and beside
+  // it the serif title, the artist and Listen as one group, as tall as it.
+  function tuneHtml(s) {
+    return `<div class="mv-tune">` +
+        `<span class="mv-tune-art${s.art ? ' pin-cover' : ''}"` +
+          `${s.art ? ` style="background-image:url('${encodeURI(s.art)}')"` : ''} aria-hidden="true">${s.art ? '' : svgIcon('music')}</span>` +
+        `<div class="mv-tune-text">` +
+          `<p class="mv-song-title mv-tune-clip"><span class="mv-tune-run"><span>${esc(s.title)}</span></span></p>` +
+          (songSub(s) ? `<p class="mv-song-sub">${esc(songSub(s))}</p>` : '') +
+          `<a class="mv-listen pill-quiet" href="${esc(songLink(s))}" target="_blank" rel="noopener noreferrer" ` +
+            `data-out="system">${svgIcon('music')}<span>Listen</span></a>` +
+        `</div>` +
+      `</div>`;
+  }
+  // Set moving once it's laid out, if it overflows.
+  function runTune(root) {
+    const clip = root.querySelector('.mv-tune-clip');
+    if (!clip) return;
+    requestAnimationFrame(() => {
+      const run = clip.firstElementChild;
+      if (!run || !clip.isConnected || prefersReduced() || !run.animate) return;
+      const one = run.firstElementChild;
+      if (one.offsetWidth <= clip.clientWidth + 1) return;
+      clip.classList.add('is-moving');
+      run.appendChild(one.cloneNode(true)).setAttribute('aria-hidden', 'true');
+      const dist = one.offsetWidth;   // the words and the gap after them
+      const ms = TUNE_HOLD + dist / TUNE_PACE * 1000;
+      run.animate([
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(0)', offset: TUNE_HOLD / ms },
+        { transform: `translateX(${-dist}px)` },
+      ], { duration: ms, iterations: Infinity });
+    });
+  }
+
   function momentFrameHtml(f) {
     const p = f.post;
     const note = f.i === 0 ? cardNoteHtml(p, true) : '';
@@ -8149,6 +8202,18 @@
     const words = (f.i === 0 && p.title ? `<h2 class="mv-title">${esc(p.title)}</h2>` : '') +
       (note ? `<div class="mv-note">${note}</div>` : '') +
       (f.i === 0 ? linkTilesHtml(p) + pollWidgetHtml(p) + tagChips(p) : '');
+    // A song with words of its own (a headline or a note) is a WORDS frame:
+    // the words take the stage as any written Moment's do (Zoe, 2026-11-07:
+    // "let the user's content shine"), and the song is the caption, the tune
+    // at the foot. The page still wears the sleeve's wash.
+    if (p.song && momentSaid(f)) {
+      const poll = !!pollWidgetHtml(p);
+      const big = !p.title && notePlain(p.note).length <= 140 && !poll;
+      return `<div class="mv-frame mv-frame--words mv-frame--tuned">` +
+          `<div class="mv-words${big ? ' mv-words--big' : ''}">${words}</div>` +
+          `<div class="mv-caption">${tuneHtml(p.song)}</div>` +
+        `</div>`;
+    }
     if (p.song) {
       const s = p.song;
       // ONE LAYOUT FOR EVERY MOMENT (Zoe, 2026-11-06: "all types of moments
@@ -8478,6 +8543,7 @@
       if (!play.hidden) setPlaySong(play, p.song);
       paintLike(pg);
       pg.stage.innerHTML = momentFrameHtml(f);
+      runTune(pg.stage);
       adoptWarm(pg.stage.querySelector('video.mv-pic'));
       pg.el.classList.toggle('is-pic', !!pg.stage.querySelector('.mv-frame--pic'));
       pg.el.classList.toggle('is-ext', !!pg.stage.querySelector('.mv-frame.is-ext'));
@@ -13011,17 +13077,38 @@
     const u = Store.user(username);
     const who = u ? u.name : '@' + username;
     const url = profileLink(username);
-    const payload = { title: `@${username} on Tria`, text: `${who} on Tria`, url };
+    qrShareSheet({
+      title: 'Share profile',
+      label: `QR code for @${username}’s profile`,
+      name: u && u.name, handle: '@' + username, url,
+      payload: { title: `@${username} on Tria`, text: `${who} on Tria`, url },
+    });
+  }
+
+  /* A circle's Share circle is the profile's QR sheet (Zoe, 2026-11-08: "share
+     circle should have the qr treatment like profiles"): the code for its
+     c/slug link, its name and handle under it, Share link and Copy link. */
+  function shareCommunity(c) {
+    const url = communityLink(c);
+    qrShareSheet({
+      title: 'Share circle',
+      label: `QR code for ${communityHandle(c)}`,
+      name: c.name, handle: communityHandle(c), url,
+      payload: { title: `${c.name} on Tria`, text: `${communityHandle(c)} on Tria`, url },
+    });
+  }
+
+  function qrShareSheet({ title, label, name, handle, url, payload }) {
     let code = null;
     try { code = window.QR ? QR.encode(url) : null; } catch { code = null; }
     if (!code) { handOver(payload); return; }
     openSheet({
-      title: 'Share profile',
+      title,
       head:
         `<div class="qr-card">` +
-          `<div class="qr-plate" role="img" aria-label="${esc(`QR code for @${username}’s profile`)}">${qrSvg(code)}</div>` +
-          (u && u.name ? `<p class="qr-name">${esc(u.name)}</p>` : '') +
-          `<p class="qr-handle">@${esc(username)}</p>` +
+          `<div class="qr-plate" role="img" aria-label="${esc(label)}">${qrSvg(code)}</div>` +
+          (name ? `<p class="qr-name">${esc(name)}</p>` : '') +
+          `<p class="qr-handle">${esc(handle)}</p>` +
         `</div>`,
       wire: (scrim) => sizeProfileCode(scrim.querySelector('.qr-plate'), code.length),
       items: [
@@ -18590,7 +18677,7 @@
     const member = Store.inCommunity(c.id);
     const items = [{
       label: 'Share circle', icon: 'send',
-      run: () => handOver({ title: `${c.name} on Tria`, text: `${communityHandle(c)} on Tria`, url: communityLink(c) }),
+      run: () => shareCommunity(c),
     }];
     if (me) items.push({ label: 'People', icon: 'friends', run: () => openCommunityMembers(c) });
     if (me && c.owner === me) items.push({
@@ -21379,6 +21466,22 @@
       `</a>`;
   }
 
+  /* A MOMENT ANSWERED sits ABOVE the answer (Zoe, 2026-11-07: "if I reply to a
+     moment, my message should be below the moment in chat"). A reply
+     (replyToSong) sends the Moment's own link under the words, and the thread
+     reads a link as a tile under what was said; here the tile is the thing
+     being answered, so it leads, the way a song's record does. Only a link to
+     a Moment that is still up: any other post's link keeps its tile under the
+     words, and a Moment past its day (gone from the cache, RLS hides it from
+     everyone but its author) has no card left to lead with. */
+  function momentLinked(url) {
+    const [, kind, key] = /^#\/(\w)\/([^?/]+)/.exec(triaRoute(url)) || [];
+    if (kind !== 'p') return false;
+    const id = decodeURIComponent(key);
+    const post = Store.posts().find(p => String(p.id) === id);
+    return !!(post && post.moment);
+  }
+
   function messageHtml(c, m, mine, run, byId) {
     const u = Store.user(m.author);
     const name = esc(u ? u.name : m.author);
@@ -21394,6 +21497,7 @@
     const link = m.text && !room && !tune ? linksIn(m.text).find(l => !MUSIC_HOST.test(l.href)) : null;
     const said = room ? room.rest : tune ? tune.rest
       : link ? noteWithoutTail(m.text, [link.href]) : m.text;
+    const lead = !!link && momentLinked(link.href);
     return `<li class="msg${mine ? ' msg--mine' : ''}${run ? ' msg--run' : ''}" data-id="${esc(m.id)}">` +
       (mine ? '' : `<span class="msg-face">${run ? '' :
         `<a class="msg-face-link" href="${href}" aria-label="${name}">` +
@@ -21412,12 +21516,13 @@
             `</button>`
           : '') +
         (tune ? msgSongHtml(tune.s) : '') +
+        (lead ? linkTileHtml(link.href) : '') +
         (said
           ? `<div class="msg-bubble" role="button" tabindex="0" aria-label="Message from ${name}, options">` +
               richText(said, m.author) + `</div>`
           : '') +
         (room ? msgCircleHtml(room.c) : '') +
-        (link ? linkTileHtml(link.href) : '') +
+        (link && !lead ? linkTileHtml(link.href) : '') +
         (hearts.length
           ? `<span class="msg-hearts" role="img" aria-label="Hearted by ${esc(listNames(hearts.map(h => displayNameOf(h.user))))}">` +
               svgIcon('heart') + `</span>`

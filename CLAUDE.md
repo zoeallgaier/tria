@@ -514,7 +514,17 @@ on the gutter; every icon, the x included, ends on it (`--mv-inset` pays back
 the 44px hit box); words keep clear of the rail's lane (`--mv-lane`); and ONE
 BASE LINE (`--mv-base`: the Reply foot, held to its true 56px `--mv-foot`, plus
 `--mv-lift`) carries both the last line of the words and the foot of the last
-icon. **Every type is laid out alike** (Zoe: "all types of moments should have
+icon. **A song Moment with words of its own** (a headline or a note, `momentSaid`)
+**is a words frame**: the words centred, and the sleeve frame's own caption
+(serif title, artist, Listen) at the foot, the three as one group beside a
+112px sleeve as tall as it (`tuneHtml`, `.mv-frame--tuned`; Zoe, 2026-11-07:
+"let the user's content shine", "this with lil album", "bigger album and group
+the listen button with the info"). A title stays on one line and
+moves like Apple Music's when it's too long (`runTune`). In the head, under
+the name, was tried and taken out the same day. The page still wears the
+sleeve's wash, and the rail still plays it. Without words it is the sleeve
+frame below.
+**Every type is laid out alike** (Zoe: "all types of moments should have
 a consistent layout"): the thing itself centred (a picture, a song's sleeve, or
 the words), its words at the foot as a caption: a song's title, artist and
 Listen moved there from under the sleeve.

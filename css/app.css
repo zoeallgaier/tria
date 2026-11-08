@@ -6329,7 +6329,7 @@ button.poll-option:disabled { cursor: default; }
   --surface-2: rgba(0, 0, 0, 0.5);
   --rule: rgba(255, 255, 255, 0.16);
 }
-.mv-page.is-ext :is(.mv-head, .mv-caption, .mv-foot) { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 14px rgba(0, 0, 0, 0.3); }
+.mv-page.is-ext :is(.mv-head, .mv-caption, .mv-foot) { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 0, 0, 0.45); }
 .mv-page.is-ext :is(.mv-rail, .mv-head, .mv-foot) svg { filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.35)); }
 /* (As specific as the tall frame's veils, which this takes away.) */
 .mv-frame--pic.is-ext:not(.has-words) .mv-media::before,
@@ -6350,9 +6350,9 @@ button.poll-option:disabled { cursor: default; }
     rgba(0, 0, 0, 0.008) calc(100% - 150px * 0.048),
     rgba(0, 0, 0, 0.002) calc(100% - 150px * 0.018),
     transparent);
-  opacity: 0.5;
+  opacity: 0.72;
 }
-.mv-frame--pic.is-ext .mv-caption.is-cut::before { opacity: 0.62; }
+.mv-frame--pic.is-ext .mv-caption.is-cut::before { opacity: 0.84; }
 /* A hold takes the layers with the chrome they were there for (the
    caption's goes with the caption). */
 .mv-media::before, .mv-media::after { transition: opacity 0.2s var(--ease-soft); }
@@ -6450,8 +6450,9 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-words :is(.card-link, .card-yt, .card-page, .card-circle, .card-song, .poll) { margin-top: 1rem; }
 /* A SONG is laid out as a picture is: the sleeve centred in the stage, big
-   and rounded like every cover, and its name, Listen and any words at the
-   foot, on the gutter and the base line, as a caption. */
+   and rounded like every cover, and its name and Listen at the foot, on the
+   gutter and the base line, as a caption. A song with words of its own is a
+   words frame instead, its song the tune in the head. */
 .mv-frame--song {
   display: flex;
   flex-direction: column;
@@ -6495,6 +6496,41 @@ button.poll-option:disabled { cursor: default; }
   text-decoration: none;
 }
 .mv-listen svg { width: 18px; height: 18px; }
+/* THE TUNE (a song Moment with words, tuneHtml in app.js): the words take the
+   stage, centred in what's left, and the sleeve frame's own caption sits at
+   the foot: the sleeve, and beside it the title, the artist and Listen as one
+   group, the sleeve as tall as the group. A title stays on one line, and one
+   too long for it moves, as Apple Music's do, its edges feathered only while
+   it moves. */
+.mv-frame--tuned { justify-content: flex-start; }
+.mv-frame--tuned .mv-words { flex: 0 1 auto; min-height: 0; margin-block: auto; }
+.mv-frame--tuned .mv-caption { flex: none; padding: 14px 0 0; }
+.mv-tune { display: flex; align-items: stretch; gap: 14px; min-width: 0; }
+.mv-tune .mv-listen { margin-top: 0.7rem; }
+.mv-tune-art {
+  flex: none;
+  align-self: center;
+  width: 112px;
+  height: 112px;
+  border-radius: var(--radius-art);
+  background: var(--glass-bg-panel) center / cover;
+  border: var(--glass-edge);
+}
+.mv-tune-art.pin-cover { border: 0; }
+.mv-tune-art:not(.pin-cover) { display: grid; place-items: center; color: var(--muted); }
+.mv-tune-art svg { width: 40%; height: 40%; stroke-width: 1.4; }
+.mv-tune-text { flex: 1; min-width: 0; }
+.mv-tune-clip { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-wrap: nowrap; }
+.mv-tune-clip.is-moving {
+  margin-left: -12px;
+  padding-left: 12px;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 20px), transparent);
+}
+.mv-tune-clip.is-moving .mv-tune-run { display: inline-flex; will-change: transform; }
+.mv-tune-clip.is-moving .mv-tune-run > span { padding-right: 2em; }
+.mv-tune .mv-song-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mv-listen + .mv-caption-text { margin-top: 0.85rem; }
 
 /* THE RAIL (Zoe, 2026-11-06: "stack them like tiktok/reels style"): the
