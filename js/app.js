@@ -17756,7 +17756,8 @@
   const GROW_MS = 620;       // one circle's rise on arrival
   const RIPPLE_MS = 4200;    // a lively circle's ripple, once every this often
   const ALIVE_MS = 864e5;    // lively: a sign of life in the last day
-  const OPEN_AT = 70;        // px of pull up on the sheet that opens the circle
+  const OPEN_AT = 70;
+  const GLIDE_W = 11;        // the camera's and the lens's spring, per second (~0.55s to settle)        // px of pull up on the sheet that opens the circle
   function renderExploreCircles() {
     const list = exploreList();
     const authed = Store.isAuthed();
@@ -17892,7 +17893,8 @@
     // circle, centred in the band under the bar, with the rest around it; you
     // can look around as far as the field goes, and a let-go past that springs
     // back. Coming back from a circle it is where you left it.
-    const cam = { x: 0, y: 0, vx: 0, vy: 0 };
+    // vx, vy: a drag's coast, px a frame. gx, gy: a glide's spring, px a second.
+    const cam = { x: 0, y: 0, vx: 0, vy: 0, gx: 0, gy: 0 };
     let camAim = null;           // a glide in progress (a lift, a keyboard's Tab)
     let sheetH = 0;              // how much of the foot the lifted circle's sheet takes
     const band = () => ({ x0: 0, x1: W, y0: top, y1: H - sheetH });
@@ -17927,6 +17929,7 @@
        edge holds and no gap ever closes. A drag brings a circle up to size as
        it comes in. It follows the band, so a lift moves it above the sheet. */
     const lens = { x: 0, y: 0, ax: 0, ay: 0 };
+    const lensV = { x: 0, y: 0, ax: 0, ay: 0 };
     const lensAim = () => {
       const v = band();
       return { x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2,
@@ -17976,7 +17979,9 @@
       nodes.forEach((nd, j) => { nd.aim = i < 0 || j === i ? 1 : 0.35; });
       if (i < 0) {
         sheetH = 0;
-        camAim = null;
+        // Home on the same glide, so the put-away eases out as the lift did.
+        const r = homeRange();
+        camAim = { x: clampTo(cam.x, r.x), y: clampTo(cam.y, r.y) };
         wake();
         return;
       }
@@ -18015,44 +18020,39 @@
 
     /* THE LIFTED CIRCLE'S SHEET is the standard one (Zoe, 2026-11-08: "the
        card should just be standard secondary menu"), see-through so the field
-       stays lit behind it: the circle as an unlock's hero (its face, name,
-       handle and where you stand, its about, who is in it), Join, and at its
-       foot the way in, the Moments Reply foot. A tap round it on the lifted
+       stays lit behind it: the circle's page's own head (Zoe, 2026-11-08:
+       "copy whats on the circle's page"), photo left and the name, who is in
+       it, its host and about beside it, its pills under, and at its foot the
+       way in, the Moments Reply foot. Going in carries that head up into its
+       place on the page (handHeadOver). A tap round it on the lifted
        circle goes in, on another lifts that one, on the paper puts it away,
        as does a pull down. A PULL UP opens the circle, the Moments Reply pull
        (Zoe, 2026-11-07: "take a note from moments replies"): the panel rises
        at half the finger's pace and
        stiffens past OPEN_AT, where "Open c/slug" inks, its chevron rises and
        a LIGHT haptic arms it; let go armed and it carries on up and away. */
-    const peekHtml = (nd, joinable) => {
-      const c = nd.c;
-      const status = nd.mine ? (c.owner === me ? 'Yours' : 'Joined')
-        : c.inviteOnly ? (Store.canJoinCommunity(c) ? 'Invited' : 'Invite only') : '';
-      const faces = me ? communityFaces(c, 4) : [];
-      return `<div class="cx-peek">` +
-          communityPicHtml(c, 'cx-peek-pic', 76) +
-          `<p class="cx-peek-name">${esc(c.name)}</p>` +
-          `<p class="cx-peek-handle">${esc(communityHandle(c))}` +
-            (c.inviteOnly ? svgIcon('lock', 'ptile-lock') : '') +
-            (status ? `<span class="daily-sep" aria-hidden="true">·</span>${status}` : '') +
-          `</p>` +
-          (c.about ? `<p class="cx-peek-about">${esc(c.about)}</p>` : '') +
-          `<div class="daily-answered cx-peek-who">` +
-            (faces.length
-              ? `<div class="daily-faces" aria-hidden="true">${faces.map(u => avatarEl(u, { cls: 'daily-face' })).join('')}</div>`
-              : '') +
-            `<span class="daily-count">${nd.n} ${memberWord(nd.n)}</span>` +
-          `</div>` +
-          // Join is THE BUTTON's commit (Zoe, 2026-11-08: "standard color
-          // button to join"); signed out it is the way to an account.
-          (joinable ? `<button type="button" class="daily-answer publish-fill cx-join">Join</button>` : '') +
-        `</div>`;
-    };
+    const peekHtml = (nd) =>
+      `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}</div>`;
     function openPeek(i) {
       const nd = nodes[i], c = nd.c;
-      const goIn = () => { leaving = true; go(communityRoute(c)); };
-      const opened = performance.now();
       let scrimEl = null, panel = null;
+      // In, with the head carried up out of the panel, which fades from under
+      // it where it stands (risen, if a pull brought it there).
+      const goIn = () => {
+        if (leaving && !panel?.isConnected) return;
+        leaving = true;
+        if (panel?.isConnected) {
+          handHeadOver(panel.querySelector('.cx-peek'), c.slug);
+          if (!reduce) {
+            const t = getComputedStyle(panel).transform;
+            panel.style.transition = 'opacity 0.22s var(--ease-soft)';
+            if (t && t !== 'none') panel.style.transform = t;
+            panel.style.opacity = '0';
+          }
+        }
+        go(communityRoute(c));
+      };
+      const opened = performance.now();
       let tapAt = null, tapHit = -1, pull = null, swallow = 0;
       // Every click on the window, before the sheet's own: the tap that lifted
       // the circle can land its click on the scrim as it goes up (WebKit
@@ -18107,11 +18107,6 @@
         // 2026-11-08). The panel carries on up and away on its own inline
         // transition, over the circle drawing under it.
         if (p.armed && e.type !== 'pointercancel') {
-          if (!reduce) {
-            panel.style.transition = 'transform 0.22s var(--ease-soft), opacity 0.2s var(--ease-soft)';
-            panel.style.transform = 'translateY(-48px)';
-            panel.style.opacity = '0';
-          }
           goIn();
           return;
         }
@@ -18121,19 +18116,27 @@
       }
       openSheet({
         scrimClass: 'sheet-scrim--see-through sheet-scrim--circle',
-        head: peekHtml(nd, !nd.mine && Store.canJoinCommunity(c)),
+        head: peekHtml(nd),
         onClose: () => {
           window.removeEventListener('click', firstClick, true);
           dropPull();
           peekPanel = null;
+          // A pull down's let-go leaves the panel where the finger was: it
+          // carries on down from there, on the sheet's own slide.
+          if (panel && !leaving) { panel.style.transition = ''; panel.style.transform = ''; }
           if (focus === i && !leaving) lift(-1);
         },
         wire: (scrim, close) => {
           scrimEl = scrim;
-          scrim.querySelector('.cx-join')?.addEventListener('click', () => {
+          // The head's taps, as its page wires them (sheets don't stack, so
+          // the roster waits for this one to go). A link leaves the field.
+          const q = (sel) => scrim.querySelector(sel);
+          q('#community-join')?.addEventListener('click', () => { close(); joinHere(i); });
+          q('#community-members')?.addEventListener('click', () => {
             close();
-            if (authed) joinHere(i); else go('#/join');
+            openCommunityMembers(Store.community(c.id) || c);
           });
+          scrim.querySelectorAll('a[href]').forEach((a) => a.addEventListener('click', () => { leaving = true; }));
           panel = peekPanel = scrim.querySelector('.sheet');
           // Its foot is the Moments Reply foot (Zoe, 2026-11-08: "the
           // consistent swipe up as before ... like replies to moments"): a
@@ -18205,7 +18208,7 @@
         moved: false, vx: 0, vy: 0, lastT: performance.now() };
       if (i >= 0) nodes[i].press = true;
       try { fieldEl.setPointerCapture(e.pointerId); } catch { /* an older WebKit */ }
-      cam.vx = cam.vy = 0;
+      cam.vx = cam.vy = cam.gx = cam.gy = 0;
       wake();
     };
     const onMove = (e) => {
@@ -18275,6 +18278,7 @@
     fieldEl.addEventListener('wheel', (e) => {
       e.preventDefault();
       camAim = null;
+      cam.gx = cam.gy = 0;
       cam.x -= e.deltaX; cam.y -= e.deltaY;
       spendHint();
       wake();
@@ -18333,6 +18337,7 @@
     const frame = (now) => {
       raf = 0;
       if (!world.isConnected) return;
+      const dt = Math.min(0.05, (last ? now - last : STEP) / 1000);
       acc = Math.min(acc + (last ? now - last : STEP), STEP * 4);
       last = now;
       const g = grav();
@@ -18343,9 +18348,20 @@
       // The camera: a glide, a coast, or a spring home.
       let homing = false;
       if (camAim) {
-        cam.x += (camAim.x - cam.x) * (reduce ? 1 : 0.12);
-        cam.y += (camAim.y - cam.y) * (reduce ? 1 : 0.12);
-        if (Math.abs(camAim.x - cam.x) + Math.abs(camAim.y - cam.y) < 0.5) camAim = null;
+        // A critically damped spring (GLIDE_W): it sets off from rest and
+        // settles with no overshoot in about the sheet's rise, where a step
+        // toward the aim each frame lurched off at its fastest.
+        if (reduce) { cam.x = camAim.x; cam.y = camAim.y; cam.gx = cam.gy = 0; }
+        else {
+          cam.gx += (GLIDE_W * GLIDE_W * (camAim.x - cam.x) - 2 * GLIDE_W * cam.gx) * dt;
+          cam.gy += (GLIDE_W * GLIDE_W * (camAim.y - cam.y) - 2 * GLIDE_W * cam.gy) * dt;
+          cam.x += cam.gx * dt; cam.y += cam.gy * dt;
+        }
+        if (Math.abs(camAim.x - cam.x) + Math.abs(camAim.y - cam.y) < 0.3
+            && Math.abs(cam.gx) + Math.abs(cam.gy) < 6) {
+          cam.x = camAim.x; cam.y = camAim.y; cam.gx = cam.gy = 0;
+          camAim = null;
+        }
       } else if (!hand || !hand.moved) {
         cam.x += cam.vx; cam.y += cam.vy;
         cam.vx *= 0.92; cam.vy *= 0.92;
@@ -18361,9 +18377,15 @@
       }
       let moving = !!hand || !!camAim || homing || Math.abs(cam.vx) + Math.abs(cam.vy) > 0.05;
       const la = lensAim();
+      // The lens follows the band on the same spring, so the circles give
+      // and take size in step with the glide.
       for (const k of ['x', 'y', 'ax', 'ay']) {
-        lens[k] += (la[k] - lens[k]) * (reduce ? 1 : 0.12);
-        if (Math.abs(la[k] - lens[k]) > 0.3) moving = true;
+        if (reduce) { lens[k] = la[k]; lensV[k] = 0; }
+        else {
+          lensV[k] += (GLIDE_W * GLIDE_W * (la[k] - lens[k]) - 2 * GLIDE_W * lensV[k]) * dt;
+          lens[k] += lensV[k] * dt;
+        }
+        if (Math.abs(la[k] - lens[k]) > 0.3 || Math.abs(lensV[k]) > 4) moving = true;
       }
       if (waveEnd < 0) {
         let far = 0;
@@ -18386,9 +18408,11 @@
         }
         nd.glow += (nd.aim - nd.glow) * (reduce ? 1 : 0.1);
         // A spring, so the lift pops and a press gives and comes back.
-        const aimS = (i === focus ? 1.06 : 1) * (nd.press ? 0.94 : 1);
+        // Softer than it was (Zoe, 2026-11-08: "smoothen ... WAYYYY more"):
+        // the lift still pops, with one small overshoot, not a wobble.
+        const aimS = (i === focus ? 1.05 : 1) * (nd.press ? 0.95 : 1);
         if (reduce) { nd.scale = aimS; nd.sv = 0; }
-        else { nd.sv = (nd.sv + (aimS - nd.scale) * 0.2) * 0.72; nd.scale += nd.sv; }
+        else { nd.sv = (nd.sv + (aimS - nd.scale) * 0.11) * 0.8; nd.scale += nd.sv; }
         const s = nd.lens * nd.scale * grow;
         nd.sr = nd.r * s;
         els[i].style.transform = `translate3d(${(nd.sx - nd.r).toFixed(2)}px, ${(nd.sy - nd.r).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
@@ -18717,6 +18741,154 @@
   // lands while it is up. False once the page it painted has gone.
   let communityRepaint = null;
 
+  // A CIRCLE'S HEAD, the profile's identity block worn by a room: a mark where the
+  // photo goes, the name, the handle, who is in it, what it is for, and the one
+  // decision it asks (Join), or, once you are in, the two things you came for.
+  // Its page and the sheet a circle lifts into on Explore circles both draw
+  // this one (Zoe, 2026-11-08: "copy whats on the circle's page"), so opening
+  // one from the sheet carries the head up into its place (handHeadOver).
+  // `peek`: the sheet's, where a circle you're in has no pills (Zoe, 2026-11-08:
+  // "no buttons on circles I host or am a part of"); the page has its own.
+  function communityHeadHtml(c, peek = false) {
+    const me = Store.session();
+    const member = Store.inCommunity(c.id);
+    const n = Store.communitySize(c.id);
+    const host = c.owner ? Store.user(c.owner) : null;
+    // Signed in it opens who they are; signed out it is only the size, since
+    // the names are for people with an account.
+    const people = !n ? ''
+      : me
+        ? `<button type="button" class="account-stat account-stat--friends" id="community-members">` +
+            `<span class="account-stat-num">${n}</span> ` +
+            `<span class="account-stat-label">${memberWord(n)}</span>` +
+          `</button>`
+        : `<span class="account-stat">` +
+            `<span class="account-stat-num">${n}</span> ` +
+            `<span class="account-stat-label">${memberWord(n)}</span>` +
+          `</span>`;
+    const hostedBy = host
+      // The host's name is the way to them (Zoe, 2026-10-23), yours to your own.
+      ? `<span class="account-stat">Hosted by ` +
+          `<a class="account-stat-host" href="${host.username === me ? '#/profile' : `#/u/${esc(encodeURIComponent(host.username))}`}">` +
+          `${host.username === me ? 'you' : esc(host.name || host.username)}</a></span>`
+      : '';
+    const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
+    // Said to its members; anyone else reads it on the pill below.
+    const fenced = c.inviteOnly && member
+      ?`<span class="account-stat-dot" aria-hidden="true">·</span><span class="account-stat">Invite only</span>` : '';
+    // An invite-only circle you hold no invite to has no Join to offer, so
+    // its place says why, quietly and untappable, the way Requested does.
+    const acts = !me
+      ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
+      : member
+        ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
+          `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>` +
+          // The host's third, so the theme, photo and words are one tap
+          // away and not only in the ••• (Zoe, 2026-11-07).
+          (c.owner === me
+            ? `<button class="friend-btn pill-quiet" type="button" id="community-edit">Edit</button>` : '')
+        : Store.canJoinCommunity(c)
+          ? `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`
+          : `<span class="friend-btn pill-quiet community-closed" aria-disabled="true">` +
+              `${svgIcon('lock')}Invite only</span>`;
+    return `<div class="account-head">` +
+        (c.avatar
+          ? `<div class="account-photo" aria-hidden="true">` +
+              `<img src="${esc(sizedSrc(c.avatar, 160))}" alt="" decoding="async"></div>`
+          : `<div class="account-photo account-photo--empty community-photo" aria-hidden="true">` +
+              svgIcon('circle', 'community-photo-ico') + `</div>`) +
+        `<div class="account-meta">` +
+          `<div class="account-id">` +
+            `<h1 class="account-name">${esc(c.name)}</h1>` +
+            // A profile's rule: the handle steps aside at phone width, where
+            // the bar's title already says it, and stays on a desktop.
+            `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
+          `</div>` +
+          (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}${fenced}</div>` : '') +
+          (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
+        `</div>` +
+      `</div>` +
+      (peek && member ? '' : `<div class="account-actions">${acts}</div>`);
+  }
+
+  /* THE HEAD CARRIED UP (Zoe, 2026-11-08: "because the content is the same it
+     should morph into the position on top on the circle page"). Opening a
+     circle from its sheet on Explore circles lifts a copy of the sheet's head
+     out of the panel, over everything, and the panel fades from under it; the
+     circle's page draws with its own head hidden, and the copy glides into
+     that head's place on the signature ease, where the two swap. The copy is
+     the sheet's own markup, its face already decoded, so nothing loads or
+     reflows mid-flight. `handHeadOver` runs inside the let-go (the navigation
+     must, see openPeek), `landHeadOver` once the page has painted. A page that
+     doesn't come, or a head drawn at a different width (a desktop's column is
+     wider than the sheet, and the text would wrap differently), lets the copy
+     fade where it is instead. */
+  let headMorph = null;
+  const MORPH_MS = 520;
+  function handHeadOver(src, slug) {
+    if (headMorph) { headMorph.clone.remove(); headMorph = null; }
+    if (!src || prefersReduced()) return;
+    const box = src.getBoundingClientRect();
+    if (!box.width) return;
+    const clone = src.cloneNode(true);
+    clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+    clone.classList.add('head-morph');
+    clone.setAttribute('aria-hidden', 'true');
+    Object.assign(clone.style, {
+      left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`,
+    });
+    document.body.append(clone);
+    src.style.visibility = 'hidden';
+    const m = headMorph = { clone, slug };
+    // Nothing landed it: let it go where it is.
+    m.timer = setTimeout(() => { if (headMorph === m) { headMorph = null; fadeMorph(clone); } }, 900);
+  }
+  function fadeMorph(clone) {
+    clone.style.transition = 'opacity 0.2s var(--ease-soft)';
+    clone.style.opacity = '0';
+    setTimeout(() => clone.remove(), 220);
+  }
+  function landHeadOver(headEl, feedEl, slug) {
+    const m = headMorph;
+    if (!m || m.slug !== slug) return;
+    headMorph = null;
+    clearTimeout(m.timer);
+    const { clone } = m;
+    const from = clone.querySelector('.account-head')?.getBoundingClientRect();
+    const to = headEl.querySelector('.account-head')?.getBoundingClientRect();
+    const at = clone.getBoundingClientRect();
+    const s = from && to && from.width ? to.width / from.width : 0;
+    if (!s || Math.abs(s - 1) > 0.03 || to.bottom < 0 || to.top > innerHeight) { fadeMorph(clone); return; }
+    // The copy's corner is its origin: move it so its head lands on the page's.
+    const dx = to.left - at.left - s * (from.left - at.left);
+    const dy = to.top - at.top - s * (from.top - at.top);
+    headEl.style.visibility = 'hidden';
+    let done = false;
+    const swap = () => {
+      if (done) return;
+      done = true;
+      headEl.style.visibility = '';
+      headEl.querySelector('.account-actions')?.style.removeProperty('visibility');
+      clone.remove();
+    };
+    void clone.offsetWidth;
+    clone.style.transition = `transform ${MORPH_MS}ms var(--ease)`;
+    clone.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) scale(${s.toFixed(4)})`;
+    clone.addEventListener('transitionend', swap, { once: true });
+    setTimeout(swap, MORPH_MS + 80);
+    // What the sheet never held, the posts (and a member's pills, which the
+    // sheet leaves off), comes up under it a beat behind.
+    const rise = [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }];
+    const ease = { duration: 460, delay: 140, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' };
+    feedEl?.animate?.(rise, ease);
+    const acts = headEl.querySelector('.account-actions');
+    if (acts && !clone.querySelector('.account-actions')) {
+      // Out of the hidden head, so it rises while the copy is still flying.
+      acts.style.visibility = 'visible';
+      acts.animate?.(rise, ease);
+    }
+  }
+
   function renderCommunity(slug) {
     communityRepaint = null;
     const born = arrivedChanged('c/' + slug);
@@ -18748,71 +18920,7 @@
       `</section>`;
     const headEl = view.querySelector('#community-head');
     const feedEl = view.querySelector('#feed');
-
-    // The head is the profile's identity block, worn by a room: a mark where the
-    // photo goes, the name, the handle, who is in it, what it is for, and the one
-    // decision it asks (Join), or, once you are in, the two things you came for.
-    const headHtml = (c) => {
-      const me = Store.session();
-      const member = Store.inCommunity(c.id);
-      const n = Store.communitySize(c.id);
-      const host = c.owner ? Store.user(c.owner) : null;
-      // Signed in it opens who they are; signed out it is only the size, since
-      // the names are for people with an account.
-      const people = !n ? ''
-        : me
-          ? `<button type="button" class="account-stat account-stat--friends" id="community-members">` +
-              `<span class="account-stat-num">${n}</span> ` +
-              `<span class="account-stat-label">${memberWord(n)}</span>` +
-            `</button>`
-          : `<span class="account-stat">` +
-              `<span class="account-stat-num">${n}</span> ` +
-              `<span class="account-stat-label">${memberWord(n)}</span>` +
-            `</span>`;
-      const hostedBy = host
-        // The host's name is the way to them (Zoe, 2026-10-23), yours to your own.
-        ? `<span class="account-stat">Hosted by ` +
-            `<a class="account-stat-host" href="${host.username === me ? '#/profile' : `#/u/${esc(encodeURIComponent(host.username))}`}">` +
-            `${host.username === me ? 'you' : esc(host.name || host.username)}</a></span>`
-        : '';
-      const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
-      // Said to its members; anyone else reads it on the pill below.
-      const fenced = c.inviteOnly && member
-        ?`<span class="account-stat-dot" aria-hidden="true">·</span><span class="account-stat">Invite only</span>` : '';
-      // An invite-only circle you hold no invite to has no Join to offer, so
-      // its place says why, quietly and untappable, the way Requested does.
-      const acts = !me
-        ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
-        : member
-          ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
-            `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>` +
-            // The host's third, so the theme, photo and words are one tap
-            // away and not only in the ••• (Zoe, 2026-11-07).
-            (c.owner === me
-              ? `<button class="friend-btn pill-quiet" type="button" id="community-edit">Edit</button>` : '')
-          : Store.canJoinCommunity(c)
-            ? `<button class="friend-btn publish-fill" type="button" id="community-join">Join</button>`
-            : `<span class="friend-btn pill-quiet community-closed" aria-disabled="true">` +
-                `${svgIcon('lock')}Invite only</span>`;
-      return `<div class="account-head">` +
-          (c.avatar
-            ? `<div class="account-photo" aria-hidden="true">` +
-                `<img src="${esc(sizedSrc(c.avatar, 160))}" alt="" decoding="async"></div>`
-            : `<div class="account-photo account-photo--empty community-photo" aria-hidden="true">` +
-                svgIcon('circle', 'community-photo-ico') + `</div>`) +
-          `<div class="account-meta">` +
-            `<div class="account-id">` +
-              `<h1 class="account-name">${esc(c.name)}</h1>` +
-              // A profile's rule: the handle steps aside at phone width, where
-              // the bar's title already says it, and stays on a desktop.
-              `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
-            `</div>` +
-            (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}${fenced}</div>` : '') +
-            (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
-          `</div>` +
-        `</div>` +
-        `<div class="account-actions">${acts}</div>`;
-    };
+    const headHtml = communityHeadHtml;
 
     // A tag on a circle's card is a search of the whole room, the way a tag
     // anywhere off My Circle is: there is no filter of this page to narrow.
@@ -18938,6 +19046,7 @@
       return paint();
     };
     paint();
+    landHeadOver(headEl, feedEl, first.slug);
     if (born) celebrateFace(headEl);
   }
 

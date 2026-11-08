@@ -12525,58 +12525,34 @@ body.circles-live .topbar--bare::before { opacity: 1; }
 .cx-empty { padding-top: 34vh; }
 
 /* THE LIFTED CIRCLE'S SHEET is the standard one (openPeek), its head the
-   circle as an unlock's hero: the face, the name in the serif, the handle and
-   where you stand, the about, who is in it, then Join as THE BUTTON's commit
-   at the daily pill's 52px. Its foot is the Moments Reply foot (.mv-foot). */
+   circle page's own (communityHeadHtml, Zoe, 2026-11-08: "copy whats on the
+   circle's page"): photo left, name, who is in it, the host and the about
+   beside it, Join under, nothing more for a circle you're in. Its sides put
+   its column on the page's (a phone's 14px gutter, less the panel's 6px
+   inset and its 1px edge), so every line breaks where the page's does and
+   opening the circle carries it up into its place with no change of size
+   (.head-morph). Drawn smaller here it would have to scale on the way, and
+   with more air it would wrap differently and snap as it landed. Its foot is
+   the Moments Reply foot (.mv-foot). */
 .cx-peek {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  /* The face stands a clear breath under the grab, as the sides give it. */
-  padding: 0.9rem 1.5rem 1rem;
-  text-align: center;
+  /* The face stands a clear breath under the grab. */
+  padding: 0.5rem calc(14px - 6px - 1px) 1.3rem;
   /* The panel is pulled from anywhere, so nothing in it selects or drags. */
   -webkit-user-select: none;
   user-select: none;
 }
+@media (min-width: 681px) { .cx-peek { padding-inline: 1.3rem; } }
 .cx-peek img { -webkit-user-drag: none; }
-.cx-peek .cx-peek-pic { width: 76px; height: 76px; margin-bottom: 0.4rem; }
-.cx-peek-name {
+/* The copy that flies from the sheet to the page (handHeadOver): fixed over
+   everything, its corner its origin, and never in the way of a finger. */
+.head-morph {
+  position: fixed;
+  z-index: 400;
   margin: 0;
-  font-family: 'Instrument Serif', 'Times New Roman', serif;
-  font-size: 1.9rem;
-  line-height: 1.1;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.cx-peek-handle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--muted);
-}
-.cx-peek-about {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  max-width: 34ch;
-  margin: 0.35rem 0 0;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.cx-peek-who { justify-content: center; margin-top: 0.55rem; }
-.cx-peek .cx-join {
-  align-self: stretch;
-  min-height: 52px;
-  margin: 0.95rem 0 0;
-  font-family: 'Oxygen', sans-serif;
-  font-weight: 700;
-  font-size: 0.95rem;
+  box-sizing: border-box;
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 /* "Open c/slug" under a soft chevron: the Reply foot itself (.mv-foot,
    .mv-swipe, .mv-reply), its 56px, its parts and its 10px drop, set where
@@ -12597,7 +12573,9 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 0 0 env(safe-area-inset-bottom);
+  /* 12px under Reply's place on a phone with a home bar (Zoe, 2026-11-08:
+     "bump the position of the open circle down"), never into the floor. */
+  margin: 0 0 max(0px, calc(env(safe-area-inset-bottom) - 12px));
   padding: 0;
   border: 0;
   background: none;

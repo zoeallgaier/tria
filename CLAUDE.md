@@ -67,15 +67,23 @@ faces of friends of yours in it** before its size, as many as it has room for
 (Zoe: "make it easier to connect"). **A tap lifts a circle into the band above
 THE STANDARD SHEET** (`openPeek`, Zoe: "the card should just be standard
 secondary menu"; until 2026-11-08 it was Discover's card risen from the foot):
-see-through, its head the circle as an unlock's hero (face, serif name, handle
-and where you stand, about, who is in it), then **Join as THE BUTTON's
-commit** (Zoe: "standard color button to join"), and at its foot **the
+see-through, **its head the circle page's own** (`communityHeadHtml(c, true)`,
+Zoe: "copy whats on the circle's page"), photo left and name, members, host
+and about beside it, its sides paying back the sheet's 6px inset and 1px edge
+so its column IS the page's (14px from the screen, the lines break alike),
+**Join as THE BUTTON's commit** and NO pills on a circle you're in or host
+(Zoe). **Going in carries the head up into its place on the page**
+(`handHeadOver` in the let-go, `landHeadOver` once renderCommunity paints: a
+fixed copy glides on `--ease`, the posts and a member's pills rise in behind;
+a desktop's wider column only fades the copy). Drawn smaller in the sheet was
+tried and dropped the same minute. The camera and the lens glide on a
+critically damped spring (`GLIDE_W`), the put-away too. At its foot **the
 Moments Reply foot**, a chevron over "Open c/slug" (Zoe: "the consistent swipe
 up as before ... like replies to moments"; for an hour it was an Open row).
 **Join is in place** (`joinHere`): the sheet goes and the disc bursts
 with `celebrateFace`'s stars in its own colours and wears its check, so you
-can join a few without leaving. Signed out Join goes to `#/join`, and so does
-Discover's cards' (it toasted "You need to be signed in." and stopped). A tap round the sheet on the lifted circle goes in,
+can join a few without leaving. Signed out the head's own "Make an account to join" goes to `#/join`, and so does
+Discover's cards' Join (it toasted "You need to be signed in." and stopped). A tap round the sheet on the lifted circle goes in,
 on another lifts that one, on the paper puts it away, as does a pull down;
 **a pull up opens it, the Moments Reply pull** (Zoe: "take a note from
 moments replies"): the panel rises at half pace and stiffens past `OPEN_AT`
@@ -86,7 +94,8 @@ discover"): WebKit's back swipe skips a history entry script made outside a
 gesture and the one before it, so a circle opened 200ms after the let-go
 swiped back past Circles. Playwright's goBack doesn't apply that rule, so
 only the phone shows it. The foot is Reply's own (56px, its parts and its
-10px drop) standing on the safe-area inset measured from the panel's floor
+10px drop) standing 12px under the safe-area inset measured from the
+panel's floor (Zoe, 2026-11-08: "bump the position of the open circle down")
 (Zoe: "match that of the reply to moment ... just slightly compensated with
 the card"), the same with or without Join. The field and the sheet refuse
 native drags (`dragstart`, `-webkit-user-drag`): one that began on a link or
