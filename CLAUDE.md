@@ -25,8 +25,13 @@ The same files also serve a website; that is a byproduct, not a target. See
 
 **Discover leads with the Explore circles card** (Zoe: "a new card akin to
 daily", "at the very top of discover"), above the daily, `circlesCardHtml`:
-words left aligned ("Explore circles" over "Find a circle for what you're
-into, or start a new one.", Zoe's line), and on the
+words left aligned ("Explore circles" over "Find a circle for something
+you're into, or start a new one.", Zoe's line), under **an eyebrow of every
+circle's name** where the daily says which day (Zoe: "a list of the existing
+names (as added), separated by commas and shifting like a song title would"):
+as their hosts wrote them, newest first, one line that moves as a Moment's
+song title does once it runs past the column (`rollCircleNames`, its own copy
+of `runTune`'s hold and pace), and on the
 right a small floating Venn: three discs in the circle mark's own geometry
 (`CARD_VENN`), in FIXED colours, the palette's pink and ocean and Tria's teal
 (Zoe: "use pink instead of orange"), blended so the overlaps mix
@@ -47,17 +52,39 @@ is the same each visit. **The circles can't be moved** (Zoe): a drag anywhere
 moves the view, which runs off the screen. **Where two meet mid drift, their
 hairlines merge into one outline** (Zoe: "combine/disappear on overlap"): the
 rings are a canvas over the discs, stroked then every disc cut out
-(destination-out). A tap
-lifts a circle (the rest dim) and raises its Discover card from the foot; a
-second tap goes in, and so does **a pull up on the card, the Moments Reply
-pull** (Zoe: "take a note from moments replies"): a chevron over "Open
-c/slug" UNDER the card, at the screen's foot in Reply's own spot and size
-(Zoe: "in the same spot as moments for consistency"), the card rising at half pace and stiffening past `OPEN_AT` (70px)
-with a LIGHT haptic, carrying on up and away on an armed let-go; a pull down
-puts it away. The pull is the window's while it runs, and the field refuses
-native link drags (`dragstart`, `-webkit-user-drag`), which had swallowed the
-pointer. The foot's "Drag to look around" goes after 3.2s or the
-first drag (`spendCaption`). **New circle is the bar's, always** (Zoe: "a perma button
+(destination-out). **The lens** (2026-11-08, Zoe: "go crazy"): the middle of
+the band is where a circle is whole, and out toward the edges each gives up to
+30% (`LENS`), drawn in toward the middle by what it lost so its inner edge
+holds and no gap closes (`place`); a drag brings circles up to size as they
+come in. Arriving fresh they **rise in as a wave** out from the middle with a
+little overshoot (`GROW_MS`); a circle **sinks under the finger** and pops on
+its lift (a spring, `sv`); one with a sign of life in the last day
+(`communityPulse`, `ALIVE_MS`) **sends a slow ripple** out from its ring in its
+own colour, passing behind its neighbours (the same cut). A disc shows **the
+faces of friends of yours in it** before its size, as many as it has room for
+(Zoe: "make it easier to connect"). **A tap lifts a circle into the band above
+THE STANDARD SHEET** (`openPeek`, Zoe: "the card should just be standard
+secondary menu"; until 2026-11-08 it was Discover's card risen from the foot):
+see-through, its head the circle as an unlock's hero (face, serif name, handle
+and where you stand, about, who is in it), then **Join as THE BUTTON's
+commit** (Zoe: "standard color button to join"), and at its foot **the
+Moments Reply foot**, a chevron over "Open c/slug" (Zoe: "the consistent swipe
+up as before ... like replies to moments"; for an hour it was an Open row).
+**Join is in place** (`joinHere`): the sheet goes and the disc bursts
+with `celebrateFace`'s stars in its own colours and wears its check, so you
+can join a few without leaving. Signed out Join goes to `#/join`, and so does
+Discover's cards' (it toasted "You need to be signed in." and stopped). A tap round the sheet on the lifted circle goes in,
+on another lifts that one, on the paper puts it away, as does a pull down;
+**a pull up opens it, the Moments Reply pull** (Zoe: "take a note from
+moments replies"): the panel rises at half pace and stiffens past `OPEN_AT`
+(70px), where "Open c/slug" inks and its chevron rises with a LIGHT haptic,
+and an armed let-go carries it on up and away. The field and the sheet refuse
+native drags (`dragstart`, `-webkit-user-drag`): one that began on a link or
+the face's image was the browser's and took the pointer. A click on the scrim
+within 450ms of a lift is the lifting tap's own (WebKit hit-tests a touch's
+click after it) and is dropped (`firstClick`). **"Drag to look around." is
+the app's toast**, after the rise, on every visit until a first drag on this
+device (`tria:circles-dragged`), and goes at a drag or a lift. **New circle is the bar's, always** (Zoe: "a perma button
 like dailies top right"); the bar's band shows from the first frame here
 (`body.circles-live`). `circlesOff` stops the frame loop in route(). **A circle opened from the field
 goes back to it** (Zoe: "make sure back goes back to circles"):

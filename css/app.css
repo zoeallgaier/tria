@@ -12325,6 +12325,19 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .discover-body > .circles-card:last-child { margin-bottom: 2rem; }
 .circles-card-top { display: flex; align-items: center; gap: 1rem; }
 .circles-card-words { flex: 1; min-width: 0; }
+/* Its eyebrow (Zoe, 2026-11-08): every circle's name, newest first, on one
+   line that moves like a Moment's song title (.mv-tune-clip) once it runs
+   past the column (rollCircleNames), both ends feathered while it does. */
+.circles-card-names { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.circles-card-names.is-moving {
+  margin-left: -12px;
+  padding-left: 12px;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 20px), transparent);
+}
+.circles-card-names.is-moving .circles-names-run { display: inline-flex; will-change: transform; }
+.circles-card-names.is-moving .circles-names-run > span { padding-right: 2em; }
 /* Its two doors, Explore and New circle, side by side in even columns (Zoe:
    "make buttons 2columns"), each the daily pill's height. */
 .circles-card-acts {
@@ -12457,80 +12470,101 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   white-space: nowrap;
 }
 .cx-sub-ico { width: 11px; height: 11px; flex-shrink: 0; }
-/* How the field works, said once at its foot on a small chip of the card's
-   own surface and hairline (so it reads over a disc), then gone after a beat. */
-.cx-caption {
-  position: absolute;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 1.1rem);
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 2 * var(--gutter, 1rem));
-  padding: 0.45rem 0.9rem;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  font-size: 0.8rem;
-  line-height: 1.4;
-  text-align: center;
-  color: var(--muted);
-  pointer-events: none;
-  transition: opacity 0.3s ease;
+/* A friend of yours in the circle: a small face leading its size, ringed in
+   the paper so it reads as cut out of the disc, the daily's stack in little. */
+.cx-pals { display: inline-flex; margin-right: 0.1rem; }
+.cx-pal.avatar {
+  width: 18px;
+  height: 18px;
+  font-size: 0.55rem;
+  border: 1.5px solid var(--bg);
 }
-.cx-caption.is-away { opacity: 0; transition-duration: 0.6s; }
+.cx-pal.avatar + .cx-pal.avatar { margin-left: -6px; }
 /* No native link drag in the field: a drag here is the field's. */
 .cx a { -webkit-user-drag: none; }
-/* THE LIFTED CIRCLE'S CARD: Discover's own card for it, risen from the foot. */
-.cx-sheet {
-  position: absolute;
-  left: var(--gutter, 1rem);
-  right: var(--gutter, 1rem);
-  bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
-  max-width: var(--feed-width);
-  margin: 0 auto;
-  transform: translateY(calc(100% + 2rem + env(safe-area-inset-bottom)));
-  transition: transform 0.5s var(--ease);
-  visibility: hidden;
+.cx-empty { padding-top: 34vh; }
+
+/* THE LIFTED CIRCLE'S SHEET is the standard one (openPeek), its head the
+   circle as an unlock's hero: the face, the name in the serif, the handle and
+   where you stand, the about, who is in it, then Join as THE BUTTON's commit
+   at the daily pill's 52px. Its foot is the Moments Reply foot (.mv-foot). */
+.cx-peek {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 1.5rem 1rem;
+  text-align: center;
+  /* The panel is pulled from anywhere, so nothing in it selects or drags. */
+  -webkit-user-select: none;
+  user-select: none;
 }
-.cx-sheet.is-up { transform: none; visibility: visible; }
-.cx-sheet:not(.is-up) { transition: transform 0.4s var(--ease-soft), visibility 0s 0.4s; }
-.cx-sheet .daily-card { margin: 0; padding-inline: 0.9rem; }
-/* ITS PULL UP, the Moments Reply foot's (.mv-foot): a soft chevron over
-   "Open c/slug", centred at the card's own foot under Join (Zoe: "put it on
-   the card"), Reply's 0.95rem words, as the foot of a Moment.
-   The card follows the finger
-   (.is-pulling holds the spring off), rises and inks the cue once armed, and
-   on an armed let-go carries on up and away as the circle opens. */
-.cx-sheet-in { transition: transform 0.45s var(--spring), opacity 0.2s var(--ease-soft); }
-.cx-sheet.is-pulling .cx-sheet-in { transition: none; }
-.cx-sheet.is-opening .cx-sheet-in {
-  opacity: 0;
-  transition: transform 0.22s var(--ease-soft), opacity 0.2s var(--ease-soft);
+.cx-peek img { -webkit-user-drag: none; }
+.cx-peek .cx-peek-pic { width: 76px; height: 76px; margin-bottom: 0.4rem; }
+.cx-peek-name {
+  margin: 0;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
+.cx-peek-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.cx-peek-about {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  max-width: 34ch;
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.cx-peek-who { justify-content: center; margin-top: 0.55rem; }
+.cx-peek .cx-join {
+  align-self: stretch;
+  min-height: 52px;
+  margin: 0.95rem 0 0;
+  font-family: 'Oxygen', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+/* "Open c/slug" under a soft chevron, centred, Reply's 0.95rem words; a tap or
+   a pull up goes in. Past OPEN_AT it inks and its chevron rises, as Reply's. */
 .cx-pull {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  margin-top: 0.8rem;
-  margin-bottom: -0.1rem;
-  line-height: 1.2;
-  color: var(--muted);
+  align-self: center;
+  margin: 0.1rem 0 0;
+  padding: 0.35rem 1.5rem 0.3rem;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1.2;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
   transition: color 0.2s var(--ease-soft);
 }
-.cx-pull-chev {
-  display: grid;
-  transition: transform 0.3s var(--spring);
-}
+.cx-pull:focus-visible { outline: none; color: var(--text); }
+.cx-pull-chev { display: grid; transition: transform 0.3s var(--spring); }
 .cx-pull-chev svg { width: 26px; height: 18px; stroke-width: 2; overflow: visible; }
-.cx-sheet.is-armed .cx-pull { color: var(--text); }
-.cx-sheet.is-armed .cx-pull-chev { transform: translateY(-4px); }
+.sheet-scrim--circle.is-armed .cx-pull { color: var(--text); }
+.sheet-scrim--circle.is-armed .cx-pull-chev { transform: translateY(-4px); }
 @media (prefers-reduced-motion: reduce) {
-  .cx-sheet, .cx-sheet:not(.is-up) { transition: visibility 0s; }
-  .cx-sheet-in, .cx-pull-chev { transition: none; }
+  .cx-pull, .cx-pull-chev { transition: none; }
 }
 
 /* THE SQUARE (Zoe, 2026-11-05): this week's public posts under the daily, in

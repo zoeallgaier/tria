@@ -17172,10 +17172,12 @@
   }
 
   // Joining from a card: in, and straight through the door, since the reason
-  // to join from here is to read what is inside.
+  // to join from here is to read what is inside. Signed out, Join is the way
+  // to an account (it said "You need to be signed in." and stopped there).
   function wireCommunityJoins(root) {
     root.querySelectorAll('[data-join]').forEach(btn => btn.addEventListener('click', async () => {
       if (btn.disabled) return;
+      if (!Store.isAuthed()) { go('#/join'); return; }
       const c = Store.community(btn.dataset.join);
       if (!c) return;
       btn.disabled = true;
@@ -17356,44 +17358,42 @@
   /* ── EXPLORE CIRCLES (#/circles) ───────────────────────────────────────────
      Zoe, 2026-11-07: "a new card akin to daily that goes to a new dedicated
      'explore circles' page ... a big beautiful animated screen of interactive
-     floating circles. The circles now are represented AS circles visually.
-     Circle sizes should be dependent on the amount of people in the circle",
-     with each one's colour a gradient blob under "a clean hairline circle
-     [that] contains the actual information". The card leads Discover; the
+     floating circles ... Circle sizes should be dependent on the amount of
+     people in the circle". The card leads Discover (circlesCardHtml); the
      circle rails stay in the square.
 
-     A CIRCLE IS A DISC, crisp at its edge and soft inside (Zoe, same day:
-     "this bokeh thing is not modern or clean enough", after a first pass of
-     blurred blobs): its own theme's spectrum (personTone, so a circle is the
-     colour its page washes) as a mesh, the middle stop filling it and the two
-     ends blooming from opposite corners, lit with THE LIGHT's numbers and set
-     solid on the paper; a 1px hairline at its edge; its face, name and size
-     inside.
+     A CIRCLE IS A DISC, crisp at its edge and soft inside (blurred bokeh came
+     first and went the same day: "not modern or clean enough"): its theme's
+     spectrum (personTone, the colour its page washes) as a mesh, lit with THE
+     LIGHT's numbers and laid solid on the paper; a hairline; its face, name
+     and size, and the faces of friends of yours who are in it.
 
      SIZE IS WHO IS IN IT: a ring's AREA goes with its members (the radius by
-     the square root), between a floor the words still fit in and a ceiling.
+     the square root), between a floor the words fit in and a ceiling.
 
      SPACED, NEVER OVERLAPPING AT REST (Zoe: "drop the overlap idea, space at
-     all properly"): every pair keeps FIELD_GAP apart. A Venn of real shared
-     members was built first and taken out the same day, and packing them
-     touching like bubbles was tried and taken back within minutes (Zoe: "bad
-     call"). The field runs off the screen ("okay with things off screen to
-     explore").
+     all properly"): every pair keeps FIELD_GAP apart, each floating on a slow
+     sine of its own. A Venn of real shared members and packing them touching
+     were both tried and taken out. WHERE TWO DO MEET, mid drift, their
+     hairlines become one (Zoe: "combine/disappear on overlap"): the rings are
+     a canvas over the discs, stroked and then every disc cut out.
 
-     WHERE TWO DO MEET, mid drift, THEIR HAIRLINES BECOME ONE (Zoe: "I want
-     the hairlines to combine/disappear on overlap"): the rings are drawn on a
-     canvas over the discs, every ring stroked and then every disc cut out of
-     the others (destination-out), so what is left is the outline of the
-     union. The discs are solid, so where they cross one lies over the other,
-     no darker lens.
+     A FIELD YOU LOOK AROUND (Zoe: "you shouldnt be able to move the
+     circles"): a drag anywhere moves the view, which runs off the screen.
+     THE LENS (2026-11-08, Zoe: "go crazy") keeps the middle whole and shrinks
+     what is out toward the edges, so a circle comes up to size as you bring
+     it in. They rise in as a wave from the middle on arrival, sink a little
+     under the finger, and one with a sign of life in the last day sends a
+     slow ripple out from its ring.
 
-     A FIELD YOU LOOK AROUND, NOT ONE YOU REARRANGE (Zoe: "you shouldnt be
-     able to move the circles"): a drag anywhere, on a circle or the paper,
-     moves the view. Each circle still wanders on a slow sine of its own, so
-     the field floats. A tap lifts a circle (the
-     rest dim) and raises its card, the Discover card itself, Join and all; a
-     second tap goes in. New circle is the bar's, always. Reduced motion
-     keeps every circle still.
+     A TAP LIFTS A CIRCLE into the band above THE STANDARD SHEET (Zoe,
+     2026-11-08: "the card should just be standard secondary menu"): its
+     face, name, handle and about, who is in it, then Join, THE BUTTON's
+     commit (in place: it bursts with stars in its own colours, and you can
+     go on and join more), and at its foot "Open c/slug", the Moments Reply
+     foot, which a tap or a pull up takes you through. A tap on the lifted
+     circle goes in, on another lifts that one. New circle is the bar's,
+     always. Reduced motion keeps every circle still.
 
      The layout is SEEDED from the circles' ids, so it is the same field every
      visit, not a shuffle. */
@@ -17482,8 +17482,8 @@
     el.classList.add('is-inked');
   };
 
-  /* THE FIELD'S BONES, shared by the page and the card's little picture: each
-     circle's radius by its members, and how near every pair may come. */
+  /* THE FIELD'S BONES: each circle's radius by its members, and how near
+     every pair may come. */
   function circleField(list, { rMin, rMax, gap = FIELD_GAP }) {
     const sizes = list.map(c => Math.max(1, Store.communitySize(c.id)));
     const top = Math.max(1, ...sizes);
@@ -17501,7 +17501,9 @@
       // Each one's own slow wander: two periods and two phases off the seed.
       w1: 0.00042 + seedOf(key + 'a') * 0.0004, w2: 0.00038 + seedOf(key + 'b') * 0.0004,
       p1: seed * 6.283, p2: seedOf(key + 'c') * 6.283,
-      glow: 1, aim: 1, scale: 1, inks: null,
+      glow: 1, aim: 1, scale: 1, sv: 0, press: false, inks: null,
+      // As drawn: where (sx, sy), how big (sr), the lens's share, the rise.
+      sx: 0, sy: 0, sr: r, lens: 1, alpha: 0, at: 0,
     };
   }
   /* One step. `push` is how much of an overlap past a pair's least distance
@@ -17585,11 +17587,19 @@
         `style="width:${d}px;height:${d}px;left:${Math.round((v.x - CARD_VENN_R - x0) * u)}px;` +
         `top:${Math.round((v.y - CARD_VENN_R - y0) * u)}px;` +
         `--float:${(7 + i * 1.3).toFixed(1)}s;--float-at:${(-i * 2.7).toFixed(1)}s"></span>`).join('');
+    // Its eyebrow, where the daily's says which day (Zoe, 2026-11-08: "a list
+    // of the existing names (as added), separated by commas and shifting like
+    // a song title would"): every circle's name as its host wrote it, newest
+    // first, on one line that moves once it runs past the column.
+    const names = exploreList().slice()
+      .sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0))
+      .map(c => c.name).join(', ');
     return `<section class="daily-card circles-card">` +
         `<div class="circles-card-top">` +
           `<div class="circles-card-words">` +
+            `<p class="daily-kicker circles-card-names"><span class="circles-names-run"><span>${esc(names)}</span></span></p>` +
             `<a class="daily-open" href="#/circles"><span class="daily-prompt">Explore circles</span></a>` +
-            `<p class="daily-hint">Find a circle for what you’re into, or start a new one.</p>` +
+            `<p class="daily-hint">Find a circle for something you’re into, or start a new one.</p>` +
           `</div>` +
           `<div class="circles-card-art" aria-hidden="true">${art}</div>` +
         `</div>` +
@@ -17603,9 +17613,11 @@
         `</div>` +
       `</section>`;
   }
-  // The Venn's colours, lit as a wash is: the palette's pink and ocean and
-  // Tria's ramp, each its spectrum through THE LIGHT.
-  function inkCirclesCard(root) {
+  // The card once it is on the page: the Venn's colours, lit as a wash is
+  // (the palette's pink and ocean and Tria's ramp, each its spectrum through
+  // THE LIGHT), and the names set moving.
+  function wireCirclesCard(root) {
+    rollCircleNames(root);
     root.querySelectorAll('.cxm-node[data-tone]').forEach((el) => {
       const t = el.dataset.tone;
       const inks = toneInks(t === 'tria' ? 'tria' : accentCss(t));
@@ -17613,6 +17625,32 @@
       inks.stops.forEach((s, i) => el.style.setProperty('--ink-' + 'abc'[i], rgba(s, 1)));
       el.style.setProperty('--ink-amt', inks.amt.toFixed(3));
       el.classList.add('is-inked');
+    });
+  }
+  /* THE NAMES MOVE AS A MOMENT'S SONG TITLE DOES (runTune): still for a
+     beat at the start of every pass, then on at an easy reading pace, a copy
+     following after a gap so the line never runs dry. Only when they run past
+     the column; reduced motion leaves them on an ellipsis. A repaint that
+     keeps the card keeps it moving. */
+  const NAMES_HOLD = 2200;   // ms still at the start of every pass
+  const NAMES_PACE = 30;     // px a second
+  function rollCircleNames(root) {
+    const clip = root.querySelector('.circles-card-names');
+    if (!clip || clip.classList.contains('is-moving')) return;
+    requestAnimationFrame(() => {
+      const run = clip.firstElementChild;
+      if (!run || !clip.isConnected || clip.classList.contains('is-moving') || prefersReduced() || !run.animate) return;
+      const one = run.firstElementChild;
+      if (one.offsetWidth <= clip.clientWidth + 1) return;
+      clip.classList.add('is-moving');
+      run.appendChild(one.cloneNode(true)).setAttribute('aria-hidden', 'true');
+      const dist = one.offsetWidth;   // the names and the gap after them
+      const ms = NAMES_HOLD + dist / NAMES_PACE * 1000;
+      run.animate([
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(0)', offset: NAMES_HOLD / ms },
+        { transform: `translateX(${-dist}px)` },
+      ], { duration: ms, iterations: Infinity });
     });
   }
 
@@ -17625,13 +17663,21 @@
   // Where the view was when you left the field, so coming back (from a
   // circle, by its back) lands where you were looking, not at the start.
   let circlesCam = null;
+  // A drag made here on this device: the hint has done its job.
+  const CIRCLES_DRAGGED = 'tria:circles-dragged';
+  const LENS = 0.3;          // how much of itself a circle at the edge gives up
+  const GROW_MS = 620;       // one circle's rise on arrival
+  const RIPPLE_MS = 4200;    // a lively circle's ripple, once every this often
+  const ALIVE_MS = 864e5;    // lively: a sign of life in the last day
+  const OPEN_AT = 70;        // px of pull up on the sheet that opens the circle
   function renderExploreCircles() {
     const list = exploreList();
     const authed = Store.isAuthed();
+    const me = Store.session();
     const startHref = authed ? '#/c/new' : '#/join';
     // NEW CIRCLE IS THE BAR'S, always there, the way a daily's Add yours is
     // (Zoe, 2026-11-07: "a perma button like dailies top right for adding
-    // circles"). It replaced a dashed Start a circle ring in the field.
+    // circles").
     mountToolbar({
       leading: toolbarBackEl('#/discover', 'Discover'),
       title: 'Circles',
@@ -17640,26 +17686,27 @@
         : '',
     });
     document.getElementById('cx-new')?.addEventListener('click', () => go(startHref));
+    if (!list.length) {
+      view.innerHTML =
+        `<section class="view view--circles">` +
+          `<h1 class="visually-hidden">Explore circles</h1>` +
+          `<p class="feed-empty cx-empty">${Store.communitiesReady()
+            ? 'No circles yet. Start the first one.' : 'Circles aren’t switched on yet.'}</p>` +
+        `</section>`;
+      return;
+    }
     view.innerHTML =
       `<section class="view view--circles">` +
         `<h1 class="visually-hidden">Explore circles</h1>` +
         `<div class="cx" id="cx">` +
           `<div class="cx-world" id="cx-world" role="list" aria-label="Circles"></div>` +
           `<canvas class="cx-lines" aria-hidden="true"></canvas>` +
-          `<p class="cx-caption" id="cx-caption">` +
-            (!Store.communitiesReady() ? 'Circles aren’t switched on yet.'
-              : list.length ? 'Drag to look around'
-              : 'No circles yet. Start the first one.') +
-          `</p>` +
-          `<div class="cx-sheet" id="cx-sheet" aria-live="polite"></div>` +
         `</div>` +
       `</section>`;
     document.body.classList.add('circles-live');
     const fieldEl = view.querySelector('#cx');
     const world = view.querySelector('#cx-world');
     const lines = view.querySelector('.cx-lines');
-    const sheet = view.querySelector('#cx-sheet');
-    const caption = view.querySelector('#cx-caption');
     const lctx = lines.getContext('2d');
     const reduce = prefersReduced();
 
@@ -17691,30 +17738,49 @@
     const { nodes } = field;
     settleField(field, grav());
 
+    // Who you know in each, and whether it has stirred today.
+    nodes.forEach((nd) => {
+      const c = nd.c;
+      nd.mine = authed && Store.inCommunity(c.id);
+      nd.friends = me
+        ? Store.communityMembers(c.id).filter(u => u !== me && Store.isFriend(u) && !Blocks.has(u))
+          .map(u => Store.user(u)).filter(Boolean)
+        : [];
+      nd.alive = Date.now() - (Date.parse(Store.communityPulse(c.id)) || 0) < ALIVE_MS;
+    });
+
     // Each ring's words, fitted: the name in the serif at a size its radius
-    // can carry, shrunk until its longest word fits the ring's inner width.
-    const ringHtml = (nd, i) => {
+    // can carry, shrunk until its longest word fits the ring's inner width;
+    // under it the size, led by the faces of friends of yours in it (Zoe,
+    // 2026-11-08: "make it easier to connect"), as many as the ring has room for.
+    const bubbleHtml = (nd) => {
       const c = nd.c;
       const inner = nd.r * 2 * 0.66;
       const longest = Math.max(4, ...c.name.split(/\s+/).map(w => w.length));
       const fs = Math.max(13, Math.min(nd.r * 0.27, 30, inner / (longest * 0.5)));
       const face = nd.r >= 74 ? Math.round(nd.r * 0.44) : 0;
-      const mine = authed && Store.inCommunity(c.id);
-      nd.mine = mine;
-      return `<a class="cx-node${mine ? ' is-mine' : ''}" href="${communityRoute(c)}" data-i="${i}" role="listitem" ` +
-          `aria-label="${esc(`${c.name}, ${communityHandle(c)}, ${nd.n} ${memberWord(nd.n)}${mine ? ', joined' : ''}`)}" ` +
-          `style="width:${nd.r * 2}px;height:${nd.r * 2}px">` +
-          `<span class="cx-bubble">` +
-            (face ? `<span class="cx-face" style="--face:${face}px">${communityPicHtml(c, 'cx-face-pic', face)}</span>` : '') +
-            `<span class="cx-name" style="font-size:${fs.toFixed(1)}px">${esc(c.name)}</span>` +
-            `<span class="cx-sub">` +
-              (c.inviteOnly ? svgIcon('lock', 'cx-sub-ico') : mine ? svgIcon('check', 'cx-sub-ico') : '') +
-              `${nd.n} ${memberWord(nd.n)}` +
-            `</span>` +
+      const room = (nd.r >= 90 ? 3 : nd.r >= 68 ? 2 : nd.r >= 56 ? 1 : 0) - (c.inviteOnly ? 1 : 0);
+      const pals = nd.friends.slice(0, Math.max(0, room));
+      return `<span class="cx-bubble">` +
+          (face ? `<span class="cx-face" style="--face:${face}px">${communityPicHtml(c, 'cx-face-pic', face)}</span>` : '') +
+          `<span class="cx-name" style="font-size:${fs.toFixed(1)}px">${esc(c.name)}</span>` +
+          `<span class="cx-sub">` +
+            (c.inviteOnly ? svgIcon('lock', 'cx-sub-ico') : nd.mine && !pals.length ? svgIcon('check', 'cx-sub-ico') : '') +
+            (pals.length
+              ? `<span class="cx-pals">${pals.map(u => avatarEl(u, { cls: 'cx-pal', px: 40 })).join('')}</span>`
+              : '') +
+            `${nd.n} ${memberWord(nd.n)}` +
           `</span>` +
-        `</a>`;
+        `</span>`;
     };
-    world.innerHTML = nodes.map(ringHtml).join('');
+    const labelOf = (nd) => {
+      const names = nd.friends.slice(0, 2).map(u => u.name || u.username);
+      return `${nd.c.name}, ${communityHandle(nd.c)}, ${nd.n} ${memberWord(nd.n)}` +
+        (names.length ? `, with ${names.join(' and ')}` : '') + (nd.mine ? ', joined' : '');
+    };
+    world.innerHTML = nodes.map(nd =>
+      `<a class="cx-node" href="${communityRoute(nd.c)}" role="listitem" aria-label="${esc(labelOf(nd))}" ` +
+        `style="width:${nd.r * 2}px;height:${nd.r * 2}px">${bubbleHtml(nd)}</a>`).join('');
     const els = [...world.children];
 
     // The hairline's ink, the page's own text colour, read again on a scheme change.
@@ -17722,24 +17788,24 @@
     const readInk = () => {
       ink = rgbOfToken(getComputedStyle(document.documentElement).getPropertyValue('--text')) || ink;
     };
-    readInk();
     const inkAll = () => {
       readInk();
-      nodes.forEach((nd) => {
-        circleInks(nd.c).then((inks) => {
-          if (!inks || !world.isConnected) return;
-          setInks(els[nodes.indexOf(nd)], inks, paperOf('--bg'));
-        });
-      });
+      const paper = paperOf('--bg');
+      nodes.forEach((nd, i) => circleInks(nd.c).then((inks) => {
+        if (!inks || !world.isConnected) return;
+        nd.inks = inks;
+        setInks(els[i], inks, paper);
+      }));
     };
     inkAll();
 
-    // THE CAMERA: the world's offset on the screen. It starts with the field
-    // centred in the band under the bar; you can look around as far as the
-    // field goes, and a let-go past that springs back.
+    // THE CAMERA: the world's offset on the screen. It starts on the biggest
+    // circle, centred in the band under the bar, with the rest around it; you
+    // can look around as far as the field goes, and a let-go past that springs
+    // back. Coming back from a circle it is where you left it.
     const cam = { x: 0, y: 0, vx: 0, vy: 0 };
-    let camAim = null;           // a glide in progress (a tap on a circle)
-    let sheetH = 0;              // how much of the foot a raised card takes
+    let camAim = null;           // a glide in progress (a lift, a keyboard's Tab)
+    let sheetH = 0;              // how much of the foot the lifted circle's sheet takes
     const band = () => ({ x0: 0, x1: W, y0: top, y1: H - sheetH });
     const homeRange = () => {
       const b = fieldBounds(nodes), v = band(), pad = 18;
@@ -17750,77 +17816,282 @@
       };
       return { x: span(b.x0, b.x1, v.x0, v.x1), y: span(b.y0, b.y1, v.y0, v.y1) };
     };
+    const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+    const centreOn = (nd) => {
+      const v = band();
+      return { x: (v.x0 + v.x1) / 2 - nd.x, y: (v.y0 + v.y1) / 2 - nd.y };
+    };
+    const fresh = !circlesCam;
     if (circlesCam) {
       cam.x = circlesCam.x;
       cam.y = circlesCam.y;
     } else {
-      // Arrive on the biggest circle, centred, with the rest around it.
-      const big = nodes.slice().sort((a, b) => b.r - a.r)[0];
-      const r = homeRange(), v = band();
-      const clampTo0 = (val, [lo, hi]) => Math.min(hi, Math.max(lo, val));
-      cam.x = big ? clampTo0((v.x0 + v.x1) / 2 - big.x, r.x) : (r.x[0] + r.x[1]) / 2;
-      cam.y = big ? clampTo0((v.y0 + v.y1) / 2 - big.y, r.y) : (r.y[0] + r.y[1]) / 2;
+      const aim = centreOn(nodes.reduce((a, b) => (b.r > a.r ? b : a)));
+      const r = homeRange();
+      cam.x = clampTo(aim.x, r.x);
+      cam.y = clampTo(aim.y, r.y);
     }
-    const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+
+    /* THE LENS (Zoe, 2026-11-08: "go crazy"): the middle of the band is where
+       a circle is whole; out toward the edges each gives up to LENS of its
+       size and is drawn in toward the middle by what it lost, so its inner
+       edge holds and no gap ever closes. A drag brings a circle up to size as
+       it comes in. It follows the band, so a lift moves it above the sheet. */
+    const lens = { x: 0, y: 0, ax: 0, ay: 0 };
+    const lensAim = () => {
+      const v = band();
+      return { x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2,
+        ax: Math.max(120, (v.x1 - v.x0) / 2), ay: Math.max(120, (v.y1 - v.y0) / 2) };
+    };
+    Object.assign(lens, lensAim());
+    // Where a circle is drawn (sx, sy) and how much of it the lens keeps.
+    const place = (nd) => {
+      const cx = nd.x + cam.x, cy = nd.y + cam.y;
+      const dx = cx - lens.x, dy = cy - lens.y;
+      const t = Math.min(1, Math.max(0, (Math.hypot(dx / lens.ax, dy / lens.ay) - 0.45) / 0.9));
+      nd.lens = 1 - LENS * t * t * (3 - 2 * t);
+      const d = Math.hypot(dx, dy) || 1, pull = nd.r * (1 - nd.lens);
+      nd.sx = cx - (dx / d) * pull;
+      nd.sy = cy - (dy / d) * pull;
+    };
+    nodes.forEach((nd) => { place(nd); nd.sr = nd.r * nd.lens; });
+
+    // THE HINT, the app's own toast, after the field has risen, on every
+    // visit until a first drag here on this device (Zoe, 2026-11-07: "make it
+    // dissapear after just a bit"). It goes the moment you drag or lift.
+    const HINT = 'Drag to look around.';
+    let told = false;
+    try { told = !!localStorage.getItem(CIRCLES_DRAGGED); } catch { /* private window */ }
+    const hintTimer = told ? 0 : setTimeout(() => {
+      if (world.isConnected && !told) toast(HINT);
+    }, fresh ? 900 : 300);
+    const quietHint = () => {
+      const t = document.querySelector('.toast.show');
+      if (t && t.textContent === HINT) t.classList.remove('show');
+    };
+    const spendHint = () => {
+      quietHint();
+      if (told) return;
+      told = true;
+      try { localStorage.setItem(CIRCLES_DRAGGED, '1'); } catch { /* private window */ }
+    };
 
     // WHAT IS LIFTED. A tap on a circle lifts it: the rest dim, the camera
-    // brings it into the band over the card, and the card rises, Discover's
-    // own card for it.
+    // brings it into the band over the sheet, and the sheet rises.
     let focus = -1;
-    /* THE CAPTION says how once, then gets out of the way (Zoe, 2026-11-07:
-       "make it dissapear after just a bit"): gone after CAPTION_MS, or at the
-       first drag, and not back when a lifted card is put away. */
-    const CAPTION_MS = 3200;
-    let captionSpent = false;
-    const spendCaption = () => {
-      if (captionSpent) return;
-      captionSpent = true;
-      caption.classList.add('is-away');
-    };
-    const captionTimer = setTimeout(spendCaption, CAPTION_MS);
+    let leaving = false;         // a circle is being opened: nothing to put back
+    let peekPanel = null;
     const lift = (i) => {
+      if (i >= 0 && sheetOpen) return;      // another sheet is up
       focus = i;
-      sheet.classList.remove('is-armed', 'is-opening', 'is-pulling');
-      els.forEach((el, j) => el.classList.toggle('is-focus', j === i));
       nodes.forEach((nd, j) => { nd.aim = i < 0 || j === i ? 1 : 0.35; });
       if (i < 0) {
-        sheet.classList.remove('is-up');
-        caption.classList.toggle('is-away', captionSpent);
         sheetH = 0;
         camAim = null;
         wake();
         return;
       }
-      const c = nodes[i].c;
-      sheet.innerHTML = `<div class="cx-sheet-in">` +
-          communityCardHtml(c) +
-          `<div class="cx-pull" aria-hidden="true">` +
-            `<span class="cx-pull-chev">${svgIcon('chevUp')}</span>` +
-            `<span class="cx-pull-word">Open ${esc(communityHandle(c))}</span>` +
-          `</div>` +
-        `</div>`;
-      // The cue is the card's own foot, under Join.
-      const pullCue = sheet.querySelector('.cx-pull');
-      sheet.querySelector('.daily-card')?.append(pullCue);
-      wireCommunityJoins(sheet);
-      sheet.classList.add('is-up');
-      caption.classList.add('is-away');
-      sheetH = sheet.offsetHeight + 24;
-      const v = band();
-      camAim = { x: (v.x0 + v.x1) / 2 - nodes[i].x, y: (v.y0 + v.y1) / 2 - nodes[i].y };
+      quietHint();
+      openPeek(i);
+      camAim = centreOn(nodes[i]);
       wake();
     };
 
+    // The circle's own colours, for its stars: its spectrum, Tria's two ends,
+    // or the plain heart for None.
+    const starsOf = (c) => personTone(c).then((tone) => {
+      const rgb = tone !== 'none' && tone !== 'tria' && cssToRgb(tone);
+      const list = tone === 'none' ? ['var(--mono-heart)'] : rgb ? stopsAround(rgb, WASH_ARC) : TRIA_STARS;
+      return CIRCLE_SPARKS.map((_, k) => list[k % list.length]);
+    }, () => null);
+    // JOIN, IN PLACE (Zoe, 2026-11-08: "join circle buttons earlier, reducing
+    // taps"): the sheet goes, the circle bursts with stars in its own colours
+    // and wears its check, and you are still on the field, free to join more.
+    const joinHere = async (i) => {
+      const nd = nodes[i], c = nd.c;
+      const res = await Store.joinCommunity(c.id).catch(() => null);
+      if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
+      toast(`You’ve joined ${communityHandle(c)}.`);
+      if (!world.isConnected) return;
+      nd.mine = true;
+      nd.n = Math.max(nd.n, Store.communitySize(c.id));
+      els[i].innerHTML = bubbleHtml(nd);
+      els[i].setAttribute('aria-label', labelOf(nd));
+      wake();
+      starsOf(c).then((inks) => {
+        const bubble = els[i].querySelector('.cx-bubble');
+        if (bubble) celebrateFace(bubble, false, inks);
+      });
+    };
+
+    /* THE LIFTED CIRCLE'S SHEET is the standard one (Zoe, 2026-11-08: "the
+       card should just be standard secondary menu"), see-through so the field
+       stays lit behind it: the circle as an unlock's hero (its face, name,
+       handle and where you stand, its about, who is in it), Join, and at its
+       foot the way in, the Moments Reply foot. A tap round it on the lifted
+       circle goes in, on another lifts that one, on the paper puts it away,
+       as does a pull down. A PULL UP opens the circle, the Moments Reply pull
+       (Zoe, 2026-11-07: "take a note from moments replies"): the panel rises
+       at half the finger's pace and
+       stiffens past OPEN_AT, where "Open c/slug" inks, its chevron rises and
+       a LIGHT haptic arms it; let go armed and it carries on up and away. */
+    const peekHtml = (nd, joinable) => {
+      const c = nd.c;
+      const status = nd.mine ? (c.owner === me ? 'Yours' : 'Joined')
+        : c.inviteOnly ? (Store.canJoinCommunity(c) ? 'Invited' : 'Invite only') : '';
+      const faces = me ? communityFaces(c, 4) : [];
+      return `<div class="cx-peek">` +
+          communityPicHtml(c, 'cx-peek-pic', 76) +
+          `<p class="cx-peek-name">${esc(c.name)}</p>` +
+          `<p class="cx-peek-handle">${esc(communityHandle(c))}` +
+            (c.inviteOnly ? svgIcon('lock', 'ptile-lock') : '') +
+            (status ? `<span class="daily-sep" aria-hidden="true">·</span>${status}` : '') +
+          `</p>` +
+          (c.about ? `<p class="cx-peek-about">${esc(c.about)}</p>` : '') +
+          `<div class="daily-answered cx-peek-who">` +
+            (faces.length
+              ? `<div class="daily-faces" aria-hidden="true">${faces.map(u => avatarEl(u, { cls: 'daily-face' })).join('')}</div>`
+              : '') +
+            `<span class="daily-count">${nd.n} ${memberWord(nd.n)}</span>` +
+          `</div>` +
+          // Join is THE BUTTON's commit (Zoe, 2026-11-08: "standard color
+          // button to join"); signed out it is the way to an account.
+          (joinable ? `<button type="button" class="daily-answer publish-fill cx-join">Join</button>` : '') +
+        `</div>`;
+    };
+    function openPeek(i) {
+      const nd = nodes[i], c = nd.c;
+      const goIn = () => { leaving = true; go(communityRoute(c)); };
+      const opened = performance.now();
+      let scrimEl = null, panel = null;
+      let tapAt = null, tapHit = -1, pull = null, swallow = 0;
+      // Every click on the window, before the sheet's own: the tap that lifted
+      // the circle can land its click on the scrim as it goes up (WebKit
+      // hit-tests a touch's click after the touch), which would close it at
+      // once; and a tap on the lifted circle is a way in, not a put-away.
+      const firstClick = (e) => {
+        if (e.target !== scrimEl) return;
+        if (performance.now() - opened < 450) { e.stopImmediatePropagation(); e.preventDefault(); return; }
+        if (tapHit === i && focus === i) leaving = true;
+      };
+      const dropPull = () => {
+        window.removeEventListener('pointermove', movePull);
+        window.removeEventListener('pointerup', endPull);
+        window.removeEventListener('pointercancel', endPull);
+        pull = null;
+      };
+      function movePull(e) {
+        if (!pull || e.pointerId !== pull.id) return;
+        const dx = e.clientX - pull.x0, dy = e.clientY - pull.y0;
+        if (!pull.moved && (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(dx))) return;
+        // Down from where it started is a pull down, the sheet's own (dragToClose).
+        if (dy > 0) {
+          scrimEl.classList.remove('is-armed');
+          // Hand the panel back as it was, unless that pull has already taken it.
+          if (pull.moved && dy <= 6) { panel.style.transition = ''; panel.style.transform = ''; }
+          dropPull();
+          return;
+        }
+        if (!pull.moved) {
+          pull.moved = true;
+          panel.style.transition = 'none';
+        }
+        const up = -dy;
+        const rise = up <= OPEN_AT ? up * 0.5 : OPEN_AT * 0.5 + (up - OPEN_AT) * 0.12;
+        panel.style.transform = `translateY(${(-rise).toFixed(1)}px)`;
+        const armed = up >= OPEN_AT;
+        if (armed !== pull.armed) {
+          pull.armed = armed;
+          scrimEl.classList.toggle('is-armed', armed);
+          if (armed) hapticTap('LIGHT');
+        }
+      }
+      function endPull(e) {
+        if (!pull || e.pointerId !== pull.id) return;
+        const p = pull;
+        dropPull();
+        if (!p.moved) return;
+        swallow = performance.now() + 400;
+        if (p.armed && e.type !== 'pointercancel') {
+          leaving = true;
+          if (reduce) { goIn(); return; }
+          panel.style.transition = 'transform 0.22s var(--ease-soft), opacity 0.2s var(--ease-soft)';
+          panel.style.transform = 'translateY(-48px)';
+          panel.style.opacity = '0';
+          setTimeout(() => { if (world.isConnected) goIn(); }, 200);
+          return;
+        }
+        scrimEl.classList.remove('is-armed');
+        panel.style.transition = '';
+        panel.style.transform = '';
+      }
+      openSheet({
+        scrimClass: 'sheet-scrim--see-through sheet-scrim--circle',
+        head: peekHtml(nd, !nd.mine && Store.canJoinCommunity(c)),
+        onClose: () => {
+          window.removeEventListener('click', firstClick, true);
+          dropPull();
+          peekPanel = null;
+          if (focus === i && !leaving) lift(-1);
+        },
+        wire: (scrim, close) => {
+          scrimEl = scrim;
+          scrim.querySelector('.cx-join')?.addEventListener('click', () => {
+            close();
+            if (authed) joinHere(i); else go('#/join');
+          });
+          panel = peekPanel = scrim.querySelector('.sheet');
+          // Its foot is the Moments Reply foot (Zoe, 2026-11-08: "the
+          // consistent swipe up as before ... like replies to moments"): a
+          // chevron over "Open c/slug", centred; a tap or a pull up goes in.
+          const cue = document.createElement('button');
+          cue.type = 'button';
+          cue.className = 'cx-pull';
+          cue.innerHTML = `<span class="cx-pull-chev" aria-hidden="true">${svgIcon('chevUp')}</span>` +
+            `<span>Open ${esc(communityHandle(c))}</span>`;
+          cue.addEventListener('click', goIn);
+          panel.append(cue);
+          sheetH = panel.offsetHeight + 22;    // the panel, its 6px floor and a breath
+          window.addEventListener('click', firstClick, true);
+          scrim.addEventListener('pointerdown', (e) => { tapAt = e.target === scrim ? local(e) : null; });
+          scrim.addEventListener('pointerup', (e) => {
+            const p = local(e);
+            tapHit = tapAt && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 10 ? hitAt(p.x, p.y) : -1;
+          });
+          // After the sheet's own click has closed it.
+          scrim.addEventListener('click', (e) => {
+            if (e.target !== scrim || tapHit < 0) return;
+            if (tapHit !== i) { hapticTap('LIGHT'); lift(tapHit); }
+            else if (leaving) goIn();
+            tapHit = -1;
+          });
+          // The face is an image, and a drag that starts on one is the
+          // browser's, which takes the pointer (as the field's links would).
+          panel.addEventListener('dragstart', (e) => e.preventDefault());
+          panel.addEventListener('pointerdown', (e) => {
+            if (e.button > 0 || pull) return;
+            pull = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, armed: false };
+            window.addEventListener('pointermove', movePull);
+            window.addEventListener('pointerup', endPull);
+            window.addEventListener('pointercancel', endPull);
+          });
+          // A pull never also taps the row it started on.
+          panel.addEventListener('click', (e) => {
+            if (performance.now() < swallow) { e.stopPropagation(); e.preventDefault(); }
+          }, true);
+        },
+      });
+    }
+
     // THE HAND. One pointer: a drag anywhere moves the view (the circles stay
-    // where they are); a tap on a circle lifts it, or goes in when it is
-    // already lifted, and a tap on the paper lets go of what is lifted. A
-    // click that ends one of our own taps is swallowed, so a link only
+    // where they are, Zoe: "you shouldnt be able to move the circles"), and a
+    // tap on a circle lifts it, which sinks a little under the finger first.
+    // A click that ends one of our own taps is swallowed, so a link only
     // navigates for a keyboard or a reader.
-    const hitAt = (sx, sy) => {
-      const wx = sx - cam.x, wy = sy - cam.y;
+    const hitAt = (x, y) => {
       let best = -1, bestQ = 1;
       nodes.forEach((nd, i) => {
-        const q = Math.hypot(wx - nd.x, wy - nd.y) / nd.r;
+        const q = Math.hypot(x - nd.sx, y - nd.sy) / nd.sr;
         if (q < bestQ) { bestQ = q; best = i; }
       });
       return best;
@@ -17832,11 +18103,13 @@
       return { x: e.clientX - box.left, y: e.clientY - box.top };
     };
     const onDown = (e) => {
-      if (hand || e.button > 0 || e.target.closest('.cx-sheet')) return;
+      if (hand || e.button > 0) return;
       const p = local(e);
       if (p.x < 22 && e.pointerType === 'touch') return;   // the back swipe's edge
-      hand = { id: e.pointerId, i: hitAt(p.x, p.y), x0: p.x, y0: p.y, x: p.x, y: p.y,
+      const i = hitAt(p.x, p.y);
+      hand = { id: e.pointerId, i, x0: p.x, y0: p.y, x: p.x, y: p.y,
         moved: false, vx: 0, vy: 0, lastT: performance.now() };
+      if (i >= 0) nodes[i].press = true;
       try { fieldEl.setPointerCapture(e.pointerId); } catch { /* an older WebKit */ }
       cam.vx = cam.vy = 0;
       wake();
@@ -17848,8 +18121,9 @@
       const now = performance.now();
       if (!hand.moved && Math.hypot(p.x - hand.x0, p.y - hand.y0) > 7) {
         hand.moved = true;
+        if (hand.i >= 0) nodes[hand.i].press = false;
         camAim = null;
-        spendCaption();
+        spendHint();
       }
       if (hand.moved) {
         const dt = Math.max(1, now - hand.lastT);
@@ -17857,9 +18131,9 @@
         hand.vy = hand.vy * 0.5 + (dy / dt) * 16 * 0.5;
         // Past the field's edge the view gives, half as far.
         const r = homeRange();
-        const out = (v, [lo, hi]) => (v < lo || v > hi ? 0.45 : 1);
-        cam.x += dx * (focus >= 0 ? 1 : out(cam.x, r.x));
-        cam.y += dy * (focus >= 0 ? 1 : out(cam.y, r.y));
+        const give = (v, [lo, hi]) => (v < lo || v > hi ? 0.45 : 1);
+        cam.x += dx * give(cam.x, r.x);
+        cam.y += dy * give(cam.y, r.y);
       }
       hand.x = p.x; hand.y = p.y; hand.lastT = now;
       wake();
@@ -17868,13 +18142,11 @@
       if (!hand || e.pointerId !== hand.id) return;
       const h = hand;
       hand = null;
+      if (h.i >= 0) nodes[h.i].press = false;
       wake();
       if (!h.moved) {
         swallowUntil = performance.now() + 700;
-        if (e.type === 'pointercancel') return;
-        const nd = h.i >= 0 ? nodes[h.i] : null;
-        if (!nd) { if (focus >= 0) lift(-1); return; }
-        if (focus === h.i) { go(communityRoute(nd.c)); return; }
+        if (e.type === 'pointercancel' || h.i < 0) return;
         hapticTap('LIGHT');
         lift(h.i);
         return;
@@ -17882,8 +18154,8 @@
       cam.vx = h.vx; cam.vy = h.vy;
       swallowUntil = performance.now() + 400;
     };
-    // A link is draggable to the browser, and a drag that starts on one (a
-    // circle, the lifted card) would be taken for that and stop the pointer.
+    // A link is draggable to the browser, and a drag that starts on one would
+    // be taken for that and stop the pointer.
     fieldEl.addEventListener('dragstart', (e) => e.preventDefault());
     fieldEl.addEventListener('pointerdown', onDown);
     fieldEl.addEventListener('pointermove', onMove);
@@ -17892,138 +18164,78 @@
     world.addEventListener('click', (e) => {
       if (performance.now() < swallowUntil) e.preventDefault();
     });
-    // A keyboard's Tab brings the circle it lands on into view, ringed.
+    // A keyboard's Tab brings the circle it lands on into view, ringed (a
+    // pointer's focus is not a keyboard's, so it moves nothing).
     let keyed = -1;
     world.addEventListener('focusin', (e) => {
-      const i = els.indexOf(e.target.closest('.cx-node'));
+      const el = e.target.closest('.cx-node');
+      let keyboard = true;
+      try { keyboard = el.matches(':focus-visible'); } catch { /* an older WebKit */ }
+      const i = els.indexOf(el);
+      if (i < 0 || !keyboard) return;
       keyed = i;
-      if (i < 0 || hand) return;
-      const v = band();
-      camAim = { x: (v.x0 + v.x1) / 2 - nodes[i].x, y: (v.y0 + v.y1) / 2 - nodes[i].y };
-      wake();
+      if (!hand) { camAim = centreOn(nodes[i]); wake(); }
     });
     world.addEventListener('focusout', () => { keyed = -1; wake(); });
-    // A trackpad or a wheel looks around, as a drag on the paper does.
+    // A trackpad or a wheel looks around, as a drag does.
     fieldEl.addEventListener('wheel', (e) => {
-      if (e.target.closest('.cx-sheet')) return;
       e.preventDefault();
       camAim = null;
       cam.x -= e.deltaX; cam.y -= e.deltaY;
+      spendHint();
       wake();
     }, { passive: false });
-    const onKey = (e) => { if (e.key === 'Escape' && focus >= 0) lift(-1); };
-    document.addEventListener('keydown', onKey);
-
-    /* A PULL UP ON THE LIFTED CARD OPENS THE CIRCLE (Zoe, 2026-11-07: "take a
-       note from moments replies"), the Moments viewer's Reply pull: the card
-       rises at half the finger's pace and stiffens past OPEN_AT, where the
-       chevron over "Open c/slug" rises and inks and a LIGHT haptic arms it.
-       Let go armed and the card carries on up and away as the circle opens;
-       short of it, it springs home. A pull DOWN puts the card away, as any
-       sheet does. A drag never also clicks the card's link; Join keeps its
-       tap and never starts a pull. */
-    const OPEN_AT = 70;
-    const PUT_AWAY_AT = 70;
-    let pull = null;
-    let pullSwallow = 0;
-    const inner = () => sheet.querySelector('.cx-sheet-in');
-    // The move and the let-go are the window's while a pull is on, so the card
-    // keeps the finger once it has left it (WebKit's pointer capture did not).
-    sheet.addEventListener('pointerdown', (e) => {
-      if (e.button > 0 || focus < 0 || pull || e.target.closest('button')) return;
-      pull = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dy: 0, moved: false, armed: false };
-      window.addEventListener('pointermove', movePull);
-      window.addEventListener('pointerup', endPull);
-      window.addEventListener('pointercancel', endPull);
-    });
-    function movePull(e) {
-      if (!pull || e.pointerId !== pull.id) return;
-      const dx = e.clientX - pull.x0, dy = e.clientY - pull.y0;
-      if (!pull.moved) {
-        if (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(dx)) return;
-        pull.moved = true;
-        sheet.classList.add('is-pulling');
-      }
-      pull.dy = dy;
-      const up = -dy;
-      const rise = up > 0 ? (up <= OPEN_AT ? up * 0.5 : OPEN_AT * 0.5 + (up - OPEN_AT) * 0.12) : up * 0.9;
-      const el = inner();
-      if (el) el.style.transform = `translateY(${(-rise).toFixed(1)}px)`;
-      const armed = up >= OPEN_AT;
-      if (armed !== pull.armed) {
-        pull.armed = armed;
-        sheet.classList.toggle('is-armed', armed);
-        if (armed) hapticTap('LIGHT');
-      }
-    }
-    function endPull(e) {
-      if (!pull || e.pointerId !== pull.id) return;
-      const p = pull;
-      pull = null;
-      window.removeEventListener('pointermove', movePull);
-      window.removeEventListener('pointerup', endPull);
-      window.removeEventListener('pointercancel', endPull);
-      if (!p.moved) return;
-      pullSwallow = performance.now() + 400;
-      sheet.classList.remove('is-pulling');
-      const el = inner();
-      if (p.armed && e.type !== 'pointercancel' && focus >= 0) {
-        const c = nodes[focus].c;
-        if (reduce || !el) { go(communityRoute(c)); return; }
-        sheet.classList.add('is-opening');
-        el.style.transform = 'translateY(-48px)';
-        setTimeout(() => { if (world.isConnected) go(communityRoute(c)); }, 200);
-        return;
-      }
-      sheet.classList.remove('is-armed');
-      if (el) el.style.transform = '';
-      if (p.dy >= PUT_AWAY_AT) lift(-1);
-    }
-    sheet.addEventListener('click', (e) => {
-      if (performance.now() < pullSwallow) { e.preventDefault(); e.stopPropagation(); }
-    }, true);
 
     /* THE HAIRLINES. Every ring stroked, then every disc cut out of what was
        stroked (destination-out, a hair inside its own line), so a ring inside
        another is erased and two that meet draw as one outline. A ring's ink is
        its state: a whisper, firmer for a circle you're in, full for the lifted
-       one. */
-    const drawLines = (appear) => {
+       one. A lively circle's ripple goes out from its ring in its own colour
+       and passes behind its neighbours, which the same cut does. */
+    const ring = (x, y, r, style, width) => {
+      lctx.strokeStyle = style;
+      lctx.lineWidth = width;
+      lctx.beginPath();
+      lctx.arc(x, y, r, 0, Math.PI * 2);
+      lctx.stroke();
+    };
+    const drawLines = (now) => {
       lctx.setTransform(D, 0, 0, D, 0, 0);
       lctx.globalCompositeOperation = 'source-over';
       lctx.clearRect(0, 0, W, H);
-      lctx.lineWidth = 1;
       const shown = [];
       nodes.forEach((nd, i) => {
-        const a = appear[i];
-        if (a <= 0) return;
-        const x = nd.x + cam.x, y = nd.y + cam.y, r = nd.r * nd.scale * (0.72 + 0.28 * a);
-        if (x + r < -2 || x - r > W + 2 || y + r < -2 || y - r > H + 2) return;
-        shown.push({ x, y, r });
+        const { sx: x, sy: y, sr: r } = nd;
+        if (nd.alpha <= 0 || x + r < -40 || x - r > W + 40 || y + r < -40 || y - r > H + 40) return;
+        shown.push(nd);
+        const shade = nd.alpha * (i === focus ? 1 : nd.glow);
         const base = i === focus || i === keyed ? 1 : nd.mine ? 0.6 : 0.28;
-        lctx.strokeStyle = rgba(ink, base * a * (i === focus ? 1 : nd.glow));
-        lctx.lineWidth = i === keyed ? 2 : 1;
-        lctx.beginPath();
-        lctx.arc(x, y, r, 0, Math.PI * 2);
-        lctx.stroke();
+        ring(x, y, r, rgba(ink, base * shade), i === keyed ? 2 : 1);
+        if (nd.alive && nd.inks && !reduce) {
+          const k = ((now + nd.seed * RIPPLE_MS) % RIPPLE_MS) / (RIPPLE_MS * 0.5);
+          if (k < 1) ring(x, y, r + 2 + k * 30 * nd.lens, rgba(nd.inks.stops[1], 0.7 * (1 - k) * (1 - k) * shade), 1.5);
+        }
       });
       lctx.globalCompositeOperation = 'destination-out';
       lctx.fillStyle = '#000';
-      shown.forEach(({ x, y, r }) => {
+      shown.forEach(({ sx, sy, sr }) => {
         lctx.beginPath();
-        lctx.arc(x, y, Math.max(0, r - 0.75), 0, Math.PI * 2);
+        lctx.arc(sx, sy, Math.max(0, sr - 0.75), 0, Math.PI * 2);
         lctx.fill();
       });
       lctx.globalCompositeOperation = 'source-over';
     };
 
     // THE FRAME. Fixed steps at 60 a second whatever the display runs at, then
-    // the camera, the discs and the hairlines. With motion reduced
-    // it sleeps once nothing is moving, and anything that moves wakes it.
+    // the camera, the lens, the discs and the hairlines. Arriving fresh, the
+    // circles rise in as a wave out from the middle, each with a little
+    // overshoot. With motion reduced it sleeps once nothing is moving, and
+    // anything that moves wakes it.
     let raf = 0, last = 0, acc = 0;
     const born = performance.now();
+    let waveEnd = fresh && !reduce ? -1 : 0;     // -1: not yet timed
     const STEP = 1000 / 60;
-    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const backOut = (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2);
     const frame = (now) => {
       raf = 0;
       if (!world.isConnected) return;
@@ -18044,7 +18256,7 @@
         cam.x += cam.vx; cam.y += cam.vy;
         cam.vx *= 0.92; cam.vy *= 0.92;
         // Home only with nothing lifted: a lifted circle keeps the place the
-        // glide gave it, over the card.
+        // glide gave it, over the sheet.
         if (focus < 0) {
           const r = homeRange();
           const hx = clampTo(cam.x, r.x), hy = clampTo(cam.y, r.y);
@@ -18053,22 +18265,44 @@
           homing = Math.abs(hx - cam.x) + Math.abs(hy - cam.y) > 0.3;
         }
       }
-      world.style.transform = `translate3d(${cam.x.toFixed(2)}px, ${cam.y.toFixed(2)}px, 0)`;
       let moving = !!hand || !!camAim || homing || Math.abs(cam.vx) + Math.abs(cam.vy) > 0.05;
-      // Each one rises in a beat after the one before, biggest first.
-      const appear = nodes.map((nd, i) => (reduce ? 1 : ease(Math.min(1, Math.max(0, (now - born - Math.min(i, 14) * 45) / 700)))));
+      const la = lensAim();
+      for (const k of ['x', 'y', 'ax', 'ay']) {
+        lens[k] += (la[k] - lens[k]) * (reduce ? 1 : 0.12);
+        if (Math.abs(la[k] - lens[k]) > 0.3) moving = true;
+      }
+      if (waveEnd < 0) {
+        let far = 0;
+        nodes.forEach((nd) => {
+          nd.at = Math.hypot(nd.x + cam.x - lens.x, nd.y + cam.y - lens.y) * 0.55;
+          far = Math.max(far, nd.at);
+        });
+        waveEnd = born + far + GROW_MS;
+      }
+      const rising = now < waveEnd;
       nodes.forEach((nd, i) => {
+        place(nd);
+        let grow = 1;
+        nd.alpha = 1;
+        if (rising) {
+          const t = Math.min(1, Math.max(0, (now - born - nd.at) / GROW_MS));
+          grow = 0.55 + 0.45 * backOut(t);
+          nd.alpha = Math.min(1, t * 2.4);
+          moving = true;
+        }
         nd.glow += (nd.aim - nd.glow) * (reduce ? 1 : 0.1);
-        const aimS = i === focus ? 1.06 : 1;
-        nd.scale += (aimS - nd.scale) * (reduce ? 1 : 0.18);
-        const a = appear[i];
-        const s = nd.scale * (0.72 + 0.28 * a);
-        els[i].style.transform = `translate3d(${(nd.x - nd.r).toFixed(2)}px, ${(nd.y - nd.r).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
-        els[i].style.opacity = (a * nd.glow).toFixed(3);
-        if (a < 1 || Math.abs(nd.vx) + Math.abs(nd.vy) > 0.02 || Math.abs(nd.aim - nd.glow) > 0.01
-            || Math.abs(aimS - nd.scale) > 0.002) moving = true;
+        // A spring, so the lift pops and a press gives and comes back.
+        const aimS = (i === focus ? 1.06 : 1) * (nd.press ? 0.94 : 1);
+        if (reduce) { nd.scale = aimS; nd.sv = 0; }
+        else { nd.sv = (nd.sv + (aimS - nd.scale) * 0.2) * 0.72; nd.scale += nd.sv; }
+        const s = nd.lens * nd.scale * grow;
+        nd.sr = nd.r * s;
+        els[i].style.transform = `translate3d(${(nd.sx - nd.r).toFixed(2)}px, ${(nd.sy - nd.r).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
+        els[i].style.opacity = (nd.alpha * nd.glow).toFixed(3);
+        if (Math.abs(nd.vx) + Math.abs(nd.vy) > 0.02 || Math.abs(nd.aim - nd.glow) > 0.01
+            || Math.abs(aimS - nd.scale) > 0.002 || Math.abs(nd.sv) > 0.001) moving = true;
       });
-      drawLines(appear);
+      drawLines(now);
       if (!reduce || moving) wake();
     };
     function wake() { if (!raf && world.isConnected) raf = requestAnimationFrame(frame); }
@@ -18077,7 +18311,7 @@
     const onResize = () => {
       measure();
       sizeCanvas();
-      if (focus >= 0) sheetH = sheet.offsetHeight + 24;
+      if (peekPanel?.isConnected) sheetH = peekPanel.offsetHeight + 22;
       wake();
     };
     window.addEventListener('resize', onResize);
@@ -18089,16 +18323,14 @@
       mq.addEventListener?.('change', onScheme);
     } catch { mq = null; }
 
+    // The sheet, if one is up, is route()'s (dismissSheet), after this.
     circlesOff = () => {
       circlesCam = { x: cam.x, y: cam.y };
-      clearTimeout(captionTimer);
+      clearTimeout(hintTimer);
+      quietHint();
       cancelAnimationFrame(raf);
       raf = 0;
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('pointermove', movePull);
-      window.removeEventListener('pointerup', endPull);
-      window.removeEventListener('pointercancel', endPull);
-      document.removeEventListener('keydown', onKey);
       mq?.removeEventListener?.('change', onScheme);
       document.body.classList.remove('circles-live');
     };
@@ -20131,7 +20363,7 @@
       bodyEl.querySelector('.daily-card[data-slug] .daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
       wireCommunityJoins(bodyEl);
-      inkCirclesCard(bodyEl);
+      wireCirclesCard(bodyEl);
       // The Add on a person's row. It binds to the BODY, once (it refuses a
       // second binding), which is what lets it survive every repaint.
       bodyEl.querySelectorAll('.person-card[data-user]').forEach(washPersonCard);
