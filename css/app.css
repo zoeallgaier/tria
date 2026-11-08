@@ -5934,10 +5934,12 @@ button.poll-option:disabled { cursor: default; }
   pointer-events: none;
 }
 .np-item.is-unseen.has-tone .np-ring { opacity: 1; }
-/* Your own face takes a + for another Moment, on its corner. */
+/* Your own face takes a + for another Moment, on its TOP RIGHT rim (Zoe,
+   2026-11-08: "so charms aren't covered"; charms sit at ten thirty and four
+   thirty, so one o'clock-ish is the rim's free corner and yours wears both). */
 .np-add {
   position: absolute;
-  top: 68px;
+  top: 6px;
   left: 68px;
   z-index: 2;
   width: 30px;

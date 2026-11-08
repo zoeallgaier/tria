@@ -682,6 +682,10 @@ const Store = (() => {
     // the fact the error swallows, and hydrate refuses to conclude without it.
     usersFresh = !u.error;
     state.users = core(u, 'users', mapUser, state.users);
+    // Kept in state, not only the module flag, so a kept world paints its
+    // charms on the first frame: the flag alone was false until the real load
+    // landed, and a world that came back unchanged never repainted them.
+    if (hasCharmsColumn) state.charmsReady = true;
     const nameById = nameMap();
     // A row whose author this reader can't see is a row nothing can draw. Signed
     // in that never happens; signed out it is every post by someone anon's users
@@ -3609,7 +3613,7 @@ const Store = (() => {
   // The charms worn on your photo, in order (the first sits at ten thirty, the
   // second at four thirty). Optimistic and synchronous before the first await,
   // like updateAccent, so the face repaints under the sheet as you pick.
-  const charmsReady = () => hasCharmsColumn;
+  const charmsReady = () => hasCharmsColumn || !!state.charmsReady;
   // A sticker charm's picture (app.js's stickerPng), uploaded like any photo
   // and handed back as its charm key. Old ones stay, like old avatars; the
   // account's delete clears the folder.

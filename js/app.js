@@ -16162,10 +16162,7 @@
     // gets no rail, not an empty + over an empty feed (2.0's first-run pass).
     if (!stacks.length && !Store.friends().length) return '';
     const share = Store.momentsReady() ? 'Share a moment' : 'Share a song';
-    const rimCharms = (s) => {
-      const u = s.mine && s.u.charms ? { ...s.u, charms: s.u.charms.slice(0, 1) } : s.u;
-      return charmsOnFace(u);
-    };
+    const rimCharms = (s) => charmsOnFace(s.u);
     const item = (s) => {
       // The face and the name, nothing under it (Zoe).
       const who = s.mine ? 'You' : (s.u.name || s.u.username);
@@ -16174,7 +16171,7 @@
           `<button type="button" class="np-open" aria-label="${esc(`${who}’s moments${s.unseen ? ', new' : ''}`)}">` +
             `<span class="np-ring" aria-hidden="true"></span>` +
             // Their charms on the rim, as on their profile (Zoe). Your own
-            // face's + takes the four thirty corner, so yours wears the first.
+            // face's + sits at the top right, clear of both charms.
             (rimCharms(s) ? `<span class="np-face">` + avatarEl(s.u, { cls: 'np-art np-avatar' }) + rimCharms(s) + `</span>`
               : avatarEl(s.u, { cls: 'np-art np-avatar' })) +
             `<span class="np-song">${esc(who)}</span>` +
@@ -29516,6 +29513,10 @@
       // The sizes the byline and the feed card will ask for, or the warm copy
       // is a different picture from the one the page draws.
       Store.users().forEach(u => warm(sizedSrc(u.avatar, 40), true));
+      // Sticker charms ride on those faces, at charmSvg's own size, so a
+      // charm lands with its face instead of popping in after it.
+      if (Store.charmsReady()) Store.users().forEach(u => (u.charms || []).filter(isCustomCharm)
+        .forEach(k => warm(sizedSrc(Store.stickerUrl(k), 120), false)));
       Store.posts().map(cardStill).filter(Boolean).slice(0, WARM_PHOTOS).forEach(src => warm(src, false));
     };
     ('requestIdleCallback' in window) ? requestIdleCallback(run, { timeout: 2000 }) : setTimeout(run, 400);
