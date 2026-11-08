@@ -97,7 +97,11 @@ pointerup, never from a timer** (Zoe: "the swipe back gesture goes to
 discover"): WebKit's back swipe skips a history entry script made outside a
 gesture and the one before it, so a circle opened 200ms after the let-go
 swiped back past Circles. Playwright's goBack doesn't apply that rule, so
-only the phone shows it. The foot is Reply's own (56px, its parts and its
+only the phone shows it. **Even in the let-go it wasn't enough**: WebKit
+marks an entry made with no user activation in the last 10s, and a drag is not
+one, so every way in from the field goes through the app (`goKept`,
+`TriaSettings.goTo`, a native `load` of the new hash, which the client asked
+for and so is never marked). The foot is Reply's own (56px, its parts and its
 10px drop) standing 12px under the safe-area inset measured from the
 panel's floor (Zoe, 2026-11-08: "bump the position of the open circle down")
 (Zoe: "match that of the reply to moment ... just slightly compensated with
