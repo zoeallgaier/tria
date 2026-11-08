@@ -6808,7 +6808,7 @@
     const h = location.hash;
     // The first run's circles too: its way on is the bar's Not now / Continue.
     return headerHeld || h.startsWith('#/chat/') || h.startsWith('#/u/') || h === '#/profile' || h.startsWith('#/profile?')
-      || h === '#/welcome/circles';
+      || h === '#/welcome/circles' || h === '#/circles';
   }
   function holdHeader(on) {
     if (on === headerHeld) return;
@@ -17350,6 +17350,664 @@
       : '';
   }
 
+  /* ── EXPLORE CIRCLES (#/circles) ───────────────────────────────────────────
+     Zoe, 2026-11-07: "a new card akin to daily that goes to a new dedicated
+     'explore circles' page ... a big beautiful animated screen of interactive
+     floating circles. The circles now are represented AS circles visually.
+     Circle sizes should be dependent on the amount of people in the circle",
+     with each one's colour a gradient blob under "a clean hairline circle
+     [that] contains the actual information". The card leads Discover; the
+     circle rails stay in the square.
+
+     A CIRCLE IS A DISC, crisp at its edge and soft inside (Zoe, same day:
+     "this bokeh thing is not modern or clean enough", after a first pass of
+     blurred blobs): its own theme's spectrum (personTone, so a circle is the
+     colour its page washes) as a mesh, the middle stop filling it and the two
+     ends blooming from opposite corners, lit with THE LIGHT's numbers and set
+     solid on the paper; a 1px hairline at its edge; its face, name and size
+     inside.
+
+     SIZE IS WHO IS IN IT: a ring's AREA goes with its members (the radius by
+     the square root), between a floor the words still fit in and a ceiling.
+
+     SPACED, NEVER OVERLAPPING AT REST (Zoe: "drop the overlap idea, space at
+     all properly"): every pair keeps FIELD_GAP apart. A Venn of real shared
+     members was built first and taken out the same day. The field is allowed
+     to run off the screen ("okay with things off screen to explore"): drag the
+     paper to look around.
+
+     WHERE TWO DO MEET, mid drift or under a finger, THEIR HAIRLINES BECOME ONE
+     (Zoe: "I want the hairlines to combine/disappear on overlap"): the rings
+     are drawn on a canvas over the discs, every ring stroked and then every
+     disc cut out of the others (destination-out), so what is left is the
+     outline of the union. The discs are solid, so where they cross one simply
+     lies over the other, no darker lens: one shape in two colours. Push is
+     soft against a dragged circle, so it really sinks into its neighbours
+     before they give way.
+
+     A FIELD, NOT A LIST: a little physics keeps it alive. Rings keep apart, a
+     gravity holds them together in the screen's own shape, and each wanders on
+     a slow sine of its own, so the field floats. A tap lifts a circle (the
+     rest dim) and raises its card, the Discover card itself, Join and all; a
+     second tap goes in. New circle is the bar's, always. Reduced motion
+     keeps every circle still.
+
+     The layout is SEEDED from the circles' ids, so it is the same field every
+     visit, not a shuffle. */
+  const FIELD_GAP = 16;      // px between rings at rest
+
+  // A circle's place in [0, 1), off its id, so the field is the same each time.
+  const seedOf = (s) => {
+    let h = 2166136261;
+    for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 100000) / 100000;
+  };
+  const darkScheme = () => {
+    try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; }
+  };
+  // '#fff' as well as '#ffffff' and rgb(): the tokens hold the short form.
+  const rgbOfToken = (css) => {
+    const s = String(css || '').trim();
+    const m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s);
+    return cssToRgb(m ? `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}` : s);
+  };
+
+  /* THE LIGHT, for a blob drawn by hand. A wash is CSS (color-mix toward
+     --wash-tint, then saturate()), and a canvas can do neither, so this is the
+     same arithmetic glowLight does for the native refresh glow: mix each stop
+     toward the tint at --wash-keep, then the saturate() matrix at --wash-sat,
+     and --wash-amt is the alpha. Read off :root each time, so a scheme change
+     answers itself. Tria's own ramp reads the -tria dials, as its wash does. */
+  function blobLight(tria) {
+    const root = getComputedStyle(document.documentElement);
+    const dial = (n, d) => parseFloat(root.getPropertyValue(n + (tria ? '-tria' : ''))) || d;
+    const keep = dial('--wash-keep', 60) / 100;
+    const s = dial('--wash-sat', 2.2);
+    const amt = dial('--wash-amt', 62) / 100;
+    const tint = rgbOfToken(root.getPropertyValue('--wash-tint')) || (darkScheme() ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 });
+    const ch = (v) => Math.round(Math.min(255, Math.max(0, v)));
+    const lit = (c) => {
+      const r = c.r * keep + tint.r * (1 - keep);
+      const g = c.g * keep + tint.g * (1 - keep);
+      const b = c.b * keep + tint.b * (1 - keep);
+      return {
+        r: ch((0.213 + 0.787 * s) * r + (0.715 - 0.715 * s) * g + (0.072 - 0.072 * s) * b),
+        g: ch((0.213 - 0.213 * s) * r + (0.715 + 0.285 * s) * g + (0.072 - 0.072 * s) * b),
+        b: ch((0.213 - 0.213 * s) * r + (0.715 - 0.715 * s) * g + (0.072 + 0.928 * s) * b),
+      };
+    };
+    return { lit, amt };
+  }
+  /* A CIRCLE'S INKS: the three stops of its blob, lit, and the alpha. A theme
+     or a photo is its spectrum (stopsAround at the wash's WASH_ARC), Tria's
+     ramp is the brand's two ends and their middle, and None is the page's own
+     muted ink, thinned, so a colourless circle is a soft grey cloud. */
+  function circleInks(c) {
+    return personTone(c).then((tone) => {
+      const root = getComputedStyle(document.documentElement);
+      if (tone === 'none') {
+        const L = blobLight(false);
+        const g = L.lit(rgbOfToken(root.getPropertyValue('--muted')) || { r: 92, g: 99, b: 107 });
+        return { stops: [g, g, g], amt: L.amt * 0.5 };
+      }
+      const rgb = tone !== 'tria' && cssToRgb(tone);
+      if (rgb) {
+        const L = blobLight(false);
+        return { stops: stopsAround(rgb, WASH_ARC).map(cssToRgb).map(L.lit), amt: L.amt };
+      }
+      const L = blobLight(true);
+      const a = rgbOfToken(root.getPropertyValue('--brand-start')) || { r: 0, g: 201, b: 206 };
+      const b = rgbOfToken(root.getPropertyValue('--brand-end')) || { r: 0, g: 204, b: 158 };
+      const mid = { r: (a.r + b.r) / 2, g: (a.g + b.g) / 2, b: (a.b + b.b) / 2 };
+      return { stops: [a, mid, b].map(L.lit), amt: L.amt };
+    }, () => null);
+  }
+  const rgba = (c, a) => `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`;
+  // A lit stop laid on a paper at the inks' alpha, as one solid colour, so a
+  // disc is opaque and two that cross never make a darker lens.
+  const onPaper = (c, paper, a) => `rgb(${Math.round(paper.r + (c.r - paper.r) * a)}, ` +
+    `${Math.round(paper.g + (c.g - paper.g) * a)}, ${Math.round(paper.b + (c.b - paper.b) * a)})`;
+  const paperOf = (prop) =>
+    rgbOfToken(getComputedStyle(document.documentElement).getPropertyValue(prop))
+      || (darkScheme() ? { r: 14, g: 16, b: 18 } : { r: 237, g: 238, b: 240 });
+  // A disc's three stops as custom properties, the CSS (.cx-node, .cxm-node)
+  // laying them out as the mesh.
+  const setInks = (el, inks, paper) => {
+    inks.stops.forEach((s, i) => el.style.setProperty('--ink-' + 'abc'[i], onPaper(s, paper, inks.amt)));
+    el.classList.add('is-inked');
+  };
+
+  /* THE FIELD'S BONES, shared by the page and the card's little picture: each
+     circle's radius by its members, and how near every pair may come. */
+  function circleField(list, { rMin, rMax, gap = FIELD_GAP }) {
+    const sizes = list.map(c => Math.max(1, Store.communitySize(c.id)));
+    const top = Math.max(1, ...sizes);
+    const nodes = list.map((c, i) => fieldNode(c, c.id, rMin + (rMax - rMin) * Math.sqrt(sizes[i] / top), sizes[i]));
+    const pairs = [];
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) pairs.push({ a: i, b: j, min: nodes[i].r + nodes[j].r + gap });
+    }
+    return { nodes, pairs, gap };
+  }
+  function fieldNode(c, key, r, n) {
+    const seed = seedOf(key);
+    return {
+      c, n, r, seed, x: 0, y: 0, vx: 0, vy: 0,
+      // Each one's own slow wander: two periods and two phases off the seed.
+      w1: 0.00042 + seedOf(key + 'a') * 0.0004, w2: 0.00038 + seedOf(key + 'b') * 0.0004,
+      p1: seed * 6.283, p2: seedOf(key + 'c') * 6.283,
+      glow: 1, aim: 1, scale: 1, inks: null,
+    };
+  }
+  /* One step. `held` is the circle under a finger: it goes where the finger
+     does and everything else gives way to it. `push` is how hard an overlap
+     is undone per step, `soft` the same against the held one, so a circle
+     you carry really sinks into its neighbours (and the hairlines merge)
+     before they give way. `gx`, `gy`
+     pull to the middle, harder across a tall screen so the field takes its
+     shape. */
+  function stepField({ nodes, pairs }, { gx, gy, t = 0, wander = 0, held = null, push = 0.5, soft = 0.12 }) {
+    for (const p of pairs) {
+      const A = nodes[p.a], B = nodes[p.b];
+      let dx = B.x - A.x, dy = B.y - A.y;
+      let d = Math.hypot(dx, dy);
+      if (d >= p.min) continue;
+      if (d < 0.01) { dx = Math.cos(A.seed * 6.283); dy = Math.sin(A.seed * 6.283); d = 1; }
+      const ux = dx / d, uy = dy / d;
+      const ma = A.r * A.r, mb = B.r * B.r;
+      // The lighter one moves more; one under a finger doesn't move at all.
+      let wa = mb / (ma + mb), wb = ma / (ma + mb);
+      if (A === held) { wa = 0; wb = 1; } else if (B === held) { wa = 1; wb = 0; }
+      const f = (p.min - d) * (A === held || B === held ? soft : push);
+      A.x -= ux * f * wa; A.y -= uy * f * wa;
+      B.x += ux * f * wb; B.y += uy * f * wb;
+    }
+    for (const nd of nodes) {
+      if (nd === held) continue;
+      nd.vx -= nd.x * gx;
+      nd.vy -= nd.y * gy;
+      if (wander) {
+        nd.vx += Math.sin(t * nd.w1 + nd.p1) * wander;
+        nd.vy += Math.cos(t * nd.w2 + nd.p2) * wander;
+      }
+      nd.vx *= 0.86; nd.vy *= 0.86;
+      nd.x += nd.vx; nd.y += nd.vy;
+    }
+  }
+  // Where they start: biggest first at the middle, the rest out along a
+  // sunflower spiral, then it settles, still.
+  function settleField(field, { gx, gy, steps = 520 }) {
+    const { nodes } = field;
+    const order = nodes.map((nd, i) => i).sort((a, b) => nodes[b].r - nodes[a].r || nodes[a].seed - nodes[b].seed);
+    const meanR = nodes.reduce((s, nd) => s + nd.r, 0) / (nodes.length || 1);
+    order.forEach((i, k) => {
+      const nd = nodes[i];
+      const ang = k * 2.39996 + nd.seed;
+      const rad = Math.sqrt(k) * (meanR * 2 + field.gap) * 0.62;
+      nd.x = Math.cos(ang) * rad;
+      nd.y = Math.sin(ang) * rad;
+    });
+    for (let s = 0; s < steps; s++) stepField(field, { gx, gy });
+    // Then gravity off for a beat, so the pressure it leaves is let out and
+    // every gap is whole.
+    for (let s = 0; s < 80; s++) stepField(field, { gx: 0, gy: 0 });
+    nodes.forEach(nd => { nd.vx = 0; nd.vy = 0; });
+  }
+  const fieldBounds = (nodes) => nodes.reduce((b, nd) => ({
+    x0: Math.min(b.x0, nd.x - nd.r), x1: Math.max(b.x1, nd.x + nd.r),
+    y0: Math.min(b.y0, nd.y - nd.r), y1: Math.max(b.y1, nd.y + nd.r),
+  }), { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity });
+
+  // Every circle the field shows: Discover's order (a blocked host's left out).
+  const exploreList = () => (Store.communitiesReady() ? communitiesInOrder() : []);
+
+  /* THE CARD, the daily's (Zoe: "a new card akin to daily"), at the very top
+     of Discover (Zoe: "lets put this at the very top"). Its picture is the
+     field in little: the biggest few circles as its discs, each bobbing on
+     its own slow float. The headline names the biggest
+     rooms, so the card says what is in there. The whole card goes in; its
+     foot is two doors, Explore and New circle. */
+  const PREVIEW_MAX = 6;
+  function circlesCardHtml() {
+    if (!Store.communitiesReady()) return '';
+    const all = exploreList();
+    if (!all.length) return '';
+    const big = all.slice().sort((a, b) => Store.communitySize(b.id) - Store.communitySize(a.id));
+    const names = big.slice(0, 3).map(c => c.name);
+    const headline = all.length > 3 ? `${names.join(', ')} and more`
+      : names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+    // The little field: the biggest few, settled small, wide rather than tall.
+    // Positions are px off the art's middle, so it centres at any card width.
+    const field = circleField(big.slice(0, PREVIEW_MAX), { rMin: 18, rMax: 38, gap: 12 });
+    settleField(field, { gx: 0.0012, gy: 0.004, steps: 400 });
+    const b = fieldBounds(field.nodes);
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    const fit = Math.min(1, 120 / Math.max(1, b.y1 - b.y0), 300 / Math.max(1, b.x1 - b.x0));
+    const art = field.nodes.map((nd) => {
+      const d = Math.round(nd.r * 2 * fit);
+      const x = Math.round((nd.x - cx) * fit - d / 2), y = Math.round((nd.y - cy) * fit - d / 2);
+      return `<span class="cxm-node" data-community="${esc(nd.c.id)}" ` +
+          `style="width:${d}px;height:${d}px;left:calc(50% + ${x}px);top:calc(50% + ${y}px);` +
+          `--float:${(6.5 + nd.seed * 4).toFixed(2)}s;--float-at:${(-nd.seed * 9).toFixed(2)}s">` +
+
+        `</span>`;
+    }).join('');
+    const n = all.length;
+    return `<section class="daily-card circles-card">` +
+        `<div class="circles-card-art" aria-hidden="true">${art}</div>` +
+        `<p class="daily-kicker">Explore circles</p>` +
+        `<a class="daily-open" href="#/circles"><span class="daily-prompt">${esc(headline)}</span></a>` +
+        `<p class="daily-hint">Rooms for what you’re into, sized by who’s in them.</p>` +
+        `<div class="daily-foot">` +
+          `<span class="daily-count">${n} circle${n === 1 ? '' : 's'}</span>` +
+          // Two doors, side by side (Zoe, 2026-11-07: "add add circle button
+          // and make buttons 2columns"): look around, or start your own.
+          `<div class="circles-card-acts">` +
+            `<a class="daily-answer publish-fill" href="#/circles">Explore</a>` +
+            `<a class="daily-answer pill-quiet" href="${Store.isAuthed() ? '#/c/new' : '#/join'}">New circle</a>` +
+          `</div>` +
+        `</div>` +
+      `</section>`;
+  }
+  // The picture's colours, once each circle's tone resolves.
+  function inkCirclesCard(root) {
+    root.querySelectorAll('.cxm-node[data-community]').forEach((el) => {
+      const c = Store.community(el.dataset.community);
+      if (!c) return;
+      circleInks(c).then((inks) => {
+        if (!inks || !el.isConnected) return;
+        setInks(el, inks, paperOf('--surface'));
+      });
+    });
+  }
+
+  /* THE PAGE. The field is fixed to the window (no document scroll, so
+     nothing moves under it but what you move), in two layers: a world of
+     links, each a disc holding its words (so every circle is a real link for
+     a keyboard and a screen reader), and over it a canvas of hairlines at the
+     screen's own resolution, so a meeting can merge them. */
+  let circlesOff = null;
+  function renderExploreCircles() {
+    const list = exploreList();
+    const authed = Store.isAuthed();
+    const startHref = authed ? '#/c/new' : '#/join';
+    // NEW CIRCLE IS THE BAR'S, always there, the way a daily's Add yours is
+    // (Zoe, 2026-11-07: "a perma button like dailies top right for adding
+    // circles"). It replaced a dashed Start a circle ring in the field.
+    mountToolbar({
+      leading: toolbarBackEl('#/discover', 'Discover'),
+      title: 'Circles',
+      actions: Store.communitiesReady()
+        ? `<button type="button" class="toolbar-cta publish-fill" id="cx-new" data-slots="2">New circle</button>`
+        : '',
+    });
+    document.getElementById('cx-new')?.addEventListener('click', () => go(startHref));
+    view.innerHTML =
+      `<section class="view view--circles">` +
+        `<h1 class="visually-hidden">Explore circles</h1>` +
+        `<div class="cx" id="cx">` +
+          `<div class="cx-world" id="cx-world" role="list" aria-label="Circles"></div>` +
+          `<canvas class="cx-lines" aria-hidden="true"></canvas>` +
+          `<p class="cx-caption" id="cx-caption">` +
+            (!Store.communitiesReady() ? 'Circles aren’t switched on yet.'
+              : list.length ? 'Sized by who’s in them. Drag to look around.'
+              : 'No circles yet. Start the first one.') +
+          `</p>` +
+          `<div class="cx-sheet" id="cx-sheet" aria-live="polite"></div>` +
+        `</div>` +
+      `</section>`;
+    document.body.classList.add('circles-live');
+    const fieldEl = view.querySelector('#cx');
+    const world = view.querySelector('#cx-world');
+    const lines = view.querySelector('.cx-lines');
+    const sheet = view.querySelector('#cx-sheet');
+    const caption = view.querySelector('#cx-caption');
+    const lctx = lines.getContext('2d');
+    const reduce = prefersReduced();
+
+    // The window's box for the field, and the band under the bar it centres in.
+    let W = 0, H = 0, top = 0;
+    const measure = () => {
+      const box = fieldEl.getBoundingClientRect();
+      W = box.width; H = box.height;
+      const bar = document.querySelector('.topbar');
+      top = Math.max(0, Math.min(H * 0.3, (bar ? bar.getBoundingClientRect().bottom : 0) - box.top));
+    };
+    measure();
+    const D = Math.min(3, window.devicePixelRatio || 1);      // the hairlines' resolution
+    const sizeCanvas = () => {
+      lines.width = Math.max(1, Math.round(W * D));
+      lines.height = Math.max(1, Math.round(H * D));
+    };
+    sizeCanvas();
+    const grav = () => {
+      const aspect = Math.max(0.6, Math.min(2.4, (H - top) / Math.max(1, W)));
+      return { gx: 0.0005 * aspect, gy: 0.0005 };
+    };
+
+    // The rings: a floor the words fit in, a ceiling that leaves room for more.
+    const short = Math.min(W, H - top);
+    const rMin = W < 420 ? 52 : 60;
+    const rMax = Math.max(rMin + 34, Math.min(170, short * 0.34));
+    const field = circleField(list, { rMin, rMax });
+    const { nodes } = field;
+    settleField(field, grav());
+
+    // Each ring's words, fitted: the name in the serif at a size its radius
+    // can carry, shrunk until its longest word fits the ring's inner width.
+    const ringHtml = (nd, i) => {
+      const c = nd.c;
+      const inner = nd.r * 2 * 0.66;
+      const longest = Math.max(4, ...c.name.split(/\s+/).map(w => w.length));
+      const fs = Math.max(13, Math.min(nd.r * 0.27, 30, inner / (longest * 0.5)));
+      const face = nd.r >= 74 ? Math.round(nd.r * 0.44) : 0;
+      const mine = authed && Store.inCommunity(c.id);
+      nd.mine = mine;
+      return `<a class="cx-node${mine ? ' is-mine' : ''}" href="${communityRoute(c)}" data-i="${i}" role="listitem" ` +
+          `aria-label="${esc(`${c.name}, ${communityHandle(c)}, ${nd.n} ${memberWord(nd.n)}${mine ? ', joined' : ''}`)}" ` +
+          `style="width:${nd.r * 2}px;height:${nd.r * 2}px">` +
+          `<span class="cx-bubble">` +
+            (face ? `<span class="cx-face" style="--face:${face}px">${communityPicHtml(c, 'cx-face-pic', face)}</span>` : '') +
+            `<span class="cx-name" style="font-size:${fs.toFixed(1)}px">${esc(c.name)}</span>` +
+            `<span class="cx-sub">` +
+              (c.inviteOnly ? svgIcon('lock', 'cx-sub-ico') : mine ? svgIcon('check', 'cx-sub-ico') : '') +
+              `${nd.n} ${memberWord(nd.n)}` +
+            `</span>` +
+          `</span>` +
+        `</a>`;
+    };
+    world.innerHTML = nodes.map(ringHtml).join('');
+    const els = [...world.children];
+
+    // The hairline's ink, the page's own text colour, read again on a scheme change.
+    let ink = { r: 20, g: 23, b: 26 };
+    const readInk = () => {
+      ink = rgbOfToken(getComputedStyle(document.documentElement).getPropertyValue('--text')) || ink;
+    };
+    readInk();
+    const inkAll = () => {
+      readInk();
+      nodes.forEach((nd) => {
+        circleInks(nd.c).then((inks) => {
+          if (!inks || !world.isConnected) return;
+          setInks(els[nodes.indexOf(nd)], inks, paperOf('--bg'));
+        });
+      });
+    };
+    inkAll();
+
+    // THE CAMERA: the world's offset on the screen. It starts with the field
+    // centred in the band under the bar; you can look around as far as the
+    // field goes, and a let-go past that springs back.
+    const cam = { x: 0, y: 0, vx: 0, vy: 0 };
+    let camAim = null;           // a glide in progress (a tap on a circle)
+    let sheetH = 0;              // how much of the foot a raised card takes
+    const band = () => ({ x0: 0, x1: W, y0: top, y1: H - sheetH });
+    const homeRange = () => {
+      const b = fieldBounds(nodes), v = band(), pad = 18;
+      const span = (lo, hi, v0, v1) => {
+        const mid = (v0 + v1) / 2 - (lo + hi) / 2;
+        const spare = (hi - lo) - (v1 - v0 - pad * 2);
+        return spare <= 0 ? [mid, mid] : [mid - spare / 2, mid + spare / 2];
+      };
+      return { x: span(b.x0, b.x1, v.x0, v.x1), y: span(b.y0, b.y1, v.y0, v.y1) };
+    };
+    {
+      // Arrive on the biggest circle, centred, with the rest around it.
+      const big = nodes.slice().sort((a, b) => b.r - a.r)[0];
+      const r = homeRange(), v = band();
+      const clampTo0 = (val, [lo, hi]) => Math.min(hi, Math.max(lo, val));
+      cam.x = big ? clampTo0((v.x0 + v.x1) / 2 - big.x, r.x) : (r.x[0] + r.x[1]) / 2;
+      cam.y = big ? clampTo0((v.y0 + v.y1) / 2 - big.y, r.y) : (r.y[0] + r.y[1]) / 2;
+    }
+    const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+
+    // WHAT IS LIFTED. A tap on a circle lifts it: the rest dim, the camera
+    // brings it into the band over the card, and the card rises, Discover's
+    // own card for it.
+    let focus = -1;
+    const lift = (i) => {
+      focus = i;
+      els.forEach((el, j) => el.classList.toggle('is-focus', j === i));
+      nodes.forEach((nd, j) => { nd.aim = i < 0 || j === i ? 1 : 0.35; });
+      if (i < 0) {
+        sheet.classList.remove('is-up');
+        caption.classList.remove('is-away');
+        sheetH = 0;
+        camAim = null;
+        wake();
+        return;
+      }
+      sheet.innerHTML = communityCardHtml(nodes[i].c);
+      wireCommunityJoins(sheet);
+      sheet.classList.add('is-up');
+      caption.classList.add('is-away');
+      sheetH = sheet.offsetHeight + 24;
+      const v = band();
+      camAim = { x: (v.x0 + v.x1) / 2 - nodes[i].x, y: (v.y0 + v.y1) / 2 - nodes[i].y };
+      wake();
+    };
+
+    // THE HAND. One pointer: on a circle it may be a tap (lift, or go in when
+    // it is already lifted) or a drag (carry it); on the paper it is a tap
+    // (let go of what is lifted) or a pan. A click that ends one of our own
+    // taps is swallowed, so a link only navigates for a keyboard or a reader.
+    const hitAt = (sx, sy) => {
+      const wx = sx - cam.x, wy = sy - cam.y;
+      let best = -1, bestQ = 1;
+      nodes.forEach((nd, i) => {
+        const q = Math.hypot(wx - nd.x, wy - nd.y) / nd.r;
+        if (q < bestQ) { bestQ = q; best = i; }
+      });
+      return best;
+    };
+    let hand = null;
+    let held = null;
+    let swallowUntil = 0;
+    const local = (e) => {
+      const box = fieldEl.getBoundingClientRect();
+      return { x: e.clientX - box.left, y: e.clientY - box.top };
+    };
+    const onDown = (e) => {
+      if (hand || e.button > 0 || e.target.closest('.cx-sheet')) return;
+      const p = local(e);
+      if (p.x < 22 && e.pointerType === 'touch') return;   // the back swipe's edge
+      hand = { id: e.pointerId, i: hitAt(p.x, p.y), x0: p.x, y0: p.y, x: p.x, y: p.y,
+        moved: false, vx: 0, vy: 0, lastT: performance.now() };
+      try { fieldEl.setPointerCapture(e.pointerId); } catch { /* an older WebKit */ }
+      cam.vx = cam.vy = 0;
+      wake();
+    };
+    const onMove = (e) => {
+      if (!hand || e.pointerId !== hand.id) return;
+      const p = local(e);
+      const dx = p.x - hand.x, dy = p.y - hand.y;
+      const now = performance.now();
+      if (!hand.moved && Math.hypot(p.x - hand.x0, p.y - hand.y0) > 7) {
+        hand.moved = true;
+        camAim = null;
+        if (hand.i >= 0) held = nodes[hand.i];
+      }
+      if (hand.moved) {
+        const dt = Math.max(1, now - hand.lastT);
+        hand.vx = hand.vx * 0.5 + (dx / dt) * 16 * 0.5;
+        hand.vy = hand.vy * 0.5 + (dy / dt) * 16 * 0.5;
+        if (held) { held.x += dx; held.y += dy; }
+        else {
+          // Past the field's edge the paper gives, half as far.
+          const r = homeRange();
+          const out = (v, [lo, hi]) => (v < lo || v > hi ? 0.45 : 1);
+          cam.x += dx * (focus >= 0 ? 1 : out(cam.x, r.x));
+          cam.y += dy * (focus >= 0 ? 1 : out(cam.y, r.y));
+        }
+      }
+      hand.x = p.x; hand.y = p.y; hand.lastT = now;
+      wake();
+    };
+    const onUp = (e) => {
+      if (!hand || e.pointerId !== hand.id) return;
+      const h = hand;
+      hand = null;
+      if (held) { held.vx = h.vx * 0.6; held.vy = h.vy * 0.6; held = null; }
+      wake();
+      if (!h.moved) {
+        swallowUntil = performance.now() + 700;
+        if (e.type === 'pointercancel') return;
+        const nd = h.i >= 0 ? nodes[h.i] : null;
+        if (!nd) { if (focus >= 0) lift(-1); return; }
+        if (focus === h.i) { go(communityRoute(nd.c)); return; }
+        hapticTap('LIGHT');
+        lift(h.i);
+        return;
+      }
+      if (h.i < 0) { cam.vx = h.vx; cam.vy = h.vy; }
+      swallowUntil = performance.now() + 400;
+    };
+    fieldEl.addEventListener('pointerdown', onDown);
+    fieldEl.addEventListener('pointermove', onMove);
+    fieldEl.addEventListener('pointerup', onUp);
+    fieldEl.addEventListener('pointercancel', onUp);
+    world.addEventListener('click', (e) => {
+      if (performance.now() < swallowUntil) e.preventDefault();
+    });
+    // A keyboard's Tab brings the circle it lands on into view, ringed.
+    let keyed = -1;
+    world.addEventListener('focusin', (e) => {
+      const i = els.indexOf(e.target.closest('.cx-node'));
+      keyed = i;
+      if (i < 0 || hand) return;
+      const v = band();
+      camAim = { x: (v.x0 + v.x1) / 2 - nodes[i].x, y: (v.y0 + v.y1) / 2 - nodes[i].y };
+      wake();
+    });
+    world.addEventListener('focusout', () => { keyed = -1; wake(); });
+    // A trackpad or a wheel looks around, as a drag on the paper does.
+    fieldEl.addEventListener('wheel', (e) => {
+      if (e.target.closest('.cx-sheet')) return;
+      e.preventDefault();
+      camAim = null;
+      cam.x -= e.deltaX; cam.y -= e.deltaY;
+      wake();
+    }, { passive: false });
+    const onKey = (e) => { if (e.key === 'Escape' && focus >= 0) lift(-1); };
+    document.addEventListener('keydown', onKey);
+
+    /* THE HAIRLINES. Every ring stroked, then every disc cut out of what was
+       stroked (destination-out, a hair inside its own line), so a ring inside
+       another is erased and two that meet draw as one outline. A ring's ink is
+       its state: a whisper, firmer for a circle you're in, full for the lifted
+       one. */
+    const drawLines = (appear) => {
+      lctx.setTransform(D, 0, 0, D, 0, 0);
+      lctx.globalCompositeOperation = 'source-over';
+      lctx.clearRect(0, 0, W, H);
+      lctx.lineWidth = 1;
+      const shown = [];
+      nodes.forEach((nd, i) => {
+        const a = appear[i];
+        if (a <= 0) return;
+        const x = nd.x + cam.x, y = nd.y + cam.y, r = nd.r * nd.scale * (0.72 + 0.28 * a);
+        if (x + r < -2 || x - r > W + 2 || y + r < -2 || y - r > H + 2) return;
+        shown.push({ x, y, r });
+        const base = i === focus || i === keyed ? 1 : nd.mine ? 0.6 : 0.28;
+        lctx.strokeStyle = rgba(ink, base * a * (i === focus ? 1 : nd.glow));
+        lctx.lineWidth = i === keyed ? 2 : 1;
+        lctx.beginPath();
+        lctx.arc(x, y, r, 0, Math.PI * 2);
+        lctx.stroke();
+      });
+      lctx.globalCompositeOperation = 'destination-out';
+      lctx.fillStyle = '#000';
+      shown.forEach(({ x, y, r }) => {
+        lctx.beginPath();
+        lctx.arc(x, y, Math.max(0, r - 0.75), 0, Math.PI * 2);
+        lctx.fill();
+      });
+      lctx.globalCompositeOperation = 'source-over';
+    };
+
+    // THE FRAME. Fixed steps at 60 a second whatever the display runs at, then
+    // the camera, the discs and the hairlines. With motion reduced
+    // it sleeps once nothing is moving, and anything that moves wakes it.
+    let raf = 0, last = 0, acc = 0;
+    const born = performance.now();
+    const STEP = 1000 / 60;
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const frame = (now) => {
+      raf = 0;
+      if (!world.isConnected) return;
+      acc = Math.min(acc + (last ? now - last : STEP), STEP * 4);
+      last = now;
+      const g = grav();
+      while (acc >= STEP) {
+        stepField(field, { ...g, t: now, wander: reduce ? 0 : 0.016, held });
+        acc -= STEP;
+      }
+      // The camera: a glide, a coast, or a spring home.
+      let homing = false;
+      if (camAim) {
+        cam.x += (camAim.x - cam.x) * (reduce ? 1 : 0.12);
+        cam.y += (camAim.y - cam.y) * (reduce ? 1 : 0.12);
+        if (Math.abs(camAim.x - cam.x) + Math.abs(camAim.y - cam.y) < 0.5) camAim = null;
+      } else if (!hand || held) {
+        cam.x += cam.vx; cam.y += cam.vy;
+        cam.vx *= 0.92; cam.vy *= 0.92;
+        // Home only with nothing lifted: a lifted circle keeps the place the
+        // glide gave it, over the card.
+        if (focus < 0) {
+          const r = homeRange();
+          const hx = clampTo(cam.x, r.x), hy = clampTo(cam.y, r.y);
+          cam.x += (hx - cam.x) * (reduce ? 1 : 0.14);
+          cam.y += (hy - cam.y) * (reduce ? 1 : 0.14);
+          homing = Math.abs(hx - cam.x) + Math.abs(hy - cam.y) > 0.3;
+        }
+      }
+      world.style.transform = `translate3d(${cam.x.toFixed(2)}px, ${cam.y.toFixed(2)}px, 0)`;
+      let moving = !!hand || !!camAim || homing || Math.abs(cam.vx) + Math.abs(cam.vy) > 0.05;
+      // Each one rises in a beat after the one before, biggest first.
+      const appear = nodes.map((nd, i) => (reduce ? 1 : ease(Math.min(1, Math.max(0, (now - born - Math.min(i, 14) * 45) / 700)))));
+      nodes.forEach((nd, i) => {
+        nd.glow += (nd.aim - nd.glow) * (reduce ? 1 : 0.1);
+        const aimS = i === focus ? 1.06 : nd === held ? 1.04 : 1;
+        nd.scale += (aimS - nd.scale) * (reduce ? 1 : 0.18);
+        const a = appear[i];
+        const s = nd.scale * (0.72 + 0.28 * a);
+        els[i].style.transform = `translate3d(${(nd.x - nd.r).toFixed(2)}px, ${(nd.y - nd.r).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
+        els[i].style.opacity = (a * nd.glow).toFixed(3);
+        if (a < 1 || Math.abs(nd.vx) + Math.abs(nd.vy) > 0.02 || Math.abs(nd.aim - nd.glow) > 0.01
+            || Math.abs(aimS - nd.scale) > 0.002) moving = true;
+      });
+      drawLines(appear);
+      if (!reduce || moving) wake();
+    };
+    function wake() { if (!raf && world.isConnected) raf = requestAnimationFrame(frame); }
+    wake();
+
+    const onResize = () => {
+      measure();
+      sizeCanvas();
+      if (focus >= 0) sheetH = sheet.offsetHeight + 24;
+      wake();
+    };
+    window.addEventListener('resize', onResize);
+    // A scheme change: the inks and the hairline are re-lit for the new paper.
+    let mq = null;
+    const onScheme = () => inkAll();
+    try {
+      mq = window.matchMedia('(prefers-color-scheme: dark)');
+      mq.addEventListener?.('change', onScheme);
+    } catch { mq = null; }
+
+    circlesOff = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('keydown', onKey);
+      mq?.removeEventListener?.('change', onScheme);
+      document.body.classList.remove('circles-live');
+    };
+  }
+
   // The inside of the circle form's Who can join field: the audience lock's
   // drawing, a globe for Public and a padlock for Invite only.
   function communityJoinInner(inviteOnly) {
@@ -19316,7 +19974,10 @@
         : byTag ? postsTagged(q, type) : postsMatching(q, type);
       // The markup is the description of what changed, so it signs the paint;
       // a person's row carries a tie, so their friendStatus is in it too.
-      const sig = JSON.stringify([q, type, roomsHtml, occ && [occ.slug, answers.length],
+      // The circles' field, its card at the very top (Zoe, 2026-11-07), out of
+      // a search as the daily is.
+      const fieldCard = searching ? '' : circlesCardHtml();
+      const sig = JSON.stringify([q, type, roomsHtml, fieldCard, occ && [occ.slug, answers.length],
         people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
           isLocked(u.username), Store.friendStatus(u.username)]),
         morePeople, found.map(p => p.id)]);
@@ -19356,7 +20017,7 @@
       // under it is the rest of the page.
       bodyEl.innerHTML = searching
         ? peopleHtml + roomsHtml + postsHtml + none
-        : (occ ? dailyCardEl(occ, answers) : '');
+        : fieldCard + (occ ? dailyCardEl(occ, answers) : '');
       if (!bodyEl.dataset.risen) {
         const risers = bodyEl.querySelectorAll('.daily-card');
         risers.forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
@@ -19371,10 +20032,10 @@
 
       // The daily's own invitation. Scoped to the daily's card: a circle's Join
       // wears the same pill (it is the daily's card, after all).
-      bodyEl.querySelector('.daily-card:not(.community-card) .daily-answer')
+      bodyEl.querySelector('.daily-card[data-slug] .daily-answer')
         ?.addEventListener('click', () => answerDaily(occ));
       wireCommunityJoins(bodyEl);
-      wireCommunityStart(bodyEl);
+      inkCirclesCard(bodyEl);
       // The Add on a person's row. It binds to the BODY, once (it refuses a
       // second binding), which is what lets it survive every repaint.
       bodyEl.querySelectorAll('.person-card[data-user]').forEach(washPersonCard);
@@ -19408,7 +20069,8 @@
          Whatever doesn't find a place closes the column, so every circle is
          always here. A circle's post needs nothing more: its "Posted in
          c/slug" line is the way in (a card under it was tried and taken out
-         the same day, Zoe: "the post itself is enough").
+         the same day, Zoe: "the post itself is enough"). The circles' field
+         has its own card at the very top of the page (circlesCardHtml).
        THE LITTLE ALGORITHM (Zoe: "without a heavy algorithm but like a little
        one is fine if it gets people connected") is only in the rails: circles
        your friends are in lead, then the liveliest, and yours go last (the
@@ -27813,6 +28475,8 @@
 
   function renderGuest(path, hash) {
     if (path === '#/discover') return renderDiscover();
+    // The field reads signed out too: sizes, and no overlaps (no rosters).
+    if (path === '#/circles') return renderExploreCircles();
     if (path.startsWith('#/p/')) {
       const pane = new URLSearchParams(hash.split('?')[1] || '').get('pane');
       return renderPost(decodeURIComponent(path.slice(4)), pane);
@@ -27875,7 +28539,7 @@
   // repost circle, the •••), and the write never starts.
   const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt',
     '.card-repost', '.card-menu', '#account-more',
-    '.daily-answer'].join(',');
+    '.daily-answer:not([href="#/circles"])'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;
     if (!e.target.closest(GUEST_ASKS)) return;
@@ -27904,6 +28568,8 @@
     sweepUploads(true);   // a composer left behind: its photos' files go
     if (stopActiveCrop) { stopActiveCrop(); stopActiveCrop = null; }
     stopPreview();   // a song preview belongs to the page it was played on
+    // The circles' field runs a frame loop and holds the window's listeners.
+    circlesOff?.(); circlesOff = null;
 
     // A SHEET IS NOT A HISTORY ENTRY, so the back gesture walks out from under
     // one: the page behind it re-renders and the panel is left floating over a
@@ -28153,6 +28819,7 @@
       switch (path) {
         case '#/':         renderHome(); break;
         case '#/discover': renderDiscover(); break;
+        case '#/circles':  renderExploreCircles(); break;
         case '#/friends':  go('#/discover'); break;   // Friends folded into Discover; keep old links alive
         case '#/updates':  renderUpdates(); break;
         case '#/chats':    renderChats(); break;

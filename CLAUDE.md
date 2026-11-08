@@ -21,6 +21,32 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## Explore circles is a field of discs (2026-11-07)
+
+**Discover leads with the Explore circles card** (Zoe: "a new card akin to
+daily", "at the very top of discover"), above the daily, `circlesCardHtml`:
+its picture is the field in little (the six biggest circles as discs,
+floating, `.cxm-node`), the headline names the biggest rooms, and its foot is
+two even doors, **Explore** and **New circle** (`.circles-card-acts`). **The
+circle rails stay in the square** (Zoe: "Keep circle carousels in the feed").
+`#/circles` (`renderExploreCircles`, signed out too) is the whole window,
+fixed: **every circle a disc, its AREA by its members** (radius by the square
+root, `circleField`), crisp at the edge with its theme's spectrum as a soft
+mesh inside (`circleInks` through `personTone`, lit with THE LIGHT's numbers
+and laid solid on the paper, `setInks`), a hairline, its face, name and size.
+Blurred bokeh blobs came first and went the same day (Zoe: "not modern or
+clean enough"), and so did a Venn of real shared members ("drop the overlap
+idea, space at all properly"). **They float**: a small physics (`stepField`),
+seeded by id so the field is the same each visit, runs off the screen and is
+looked around by dragging the paper. **Where two meet, their hairlines merge
+into one outline** (Zoe: "combine/disappear on overlap"): the rings are a
+canvas over the discs, stroked then every disc cut out (destination-out),
+and the push against a dragged circle is soft so it really sinks in. A tap
+lifts a circle (the rest dim) and raises its Discover card from the foot; a
+second tap goes in. **New circle is the bar's, always** (Zoe: "a perma button
+like dailies top right"); the bar's band shows from the first frame here
+(`body.circles-live`). `circlesOff` stops the frame loop in route().
+
 ## A profile's types are tabs you swipe (2026-11-07)
 
 **The bar's filter disc and dial are gone from every profile; the types are a

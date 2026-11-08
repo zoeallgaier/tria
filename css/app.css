@@ -12290,6 +12290,200 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 }
 .community-strip .daily-foot { margin-top: auto; padding-top: 0.95rem; }
 
+/* ── A CIRCLE AS A DISC (Zoe, 2026-11-07) ────────────────────────────────────
+   Crisp at the edge, soft inside, never a blur ("this bokeh thing is not
+   modern or clean enough"): the circle's theme spectrum as a mesh, the middle
+   stop filling it and the two ends blooming from opposite corners, each stop
+   already laid solid on its paper by app.js (setInks: THE LIGHT's mix, then
+   --wash-amt of it over --bg or --surface), so a disc is opaque and one that
+   crosses another lies over it with no darker lens. Bare paper until its
+   colour resolves, then it fades in. One drawing for the page's discs and the
+   card's little ones. */
+:is(.cx-node, .cxm-node)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 26% 22%, var(--ink-a), transparent 58%),
+    radial-gradient(circle at 78% 82%, var(--ink-c), transparent 56%),
+    var(--ink-b);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+:is(.cx-node, .cxm-node).is-inked::after { opacity: 1; }
+
+/* ── THE CIRCLES CARD (Zoe, 2026-11-07), the very top of Discover ──────────
+   The daily's card (circlesCardHtml), its picture the field in little: the
+   biggest few circles as discs with their hairlines, each floating on its own
+   slow loop. */
+.discover-body > .circles-card:not(:last-child) { margin-bottom: 0.95rem; }
+.discover-body > .circles-card:last-child { margin-bottom: 2rem; }
+/* Its two doors, Explore and New circle, side by side in even columns under
+   the count (Zoe: "make buttons 2columns"), each the daily pill's height. */
+.circles-card-acts {
+  flex: 1 0 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.circles-card .circles-card-acts .daily-answer {
+  z-index: 1;
+  width: auto;
+  min-width: 0;
+  flex: none;
+}
+.circles-card-art {
+  position: relative;
+  height: 132px;
+  margin: -0.15rem 0 0.75rem;
+  pointer-events: none;
+}
+.cxm-node {
+  position: absolute;
+  isolation: isolate;
+  border-radius: 50%;
+  animation: cxm-float var(--float, 8s) ease-in-out var(--float-at, 0s) infinite alternate;
+}
+/* Its hairline, over the disc (which sits at z -1 inside the node). */
+.cxm-node::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent);
+}
+@keyframes cxm-float {
+  0%   { transform: translate(-2px, 2px); }
+  100% { transform: translate(2px, -2px); }
+}
+@media (prefers-reduced-motion: reduce) { .cxm-node { animation: none; } }
+
+/* ── EXPLORE CIRCLES (#/circles, renderExploreCircles) ──────────────────────
+   The whole window, fixed, so nothing scrolls under the field but what you
+   move: a world of discs (links, each holding its words), and over them a
+   canvas of hairlines at the screen's resolution, which is where two that
+   meet merge into one outline. The bar's band stays bare (no scroll) and the
+   field runs up under it. touch-action none hands every gesture to the
+   field; the long press's callout and text selection are taken away. */
+.view--circles { padding: 0; }
+/* The bar wears its band here from the first frame: nothing scrolls, so it
+   would otherwise stay bare, and the field runs under the title. */
+body.circles-live .topbar--bare::before { opacity: 1; }
+.cx {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--sidebar-w);
+  right: 0;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  background: var(--bg);
+}
+@media (max-width: 680px) { .cx { left: 0; } }
+.cx-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.cx-world { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+/* Its transform and opacity are the frame's (position, the rise in, the lift,
+   the dim), so nothing here transitions them. */
+.cx-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  isolation: isolate;
+  border-radius: 50%;
+  color: var(--text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  outline: none;
+  opacity: 0;
+}
+.cx-bubble {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 17%;
+  border-radius: 50%;
+  text-align: center;
+}
+.cx-face { margin-bottom: 0.4rem; }
+.cx-face .community-pic { width: var(--face); height: var(--face); }
+.cx-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  max-width: 100%;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+.cx-face ~ .cx-name { -webkit-line-clamp: 2; }
+.cx-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--muted) 55%, var(--text));
+  white-space: nowrap;
+}
+.cx-sub-ico { width: 11px; height: 11px; flex-shrink: 0; }
+/* What the field is, said once at its foot until a circle is lifted, on a
+   small chip of the card's own surface and hairline so it reads over a disc. */
+.cx-caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 1.1rem);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2 * var(--gutter, 1rem));
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--muted);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.cx-caption.is-away { opacity: 0; }
+/* THE LIFTED CIRCLE'S CARD: Discover's own card for it, risen from the foot. */
+.cx-sheet {
+  position: absolute;
+  left: var(--gutter, 1rem);
+  right: var(--gutter, 1rem);
+  bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+  max-width: var(--feed-width);
+  margin: 0 auto;
+  transform: translateY(calc(100% + 2rem + env(safe-area-inset-bottom)));
+  transition: transform 0.5s var(--ease);
+  visibility: hidden;
+}
+.cx-sheet.is-up { transform: none; visibility: visible; }
+.cx-sheet:not(.is-up) { transition: transform 0.4s var(--ease-soft), visibility 0s 0.4s; }
+.cx-sheet .daily-card { margin: 0; padding-inline: 0.9rem; }
+@media (prefers-reduced-motion: reduce) {
+  .cx-sheet, .cx-sheet:not(.is-up) { transition: visibility 0s; }
+}
+
 /* THE SQUARE (Zoe, 2026-11-05): this week's public posts under the daily, in
    My Circle's reading column, with circles and people set between them
    (paintSquare). No hairline over the first post: the daily card ends on its
