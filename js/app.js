@@ -257,9 +257,6 @@
     // centred and grown to the old ring's size, its shine kept. It was a ring
     // with a filled centre (you in the middle of your people) from 2026-10-22,
     // and a house for an afternoon before that; both are in git.
-    // One plain ring: a circle you're in, on a profile's stat line (the
-    // triad there is friends, Zoe 2026-11-08).
-    ring: '<circle cx="12" cy="12" r="7.5"/>',
     myCircle: '<circle cx="12" cy="12" r="7"/><path d="M8.6 10.25a3.73 3.73 0 0 1 2-2.1"/>',
     /* THE TAB YOU'RE ON IS DRAWN SOLID, and the bar has no labels (Zoe,
        2026-11-05, "like insta"; picked in
@@ -10355,7 +10352,7 @@
     // A locked profile fences its feed, so its post stat is dropped (a "0 posts"
     // would mislead) and the line carries the friend count alone (no leading dot).
     // Icons, not words (Zoe, 2026-11-08): a pencil for posts, the triad for
-    // friends, a ring for the circles they're in. Each names itself to a
+    // friends, the two people (ICONS.friends) for the circles they're in. Each names itself to a
     // screen reader. The circles stat needs rosters, so signed in only.
     const statIco = (key, label) =>
       svgIcon(key, 'account-stat-ico') + `<span class="visually-hidden"> ${label}</span>`;
@@ -10376,7 +10373,7 @@
     const cc = (Store.communitiesReady() && Store.isAuthed()) ? Store.communitiesOf(u.username).length : -1;
     const circleStat = cc < 0 ? ''
       : `<span class="account-stat">` +
-          statIco('ring', cc === 1 ? 'circle' : 'circles') +
+          statIco('friends', cc === 1 ? 'circle' : 'circles') +
           `<span class="account-stat-num">${cc}</span>` +
         `</span>`;
     const statsRow = `<div class="account-stats account-stats--icons">${postStat}${friendStat}${circleStat}</div>`;
