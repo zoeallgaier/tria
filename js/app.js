@@ -17038,7 +17038,10 @@
   // Where a circle's back chevron points: wherever you came from, as a profile's
   // does (see communityOrigin in the router).
   function communityBackTarget() {
-    const labels = { '#/': 'My Circle', '#/discover': 'Discover', '#/chats': 'Chats', '#/profile': 'Profile' };
+    // The circles' field too (Zoe, 2026-11-08: "make sure back goes back to
+    // circles if I go to a circle").
+    const labels = { '#/': 'My Circle', '#/discover': 'Discover', '#/chats': 'Chats', '#/profile': 'Profile',
+      '#/circles': 'Circles' };
     if (communityOrigin.startsWith('#/chat/')) return { href: communityOrigin, label: 'Chat' };
     const href = labels[communityOrigin] ? communityOrigin : '#/discover';
     return { href, label: labels[href] };
@@ -17685,6 +17688,9 @@
     const { nodes } = field;
     settleField(field, grav());
 
+  // Where the view was when you left the field, so coming back (from a
+  // circle, by its back) lands where you were looking, not at the start.
+  let circlesCam = null;
     // Each ring's words, fitted: the name in the serif at a size its radius
     // can carry, shrunk until its longest word fits the ring's inner width.
     const ringHtml = (nd, i) => {
@@ -17744,7 +17750,10 @@
       };
       return { x: span(b.x0, b.x1, v.x0, v.x1), y: span(b.y0, b.y1, v.y0, v.y1) };
     };
-    {
+    if (circlesCam) {
+      cam.x = circlesCam.x;
+      cam.y = circlesCam.y;
+    } else {
       // Arrive on the biggest circle, centred, with the rest around it.
       const big = nodes.slice().sort((a, b) => b.r - a.r)[0];
       const r = homeRange(), v = band();
@@ -17788,7 +17797,6 @@
             `<span class="cx-pull-chev">${svgIcon('chevUp')}</span>` +
             `<span class="cx-pull-word">Open ${esc(communityHandle(c))}</span>` +
           `</div>` +
-          communityCardHtml(c) +
         `</div>`;
       wireCommunityJoins(sheet);
       sheet.classList.add('is-up');
@@ -17850,12 +17858,16 @@
         cam.y += dy * (focus >= 0 ? 1 : out(cam.y, r.y));
       }
       hand.x = p.x; hand.y = p.y; hand.lastT = now;
+          communityCardHtml(c) +
       wake();
     };
     const onUp = (e) => {
       if (!hand || e.pointerId !== hand.id) return;
       const h = hand;
       hand = null;
+      // The cue is the card's own foot, under Join.
+      const pullCue = sheet.querySelector('.cx-pull');
+      sheet.querySelector('.daily-card')?.append(pullCue);
       wake();
       if (!h.moved) {
         swallowUntil = performance.now() + 700;
@@ -18144,6 +18156,7 @@
             : '') +
         `</div>`;
     }).join('');
+      circlesCam = { x: cam.x, y: cam.y };
     openSheet({
       title: `In ${communityHandle(c)}`,
       dock: 'Done',
@@ -28901,6 +28914,10 @@
       }
       switch (path) {
         case '#/':         renderHome(); break;
+    // The field keeps where you were looking only for a way back from a
+    // circle (or a hop inside one); arriving fresh starts on the biggest.
+    if (path === '#/circles' && lastPath !== '#/circles'
+        && !['#/c/', '#/p/', '#/u/'].some((p) => lastPath?.startsWith(p))) circlesCam = null;
         case '#/discover': renderDiscover(); break;
         case '#/circles':  renderExploreCircles(); break;
         case '#/friends':  go('#/discover'); break;   // Friends folded into Discover; keep old links alive

@@ -12496,7 +12496,9 @@ body.circles-live .topbar--bare::before { opacity: 1; }
 .cx-sheet:not(.is-up) { transition: transform 0.4s var(--ease-soft), visibility 0s 0.4s; }
 .cx-sheet .daily-card { margin: 0; padding-inline: 0.9rem; }
 /* ITS PULL UP, the Moments Reply foot's (.mv-foot): a soft chevron over
-   "Open c/slug", centred above the card. The card follows the finger
+   "Open c/slug", centred at the card's own foot under Join (Zoe: "put it on
+   the card"), Reply's 0.95rem words, as the foot of a Moment.
+   The card follows the finger
    (.is-pulling holds the spring off), rises and inks the cue once armed, and
    on an armed let-go carries on up and away as the circle opens. */
 .cx-sheet-in { transition: transform 0.45s var(--spring), opacity 0.2s var(--ease-soft); }
@@ -12509,9 +12511,12 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-bottom: 0.55rem;
+  gap: 0.1rem;
+  margin-top: 0.8rem;
+  margin-bottom: -0.1rem;
+  line-height: 1.2;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   font-weight: 700;
   transition: color 0.2s var(--ease-soft);
 }
@@ -12542,6 +12547,7 @@ body.circles-live .topbar--bare::before { opacity: 1; }
    it than under: the post above already ends on its action row's own space,
    so even margins read as more air on top (Zoe: "the top padding is a bit too
    much"). */
+  box-sizing: border-box;
 .square-feed > .feed-extra {
   margin-block: 0.55rem 1rem;
   animation: rise var(--dur-slow) var(--ease) backwards;

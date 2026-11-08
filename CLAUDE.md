@@ -51,14 +51,18 @@ rings are a canvas over the discs, stroked then every disc cut out
 lifts a circle (the rest dim) and raises its Discover card from the foot; a
 second tap goes in, and so does **a pull up on the card, the Moments Reply
 pull** (Zoe: "take a note from moments replies"): a chevron over "Open
-c/slug", the card rising at half pace and stiffening past `OPEN_AT` (70px)
+c/slug" UNDER the card, at the screen's foot in Reply's own spot and size
+(Zoe: "in the same spot as moments for consistency"), the card rising at half pace and stiffening past `OPEN_AT` (70px)
 with a LIGHT haptic, carrying on up and away on an armed let-go; a pull down
 puts it away. The pull is the window's while it runs, and the field refuses
 native link drags (`dragstart`, `-webkit-user-drag`), which had swallowed the
 pointer. The foot's "Drag to look around" goes after 3.2s or the
 first drag (`spendCaption`). **New circle is the bar's, always** (Zoe: "a perma button
 like dailies top right"); the bar's band shows from the first frame here
-(`body.circles-live`). `circlesOff` stops the frame loop in route().
+(`body.circles-live`). `circlesOff` stops the frame loop in route(). **A circle opened from the field
+goes back to it** (Zoe: "make sure back goes back to circles"):
+`communityBackTarget` knows `#/circles`, and the view is kept (`circlesCam`)
+only for a way back from a circle; arriving fresh starts on the biggest.
 
 ## A profile's types are tabs you swipe (2026-11-07)
 
