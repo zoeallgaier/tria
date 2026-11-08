@@ -10374,11 +10374,12 @@
       ? `<button type="button" class="account-stat account-stat--friends" id="show-friends">${friendInner}</button>`
       : `<span class="account-stat">${friendInner}</span>`;
     const cc = (Store.communitiesReady() && Store.isAuthed()) ? Store.communitiesOf(u.username).length : -1;
+    const circleInner = statIco('circle', cc === 1 ? 'circle' : 'circles') +
+      `<span class="account-stat-num">${cc}</span>`;
     const circleStat = cc < 0 ? ''
-      : `<span class="account-stat">` +
-          statIco('circle', cc === 1 ? 'circle' : 'circles') +
-          `<span class="account-stat-num">${cc}</span>` +
-        `</span>`;
+      : cc > 0
+        ? `<button type="button" class="account-stat account-stat--friends" id="show-circles">${circleInner}</button>`
+        : `<span class="account-stat">${circleInner}</span>`;
     const statsRow = `<div class="account-stats account-stats--icons">${postStat}${friendStat}${circleStat}</div>`;
 
     // The in-flow action row, at the foot of the identity block. Your own
@@ -10841,6 +10842,44 @@
     const friendsBtn = document.getElementById('show-friends');
     if (friendsBtn) friendsBtn.addEventListener('click',
       () => go(`#/friends/${encodeURIComponent(u.username)}`));
+    const circlesBtn = document.getElementById('show-circles');
+    if (circlesBtn) circlesBtn.addEventListener('click',
+      () => go(`#/in/${encodeURIComponent(u.username)}`));
+  }
+
+  /* ── The circles someone is in, as a PAGE (Zoe, 2026-11-08) ─────
+     `#/in/<username>`, opened from the triad stat on a profile, as
+     #/friends/ is from the friends one. Circles are public rooms and the
+     count is on the profile for any signed-in reader, so there is no
+     friends gate; signed out there are no rosters and nothing to list.
+     Each is Discover's circle card, Join and all. */
+  function renderUserCircles(username) {
+    const u = Store.user(username);
+    if (!u || !Store.isAuthed() || !Store.communitiesReady()) { location.hash = '#/'; return; }
+    const isSelf = u.username === Store.session();
+    if (!isSelf && Blocks.has(u.username)) { go(`#/u/${encodeURIComponent(u.username)}`); return; }
+    // Shared ones first (yours too), then by name.
+    const list = Store.communitiesOf(u.username).sort((a, b) =>
+      (Store.inCommunity(b.id) - Store.inCommunity(a.id)) || a.name.localeCompare(b.name));
+    const title = isSelf ? 'Your circles' : `${u.name}’s circles`;
+    mountToolbar({
+      leading: isSelf
+        ? toolbarBackEl('#/profile', 'Profile')
+        : toolbarBackEl(`#/u/${encodeURIComponent(u.username)}`, u.name),
+      title,
+    });
+    view.innerHTML =
+      `<section class="view view--people">` +
+        mastheadEl('', esc(title)) +
+        (list.length
+          ? `<section class="communities" id="user-circles">` +
+              list.map(c => communityCardHtml(c)).join('') + `</section>`
+          : `<p class="feed-empty">${isSelf
+              ? 'No circles yet. Explore circles is on Discover.'
+              : `${esc(u.name)} isn’t in any circles yet.`}</p>`) +
+      `</section>`;
+    const el = document.getElementById('user-circles');
+    if (el) wireCommunityJoins(el);
   }
 
   /* ── Someone's circle, as a PAGE ────────────────────────────────
@@ -17149,6 +17188,7 @@
     const labels = { '#/': 'My Circle', '#/discover': 'Discover', '#/chats': 'Chats', '#/profile': 'Profile',
       '#/circles': 'Circles' };
     if (communityOrigin.startsWith('#/chat/')) return { href: communityOrigin, label: 'Chat' };
+    if (communityOrigin.startsWith('#/in/')) return { href: communityOrigin, label: 'Circles' };
     const href = labels[communityOrigin] ? communityOrigin : '#/discover';
     return { href, label: labels[href] };
   }
@@ -29240,8 +29280,8 @@
     // profile is not a #/u/ route, so nothing below ever files it, and a circle
     // reached from #/profile is the one way into a profile whose origin has
     // never been written down.
-    if (path.startsWith('#/friends/') || path.startsWith('#/u/')) {
-      if (lastPath && !lastPath.startsWith('#/u/') && !lastPath.startsWith('#/friends/')) {
+    if (path.startsWith('#/friends/') || path.startsWith('#/in/') || path.startsWith('#/u/')) {
+      if (lastPath && !lastPath.startsWith('#/u/') && !lastPath.startsWith('#/friends/') && !lastPath.startsWith('#/in/')) {
         profileOrigin = lastPath;
       }
     }
@@ -29312,6 +29352,10 @@
       // still redirects for the links that are out there.
       if (path.startsWith('#/friends/')) {
         renderFriends(decodeURIComponent(path.slice(10)));
+        return;
+      }
+      if (path.startsWith('#/in/')) {
+        renderUserCircles(decodeURIComponent(path.slice(5)));
         return;
       }
       // A circle (the room) lives at #/c/<slug>, the way a subreddit lives at
